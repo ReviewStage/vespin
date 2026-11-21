@@ -26,9 +26,12 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
  * passes 3. A build from 5 on reads an automation without its `guards`, so
  * a service may stop sending them once the floor reaches 5. A build from 6
  * on reads an agent, and an inbox item, on no task (`taskId: null`), so a
- * service may answer one to it alone until the floor passes 5.
+ * service may answer one to it alone until the floor passes 5. A build from
+ * 7 on reads an agent on a machine its workspace owns
+ * (`AGENT_MACHINE.WORKSPACE`), so a service may answer one to it alone until
+ * the floor passes 6.
  */
-export const HOSTED_API_VERSION = 6;
+export const HOSTED_API_VERSION = 7;
 
 /** The headers a client names itself in: which app and version, as `platform/version`, and the hosted API version it was built against. */
 export const CLIENT_HEADER = {

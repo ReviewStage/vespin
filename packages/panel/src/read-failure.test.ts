@@ -164,6 +164,7 @@ function sidebarOver(tasks: TasksControl): React.ReactElement {
     tab: PANEL_TAB.TASKS,
     onTabChange: ignore,
     onPressWithin: ignore,
+    watched: undefined,
     account: {
       status: ACCOUNT_STATUS.SIGNED_IN,
       email: "dev@example.com",
@@ -406,7 +407,7 @@ async function versionNotRead(sections: boolean, onRetryVersion: () => void): Pr
         steps: { back: [], forward: [] },
         onGoTo: ignore,
       },
-      subject: taskVersionSubject(tasks),
+      subject: taskVersionSubject(tasks, undefined),
       account: { status: ACCOUNT_STATUS.SIGNED_IN, email: "dev@example.com", provider: "github" },
       onExit: ignore,
       onRestored: ignore,

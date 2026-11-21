@@ -40,6 +40,7 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { TOPIC } from "@repo/database/sync/notification";
 import { taskSync } from "@repo/database/sync/tables";
 import {
+  connectWorkspaceMachine,
   DEVICE_LAYOUT,
   getTestDB,
   joinWorkspace,
@@ -105,6 +106,10 @@ import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/code
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
 import { TASKLESS_LIVE } from "../../agents/taskless-reads.js";
+import {
+  WORKSPACE_MACHINE_LIVE,
+  type WorkspaceMachineLive,
+} from "../../agents/workspace-machine-reads.js";
 import { TURN_FAILURE } from "../../core.js";
 import type { SyncMoved } from "../../sync/live-query.js";
 import {
@@ -240,9 +245,12 @@ const liveRowsOf = (
   userId: string,
   liveSince = EVERY_TASK,
   taskless: (typeof TASKLESS_LIVE)[keyof typeof TASKLESS_LIVE] = TASKLESS_LIVE.LEFT_OUT,
+  workspaceMachines: WorkspaceMachineLive = WORKSPACE_MACHINE_LIVE.CARRIED,
 ) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(tasksRead.statements({ userId, liveSince, taskless }));
+    const statements = Option.getOrThrow(
+      tasksRead.statements({ userId, liveSince, taskless, workspaceMachines }),
+    );
 
     return yield* Schema.decodeUnknownEffect(TASK_LIST_READ.rows)({
       tasks: yield* runLive(statements.tasks),
@@ -253,7 +261,9 @@ const liveRowsOf = (
 /** The rows one task's read delivers to the account, by the task or the agent `id` names, decoded as the desktop decodes them. */
 const taskRowsOf = (userId: string, id: string) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(taskRowsRead.statements({ userId, id }));
+    const statements = Option.getOrThrow(
+      taskRowsRead.statements({ userId, id, workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED }),
+    );
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_ROWS_READ.rows)({
       tasks: yield* runLive(statements.tasks),
@@ -269,7 +279,13 @@ const taskRowsOf = (userId: string, id: string) =>
 /** The tasks related to the task `id` names and their agents, as its relations' read delivers them to the account, decoded as the desktop decodes them. */
 const relatedOf = (userId: string, id: string) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(taskRelationsRead.statements({ userId, id }));
+    const statements = Option.getOrThrow(
+      taskRelationsRead.statements({
+        userId,
+        id,
+        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
+      }),
+    );
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_RELATIONS_READ.rows)({
       tasks: yield* runLive(statements.tasks),
@@ -285,7 +301,13 @@ const relatedOf = (userId: string, id: string) =>
 /** The tasks and agents a search delivers to the account, decoded as the desktop decodes them. */
 const searchedOf = (userId: string, query: string) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(taskSearchRead.statements({ userId, query }));
+    const statements = Option.getOrThrow(
+      taskSearchRead.statements({
+        userId,
+        query,
+        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
+      }),
+    );
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_SEARCH_READ.rows)({
       tasks: yield* runLive(statements.tasks),
@@ -305,6 +327,7 @@ const settledPageOf = (userId: string, workspaceId: string, before?: SettledPage
       taskPageRead.statements({
         userId,
         workspaceId,
+        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
         beforeAt: before === undefined ? "" : String(before.finishedAt),
         beforeId: before?.taskId ?? "",
       }),
@@ -332,7 +355,12 @@ const settledPageOf = (userId: string, workspaceId: string, before?: SettledPage
 const personPageOf = (userId: string, workspaceId: string, personId: string) =>
   Effect.gen(function* () {
     const statements = Option.getOrThrow(
-      personPageRead.statements({ userId, workspaceId, personId }),
+      personPageRead.statements({
+        userId,
+        workspaceId,
+        personId,
+        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
+      }),
     );
 
     const rows = yield* Schema.decodeUnknownEffect(PERSON_PAGE_READ.rows)({
@@ -634,6 +662,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           userId: "user-immutable",
           liveSince: LIVE_SINCE,
           taskless: TASKLESS_LIVE.CARRIED,
+          workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
         }),
       );
 
@@ -1020,6 +1049,37 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           stateAt: NOW + 60_000,
           runsUntil: NOW + 60_000 + Duration.toMillis(SANDBOX_IDLE),
         });
+      }),
+  );
+
+  it.effect(
+    "an agent on a workspace's machine reads on that machine, by its name, for a build that reads one, and stays off an older build's list",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const agent = yield* openAgent(owner, { taskId: plan.id }, 60_000);
+        const box = yield* connectWorkspaceMachine(plan.workspaceId, owner);
+        yield* (yield* Database)
+          .update(agentTable)
+          .set({ machine: AGENT_MACHINE.WORKSPACE, deviceId: box })
+          .where(eq(agentTable.id, agent.id));
+
+        const listedTo = (workspaceMachines: WorkspaceMachineLive) =>
+          Effect.map(
+            liveRowsOf(owner, EVERY_TASK, TASKLESS_LIVE.LEFT_OUT, workspaceMachines),
+            (rows) =>
+              taskAgentsOfLiveRows(rows, NOW).map((each) => [
+                each.id,
+                each.machine,
+                each.mac?.name,
+              ]),
+          );
+
+        assert.deepEqual(yield* listedTo(WORKSPACE_MACHINE_LIVE.CARRIED), [
+          [agent.id, AGENT_MACHINE.WORKSPACE, "build-box"],
+        ]);
+        assert.deepEqual(yield* listedTo(WORKSPACE_MACHINE_LIVE.LEFT_OUT), []);
       }),
   );
 
@@ -1468,7 +1528,12 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         const statements = Option.getOrThrow(
           delta.statements(
-            { userId: teammate, liveSince: EVERY_TASK, taskless: TASKLESS_LIVE.LEFT_OUT },
+            {
+              userId: teammate,
+              liveSince: EVERY_TASK,
+              taskless: TASKLESS_LIVE.LEFT_OUT,
+              workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
+            },
             moved,
           ),
         );

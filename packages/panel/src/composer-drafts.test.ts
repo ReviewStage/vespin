@@ -34,7 +34,7 @@ import {
   useDraftWriter,
 } from "./composer-drafts.js";
 import { DesktopTasks } from "./desktop/desktop-tasks.js";
-import { SidebarTask } from "./desktop/task-actions.js";
+
 import {
   type AgentComposerControl,
   type MessageSender,
@@ -57,7 +57,8 @@ import { withQueryClient } from "./testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "./testing/desktop-sidebar.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "./testing/outbox.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
-import { agentsControl, listedAgent, tasksControl } from "./testing/tasks-control.js";
+import { sidebarTaskRow } from "./testing/sidebar-task.js";
+import { agentsControl, listedAgent, taskAgentsOf, tasksControl } from "./testing/tasks-control.js";
 import { windowRouter } from "./testing/window-router.js";
 
 // Each test's host starts with no message on its way.
@@ -202,20 +203,19 @@ function openWindow() {
         tab: onTask ? undefined : openTab,
         openAgents: [open.agent.id],
       },
-      agents: agentsControl({
-        agents: [open.agent],
-        agentIds: [open.agent.id],
-        onMessage: (agentId, message) => send(agentId, message),
-      }),
+      agents: taskAgentsOf(
+        agentsControl({
+          agents: [open.agent],
+          agentIds: [open.agent.id],
+          onMessage: (agentId, message) => send(agentId, message),
+        }),
+      ),
     });
 
     const rows = [INVITES.plan, BILLING.plan].map((summary) =>
-      createElement(SidebarTask, {
+      sidebarTaskRow(tasks, summary, {
         key: summary.id,
-        tasks: tasks,
-        task: summary,
         current: summary.id === open.plan.id,
-        unread: () => false,
         now: 3,
         onOpen: () => undefined,
       }),
@@ -810,7 +810,7 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
       tab: pin.tab,
       openAgents: [open.agent.id],
     },
-    agents: agentsControl({ agents: [open.agent], agentIds: [open.agent.id] }),
+    agents: taskAgentsOf(agentsControl({ agents: [open.agent], agentIds: [open.agent.id] })),
   });
 
   const container = document.body.appendChild(document.createElement("div"));
@@ -883,7 +883,7 @@ async function columnOn(
         ? [INVITES.agent.id]
         : [],
     },
-    agents: {
+    agents: taskAgentsOf({
       ...agentsControl({ agents: [agent], agentIds: [agent.id] }),
       draft: {
         id: DRAFT_KEY,
@@ -892,7 +892,7 @@ async function columnOn(
         choice: undefined,
         disabledServers: [],
       },
-    },
+    }),
   });
 
   const container = document.body.appendChild(document.createElement("div"));
@@ -908,11 +908,8 @@ async function columnOn(
             createElement(
               "ul",
               null,
-              createElement(SidebarTask, {
-                tasks: tasks,
-                task: INVITES.plan,
+              sidebarTaskRow(tasks, INVITES.plan, {
                 current: true,
-                unread: () => false,
                 now: 3,
                 onOpen: () => undefined,
               }),

@@ -39,10 +39,10 @@ import {
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
 import { identityLetter } from "@repo/features/workspace-tile";
-import { useState, useSyncExternalStore } from "react";
+import { memo, useState, useSyncExternalStore } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useReduceMotion, useScaledSize } from "./accessibility.js";
-import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import {
   PRIORITY_MARK_SYMBOL,
@@ -122,9 +122,15 @@ export function ToneGlyph({
 
 /**
  * A task's status as its ring, in its tone's ink, heard as the status's
- * name: the one mark a status tone stands on.
+ * name: the one mark a status tone stands on. Note that it is drawn again
+ * only as its status, the theme, or the text size moves, since every task's
+ * row, chip, and preview holds one and a list's change draws its rows again.
  */
-export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
+export const TaskStatusMark = memo(function TaskStatusMark({
+  status,
+}: {
+  readonly status: TaskStatus;
+}) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
@@ -136,7 +142,7 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
       modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
     />
   );
-}
+});
 
 /** How round a repository's picture stands, of its size: a tile's, as the panel draws a repository's owner, not a person's circle. */
 const REPOSITORY_CORNER = 0.25;
@@ -214,6 +220,33 @@ export function TaskPriorityMark({ priority }: { readonly priority: TaskPriority
         modifiers={[opacity(under.opacity), accessibilityHidden()]}
       />
       {lit}
+    </ZStack>
+  );
+}
+
+/**
+ * No one, where a place says who is on something and nobody is, as the
+ * panel's `UnassignedAvatar` draws it at a face's size: its ring of eight
+ * long dashes over its seat drawn faint, so the outline leads, in the muted
+ * ink. It is never heard, since the words beside it say No assignee.
+ */
+export function UnassignedMark({ size }: { readonly size: number }) {
+  const colors = useColors();
+
+  return (
+    <ZStack>
+      <Image
+        {...glyphImage(UNASSIGNED_UNDER.glyph)}
+        size={size}
+        color={colors.TEXT_MUTED}
+        modifiers={[opacity(UNASSIGNED_UNDER.opacity), accessibilityHidden()]}
+      />
+      <Image
+        {...glyphImage(GLYPH.UNASSIGNED)}
+        size={size}
+        color={colors.TEXT_MUTED}
+        modifiers={[accessibilityHidden()]}
+      />
     </ZStack>
   );
 }

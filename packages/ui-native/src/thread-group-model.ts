@@ -53,3 +53,24 @@ export function threadRuns<Message extends Grouped>(
 
   return runs;
 }
+
+/**
+ * A thread's newest runs holding at least `least` messages, whole, so no
+ * run's head moves when the runs before them are drawn above; every run
+ * where they hold fewer. A thread opens at its newest message, so its first
+ * frame draws these, and the older follow a render later.
+ */
+export function newestRuns<Message>(
+  runs: readonly (readonly Message[])[],
+  least: number,
+): readonly (readonly Message[])[] {
+  let held = 0;
+  let from = runs.length;
+
+  while (from > 0 && held < least) {
+    from -= 1;
+    held += runs[from]?.length ?? 0;
+  }
+
+  return from === 0 ? runs : runs.slice(from);
+}

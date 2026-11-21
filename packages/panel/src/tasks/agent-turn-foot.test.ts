@@ -11,6 +11,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
 import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -138,6 +139,8 @@ async function drawnTurn(
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+  // The pointer comes onto the turn, as a reader's does to reach its actions.
+  pointAtTurns(container);
 
   return (
     container.querySelector<HTMLElement>(`.is-assistant[data-message-id="${TURN}"]`) ??

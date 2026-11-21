@@ -1,5 +1,5 @@
+import { afterPaint } from "@repo/ui/after-paint";
 import { useEffect, useRef } from "react";
-import { afterPaint } from "./after-paint.js";
 
 /**
  * use-when-idle.ts -- work the panel's first paint does not need, started once the renderer has nothing better to do.

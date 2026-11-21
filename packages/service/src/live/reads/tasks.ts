@@ -56,7 +56,7 @@ import {
 } from "@repo/database/sync/tables";
 import { BOOT_PHASE, type WireBootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
-import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
+import { AGENT_BRIEF, AGENT_MACHINE, type AgentFailure } from "@repo/features/agent-wire";
 import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
 import {
   NO_TASK_OWNER,
@@ -85,6 +85,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  ne,
   notInArray,
   or,
   type SQL,
@@ -93,6 +94,10 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { Clock, Duration, Effect } from "effect";
 import { TASKLESS_LIVE, tasklessLiveParam } from "../../agents/taskless-reads.js";
+import {
+  WORKSPACE_MACHINE_LIVE,
+  workspaceMachineLiveParam,
+} from "../../agents/workspace-machine-reads.js";
 import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import { instantParam } from "../../sync/live-param.js";
 import type { SyncMoved } from "../../sync/live-query.js";
@@ -345,6 +350,28 @@ function issuesStatement() {
   );
 }
 
+/** What the agents a statement reads may stand on, beside a task and the cloud or a device: no task, for a build that reads a null `taskId`, and a workspace's machine, for one that reads it. */
+interface AgentsCarried {
+  readonly taskless: boolean;
+  readonly workspaceMachines: boolean;
+}
+
+/** What a read's served params carry of its agents (`AgentsCarried`); a read that serves no `taskless` carries none on no task. */
+function agentsCarried(params: {
+  readonly taskless?: string;
+  readonly workspaceMachines: string;
+}): AgentsCarried {
+  return {
+    taskless: params.taskless === TASKLESS_LIVE.CARRIED,
+    workspaceMachines: params.workspaceMachines === WORKSPACE_MACHINE_LIVE.CARRIED,
+  };
+}
+
+/** The one param a read of the list's agents beside the list itself serves: whether the build asking reads an agent on a workspace's machine (`workspaceMachineLiveParam`). */
+function servedWorkspaceMachines(request: Request) {
+  return Effect.succeed({ workspaceMachines: workspaceMachineLiveParam(request) });
+}
+
 /**
  * Every agent of a plan the account reaches, archived ones among them, each with its newest turn by
  * the order turns were queued, as `findLatestTurns` reads it, the harness
@@ -362,9 +389,15 @@ function issuesStatement() {
  * and that the Mac's last beat is not read,
  * because a beat wakes nothing (`deviceSync`) and a window judges a Mac by
  * its own presence read. An agent on no task is read only where `taskless`,
- * for a build that reads a null `taskId` (`tasklessLiveParam`).
+ * for a build that reads a null `taskId` (`tasklessLiveParam`), and one on
+ * a workspace's machine only where `workspaceMachines`, for a build that
+ * reads one (`workspaceMachineLiveParam`).
  */
-function agentsStatement(userId: string, narrowed: SQL = sql`true`, taskless = false) {
+function agentsStatement(
+  userId: string,
+  narrowed: SQL,
+  { taskless, workspaceMachines }: AgentsCarried,
+) {
   const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
 
   return liveRowsStatement(
@@ -469,10 +502,12 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`, taskless = f
         .leftJoinLateral(latest, sql`true`)
         .where(
           // An agent on a task is listed only where the account reaches the task too, as a read of it by its id is;
-          // one on no task only for a build that reads it, since an older one fails its whole answer on a null task.
+          // one on no task, or on a workspace's machine, only for a build that reads it, since an older one fails
+          // its whole answer on a null task, and reads an agent's machine only as the cloud or a device.
           and(
             agentVisibleTo(userId),
             taskless ? undefined : isNotNull(agentTable.taskId),
+            workspaceMachines ? undefined : ne(agentTable.machine, AGENT_MACHINE.WORKSPACE),
             narrowed,
           ),
         ),
@@ -680,14 +715,19 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
     Effect.map(Clock.currentTimeMillis, (now) => ({
       liveSince: String(now - TASK_LIVE_WINDOW_MILLIS),
       taskless: tasklessLiveParam(request),
+      workspaceMachines: workspaceMachineLiveParam(request),
     })),
-  statements: ({ userId, liveSince, taskless }) => {
-    const since = instantParam(liveSince);
-    const carried = taskless === TASKLESS_LIVE.CARRIED;
+  statements: (params) => {
+    const since = instantParam(params.liveSince);
+    const carried = agentsCarried(params);
 
     return {
-      tasks: tasksStatement(userId, liveTaskOf(userId, since)),
-      agents: agentsStatement(userId, listedAgentOf(userId, since, carried), carried),
+      tasks: tasksStatement(params.userId, liveTaskOf(params.userId, since)),
+      agents: agentsStatement(
+        params.userId,
+        listedAgentOf(params.userId, since, carried.taskless),
+        carried,
+      ),
       issues: issuesStatement(),
     };
   },
@@ -698,9 +738,10 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
       tasks: [taskSync, { table: taskPinSync, column: taskPin.taskId }],
       agents: [agentSync, { table: agentPinSync, column: agentPin.agentId }],
     },
-    statements: ({ userId, liveSince, taskless }, moved) => {
-      const since = instantParam(liveSince);
-      const carried = taskless === TASKLESS_LIVE.CARRIED;
+    statements: (params, moved) => {
+      const { userId } = params;
+      const since = instantParam(params.liveSince);
+      const carried = agentsCarried(params);
 
       return {
         tasks: tasksStatement(
@@ -709,7 +750,7 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
         ),
         agents: agentsStatement(
           userId,
-          and(listedAgentOf(userId, since, carried), movedAgents(moved)) ?? sql`false`,
+          and(listedAgentOf(userId, since, carried.taskless), movedAgents(moved)) ?? sql`false`,
           carried,
         ),
         issues: issuesStatement(),
@@ -748,7 +789,8 @@ function taskNamedBy(id: string): SQL {
 export const taskRowsRead = bindLiveRead(TASK_ROWS_READ, {
   reads: TASK_LIST_TABLES,
   topics: ({ userId }) => readerAndWorkspaceTopics(userId),
-  statements: ({ userId, id }) => {
+  serve: (_params, _query, request) => servedWorkspaceMachines(request),
+  statements: ({ userId, id, workspaceMachines }) => {
     const ofTask = queryBuilder.select({ id: task.id }).from(task).where(taskNamedBy(id));
 
     return {
@@ -756,6 +798,7 @@ export const taskRowsRead = bindLiveRead(TASK_ROWS_READ, {
       agents: agentsStatement(
         userId,
         or(eq(agentTable.id, id), sql`${agentTable.taskId} in (${ofTask})`) ?? sql`false`,
+        agentsCarried({ workspaceMachines }),
       ),
     };
   },
@@ -807,12 +850,17 @@ function taskRelatedTo(id: string): SQL {
 export const taskRelationsRead = bindLiveRead(TASK_RELATIONS_READ, {
   reads: TASK_LIST_TABLES,
   topics: ({ userId }) => readerAndWorkspaceTopics(userId),
-  statements: ({ userId, id }) => {
+  serve: (_params, _query, request) => servedWorkspaceMachines(request),
+  statements: ({ userId, id, workspaceMachines }) => {
     const related = queryBuilder.select({ id: task.id }).from(task).where(taskRelatedTo(id));
 
     return {
       tasks: tasksStatement(userId, taskRelatedTo(id)),
-      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${related})`),
+      agents: agentsStatement(
+        userId,
+        sql`${agentTable.taskId} in (${related})`,
+        agentsCarried({ workspaceMachines }),
+      ),
     };
   },
 });
@@ -867,7 +915,8 @@ function taskNumberedBy(query: string): SQL {
 export const taskSearchRead = bindLiveRead(TASK_SEARCH_READ, {
   reads: TASK_LIST_TABLES,
   topics: ({ userId }) => readerAndWorkspaceTopics(userId),
-  statements: ({ userId, query }) => {
+  serve: (_params, _query, request) => servedWorkspaceMachines(request),
+  statements: ({ userId, query, workspaceMachines }) => {
     const named = queryBuilder
       .select({ id: task.id })
       .from(task)
@@ -884,7 +933,11 @@ export const taskSearchRead = bindLiveRead(TASK_SEARCH_READ, {
 
     return {
       tasks: tasksStatement(userId, sql`${task.id} in (${found})`),
-      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${found})`),
+      agents: agentsStatement(
+        userId,
+        sql`${agentTable.taskId} in (${found})`,
+        agentsCarried({ workspaceMachines }),
+      ),
     };
   },
 });
@@ -938,12 +991,17 @@ function settledPage(userId: string, workspaceId: string, beforeAt: string, befo
 export const taskPageRead = bindLiveRead(TASK_PAGE_READ, {
   reads: TASK_LIST_TABLES,
   topics: ({ userId }) => readerAndWorkspaceTopics(userId),
-  statements: ({ userId, workspaceId, beforeAt, beforeId }) => {
+  serve: (_params, _query, request) => servedWorkspaceMachines(request),
+  statements: ({ userId, workspaceId, beforeAt, beforeId, workspaceMachines }) => {
     const page = settledPage(userId, workspaceId, beforeAt, beforeId);
 
     return {
       tasks: tasksStatement(userId, sql`${task.id} in (${page})`),
-      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${page})`),
+      agents: agentsStatement(
+        userId,
+        sql`${agentTable.taskId} in (${page})`,
+        agentsCarried({ workspaceMachines }),
+      ),
     };
   },
 });
@@ -999,7 +1057,8 @@ function personAgentTasks(userId: string, workspaceId: string, personId: string)
 export const personPageRead = bindLiveRead(PERSON_PAGE_READ, {
   reads: TASK_LIST_TABLES,
   topics: ({ userId }) => readerAndWorkspaceTopics(userId),
-  statements: ({ userId, workspaceId, personId }) => {
+  serve: (_params, _query, request) => servedWorkspaceMachines(request),
+  statements: ({ userId, workspaceId, personId, workspaceMachines }) => {
     const theirs = (which: SQL) =>
       sql<number>`(select count(*)::int from ${task} where ${taskReachableBy(userId)} and ${task.organizationId} = ${workspaceId} and ${which})`;
 
@@ -1019,7 +1078,11 @@ export const personPageRead = bindLiveRead(PERSON_PAGE_READ, {
         (selection) => queryBuilder.select(selection).from(sql`(select 1) as "one"`),
       ),
       tasks: tasksStatement(userId, sql`${task.id} in (${page})`),
-      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${page})`),
+      agents: agentsStatement(
+        userId,
+        sql`${agentTable.taskId} in (${page})`,
+        agentsCarried({ workspaceMachines }),
+      ),
     };
   },
 });

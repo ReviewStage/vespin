@@ -75,6 +75,7 @@ import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
 import {
+  type ChatReply,
   type ChatRunPlace,
   type ManagerChatRuns,
   managerChatLines,
@@ -196,6 +197,7 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
+import { land } from "@repo/ui/landed";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
@@ -263,6 +265,7 @@ import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
+import { centerWithin, scrollerOf } from "../scroll-within.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
@@ -338,6 +341,14 @@ import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ArchivedComposerNote } from "./archived-note.js";
+import {
+  ChatReplyProvider,
+  ChatShowProvider,
+  ReplyChip,
+  ReplyMessageAction,
+  useChatMessageMenu,
+  useChatReplyQuote,
+} from "./chat-reply.js";
 import { ComputerDock } from "./computer-dock.js";
 import { ComputerPermissionNote } from "./computer-permission-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
@@ -369,6 +380,7 @@ import {
   agentMessagePlace,
   MESSAGE_GONE,
   MessagePlaceProvider,
+  messageElement,
   useMessageReveal,
 } from "./message-links.js";
 import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
@@ -410,6 +422,7 @@ import {
   useUndeliveredLines,
   useUnsentLines,
 } from "./undelivered-mark.js";
+import type { ChatReplyTarget } from "./use-agent-composer.js";
 import {
   type HeldComposer,
   type MessageSender as MessageWriter,
@@ -673,6 +686,40 @@ interface ChatManagerLook {
 
 /** The Manager whose chat a transcript is; none for every other agent. */
 const ChatManager = createContext<ChatManagerLook | undefined>(undefined);
+
+/** A Manager's chat's doors: the Manager whose chat it is, and the press that brings one of its messages into view, as a reply's quote asks (`chat-reply.tsx`). */
+function ChatDoors({
+  manager,
+  show,
+  children,
+}: {
+  manager: ChatManagerLook | undefined;
+  show: (messageId: string) => void;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <ChatManager value={manager}>
+      <ChatShowProvider show={show}>{children}</ChatShowProvider>
+    </ChatManager>
+  );
+}
+
+/** What a transcript's replies are laid into the box through: words selected in a message, laid in as a quote (`reply-to-selection.tsx`), and a Manager's message the next send answers (`chat-reply.tsx`); either none while the box takes none. */
+function ReplyDoors({
+  selection,
+  chat,
+  children,
+}: {
+  selection: ((words: string) => void) | undefined;
+  chat: ((target: ChatReplyTarget) => void) | undefined;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <ReplyDoorProvider value={selection}>
+      <ChatReplyProvider replyTo={chat}>{children}</ChatReplyProvider>
+    </ReplyDoorProvider>
+  );
+}
 
 /** The face beside a Manager's bubbles, at a message's seat; none where it wears none. */
 function chatAvatar(face: ManagerFaceValue | undefined): React.JSX.Element | undefined {
@@ -2070,16 +2117,21 @@ export function AgentMessage({
     // A line sent from a suggestion is headed by the agent that suggested it, its words without the lead that names that agent to the agent reading them.
     const suggested = suggestedByOf(message);
 
+    // A line in a Manager's chat that answers one of its messages draws the quote over its bubble, its words alone inside.
+    const reply = chatRuns?.replies.get(message.id);
+
     const shown =
-      comment !== undefined
-        ? commentLineWords(comment)
-        : slack !== undefined
-          ? slack.words
-          : suggested !== undefined
-            ? suggestionWords(words)
-            : thread === undefined
-              ? words
-              : threadLineWords(words, thread.event);
+      reply !== undefined
+        ? reply.words
+        : comment !== undefined
+          ? commentLineWords(comment)
+          : slack !== undefined
+            ? slack.words
+            : suggested !== undefined
+              ? suggestionWords(words)
+              : thread === undefined
+                ? words
+                : threadLineWords(words, thread.event);
 
     // A line open for writing again is written where it stands.
     if (drawnEditor !== undefined) {
@@ -2091,7 +2143,12 @@ export function AgentMessage({
             data-leaving={editing.leaving ? "" : undefined}
             inert={editing.leaving}
           >
-            <EditComposer message={message} words={shown} edit={drawnEditor} />
+            {/* Note that a reply is written again with its quote, so the line sent in its place still answers the message. */}
+            <EditComposer
+              message={message}
+              words={reply === undefined ? shown : words}
+              edit={drawnEditor}
+            />
           </div>
         </Message>
       );
@@ -2143,6 +2200,7 @@ export function AgentMessage({
         <ChatLine
           message={message}
           runs={chatRuns}
+          reply={reply}
           sender={sender}
           subject={subject}
           shown={shown}
@@ -2320,6 +2378,7 @@ function ManagerGreetingMessage({
 function ChatLine({
   message,
   runs,
+  reply,
   sender,
   subject,
   shown,
@@ -2331,6 +2390,8 @@ function ChatLine({
 }: {
   message: AgentTranscriptMessage;
   runs: ManagerChatRuns;
+  /** The Manager's message the line answers, whose quote its bubble opens on; none for a line that answers none. */
+  reply: ChatReply | undefined;
   /** Who sent it; none for the reader's own. */
   sender: Actor | undefined;
   /** What heads the line, such as the suggestion it was sent from; none where nothing does. */
@@ -2345,6 +2406,7 @@ function ChatLine({
 }): React.JSX.Element {
   const place = runs.places.get(message.id) ?? LONE_RUN;
   const received = sender !== undefined;
+  const quote = useChatReplyQuote(reply);
 
   const head =
     received && place.opens ? (
@@ -2372,6 +2434,7 @@ function ChatLine({
             side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
             run={chatRunOf(place.opens, place.closes)}
             avatar={received ? <ActorMark actor={sender} size={ACTOR_SIZE.CARD} /> : undefined}
+            quote={quote}
             beside={
               <>
                 {mark}
@@ -2421,6 +2484,8 @@ function ChatSent({
 }): React.JSX.Element {
   const manager = useContext(ChatManager);
   const face = manager?.face;
+  const target = { id: message.id, words: moving ? "" : words };
+  const menu = useChatMessageMenu(target);
 
   return (
     <Message
@@ -2433,10 +2498,16 @@ function ChatSent({
         side={CHAT_SIDE.RECEIVED}
         run={chatRunOf(place.opens, place.closes)}
         avatar={chatAvatar(face)}
-        beside={moving || words === "" ? null : <CopyMessageAction words={words} />}
+        contextMenu={menu.contextMenu}
+        beside={
+          moving || words === "" ? null : (
+            <CopyMessageAction words={words} lead={<ReplyMessageAction target={target} />} />
+          )
+        }
       >
         {children}
       </ChatBubble>
+      {menu.menu}
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
         inset={chatInset(face)}
@@ -3365,6 +3436,27 @@ function AgentTranscriptView({
     bringIn.current = bringMessage;
   });
 
+  // A reply's quote brings the message it answers into view and lights it, as a link to a message does; one the log draws whole is scrolled to here.
+  const showMessage = useCallback(
+    (messageId: string) => {
+      const brought = bringMessage(messageId, (row) => land(messageElement(row, messageId) ?? row));
+
+      const element =
+        brought || log.current === null ? undefined : messageElement(log.current, messageId);
+
+      if (element === undefined) return;
+      const scroller = scrollerOf(element);
+
+      if (scroller !== undefined) {
+        centerWithin(scroller, element);
+        scroller.dispatchEvent(new Event("scroll"));
+      }
+
+      land(element);
+    },
+    [bringMessage],
+  );
+
   // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
   const railLines = useMemo(() => {
     const { description, task } = openingLinesOf(brief, drawnOrigin, firstLine);
@@ -3502,7 +3594,7 @@ function AgentTranscriptView({
       <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
           <ChatRuns value={chatRuns}>
-            <ChatManager value={manager}>
+            <ChatDoors manager={manager} show={showMessage}>
               <ConnectionNames needed={callsServer}>
                 <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
                   {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
@@ -3626,7 +3718,7 @@ function AgentTranscriptView({
                   <ConversationScrollButton />
                 </Conversation>
               </ConnectionNames>
-            </ChatManager>
+            </ChatDoors>
           </ChatRuns>
         </LiveDoors>
       </TranscriptAgentOn>
@@ -4071,6 +4163,17 @@ function AgentTabView({
   // The door the box hands Reply, which lays a quote in at its caret.
   const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
   const replyThroughBox = useCallback((words: string) => replyDoor.current?.(words), []);
+  // The door the box hands a Manager's message's Reply, which puts the caret in it once the reply stands over it.
+  const focusDoor = useRef<(() => void) | undefined>(undefined);
+  const { replyTo } = composer;
+
+  const replyInChat = useCallback(
+    (target: ChatReplyTarget) => {
+      replyTo(target);
+      focusDoor.current?.();
+    },
+    [replyTo],
+  );
 
   // Note that Reply stands only while the box takes a change, as a file's + does.
   const replies =
@@ -4135,7 +4238,10 @@ function AgentTabView({
                 <UndeliveredLines value={marks}>
                   <RewindProvider value={rewind}>
                     <TurnFilesOn value={turnLines}>
-                      <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
+                      <ReplyDoors
+                        selection={replies ? replyThroughBox : undefined}
+                        chat={chat && replies ? replyInChat : undefined}
+                      >
                         <AutomationsWanted wanted={automationLines}>
                           <ApprovalsProvider asks={approvals.asks}>
                             <GoalConditions value={conditions}>
@@ -4224,7 +4330,7 @@ function AgentTabView({
                             </GoalConditions>
                           </ApprovalsProvider>
                         </AutomationsWanted>
-                      </ReplyDoorProvider>
+                      </ReplyDoors>
                     </TurnFilesOn>
                   </RewindProvider>
                 </UndeliveredLines>
@@ -4303,6 +4409,9 @@ function AgentTabView({
           continuedNote
         ) : (
           <>
+            {composer.replyingTo === undefined ? null : (
+              <ReplyChip target={composer.replyingTo} onDrop={composer.dropReply} />
+            )}
             {composer.suggestion === undefined ? null : (
               <SuggestionChip
                 suggestion={composer.suggestion}
@@ -4333,6 +4442,7 @@ function AgentTabView({
                     keywords={keywords}
                     skills={skills}
                     replyDoor={replyDoor}
+                    focusDoor={focusDoor}
                     closedRemedy={closedRemedy}
                     sendsEmpty={sendsEmpty}
                     onContinueInCloud={onMoveToCloud}

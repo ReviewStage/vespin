@@ -33,9 +33,16 @@
  * lapsed (`@repo/database/models/host-pairing-store`). The read answers
  * what the approve screen shows: the box as it named itself and the
  * address its start came from, so a member sees whose box they would let
- * run their agents. An approve makes the account's host under an id minted
- * here, never one the box named, listed from that moment and keyed with a
- * secret on its box's next poll. Each of the three is a guess: one that
+ * run their agents, and the workspaces the member owns or admins that it
+ * may connect the box to instead, none where the box's daemon cannot be a
+ * workspace's machine. An approve makes the host under an id minted here,
+ * never one the box named, listed from that moment and keyed with a secret
+ * on its box's next poll: the account's own, or, where it names a
+ * workspace, that workspace's machine, which only its owners and admins
+ * may connect, refused as not found for a workspace the account is not in
+ * and not permitted for one it does not manage. A Mac is one owner's: an
+ * approve that would make it both a member's own and a workspace's is
+ * refused as owned elsewhere, and its pairing waits for another answer. Each of the three is a guess: one that
  * finds no pending pairing is answered not found and counts against the
  * account, and an account past the limit is refused as held, with when its
  * window ends, until it does.
@@ -45,6 +52,7 @@ import { randomUUID } from "node:crypto";
 import { runningTurnIds } from "@repo/database/models/abandoned-turns";
 import { accountExperimentOn } from "@repo/database/models/account-store";
 import { readVisibleAgent } from "@repo/database/models/agent-store";
+import { type HostPrincipal, ownDeviceHost } from "@repo/database/models/device-agent-store";
 import {
   allowedAppsOf,
   changeMachine,
@@ -54,14 +62,26 @@ import {
 import {
   approveHostPairing,
   denyHostPairing,
+  HOST_PAIRING_APPROVAL,
   HOST_PAIRING_GUESS,
+  type HostPairingApproval,
   type HostPairingGuessed,
   readHostPairing,
 } from "@repo/database/models/host-pairing-store";
-import { hostAgentConversations, hostsOf, removeHost } from "@repo/database/models/host-store";
+import {
+  hostAgentConversations,
+  hostsOf,
+  removeHostDevice,
+} from "@repo/database/models/host-store";
 import { answerMachineAsk } from "@repo/database/models/machine-command-ask-store";
 import { storeWriter } from "@repo/database/models/writer";
-import { HOST_WIRE, hostUserCodeOf, hostVersionMeets } from "@repo/features/host-wire";
+import { MACHINE_OWNER } from "@repo/features/device-agent-wire";
+import {
+  HOST_WIRE,
+  type HostPairingTarget,
+  hostUserCodeOf,
+  hostVersionMeets,
+} from "@repo/features/host-wire";
 import {
   lateAllowedWords,
   MACHINE_ASK_DECISION,
@@ -69,6 +89,7 @@ import {
 } from "@repo/features/machine-ask-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { Clock, Effect, Option } from "effect";
+import { managedWorkspace, managedWorkspacesOf } from "../accounts/workspace-access.js";
 import { HOST_VERSION } from "../auth/device-secret.js";
 import {
   recordServerEvent,
@@ -108,9 +129,9 @@ export function installScriptUrlOf(request: Request): string {
  * removed and a retry would find no host to remove; whatever was left reads
  * as lost once its lease runs out, and is settled at the agent's next touch.
  */
-const endedHostAgents = (userId: string, deviceId: string) =>
+const endedHostAgents = (host: HostPrincipal) =>
   Effect.gen(function* () {
-    const conversations = yield* hostAgentConversations(userId, deviceId);
+    const conversations = yield* hostAgentConversations(host);
 
     const lost = yield* Effect.forEach(conversations, (conversationId) =>
       Effect.map(runningTurnIds(conversationId), (ids) => ({
@@ -127,19 +148,32 @@ const endedHostAgents = (userId: string, deviceId: string) =>
   );
 
 /**
+ * Removes the host's device, a member's own or a workspace's machine:
+ * stamped removed, so its secret is refused at once and its box cleans
+ * itself up as it hears so, and every agent's running turns on it settled
+ * lost. Answers the transaction it removed in, or none where its owner held
+ * no such device standing.
+ */
+export const removeHostOf = (host: HostPrincipal) =>
+  Effect.gen(function* () {
+    const removed = yield* hostedStoreOrUnavailable(removeHostDevice(host));
+
+    if (removed !== undefined) yield* endedHostAgents(host);
+
+    return removed;
+  });
+
+/**
  * Removes the account's host of the id given, as Settings › Hosts' Remove
- * and the host's own leave (`device-agents-procedures.ts`) both do: stamped
- * removed, so its secret is refused at once and its box cleans itself up as
- * it hears so, its agents' running turns settled lost, and the change
- * counted. Answers the transaction it removed in, or none where no host of
- * that id stood.
+ * and the host's own leave (`device-agents-procedures.ts`) both do
+ * (`removeHostOf`), and counts the change. Answers the transaction it
+ * removed in, or none where no host of that id stood.
  */
 export const removeAccountHost = (userId: string, id: string) =>
   Effect.gen(function* () {
-    const removed = yield* hostedStoreOrUnavailable(removeHost(userId, id));
+    const removed = yield* removeHostOf(ownDeviceHost(userId, id));
 
     if (removed === undefined) return undefined;
-    yield* endedHostAgents(userId, id);
     yield* recordServerEvent(
       SERVER_EVENT.HOST_PAIRING_CHANGE,
       { userId },
@@ -197,6 +231,21 @@ const foundOrRefused = <A>(guessed: HostPairingGuessed<A>) => {
       return Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     case HOST_PAIRING_GUESS.HELD:
       return Effect.fail(hostPairingHeld(guessed.heldUntil.getTime()));
+  }
+};
+
+/** An approve that names no target: the approver's own machine, as every approve before targets did. */
+const JUST_ME: HostPairingTarget = { kind: MACHINE_OWNER.USER };
+
+/** The host an approve made, or its refusal: owned elsewhere where its Mac stands as another owner's host, and invalid where a workspace was asked of a box unfit to be one's, which no screen offers. */
+const approvedOrRefused = (approved: HostPairingApproval) => {
+  switch (approved.approval) {
+    case HOST_PAIRING_APPROVAL.APPROVED:
+      return Effect.succeed(approved.deviceId);
+    case HOST_PAIRING_APPROVAL.MACHINE_OWNED_ELSEWHERE:
+      return Effect.fail(HOSTED_REFUSAL.MACHINE_OWNED_ELSEWHERE);
+    case HOST_PAIRING_APPROVAL.UNFIT_FOR_WORKSPACE:
+      return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
 };
 
@@ -286,18 +335,30 @@ export function hostsProcedures(seams: HostsProcedureSeams) {
     readPairing: hosts.readPairing.effect(function* ({ context, input }) {
       const code = yield* codeOf(input.code);
 
-      const pending = yield* foundOrRefused(
+      const { workspaceFit, ...pending } = yield* foundOrRefused(
         yield* hostedStoreOrUnavailable(readHostPairing(context.userId, code)),
       );
 
-      return { ...pending, expiresAt: pending.expiresAt.getTime() };
+      const workspaces = workspaceFit ? yield* managedWorkspacesOf(context.userId) : [];
+
+      return { ...pending, expiresAt: pending.expiresAt.getTime(), workspaces };
     }),
     approvePairing: hosts.approvePairing.effect(function* ({ context, input }) {
       const code = yield* codeOf(input.code);
+      const target = input.target ?? JUST_ME;
+
+      // Note that only a workspace's owners and admins connect a machine to it, judged before the guess, which a refusal never spends.
+      if (target.kind === MACHINE_OWNER.WORKSPACE) {
+        yield* managedWorkspace(context.userId, target.workspaceId);
+      }
 
       // Note that the host's id is minted here, so a pairing never names a device that stands.
-      const deviceId = yield* foundOrRefused(
-        yield* hostedStoreOrUnavailable(approveHostPairing(context.userId, code, randomUUID())),
+      const deviceId = yield* approvedOrRefused(
+        yield* foundOrRefused(
+          yield* hostedStoreOrUnavailable(
+            approveHostPairing(context.userId, code, randomUUID(), target),
+          ),
+        ),
       );
 
       yield* recordServerEvent(

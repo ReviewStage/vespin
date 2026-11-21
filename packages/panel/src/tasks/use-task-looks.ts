@@ -7,10 +7,10 @@ import {
 } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { eq, useLiveQuery } from "@tanstack/react-db";
-import { useMutation } from "@tanstack/react-query";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { actMutation, pressMutation } from "../act-mutations.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 
 /**
@@ -181,8 +181,9 @@ export function useTaskLooks(
 
   const taskId = task?.id;
   const activityAt = row?.agents?.activityAt;
-  // Note that a look is sent with `mutate` and no `onError`, quiet whatever comes back, since no person pressed for it.
-  const { mutate: markTaskRead } = useMutation(actMutation(ACT_KIND.TASKS_MARK_READ));
+  // Note that a look is sent with `mutate` and no `onError`, quiet whatever comes back, since no person pressed for it, and
+  // its calls alone are held, so a look going out and landing draws nothing: the window's shell and its sidebar hold.
+  const { mutate: markTaskRead } = useMutationCalls(actMutation(ACT_KIND.TASKS_MARK_READ));
 
   const lookAtTask = useCallback(
     (taskId: string, readMark: ReadMark) => markTaskRead({ taskId, readMark }),
@@ -234,19 +235,39 @@ export function useTaskLooks(
  * frames never wear a developer's marks.
  */
 export function useUnreadTasks({ staged }: { staged: boolean }): (task: TaskSummary) => boolean {
-  const watched = useSelector(watchedStore);
+  return useUnreadWatching({ staged, watched: useSelector(watchedStore) });
+}
 
+/**
+ * Whether each plan is unread, as `useUnreadTasks` answers, against the plan
+ * `watched` as its caller is drawn: the one the window's look names
+ * (`useTaskLooks`). Note that a list drawn in the commit a task opens in
+ * reads it here, because the look writes the plan watched only once that
+ * commit lands, and a list reading that write would be drawn again, whole,
+ * in the commit after.
+ */
+export function useUnreadWatching({
+  staged,
+  watched,
+}: {
+  staged: boolean;
+  watched: string | undefined;
+}): (task: TaskSummary) => boolean {
   // Note that the answer stands while the plan watched does, so a list derived from it is derived again only when it moves.
-  return useCallback(
-    (task) => {
-      if (staged) return false;
+  return useCallback((task) => unreadWatching(task, staged, watched), [staged, watched]);
+}
 
-      if (task.markedUnread === true) return true;
+/** Whether a plan is unread, as `useUnreadWatching` answers, against the plan `watched` at the call. */
+export function unreadWatching(
+  task: TaskSummary,
+  staged: boolean,
+  watched: string | undefined,
+): boolean {
+  if (staged) return false;
 
-      return task.id !== watched && readsUnread(task, newestChangeOf(task));
-    },
-    [staged, watched],
-  );
+  if (task.markedUnread === true) return true;
+
+  return task.id !== watched && readsUnread(task, newestChangeOf(task));
 }
 
 /** Whether the developer marked a plan unread, and the mark a menu sets either way. */
@@ -271,7 +292,7 @@ function readMarkOf(unread: boolean): ReadMark {
  * marked.
  */
 export function useReadMark(): ReadMarks["mark"] {
-  const { mutate: markTaskRead } = useMutation(pressMutation(ACT_KIND.TASKS_MARK_READ));
+  const { mutate: markTaskRead } = useMutationCalls(pressMutation(ACT_KIND.TASKS_MARK_READ));
 
   return useCallback(
     (task, unread) => markTaskRead({ taskId: task.id, readMark: readMarkOf(unread) }),

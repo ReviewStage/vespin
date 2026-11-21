@@ -47,7 +47,9 @@ type UseListedInboxGroupsResult = {
  * agent's items among them, as every member's Inbox lists them; and the
  * read they come from.
  */
-export function useListedInboxGroups(tasks: TasksControl): UseListedInboxGroupsResult {
+export function useListedInboxGroups(
+  tasks: Pick<TasksControl, "workspace" | "typedNames">,
+): UseListedInboxGroupsResult {
   const { inboxTasks } = useListedInbox(tasks);
   // Note that only the plans holding items are read, each by its id with its name as it is being typed, so a plan that holds none moving, as each turn of its agents does, groups nothing again, nor draws the sidebar counting them (`useInboxViewCount`).
   const holderRows = useTaskListRows(tasks.typedNames);

@@ -311,7 +311,11 @@ export function standsLive(
  * stands beside them, unarchived or archived since `liveSince`, carried only
  * to a build that reads a null `taskId` (`HOSTED_API_VERSION` 6 on), which
  * the service binds as `taskless` from the headers the build names itself
- * in. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
+ * in. An agent on a machine its workspace owns is carried only to a build
+ * that reads one (`HOSTED_API_VERSION` 7 on), which the service binds as
+ * `workspaceMachines` the same way, as does every read below that answers
+ * the list's agents. Past a sync id it answers what moved alone
+ * (`LIVE_MODE.DELTA`).
  * The service answers `unavailable` where its deployment's Realtime is
  * misconfigured.
  */
@@ -322,6 +326,7 @@ export const TASK_LIST_READ = liveRead({
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
     liveSince: LIVE_PARAM.SERVED,
     taskless: LIVE_PARAM.SERVED,
+    workspaceMachines: LIVE_PARAM.SERVED,
   },
   mode: LIVE_MODE.DELTA,
   parts: {
@@ -379,7 +384,11 @@ export type TaskListLiveAnswer = LiveReadAnswer<typeof TASK_LIST_READ>;
 export const TASK_ROWS_READ = liveRead({
   name: "taskRows",
   path: HOSTED_SERVICE_PATH.LIVE_TASK_ROWS,
-  params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  params: {
+    id: LIVE_PARAM.ID,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    workspaceMachines: LIVE_PARAM.SERVED,
+  },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     tasks: TASK_LIST_READ.parts.tasks,
@@ -400,7 +409,11 @@ export type TaskRowsLiveAnswer = LiveReadAnswer<typeof TASK_ROWS_READ>;
 export const TASK_RELATIONS_READ = liveRead({
   name: "taskRelations",
   path: HOSTED_SERVICE_PATH.LIVE_TASK_RELATIONS,
-  params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  params: {
+    id: LIVE_PARAM.ID,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    workspaceMachines: LIVE_PARAM.SERVED,
+  },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     tasks: TASK_LIST_READ.parts.tasks,
@@ -424,7 +437,11 @@ export const TASK_SEARCH_LIMIT = 20;
 export const TASK_SEARCH_READ = liveRead({
   name: "taskSearch",
   path: HOSTED_SERVICE_PATH.LIVE_TASK_SEARCH,
-  params: { query: LIVE_PARAM.TEXT, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  params: {
+    query: LIVE_PARAM.TEXT,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    workspaceMachines: LIVE_PARAM.SERVED,
+  },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     tasks: TASK_LIST_READ.parts.tasks,
@@ -463,6 +480,7 @@ export const TASK_PAGE_READ = liveRead({
     beforeAt: LIVE_PARAM.OPTIONAL_TEXT,
     beforeId: LIVE_PARAM.OPTIONAL_ID,
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    workspaceMachines: LIVE_PARAM.SERVED,
   },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
@@ -523,6 +541,7 @@ export const PERSON_PAGE_READ = liveRead({
     workspaceId: LIVE_PARAM.TEXT,
     personId: LIVE_PARAM.TEXT,
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    workspaceMachines: LIVE_PARAM.SERVED,
   },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
@@ -902,11 +921,18 @@ function continuationOf(row: AgentLiveRow, messageId: string | undefined): Conti
     : { agentId: row.id, title: row.title, forked: true, messageId };
 }
 
-/** The Mac a local agent runs on as its summary names it, with no beat; none for one in a sandbox, or whose Mac is gone. */
+/** Where the agent runs as its summary says it: a device or a workspace's machine, none for the cloud or a kind this build does not know. */
+function machineOf(row: AgentLiveRow): AgentSummary["machine"] {
+  return row.machine === AGENT_MACHINE.DEVICE || row.machine === AGENT_MACHINE.WORKSPACE
+    ? row.machine
+    : undefined;
+}
+
+/** The Mac a local agent, or the workspace's machine an agent on one, runs on as its summary names it, with no beat; none for one in a sandbox, or whose machine is gone. */
 function macOf(row: AgentLiveRow): AgentSummary["mac"] {
   const { deviceId, deviceName } = row;
 
-  if (row.machine !== AGENT_MACHINE.DEVICE || deviceId == null || deviceName == null) {
+  if (machineOf(row) === undefined || deviceId == null || deviceName == null) {
     return undefined;
   }
 
@@ -949,6 +975,7 @@ function agentSummaryOf(
     (each) => each === row.permissionMode,
   );
 
+  const machine = machineOf(row);
   const mac = macOf(row);
 
   const owner = agentOwnerOf({
@@ -978,9 +1005,9 @@ function agentSummaryOf(
     ...(row.kind === AGENT_KIND.MANAGER && row.saidAt !== undefined && row.saidAt !== null
       ? { saidAt: row.saidAt }
       : undefined),
-    ...(row.machine === AGENT_MACHINE.DEVICE
-      ? { machine: AGENT_MACHINE.DEVICE }
-      : { sandboxVcpus: row.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }),
+    ...(machine === undefined
+      ? { sandboxVcpus: row.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }
+      : { machine }),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: row.createdAt,
     status,

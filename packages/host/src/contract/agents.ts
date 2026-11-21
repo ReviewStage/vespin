@@ -81,6 +81,7 @@ import {
 } from "@repo/features/agent-view";
 import {
   HOST_PAIRING_CALL_FAILURE,
+  hostPairingApproveParamsSchema,
   hostPairingApproveViewSchema,
   hostPairingDenyViewSchema,
   hostPairingParamsSchema,
@@ -212,7 +213,7 @@ export const AGENT_ACTS = declaredActs({
     unanswered: PAIRING_UNANSWERED,
   }),
   HOSTS_PAIRING_APPROVE: hostAct({
-    input: hostPairingParamsSchema,
+    input: hostPairingApproveParamsSchema,
     output: hostPairingApproveViewSchema,
     refusal: "Could not connect the host on this system.",
     panelOnly: true,

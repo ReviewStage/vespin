@@ -1,5 +1,5 @@
 import { REWIND_ACTION, type RewindAction } from "@repo/features/agent-rewind-model";
-import { BUTTON_SIZE, CopyButton, MessageActions } from "@repo/ui";
+import { BUTTON_SIZE, CopyButton, HeldMessageAction, MessageActions } from "@repo/ui";
 import { LinkIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { MessageAction } from "../ai-elements/message.js";
@@ -47,12 +47,14 @@ export function CopyMessageAction({
     <MessageActions>
       {lead}
       {copyable ? (
-        <CopyButton
-          text={words}
-          what={COPY_WHAT}
-          copy={copyThroughShell}
-          size={BUTTON_SIZE.COMPACT}
-        />
+        <HeldMessageAction>
+          <CopyButton
+            text={words}
+            what={COPY_WHAT}
+            copy={copyThroughShell}
+            size={BUTTON_SIZE.COMPACT}
+          />
+        </HeldMessageAction>
       ) : null}
       {messageId === undefined || place === undefined || copyLink === undefined ? null : (
         <MessageAction

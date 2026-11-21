@@ -127,27 +127,31 @@ export function agentInboxPast(
   );
 }
 
-/** The task's inbox as it stands, held while its cursor is still the reader's. */
+/** The task's inbox as it stands, its items of agents on workspaces' machines only where `workspaceMachines`, held while its cursor is still the reader's. */
 export function taskInboxPast(
   userId: string,
   taskId: string,
   after: string,
+  workspaceMachines = true,
 ): InboxStoreEffect<InboxAnswer> {
   return heldUntilMoved(
-    taskInboxStamps(userId, taskId),
+    taskInboxStamps(userId, taskId, workspaceMachines),
     after,
     [[TOPIC.TASK, taskId]],
     CODER.MESSAGES_POLL,
   ).pipe(
-    Effect.andThen(taskInboxItems(userId, taskId)),
+    Effect.andThen(taskInboxItems(userId, taskId, workspaceMachines)),
     Effect.map((items) => ({ items, cursor: cursorOf(itemStamps(items)) })),
   );
 }
 
 /** Where everything that waits on the account stands: its open items, and its automations' failed runs. */
-function accountStamps(userId: string): InboxStoreEffect<readonly InboxCursorStamp[]> {
+function accountStamps(
+  userId: string,
+  workspaceMachines: boolean,
+): InboxStoreEffect<readonly InboxCursorStamp[]> {
   return Effect.gen(function* () {
-    const items = yield* accountWaitingStamps(userId);
+    const items = yield* accountWaitingStamps(userId, workspaceMachines);
     const runs = failedRunStamps(yield* failedRunsOf(userId));
 
     return [...items, ...runs];
@@ -156,7 +160,8 @@ function accountStamps(userId: string): InboxStoreEffect<readonly InboxCursorSta
 
 /**
  * What waits on the developer across the account, held while its cursor is
- * still the reader's, and when it was read. Every agent stands on a task, so
+ * still the reader's, and when it was read, its items of agents on
+ * workspaces' machines only where `workspaceMachines`. Every agent stands on a task, so
  * its `taskless`, `automations`, and `agents` are empty, as the live read's
  * parts are, which a released desktop still follows. Note that the instant
  * is taken before the items are, because an item written between the two
@@ -165,13 +170,14 @@ function accountStamps(userId: string): InboxStoreEffect<readonly InboxCursorSta
 export function accountInboxPast(
   userId: string,
   after: string,
+  workspaceMachines = true,
 ): InboxStoreEffect<AccountInboxAnswer> {
   const read = Effect.gen(function* () {
     const readAt = yield* Clock.currentTimeMillis;
     // Note that the cursor is read before what it stands for, so a change landing between them wakes the reader again rather than being lost.
-    const cursor = cursorOf(yield* accountStamps(userId));
-    const rows = yield* accountWaitingItems(userId);
-    const tasks = yield* accountInboxTasks(userId);
+    const cursor = cursorOf(yield* accountStamps(userId, workspaceMachines));
+    const rows = yield* accountWaitingItems(userId, workspaceMachines);
+    const tasks = yield* accountInboxTasks(userId, workspaceMachines);
     const failedRuns = yield* failedRunsOf(userId);
     const items = rows.map(({ status: _status, ...entry }) => entry);
 
@@ -188,7 +194,7 @@ export function accountInboxPast(
   });
 
   return heldUntilMoved(
-    accountStamps(userId),
+    accountStamps(userId, workspaceMachines),
     after,
     [[TOPIC.ACCOUNT, userId]],
     CODER.ACCOUNT_INBOX_POLL,

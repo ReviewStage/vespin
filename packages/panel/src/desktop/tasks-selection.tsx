@@ -31,8 +31,8 @@ import { useSteadyDoor } from "../steady-door.js";
 import { type TaskListRows, useTaskListRows } from "../task-list-collections.js";
 import { useTasksDelete } from "../tasks/task-delete.js";
 import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { sectionGlyph } from "./section-icon-picker.js";
+import type { SidebarTasksControl } from "./sidebar-open.js";
 import {
   movesInto,
   newSectionAction,
@@ -116,7 +116,7 @@ export interface ChosenRows {
  * lets the selection go.
  */
 function selectionActs(
-  tasks: TasksControl,
+  tasks: SidebarTasksControl,
   rows: TaskListRows,
   latest: () => TaskSections,
   taskIds: readonly string[],
@@ -309,7 +309,7 @@ export type ChosenTasksStore = Store<ReadonlySet<string>>;
  * and in a store of the hook's own otherwise.
  */
 export function useTasksSelection(
-  tasks: TasksControl,
+  tasks: SidebarTasksControl,
   drawn: ReadonlySet<string>,
   held?: ChosenTasksStore,
 ): TasksSelection {

@@ -39,7 +39,7 @@ import type {
   MentionablePage,
   MentionablePullRequest,
 } from "./mention-picker.js";
-import type { AgentsControl } from "./use-agents.js";
+import { type AgentsControl, agentsNow, type HeldAgents } from "./use-agents.js";
 import { useOpenTask } from "./use-open-link.js";
 import { useAgentsListed, workspaceAgentsNow } from "./use-workspace-agents.js";
 import { workspaceAgentSearchQueryOptions } from "./workspace-agent-search.js";
@@ -104,13 +104,19 @@ const TaskMentionsContext = createContext<TaskMentionsValue | undefined>(undefin
 /** What takes in a mention made elsewhere on the page: the agent's message box drawn there. */
 type MentionBox = (mention: MentionNode) => void;
 
-/** The box standing on the page, if one is, and the door a box takes its place through. */
-interface MentionBoxes {
-  readonly box: MentionBox | undefined;
-  readonly stand: (update: (standing: MentionBox | undefined) => MentionBox | undefined) => void;
-}
+/** The door a box takes its place on the page through. */
+type MentionBoxStand = (
+  update: (standing: MentionBox | undefined) => MentionBox | undefined,
+) => void;
 
-const MentionBoxContext = createContext<MentionBoxes | undefined>(undefined);
+/**
+ * The box standing on the page, if one is, and apart from it the door a box
+ * takes its place through. Note that they are two, because every box reads
+ * the door and only a File tab reads the box, and a box taking its place as
+ * its task opens would otherwise draw every box again, and all under it.
+ */
+const MentionBoxContext = createContext<MentionBox | undefined>(undefined);
+const MentionStandContext = createContext<MentionBoxStand | undefined>(undefined);
 
 /**
  * Hands every place under it the task's page's mentions. Note that the text
@@ -128,11 +134,12 @@ export function TaskMentions({
   children: ReactNode;
 }): React.JSX.Element {
   const [box, stand] = useState<MentionBox | undefined>(undefined);
-  const boxes = useMemo<MentionBoxes>(() => ({ box, stand }), [box]);
 
   return (
     <TaskMentionsContext value={value}>
-      <MentionBoxContext value={boxes}>{children}</MentionBoxContext>
+      <MentionStandContext value={stand}>
+        <MentionBoxContext value={box}>{children}</MentionBoxContext>
+      </MentionStandContext>
     </TaskMentionsContext>
   );
 }
@@ -198,7 +205,8 @@ const NO_AGENTS_HELD: readonly AgentSummary[] = [];
 /** What a place holds of a task beside its description's words: the pages agents showed on it, its agents as read, and the reader of the workspace's. */
 interface TaskHolding {
   readonly pages: readonly MentionablePage[] | undefined;
-  readonly agents: Pick<AgentsControl, "agents" | "archived" | "models" | "pullRequests">;
+  /** The task's agents, the open task's read as they stand when an `@` list reads them (`agentsNow`). */
+  readonly agents: HeldAgents;
   readonly readAgents: MentionAgentsReader | undefined;
 }
 
@@ -231,13 +239,20 @@ export function heldTaskMentions(
     repository,
     text: () => text ?? "",
     pages,
-    agents: (agents.agents ?? NO_AGENTS_HELD).map((agent) => {
-      const name = agentName(agent, agents.models);
+    // Note that the agents and their pull requests are read as an `@` list reads them, so a step of a turn hands the place no new value.
+    get agents() {
+      const held = agentsNow(agents);
 
-      return { id: agent.id, name, actor: agentActor(agent, name), summary: agent };
-    }),
+      return (held.agents ?? NO_AGENTS_HELD).map((agent) => {
+        const name = agentName(agent, held.models);
+
+        return { id: agent.id, name, actor: agentActor(agent, name), summary: agent };
+      });
+    },
     readAgents,
-    pullRequests: mentionablePullRequests(agents),
+    get pullRequests() {
+      return mentionablePullRequests(agentsNow(agents));
+    },
     doors: {
       ...doors,
       holder: text === undefined ? undefined : holder,
@@ -464,7 +479,7 @@ export function useMentionLink(task?: MentionedTask): LinkDrawer {
 
 /** Makes the agent's message box the one a mention made elsewhere on the page is laid into, for as long as it is drawn; none where the box takes none, as an Inbox answer's. */
 export function useMentionBox(receive: MentionBox | undefined): void {
-  const stand = useContext(MentionBoxContext)?.stand;
+  const stand = useContext(MentionStandContext);
   const latest = useRef(receive);
   latest.current = receive;
   const takes = receive !== undefined;
@@ -480,5 +495,5 @@ export function useMentionBox(receive: MentionBox | undefined): void {
 
 /** Hands a mention to the agent's message box drawn on the page; nothing while no box stands there, or off a task's page. */
 export function useMentionDrop(): ((mention: MentionNode) => void) | undefined {
-  return useContext(MentionBoxContext)?.box;
+  return useContext(MentionBoxContext);
 }

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { act, createElement, createRef, useLayoutEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
+import { holdFrames, settleFrames } from "../../testing/frames.js";
 import {
   useVirtualRuns,
   VIRTUAL_ROWS_ANCHOR,
@@ -18,7 +19,8 @@ import {
  * though the rows far from the view are not drawn at all; and a run read
  * from its top draws the rows its scroller shows, wherever in the scroller
  * the boxes around it place it, by the sizes it measured when it was last
- * drawn where it is handed them. A run anchored to its end draws its last
+ * drawn where it is handed them, drawing the rows past the view only once
+ * its first frame has painted. A run anchored to its end draws its last
  * rows from its first draw, and, drawn before its scroller is laid out,
  * opens at its end once the scroller is. A list of
  * several runs answers every row's key, in the order its runs stand.
@@ -79,11 +81,13 @@ test("the rows are the items of a list, each saying the run's size and its own p
   }
 });
 
-test("a run read from its top, placed by a box inside its scroller, draws the rows the scroll shows", () => {
+test("a run read from its top, placed by a box inside its scroller, draws the rows the scroll shows, and the rows on either side once its first frame has painted", async () => {
   vi.stubGlobal("ResizeObserver", StandInResizeObserver);
+  holdFrames();
   // Note that jsdom lays nothing out, so the run stands at the top of a list's body that is itself
   // placed 1,000px down the scroller's content, and the scroller is scrolled 2,000px down: rows
-  // 10 to 17 of 100px fill the window's 768px, and the four on either side are drawn with them.
+  // 10 to 17 of 100px fill the window's 768px, drawn alone in the run's first frame, and the
+  // four on either side are drawn with them once that frame has painted.
   const box = (id: string) => document.getElementById(id);
   vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockImplementation(function (
     this: HTMLElement,
@@ -133,17 +137,29 @@ test("a run read from its top, placed by a box inside its scroller, draws the ro
       ),
     );
 
+  const drawn = () => [...container.querySelectorAll("li")].map((row) => row.textContent);
   act(() => root.render(frame(false)));
   act(() => root.render(frame(true)));
-  const drawn = [...container.querySelectorAll("li")].map((row) => row.textContent);
-  assert.equal(drawn[0], "row-6");
-  assert.equal(drawn.at(-1), "row-21");
+  const first = drawn();
+  await settleFrames();
+
+  assert.deepEqual(
+    [first[0], first.at(-1)],
+    ["row-10", "row-17"],
+    "the first frame draws the view's rows",
+  );
+  assert.deepEqual(
+    [drawn()[0], drawn().at(-1)],
+    ["row-6", "row-21"],
+    "and then the four on either side",
+  );
 });
 
 test("a run drawn again with what it measured lays its rows out by those sizes from its first draw", () => {
   vi.stubGlobal("ResizeObserver", StandInResizeObserver);
   // Note that the run stands at the top of a body 1,000px down its scroller, scrolled 2,000px down, as above: by the
-  // 100px estimate rows 10 to 17 would show, but its first 20 rows measured 50px, so 1,000px into the run is row 20.
+  // 100px estimate rows 10 to 17 would show, but its first 20 rows measured 50px, so 1,000px into the run is row 20,
+  // and rows 20 to 27 fill the window's 768px.
   const box = (id: string) => document.getElementById(id);
   vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockImplementation(function (
     this: HTMLElement,
@@ -207,8 +223,8 @@ test("a run drawn again with what it measured lays its rows out by those sizes f
   act(() => root.render(frame(false)));
   act(() => root.render(frame(true)));
   const drawn = [...container.querySelectorAll("li")].map((row) => row.textContent);
-  assert.equal(drawn[0], "row-16");
-  assert.equal(drawn.at(-1), "row-31");
+  assert.equal(drawn[0], "row-20");
+  assert.equal(drawn.at(-1), "row-27");
 });
 
 test("a row moved to another place, the run's length unchanged, is drawn under its own key", () => {

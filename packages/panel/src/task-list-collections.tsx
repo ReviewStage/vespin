@@ -15,7 +15,16 @@ import {
   type TaskNames,
 } from "@repo/features/tasks-model";
 import type { TaskListCollections } from "@repo/host/task-list-following";
-import { type Collection, eq, useLiveQuery } from "@tanstack/react-db";
+import {
+  type Collection,
+  caseWhen,
+  coalesce,
+  eq,
+  gt,
+  inArray,
+  or,
+  useLiveQuery,
+} from "@tanstack/react-db";
 import {
   createContext,
   type ReactNode,
@@ -130,6 +139,29 @@ export function useTaskListRow<Row extends object>(
 }
 
 /**
+ * What `pick` reads of the row `key` names in `collection`, drawn again only
+ * when that changes, as a reader needing one fact of a row whose other
+ * fields move often takes it; `pick` of none where the collection holds no
+ * such row, or no key is given. Note that `pick` answers a value compared by
+ * identity, so it picks a primitive, never a fresh object.
+ */
+export function useTaskListRowAs<Row extends object, Picked>(
+  collection: Collection<Row, string>,
+  key: string | undefined,
+  pick: (row: Row | undefined) => Picked,
+): Picked {
+  const subscribe = useCallback(
+    (heard: RowHeard) =>
+      key === undefined ? LISTEN_TO_NOTHING() : listenToRow(collection, key, heard),
+    [collection, key],
+  );
+
+  const read = (): Picked => pick(key === undefined ? undefined : collection.get(key));
+
+  return useSyncExternalStore(subscribe, read, read);
+}
+
+/**
  * The task `taskId` names as the list holds it (`useTaskListRow`), its name
  * drawn as it is being typed where it is (`typedNames`); none where the list
  * holds no such task, or no id is given. The same object until that row or
@@ -189,6 +221,248 @@ export function useNamedTasks(
 
     return [...pinned, ...rest];
   }, [every, typedNames, order]);
+}
+
+/**
+ * Whom a page reads tasks about: a member, whose tasks are those assigned to
+ * or created by them, the creator read as `creatorIdOf` reads it, the owner
+ * where the service names none, or a coding agent, a Manager say, whose tasks are
+ * those it made; either way also the tasks `taskIds` names, those the
+ * agents it lists work on.
+ */
+export type TasksAbout =
+  | { readonly userId: string; readonly taskIds: readonly string[] }
+  | { readonly agentId: string; readonly taskIds: readonly string[] };
+
+/**
+ * The tasks of the workspace `workspaceId` names, every workspace's where
+ * none is named, that `about` names, in the sidebar's order as
+ * `useNamedTasks` answers them, each name drawn as it is being typed. The
+ * query holds those tasks alone, and of their agents' counts only the
+ * activity a task is ordered by (`taskTime`), so a change to any other task,
+ * or a turn of their agents that moves no order, draws no reader; for a page
+ * about someone, as a person's page and a Manager's overview are. The rows
+ * are the collection's own as the query last moved, so their `agents` may be
+ * a turn behind: a row that draws them reads its own task (`useNamedTask`).
+ */
+export function useTasksAbout(
+  typedNames: TaskNames,
+  workspaceId: string | undefined,
+  about: TasksAbout,
+): readonly TaskSummary[] {
+  const collections = useTaskListCollections();
+  const userId = "userId" in about ? about.userId : undefined;
+  const agentId = "agentId" in about ? about.agentId : undefined;
+  const { taskIds } = about;
+
+  const { data } = useLiveQuery((q) => {
+    const all = q
+      .from({ task: collections.tasks })
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
+
+    const held =
+      workspaceId === undefined ? all : all.where(({ task }) => eq(task.workspaceId, workspaceId));
+
+    const about =
+      userId === undefined
+        ? held.where(({ task }) =>
+            or(inArray(task.id, [...taskIds]), eq(task.origin?.agentId, agentId)),
+          )
+        : held.where(({ task }) =>
+            or(
+              inArray(task.id, [...taskIds]),
+              eq(task.assignee?.userId, userId),
+              eq(coalesce(task.createdBy?.userId, task.ownerId), userId),
+            ),
+          );
+
+    // Note that the agents' counts are left out but for the activity a task is ordered by (`taskTime`), so a turn that moves no order moves no row.
+    return about.select(({ task }) => {
+      const agentsAt = coalesce(task.agents?.activityAt, 0);
+
+      return {
+        ...task,
+        agents: undefined,
+        activeAt: caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt),
+      };
+    });
+  });
+
+  return useMemo(() => {
+    const rows = data.flatMap((row): TaskSummary[] => {
+      const task = collections.tasks.get(row.id);
+
+      return task === undefined ? [] : [task];
+    });
+
+    const { pinned, rest } = sidebarTasks(renamedTasks(rows, typedNames));
+
+    return [...pinned, ...rest];
+  }, [data, collections.tasks, typedNames]);
+}
+
+/**
+ * Every task the list holds in `order` as `useNamedTasks` answers them, but
+ * drawn again only when a task moves in something other than its agents'
+ * counts, which change on every turn an agent starts or ends. The rows are
+ * the collection's own as the query last moved, so their `agents` may be a
+ * turn behind: a row that draws them reads its own task (`useNamedTask`).
+ * For a reader that walks the whole list and draws agents only in rows of
+ * its own, as the palette's task rows do.
+ */
+export function useNamedTasksAtRest(
+  typedNames: TaskNames,
+  order: NamedOrder,
+  workspaceId?: string | undefined,
+  asked = true,
+): readonly TaskSummary[] {
+  const collections = useTaskListCollections();
+
+  const { data } = useLiveQuery((q) => {
+    if (!asked) return undefined;
+
+    const all = q
+      .from({ task: collections.tasks })
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
+
+    const held =
+      workspaceId === undefined ? all : all.where(({ task }) => eq(task.workspaceId, workspaceId));
+
+    return held.select(({ task }) => ({ ...task, agents: undefined }));
+  });
+
+  return useMemo(() => {
+    if (data === undefined) return NO_NAMED_TASKS;
+
+    const rows = data.flatMap((row): TaskSummary[] => {
+      const task = collections.tasks.get(row.id);
+
+      return task === undefined ? [] : [task];
+    });
+
+    const named = renamedTasks(rows, typedNames);
+
+    if (order === NAMED_ORDER.STARTED) return named;
+    const { pinned, rest } = sidebarTasks(named);
+
+    return [...pinned, ...rest];
+  }, [data, collections.tasks, typedNames, order]);
+}
+
+/**
+ * The listed workspace's `count` tasks with the latest activity (`taskTime`
+ * under Updated: the later of a task's own update and its agents' last
+ * settled activity), pinned ones first among equals, each as the collection
+ * holds it. The query selects each task's id and repository alone, so a
+ * delivery that moves nothing else, as each turn of an agent does, leaves
+ * the list as it was; a row that draws more reads its own task
+ * (`useNamedTask`).
+ */
+export function useRecentTasks(
+  workspaceId: string | undefined,
+  count: number,
+): readonly TaskSummary[] {
+  const collections = useTaskListCollections();
+
+  const { data } = useLiveQuery((q) => {
+    const all = q.from({ task: collections.tasks });
+
+    const held =
+      workspaceId === undefined ? all : all.where(({ task }) => eq(task.workspaceId, workspaceId));
+
+    return held
+      .orderBy(({ task }) => {
+        const agentsAt = coalesce(task.agents?.activityAt, 0);
+
+        return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
+      }, "desc")
+      .orderBy(({ task }) => coalesce(task.pinnedAt, 0), "desc")
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
+      .limit(count)
+      .select(({ task }) => ({ id: task.id, repository: task.repository }));
+  });
+
+  return useMemo(
+    () =>
+      data.flatMap((row): TaskSummary[] => {
+        const task = collections.tasks.get(row.id);
+
+        return task === undefined ? [] : [task];
+      }),
+    [data, collections.tasks],
+  );
+}
+
+/**
+ * How many tasks the listed workspace holds, up to `most`; every
+ * workspace's where none is listed. The query selects each task's id alone,
+ * so only a task coming or going draws its reader.
+ */
+export function useTaskCountUpTo(workspaceId: string | undefined, most: number): number {
+  const collections = useTaskListCollections();
+
+  return useLiveQuery((q) => {
+    const all = q.from({ task: collections.tasks });
+
+    const held =
+      workspaceId === undefined ? all : all.where(({ task }) => eq(task.workspaceId, workspaceId));
+
+    return held
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .limit(most)
+      .select(({ task }) => ({ id: task.id }));
+  }).data.length;
+}
+
+/** A task as New task's relations read it: what the search lists, judges, and its row draws. */
+export interface RelatableTask {
+  readonly id: TaskSummary["id"];
+  readonly name: TaskSummary["name"];
+  readonly workspaceId: TaskSummary["workspaceId"];
+  readonly repository: TaskSummary["repository"];
+  readonly number?: TaskSummary["number"] | undefined;
+  readonly status?: TaskSummary["status"] | undefined;
+  readonly parentTaskId?: TaskSummary["parentTaskId"] | undefined;
+}
+
+/**
+ * The listed workspace's tasks as a new task may relate to them, pinned first
+ * as the sidebar orders them, each name drawn as it is being typed where it is
+ * (`typedNames`). The query selects the fields a relation reads
+ * (`RelatableTask`), so a delivery that moves none of them, as each turn of an
+ * agent does, leaves the list as it was.
+ */
+export function useRelatableTasks(
+  typedNames: TaskNames,
+  workspaceId: string | undefined,
+): readonly RelatableTask[] {
+  const collections = useTaskListCollections();
+
+  const { data } = useLiveQuery((q) => {
+    const all = q.from({ task: collections.tasks });
+
+    const held =
+      workspaceId === undefined ? all : all.where(({ task }) => eq(task.workspaceId, workspaceId));
+
+    return held
+      .orderBy(({ task }) => coalesce(task.pinnedAt, 0), "desc")
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
+      .select(({ task }) => ({
+        id: task.id,
+        name: task.name,
+        workspaceId: task.workspaceId,
+        number: task.number,
+        status: task.status,
+        repository: task.repository,
+        parentTaskId: task.parentTaskId,
+      }));
+  });
+
+  return useMemo(() => renamedTasks(data, typedNames), [data, typedNames]);
 }
 
 /** The tasks a collection holds by their number, in any workspace, and each numbered task's number, as the deliveries left them. */
@@ -344,14 +618,45 @@ export function useSteppedTasks(step: string | undefined): readonly TaskSummary[
 export interface TaskListRows {
   /** The task listed under `taskId`, its name as it is being typed where it is; none where the list holds none. */
   readonly task: (taskId: string) => TaskSummary | undefined;
-  /** The agent listed under `agentId`; none where the list holds none. */
-  readonly agent: (agentId: string) => ListedAgent | undefined;
+  /** The agent listed under `agentId`, by its task and what it is named by; none where the list holds none. */
+  readonly agent: (agentId: string) => NamedAgentRow | undefined;
 }
 
-/** The rows a reader by id asked for, by id, each as it read it last, and the stops of the listens following them. */
-interface AskedRows<Row> {
-  readonly read: Map<string, Row | undefined>;
+/** What a reader by id reads of an agent: its task and what it is named by (`agentName`), which a step of its turn never moves. */
+export type NamedAgentRow = Pick<
+  ListedAgent,
+  "id" | "taskId" | "title" | "model" | "automationName"
+>;
+
+/** What a reader by id reads of an agent's row; none for no row. */
+function namedAgentOf(row: ListedAgent | undefined): NamedAgentRow | undefined {
+  if (row === undefined) return undefined;
+  const { id, taskId, title, model, automationName } = row;
+
+  return automationName === undefined
+    ? { id, taskId, title, model }
+    : { id, taskId, title, model, automationName };
+}
+
+/** Whether two reads of an agent by id name it alike, so a step of its turn moves no reader. */
+function sameNamedAgent(a: NamedAgentRow | undefined, b: NamedAgentRow | undefined): boolean {
+  return (
+    a === b ||
+    (a !== undefined &&
+      b !== undefined &&
+      a.taskId === b.taskId &&
+      a.title === b.title &&
+      a.model === b.model &&
+      a.automationName === b.automationName)
+  );
+}
+
+/** The rows a reader by id asked for, by id, each as it read it last, the stops of the listens following them, and what it reads of a row (`pick`), compared by `same`. */
+interface AskedRows<Row, Read> {
+  readonly read: Map<string, Read | undefined>;
   readonly stops: Map<string, () => void>;
+  readonly pick: (row: Row | undefined) => Read | undefined;
+  readonly same: (a: Read | undefined, b: Read | undefined) => boolean;
 }
 
 /** Counts one more move of a row a reader asked for. */
@@ -362,21 +667,27 @@ const countMove = (moves: number): number => moves + 1;
  * `moved` of a row that moved between its read and now, since its listen
  * hears only what moves after it.
  */
-function followAsked<Row extends object>(
+function followAsked<Row extends object, Read>(
   collection: Collection<Row, string>,
-  asked: AskedRows<Row>,
+  asked: AskedRows<Row, Read>,
   moved: RowHeard,
 ): void {
   for (const [key, read] of asked.read) {
     if (asked.stops.has(key)) continue;
-    asked.stops.set(key, listenToRow(collection, key, moved));
 
-    if (collection.get(key) !== read) moved();
+    // Note that a move is told only where what the reader reads of the row moved, read against its last lookup.
+    const heard = () => {
+      if (!asked.same(asked.read.get(key), asked.pick(collection.get(key)))) moved();
+    };
+
+    asked.stops.set(key, listenToRow(collection, key, heard));
+
+    if (!asked.same(asked.pick(collection.get(key)), read)) moved();
   }
 }
 
 /** Stops following every row asked for, so the next commit follows them afresh. */
-function stopFollowing(asked: AskedRows<object>): void {
+function stopFollowing(asked: Pick<AskedRows<object, unknown>, "stops">): void {
   for (const stop of asked.stops.values()) stop();
   asked.stops.clear();
 }
@@ -395,9 +706,12 @@ export function useTaskListRows(typedNames: TaskNames = NO_NAMES_TYPED): TaskLis
   const collections = useTaskListCollections();
 
   // The ids asked for, followed once committed. Note that they only grow, as the rows a reader looks up are few.
-  const asked = useRef<{ tasks: AskedRows<TaskSummary>; agents: AskedRows<ListedAgent> }>({
-    tasks: { read: new Map(), stops: new Map() },
-    agents: { read: new Map(), stops: new Map() },
+  const asked = useRef<{
+    tasks: AskedRows<TaskSummary, TaskSummary>;
+    agents: AskedRows<ListedAgent, NamedAgentRow>;
+  }>({
+    tasks: { read: new Map(), stops: new Map(), pick: (row) => row, same: Object.is },
+    agents: { read: new Map(), stops: new Map(), pick: namedAgentOf, same: sameNamedAgent },
   }).current;
 
   const [moves, moved] = useReducer(countMove, 0);
@@ -423,7 +737,7 @@ export function useTaskListRows(typedNames: TaskNames = NO_NAMES_TYPED): TaskLis
         return row === undefined ? undefined : renamedTask(row, typedNames);
       },
       agent: (agentId: string) => {
-        const row = collections.agents.get(agentId);
+        const row = namedAgentOf(collections.agents.get(agentId));
         asked.agents.read.set(agentId, row);
 
         return row;

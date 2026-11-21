@@ -4,9 +4,9 @@ import { dropBelowStart, GearIcon, IconButton, useMenu } from "@repo/ui";
 import { MessageSquareIcon } from "@repo/ui/icons";
 import { runAppCommand } from "../app-commands.js";
 import { useAdminDoor } from "../places/routed-doors.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu, type MenuEntry } from "./action-menu.js";
 import { AccountAvatar, AccountHeading, useAccountMenuGroups } from "./sidebar-foot.js";
+import type { SidebarTasksControl } from "./sidebar-open.js";
 import { useWorkspaceMenuDoors, workspaceMenuGroups } from "./workspace-switcher.js";
 
 /**
@@ -29,7 +29,7 @@ export function PhoneAccount({
   onSettings,
   onSignOut,
 }: {
-  tasks: TasksControl;
+  tasks: SidebarTasksControl;
   account: AccountSnapshot;
   onSettings: () => void;
   onSignOut: () => Promise<void>;

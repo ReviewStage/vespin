@@ -15,7 +15,12 @@ import {
   taskNamesOf,
 } from "@repo/database/models/agent-store";
 import { currentAutomationRun } from "@repo/database/models/automation-store";
-import { type Device, devicesSeenSince } from "@repo/database/models/device-store";
+import {
+  type Device,
+  devicesSeenSince,
+  type WorkspaceOwnedMachine,
+  workspaceOwnedMachinesOf,
+} from "@repo/database/models/device-store";
 import {
   listMessagesBefore,
   listMessagesFrom,
@@ -73,6 +78,7 @@ import {
   LOCAL_AGENT_REFUSAL,
   type LocalAgentRefusal,
   MAC_PRESENCE,
+  personalRunsOnSchema,
   type RefusedDevice,
   startBranchSchema,
 } from "@repo/features/agent-wire";
@@ -469,6 +475,7 @@ export const START_AGENT_REFUSAL = {
   BILLING_REQUIRED: `Not started: the workspace has used its free cloud usage for the month and has no billing set up, or its last payment failed; an owner or admin sets up or manages billing in Settings › Billing, or start it on a member's Mac.`,
   DEVICE_REMOVED: `Not started: the machine it would run on was removed. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add the machine again.`,
   NO_DEVICES: `Not started: the member has no device registered to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add a machine in Settings › Machines.`,
+  NO_WORKSPACE_MACHINES: `Not started: the workspace owns no machine to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask a workspace admin to connect one in Settings › Machines.`,
   NO_SOURCE:
     "Not started: no agent of your workspace has that id to start from; " +
     `${AGENT_TOOL.LIST_AGENTS} names them.`,
@@ -544,10 +551,50 @@ function notOwnerWords(device: RefusedDevice | undefined): string {
 }
 
 /** A device of the member's as a refusal of a device's name lists it: its name, its id, and whether it is online now, as a start would take it (`freshOffer`). */
-function listedDevice(device: Device, now: number): string {
+function listedDevice(device: Pick<Device, "id" | "name" | "lastSeenAt">, now: number): string {
   const online = device.lastSeenAt.getTime() >= now - MAC_PRESENCE.FRESH_MS;
 
   return `${JSON.stringify(device.name)} (deviceId ${device.id}, ${online ? "online" : "away"})`;
+}
+
+/**
+ * The machines of those given that `name` names, any case. Note that both
+ * sides are read as a machine's name is kept (`cleanMachineName`), so a
+ * name typed with its double space, or one kept before names were cleaned,
+ * still matches.
+ */
+function namedMachines<M extends { readonly name: string }>(
+  machines: readonly M[],
+  name: string,
+): readonly M[] {
+  const wanted = cleanMachineName(name).toLowerCase();
+
+  return machines.filter((machine) => cleanMachineName(machine.name).toLowerCase() === wanted);
+}
+
+/**
+ * Why a start naming a workspace's machine by its name started nothing: the
+ * name matches none of the workspace's machines, or more than one, said
+ * with every one of them by name, id, and whether it is online, so the call
+ * can be made again naming one; or the workspace has none to list.
+ */
+function workspaceMachineNameRefusal(
+  name: string,
+  matched: number,
+  machines: readonly WorkspaceOwnedMachine[],
+  now: number,
+): string {
+  if (machines.length === 0) return START_AGENT_REFUSAL.NO_WORKSPACE_MACHINES;
+  const named = JSON.stringify(name);
+
+  const why =
+    matched === 0
+      ? `no machine of the workspace's is named ${named}`
+      : `${matched} machines of the workspace's are named ${named}, so name the one you mean by its deviceId`;
+
+  const listed = machines.map((machine) => listedDevice(machine, now)).join("; ");
+
+  return `Not started: ${why}. Its machines: ${listed}. Name one by its name or its deviceId, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`;
 }
 
 /**
@@ -728,17 +775,31 @@ export const START_BRANCH = startBranchSchema;
  * start on the description had no room for what was said beyond the description, so the
  * caller started the agent and then messaged it the rest.
  */
+/** One of the member's own devices by its name, which a call matches to its id (`runsOnOfStart`). */
+const DEVICE_BY_NAME = Schema.Struct({
+  machine: Schema.Literal(AGENT_MACHINE.DEVICE),
+  device: deviceAgentRegisterRequestSchema.fields.name,
+});
+
+/**
+ * Where an automation's runs start, as its tools name it: as the automation
+ * keeps it (`personalRunsOnSchema`), the cloud or one of its creator's
+ * devices by its id, or one of those devices by its name.
+ */
+export const AUTOMATION_RUNS_ON = Schema.Union([...personalRunsOnSchema.members, DEVICE_BY_NAME]);
+
 /**
  * Where a started agent runs, as `start_agent` names it: as a start request
- * does (`agentRunsOnRequestSchema`), or one of the member's own devices by
- * its name, which the call matches to its id (`runsOnOfStart`) before the
- * start is asked.
+ * does (`agentRunsOnRequestSchema`), or one of the member's own devices, or
+ * a machine the workspace owns, by its name, which the call matches to its
+ * id (`runsOnOfStart`) before the start is asked.
  */
 export const START_RUNS_ON = Schema.Union([
   ...agentRunsOnRequestSchema.members,
+  DEVICE_BY_NAME,
   Schema.Struct({
-    machine: Schema.Literal(AGENT_MACHINE.DEVICE),
-    device: deviceAgentRegisterRequestSchema.fields.name,
+    machine: Schema.Literal(AGENT_MACHINE.WORKSPACE),
+    name: deviceAgentRegisterRequestSchema.fields.name,
   }),
 ]);
 
@@ -865,11 +926,15 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
     runsOn: Schema.optionalKey(
       describeWire(
         START_RUNS_ON,
-        `Where the agent runs: ${IN_THE_CLOUD_WORDS} for the cloud, or ` +
+        `Where the agent runs: ${IN_THE_CLOUD_WORDS} for the cloud, ` +
           `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, device: "<name>" })} for one of the ` +
           "member's own devices (a Mac or a host) by its name, or " +
-          `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id; it must be online, ` +
-          "and a name matching none of their devices, or several, is refused with the devices listed. " +
+          `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id, or ` +
+          `${JSON.stringify({ machine: AGENT_MACHINE.WORKSPACE, name: "<name>" })} for one of the ` +
+          "workspace's own machines, which run every member's agents, each in its own VM, by its " +
+          `name, or ${JSON.stringify({ machine: AGENT_MACHINE.WORKSPACE, deviceId: "<id>" })} by ` +
+          "its id; it must be online, and a name matching none of those machines, or several, is " +
+          "refused with them listed. " +
           `${AGENT_TOOL.LIST_MACHINES} lists each place with the runsOn to pass. Every start names it ` +
           "but one with from, which runs where the agent it starts from runs unless it names another " +
           "place, which moves it there.",
@@ -2408,37 +2473,53 @@ function startInputRefusal(
 /**
  * The place a start's runsOn names, as a start request names it: a device
  * named by its name is the starting member's own registered device of that
- * name, any case, by its id; a name that matches none of theirs, or more than
- * one, is refused with their devices listed (`deviceNameRefusal`). Note that
- * only the member's own devices are read, so a teammate's device of that name
- * never matches and is never listed.
+ * name, any case, by its id, and a workspace's machine named by its name is
+ * one of that name the workspace the start lands in owns (`workspaceId`);
+ * a name that matches none of those, or more than one, is refused with them
+ * listed (`machineNameRefusal`). Note that only the member's own devices
+ * and the workspace's own machines are read, so a teammate's device of that
+ * name never matches and is never listed.
  */
 const runsOnOfStart = Effect.fnUntraced(function* (
   userId: string,
+  workspaceId: string,
   runsOn: typeof START_RUNS_ON.Type | undefined,
 ): Effect.fn.Return<
   Result.Result<AgentRunsOnRequest | undefined, string>,
   StoreFailure,
   DatabaseServices
 > {
-  if (runsOn === undefined || !("device" in runsOn)) return Result.succeed(runsOn);
-  const devices = yield* devicesSeenSince(userId, new Date(0));
-  // Note that both sides are read as a machine's name is kept (`cleanMachineName`), so a name typed with its double space, or one kept before names were cleaned, still matches.
-  const wanted = cleanMachineName(runsOn.device).toLowerCase();
+  if (runsOn === undefined) return Result.succeed(undefined);
 
-  const matched = devices.filter(
-    (device) => cleanMachineName(device.name).toLowerCase() === wanted,
-  );
+  if ("device" in runsOn) {
+    const devices = yield* devicesSeenSince(userId, new Date(0));
+    const matched = namedMachines(devices, runsOn.device);
+    const [only] = matched;
 
-  const [only] = matched;
+    if (matched.length === 1 && only !== undefined) {
+      return Result.succeed({ machine: AGENT_MACHINE.DEVICE, deviceId: only.id });
+    }
 
-  if (matched.length === 1 && only !== undefined) {
-    return Result.succeed({ machine: AGENT_MACHINE.DEVICE, deviceId: only.id });
+    const now = yield* Clock.currentTimeMillis;
+
+    return Result.fail(deviceNameRefusal(runsOn.device, matched.length, devices, now));
   }
 
-  const now = yield* Clock.currentTimeMillis;
+  if ("name" in runsOn) {
+    const machines = yield* workspaceOwnedMachinesOf(userId, workspaceId);
+    const matched = namedMachines(machines, runsOn.name);
+    const [only] = matched;
 
-  return Result.fail(deviceNameRefusal(runsOn.device, matched.length, devices, now));
+    if (matched.length === 1 && only !== undefined) {
+      return Result.succeed({ machine: AGENT_MACHINE.WORKSPACE, deviceId: only.id });
+    }
+
+    const now = yield* Clock.currentTimeMillis;
+
+    return Result.fail(workspaceMachineNameRefusal(runsOn.name, matched.length, machines, now));
+  }
+
+  return Result.succeed(runsOn);
 });
 
 /**
@@ -2590,7 +2671,7 @@ export function runStartAgent(
         return agentToolRejected(`Not started: ${forwardedImageRefusalWords(images.failure)}`);
       }
 
-      const runsOn = yield* runsOnOfStart(userId, asked.success.runsOn);
+      const runsOn = yield* runsOnOfStart(userId, callerWorkspaceId(caller), asked.success.runsOn);
 
       if (Result.isFailure(runsOn)) return agentToolRejected(runsOn.failure);
       const place: StartWhere = landing?.success.place ?? { taskId };

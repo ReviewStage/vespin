@@ -1,5 +1,5 @@
 /**
- * keeping.ts -- what the app does with a picture, a recording, a file, or a message's words that a press or a long press asks for: opens it full screen in the system's Quick Look, copies it to the system's pasteboard, saves it to Photos, or opens the system's share sheet on it, buzzing as a copy or a save goes and saying in the failure notice what did not.
+ * keeping.ts -- what the app does with a picture, a recording, a file, or a message's words that a press or a long press asks for: opens a picture full screen in the app's viewer and anything else in the system's Quick Look, copies it to the system's pasteboard, saves it to Photos, or opens the system's share sheet on it, buzzing as a copy or a save goes and saying in the failure notice what did not.
  *
  * The desktop and the web copy and save through the window's act port
  * (`WINDOW_COPY_IMAGE`, `WINDOW_COPY_RICH`, `WINDOW_SAVE_FILE`); the phone has the system's
@@ -34,6 +34,7 @@ import {
   type Kept,
   NOTICE_KIND,
   useFailureNotices,
+  type ViewedPicture,
 } from "@repo/ui-native";
 import { setImageAsync, setStringAsync } from "expo-clipboard";
 import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
@@ -42,6 +43,7 @@ import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { useMemo } from "react";
 import { Share } from "react-native";
 import { cachedFile } from "./cached-media.js";
+import { pictureViewerModule } from "./picture-viewer-module.js";
 import { quickLookModule } from "./quick-look-module.js";
 import { richPasteboardModule } from "./rich-pasteboard-module.js";
 
@@ -208,6 +210,31 @@ async function opened(kept: Kept): Promise<void> {
   if (!shown) await Share.share({ url: file, title: kept.name });
 }
 
+/**
+ * Opens a picture full screen in the app's viewer (`modules/picture-viewer/`),
+ * grown out of its thumbnail and drawn first from the bitmap the thumbnail
+ * shows, a swipe stepping through the rest of its set. Note that one UIKit
+ * would not present the viewer over opens in Quick Look instead, which asks
+ * the same of UIKit and shares it where refused too.
+ */
+async function viewed(pictures: readonly ViewedPicture[], index: number): Promise<void> {
+  const shown = await pictureViewerModule.show(
+    pictures.map((picture) => ({
+      uri: picture.source,
+      ...picture.place,
+      title: picture.title,
+      subtitle: picture.subtitle ?? null,
+    })),
+    index,
+  );
+
+  const pressed = pictures[index];
+
+  if (!shown && pressed !== undefined) {
+    await opened({ kind: KEPT_KIND.PICTURE, source: pressed.source, name: pressed.title });
+  }
+}
+
 /** Each act's work. */
 const KEEP_WORK = {
   [KEEP_ACT.COPY]: copied,
@@ -245,6 +272,7 @@ export function useKeeping(): Keeping {
 
     return {
       open: (kept) => run(() => opened(kept), OPEN_FAILED, false),
+      view: (pictures, index) => run(() => viewed(pictures, index), OPEN_FAILED, false),
       keep: (kept, act) =>
         run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>

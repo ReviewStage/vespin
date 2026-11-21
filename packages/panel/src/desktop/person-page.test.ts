@@ -63,6 +63,7 @@ import {
   handInbox,
   listedAgent,
   type TasksControlOverrides,
+  taskAgentsOf,
   tasksControl,
   waitingOf,
 } from "../testing/tasks-control.js";
@@ -806,6 +807,50 @@ test("a waiting item is the Inbox's own row: its task named on a line of its own
   assert.equal(card?.querySelector(".ui-hover-card-name")?.textContent, RETRY_429.title);
 });
 
+test("a task whose agents' turn ended stands first among theirs, with nothing else of it moved", async () => {
+  const { page, redraw } = mount(CHARLES.userId);
+  await settle();
+  assert.deepEqual(sections(page).Created, ["Relay retries on 502", "Retry budget dashboard"]);
+
+  redraw({
+    tasks: TASKS.map((each) =>
+      each.id === DASHBOARD.id
+        ? { ...each, agents: { total: 1, working: 0, pullRequestTotal: 0, activityAt: NOW } }
+        : each,
+    ),
+  });
+  await settle();
+
+  assert.deepEqual(sections(page).Created, ["Retry budget dashboard", "Relay retries on 502"]);
+});
+
+test("a task a service names only by its owner is listed as theirs, as one naming its creator is", async () => {
+  const { createdBy: _createdBy, ...owned } = task(10, "Owned shim audit", CHARLES, 3 * MINUTE);
+  const { page } = mountWith({ tasks: [...TASKS, owned] }, CHARLES.userId);
+  await settle();
+
+  assert.deepEqual(sections(page).Created, [
+    "Owned shim audit",
+    "Relay retries on 502",
+    "Retry budget dashboard",
+  ]);
+});
+
+test("an agent's row takes its new name once only its name moved", async () => {
+  const { page, redraw } = mount(CHARLES.userId);
+  await settle();
+  assert.ok(button(page, "Jittered backoff"));
+
+  redraw({
+    listedAgents: followedOf(TASKS).map((each) =>
+      each.id === BACKOFF.id ? { ...each, title: "Jittered backoff, capped" } : each,
+    ),
+  });
+  await settle();
+
+  assert.ok(button(page, "Jittered backoff, capped"));
+});
+
 test("an agent's row says its failure at its end and hangs the agent's card while rested on, as the sidebar's row does", async () => {
   const broken = agent(9, "Flaky retry", CHARLES, AGENT_STATUS.FAILED, 5 * MINUTE);
   const failing = task(9, "Retry flake hunt", CHARLES, 5 * MINUTE, [broken]);
@@ -1390,14 +1435,16 @@ test("archiving chosen agents where a teammate's still works asks once before an
   const { page } = mountWith(
     {
       tasks,
-      agents: agentsControl({
-        me: DEAN.userId,
-        onArchive: (agentId, _, how) => {
-          archived.push([agentId, how?.asked === true]);
+      agents: taskAgentsOf(
+        agentsControl({
+          me: DEAN.userId,
+          onArchive: (agentId, _, how) => {
+            archived.push([agentId, how?.asked === true]);
 
-          return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
-        },
-      }),
+            return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
+          },
+        }),
+      ),
     },
     CHARLES.userId,
   );

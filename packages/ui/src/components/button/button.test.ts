@@ -30,8 +30,8 @@ import {
  * effect. An unavailable button that keeps its Tab stop, and a busy one,
  * refuse a press. A done button wears its check, refuses a press, and is
  * heard done once its check has been seen. A busy button whose press
- * succeeded wears the check until its hold ends, then its words; one that
- * failed wears none. A submit sends its form while it takes a press, sends
+ * succeeded wears the check until its hold ends, then its words, and again
+ * on its next landing; one that failed wears none. A submit sends its form while it takes a press, sends
  * nothing while it is unavailable, and made a Stop does its own act without
  * sending the form.
  */
@@ -552,7 +552,6 @@ test("a busy button whose press succeeded wears a check where its ring stood, re
   );
 
   act(() => fade.dispatchEvent(new Event("finish")));
-  Reflect.deleteProperty(HTMLElement.prototype, "getAnimations");
 
   expect(landed).toEqual([
     { check: true, busy: null, disabled: false },
@@ -570,6 +569,12 @@ test("a busy button whose press succeeded wears a check where its ring stood, re
   act(() => root.render(draw(true, false)));
   act(() => root.render(draw(false, false)));
   expect(container.querySelector(".ui-button-done")).toBeNull();
+
+  // A press landing again wears its check again.
+  act(() => root.render(draw(true, false)));
+  act(() => root.render(draw(false, true)));
+  expect(container.querySelectorAll(".ui-button-done svg")).toHaveLength(2);
+  Reflect.deleteProperty(HTMLElement.prototype, "getAnimations");
 });
 
 test("a ButtonLink given a label is named by it, and an IconButtonLink's press is heard before the link is followed", () => {

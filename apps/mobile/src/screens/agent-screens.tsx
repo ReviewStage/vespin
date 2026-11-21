@@ -974,6 +974,17 @@ function AgentConversation({
   const chat = shown?.kind === AGENT_KIND.MANAGER;
   useManagerChatLooks(shown);
 
+  // The calls the agent holds for the member's answer, whose folds stand open so their rows draw them; a subagent's call has no row of its own.
+  const pending = agent?.pendingApprovals;
+
+  const waitingCalls = useMemo(
+    () =>
+      new Set(
+        (pending ?? []).flatMap((ask) => (ask.subagentId === undefined ? [ask.toolUseId] : [])),
+      ),
+    [pending],
+  );
+
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const items = useMemo(
     () =>
@@ -986,8 +997,10 @@ function AgentConversation({
         wholePart: whole.read,
         origin,
         suggestionAddress,
+        waitingCalls,
       }),
     [
+      waitingCalls,
       messages,
       sending,
       status,

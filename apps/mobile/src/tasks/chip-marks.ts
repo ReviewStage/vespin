@@ -3,10 +3,11 @@
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { type ChipMarkOf, chipMarkOf } from "@repo/ui-native";
+import { useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useListedAgents, useListedTasks } from "../host/host-provider.js";
+import { useTaskListCollections } from "../host/host-provider.js";
 import { useMemberFaces } from "../member-pictures.js";
 import { selectPhotos, switcherWorkspace } from "../workspace-switcher.js";
 
@@ -18,8 +19,21 @@ import { selectPhotos, switcherWorkspace } from "../workspace-switcher.js";
  * keeps its kind's glyph.
  */
 export function useChipMarks(): ChipMarkOf {
-  const tasks = useListedTasks();
-  const agents = useListedAgents();
+  const collections = useTaskListCollections();
+
+  // Note that each list is read as the one field a chip shows, a task's status and an agent's model, so a change to any other field, as each step of a working agent's turn makes, moves neither query, and the marks, which every message's words read, are not made again.
+  const tasks = useLiveQuery((q) =>
+    q
+      .from({ task: collections.tasks })
+      .select(({ task }) => ({ id: task.id, status: task.status })),
+  ).data;
+
+  const agents = useLiveQuery((q) =>
+    q
+      .from({ agent: collections.agents })
+      .select(({ agent }) => ({ id: agent.id, model: agent.model })),
+  ).data;
+
   const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const member = useMemberFaces();

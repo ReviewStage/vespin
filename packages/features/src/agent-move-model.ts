@@ -6,11 +6,18 @@
  * agent in the cloud may go to any of the member's devices; one on a device
  * may go to the cloud or another device, bringing only what it pushed; one
  * on a device the service did not name is offered the cloud alone, since
- * any device listed may be the one it runs on. An agent still writing is
+ * any device listed may be the one it runs on. One on a machine its
+ * workspace owns may go to the cloud or any of the member's devices,
+ * bringing only what it pushed, as from a device. An agent still writing is
  * stopped first, as Stop does, and moved once the Stop took.
  */
 
-import { AGENT_MACHINE, type AgentRunsOnRequest, type AgentSummary } from "./agent-wire.js";
+import {
+  AGENT_MACHINE,
+  type AgentRunsOnRequest,
+  type AgentSummary,
+  agentMachineOf,
+} from "./agent-wire.js";
 import type { MacOffer } from "./models-wire.js";
 import { agentStillWriting } from "./task-agents-model.js";
 
@@ -30,9 +37,20 @@ export type MovedAgent = Pick<AgentSummary, "id" | "status" | "archivedAt" | "ma
 /** No devices, held steady for an agent offered none. */
 const NO_DEVICES: readonly MacOffer[] = [];
 
-/** What each place says under its name: that the agent is stopped first while it writes, and that only pushed work comes along from a device; none where neither holds. */
+/** Whether an agent's work outside what it pushed stays behind on a move: so on a device or a workspace's machine, whose folder stays where it is; not in the cloud, whose work is copied along. */
+export function movesPushedOnly(agent: Pick<AgentSummary, "machine">): boolean {
+  switch (agentMachineOf(agent)) {
+    case AGENT_MACHINE.VERCEL:
+      return false;
+    case AGENT_MACHINE.DEVICE:
+    case AGENT_MACHINE.WORKSPACE:
+      return true;
+  }
+}
+
+/** What each place says under its name: that the agent is stopped first while it writes, and that only pushed work comes along from a device or a workspace's machine; none where neither holds. */
 export function moveDetail(agent: MovedAgent): string | undefined {
-  const pushedOnly = agent.machine === AGENT_MACHINE.DEVICE;
+  const pushedOnly = movesPushedOnly(agent);
 
   if (!agentStillWriting(agent.status)) return pushedOnly ? MOVE_WORDS.PUSHED_ONLY : undefined;
 
@@ -47,12 +65,19 @@ export interface MovePlaces {
 
 /** The places `agent` may be moved to among the member's `devices`, on the terms the header says. */
 export function movePlaces(agent: MovedAgent, devices: readonly MacOffer[]): MovePlaces {
-  const local = agent.machine === AGENT_MACHINE.DEVICE;
-  const here = local ? agent.mac?.deviceId : undefined;
+  switch (agentMachineOf(agent)) {
+    case AGENT_MACHINE.VERCEL:
+      return { cloud: false, devices };
+    case AGENT_MACHINE.DEVICE: {
+      const here = agent.mac?.deviceId;
 
-  return {
-    cloud: local,
-    devices:
-      local && here === undefined ? NO_DEVICES : devices.filter((each) => each.deviceId !== here),
-  };
+      return {
+        cloud: true,
+        devices: here === undefined ? NO_DEVICES : devices.filter((each) => each.deviceId !== here),
+      };
+    }
+
+    case AGENT_MACHINE.WORKSPACE:
+      return { cloud: true, devices };
+  }
 }

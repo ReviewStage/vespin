@@ -81,7 +81,12 @@ import { restOn } from "../testing/hint-rest.js";
 import { overEveryTask, type StandingTaskList, standingTaskList } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
-import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  listedAgent,
+  taskAgentsOf,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
 import {
   holdingInboxChoice,
@@ -815,21 +820,23 @@ test("an agent's row hangs its tab's card beside it while the pointer rests on i
           repository: null,
         },
       ],
-      agents: agentsControl({
-        agents: [
-          {
-            id: "agent-7",
-            taskId: "plan-1",
-            model: "anthropic/claude-opus-5.5",
-            effort: "high",
-            title: "Invoice export",
-            createdAt: 1,
-            status: AGENT_STATUS.RUNNING,
-            turnId: null,
-          },
-        ],
-        agentIds: ["agent-7"],
-      }),
+      agents: taskAgentsOf(
+        agentsControl({
+          agents: [
+            {
+              id: "agent-7",
+              taskId: "plan-1",
+              model: "anthropic/claude-opus-5.5",
+              effort: "high",
+              title: "Invoice export",
+              createdAt: 1,
+              status: AGENT_STATUS.RUNNING,
+              turnId: null,
+            },
+          ],
+          agentIds: ["agent-7"],
+        }),
+      ),
       onShowAgent: (taskId, agentId) => shown.push([taskId, agentId]),
     }),
   );
@@ -880,11 +887,13 @@ test("an archived agent of the open task is still found, after the standing ones
           repository: null,
         },
       ],
-      agents: agentsControl({
-        agents: [agent("agent-7", "Invoice export")],
-        archived: [{ ...agent("agent-8", "Refund export"), archivedAt: 3 }],
-        agentIds: ["agent-7"],
-      }),
+      agents: taskAgentsOf(
+        agentsControl({
+          agents: [agent("agent-7", "Invoice export")],
+          archived: [{ ...agent("agent-8", "Refund export"), archivedAt: 3 }],
+          agentIds: ["agent-7"],
+        }),
+      ),
       onShowAgent: (taskId, agentId) => shown.push(`${taskId}:${agentId}`),
     }),
   );
@@ -926,6 +935,19 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
     [AUTOMATION_FOLLOW.WORKSPACE]: () => ({ rows: [automation] }),
   });
 
+  // The agent the automation's run started, on the open plan, as the list followed live holds it.
+  const run = {
+    id: "agent-7",
+    taskId: "plan-1",
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    title: "Invoice export",
+    createdAt: 1,
+    status: AGENT_STATUS.COMPLETED,
+    turnId: null,
+    automationId: automation.id,
+  };
+
   const tasks = tasksControl({
     activeTaskId: "plan-1",
     workspace: {
@@ -945,22 +967,8 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
         repository: null,
       },
     ],
-    agents: agentsControl({
-      agents: [
-        {
-          id: "agent-7",
-          taskId: "plan-1",
-          model: "anthropic/claude-opus-5.5",
-          effort: "high",
-          title: "Invoice export",
-          createdAt: 1,
-          status: AGENT_STATUS.COMPLETED,
-          turnId: null,
-          automationId: automation.id,
-        },
-      ],
-      agentIds: ["agent-7"],
-    }),
+    agents: taskAgentsOf(agentsControl({ agents: [run], agentIds: [run.id] }), "plan-1"),
+    listedAgents: [listedAgent(run)],
   });
 
   /** The words "Started by" says on the agent's row's card in ⌘K. */
@@ -989,7 +997,9 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
       root.render(
         withExperiments(
           experimentsOn(EXPERIMENT.DESCRIPTIONS),
-          windowRouter().provide(createElement(ListedAutomations, { tasks, children: palette })),
+          windowRouter().provide(
+            overEveryTask(tasks, createElement(ListedAutomations, { tasks, children: palette })),
+          ),
         ),
       ),
     );
@@ -1054,36 +1064,36 @@ test("an agent's Pull request row is named as its tab is, by its pull request's 
     repository: null,
   };
 
-  // The plan and its line for the agent's pull request, which its row is offered from, as the list followed live holds them.
+  const pullRequest = {
+    number: 42,
+    title: "Export invoices as CSV",
+    url: "https://github.com/acme/billing/pull/42",
+    state: PULL_REQUEST_STATE.OPEN,
+    checks: CHECK_SUMMARY.PASSING,
+    additions: 120,
+    deletions: 8,
+    changedFiles: 4,
+  };
+
+  // The plan, its line for the agent's pull request, which its row is offered from, and the agent's pull request, as the list followed live holds them.
   listed = standingTaskList({
     tasks: [plan],
     taskPullRequests: [
       { taskId: "plan-1", pullRequests: [taskLineOf(42, "acme/billing", agent.id)] },
     ],
+    agentPullRequests: [{ agentId: agent.id, taskId: "plan-1", pullRequest }],
   });
   openPalette(
     tasksControl({
       activeTaskId: "plan-1",
       tasks: [plan],
-      agents: agentsControl({
-        agents: [agent],
-        agentIds: [agent.id],
-        pullRequests: new Map([
-          [
-            agent.id,
-            {
-              number: 42,
-              title: "Export invoices as CSV",
-              url: "https://github.com/acme/billing/pull/42",
-              state: PULL_REQUEST_STATE.OPEN,
-              checks: CHECK_SUMMARY.PASSING,
-              additions: 120,
-              deletions: 8,
-              changedFiles: 4,
-            },
-          ],
-        ]),
-      }),
+      agents: taskAgentsOf(
+        agentsControl({
+          agents: [agent],
+          agentIds: [agent.id],
+        }),
+        "plan-1",
+      ),
     }),
   );
   const changes = "#42 Export invoices as CSV · Invoice export · Billing usage alerts";
@@ -1124,25 +1134,27 @@ test("while an agent's page holds the side panel, ⌘K offers none of the open p
       ],
       region: { kind: TASK_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
       agentView: { ...control.agentView, agentId: "agent-page-1" },
-      agents: agentsControl({
-        agents: [agent],
-        agentIds: [agent.id],
-        pullRequests: new Map([
-          [
-            agent.id,
-            {
-              number: 42,
-              title: "Export invoices as CSV",
-              url: "https://github.com/acme/billing/pull/42",
-              state: PULL_REQUEST_STATE.OPEN,
-              checks: CHECK_SUMMARY.PASSING,
-              additions: 120,
-              deletions: 8,
-              changedFiles: 4,
-            },
-          ],
-        ]),
-      }),
+      agents: taskAgentsOf(
+        agentsControl({
+          agents: [agent],
+          agentIds: [agent.id],
+          pullRequests: new Map([
+            [
+              agent.id,
+              {
+                number: 42,
+                title: "Export invoices as CSV",
+                url: "https://github.com/acme/billing/pull/42",
+                state: PULL_REQUEST_STATE.OPEN,
+                checks: CHECK_SUMMARY.PASSING,
+                additions: 120,
+                deletions: 8,
+                changedFiles: 4,
+              },
+            ],
+          ]),
+        }),
+      ),
     }),
     (taskId) => {
       read.push(taskId);
@@ -1190,12 +1202,24 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
     repository: "acme/relay",
   };
 
-  // The plan and its line for the agent's pull request, which its row is offered from, as the list followed live holds them.
+  const pullRequest = {
+    number: 42,
+    title: "Export invoices as CSV",
+    url: "https://github.com/acme/billing/pull/42",
+    state: PULL_REQUEST_STATE.OPEN,
+    checks: CHECK_SUMMARY.PASSING,
+    additions: 120,
+    deletions: 8,
+    changedFiles: 4,
+  };
+
+  // The plan, its line for the agent's pull request, which its row is offered from, and the agent's pull request, as the list followed live holds them.
   listed = standingTaskList({
     tasks: [plan],
     taskPullRequests: [
       { taskId: DOCUMENT_TASK.id, pullRequests: [taskLineOf(42, "acme/billing", agent.id)] },
     ],
+    agentPullRequests: [{ agentId: agent.id, taskId: DOCUMENT_TASK.id, pullRequest }],
   });
 
   const tasks = tasksControl({
@@ -1203,25 +1227,13 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
     tasks: [plan],
     region: { kind: TASK_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
     sidePanel: { ...base.sidePanel, onOpenFile: (ref) => opened.push(ref.path) },
-    agents: agentsControl({
-      agents: [agent],
-      agentIds: [agent.id],
-      pullRequests: new Map([
-        [
-          agent.id,
-          {
-            number: 42,
-            title: "Export invoices as CSV",
-            url: "https://github.com/acme/billing/pull/42",
-            state: PULL_REQUEST_STATE.OPEN,
-            checks: CHECK_SUMMARY.PASSING,
-            additions: 120,
-            deletions: 8,
-            changedFiles: 4,
-          },
-        ],
-      ]),
-    }),
+    agents: taskAgentsOf(
+      agentsControl({
+        agents: [agent],
+        agentIds: [agent.id],
+      }),
+      DOCUMENT_TASK.id,
+    ),
   });
 
   handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
@@ -1412,6 +1424,34 @@ test("a task's row ends as its sidebar row does, who is on it then an agent at w
   assert.deepEqual(ends(), [["unassigned", "working"], ["unassigned"]]);
   type("ACME-12");
   assert.deepEqual(rows(), ["Billing usage alerts · billing · ACME-12"]);
+});
+
+test("a task's row in ⌘K says its agents stopped once only its agents moved, while the palette stands open", () => {
+  const acme = { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null };
+
+  const withAgentsAt = (working: number): TaskSummary => ({
+    id: "plan-12",
+    workspaceId: acme.id,
+    name: "Billing usage alerts",
+    number: 12,
+    createdAt: 1,
+    updatedAt: 1,
+    repository: "acme/billing",
+    agents: { total: 1, working, pullRequestTotal: 0 },
+  });
+
+  listed = standingTaskList({ tasks: [withAgentsAt(1)] });
+  openPalette(tasksControl({ workspace: acme, workspaces: [acme], tasks: [withAgentsAt(1)] }));
+  chooseFilter("Tasks");
+
+  const marks = () =>
+    [...document.querySelectorAll('[role="option"] .task-agents-mark')].map((mark) =>
+      mark.getAttribute("data-task-agents"),
+    );
+
+  assert.deepEqual(marks(), ["working"]);
+  act(() => listed?.stand({ tasks: [withAgentsAt(0)] }));
+  assert.deepEqual(marks(), []);
 });
 
 test("an agent pressed on a task's card in ⌘K over Settings leaves the palette for the tasks and opens the agent's tab, as a row does", () => {
@@ -1986,20 +2026,23 @@ const ON_AGENT_TAB: TasksControl = tasksControl({
     { id: "workspace-acme", name: "Acme", slug: "acme", role: WORKSPACE_ROLE.MEMBER, github: null },
   ],
   mainTabs: { ...tasksControl().mainTabs, tab: agentTab(LINKED_AGENT) },
-  agents: agentsControl({
-    agents: [
-      {
-        id: LINKED_AGENT,
-        taskId: DOCUMENT_TASK.id,
-        model: "anthropic/claude-opus-5.5",
-        effort: "high",
-        title: "Expire old invites",
-        createdAt: 3,
-        status: AGENT_STATUS.RUNNING,
-        turnId: "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32",
-      },
-    ],
-  }),
+  agents: taskAgentsOf(
+    agentsControl({
+      agents: [
+        {
+          id: LINKED_AGENT,
+          taskId: DOCUMENT_TASK.id,
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          title: "Expire old invites",
+          createdAt: 3,
+          status: AGENT_STATUS.RUNNING,
+          turnId: "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32",
+        },
+      ],
+      agentIds: [LINKED_AGENT],
+    }),
+  ),
 });
 
 test("on a task's agent's tab, ⌘K offers Copy link to the agent, wearing ⇧⌘C, then to the task, and choosing one copies its link and says Link copied", async () => {
@@ -2587,7 +2630,7 @@ test('with a task open, ⌘K\'s "This task" lists its pages and a terminal for e
     region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     pages: [{ id: "page-1", title: "Invite funnel", version: 1, at: 1 }],
     sidePanel: { ...base.sidePanel, onChoose: (tab) => chosen.push(tab) },
-    agents: agentsControl({ agents: [agent], agentIds: [agent.id] }),
+    agents: taskAgentsOf(agentsControl({ agents: [agent], agentIds: [agent.id] })),
   });
 
   handCapabilities(DESKTOP_CAPABILITIES);

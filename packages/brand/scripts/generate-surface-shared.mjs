@@ -59,6 +59,11 @@ import {
   TASK_PRIORITY_MARK,
   TASK_PRIORITY_UNLIT_OPACITY,
   TASK_STATUS_MARK,
+  UNASSIGNED_MARK,
+  UNASSIGNED_MARK_BOX,
+  UNASSIGNED_MARK_LINE_WIDTH,
+  UNASSIGNED_RING_PATH_LENGTH,
+  UNASSIGNED_SEAT_OPACITY,
 } from "./task-status-marks.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -454,6 +459,31 @@ const taskPriorityBars = {
   svg: priorityTemplate(TASK_PRIORITY_MARK.HIGH),
 };
 
+// No one's mark as two symbols, its dashed ring and the seat drawn faint
+// under it. Note that the ring's dashes are measured along its path's
+// counted length, as the panel's SVG lays them, so they are measured again
+// along its circumference here, where the outline is cut.
+const unassignedPart = ({ dash, ...part }) =>
+  dash === undefined
+    ? part
+    : {
+        ...part,
+        dash: dash.map((length) => (length * 2 * Math.PI * part.r) / UNASSIGNED_RING_PATH_LENGTH),
+      };
+
+const unassignedTemplate = (parts) =>
+  markTemplate(parts.map(unassignedPart), {
+    box: UNASSIGNED_MARK_BOX,
+    lineWidth: UNASSIGNED_MARK_LINE_WIDTH,
+    roles: TASK_MARK_ROLE,
+    elements: TASK_MARK_ELEMENT,
+  });
+
+const unassignedSymbols = [
+  { key: "RING", name: "UnassignedRing", svg: unassignedTemplate(UNASSIGNED_MARK.RING) },
+  { key: "SEAT", name: "UnassignedSeat", svg: unassignedTemplate(UNASSIGNED_MARK.SEAT) },
+];
+
 // ---------- Emission ----------
 const CHECK_ONLY = process.argv.includes("--check");
 const written = [];
@@ -662,6 +692,20 @@ export const TASK_PRIORITY_UNLIT_OPACITY = ${TASK_PRIORITY_UNLIT_OPACITY};
 export const TASK_STATUS_MARK = ${tsMarks(TASK_STATUS_MARK)} as const;
 
 export const TASK_PRIORITY_MARK = ${tsMarks(TASK_PRIORITY_MARK)} as const;
+
+// No one's mark: a ring of dashes measured along a path counted
+// ${UNASSIGNED_RING_PATH_LENGTH} long, stroked ${UNASSIGNED_MARK_LINE_WIDTH} wide on a ${UNASSIGNED_MARK_BOX}-unit square, and a seat
+// drawn at ${UNASSIGNED_SEAT_OPACITY} of it.
+
+export const UNASSIGNED_MARK_BOX = ${UNASSIGNED_MARK_BOX};
+
+export const UNASSIGNED_MARK_LINE_WIDTH = ${UNASSIGNED_MARK_LINE_WIDTH};
+
+export const UNASSIGNED_RING_PATH_LENGTH = ${UNASSIGNED_RING_PATH_LENGTH};
+
+export const UNASSIGNED_SEAT_OPACITY = ${UNASSIGNED_SEAT_OPACITY};
+
+export const UNASSIGNED_MARK = ${tsMarks(UNASSIGNED_MARK)} as const;
 `;
 }
 
@@ -679,7 +723,7 @@ function taskStatusSymbolsTs() {
 // which the iOS app's config writes into its asset catalog as symbol sets.
 
 export const TASK_STATUS_SYMBOL_TEMPLATES: readonly { name: string; svg: string }[] = [
-${tsTemplates(taskStatusSymbols)}
+${tsTemplates([...taskStatusSymbols, ...unassignedSymbols])}
 ];
 
 export const TASK_PRIORITY_SYMBOL_TEMPLATES: readonly { name: string; svg: string }[] = [
@@ -708,6 +752,12 @@ ${tsRecord(taskPrioritySymbols.map(({ key, name }) => [key, `"${name}"`]))}
 export const TASK_PRIORITY_BARS_SYMBOL = "${taskPriorityBars.name}";
 
 export const TASK_PRIORITY_UNLIT_OPACITY = ${TASK_PRIORITY_UNLIT_OPACITY};
+
+export const UNASSIGNED_SYMBOL = {
+${tsRecord(unassignedSymbols.map(({ key, name }) => [key, `"${name}"`]))}
+} as const;
+
+export const UNASSIGNED_SEAT_OPACITY = ${UNASSIGNED_SEAT_OPACITY};
 `;
 }
 
