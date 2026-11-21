@@ -250,7 +250,7 @@ shows only between real devices.
 
 ## The native interactions module
 
-What `@expo/ui` has no modifier for, drag and drop, is the app's own native module, autolinked from
+What `@expo/ui` has no modifier for, drag and drop and a row's menu built from data, is the app's own native module, autolinked from
 `modules/native-interactions/`: its Swift registers each modifier with
 `@expo/ui`'s registry (`ViewModifierRegistry`) as the module is made, and
 `@repo/ui-native` hands them to its views (`src/interactions.ts`), so no
@@ -259,7 +259,10 @@ group's header in the Tasks list, or onto Pinned or a section in the iPad's side
 an agent's composer or a sheet that starts work are kept as JPEGs and
 attached. A list hands its scroll view to the native stack's bar
 (`stackScrollEdge`), which UIKit never finds inside a `Host`'s hosting
-controller, so a tab root's large title collapses as the list scrolls. A view handed a modifier the build does not register draws as it
+controller, so a tab root's large title collapses as the list scrolls. A row's long press menu, its preview, and its swipes are SwiftUI's own,
+built from the JSON tree the row hands over (`RowMenu.swift`), its menu
+and preview read only as a long press opens them, so a list's rows hold
+none of their views. A view handed a modifier the build does not register draws as it
 would without it. A pointer's hover is the system's own on each button, with
 none added, since an added highlight drew a second platter of glass over a
 button's own on iPadOS 26. No Maestro flow can drag or hover, so these are
