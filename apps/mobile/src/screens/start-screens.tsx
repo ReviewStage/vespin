@@ -1047,7 +1047,7 @@ function useStartedIn(
 
   return (ask) =>
     start(ask).then((answer) => {
-      if ("taskId" in answer) placing.moveToSection(answer.taskId, placed);
+      if ("taskId" in answer) placing.placeStarted(answer.taskId, placed);
 
       return answer;
     });
