@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
+import { VOICE_SPEAKER, type VoiceSpeaker } from "@repo/features/agent-wire";
 import { Effect, Stream } from "effect";
-import { VOICE_SPEAKER, type VoiceSpeaker } from "./agent-wire.js";
 import {
   AGENT_TURN,
   type AgentTurnEvent,

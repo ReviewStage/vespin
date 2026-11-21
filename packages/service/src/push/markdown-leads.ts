@@ -1,6 +1,6 @@
 // markdown-leads.ts -- Markdown cut short only where a block ends, so a cut never leaves a mark open: as a notification carries a post's words within Apple's bound.
 
-import { markdownTree } from "./markdown-tree.js";
+import { markdownTree } from "@repo/features/markdown-tree";
 
 /**
  * What a lead drops from its start: blank lines, and an indent under four
