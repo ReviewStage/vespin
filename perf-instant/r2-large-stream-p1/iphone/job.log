@@ -1,0 +1,34 @@
+fatal: couldn't find remote ref refs/heads/agent/ios-chip-marks-narrow
+FETCH FAILED agent/ios-chip-marks-narrow
+fatal: couldn't find remote ref refs/heads/agent/ios-inbox-groups-holders
+FETCH FAILED agent/ios-inbox-groups-holders
+fatal: couldn't find remote ref refs/heads/agent/ios-task-by-key
+FETCH FAILED agent/ios-task-by-key
+fatal: couldn't find remote ref refs/heads/agent/ios-mention-lists-on-ask
+FETCH FAILED agent/ios-mention-lists-on-ask
+fatal: couldn't find remote ref refs/heads/agent/ios-task-open-instant
+FETCH FAILED agent/ios-task-open-instant
+fatal: couldn't find remote ref refs/heads/agent/ios-status-mark-memo
+FETCH FAILED agent/ios-status-mark-memo
+screen.mp4 kept
+merging agent/ios-chip-marks-narrow at d4f901de65
+merging agent/ios-inbox-groups-holders at 28bbe4b057
+merging agent/ios-task-by-key at 837a605159
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging packages/host/src/fixture-inbox.ts
+merging agent/ios-mention-lists-on-ask at 118c855c9f
+Auto-merging apps/mobile/src/host/host-provider.tsx
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+Auto-merging apps/mobile/src/use-mention-offer.ts
+merging agent/ios-task-open-instant at 2cb5c24f41
+Auto-merging apps/mobile/src/tasks/use-tasks.ts
+merging agent/ios-status-mark-memo at 2c2d701baf
+merging agent/ios-root-reads-narrow at 60be7c1d68
+merging agent/ios-new-task-reads at c633a87df0
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+built 74d3c41901 = probe + agent/ios-chip-marks-narrow agent/ios-inbox-groups-holders agent/ios-task-by-key agent/ios-mention-lists-on-ask agent/ios-task-open-instant agent/ios-status-mark-memo agent/ios-root-reads-narrow agent/ios-new-task-reads (PROFILE=1)
+install 0
+export 0
+signed 0
+iphone: maestro exit 1
+ALLDONE
