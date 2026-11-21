@@ -49,6 +49,7 @@ import {
   type DeviceLaunchUnstarted,
   deviceAgentFilesPayloadSchema,
   deviceAgentLaunchPayloadSchema,
+  MACHINE_OWNER,
 } from "@repo/features/device-agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { SandboxUnavailable } from "@repo/sandbox";
@@ -268,11 +269,13 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
 
         const stored = JSON.stringify(row);
 
-        const first = yield* claimedDeviceAgentLine(opened.userId, opened.deviceId, handle.command);
+        const first = yield* claimedDeviceAgentLine(
+          ownDeviceHost(opened.userId, opened.deviceId),
+          handle.command,
+        );
 
         const second = yield* claimedDeviceAgentLine(
-          opened.userId,
-          opened.deviceId,
+          ownDeviceHost(opened.userId, opened.deviceId),
           handle.command,
         );
 
@@ -382,7 +385,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const line = yield* untilQueued(userId, deviceId);
           assert.equal(line.kind, DEVICE_AGENT_LINE_KIND.RESTORE);
           assert.deepEqual(line.payload, snapshot);
-          yield* claimedDeviceAgentLine(userId, deviceId, line.id);
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), line.id);
           yield* settleDeviceAgentLine(
             ownDeviceHost(userId, deviceId),
             line.id,
@@ -393,7 +396,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
 
           const again = yield* Effect.forkChild(machine.restoreCheckout(session, snapshot));
           const second = yield* untilQueued(userId, deviceId);
-          yield* claimedDeviceAgentLine(userId, deviceId, second.id);
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), second.id);
           yield* settleDeviceAgentLine(ownDeviceHost(userId, deviceId), second.id, 0);
           yield* TestClock.adjust("1 second");
           assert.equal(yield* Fiber.join(again), RESTORE_OUTCOME.RESTORED);
@@ -532,10 +535,10 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const shown = yield* Fiber.join(showing);
 
           assert.equal(
-            request.args["path"],
+            request.args.path,
             `/Users/fixture/.vespin/agents/${agent.id}/repository/shots/members.png`,
           );
-          assert.equal(shown["status"], ACTION_RESULT_STATUS.ACCEPTED);
+          assert.equal(shown.status, ACTION_RESULT_STATUS.ACCEPTED);
         }),
     );
 
@@ -552,10 +555,10 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           );
 
           const line = yield* untilQueued(userId, deviceId);
-          yield* claimedDeviceAgentLine(userId, deviceId, line.id);
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), line.id);
           yield* TestClock.adjust("1 second");
           const waiting = writing.pollUnsafe();
-          yield* settledDeviceAgentLine(userId, deviceId, line.id, 0);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), line.id, 0);
           yield* TestClock.adjust("1 second");
           const path = `${DEVICE_LAYOUT.attachmentsFolder}/${agent.id}/description/spec.pdf`;
           const written = yield* Fiber.join(writing);
@@ -565,8 +568,8 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           );
 
           const unwritten = yield* untilQueued(userId, deviceId);
-          yield* claimedDeviceAgentLine(userId, deviceId, unwritten.id);
-          yield* settledDeviceAgentLine(userId, deviceId, unwritten.id, 1);
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), unwritten.id);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), unwritten.id, 1);
           yield* TestClock.adjust("1 second");
           const failed = yield* Effect.flip(Fiber.join(failing));
 
@@ -584,12 +587,17 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
     );
 
     it.effect(
-      "a line queued, claimed, settled, and withdrawn each notify the agent's account and the agent, and a request queued, claimed, answered, and withdrawn the account",
+      "a line queued, claimed, settled, and withdrawn each notify the agent's account, its device, and the agent, and a request queued, claimed, answered, and withdrawn the account and its device",
       () =>
         Effect.gen(function* () {
           const opened = yield* openLocalAgent();
           const { userId, deviceId, agent } = opened;
-          const account: readonly SyncTopic[] = [[TOPIC.ACCOUNT, userId]];
+
+          const account: readonly SyncTopic[] = [
+            [TOPIC.ACCOUNT, userId],
+            [TOPIC.DEVICE, deviceId],
+          ];
+
           const accountAndAgent: readonly SyncTopic[] = [...account, [TOPIC.AGENT, agent.id]];
           const id = randomUUID();
 
@@ -602,7 +610,10 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
 
           const { value: runner } = yield* expectTopicsFire(launched(opened), accountAndAgent);
           const line = runner.handle.command;
-          yield* expectTopicsFire(claimedDeviceAgentLine(userId, deviceId, line), accountAndAgent);
+          yield* expectTopicsFire(
+            claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), line),
+            accountAndAgent,
+          );
           yield* expectTopicsFire(
             settleDeviceAgentLine(ownDeviceHost(userId, deviceId), line, 0),
             accountAndAgent,
@@ -621,7 +632,10 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           );
           yield* expectTopicsFire(withdrawDeviceAgentRequest(userId, id), account);
           const later = new Date((yield* Clock.currentTimeMillis) + 1);
-          yield* expectTopicsFire(withdrawExpiredDeviceAgentRows(userId, later), accountAndAgent);
+          yield* expectTopicsFire(
+            withdrawExpiredDeviceAgentRows({ kind: MACHINE_OWNER.USER, userId }, later),
+            accountAndAgent,
+          );
           assert.ok(
             Option.isNone(yield* deviceAgentLineStanding(userId, line)),
             "the settled line was withdrawn",
@@ -640,7 +654,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             const bytes = new Uint8Array([137, 80, 78, 71]);
 
             const lines = yield* wokenOnHub(
-              deviceAgentLinesFor(userId, deviceId),
+              deviceAgentLinesFor(ownDeviceHost(userId, deviceId)),
               launched(opened),
             );
 
@@ -662,7 +676,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             const id = randomUUID();
 
             const requests = yield* wokenOnHub(
-              deviceAgentRequestsFor(userId, deviceId),
+              deviceAgentRequestsFor(ownDeviceHost(userId, deviceId)),
               queueDeviceAgentRequest(userId, {
                 id,
                 agentId: agent.id,
@@ -674,7 +688,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             const exit = yield* wokenOnHub(
               machine.runnerExit(lines.written.handle),
               Effect.andThen(
-                claimedDeviceAgentLine(userId, deviceId, line),
+                claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), line),
                 settleDeviceAgentLine(ownDeviceHost(userId, deviceId), line, 0),
               ),
             );
@@ -701,8 +715,8 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const { userId, deviceId, agent } = opened;
           const older = yield* launched(opened);
           const newer = yield* launched(opened);
-          yield* claimedDeviceAgentLine(userId, deviceId, older.handle.command);
-          yield* claimedDeviceAgentLine(userId, deviceId, newer.handle.command);
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), older.handle.command);
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), newer.handle.command);
           const writer = yield* storeWriter({ tools: {} });
           const turnId = randomUUID();
           yield* writer.enqueueTurn(
@@ -715,10 +729,14 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             (turns) => turns.get(agent.conversationId)?.status,
           );
 
-          yield* settledDeviceAgentLine(userId, deviceId, older.handle.command);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), older.handle.command);
           const afterOlder = yield* statusNow;
-          yield* settledDeviceAgentLine(userId, deviceId, newer.handle.command);
-          const askedAgain = yield* settledDeviceAgentLine(userId, deviceId, newer.handle.command);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), newer.handle.command);
+
+          const askedAgain = yield* settledDeviceAgentLine(
+            ownDeviceHost(userId, deviceId),
+            newer.handle.command,
+          );
 
           assert.equal(askedAgain, true, "a settle the Mac asks again is answered as settled");
           assert.equal(
@@ -743,7 +761,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
         const { userId, deviceId, agent } = opened;
         yield* messageSent(opened);
         const launch = yield* launched(opened);
-        yield* claimedDeviceAgentLine(userId, deviceId, launch.handle.command);
+        yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.handle.command);
 
         if (step !== undefined) {
           yield* stepDeviceAgentLaunch(
@@ -753,7 +771,12 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           );
         }
 
-        yield* settledDeviceAgentLine(userId, deviceId, launch.handle.command, 1, unstarted);
+        yield* settledDeviceAgentLine(
+          ownDeviceHost(userId, deviceId),
+          launch.handle.command,
+          1,
+          unstarted,
+        );
 
         const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
           agent.conversationId,
@@ -804,7 +827,10 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
         Effect.gen(function* () {
           const opened = yield* openLocalAgent();
           const { handle } = yield* launched(opened);
-          yield* claimedDeviceAgentLine(opened.userId, opened.deviceId, handle.command);
+          yield* claimedDeviceAgentLine(
+            ownDeviceHost(opened.userId, opened.deviceId),
+            handle.command,
+          );
           const machine = yield* deviceMachine;
           yield* TestClock.adjust("2 minutes");
 
@@ -854,7 +880,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           yield* messageSent(opened);
           const launch = yield* launched(opened);
           // The Mac took the launch and went quiet while preparing it, before its runner posted anything.
-          yield* claimedDeviceAgentLine(userId, deviceId, launch.handle.command);
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.handle.command);
           yield* TestClock.adjust("6 minutes");
 
           yield* reconcileAgent(agent);
@@ -880,11 +906,13 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const lapsedLaunch = yield* launched(lapsed);
           const keptLaunch = yield* launched(kept);
           yield* claimedDeviceAgentLine(
-            lapsed.userId,
-            lapsed.deviceId,
+            ownDeviceHost(lapsed.userId, lapsed.deviceId),
             lapsedLaunch.handle.command,
           );
-          yield* claimedDeviceAgentLine(kept.userId, kept.deviceId, keptLaunch.handle.command);
+          yield* claimedDeviceAgentLine(
+            ownDeviceHost(kept.userId, kept.deviceId),
+            keptLaunch.handle.command,
+          );
           yield* recordAgentRunnerToken(lapsed.userId, lapsed.agent.id, "fixture-digest");
           const writer = yield* storeWriter({ tools: {} });
 
@@ -897,7 +925,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           }
 
           yield* TestClock.adjust("6 minutes");
-          yield* beatDevice(kept.userId, kept.deviceId);
+          yield* beatDevice(ownDeviceHost(kept.userId, kept.deviceId));
 
           for (const { agent } of [lapsed, kept]) yield* reconcileAgent(agent);
 

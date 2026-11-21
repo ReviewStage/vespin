@@ -6,7 +6,11 @@
  * nothing here ever holds one. Every read and write the account names is
  * keyed by it, so no account lists, removes, or enrolls another's; the
  * secret read is keyed by the secret's hash alone, which names one standing
- * machine (`../schemas/device.ts`).
+ * machine (`../schemas/device.ts`), answered as its principal, its device
+ * and that device's owner. A host's own register and remove are keyed by
+ * that principal, a member's own machine or a workspace's alike; a
+ * workspace's machine registers on the row its approve made, keeps the name
+ * its admins gave it, and folds nothing.
  *
  * A machine is enrolled where its row holds a secret and was not removed,
  * whatever its platform: a box its approved pairing
@@ -38,23 +42,26 @@ import {
   hostUpdateSchema,
   MACHINE_OWNER,
   type MachineOwner,
+  machineOwnerSchema,
 } from "@repo/features/device-agent-wire";
-import { and, asc, eq, exists, gt, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, ne, type SQL, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { agentTable } from "../schemas/agent.js";
 import { device } from "../schemas/device.js";
-import { hostPairing } from "../schemas/host-pairing.js";
 import { accountPreference } from "../schemas/preferences.js";
 import { runningTurnIds } from "./abandoned-turns.js";
 import { type HostPrincipal, settleGoneDeviceAgentLaunches } from "./device-agent-store.js";
 import {
   type DeviceRegistration,
+  deviceOwnedBy,
+  hostListed,
   MachineColumnsSchema,
   machineColumns,
   registerDevice,
+  registerWorkspaceMachine,
 } from "./device-store.js";
 
 type HostEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -82,6 +89,19 @@ function ownerOf(row: {
   return { kind: MACHINE_OWNER.WORKSPACE, workspaceId: row.organizationId };
 }
 
+/** An agent of the owner's: the member's own, or any of the workspace's members'. */
+function agentOwnedBy(owner: MachineOwner): SQL {
+  switch (owner.kind) {
+    case MACHINE_OWNER.USER:
+      return eq(agentTable.userId, owner.userId);
+    case MACHINE_OWNER.WORKSPACE:
+      return eq(agentTable.organizationId, owner.workspaceId);
+  }
+}
+
+/** A device by its owner and its id. */
+const OwnedIdSchema = Schema.Struct({ owner: machineOwnerSchema, id: Schema.String });
+
 /** One of the account's enrolled machines, as Settings lists it: beside its name and beat, which machine it runs on and its model, none where its host never said, its home folder, none before it first registered, where its setup stands and why it failed, none once it is ready, and where its update stands and why it failed, as its last beat said, none while no update is under way. */
 const HostRowSchema = Schema.Struct({
   id: Schema.String,
@@ -101,29 +121,6 @@ const HostRowSchema = Schema.Struct({
 export type HostRow = typeof HostRowSchema.Type;
 
 const KeptSchema = Schema.Struct({ id: Schema.String });
-
-/**
- * Whether a device row is one of the account's hosts as Settings lists and
- * removes them at `now`: enrolled, or made by a pairing's approve and not
- * removed while its box has yet to collect its secret and its pairing has
- * not lapsed (`./host-pairing-store.ts`). Note that a lapsed pairing is
- * judged here rather than waited on, because only a later start deletes it
- * and the host it made.
- */
-function listed(now: Date) {
-  return and(
-    isNull(device.removedAt),
-    or(
-      isNotNull(device.secretHash),
-      exists(
-        queryBuilder
-          .select({ id: hostPairing.id })
-          .from(hostPairing)
-          .where(and(eq(hostPairing.deviceId, device.id), gt(hostPairing.expiresAt, now))),
-      ),
-    ),
-  );
-}
 
 /**
  * The account's own device keyed with a new secret, inserted where no row
@@ -199,14 +196,14 @@ const keyOwnDevice = SqlSchema.findAll({
 });
 
 const findHostAgents = SqlSchema.findAll({
-  Request: Schema.Struct({ userId: Schema.String, deviceId: Schema.String }),
+  Request: OwnedIdSchema,
   Result: Schema.Struct({ conversationId: Schema.String }),
-  execute: ({ userId, deviceId }) =>
+  execute: ({ owner, id }) =>
     Database.use((db) =>
       db
         .select({ conversationId: agentTable.conversationId })
         .from(agentTable)
-        .where(and(eq(agentTable.userId, userId), eq(agentTable.deviceId, deviceId))),
+        .where(and(agentOwnedBy(owner), eq(agentTable.deviceId, id))),
     ),
 });
 
@@ -266,7 +263,7 @@ const findHosts = SqlSchema.findAll({
           updateFailure: device.updateFailure,
         })
         .from(device)
-        .where(and(eq(device.userId, userId), listed(now)))
+        .where(and(eq(device.userId, userId), hostListed(now)))
         .orderBy(asc(device.name), asc(device.id)),
     ),
 });
@@ -277,14 +274,14 @@ const findHosts = SqlSchema.findAll({
  * hosts waits for that transaction to arrive before it confirms the remove.
  */
 const stampRemoved = SqlSchema.findAll({
-  Request: Schema.Struct({ userId: Schema.String, id: Schema.String, now: Schema.Date }),
+  Request: Schema.Struct({ ...OwnedIdSchema.fields, now: Schema.Date }),
   Result: TxidRowSchema,
-  execute: ({ userId, id, now }) =>
+  execute: ({ owner, id, now }) =>
     Database.use((db) =>
       db
         .update(device)
         .set({ removedAt: now, secretHash: null })
-        .where(and(eq(device.id, id), eq(device.userId, userId), listed(now)))
+        .where(and(eq(device.id, id), deviceOwnedBy(owner), hostListed(now)))
         .returning(TXID_RETURNING),
     ),
 });
@@ -343,7 +340,7 @@ const stampFolded = SqlSchema.findAll({
             eq(device.machineId, machineId),
             eq(device.platform, DEVICE_PLATFORM.DARWIN),
             ne(device.id, id),
-            listed(now),
+            hostListed(now),
           ),
         )
         .returning({ id: device.id }),
@@ -375,15 +372,15 @@ const moveAgents = SqlSchema.findAll({
     ),
 });
 
-/** Retires the runner bearer of each of the account's agents pinned to its device removed, since a removed host's runners act for no one. */
+/** Retires the runner bearer of each of the owner's agents pinned to its device removed, since a removed host's runners act for no one. */
 const retireRunners = SqlSchema.void({
-  Request: Schema.Struct({ userId: Schema.String, deviceId: Schema.String }),
-  execute: ({ userId, deviceId }) =>
+  Request: OwnedIdSchema,
+  execute: ({ owner, id }) =>
     Database.use((db) =>
       db
         .update(agentTable)
         .set({ runnerTokenHash: null })
-        .where(and(eq(agentTable.userId, userId), eq(agentTable.deviceId, deviceId))),
+        .where(and(agentOwnedBy(owner), eq(agentTable.deviceId, id))),
     ),
 });
 
@@ -518,31 +515,44 @@ export function enrollOwnDevice(
 }
 
 /**
- * Registers the account's host as `registerDevice` does, and where this is
- * its first register, folds the account's other Macs on its machine into
- * it (`folded`), in one transaction under the account's join lock
- * (`underJoinLock`), so a register the fold failed under is a first
- * register still when it is asked again. Note that only the first folds,
- * a paired box's first word naming its machine, because a later one comes
- * from a host already running, and two such on one machine must never
- * remove each other. Answers the agents the fold
- * moved; nothing where another account holds the id, and nothing was
- * written.
+ * Registers the host's device. A member's own registers as `registerDevice`
+ * does, and where this is its first register, folds the account's other
+ * Macs on its machine into it (`folded`), in one transaction under the
+ * account's join lock (`underJoinLock`), so a register the fold failed
+ * under is a first register still when it is asked again. Note that only
+ * the first folds, a paired box's first word naming its machine, because a
+ * later one comes from a host already running, and two such on one machine
+ * must never remove each other. A workspace's machine registers on the row
+ * its approve made (`registerWorkspaceMachine`) and folds nothing, since no
+ * other device of the workspace's stands for the machine it runs on.
+ * Answers the agents the fold moved; nothing where the owner holds no such
+ * device, and nothing was written.
  */
 export function registerHost(
-  userId: string,
-  registered: { readonly id: string; readonly name: string } & DeviceRegistration,
+  host: HostPrincipal,
+  registered: { readonly name: string } & DeviceRegistration,
 ): HostEffect<Option.Option<readonly FoldedAgent[]>> {
-  return underJoinLock(
-    userId,
-    Effect.gen(function* () {
-      const joining = (yield* findUnregistered({ userId, id: registered.id })).length > 0;
+  const { owner, deviceId: id } = host;
 
-      if (!(yield* registerDevice(userId, registered))) return Option.none();
+  switch (owner.kind) {
+    case MACHINE_OWNER.USER:
+      return underJoinLock(
+        owner.userId,
+        Effect.gen(function* () {
+          const { userId } = owner;
+          const joining = (yield* findUnregistered({ userId, id })).length > 0;
 
-      return Option.some(joining ? yield* folded(userId, registered.id) : []);
-    }),
-  );
+          if (!(yield* registerDevice(userId, { id, ...registered }))) return Option.none();
+
+          return Option.some(joining ? yield* folded(userId, id) : []);
+        }),
+      );
+    case MACHINE_OWNER.WORKSPACE:
+      return Effect.map(
+        registerWorkspaceMachine(owner.workspaceId, { id, ...registered }),
+        (kept) => (kept ? Option.some([]) : Option.none()),
+      );
+  }
 }
 
 /** The standing machine a device secret's hash names, its owner, and the version it last called with; nothing for a removed machine, an old secret, or none. */
@@ -563,16 +573,24 @@ export function hostsOf(userId: string): HostEffect<readonly HostRow[]> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => findHosts({ userId, now }));
 }
 
-/** Removes the account's enrolled machine, or a host its approve made, and refuses its secret and its agents' runner bearers from now on, answering the transaction it was removed in; none where the account lists no such machine. */
-export function removeHost(userId: string, id: string): HostEffect<string | undefined> {
+/**
+ * Removes the host's device as its owner lists it, a member's own machine
+ * or a workspace's, and refuses its secret and the runner bearers of every
+ * agent of the owner's on it from now on, answering the transaction it was
+ * removed in; none where the owner lists no such device. Note that who may
+ * remove a workspace's is its caller's to judge.
+ */
+export function removeHostDevice(host: HostPrincipal): HostEffect<string | undefined> {
+  const { owner, deviceId: id } = host;
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const now = yield* DateTime.nowAsDate;
-        const [removed] = yield* stampRemoved({ userId, id, now });
+        const [removed] = yield* stampRemoved({ owner, id, now });
 
         if (removed === undefined) return undefined;
-        yield* retireRunners({ userId, deviceId: id });
+        yield* retireRunners({ owner, id });
 
         return removed.txid;
       }),
@@ -580,12 +598,14 @@ export function removeHost(userId: string, id: string): HostEffect<string | unde
   );
 }
 
-/** The conversations of the account's agents pinned to its device, whose runners a removed host can no longer settle. */
-export function hostAgentConversations(
-  userId: string,
-  deviceId: string,
-): HostEffect<readonly string[]> {
-  return Effect.map(findHostAgents({ userId, deviceId }), (rows) =>
+/** Removes the account's enrolled machine, or a host its approve made, and refuses its secret and its agents' runner bearers from now on, answering the transaction it was removed in; none where the account lists no such machine. */
+export function removeHost(userId: string, id: string): HostEffect<string | undefined> {
+  return removeHostDevice({ deviceId: id, owner: { kind: MACHINE_OWNER.USER, userId } });
+}
+
+/** The conversations of the owner's agents pinned to the host's device, whose runners a removed host can no longer settle: the member's own, or every member's on a workspace's machine. */
+export function hostAgentConversations(host: HostPrincipal): HostEffect<readonly string[]> {
+  return Effect.map(findHostAgents({ owner: host.owner, id: host.deviceId }), (rows) =>
     rows.map((row) => row.conversationId),
   );
 }

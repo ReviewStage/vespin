@@ -384,7 +384,7 @@ const sandboxLaunch = (
 const macLaunch = (userId: string, deviceId: string, lineId: string) =>
   Effect.gen(function* () {
     const claimed = Option.getOrThrow(
-      yield* claimedDeviceAgentLine(userId, deviceId, lineId).pipe(
+      yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), lineId).pipe(
         Effect.provide(Layer.succeed(HostedEnvironment, ENVIRONMENT)),
       ),
     );
@@ -541,7 +541,7 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
       : Effect.forEach(api.commands, (command) => sandboxLaunch(api, userId, command));
 
     // A Mac beats on while it waits for the agent's next launch; a sandbox has nothing to beat.
-    const beat = onMac ? Effect.asVoid(beatDevice(userId, deviceId)) : Effect.void;
+    const beat = onMac ? Effect.asVoid(beatDevice(ownDeviceHost(userId, deviceId))) : Effect.void;
 
     return { userId, agent, api, sessions, sequence, launches, beat };
   });

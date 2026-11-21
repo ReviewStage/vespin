@@ -476,7 +476,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       const first = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
       const cutoff = yield* fiveMinutesOn;
       yield* TestClock.adjust("10 minutes");
-      yield* withdrawExpiredDeviceAgentRows(userId, cutoff);
+      yield* withdrawExpiredDeviceAgentRows({ kind: MACHINE_OWNER.USER, userId }, cutoff);
 
       const next = Option.getOrThrow(yield* queueDeviceAgentLine(userId, message(agentId, "back")));
 
@@ -998,7 +998,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       yield* TestClock.adjust("10 minutes");
       const fresh = Option.getOrThrow(yield* queueDeviceAgentLine(userId, message(agentId, "new")));
 
-      yield* withdrawExpiredDeviceAgentRows(userId, cutoff);
+      yield* withdrawExpiredDeviceAgentRows({ kind: MACHINE_OWNER.USER, userId }, cutoff);
 
       assert.deepEqual(
         (yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).map((line) => line.id),
@@ -1045,7 +1045,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           exited.id,
         );
         yield* TestClock.adjust("10 minutes");
-        yield* beatDevice(back.userId, back.deviceId);
+        yield* beatDevice(ownDeviceHost(back.userId, back.deviceId));
         yield* settleDeviceAgentLine(
           ownDeviceHost(settledByDevice.userId, settledByDevice.deviceId),
           exited.id,
@@ -1160,13 +1160,13 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       Effect.gen(function* () {
         const owner = yield* openAccount();
         const other = yield* openAccount();
-        yield* beatDevice(owner.userId, owner.deviceId, {
+        yield* beatDevice(ownDeviceHost(owner.userId, owner.deviceId), {
           update: HOST_UPDATE.WAITING,
         });
 
         const waiting = yield* deviceAgentAwaitsUpdate(owner.userId, owner.agentId);
         const readByOther = yield* deviceAgentAwaitsUpdate(other.userId, owner.agentId);
-        yield* beatDevice(owner.userId, owner.deviceId, {
+        yield* beatDevice(ownDeviceHost(owner.userId, owner.deviceId), {
           update: HOST_UPDATE.UPDATING,
         });
         const switching = yield* deviceAgentAwaitsUpdate(owner.userId, owner.agentId);

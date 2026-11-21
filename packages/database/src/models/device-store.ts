@@ -7,7 +7,10 @@
  * read through a workspace the reader and the owner both stand in
  * (`workspaceMachinesOf`), and the machines a workspace itself owns, read
  * by its members alone (`workspaceOwnedMachinesOf`), or one of them as a
- * Start places an agent on it (`workspaceMachineStanding`). A register
+ * Start places an agent on it (`workspaceMachineStanding`), and renamed by
+ * its admins (`renameWorkspaceMachine`). A host's beat and layout are read
+ * by its principal (`HostPrincipal`), its device under that device's owner,
+ * a member or a workspace. A register
  * under an id another account holds writes nothing and answers false, so a
  * desktop cannot take over a Mac by naming its id (`../schemas/device.ts`).
  */
@@ -26,7 +29,10 @@ import {
   HOST_UPDATE,
   type HostUpdate,
   hostUpdateSchema,
+  MACHINE_OWNER,
+  type MachineOwner,
   machineNetworkSchema,
+  machineOwnerSchema,
 } from "@repo/features/device-agent-wire";
 import {
   type AllowedAppLook,
@@ -42,28 +48,45 @@ import {
   desc,
   eq,
   exists,
+  gt,
   gte,
   inArray,
   isNotNull,
   isNull,
   lt,
   ne,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { DateTime, Effect, Option, Schema } from "effect";
+import { DateTime, Effect, Option, Schema, Struct } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { member } from "../schemas/auth.js";
 import { device } from "../schemas/device.js";
+import { hostPairing } from "../schemas/host-pairing.js";
 import { machineCommandDeviceListener } from "../schemas/machine-command.js";
+import type { HostPrincipal } from "./device-agent-store.js";
 import { workspaceReachableBy } from "./workspace-store.js";
 
 type DeviceEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 const DeviceKeySchema = Schema.Struct({ userId: Schema.String, id: Schema.String });
+
+/** A device by its id and its owner, a member or a workspace (`HostPrincipal`). */
+const OwnedDeviceKeySchema = Schema.Struct({ owner: machineOwnerSchema, id: Schema.String });
+
+/** A device row its owner holds: the member's own, or the workspace's machine. */
+export function deviceOwnedBy(owner: MachineOwner): SQL {
+  switch (owner.kind) {
+    case MACHINE_OWNER.USER:
+      return eq(device.userId, owner.userId);
+    case MACHINE_OWNER.WORKSPACE:
+      return eq(device.organizationId, owner.workspaceId);
+  }
+}
 
 /** A machine's settings as its row keeps them, the apps switch null where it never carried one up. */
 const StoredSettingsSchema = Schema.Struct({
@@ -162,27 +185,42 @@ export type DeviceRegistration = Omit<
     readonly setupFailure?: string | undefined;
   };
 
-const upsertDevice = SqlSchema.findAll({
-  Request: Schema.Struct({
-    ...DeviceKeySchema.fields,
-    ...DeviceStandingSchema.fields,
-    name: Schema.String,
-    platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
-    arch: Schema.Literals(Object.values(DEVICE_ARCH)),
-    ...MachineColumnsSchema.fields,
-    setup: Schema.NullOr(deviceSetupSchema),
-    setupFailure: Schema.NullOr(Schema.String),
-    now: Schema.Date,
-  }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({
-    userId,
-    id,
+/** What a register writes beside the device's key, as its request names it. */
+const RegisteredFieldsSchema = Schema.Struct({
+  ...DeviceStandingSchema.fields,
+  name: Schema.String,
+  platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
+  arch: Schema.Literals(Object.values(DEVICE_ARCH)),
+  ...MachineColumnsSchema.fields,
+  setup: Schema.NullOr(deviceSetupSchema),
+  setupFailure: Schema.NullOr(Schema.String),
+  now: Schema.Date,
+});
+
+/** The columns a register writes, its device seen now and no longer away. */
+function registeredColumns({
+  name,
+  platform,
+  arch,
+  machineId,
+  model,
+  home,
+  agentsFolder,
+  tempFolder,
+  attachmentsFolder,
+  claudeExecutable,
+  codexExecutable,
+  cursorSdk,
+  capabilities,
+  setup,
+  setupFailure,
+  now,
+}: typeof RegisteredFieldsSchema.Type) {
+  return {
     name,
     platform,
     arch,
-    machineId,
-    model,
+    ...machineColumns({ machineId, model }),
     home,
     agentsFolder,
     tempFolder,
@@ -190,54 +228,25 @@ const upsertDevice = SqlSchema.findAll({
     claudeExecutable,
     codexExecutable,
     cursorSdk,
-    capabilities,
+    capabilities: [...capabilities],
     setup,
     setupFailure,
-    now,
-  }) =>
+    lastSeenAt: now,
+    awayAt: null,
+  };
+}
+
+const upsertDevice = SqlSchema.findAll({
+  Request: Schema.Struct({ ...DeviceKeySchema.fields, ...RegisteredFieldsSchema.fields }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, id, ...registered }) =>
     Database.use((db) =>
       db
         .insert(device)
-        .values({
-          id,
-          userId,
-          name,
-          platform,
-          arch,
-          ...machineColumns({ machineId, model }),
-          home,
-          agentsFolder,
-          tempFolder,
-          attachmentsFolder,
-          claudeExecutable,
-          codexExecutable,
-          cursorSdk,
-          capabilities: [...capabilities],
-          setup,
-          setupFailure,
-          lastSeenAt: now,
-          awayAt: null,
-        })
+        .values({ id, userId, ...registeredColumns(registered) })
         .onConflictDoUpdate({
           target: device.id,
-          set: {
-            name,
-            platform,
-            arch,
-            ...machineColumns({ machineId, model }),
-            home,
-            agentsFolder,
-            tempFolder,
-            attachmentsFolder,
-            claudeExecutable,
-            codexExecutable,
-            cursorSdk,
-            capabilities: [...capabilities],
-            setup,
-            setupFailure,
-            lastSeenAt: now,
-            awayAt: null,
-          },
+          set: registeredColumns(registered),
           // Moved only where the account registering it is the one holding it.
           setWhere: eq(device.userId, userId),
         })
@@ -245,9 +254,29 @@ const upsertDevice = SqlSchema.findAll({
     ),
 });
 
+/**
+ * A workspace's machine registered: only ever its row as its approve made
+ * it, never one inserted, since a workspace's machine joins only through
+ * an admin's approve (`./host-pairing-store.ts`). Note that its name is
+ * left as it stands, since the name a workspace's machine goes by is its
+ * admins' to give (`renameWorkspaceMachine`), not its hostname's.
+ */
+const updateRegistered = SqlSchema.findAll({
+  Request: Schema.Struct({ ...OwnedDeviceKeySchema.fields, ...RegisteredFieldsSchema.fields }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ owner, id, ...registered }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set(Struct.omit(registeredColumns(registered), ["name"]))
+        .where(and(eq(device.id, id), deviceOwnedBy(owner), isNull(device.removedAt)))
+        .returning({ id: device.id }),
+    ),
+});
+
 const touchDevice = SqlSchema.findAll({
   Request: Schema.Struct({
-    ...DeviceKeySchema.fields,
+    ...OwnedDeviceKeySchema.fields,
     now: Schema.Date,
     updating: Schema.UndefinedOr(
       Schema.Struct({
@@ -257,7 +286,7 @@ const touchDevice = SqlSchema.findAll({
     ),
   }),
   Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ userId, id, now, updating }) =>
+  execute: ({ owner, id, now, updating }) =>
     Database.use((db) =>
       db
         .update(device)
@@ -268,7 +297,7 @@ const touchDevice = SqlSchema.findAll({
             ? undefined
             : { updatePhase: updating.phase, updateFailure: updating.failure }),
         })
-        .where(and(eq(device.id, id), eq(device.userId, userId)))
+        .where(and(eq(device.id, id), deviceOwnedBy(owner)))
         .returning({ id: device.id }),
     ),
 });
@@ -389,9 +418,9 @@ const findWorkspaceMachineStanding = SqlSchema.findOneOption({
 });
 
 const findLayout = SqlSchema.findOneOption({
-  Request: DeviceKeySchema,
+  Request: OwnedDeviceKeySchema,
   Result: DeviceLaidOutSchema,
-  execute: ({ userId, id }) =>
+  execute: ({ owner, id }) =>
     Database.use((db) =>
       db
         .select({
@@ -409,7 +438,7 @@ const findLayout = SqlSchema.findOneOption({
         .where(
           and(
             eq(device.id, id),
-            eq(device.userId, userId),
+            deviceOwnedBy(owner),
             isNotNull(device.home),
             isNotNull(device.claudeExecutable),
             // Note that a host from before its temp and attachments folders lays no agent out until it registers them.
@@ -773,7 +802,30 @@ const findWorkspaceMachines = SqlSchema.findAll({
     ),
 });
 
-/** A machine the workspace owns, as its members list it. */
+/**
+ * Whether a device row is one of its owner's hosts as Settings lists and
+ * removes them at `now`: enrolled, or made by a pairing's approve and not
+ * removed while its box has yet to collect its secret and its pairing has
+ * not lapsed (`./host-pairing-store.ts`). Note that a lapsed pairing is
+ * judged here rather than waited on, because only a later start deletes it
+ * and the host it made.
+ */
+export function hostListed(now: Date) {
+  return and(
+    isNull(device.removedAt),
+    or(
+      isNotNull(device.secretHash),
+      exists(
+        queryBuilder
+          .select({ id: hostPairing.id })
+          .from(hostPairing)
+          .where(and(eq(hostPairing.deviceId, device.id), gt(hostPairing.expiresAt, now))),
+      ),
+    ),
+  );
+}
+
+/** A machine the workspace owns, as its members list it, with when it last beat. */
 const WorkspaceOwnedMachineSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -781,14 +833,15 @@ const WorkspaceOwnedMachineSchema = Schema.Struct({
   arch: Schema.Literals(Object.values(DEVICE_ARCH)),
   connectedBy: Schema.NullOr(Schema.String),
   network: machineNetworkSchema,
+  lastSeenAt: Schema.Date,
 });
 
 export type WorkspaceOwnedMachine = typeof WorkspaceOwnedMachineSchema.Type;
 
 const findWorkspaceOwnedMachines = SqlSchema.findAll({
-  Request: Schema.Struct({ readerId: Schema.String, workspaceId: Schema.String }),
+  Request: Schema.Struct({ readerId: Schema.String, workspaceId: Schema.String, now: Schema.Date }),
   Result: WorkspaceOwnedMachineSchema,
-  execute: ({ readerId, workspaceId }) =>
+  execute: ({ readerId, workspaceId, now }) =>
     Database.use((db) =>
       db
         .select({
@@ -798,18 +851,42 @@ const findWorkspaceOwnedMachines = SqlSchema.findAll({
           arch: device.arch,
           connectedBy: device.connectedBy,
           network: sql<string>`${device.network}`,
+          lastSeenAt: device.lastSeenAt,
         })
         .from(device)
         .where(
           and(
             eq(device.organizationId, workspaceId),
-            isNull(device.removedAt),
+            hostListed(now),
             workspaceReachableBy(readerId, workspaceId),
           ),
         )
         .orderBy(asc(device.name), asc(device.id)),
     ),
 });
+
+/** A register's fields as the row keeps them, each one it names none of cleared, with when it was seen. */
+function registeredFields(
+  registered: { readonly name: string } & DeviceRegistration,
+  now: Date,
+): typeof RegisteredFieldsSchema.Type {
+  return {
+    ...registered,
+    // Note that a register naming no agents folder clears the last one, as a host moved back to a build from before the field names none.
+    agentsFolder: registered.agentsFolder ?? null,
+    // Note that a register naming no Codex clears the last one, since the Mac checks it on every start.
+    codexExecutable: registered.codexExecutable ?? null,
+    // Likewise a register naming no Cursor SDK clears the last one, as a host moved back to a build from before it keeps none.
+    cursorSdk: registered.cursorSdk ?? null,
+    // Note that a register naming none clears the last ones, as a desktop moved back to a build without them takes none.
+    capabilities: registered.capabilities ?? [],
+    // Likewise a register naming no setup is a device ready to take an agent, as every desktop from before the field is.
+    setup: registered.setup ?? null,
+    setupFailure:
+      registered.setup === DEVICE_SETUP.FAILED ? (registered.setupFailure ?? null) : null,
+    now,
+  };
+}
 
 /**
  * Registers the Mac under the account, or renames, relocates, and beats it
@@ -821,25 +898,31 @@ export function registerDevice(
   userId: string,
   registered: { readonly id: string; readonly name: string } & DeviceRegistration,
 ): DeviceEffect<boolean> {
+  const { id, ...fields } = registered;
+
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.map(
-      upsertDevice({
-        userId,
-        ...registered,
-        // Note that a register naming no agents folder clears the last one, as a host moved back to a build from before the field names none.
-        agentsFolder: registered.agentsFolder ?? null,
-        // Note that a register naming no Codex clears the last one, since the Mac checks it on every start.
-        codexExecutable: registered.codexExecutable ?? null,
-        // Likewise a register naming no Cursor SDK clears the last one, as a host moved back to a build from before it keeps none.
-        cursorSdk: registered.cursorSdk ?? null,
-        // Note that a register naming none clears the last ones, as a desktop moved back to a build without them takes none.
-        capabilities: registered.capabilities ?? [],
-        // Likewise a register naming no setup is a device ready to take an agent, as every desktop from before the field is.
-        setup: registered.setup ?? null,
-        setupFailure:
-          registered.setup === DEVICE_SETUP.FAILED ? (registered.setupFailure ?? null) : null,
-        now,
-      }),
+      upsertDevice({ userId, id, ...registeredFields(fields, now) }),
+      (rows) => rows.length > 0,
+    ),
+  );
+}
+
+/**
+ * Registers a workspace's machine as `registerDevice` registers a member's
+ * own, on the row its approve made; false where the workspace holds no such
+ * machine standing, and nothing was written.
+ */
+export function registerWorkspaceMachine(
+  workspaceId: string,
+  registered: { readonly id: string; readonly name: string } & DeviceRegistration,
+): DeviceEffect<boolean> {
+  const { id, ...fields } = registered;
+  const owner = { kind: MACHINE_OWNER.WORKSPACE, workspaceId } as const;
+
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    Effect.map(
+      updateRegistered({ owner, id, ...registeredFields(fields, now) }),
       (rows) => rows.length > 0,
     ),
   );
@@ -850,7 +933,32 @@ export function deviceLayout(
   userId: string,
   id: string,
 ): DeviceEffect<Option.Option<DeviceLaidOut>> {
-  return findLayout({ userId, id });
+  return findLayout({ owner: { kind: MACHINE_OWNER.USER, userId }, id });
+}
+
+/** The host's device's layout, as `deviceLayout` reads a member's own, a workspace's machine read by its workspace; nothing where its owner holds no such device, or one that never registered. */
+export function hostLayout(host: HostPrincipal): DeviceEffect<Option.Option<DeviceLaidOut>> {
+  return findLayout({ owner: host.owner, id: host.deviceId });
+}
+
+const findHostSeen = SqlSchema.findOneOption({
+  Request: OwnedDeviceKeySchema,
+  Result: Schema.Struct({ lastSeenAt: Schema.Date }),
+  execute: ({ owner, id }) =>
+    Database.use((db) =>
+      db
+        .select({ lastSeenAt: device.lastSeenAt })
+        .from(device)
+        .where(and(eq(device.id, id), deviceOwnedBy(owner), isNull(device.removedAt))),
+    ),
+});
+
+/** When the host's device last beat; nothing where its owner holds no such device standing. */
+export function hostLastSeen(host: HostPrincipal): DeviceEffect<Option.Option<Date>> {
+  return Effect.map(
+    findHostSeen({ owner: host.owner, id: host.deviceId }),
+    Option.map((row) => row.lastSeenAt),
+  );
 }
 
 /** Where a host's update stands as its own beat says it: its phase, and why it failed where it did; neither while no update is under way. */
@@ -860,16 +968,13 @@ export interface DeviceUpdating {
 }
 
 /**
- * Records that the account's Mac is there now, and where its update stands
- * where its own beat says, cleared where that names none; a touch that says
- * nothing of its update, a held read's, leaves it. False where the account
- * holds no such Mac.
+ * Records that the host's device is there now, a member's own or a
+ * workspace's machine, and where its update stands where its own beat
+ * says, cleared where that names none; a touch that says nothing of its
+ * update, a held read's, leaves it. False where its owner holds no such
+ * device.
  */
-export function beatDevice(
-  userId: string,
-  id: string,
-  updating?: DeviceUpdating,
-): DeviceEffect<boolean> {
+export function beatDevice(host: HostPrincipal, updating?: DeviceUpdating): DeviceEffect<boolean> {
   const update = updating?.update ?? null;
 
   const said =
@@ -882,7 +987,10 @@ export function beatDevice(
         };
 
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    Effect.map(touchDevice({ userId, id, now, updating: said }), (rows) => rows.length > 0),
+    Effect.map(
+      touchDevice({ owner: host.owner, id: host.deviceId, now, updating: said }),
+      (rows) => rows.length > 0,
+    ),
   );
 }
 
@@ -1147,9 +1255,10 @@ export function workspaceMachineStanding(
 }
 
 /**
- * The machines the workspace itself owns, none removed, by name: each one's
- * platform and architecture, who connected it, none once that account is
- * gone, and the networks its agents may reach. None unless the reader is a
+ * The machines the workspace itself owns, as Settings lists a member's
+ * hosts (`hostListed`), by name: each one's platform and architecture, who
+ * connected it, none once that account is gone, the networks its agents may
+ * reach, and when it last beat. None unless the reader is a
  * member of the workspace. Note that it selects no secret or folder, since
  * a member is shown only what each machine is.
  */
@@ -1157,5 +1266,36 @@ export function workspaceOwnedMachinesOf(
   readerId: string,
   workspaceId: string,
 ): DeviceEffect<readonly WorkspaceOwnedMachine[]> {
-  return findWorkspaceOwnedMachines({ readerId, workspaceId });
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    findWorkspaceOwnedMachines({ readerId, workspaceId, now }),
+  );
+}
+
+const writeWorkspaceMachineName = SqlSchema.findAll({
+  Request: Schema.Struct({ workspaceId: Schema.String, id: Schema.String, name: Schema.String }),
+  Result: TxidRowSchema,
+  execute: ({ workspaceId, id, name }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ name })
+        .where(
+          and(eq(device.id, id), eq(device.organizationId, workspaceId), isNull(device.removedAt)),
+        )
+        .returning(TXID_RETURNING),
+    ),
+});
+
+/**
+ * Renames the workspace's machine, which its register never renames again
+ * (`registerWorkspaceMachine`), answering the transaction it was renamed
+ * in; none where the workspace holds no such machine standing. Note that
+ * who may is its caller's to judge.
+ */
+export function renameWorkspaceMachine(
+  workspaceId: string,
+  id: string,
+  name: string,
+): DeviceEffect<string | undefined> {
+  return Effect.map(writeWorkspaceMachineName({ workspaceId, id, name }), (rows) => rows[0]?.txid);
 }

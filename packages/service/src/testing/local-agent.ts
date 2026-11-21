@@ -169,7 +169,7 @@ export const warmLocalAgent = Effect.gen(function* () {
     .where(eq(conversations.id, agent.conversationId));
   const [launch] = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
   assert.equal(launch?.kind, DEVICE_AGENT_LINE_KIND.LAUNCH);
-  yield* claimedDeviceAgentLine(userId, deviceId, launch.id);
+  yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.id);
   const settledAt = yield* DateTime.nowAsDate;
 
   const [settled] = yield* db
@@ -206,7 +206,12 @@ export const launchCarries = (warm: WarmLocalAgent, text: string) =>
     const launch = waiting.filter((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH).at(-1);
 
     if (launch === undefined) return false;
-    const claimed = yield* claimedDeviceAgentLine(warm.userId, warm.deviceId, launch.id);
+
+    const claimed = yield* claimedDeviceAgentLine(
+      ownDeviceHost(warm.userId, warm.deviceId),
+      launch.id,
+    );
+
     const opened = Option.map(claimed, (line) => ("secrets" in line ? line.secrets : null));
 
     return JSON.stringify(Option.getOrNull(opened)).includes(text);

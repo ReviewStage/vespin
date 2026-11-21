@@ -45,8 +45,13 @@ import {
   latestTurnsOf,
   readAgent,
 } from "@repo/database/models/agent-store";
-import { liveDeviceAgents, ownDeviceHost } from "@repo/database/models/device-agent-store";
-import { devicesNamed } from "@repo/database/models/device-store";
+import {
+  deviceAgentPin,
+  type HostPrincipal,
+  liveDeviceAgents,
+  ownDeviceHost,
+} from "@repo/database/models/device-agent-store";
+import { hostLastSeen } from "@repo/database/models/device-store";
 import { type LostLine, storeWriter, turnOpeningLine } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
@@ -233,7 +238,7 @@ export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(fu
 
   const hostAway =
     agent.machine === AGENT_MACHINE.DEVICE && agent.deviceId != null
-      ? yield* deviceAway(agent.userId, agent.deviceId)
+      ? yield* deviceAway(ownDeviceHost(agent.userId, agent.deviceId))
       : false;
 
   return carryOnDecision({
@@ -364,37 +369,41 @@ const agentCarriedOnReturn = (
   );
 
 /**
- * The agents of a Mac back from past its lease carried on, for the turns
+ * The agents of a host back from past its lease carried on, for the turns
  * cut off while it was away, as the header says: every agent pinned to the
- * Mac and not archived, the same list its own beat reads, each as
- * `agentCarriedOnReturn` says, kept from the others. Answers how many
- * carry-ons went.
+ * host's device and not archived, the same list its own beat reads, its
+ * owner's own or, on a workspace's machine, any member's, each under its own
+ * account as `agentCarriedOnReturn` says, kept from the others. Answers how
+ * many carry-ons went.
  */
 export const carryOnHostReturned = /* @__PURE__ */ Effect.fn("web/carryOnHostReturned")(function* (
   sessionsFor: QueueSessions,
-  userId: string,
-  deviceId: string,
+  host: HostPrincipal,
   handOn: QueueHandOn,
 ) {
-  const agentIds = yield* liveDeviceAgents(ownDeviceHost(userId, deviceId));
+  const agentIds = yield* liveDeviceAgents(host);
   let went = 0;
 
   for (const agentId of agentIds) {
-    if (yield* agentCarriedOnReturn(sessionsFor, userId, agentId, handOn)) went += 1;
+    const pin = yield* deviceAgentPin(agentId);
+
+    if (Option.isNone(pin)) continue;
+
+    if (yield* agentCarriedOnReturn(sessionsFor, pin.value.userId, agentId, handOn)) went += 1;
   }
 
   return went;
 });
 
-/** Whether the account's Mac last beat before its lease ran out; a Mac the account does not hold reads as not. */
-const deviceAway = (userId: string, deviceId: string) =>
+/** Whether the host's device last beat before its lease ran out; a device its owner does not hold reads as not. */
+const deviceAway = (host: HostPrincipal) =>
   Effect.gen(function* () {
-    const device = (yield* devicesNamed([deviceId])).get(deviceId);
+    const seen = yield* hostLastSeen(host);
 
-    if (device === undefined || device.userId !== userId) return false;
+    if (Option.isNone(seen)) return false;
     const now = yield* Clock.currentTimeMillis;
 
-    return device.lastSeenAt.getTime() < now - DEVICE_LEASE.MS;
+    return seen.value.getTime() < now - DEVICE_LEASE.MS;
   });
 
 /**
@@ -408,19 +417,18 @@ const deviceAway = (userId: string, deviceId: string) =>
  */
 export function hostWriteCarriedOn<A, E, R>(
   sessionsFor: QueueSessions,
-  userId: string,
-  deviceId: string,
+  host: HostPrincipal,
   handOn: QueueHandOn,
   write: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | StoreFailure, R | CarryOnServices> {
   return Effect.gen(function* () {
-    const away = yield* deviceAway(userId, deviceId);
+    const away = yield* deviceAway(host);
     const answer = yield* write;
 
     if (away) {
       yield* afterResponse(
         "a returned Mac's carry-ons",
-        Effect.asVoid(carryOnHostReturned(sessionsFor, userId, deviceId, handOn)),
+        Effect.asVoid(carryOnHostReturned(sessionsFor, host, handOn)),
       );
     }
 

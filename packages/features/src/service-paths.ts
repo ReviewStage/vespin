@@ -231,6 +231,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_HOSTS: "/api/live/hosts",
   /** The account's machines with their settings for agents' commands and apps, sealed for following over Neon Realtime (GET), or their rows inline where polled. `machine-live.ts` declares the answer. */
   LIVE_MACHINES: "/api/live/machines",
+  /** The machines one workspace owns under `?workspaceId=`, sealed for following over Neon Realtime (GET), or `not-found`, or their rows inline where polled. `workspace-machine-live.ts` declares the answer. */
+  LIVE_WORKSPACE_MACHINES: "/api/live/workspace-machines",
   /** The asks the account's machines hold for its answer, sealed for following over Neon Realtime (GET), or their rows inline where polled. `machine-ask-live.ts` declares the answer. */
   LIVE_MACHINE_ASKS: "/api/live/machine-asks",
   /** One coding agent's pull request's newest chapters, the agent under `?id=` and the pull request under `&number=`, sealed for following over Neon Realtime (GET), with whether the reader can generate them, or `not-found`. `pull-request-chapters-live.ts` declares the answer. */
@@ -301,6 +303,12 @@ export const HOSTED_SERVICE_PATH = {
   HOST_PAIRING_APPROVE: "/api/hosts/pairing/approve",
   /** A pending pairing denied by its code, so its box is answered denied (POST). */
   HOST_PAIRING_DENY: "/api/hosts/pairing/deny",
+  /** The machines one workspace owns, to a member of it (GET, `WORKSPACE_MACHINES_QUERY`). `workspace-machine-wire.ts` declares the bodies. */
+  WORKSPACE_MACHINES: "/api/workspaces/machines",
+  /** One of a workspace's machines renamed by an owner or an admin of it (POST). */
+  WORKSPACE_MACHINE_RENAME: "/api/workspaces/machines/rename",
+  /** One of a workspace's machines removed by an owner or an admin of it, its secret refused at once (POST). */
+  WORKSPACE_MACHINE_REMOVE: "/api/workspaces/machines/remove",
   /**
    * The shell commands the account's agents asked to run on the developer's
    * Mac: the ones waiting, held open while none is, each claimed for the
