@@ -65,6 +65,7 @@ import {
   claimDeviceAgentRequest,
   liveDeviceAgents,
   openDeviceAgentLaunches,
+  ownDeviceHost,
   stepDeviceAgentLaunch,
 } from "@repo/database/models/device-agent-store";
 import { beatDevice, machineColumns } from "@repo/database/models/device-store";
@@ -301,13 +302,14 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       const { platform, arch } = input;
       const name = yield* keptMachineName(input.name);
 
-      // Note that the pairing keeps no machine the start named, since the box's first register follows its approve at once and names it again.
+      // Note that the pairing keeps the machine's id alone, not its model, which the box's first register names again after its approve.
       const userCode = yield* openedPairing({
         pollSecretHash: poll.hash,
         name,
         platform,
         arch,
         version: context.hostVersion,
+        machineId: input.machineId,
         ip: ip ?? null,
       });
 
@@ -406,7 +408,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
 
       // Note that the launches are read after the beat is written, so a claim the device finished before it sent the beat is among them.
       const openLaunches = yield* hostedStoreOrUnavailable(
-        openDeviceAgentLaunches(context.userId, deviceId),
+        openDeviceAgentLaunches(ownDeviceHost(context.userId, deviceId)),
       );
 
       const release = newerReleaseFor(context.request);
@@ -417,7 +419,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       yield* followed(context, input.deviceId);
 
       const agentIds = yield* hostedStoreOrUnavailable(
-        liveDeviceAgents(context.userId, input.deviceId),
+        liveDeviceAgents(ownDeviceHost(context.userId, input.deviceId)),
       );
 
       return { agentIds };
@@ -448,7 +450,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       yield* followed(context, input.deviceId);
 
       const stepped = yield* hostedStoreOrUnavailable(
-        stepDeviceAgentLaunch(context.userId, input.deviceId, input.id, input.step),
+        stepDeviceAgentLaunch(ownDeviceHost(context.userId, input.deviceId), input.id, input.step),
       );
 
       // A launch starting its runner is the Mac's machine up for the agent's first launch, which hands its queue on:
@@ -490,7 +492,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       yield* followed(context, input.deviceId);
 
       const claimed = yield* hostedStoreOrUnavailable(
-        claimDeviceAgentRequest(context.userId, input.deviceId, input.id),
+        claimDeviceAgentRequest(ownDeviceHost(context.userId, input.deviceId), input.id),
       );
 
       if (Option.isNone(claimed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
@@ -502,7 +504,11 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
 
       return yield* keptOrNotFound(
         yield* hostedStoreOrUnavailable(
-          answerDeviceAgentRequest(context.userId, input.deviceId, input.id, input.answer),
+          answerDeviceAgentRequest(
+            ownDeviceHost(context.userId, input.deviceId),
+            input.id,
+            input.answer,
+          ),
         ),
       );
     }),

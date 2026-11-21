@@ -36,6 +36,8 @@ import {
   type DevicePlatform,
   deviceSetupSchema,
   hostUpdateSchema,
+  MACHINE_OWNER,
+  type MachineOwner,
 } from "@repo/features/device-agent-wire";
 import { and, asc, eq, exists, gt, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
@@ -47,7 +49,7 @@ import { device } from "../schemas/device.js";
 import { hostPairing } from "../schemas/host-pairing.js";
 import { accountPreference } from "../schemas/preferences.js";
 import { runningTurnIds } from "./abandoned-turns.js";
-import { settleGoneDeviceAgentLaunches } from "./device-agent-store.js";
+import { type HostPrincipal, settleGoneDeviceAgentLaunches } from "./device-agent-store.js";
 import {
   type DeviceRegistration,
   MachineColumnsSchema,
@@ -57,14 +59,28 @@ import {
 
 type HostEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** The device a host's secret names, its account, and the daemon version it last called with. */
-const HostCallerSchema = Schema.Struct({
+/** The device a host's secret names, its owner's columns, and the daemon version it last called with. */
+const HostCallerRowSchema = Schema.Struct({
   deviceId: Schema.String,
-  userId: Schema.String,
+  userId: Schema.NullOr(Schema.String),
+  organizationId: Schema.NullOr(Schema.String),
   version: Schema.NullOr(Schema.String),
 });
 
-export type HostCaller = typeof HostCallerSchema.Type;
+/** The host a secret names (`HostPrincipal`), with the daemon version it last called with. */
+export type HostCaller = HostPrincipal & { readonly version: string | null };
+
+/** A device's owner from its two owner columns, of which its check holds exactly one. */
+function ownerOf(row: {
+  readonly userId: string | null;
+  readonly organizationId: string | null;
+}): MachineOwner {
+  if (row.userId !== null) return { kind: MACHINE_OWNER.USER, userId: row.userId };
+
+  if (row.organizationId === null) throw new Error("A device row names no owner.");
+
+  return { kind: MACHINE_OWNER.WORKSPACE, workspaceId: row.organizationId };
+}
 
 /** One of the account's enrolled machines, as Settings lists it: beside its name and beat, which machine it runs on and its model, none where its host never said, its home folder, none before it first registered, where its setup stands and why it failed, none once it is ready, and where its update stands and why it failed, as its last beat said, none while no update is under way. */
 const HostRowSchema = Schema.Struct({
@@ -208,11 +224,16 @@ const findRemoved = SqlSchema.findAll({
 
 const findBySecret = SqlSchema.findOneOption({
   Request: Schema.Struct({ secretHash: Schema.String }),
-  Result: HostCallerSchema,
+  Result: HostCallerRowSchema,
   execute: ({ secretHash }) =>
     Database.use((db) =>
       db
-        .select({ deviceId: device.id, userId: device.userId, version: device.version })
+        .select({
+          deviceId: device.id,
+          userId: device.userId,
+          organizationId: device.organizationId,
+          version: device.version,
+        })
         .from(device)
         .where(and(eq(device.secretHash, secretHash), isNull(device.removedAt))),
     ),
@@ -524,9 +545,12 @@ export function registerHost(
   );
 }
 
-/** The standing machine a device secret's hash names, its account, and the version it last called with; nothing for a removed machine, an old secret, or none. */
+/** The standing machine a device secret's hash names, its owner, and the version it last called with; nothing for a removed machine, an old secret, or none. */
 export function hostBySecret(secretHash: string): HostEffect<Option.Option<HostCaller>> {
-  return findBySecret({ secretHash });
+  return Effect.map(
+    findBySecret({ secretHash }),
+    Option.map(({ deviceId, version, ...owner }) => ({ deviceId, owner: ownerOf(owner), version })),
+  );
 }
 
 /** Records the daemon version the host called with. */

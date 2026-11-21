@@ -5,7 +5,8 @@
  * account, so no account moves, beats, or reads another's Mac, bar a
  * workspace's machines, which name only what each machine is and whose,
  * read through a workspace the reader and the owner both stand in
- * (`workspaceMachinesOf`). A register
+ * (`workspaceMachinesOf`), and the machines a workspace itself owns, read
+ * by its members alone (`workspaceOwnedMachinesOf`). A register
  * under an id another account holds writes nothing and answers false, so a
  * desktop cannot take over a Mac by naming its id (`../schemas/device.ts`).
  */
@@ -24,6 +25,7 @@ import {
   HOST_UPDATE,
   type HostUpdate,
   hostUpdateSchema,
+  machineNetworkSchema,
 } from "@repo/features/device-agent-wire";
 import {
   type AllowedAppLook,
@@ -345,7 +347,8 @@ const findNamed = SqlSchema.findAll({
           setupFailure: device.setupFailure,
         })
         .from(device)
-        .where(inArray(device.id, [...ids])),
+        // Note that a workspace's machine is no member's device, so it is never named here.
+        .where(and(inArray(device.id, [...ids]), isNotNull(device.userId))),
     ),
 });
 
@@ -734,6 +737,44 @@ const findWorkspaceMachines = SqlSchema.findAll({
     ),
 });
 
+/** A machine the workspace owns, as its members list it. */
+const WorkspaceOwnedMachineSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
+  arch: Schema.Literals(Object.values(DEVICE_ARCH)),
+  connectedBy: Schema.NullOr(Schema.String),
+  network: machineNetworkSchema,
+});
+
+export type WorkspaceOwnedMachine = typeof WorkspaceOwnedMachineSchema.Type;
+
+const findWorkspaceOwnedMachines = SqlSchema.findAll({
+  Request: Schema.Struct({ readerId: Schema.String, workspaceId: Schema.String }),
+  Result: WorkspaceOwnedMachineSchema,
+  execute: ({ readerId, workspaceId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: device.id,
+          name: device.name,
+          platform: device.platform,
+          arch: device.arch,
+          connectedBy: device.connectedBy,
+          network: sql<string>`${device.network}`,
+        })
+        .from(device)
+        .where(
+          and(
+            eq(device.organizationId, workspaceId),
+            isNull(device.removedAt),
+            workspaceReachableBy(readerId, workspaceId),
+          ),
+        )
+        .orderBy(asc(device.name), asc(device.id)),
+    ),
+});
+
 /**
  * Registers the Mac under the account, or renames, relocates, and beats it
  * where the account holds it already, with the machine it runs on where it
@@ -833,7 +874,8 @@ export function devicesSeenSince(userId: string, since: Date): DeviceEffect<read
  * state. Note that this read is keyed by the devices alone, not an account,
  * because a local agent's teammates see which Mac it runs on as they see who
  * started it; its caller hands it only the device ids of agents it already
- * read through their workspaces' gate.
+ * read through their workspaces' gate. Only members' own devices are named,
+ * never a workspace's machine.
  */
 export function devicesNamed(ids: readonly string[]): DeviceEffect<ReadonlyMap<string, Device>> {
   if (ids.length === 0) return Effect.succeed(new Map());
@@ -1051,4 +1093,18 @@ export function workspaceMachinesOf(
         ...(computerUse === null ? undefined : { computerUse }),
       })),
   );
+}
+
+/**
+ * The machines the workspace itself owns, none removed, by name: each one's
+ * platform and architecture, who connected it, none once that account is
+ * gone, and the networks its agents may reach. None unless the reader is a
+ * member of the workspace. Note that it selects no secret or folder, since
+ * a member is shown only what each machine is.
+ */
+export function workspaceOwnedMachinesOf(
+  readerId: string,
+  workspaceId: string,
+): DeviceEffect<readonly WorkspaceOwnedMachine[]> {
+  return findWorkspaceOwnedMachines({ readerId, workspaceId });
 }

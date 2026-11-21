@@ -13,7 +13,7 @@ import {
   queueAgentMessage,
 } from "@repo/database/models/agent-queue-store";
 import { latestTurnsOf, readAgent } from "@repo/database/models/agent-store";
-import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
+import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
@@ -229,7 +229,7 @@ const turnRunning = (warm: WarmLocalAgent, text: string) =>
 /** The newest launch line waiting for the agent's Mac, claimed as the Mac claims one; none where none waits. */
 const launchClaimed = (warm: WarmLocalAgent) =>
   Effect.gen(function* () {
-    const waiting = yield* deviceAgentLinesWaiting(warm.userId, warm.deviceId);
+    const waiting = yield* deviceAgentLinesWaiting(ownDeviceHost(warm.userId, warm.deviceId));
     const launch = waiting.filter((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH).at(-1);
 
     if (launch === undefined) return undefined;
@@ -307,7 +307,10 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           assert.equal(left?.id, resumed?.id);
           assert.equal(left?.status, TURN_STATUS.FAILED);
           assert.equal(left?.failure, TURN_FAILURE.RUNNER_LOST);
-          assert.deepEqual(yield* deviceAgentLinesWaiting(userId, warm.deviceId), []);
+          assert.deepEqual(
+            yield* deviceAgentLinesWaiting(ownDeviceHost(userId, warm.deviceId)),
+            [],
+          );
         }),
     );
 
@@ -367,7 +370,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           assert.notEqual(yield* launchClaimed(warm), undefined);
           yield* hostWrite(beatDevice(userId, deviceId));
 
-          assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
+          assert.deepEqual(yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId)), []);
         }),
     );
 

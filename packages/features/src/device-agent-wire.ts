@@ -248,6 +248,45 @@ export const DEVICE_ARCH = {
 
 export type DeviceArch = (typeof DEVICE_ARCH)[keyof typeof DEVICE_ARCH];
 
+/**
+ * Who a host machine belongs to: one member, whose own agents alone run on
+ * it, or a workspace, whose members' agents all may. A machine is one or
+ * the other, never both.
+ */
+export const MACHINE_OWNER = {
+  USER: "user",
+  WORKSPACE: "workspace",
+} as const;
+
+/** A host machine's owner, by its kind and the id of the account or workspace it names. */
+export const machineOwnerSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(MACHINE_OWNER.USER),
+    userId: EffectSchema.String,
+  }),
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(MACHINE_OWNER.WORKSPACE),
+    workspaceId: EffectSchema.String,
+  }),
+]);
+
+export type MachineOwner = typeof machineOwnerSchema.Type;
+
+/**
+ * Which networks a workspace machine's agents may reach beyond the open
+ * internet: none of the networks the machine itself sits on, or its private
+ * ranges too, as the admin who connected it chose. The machine itself and
+ * link-local addresses are never reached either way.
+ */
+export const MACHINE_NETWORK = {
+  PUBLIC_ONLY: "public-only",
+  PRIVATE_ALLOWED: "private-allowed",
+} as const;
+
+export type MachineNetwork = (typeof MACHINE_NETWORK)[keyof typeof MACHINE_NETWORK];
+
+export const machineNetworkSchema = EffectSchema.Literals(Object.values(MACHINE_NETWORK));
+
 /** The most characters of a machine's model as its host reports it. */
 export const DEVICE_MODEL_MAX_CHARS = 200;
 

@@ -67,7 +67,7 @@ export const HOST_PAIRING = {
   CLEAR_BATCH: 100,
 } as const;
 
-/** What a box opens a pairing with: its poll secret's hash, the code it shows, its name, platform, architecture, and daemon version, and the address it called from where one was named. */
+/** What a box opens a pairing with: its poll secret's hash, the code it shows, its name, platform, architecture, and daemon version, the machine it runs on and the address it called from where each was named. */
 export interface HostPairingOpening {
   readonly pollSecretHash: string;
   readonly userCode: string;
@@ -75,6 +75,8 @@ export interface HostPairingOpening {
   readonly platform: DevicePlatform;
   readonly arch: DeviceArch;
   readonly version: string;
+  /** The machine's keyed id (`device.machine_id`), absent from a daemon that names none. */
+  readonly machineId?: string | undefined;
   readonly ip: string | null;
 }
 
@@ -135,6 +137,7 @@ const insertPairing = SqlSchema.findAll({
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     arch: Schema.Literals(Object.values(DEVICE_ARCH)),
     version: Schema.String,
+    machineId: Schema.NullOr(Schema.String),
     ip: Schema.NullOr(Schema.String),
     now: Schema.Date,
     expiresAt: Schema.Date,
@@ -306,6 +309,7 @@ const settleApproved = SqlSchema.findOneOption({
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     arch: Schema.Literals(Object.values(DEVICE_ARCH)),
     version: Schema.String,
+    machineId: Schema.NullOr(Schema.String),
   }),
   execute: ({ userCode, userId, now, collectBy }) =>
     Database.use((db) =>
@@ -323,11 +327,12 @@ const settleApproved = SqlSchema.findOneOption({
           platform: hostPairing.platform,
           arch: hostPairing.arch,
           version: hostPairing.version,
+          machineId: hostPairing.machineId,
         }),
     ),
 });
 
-/** The host an approve makes: the account's, under the id given, with no secret until its box collects one. */
+/** The host an approve makes: the account's, under the id given, on the machine its box named, with no secret until its box collects one. */
 const insertPairedHost = SqlSchema.void({
   Request: Schema.Struct({
     id: Schema.String,
@@ -336,6 +341,7 @@ const insertPairedHost = SqlSchema.void({
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     arch: Schema.Literals(Object.values(DEVICE_ARCH)),
     version: Schema.String,
+    machineId: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
   execute: ({ now, ...host }) =>
@@ -492,7 +498,13 @@ export function openHostPairing(opening: HostPairingOpening): PairingEffect<Opti
       const now = yield* DateTime.nowAsDate;
       yield* clearLapsed(now);
       const expiresAt = new Date(now.getTime() + Duration.toMillis(HOST_PAIRING.LIFETIME));
-      const opened = yield* insertPairing({ ...opening, now, expiresAt });
+
+      const opened = yield* insertPairing({
+        ...opening,
+        machineId: opening.machineId ?? null,
+        now,
+        expiresAt,
+      });
 
       return Option.map(Option.fromNullishOr(opened[0]), (row) => row.expiresAt);
     }),

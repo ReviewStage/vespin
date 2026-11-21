@@ -21,6 +21,7 @@ import {
   deviceAgentLineStanding,
   deviceAgentLinesWaiting,
   deviceAgentRequestsWaiting,
+  ownDeviceHost,
   queueDeviceAgentRequest,
   settleDeviceAgentLine,
   stepDeviceAgentLaunch,
@@ -156,9 +157,9 @@ const messageSent = (opened: Effect.Success<ReturnType<typeof openLocalAgent>>) 
 /** Lets a forked read's statements run until its request waits for the Mac. */
 const untilAsked = (userId: string, deviceId: string) =>
   Effect.gen(function* () {
-    while ((yield* deviceAgentRequestsWaiting(userId, deviceId)).length === 0)
+    while ((yield* deviceAgentRequestsWaiting(ownDeviceHost(userId, deviceId))).length === 0)
       yield* Effect.yieldNow;
-    const [request] = yield* deviceAgentRequestsWaiting(userId, deviceId);
+    const [request] = yield* deviceAgentRequestsWaiting(ownDeviceHost(userId, deviceId));
 
     return Option.getOrThrow(Option.fromNullishOr(request));
   });
@@ -166,8 +167,9 @@ const untilAsked = (userId: string, deviceId: string) =>
 /** The first line waiting for the agent's Mac, once one does. */
 const untilQueued = (userId: string, deviceId: string) =>
   Effect.gen(function* () {
-    while ((yield* deviceAgentLinesWaiting(userId, deviceId)).length === 0) yield* Effect.yieldNow;
-    const [line] = yield* deviceAgentLinesWaiting(userId, deviceId);
+    while ((yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).length === 0)
+      yield* Effect.yieldNow;
+    const [line] = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
 
     return Option.getOrThrow(Option.fromNullishOr(line));
   });
@@ -343,7 +345,10 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
 
           assert.ok(refused instanceof LaunchRefused);
           assert.equal(refused.reason, "host predates its own github sign-in");
-          assert.deepEqual(yield* deviceAgentLinesWaiting(opened.userId, opened.deviceId), []);
+          assert.deepEqual(
+            yield* deviceAgentLinesWaiting(ownDeviceHost(opened.userId, opened.deviceId)),
+            [],
+          );
         }),
     );
 
@@ -364,7 +369,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             yield* machine.restoreCheckout(session, snapshot),
             RESTORE_OUTCOME.UNSUPPORTED,
           );
-          assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
+          assert.deepEqual(yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId)), []);
 
           // The Mac's host registers that it takes the line, as a newer release does.
           yield* registerDevice(userId, {
@@ -378,14 +383,18 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           assert.equal(line.kind, DEVICE_AGENT_LINE_KIND.RESTORE);
           assert.deepEqual(line.payload, snapshot);
           yield* claimedDeviceAgentLine(userId, deviceId, line.id);
-          yield* settleDeviceAgentLine(userId, deviceId, line.id, CHECKOUT_RESTORE_EXIT.MISSING);
+          yield* settleDeviceAgentLine(
+            ownDeviceHost(userId, deviceId),
+            line.id,
+            CHECKOUT_RESTORE_EXIT.MISSING,
+          );
           yield* TestClock.adjust("1 second");
           assert.equal(yield* Fiber.join(restoring), RESTORE_OUTCOME.MISSING);
 
           const again = yield* Effect.forkChild(machine.restoreCheckout(session, snapshot));
           const second = yield* untilQueued(userId, deviceId);
           yield* claimedDeviceAgentLine(userId, deviceId, second.id);
-          yield* settleDeviceAgentLine(userId, deviceId, second.id, 0);
+          yield* settleDeviceAgentLine(ownDeviceHost(userId, deviceId), second.id, 0);
           yield* TestClock.adjust("1 second");
           assert.equal(yield* Fiber.join(again), RESTORE_OUTCOME.RESTORED);
 
@@ -395,7 +404,9 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           yield* TestClock.adjust(MAC_MACHINE.RESTORE_WAIT);
           assert.equal(yield* Fiber.join(unclaimed), RESTORE_OUTCOME.FAILED);
           assert.deepEqual(
-            (yield* deviceAgentLinesWaiting(userId, deviceId)).map((line) => line.id),
+            (yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).map(
+              (line) => line.id,
+            ),
             [],
             `the line ${third.id} is withdrawn`,
           );
@@ -413,7 +424,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           assert.deepEqual(yield* machine.diffCheckout(session, range), {
             outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED,
           });
-          assert.deepEqual(yield* deviceAgentRequestsWaiting(userId, deviceId), []);
+          assert.deepEqual(yield* deviceAgentRequestsWaiting(ownDeviceHost(userId, deviceId)), []);
 
           yield* registerDevice(userId, {
             id: deviceId,
@@ -427,8 +438,8 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             [request.kind, request.args],
             [DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, range],
           );
-          yield* claimDeviceAgentRequest(userId, deviceId, request.id);
-          yield* answerDeviceAgentRequest(userId, deviceId, request.id, {
+          yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), request.id);
+          yield* answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), request.id, {
             kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
             exit: 0,
             diff: "diff --git a/x b/x\n",
@@ -441,8 +452,8 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
 
           const gone = yield* Effect.forkChild(machine.diffCheckout(session, range));
           const again = yield* untilAsked(userId, deviceId);
-          yield* claimDeviceAgentRequest(userId, deviceId, again.id);
-          yield* answerDeviceAgentRequest(userId, deviceId, again.id, {
+          yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), again.id);
+          yield* answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), again.id, {
             kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
             exit: CHECKOUT_DIFF_EXIT.MISSING,
             diff: "",
@@ -460,8 +471,8 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
 
         const reading = yield* Effect.forkChild(machine.readFile(session, "/tmp/shot.png", 1_024));
         const request = yield* untilAsked(userId, deviceId);
-        yield* claimDeviceAgentRequest(userId, deviceId, request.id);
-        yield* answerDeviceAgentRequest(userId, deviceId, request.id, {
+        yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), request.id);
+        yield* answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), request.id, {
           kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
           bytes,
         });
@@ -477,7 +488,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           "a Mac silent past its presence window is away",
         );
         assert.deepEqual(
-          yield* deviceAgentRequestsWaiting(userId, deviceId),
+          yield* deviceAgentRequestsWaiting(ownDeviceHost(userId, deviceId)),
           [],
           "nothing was asked of it",
         );
@@ -512,8 +523,8 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           );
 
           const request = yield* untilAsked(userId, deviceId);
-          yield* claimDeviceAgentRequest(userId, deviceId, request.id);
-          yield* answerDeviceAgentRequest(userId, deviceId, request.id, {
+          yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), request.id);
+          yield* answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), request.id, {
             kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
             bytes: pngBytes(1200, 720),
           });
@@ -593,13 +604,16 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const line = runner.handle.command;
           yield* expectTopicsFire(claimedDeviceAgentLine(userId, deviceId, line), accountAndAgent);
           yield* expectTopicsFire(
-            settleDeviceAgentLine(userId, deviceId, line, 0),
+            settleDeviceAgentLine(ownDeviceHost(userId, deviceId), line, 0),
             accountAndAgent,
           );
           yield* expectTopicsFire(queueDeviceAgentRequest(userId, request), account);
-          yield* expectTopicsFire(claimDeviceAgentRequest(userId, deviceId, id), account);
           yield* expectTopicsFire(
-            answerDeviceAgentRequest(userId, deviceId, id, {
+            claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), id),
+            account,
+          );
+          yield* expectTopicsFire(
+            answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), id, {
               kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
               bytes: new Uint8Array([137, 80, 78, 71]),
             }),
@@ -635,10 +649,10 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             const read = yield* wokenOnHub(
               machine.readFile(session, "/tmp/shot.png", 1_024),
               Effect.gen(function* () {
-                const [asked] = yield* deviceAgentRequestsWaiting(userId, deviceId);
+                const [asked] = yield* deviceAgentRequestsWaiting(ownDeviceHost(userId, deviceId));
                 assert.ok(asked !== undefined, "the read asked its Mac");
-                yield* claimDeviceAgentRequest(userId, deviceId, asked.id);
-                yield* answerDeviceAgentRequest(userId, deviceId, asked.id, {
+                yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), asked.id);
+                yield* answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), asked.id, {
                   kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
                   bytes,
                 });
@@ -661,7 +675,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
               machine.runnerExit(lines.written.handle),
               Effect.andThen(
                 claimedDeviceAgentLine(userId, deviceId, line),
-                settleDeviceAgentLine(userId, deviceId, line, 0),
+                settleDeviceAgentLine(ownDeviceHost(userId, deviceId), line, 0),
               ),
             );
 
@@ -732,7 +746,11 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
         yield* claimedDeviceAgentLine(userId, deviceId, launch.handle.command);
 
         if (step !== undefined) {
-          yield* stepDeviceAgentLaunch(userId, deviceId, launch.handle.command, step);
+          yield* stepDeviceAgentLaunch(
+            ownDeviceHost(userId, deviceId),
+            launch.handle.command,
+            step,
+          );
         }
 
         yield* settledDeviceAgentLine(userId, deviceId, launch.handle.command, 1, unstarted);
@@ -820,7 +838,10 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
 
           assert.ok(removed instanceof LaunchRefused);
           assert.equal(removed.deviceRemoved, true);
-          assert.deepEqual(yield* deviceAgentLinesWaiting(opened.userId, opened.deviceId), []);
+          assert.deepEqual(
+            yield* deviceAgentLinesWaiting(ownDeviceHost(opened.userId, opened.deviceId)),
+            [],
+          );
         }),
     );
 
@@ -910,7 +931,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             Option.some([true, null]),
           );
           assert.deepEqual(
-            yield* deviceAgentLinesWaiting(lapsed.userId, lapsed.deviceId),
+            yield* deviceAgentLinesWaiting(ownDeviceHost(lapsed.userId, lapsed.deviceId)),
             [],
             "the Mac's own beat ends a run it holds no longer once it is back",
           );

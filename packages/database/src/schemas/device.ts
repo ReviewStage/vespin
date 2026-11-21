@@ -4,12 +4,22 @@ import type {
   DevicePlatform,
   DeviceSetup,
   HostUpdate,
+  MachineNetwork,
 } from "@repo/features/device-agent-wire";
 import type { AllowedAppLook, MachineCommandMode } from "@repo/features/machine-command-wire";
 import { sql } from "drizzle-orm";
-import { boolean, index, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
-import { user } from "./auth.js";
+import { organization, user } from "./auth.js";
 
 /**
  * device.ts -- one of an account's devices that can run its local agents, and when it last said it was there.
@@ -25,8 +35,16 @@ import { user } from "./auth.js";
  * the harnesses it keeps, which move with every update. A
  * local agent is pinned to one of these
  * (`agent.device_id`), and every line and request for it names the
- * same Mac (`./device-agent.ts`). The row belongs to the account and leaves
- * with it.
+ * same Mac (`./device-agent.ts`).
+ *
+ * A device is owned by exactly one of an account (`user_id`) or a workspace
+ * (`organization_id`), which the row's check holds: a member's own machine, on
+ * which only their agents run, or a workspace machine, which an admin
+ * connected for every member's agents. The row leaves with its owner. A
+ * workspace machine keeps who connected it (`connected_by`), which an
+ * account's delete clears rather than taking the machine with it, and which
+ * networks its agents may reach (`network`). Every row from before the
+ * workspace column is its account's own.
  *
  * Every device joins with a device secret of its own, a box the one its
  * approved pairing hands it (`./host-pairing.ts`) and a Mac the one its
@@ -48,9 +66,20 @@ export const device = pgTable(
   {
     /** Minted once per install, as the host enrolls. */
     id: uuid("id").primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+    /** The account that owns the device, its own machine; null for a workspace's machine. */
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    /** The workspace that owns the device, a machine every member's agents may run on; null for an account's own. */
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
+    /** The account that connected a workspace's machine; null for an account's own, and once that account is deleted, which leaves the machine with its workspace. */
+    connectedBy: text("connected_by").references(() => user.id, { onDelete: "set null" }),
+    /**
+     * Which networks a workspace machine's agents may reach beyond the open
+     * internet (`MACHINE_NETWORK`), as the admin who connected it chose; null
+     * for an account's own machine, whose agents run as its member does.
+     */
+    network: text("network").$type<MachineNetwork>(),
     /** The device's own name, as its host read it from the system, for the agent's label. */
     name: text("name").notNull(),
     /** The device's operating system, as it last registered. */
@@ -177,8 +206,21 @@ export const device = pgTable(
     awayAt: timestamptz("away_at"),
   },
   (table) => [
+    // A device is an account's or a workspace's, never both and never neither.
+    check("device_one_owner", sql`num_nonnulls(${table.userId}, ${table.organizationId}) = 1`),
+    // A workspace's machine, and only one, names its networks, and only one keeps who connected it.
+    check(
+      "device_workspace_fields",
+      sql`(${table.organizationId} is null) = (${table.network} is null) and (${table.organizationId} is not null or ${table.connectedBy} is null)`,
+    ),
     // Start reads the account's Macs that beat lately.
     index("device_user_seen").on(table.userId, table.lastSeenAt),
+    // A workspace's machines are listed to its members.
+    index("device_workspace")
+      .on(table.organizationId)
+      .where(sql`${table.organizationId} is not null`),
+    // An account's delete clears it from the machines it connected.
+    index("device_connected_by").on(table.connectedBy).where(sql`${table.connectedBy} is not null`),
     // A host's call is resolved by its secret's hash alone.
     uniqueIndex("device_secret_hash")
       .on(table.secretHash)

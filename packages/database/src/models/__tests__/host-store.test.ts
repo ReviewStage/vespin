@@ -7,6 +7,7 @@ import {
   DEVICE_ARCH,
   DEVICE_PLATFORM,
   type DevicePlatform,
+  MACHINE_OWNER,
 } from "@repo/features/device-agent-wire";
 import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
@@ -14,7 +15,13 @@ import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
 import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
-import { DEVICE_LAYOUT, getTestDB, startTask } from "../../testing/index.js";
+import {
+  connectWorkspaceMachine,
+  DEVICE_LAYOUT,
+  getTestDB,
+  openWorkspace,
+  startTask,
+} from "../../testing/index.js";
 import {
   createAgent,
   readRunnerTokenConversation,
@@ -39,7 +46,8 @@ import { keepRunsOnPick, readRunsOnPick } from "../runs-on-pick.js";
  * a removed host's secret and its runners' bearers resolve nothing, and no account enrolls, lists,
  * or removes another's. A Mac that joins again folds the account's other
  * Macs on its machine into it, never another account's, a Linux box's, or
- * itself, and a host's later register never folds.
+ * itself, and a host's later register never folds. A workspace's machine's
+ * secret names the workspace as its owner.
  * Synthetic accounts, hashes, and machines throughout.
  */
 
@@ -76,6 +84,20 @@ const enrolledHost = (
   });
 
 it.layer(getTestDB())("the host store", (it) => {
+  it.effect("a workspace's machine's secret names the workspace as its owner", () =>
+    Effect.gen(function* () {
+      const { owner } = yield* openAccounts;
+      const workspace = yield* openWorkspace(owner);
+      const secretHash = `secret-${randomUUID()}`;
+      const box = yield* connectWorkspaceMachine(workspace, owner, secretHash);
+
+      assert.deepEqual(
+        Option.map(yield* hostBySecret(secretHash), (host) => [host.deviceId, host.owner]),
+        Option.some([box, { kind: MACHINE_OWNER.WORKSPACE, workspaceId: workspace }]),
+      );
+    }),
+  );
+
   it.effect(
     "a member's session creates a machine its account never registered, under that account alone, and never takes another account's id",
     () =>
@@ -114,8 +136,8 @@ it.layer(getTestDB())("the host store", (it) => {
         );
         assert.deepEqual(yield* hostsOf(other), []);
         assert.deepEqual(
-          Option.map(yield* hostBySecret(ownerHash), (host) => host.userId),
-          Option.some(owner),
+          Option.map(yield* hostBySecret(ownerHash), (host) => host.owner),
+          Option.some({ kind: MACHINE_OWNER.USER, userId: owner }),
           "the owner's secret still stands",
         );
       }),

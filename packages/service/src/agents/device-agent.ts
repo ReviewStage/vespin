@@ -23,6 +23,7 @@ import {
   deviceAgentLinesWaiting,
   deviceAgentRequestsWaiting,
   latestDeviceAgentLaunch,
+  ownDeviceHost,
   settleDeviceAgentLine,
   withdrawExpiredDeviceAgentRows,
 } from "@repo/database/models/device-agent-store";
@@ -106,12 +107,12 @@ function heldRead<A>(
 
 /** The Mac's held read of its agents' lines, in their order. */
 export function deviceAgentLinesFor(userId: string, deviceId: string) {
-  return heldRead(userId, deviceId, deviceAgentLinesWaiting(userId, deviceId));
+  return heldRead(userId, deviceId, deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId)));
 }
 
 /** The Mac's held read of its agents' tools' requests, oldest first. */
 export function deviceAgentRequestsFor(userId: string, deviceId: string) {
-  return heldRead(userId, deviceId, deviceAgentRequestsWaiting(userId, deviceId));
+  return heldRead(userId, deviceId, deviceAgentRequestsWaiting(ownDeviceHost(userId, deviceId)));
 }
 
 /**
@@ -162,7 +163,7 @@ export function claimedDeviceAgentLine(
   claimToken?: string,
 ) {
   return Effect.gen(function* () {
-    const claimed = yield* claimDeviceAgentLine(userId, deviceId, id, claimToken);
+    const claimed = yield* claimDeviceAgentLine(ownDeviceHost(userId, deviceId), id, claimToken);
 
     if (Option.isNone(claimed)) return Option.none();
     const { sealedSecrets, secretsGone, ...line } = claimed.value;
@@ -208,7 +209,7 @@ export function settledDeviceAgentLine(
   unstarted?: DeviceLaunchUnstarted,
 ) {
   return Effect.gen(function* () {
-    const fresh = yield* settleDeviceAgentLine(userId, deviceId, id, exitCode);
+    const fresh = yield* settleDeviceAgentLine(ownDeviceHost(userId, deviceId), id, exitCode);
 
     const settled = Option.isSome(fresh)
       ? fresh
