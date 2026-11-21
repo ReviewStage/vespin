@@ -1,0 +1,99 @@
+probe rows 14620, commands 474, frames 14211
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
+cold-launch | 4 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | None | None | None | None | None
+inbox-row | 6 | topTouchEnd | 620 | 30 | 164 | 8731 | 727 | 1201 | 172 | 13 | 207 | 210 | 840 | 1176 | 22
+back-from-thread | 5 | topTouchEnd | 685 | 23 | 79 | 6443 | 91 | 1219 | 0 | 9 | -19 | 89 | 771 | 1358 | 50
+more-menu | 6 | topTouchEnd | 702 | 14 | 42 | 3310 | 58 | 1116 | 0 | 6 | -17 | 146 | 848 | 1013 | 25
+new-task | 6 | topTouchEnd | 646 | 30 | 288 | 8669 | 2256 | 1318 | 227 | 12 | -15 | 398 | 1078 | 1196 | 18
+new-task-cancel | 5 | topTouchEnd | 737 | 11 | 31 | 2347 | 29 | 814 | 0 | 3 | -18 | 154 | 889 | 719 | 20
+switcher-open | 6 | topTouchEnd | 720 | 14 | 42 | 3305 | 58 | 1098 | 0 | 5 | -21 | 119 | 842 | 1022 | 47
+switch-workspace | 5 | topIsOnChange | 618 | 15 | 40 | 2032 | 35 | 1268 | 0 | 5 | -24 | 99 | 717 | 1266 | 33
+switch-back | 5 | topIsOnChange | 562 | 22 | 106 | 7593 | 2578 | 1343 | 70 | 9 | -24 | 101 | 657 | 1267 | 27
+tab-tasks | 6 | topTouchEnd | 757 | 24 | 68 | 5768 | 87 | 1687 | 36 | 8 | -26 | 48 | 805 | 1552 | 20
+tab-inbox | 5 | topTouchEnd | 791 | 16 | 51 | 4021 | 58 | 843 | 0 | 5 | -18 | 50 | 831 | 860 | 20
+tasks-row | 6 | topTouchEnd | 713 | 20 | 202 | 11650 | 2182 | 1192 | 226 | 14 | 22 | 332 | 974 | 1134 | 155
+back-from-task | 5 | topTouchEnd | 893 | 19 | 91 | 7795 | 125 | 911 | 109 | 9 | -22 | 90 | 973 | 985 | 70
+status-chip-open | 7 | topTouchEnd | 774 | 17 | 86 | 8479 | 151 | 1320 | 0 | 10 | 44 | 142 | 906 | 1294 | 25
+status-pick | 6 | topWindowChange | 154 | 26 | 148 | 14164 | 370 | 2002 | 109 | 16 | 52 | 562 | 715 | 2048 | 206
+send | 4 | topTouchEnd | 726 | 11 | 46 | 3659 | 82 | 331 | 0 | 6 | -28 | 151 | 880 | 239 | 93
+agent-row | 6 | topTouchEnd | 641 | 39 | 236 | 18309 | 1830 | 1229 | 179 | 23 | 39 | 184 | 866 | 1174 | 145
+back-from-agent | 5 | topTouchEnd | 729 | 23 | 136 | 13937 | 315 | 1653 | 316 | 18 | -19 | 87 | 816 | 1667 | 25
+inbox-row-plain | 6 | topTouchEnd | 641 | 30 | 122 | 8094 | 560 | 1165 | 77 | 14 | 156 | 165 | 822 | 1139 | 23
+back-from-plain | 5 | topTouchEnd | 633 | 21 | 57 | 4595 | 66 | 1284 | 44 | 8 | -23 | 84 | 712 | 1366 | 45
+inbox-row-long | 6 | topTouchEnd | 714 | 27 | 252 | 20293 | 2699 | 1245 | 280 | 20 | 244 | 246 | 978 | 1212 | 22
+back-from-long | 5 | topTouchEnd | 751 | 24 | 86 | 8820 | 128 | 1370 | 37 | 11 | -27 | 83 | 834 | 1369 | 25
+
+most rendered components per path (summed over its taps):
+cold-launch: 
+inbox-row: obj×7479, View×2165, HStack×1837, HStackView×1835, Text×1637, Slot×1122, SlotView×1115, Image×946, Button×872, ImageView×871, RoundedRectangle×826, RoundedRectangleView×826, VStack×111, VStackView×111
+back-from-thread: obj×4453, HStack×1615, HStackView×1615, RoundedRectangle×1118, RoundedRectangleView×1118, Slot×1062, SlotView×1062, Image×791, ImageView×735, Text×724, Button×684, View×556
+more-menu: obj×1864, HStack×1274, HStackView×1274, RoundedRectangle×948, RoundedRectangleView×948, Slot×852, SlotView×852, Image×600, ImageView×564, Button×504, Text×384, TextView×384
+new-task: obj×5557, Slot×2127, SlotView×2127, HStack×2096, HStackView×2096, Image×1632, ImageView×1547, RoundedRectangle×1167, RoundedRectangleView×1167, Label×1049, LabelView×1034, Button×838, GlyphImage×162
+new-task-cancel: obj×2580, HStack×756, HStackView×756, RoundedRectangle×679, RoundedRectangleView×679, Slot×497, SlotView×497, Image×350, ImageView×329, Button×294, Text×224, TextView×224
+switcher-open: obj×1650, HStack×1080, HStackView×1080, RoundedRectangle×922, RoundedRectangleView×922, Slot×710, SlotView×710, Image×500, ImageView×470, Button×420, Text×320, TextView×320
+switch-workspace: obj×3362, Screen×224, SceneView×220, NavigationProvider×220, anon×191, View×163, Slot×160, SlotView×160, Image×120, Button×120, NavigationActivityProvider×100, PreventRemovalProvider×84, ImageView×20
+switch-back: obj×3451, HStack×2374, HStackView×2374, Slot×1468, SlotView×1468, RoundedRectangle×1170, RoundedRectangleView×1170, Image×1160, ImageView×1086, Button×931, Text×896, TextView×896
+tab-tasks: obj×4667, HStack×1922, HStackView×1922, RoundedRectangle×1458, RoundedRectangleView×1458, Slot×1278, SlotView×1278, Image×900, ImageView×846, Button×756, Text×576, TextView×576
+tab-inbox: obj×3741, HStack×1232, HStackView×1232, RoundedRectangle×923, RoundedRectangleView×923, Slot×781, SlotView×781, Image×550, ImageView×517, Button×462, Text×288, TextView×288, SceneView×70, NavigationProvider×70
+tasks-row: obj×5635, HStack×3540, HStackView×3540, Slot×2942, SlotView×2942, Image×2280, ImageView×2211, Text×2034, Button×1550, RoundedRectangle×1278, RoundedRectangleView×1278, View×944, GlyphImage×746, Label×315
+back-from-task: obj×4955, HStack×2255, HStackView×2255, Slot×1500, SlotView×1500, RoundedRectangle×1263, RoundedRectangleView×1263, Image×1075, Text×1070, ImageView×1025, Button×890, TextView×725
+status-chip-open: obj×4836, HStack×3173, HStackView×3173, Text×2153, Slot×2147, SlotView×2147, View×1740, Image×1595, ImageView×1532, RoundedRectangle×1516, RoundedRectangleView×1309, Button×1308, TextView×210
+status-pick: obj×7319, HStack×5203, HStackView×5203, Text×3591, Slot×3584, SlotView×3584, View×2900, Image×2679, ImageView×2573, RoundedRectangle×2445, RoundedRectangleView×2445, Button×2186
+send: obj×1407, View×1107, Text×556, Button×444, HStack×431, HStackView×431, ViewHolderInternal×304, Image×304, ImageView×298, Slot×226, SlotView×226, RoundedRectangle×146, PictureSetProvider×69, RNHostView×52
+agent-row: obj×12326, View×9345, Text×5319, HStack×2853, HStackView×2853, Button×2553, ViewHolderInternal×2130, RunView×1931, Image×1842, ImageView×1827, Slot×1292, SlotView×1292, PictureSetProvider×192, RNHostView×180
+back-from-agent: obj×8422, View×4222, Text×3942, HStack×3607, HStackView×3607, Slot×2372, SlotView×2372, Image×1785, ImageView×1716, RunView×1533, RoundedRectangle×1468, Button×1120, RoundedRectangleView×388
+inbox-row-plain: obj×5487, HStack×1695, HStackView×1695, Slot×1417, SlotView×1417, Text×1120, RoundedRectangle×1094, RoundedRectangleView×1094, Image×1039, Button×1008, ImageView×997, TextView×980
+back-from-plain: obj×3568, HStack×1243, HStackView×1243, RoundedRectangle×1067, RoundedRectangleView×1067, Slot×851, SlotView×851, Image×609, ImageView×576, Button×538, Text×462, TextView×436
+inbox-row-long: obj×11401, View×10794, Text×7416, HStack×3168, HStackView×3168, RunView×3080, VStack×2780, VStackView×2780, BlockView×2640, RNHostView×2572, Blocks×2200, TextView×1244, Line×1000
+back-from-long: obj×5172, View×2535, Text×1994, HStack×1800, HStackView×1800, RoundedRectangle×1141, RoundedRectangleView×1116, Slot×925, SlotView×925, Image×872, TextView×688, ImageView×423, RunView×280, BlockView×120
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+cold-launch: 
+inbox-row: ThreadDetail 19.3, Video 11.0, Markdown 8.3, SceneView 6.1, BaseNavigationContainer 5.9, RowFrame 5.6, GuardedScreens 4.5, TasksListScreen 3.2, MenuCommands 2.7, StandardRouterNavigator 2.7
+back-from-thread: RowFrame 5.9, TasksListScreen 5.1, SceneView 4.8, GuardedScreens 2.8, StandardRouterNavigator 2.7, MenuCommands 2.7, Animated(Anonymous) 2.5, InboxStackList 1.9, obj 1.5, TaskListRow 1.3
+more-menu: RowFrame 3.8, TasksListScreen 3.6, GuardedScreens 1.6, SceneView 1.5, StandardRouterNavigator 1.1, InboxStackList 1.1, MenuCommands 1.0, TaskListRow 0.8, HStackView 0.7, obj 0.4
+new-task: NewTaskScreen 173.9, RowFrame 5.0, TasksListScreen 4.8, SceneView 4.7, BaseNavigationContainer 4.6, StandardRouterNavigator 3.1, GuardedScreens 2.8, PillField 2.5, Animated(Anonymous) 2.5, MenuCommands 1.8
+new-task-cancel: RowFrame 3.7, TasksListScreen 2.5, GuardedScreens 2.5, SceneView 1.8, StandardRouterNavigator 1.8, TabsLayout 1.4, MenuCommands 1.3, Animated(Anonymous) 1.0, obj 0.9, BaseNavigationContainer 0.5
+switcher-open: TasksListScreen 3.3, RowFrame 3.3, GuardedScreens 1.9, MenuCommands 1.8, HStackView 1.2, SceneView 1.2, StandardRouterNavigator 0.9, InboxStackList 0.7, TaskListRow 0.7, RoundedRectangleView 0.6
+switch-workspace: TasksListScreen 7.4, GuardedScreens 3.4, SceneView 3.3, StandardRouterNavigator 2.9, TabsScreen 2.1, MenuCommands 2.1, InboxStackList 1.5, Animated(Anonymous) 1.3, TasksStackList 1.3, obj 1.2
+switch-back: RowFrame 8.7, TasksListScreen 7.6, TasksTree 5.9, InboxRowView 5.3, StandardRouterNavigator 3.5, GuardedScreens 3.2, SceneView 2.9, MenuCommands 2.4, InboxStackList 1.8, TaskListRow 0.7
+tab-tasks: RowFrame 5.9, TasksListScreen 5.4, SceneView 3.8, GuardedScreens 3.0, StandardRouterNavigator 3.0, MenuCommands 2.1, obj 1.6, Animated(Anonymous) 1.4, TaskListRow 1.1, InboxStackList 0.9
+tab-inbox: RowFrame 4.8, TasksListScreen 3.9, SceneView 3.3, GuardedScreens 2.5, StandardRouterNavigator 2.1, obj 1.7, MenuCommands 1.6, Animated(Anonymous) 1.3, TabsScreen 1.0, InboxStackList 1.0
+tasks-row: OverviewDescription 24.8, TaskScreen 23.4, Markdown 18.7, MenuCommands 9.8, RowFrame 7.1, SceneView 6.3, BaseNavigationContainer 4.4, TasksListScreen 3.6, GuardedScreens 2.0, HStackView 1.9
+back-from-task: RowFrame 7.3, SceneView 6.8, TasksListScreen 5.1, TabsScreen 5.1, GuardedScreens 3.6, MenuCommands 3.1, StandardRouterNavigator 3.1, Animated(Anonymous) 2.1, obj 1.2, HStackView 1.2
+status-chip-open: SceneView 5.7, RowFrame 5.5, TasksListScreen 4.2, TaskScreen 2.3, GuardedScreens 1.6, Text 1.6, MenuCommands 1.4, HStackView 1.4, StandardRouterNavigator 1.0, Animated(Anonymous) 0.7
+status-pick: RowFrame 10.6, TasksListScreen 8.7, SceneView 7.3, TaskScreen 5.1, StandardRouterNavigator 3.5, GuardedScreens 3.2, HStackView 3.1, MenuCommands 2.9, Animated(Anonymous) 2.4, Text 2.1
+send: AgentConversation 3.2, Markdown 3.0, PillField 1.8, SceneView 1.3, AgentComposerArea 1.2, TasksListScreen 1.0, RowFrame 0.9, View 0.7, TranscriptRow 0.7, SendButton 0.6
+agent-row: Markdown 27.4, AgentComposerArea 14.4, AgentConversation 8.9, SceneView 8.5, View 4.6, RowFrame 4.5, SymbolView 4.1, BaseNavigationContainer 3.8, Text 3.8, TranscriptRow 3.7
+back-from-agent: RowFrame 7.9, SceneView 7.6, MenuCommands 6.0, TasksListScreen 5.6, GuardedScreens 4.1, Text 3.9, TaskScreen 3.7, StandardRouterNavigator 3.5, Animated(Anonymous) 2.4, InboxStackList 1.3
+inbox-row-plain: ThreadDetail 15.9, RowFrame 5.7, BaseNavigationContainer 4.9, TasksListScreen 4.6, SceneView 4.3, GuardedScreens 3.0, MenuCommands 2.6, Markdown 2.4, StandardRouterNavigator 2.2, Animated(Anonymous) 1.7
+back-from-plain: RowFrame 5.4, TasksListScreen 4.7, SceneView 3.4, MenuCommands 2.6, GuardedScreens 2.3, StandardRouterNavigator 2.1, Animated(Anonymous) 1.6, InboxStackList 1.1, obj 1.0, TabsLayout 0.8
+inbox-row-long: Markdown 55.1, ThreadDetail 32.0, Avatar 6.6, RowFrame 5.4, Text 5.0, BaseNavigationContainer 4.6, View 4.5, StandardRouterNavigator 4.5, SceneView 3.9, GuardedScreens 3.8
+back-from-long: RowFrame 5.2, TasksListScreen 4.7, SceneView 4.0, GuardedScreens 4.0, MenuCommands 3.2, StandardRouterNavigator 2.2, Animated(Anonymous) 1.7, obj 1.6, Avatar 1.5, Text 1.4
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+cold-launch: markdown 0.0, rest 0.0
+inbox-row: markdown 8.7, rest 66.8
+back-from-thread: markdown 0.4, rest 34.5
+more-menu: markdown 0.0, rest 18.2
+new-task: markdown 0.0, rest 209.4
+new-task-cancel: markdown 0.0, rest 19.0
+switcher-open: markdown 0.0, rest 17.4
+switch-workspace: markdown 0.0, rest 28.3
+switch-back: markdown 0.0, rest 46.8
+tab-tasks: markdown 0.0, rest 31.5
+tab-inbox: markdown 0.0, rest 26.1
+tasks-row: markdown 18.7, rest 89.8
+back-from-task: markdown 0.0, rest 47.4
+status-chip-open: markdown 0.3, rest 29.6
+status-pick: markdown 0.8, rest 56.0
+send: markdown 3.0, rest 14.3
+agent-row: markdown 27.4, rest 68.8
+back-from-agent: markdown 0.0, rest 52.4
+inbox-row-plain: markdown 2.4, rest 50.9
+back-from-plain: markdown 0.0, rest 28.1
+inbox-row-long: markdown 55.1, rest 81.1
+back-from-long: markdown 0.0, rest 33.0
+
+whole run: 474s, 6281 commits, 2229247 components rendered, 30378 ms of stalls over 283 stalls
+events: topTransitionProgress×3623, topHeaderHeightChange×900, topGlobalEvent×568, topWindowChange×300, topLoad×181, topLoadEnd×181, topLoadStart×181, topWillAppear×129, topWords×123, topFinishTransitioning×120, topWillDisappear×108, topAppear×105, topTouchStart×103, topTouchEnd×103, topDisappear×86

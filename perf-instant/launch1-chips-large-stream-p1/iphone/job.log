@@ -1,0 +1,12 @@
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-chip-marks-by-key
+FETCH FAILED pin2b/agent/ios-chip-marks-by-key
+screen.mp4 kept
+merging pin2b/agent/ios-chip-marks-by-key at 398c137ed4
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging packages/host/src/fixture-inbox.ts
+built 2f94f427ec = probe + pin2b/agent/ios-chip-marks-by-key (PROFILE=1)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ALLDONE
