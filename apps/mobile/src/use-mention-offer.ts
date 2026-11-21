@@ -29,17 +29,22 @@ import {
   type LinkDestination,
   linkOf,
   linkWorkspaceStep,
+  MENTION_SIGIL,
 } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { MENTION_FROM, typedMentionKind } from "@repo/features/mention-kind";
 import {
   atWordEnding,
   dateCandidates,
+  isKindChoice,
   MENTION_NO_MATCH,
   MENTION_OFFER_KIND,
   type MentionCandidate,
-  type MentionGroup,
+  type MentionOffered,
+  type MentionOfferFrom,
   type MentionOfferKind,
-  mentionGroups,
+  type MentionOfferRow,
+  mentionOffer,
   type PickedMention,
   withMentionLinks,
   wordsWithPick,
@@ -60,6 +65,8 @@ import {
   GLYPH,
   type Glyph,
   INBOX_LINE_LOOK,
+  type MentionCrumb,
+  type MentionSuggestion,
   type MentionSuggestionGroup,
   PULL_REQUEST_LOOK,
   useChipMarkOf,
@@ -94,6 +101,17 @@ const KIND_GLYPH = {
   [MENTION_OFFER_KIND.DATE]: GLYPH.DATE,
 } as const satisfies Record<MentionOfferKind, Glyph>;
 
+/** The glyph each kind's row under Browse, and its crumb, lead with, as the panel's kind rows lead with theirs. */
+const FROM_GLYPH = {
+  [MENTION_FROM.AGENTS]: GLYPH.AGENT,
+  [MENTION_FROM.TASKS]: GLYPH.TASK,
+  [MENTION_FROM.PEOPLE]: GLYPH.PEOPLE,
+  [MENTION_FROM.PAGES]: GLYPH.PAGE,
+  [MENTION_FROM.THREADS]: GLYPH.THREAD,
+  [MENTION_FROM.PULL_REQUESTS]: GLYPH.PULL_REQUEST,
+  [MENTION_FROM.DATES]: GLYPH.DATE,
+} as const satisfies Record<MentionOfferFrom, Glyph>;
+
 /** What a page's row says after its name, as the panel's: a version past its first, else when it was shown. */
 function pageDetail(version: number, at: number, now: number): string {
   return version > 1 ? `Version ${version}` : sinceText(at, now);
@@ -112,16 +130,36 @@ interface ThreadCandidate extends MentionCandidate {
   readonly own: boolean;
 }
 
-/** The groups an `@` word offers, and each row's mark by the link a pick writes. */
+/** What an `@` word offers, and each row's mark by the link a pick writes. */
 interface Offered {
-  readonly groups: readonly MentionGroup[];
+  readonly offer: MentionOffered;
   readonly marks: ReadonlyMap<string, ChipMark>;
+}
+
+/** No offer: what stands before the place's workspace is known. */
+const NO_OFFER: MentionOffered = { narrowed: undefined, groups: [] };
+
+/** A row as the list draws it: a kind's by its query, which names it uniquely in its group, its chevron saying a press narrows to it. */
+function suggestion(row: MentionOfferRow, marks: ReadonlyMap<string, ChipMark>): MentionSuggestion {
+  if (isKindChoice(row)) {
+    return { id: row.query, glyph: FROM_GLYPH[row.from], name: row.name, opens: true };
+  }
+
+  return {
+    id: row.id,
+    glyph: KIND_GLYPH[row.kind],
+    mark: marks.get(row.target),
+    name: row.name,
+    detail: row.detail,
+  };
 }
 
 /** What an `@` being typed offers, what stands where nothing matches, and the press that writes one. */
 export interface MentionsOffered {
   readonly groups: readonly MentionSuggestionGroup[];
   readonly empty: string | undefined;
+  /** The kind the list is narrowed to, and the press back to every kind; none for every kind. */
+  readonly crumb: MentionCrumb | undefined;
   readonly pick: (group: string, id: string) => void;
 }
 
@@ -129,6 +167,8 @@ export interface MentionsOffered {
 export interface MentionPills {
   readonly word: { readonly query: string } | undefined;
   readonly pick: (mention: PickedMention) => void;
+  /** Writes plain words in the `@` word's place, the caret after them, as a kind's row writes `@people:`. */
+  readonly rewrite: (words: string) => void;
 }
 
 /** What `useMentionOffer` hands its composer: the offer while an `@` is typed, and the words as they are sent, each pick written as its link. */
@@ -177,8 +217,8 @@ export function useMentionOffer(
   // The mentions picked into the words, which the send writes as their links where they still stand.
   const picked = useRef<PickedMention[]>([]);
 
-  const { groups, marks } = useMemo((): Offered => {
-    if (!asking || step === undefined) return { groups: [], marks: new Map() };
+  const { offer, marks } = useMemo((): Offered => {
+    if (!asking || step === undefined) return { offer: NO_OFFER, marks: new Map() };
     const now = Date.now();
     // Each row's mark by the link a pick writes, as the chip it becomes leads with it.
     const marks = new Map<string, ChipMark>();
@@ -316,10 +356,11 @@ export function useMentionOffer(
       pages,
       threads,
       pullRequests,
-      dates: dateCandidates(word.query, now, readerZone(), { workspace: step, repository: null }),
+      dates: (words: string) =>
+        dateCandidates(words, now, readerZone(), { workspace: step, repository: null }),
     };
 
-    return { groups: mentionGroups(sources, word.query), marks };
+    return { offer: mentionOffer(sources, word.query), marks };
   }, [
     markOf,
     asking,
@@ -341,31 +382,50 @@ export function useMentionOffer(
     pills === undefined ? withMentionLinks(text, picked.current) : text;
 
   if (!asking) return { offered: undefined, sendable };
+  const { groups, narrowed } = offer;
 
   // Note that once the words run past a space with nothing found, the offer closes, as the panel's list closes, so a sentence that began with an `@` goes on unhindered.
   if (groups.length === 0 && word.query.includes(" ")) return { offered: undefined, sendable };
+
+  // The `@` word written anew as `@` and `query`, as a kind's row narrows the list and its crumb widens it.
+  const retype = (query: string) => {
+    const typed = `${MENTION_SIGIL}${query}`;
+
+    if (pills !== undefined) return pills.rewrite(typed);
+
+    if (ending !== undefined) onWords(`${words.slice(0, ending.start)}${typed}`);
+  };
+
+  const typed = typedMentionKind(word.query);
+
+  const crumb =
+    narrowed === undefined || typed === undefined
+      ? undefined
+      : {
+          name: narrowed.name,
+          glyph: FROM_GLYPH[narrowed.from],
+          // Note that the way back keeps the words searched and deletes the `kind:`, as the panel's crumb does.
+          onBack: () => retype(word.query.slice(typed.entry.length)),
+        };
 
   return {
     offered: {
       groups: groups.map((group) => ({
         title: group.title,
-        rows: group.rows.map(({ id, kind, name, detail, target }) => ({
-          id,
-          glyph: KIND_GLYPH[kind],
-          mark: marks.get(target),
-          name,
-          detail,
-        })),
+        rows: group.rows.map((row) => suggestion(row, marks)),
       })),
       empty: groups.length === 0 ? MENTION_NO_MATCH : undefined,
+      crumb,
       pick: (title, id) => {
         const row = groups
           .find((group) => group.title === title)
-          ?.rows.find((each) => each.id === id);
+          ?.rows.find((each) => (isKindChoice(each) ? each.query : each.id) === id);
 
         if (row === undefined) return;
-        const mention = { name: row.name, target: row.target };
         buzz(BUZZ.SELECTION);
+
+        if (isKindChoice(row)) return retype(row.query);
+        const mention = { name: row.name, target: row.target };
 
         if (pills !== undefined) return pills.pick(mention);
 

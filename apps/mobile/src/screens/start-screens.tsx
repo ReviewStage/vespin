@@ -703,7 +703,7 @@ function offeredMentions(mentions: MentionOffer, skills: SkillsOffered | undefin
 
   return skills !== undefined || offered === undefined
     ? undefined
-    : { groups: offered.groups, empty: offered.empty, onPick: offered.pick };
+    : { groups: offered.groups, empty: offered.empty, crumb: offered.crumb, onPick: offered.pick };
 }
 
 /** The skills a `/` offers, as the start page takes them. */

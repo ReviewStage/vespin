@@ -1,6 +1,6 @@
 // composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place, and an agent's threads line.
 
-import { Button, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, ScrollView, Spacer, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -241,12 +241,15 @@ function SuggestionRow({
   mark,
   title,
   detail,
+  opens = false,
   onPress,
 }: {
   readonly glyph: Glyph;
   readonly mark?: ChipMark | undefined;
   readonly title: string;
   readonly detail?: string | undefined;
+  /** Whether a press opens a narrower list rather than writing the row, which its trailing chevron says, as a row that goes on does in iOS's lists. */
+  readonly opens?: boolean | undefined;
   readonly onPress: () => void;
 }) {
   const large = useAccessibilitySize();
@@ -290,10 +293,74 @@ function SuggestionRow({
             </Text>
           )}
         </VStack>
+        {opens ? (
+          <>
+            <Spacer />
+            <Image
+              {...glyphImage(GLYPH.DISCLOSURE)}
+              color={colors.TEXT_MUTED}
+              modifiers={[font({ textStyle: TYPE_ROLE.TIME }), accessibilityHidden()]}
+            />
+          </>
+        ) : null}
       </HStack>
     </Button>
   );
 }
+
+/** What a narrowed `@` list's way back is heard as, the panel's words for every kind. */
+const WIDEN_WORDS = "All kinds";
+
+/**
+ * The crumb a narrowed `@` list stands under, as the panel's: the back
+ * chevron iOS draws, then the kind's glyph and name, the whole of it one
+ * press that widens the list to every kind again, heard as "All kinds".
+ */
+function MentionCrumbRow({ crumb }: { readonly crumb: MentionCrumb }) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+
+  return (
+    <Button
+      onPress={crumb.onBack}
+      modifiers={[
+        buttonStyle("plain"),
+        accessibilityLabel(WIDEN_WORDS),
+        accessibilityHint(crumb.name),
+      ]}
+    >
+      <HStack
+        spacing={SPACE.TIGHT}
+        modifiers={[
+          frame({
+            minHeight: PRESS_SIZE,
+            maxWidth: Number.POSITIVE_INFINITY,
+            alignment: "leading",
+          }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
+        <Image {...glyphImage(GLYPH.BACK)} size={size} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(crumb.glyph)} size={size} color={colors.TEXT_MUTED} />
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
+            foregroundStyle(colors.TEXT),
+          ]}
+        >
+          {crumb.name}
+        </Text>
+      </HStack>
+    </Button>
+  );
+}
+
+/** A narrowed `@` list's crumb: the kind's name and glyph, and the press back to every kind. */
+export type MentionCrumb = {
+  readonly name: string;
+  readonly glyph: Glyph;
+  readonly onBack: () => void;
+};
 
 /** One thing an `@` offers: its id, its kind's glyph, the mark of the entity it names where the app holds one, the name it goes under, and what its row says after the name. */
 export type MentionSuggestion = {
@@ -302,6 +369,8 @@ export type MentionSuggestion = {
   readonly mark?: ChipMark | undefined;
   readonly name: string;
   readonly detail?: string | undefined;
+  /** Whether it is a kind, whose press narrows the list to it rather than writing a mention. */
+  readonly opens?: boolean | undefined;
 };
 
 /** A group of what an `@` offers, under the panel's heading, each row led by its kind's glyph, since Suggested holds several kinds. */
@@ -326,53 +395,67 @@ export type MentionSuggestionGroup = {
 export function MentionSuggestions({
   groups,
   empty,
+  crumb,
   onPick,
 }: {
   readonly groups: readonly MentionSuggestionGroup[];
   /** What stands where nothing is offered, such as no result matching. */
   readonly empty: string | undefined;
+  /** The kind the list is narrowed to, which it stands under; none for every kind. */
+  readonly crumb?: MentionCrumb | undefined;
   readonly onPick: (group: string, id: string) => void;
 }) {
   const colors = useColors();
+  const head = crumb === undefined ? null : <MentionCrumbRow crumb={crumb} />;
 
   if (groups.length === 0) {
-    if (empty === undefined) return null;
+    if (empty === undefined) return head;
 
     return (
-      <Text
-        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-      >
-        {empty}
-      </Text>
+      <VStack alignment="leading" spacing={0}>
+        {head}
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {empty}
+        </Text>
+      </VStack>
     );
   }
 
-  // Note that the rows scroll with the composer's head, its one scroller (`BarHead`), never in a scroller of their own inside it, which cut a row through and scrolled inside a scroll.
+  // Note that the rows scroll with the composer's head, its one scroller (`BarHead`), never in a scroller of their own inside it, which cut a row through and scrolled inside a scroll; a narrowed list's crumb stands over them.
   return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT}>
-      {groups.map((group) => (
-        <VStack key={group.title} alignment="leading" spacing={0}>
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
-              foregroundStyle(colors.TEXT_MUTED),
-              SwiftModifiers.accessibilityAddTraits(["isHeader"]),
-            ]}
-          >
-            {group.title}
-          </Text>
-          {group.rows.map((row) => (
-            <SuggestionRow
-              key={row.id}
-              glyph={row.glyph}
-              mark={row.mark}
-              title={row.name}
-              detail={row.detail}
-              onPress={() => onPick(group.title, row.id)}
-            />
-          ))}
-        </VStack>
-      ))}
+    <VStack alignment="leading" spacing={0}>
+      {head}
+      <VStack alignment="leading" spacing={SPACE.TIGHT}>
+        {groups.map((group) => (
+          <VStack key={group.title} alignment="leading" spacing={0}>
+            {/* Note that a narrowed list's crumb already names its one group. */}
+            {crumb === undefined ? (
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
+                  foregroundStyle(colors.TEXT_MUTED),
+                  SwiftModifiers.accessibilityAddTraits(["isHeader"]),
+                ]}
+              >
+                {group.title}
+              </Text>
+            ) : null}
+            {group.rows.map((row) => (
+              <SuggestionRow
+                key={row.id}
+                glyph={row.glyph}
+                mark={row.mark}
+                title={row.name}
+                detail={row.detail}
+                opens={row.opens}
+                onPress={() => onPick(group.title, row.id)}
+              />
+            ))}
+          </VStack>
+        ))}
+      </VStack>
     </VStack>
   );
 }

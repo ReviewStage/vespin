@@ -75,6 +75,7 @@ export function usePillField(
     mentions: {
       word: atWord,
       pick: (mention) => field.current?.pick(mentionPill(mention.name, mention.target)),
+      rewrite: (words) => field.current?.rewrite(words),
     },
   };
 }

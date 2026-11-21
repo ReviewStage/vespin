@@ -46,6 +46,7 @@ import {
 import {
   type AttachedPicture,
   AttachedPictures,
+  type MentionCrumb,
   type MentionSuggestionGroup,
   MentionSuggestions,
   type SkillSuggestion,
@@ -331,6 +332,7 @@ type StartPageProps = {
     | {
         readonly groups: readonly MentionSuggestionGroup[];
         readonly empty: string | undefined;
+        readonly crumb?: MentionCrumb | undefined;
         readonly onPick: (group: string, id: string) => void;
       }
     | undefined;
@@ -429,6 +431,7 @@ export function StartPage(props: StartPageProps) {
           <MentionSuggestions
             groups={mentions.groups}
             empty={mentions.empty}
+            crumb={mentions.crumb}
             onPick={mentions.onPick}
           />
         )}

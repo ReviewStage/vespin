@@ -363,7 +363,14 @@ export function ThreadComposer({
   const pictures = useMemo(() => attachedFiles(draft.attachments), [draft.attachments]);
   const onNote = (note: string) => onDraft((now) => ({ ...now, note }));
   const pillField = usePillField(draft.note, onNote, { attached: pictures, detach });
-  const mentions = useMentionOffer(draft.note, onNote, place, pillField.mentions).offered;
+
+  // Note that the thread's own agent, whom the reply goes to, is left out of what an `@` offers, as on its own page.
+  const mentions = useMentionOffer(
+    draft.note,
+    onNote,
+    { ...place, agentId: item.agentId },
+    pillField.mentions,
+  ).offered;
 
   // Note that the box's head holds what an `@` offers, then what the picker refused, then why the last send didn't go.
   const head =
@@ -373,6 +380,7 @@ export function ThreadComposer({
           <MentionSuggestions
             groups={mentions.groups}
             empty={mentions.empty}
+            crumb={mentions.crumb}
             onPick={mentions.pick}
           />
         )}
