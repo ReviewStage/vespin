@@ -190,7 +190,9 @@ builds a control of its own.
   stop sign of a blocked task, a thread that needs you, its sub-tasks as a
   ring and "2/5", one mark for its agents, the face of who is on it where
   that is someone other than the reader or the dashed mark where no one is,
-  and when it last moved; a search's finds end in its key; its priority
+  and when it last moved, the agents' mark and then the sub-tasks' progress
+  stepping aside before a long name is cut, as Mail's rows keep the
+  sender's name, `task-row-fit-model.ts`; a search's finds end in its key; its priority
   stands on the task's own Priority chip, not the row; a parent stands as the
   label of `RowDisclosure`, SwiftUI's own `DisclosureGroup`, whose chevron at
   the line's trailing edge folds its sub-tasks, as Files and Notes fold a
