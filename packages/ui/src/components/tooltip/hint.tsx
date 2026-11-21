@@ -108,13 +108,12 @@ import {
   useContext,
   useEffect,
   useId,
+  useInsertionEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
-import { createPortal } from "react-dom";
 import { isComposingKey } from "../../composing-key.js";
 import { useDisclosure } from "../../use-disclosure.js";
 import { useStateWithRef } from "../../use-state-with-ref.js";
@@ -123,7 +122,7 @@ import type { ListRowHint } from "../list-row/list-row-hint.js";
 import { useTouchHold } from "../menu/touch-hold.js";
 import type { OneLineHint } from "../one-line/clipped-line.js";
 import { Shortcut } from "../shortcut/shortcut.js";
-import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
+import { VISUALLY_HIDDEN_CLASS } from "../visually-hidden/visually-hidden.js";
 import { type CardBox, TOOLTIP_CHORD, TooltipCard, TooltipPill } from "./tooltip.js";
 
 /**
@@ -500,9 +499,6 @@ function heardByProps(control: ReactElement<AnchorProps>, label: string | undefi
     : HEARD.DESCRIBED;
 }
 
-/** Hears no change, since whether this is a window never changes once drawn. */
-const noChange = () => () => {};
-
 /** The one element at the window body's end that every hint's words stand in, made with the first. */
 let wordsHome: HTMLElement | undefined;
 
@@ -521,42 +517,35 @@ function wordsHomeNow(): HTMLElement {
 }
 
 /**
- * A hint's words as a reader hears them, from the control's first render
+ * A hint's words as a reader hears them, from the control's first commit
  * rather than once the hint is drawn: its description (`aria-describedby`),
  * heard as focus lands on it, hidden; or, `spoken`, words of a control that
  * takes no focus, which it owns (`aria-owns`) so a reader's cursor reads them
  * at its end, drawn nowhere. Either stands at the window body's end rather
  * than in or beside the control, so the control's own words, and the row or bar
- * around it, are as they were. Note that a server, which has no body, draws
- * none, and the window then draws them as it takes the page over.
+ * around it, are as they were; `words` undefined writes none.
+ *
+ * Note that the words are written into their home by hand rather than drawn
+ * through a portal, because a portal would mount a component of its own
+ * under every described control in the window for words no one sees. They
+ * are written as the commit writes the page, before any layout effect reads
+ * it, as a portal's would be, so no layout is read between two of them. A
+ * server runs no effect, so it writes none, and the window writes them as it
+ * takes the page over.
  */
-function HintWords({
-  id,
-  words,
-  spoken,
-}: {
-  id: string;
-  words: string;
-  spoken: boolean;
-}): React.ReactNode {
-  const inWindow = useSyncExternalStore(
-    noChange,
-    () => true,
-    () => false,
-  );
+function useHintWords(id: string, words: string | undefined, spoken: boolean): void {
+  useInsertionEffect(() => {
+    if (words === undefined) return undefined;
+    const element = document.createElement("span");
+    element.id = id;
+    element.textContent = words;
 
-  if (!inWindow) return null;
+    if (spoken) element.className = VISUALLY_HIDDEN_CLASS;
+    else element.hidden = true;
+    wordsHomeNow().append(element);
 
-  return createPortal(
-    spoken ? (
-      <VisuallyHidden id={id}>{words}</VisuallyHidden>
-    ) : (
-      <span id={id} hidden>
-        {words}
-      </span>
-    ),
-    wordsHomeNow(),
-  );
+    return () => element.remove();
+  }, [id, words, spoken]);
 }
 
 /** Hands `node` to a ref of any shape, as a control's own ref is handed beside the tooltip's. */
@@ -1038,6 +1027,8 @@ export function Tooltip({
     .filter((each) => each !== undefined && each !== "")
     .join(" ");
 
+  useHintWords(wordsId, described || spoken ? label : undefined, spoken);
+
   const anchor = cloneElement(children, {
     ...(describedBy === "" ? undefined : { "aria-describedby": describedBy }),
     ...(owns === "" ? undefined : { "aria-owns": owns }),
@@ -1122,7 +1113,6 @@ export function Tooltip({
   return (
     <>
       {anchor}
-      {described || spoken ? <HintWords id={wordsId} words={label} spoken={spoken} /> : null}
       {/* Note that a hint whose control is gone draws no exit, which would fade out at the window's corner. */}
       {!pill.mounted || drawn === undefined || !drawn.shown.anchor.isConnected ? null : (
         <Hint
