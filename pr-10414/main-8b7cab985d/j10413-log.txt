@@ -1,0 +1,8 @@
+== bundle PJj10413 base 8b7cab985d
+  built 8b7cab985d base app Vmain9.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-tasks: fails 1 shots 34 Assert that "This agent is archived" is visible... FAILED
+ipad27-light-tasks: fails 1 shots 33 Assert that "This agent is archived" is visible... FAILED

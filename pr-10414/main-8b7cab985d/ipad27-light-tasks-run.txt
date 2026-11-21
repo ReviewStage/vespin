@@ -1,0 +1,652 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow tasks
+  > On Flow Complete
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+    Assert that "${TAB}" is visible... COMPLETED
+    Tap on "${TAB}", Index: -1... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Pinned" is visible... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Assert that "Experiments" is visible... COMPLETED
+Assert that "Ideas" is visible... COMPLETED
+Assert that "New task in Ideas" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot tasks-list... COMPLETED
+Tap on "Launch", Child of: "Launch, [0-9]+"... COMPLETED
+Assert that "Launch checklist" is not visible... COMPLETED
+Tap on "Launch", Child of: "Launch, [0-9]+"... COMPLETED
+Assert that "Launch checklist" is visible... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+      Repeat while "${ROW}" is not visible (up to 20 times)...
+      Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+      Assert that "${ROW}" is visible... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Launch checklist", Above id: search-tab is not visible and false is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Take screenshot tasks-menu... COMPLETED
+Tap on "Status"... COMPLETED
+Tap on "Done"... COMPLETED
+Assert that "Launch checklist" is not visible... COMPLETED
+Run flow when "No task selected" is not visible...
+Run flow when "No task selected" is not visible... SKIPPED
+Run flow when "No task selected" is visible...
+  Run subflows/row-menu.yaml...
+    Run to-row.yaml...
+      Run flow when ${FLOATING_TABS != 'true'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${FLOATING_TABS == 'true'} is true...
+        Repeat while "${ROW}" is not visible (up to 20 times)...
+        Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+        Assert that "${ROW}" is visible... COMPLETED
+      Run flow when true is true... COMPLETED
+      Run clear-of-tabs.yaml...
+        Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Run flow when "Usage alerts", Above id: search-tab is not visible and false is true... SKIPPED
+        Wait for animation to end... COMPLETED
+      Run clear-of-tabs.yaml... COMPLETED
+    Run to-row.yaml... COMPLETED
+    Long press on "${ROW}"... COMPLETED
+    Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Wait for animation to end... COMPLETED
+  Run subflows/row-menu.yaml... COMPLETED
+  Tap on "Status"... COMPLETED
+  Tap on "Done"... COMPLETED
+Run flow when "No task selected" is visible... COMPLETED
+Assert that "Usage alerts" is not visible... COMPLETED
+Take screenshot tasks-marked-done... COMPLETED
+Scrolling UP until "Weekly digest email" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "No task selected" is not visible...
+Run flow when "No task selected" is not visible... SKIPPED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+      Repeat while "${ROW}" is not visible (up to 20 times)...
+      Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+      Assert that "${ROW}" is visible... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Weekly digest email", Above id: search-tab is not visible and false is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Assert that "Rename" is visible... COMPLETED
+Assert that "Mark as unread" is visible... COMPLETED
+Assert that "Status" is visible... COMPLETED
+Assert that "Priority" is visible... COMPLETED
+Assert that "Assignee" is visible... COMPLETED
+Assert that "More" is visible... COMPLETED
+Scrolling DOWN until "Unpin" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Scrolling DOWN until "Permanently delete" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Take screenshot tasks-row-menu... COMPLETED
+Scrolling UP until "Rename" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Rename"... COMPLETED
+Assert that "Rename task" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot tasks-rename... COMPLETED
+Tap on "Cancel"... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+      Repeat while "${ROW}" is not visible (up to 20 times)...
+      Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+      Assert that "${ROW}" is visible... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Weekly digest email", Above id: search-tab is not visible and false is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Scrolling DOWN until "Permanently delete" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Permanently delete"... COMPLETED
+Assert that "Permanently delete task?" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot tasks-delete-ask... COMPLETED
+Run subflows/dismiss-ask.yaml...
+  Run flow when "Cancel" is not visible...
+    Tap on point (50%, 20%)... COMPLETED
+  Run flow when "Cancel" is not visible... COMPLETED
+  Run flow when "Cancel" is visible...
+  Run flow when "Cancel" is visible... SKIPPED
+  Wait for animation to end... COMPLETED
+  Assert that "${QUESTION}" is not visible... COMPLETED
+Run subflows/dismiss-ask.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+      Repeat while "${ROW}" is not visible (up to 20 times)...
+      Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+      Assert that "${ROW}" is visible... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Weekly digest email", Above id: search-tab is not visible and false is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Tap on "More"... COMPLETED
+Tap on "Copy link"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Take screenshot tasks-copy-link... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+      Repeat while "${ROW}" is not visible (up to 20 times)...
+      Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+      Assert that "${ROW}" is visible... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Weekly digest email", Above id: search-tab is not visible and false is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Tap on "Mark as unread"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot tasks-row-unread... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+      Repeat while "${ROW}" is not visible (up to 20 times)...
+      Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+      Assert that "${ROW}" is visible... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Weekly digest email", Above id: search-tab is not visible and false is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Tap on "Status"... COMPLETED
+Tap on "Done"... COMPLETED
+Assert that "Mark as Done?" is visible... COMPLETED
+Assert that "Stop agent" is visible... COMPLETED
+Take screenshot tasks-mark-done-ask... COMPLETED
+Run subflows/dismiss-ask.yaml...
+  Run flow when "Cancel" is not visible...
+    Tap on point (50%, 20%)... COMPLETED
+  Run flow when "Cancel" is not visible... COMPLETED
+  Run flow when "Cancel" is visible...
+  Run flow when "Cancel" is visible... SKIPPED
+  Wait for animation to end... COMPLETED
+  Assert that "${QUESTION}" is not visible... COMPLETED
+Run subflows/dismiss-ask.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Tap on "Weekly digest email"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+    Assert that "${TAB}" is visible... COMPLETED
+    Tap on "${TAB}", Index: -1... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Take screenshot tasks-row-read... COMPLETED
+Scrolling UP until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Assert that "Agents" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot task-overview... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+      Repeat while "${ROW}" is not visible (up to 20 times)...
+      Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+      Assert that "${ROW}" is visible... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Build teammate invitations", Above id: search-tab is not visible and false is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Take screenshot task-agent-preview... COMPLETED
+Run subflows/dismiss.yaml...
+  Tap on point (${POINT})... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/dismiss.yaml... COMPLETED
+Run flow when "No task selected" is not visible...
+  Swipe from (80%, 66%) to (45%, 66%) in 900 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot task-agent-swipe... COMPLETED
+  Tap on "Created by .*"... COMPLETED
+  Wait for animation to end... COMPLETED
+Run flow when "No task selected" is not visible... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+    Assert that "${ELEMENT}" is visible... COMPLETED
+  Run flow when true is true... COMPLETED
+Run subflows/scroll-in.yaml... COMPLETED
+Take screenshot task-description... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+Run flow when false is true... SKIPPED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run subflows/scroll-to.yaml...
+    Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${ABOVE != ''} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+      Run scroll-in.yaml...
+        Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+        Run flow when false is true... SKIPPED
+        Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+        Run flow when false is true... SKIPPED
+        Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+          Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+          Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+          Assert that "${ELEMENT}" is visible... COMPLETED
+        Run flow when true is true... COMPLETED
+        Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+        Run flow when false is true... SKIPPED
+      Run scroll-in.yaml... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+      Swipe from (85%, 40%) to (85%, 60%) in 1200 ms... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Run flow when false is true... SKIPPED
+    Wait for animation to end within 5000 ms... COMPLETED
+  Run subflows/scroll-to.yaml... COMPLETED
+Run flow when true is true... COMPLETED
+Tap on "Invite funnel"... COMPLETED
+Assert that "Invites sent in the staging workspace.*" is visible... COMPLETED
+Take screenshot task-page... COMPLETED
+Tap on "More"... COMPLETED
+Assert that "Open in browser" is visible... COMPLETED
+Take screenshot task-page-menu... COMPLETED
+Run subflows/dismiss.yaml...
+  Tap on point (${POINT})... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/dismiss.yaml... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+    Assert that "${ELEMENT}" is visible... COMPLETED
+  Run flow when true is true... COMPLETED
+Run subflows/scroll-in.yaml... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+Run flow when false is true... SKIPPED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run subflows/scroll-to.yaml...
+    Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${ABOVE != ''} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+      Run scroll-in.yaml...
+        Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+        Run flow when false is true... SKIPPED
+        Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+        Run flow when false is true... SKIPPED
+        Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+          Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+          Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+          Assert that "${ELEMENT}" is visible... COMPLETED
+        Run flow when true is true... COMPLETED
+        Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+        Run flow when false is true... SKIPPED
+      Run scroll-in.yaml... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+      Swipe from (85%, 40%) to (85%, 60%) in 1200 ms... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Run flow when false is true... SKIPPED
+    Wait for animation to end within 5000 ms... COMPLETED
+  Run subflows/scroll-to.yaml... COMPLETED
+Run flow when true is true... COMPLETED
+Tap on "Status, .*"... COMPLETED
+Take screenshot task-status-menu... COMPLETED
+Tap on "Todo"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Status, Todo" is visible... COMPLETED
+Take screenshot task-status-set... COMPLETED
+Tap on "Priority, .*"... COMPLETED
+Assert that "Urgent" is visible... COMPLETED
+Take screenshot task-priority-menu... COMPLETED
+Tap on point (50%, 90%)... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Assignee, .*"... COMPLETED
+Assert that "No assignee" is visible... COMPLETED
+Take screenshot task-assignee-menu... COMPLETED
+Tap on point (50%, 90%)... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/bar-act.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+Run subflows/bar-act.yaml... COMPLETED
+Assert that "New sub-task" is visible... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Tap on "More"... COMPLETED
+Run flow when true is true... COMPLETED
+Assert that "Copy link" is visible... COMPLETED
+Assert that "Permanently delete" is visible... COMPLETED
+Take screenshot task-more-menu... COMPLETED
+Tap on "Permanently delete"... COMPLETED
+Assert that "Permanently delete task?" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot task-delete-ask... COMPLETED
+Run subflows/dismiss-ask.yaml...
+  Run flow when "Cancel" is not visible...
+  Run flow when "Cancel" is not visible... SKIPPED
+  Run flow when "Cancel" is visible...
+    Tap on "Cancel"... COMPLETED
+  Run flow when "Cancel" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "${QUESTION}" is not visible... COMPLETED
+Run subflows/dismiss-ask.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+    Assert that "${ELEMENT}" is visible... COMPLETED
+  Run flow when true is true... COMPLETED
+Run subflows/scroll-in.yaml... COMPLETED
+Tap on "Add sub-task"... COMPLETED
+Assert that "Link existing task" is visible... COMPLETED
+Take screenshot task-sub-task-add... COMPLETED
+Tap on "New sub-task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Assert that "Sub-task of.*" is visible... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Take screenshot new-sub-task... COMPLETED
+Tap on "Cancel"... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE != ''} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+    Run scroll-in.yaml...
+      Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+        Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+          Swipe from (85%, 65%) to (85%, 40%) in 1200 ms... COMPLETED
+        Repeat while "${ELEMENT}" is not visible (up to 40 times)... COMPLETED
+        Assert that "${ELEMENT}" is visible... COMPLETED
+      Run flow when true is true... COMPLETED
+    Run scroll-in.yaml... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Swipe from (85%, 60%) to (85%, 40%) in 1200 ms... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Take screenshot task-comments... COMPLETED
+Tap on "Should an owner be able to resend.*"... COMPLETED
+Assert that "Yes: Resend stands beside each expired invite.*" is visible... COMPLETED
+Assert that "resend-flow.pdf.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot task-comment-thread... COMPLETED
+Tap on "Reply"... COMPLETED
+Input text Thanks, that covers it.... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot task-comment-reply... COMPLETED
+Tap on "Send"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+    Assert that "${TAB}" is visible... COMPLETED
+    Tap on "${TAB}", Index: -1... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Pinned" is visible... COMPLETED
+Set orientation LANDSCAPE_LEFT... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot tasks-wide... COMPLETED
+Set orientation PORTRAIT... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "Search tasks" is not visible and ${FLOATING_TABS != 'true'} is true...
+Run flow when "Search tasks" is not visible and false is true... SKIPPED
+Run flow when "Search tasks" is not visible and ${FLOATING_TABS == 'true'} is true...
+  Tap on "Show Sidebar"... COMPLETED
+  Wait for animation to end... COMPLETED
+Run flow when "Search tasks" is not visible and true is true... COMPLETED
+Tap on "Search tasks"... COMPLETED
+Input text rounding... COMPLETED
+Assert that "Ledger rounding" is visible... COMPLETED
+Assert that "Weekly digest email" is not visible... COMPLETED
+Take screenshot tasks-search... COMPLETED
+Tap on "Ledger rounding"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE != ''} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+    Run scroll-in.yaml...
+      Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+        Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+        Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+        Assert that "${ELEMENT}" is visible... COMPLETED
+      Run flow when true is true... COMPLETED
+    Run scroll-in.yaml... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Swipe from (85%, 60%) to (85%, 40%) in 1200 ms... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Swiping in LEFT direction on "Fix ledger rounding"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot task-agent-swipe-resting... COMPLETED
+Tap on "Archive"... COMPLETED
+Assert that "Archive agent?" is visible... COMPLETED
+Take screenshot task-agent-archive-ask... COMPLETED
+Run subflows/dismiss-ask.yaml...
+  Run flow when "Cancel" is not visible...
+    Tap on point (50%, 20%)... COMPLETED
+  Run flow when "Cancel" is not visible... COMPLETED
+  Run flow when "Cancel" is visible...
+  Run flow when "Cancel" is visible... SKIPPED
+  Wait for animation to end... COMPLETED
+  Assert that "${QUESTION}" is not visible... COMPLETED
+Run subflows/dismiss-ask.yaml... COMPLETED
+Assert that "Fix ledger rounding" is visible... COMPLETED
+Swiping in LEFT direction on "Fix ledger rounding"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Archive"... COMPLETED
+Assert that "Archive agent?" is visible... COMPLETED
+Tap on "Archive agent"... COMPLETED
+Assert that "Archive agent?" is not visible... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE != ''} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+    Run scroll-in.yaml...
+      Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+        Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+        Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+        Assert that "${ELEMENT}" is visible... COMPLETED
+      Run flow when true is true... COMPLETED
+    Run scroll-in.yaml... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Swipe from (85%, 60%) to (85%, 40%) in 1200 ms... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Assert that "Fix ledger rounding" is not visible... COMPLETED
+Tap on "Archived", Child of: "Archived, [0-9]+"... COMPLETED
+Assert that "Fix ledger rounding" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot task-agents-archived... COMPLETED
+Tap on "Fix ledger rounding"... COMPLETED
+Assert that "This agent is archived" is visible... FAILED
+Set orientation PORTRAIT... COMPLETED
+
+Assertion is false: "This agent is archived" is visible
+
+Assertion '"This agent is archived" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sj10413/ipad27-light-tasks/2026-11-21_111542
