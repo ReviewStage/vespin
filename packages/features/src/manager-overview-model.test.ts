@@ -128,8 +128,6 @@ test("a Manager's overview lists its own agents, pull requests, and tasks", () =
     pullRequests: overview.pullRequests.map(({ pullRequest: each }) => each.number),
     openTasks: overview.openTasks.map((each) => each.name),
     doneThisWeek: overview.doneThisWeek.map((each) => each.name),
-    working: overview.working,
-    openPullRequests: overview.openPullRequests,
   }).toEqual({
     // At work first, then the newest settled.
     agents: ["Agent 2", "Agent 3", "Agent 1"],
@@ -138,7 +136,5 @@ test("a Manager's overview lists its own agents, pull requests, and tasks", () =
     openTasks: ["Task 3", "Task 2", "Task 1"],
     // Ledger finished 20 days ago, so it is no longer this week's.
     doneThisWeek: ["Task 4"],
-    working: 1,
-    openPullRequests: 2,
   });
 });

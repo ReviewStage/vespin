@@ -5,24 +5,22 @@
  * its right and this panel in the room it leaves, under the page's head,
  * which names the Manager, so the panel draws no title of its own: it is a
  * page under the window's toolbar (`PAGE_FRAME.TOOLBAR`), named for a
- * reader by its label, its content across the whole room it has. It is
- * dense, every row one line, so a Manager's whole state stands on one
- * screen beside the open sidebar.
+ * reader by its label, at the page's measure. It stands as a person's page
+ * does: one column of sections, each its name and count over its rows, a
+ * press on its head folding it (`PERSON_SECTION_FOLD`), each list read from
+ * what the window already follows live (`manager-overview-model.ts`).
  *
- * It opens on one line of counts: what waits on the reader, its agents at
- * work, its pull requests open, and its tasks done this week, each read
- * from what the window already follows live (`manager-overview-model.ts`).
- * Under it stands Waiting on you, the Manager's own threads that wait on
- * the reader, each the row the line over its box lists (`NeedsYouRow`): an
- * ask of two short options answered from its buttons, any other opening its
- * thread in the window's Inbox; nothing while none waits. Under it stand two
- * columns. The first lists its agents, each the row a task's agents stand
- * in (`AgentListRow`), and the pull requests they opened, each in a task
- * row's anatomy as the Merge queue page draws one, opening in its Pull
- * request tab. The second lists its open tasks and those done this week,
- * each the Tasks page's own row (`RecentTasks`). A section with nothing to
- * list stands nowhere, and a list longer than its cap shows its first rows
- * and the rest on a press (`ShowMoreRow`).
+ * It opens on Waiting on you, the Manager's own threads that wait on the
+ * reader, each the row the line over its box lists (`NeedsYouRow`): an ask
+ * of two short options answered from its buttons, any other opening its
+ * thread in the window's Inbox; nothing while none waits. Under it stand
+ * its agents, each the row a task's agents stand in (`AgentListRow`); the
+ * pull requests they opened, each in a task row's anatomy as the Merge
+ * queue page draws one, opening in its Pull request tab; and its open
+ * tasks and those done this week, each the Tasks page's own row
+ * (`RecentTasks`). A section with nothing to list stands nowhere, and a
+ * list longer than its cap shows its first rows and the rest on a press
+ * (`ShowMoreRow`).
  */
 
 import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
@@ -32,18 +30,14 @@ import type { PersonAgent } from "@repo/features/person-page-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TERM } from "@repo/features/words";
 import {
-  CountLine,
   CountParts,
   DetailPage,
-  GAP,
   LIST_INSET,
   List,
   linesCount,
   PAGE_FRAME,
-  PAGE_WIDTH,
   ShowMoreRow,
   STATUS_TONE,
-  Stack,
   TASK_ROW_CELL,
   TASK_ROW_EDGES,
   TaskRow,
@@ -76,20 +70,15 @@ import {
   useListedAgentPullRequests,
 } from "../tasks/use-workspace-agents.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
-import { PersonSectionFrame } from "./person-frame.js";
+import { PERSON_SECTION_FOLD, PersonSectionFrame } from "./person-frame.js";
 import { RecentTasks } from "./recent-tasks.js";
 
 /** What the panel is called, said to a reader as its region's name. */
 const OVERVIEW = "Overview";
 
-/** What the panel's sections and counts say. */
+/** What the panel's sections say. */
 const OVERVIEW_WORDS = {
-  COUNTS: "At a glance",
   WAITING: "Waiting on you",
-  WAITING_COUNT: "waiting on you",
-  WORKING: "agents working",
-  PULL_REQUESTS_OPEN: "pull requests open",
-  DONE_THIS_WEEK: "done this week",
   AGENTS: "Agents",
   PULL_REQUESTS: "Pull requests",
   OPEN_TASKS: "Open tasks",
@@ -153,6 +142,7 @@ function WaitingOnYou({ threads }: { threads: AgentThreads }): React.JSX.Element
       count={threads.waiting.length}
       noun={TERM.INBOX_ITEM}
       tone={STATUS_TONE.ATTENTION}
+      fold={PERSON_SECTION_FOLD}
     >
       <ReplayMask>
         <List label={OVERVIEW_WORDS.WAITING} inset={LIST_INSET.ROW}>
@@ -249,6 +239,7 @@ function ManagerAgents({
       title={OVERVIEW_WORDS.AGENTS}
       count={agents.length}
       noun={TERM.AGENT}
+      fold={PERSON_SECTION_FOLD}
     >
       <ReplayMask>
         <TaskRows label={OVERVIEW_WORDS.AGENTS} cells={AGENT_ROW_CELLS} more={more} moves>
@@ -308,6 +299,7 @@ function ManagerPullRequests({
       title={OVERVIEW_WORDS.PULL_REQUESTS}
       count={pullRequests.length}
       noun={TERM.PULL_REQUEST}
+      fold={PERSON_SECTION_FOLD}
     >
       <ReplayMask>
         <TaskRows
@@ -370,7 +362,13 @@ function ManagerTasks({
   if (listed.length === 0) return null;
 
   return (
-    <PersonSectionFrame label={title} title={title} count={listed.length} noun={TERM.TASK}>
+    <PersonSectionFrame
+      label={title}
+      title={title}
+      count={listed.length}
+      noun={TERM.TASK}
+      fold={PERSON_SECTION_FOLD}
+    >
       <ReplayMask>
         <RecentTasks
           tasks={tasks}
@@ -426,8 +424,6 @@ export function ManagerOverview({
     [manager.id, listed, liveAgents, listedPullRequests, now],
   );
 
-  const waiting = threads?.waiting.length ?? 0;
-
   const byAgent = useMemo(
     () => new Map(overview.pullRequests.map((each) => [each.agent.id, each.pullRequest])),
     [overview.pullRequests],
@@ -435,47 +431,26 @@ export function ManagerOverview({
 
   return (
     <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
-      <DetailPage frame={PAGE_FRAME.TOOLBAR} label={OVERVIEW} width={PAGE_WIDTH.FULL}>
-        {/* Note that the counts and the sections' heads show in a screen recording, while each section masks its rows. */}
+      <DetailPage frame={PAGE_FRAME.TOOLBAR} label={OVERVIEW}>
+        {/* Note that the sections' heads show in a screen recording, while each section masks its rows. */}
         <ReplayUnmask>
-          <Stack gap={GAP.SECTION}>
-            <CountLine
-              label={OVERVIEW_WORDS.COUNTS}
-              counts={[
-                {
-                  value: waiting,
-                  words: OVERVIEW_WORDS.WAITING_COUNT,
-                  tone: STATUS_TONE.ATTENTION,
-                },
-                { value: overview.working, words: OVERVIEW_WORDS.WORKING },
-                { value: overview.openPullRequests, words: OVERVIEW_WORDS.PULL_REQUESTS_OPEN },
-                { value: overview.doneThisWeek.length, words: OVERVIEW_WORDS.DONE_THIS_WEEK },
-              ]}
-            />
-            {threads === undefined ? null : <WaitingOnYou threads={threads} />}
-            <div className="manager-overview-columns">
-              <div className="manager-overview-column">
-                <ManagerAgents tasks={tasks} agents={overview.agents} pullRequests={byAgent} />
-                <ManagerPullRequests tasks={tasks} pullRequests={overview.pullRequests} />
-              </div>
-              <div className="manager-overview-column">
-                <ManagerTasks
-                  tasks={tasks}
-                  title={OVERVIEW_WORDS.OPEN_TASKS}
-                  listed={overview.openTasks}
-                  cap={OPEN_TASK_ROWS}
-                  unread={unread}
-                />
-                <ManagerTasks
-                  tasks={tasks}
-                  title={OVERVIEW_WORDS.DONE}
-                  listed={overview.doneThisWeek}
-                  cap={DONE_ROWS}
-                  unread={unread}
-                />
-              </div>
-            </div>
-          </Stack>
+          {threads === undefined ? null : <WaitingOnYou threads={threads} />}
+          <ManagerAgents tasks={tasks} agents={overview.agents} pullRequests={byAgent} />
+          <ManagerPullRequests tasks={tasks} pullRequests={overview.pullRequests} />
+          <ManagerTasks
+            tasks={tasks}
+            title={OVERVIEW_WORDS.OPEN_TASKS}
+            listed={overview.openTasks}
+            cap={OPEN_TASK_ROWS}
+            unread={unread}
+          />
+          <ManagerTasks
+            tasks={tasks}
+            title={OVERVIEW_WORDS.DONE}
+            listed={overview.doneThisWeek}
+            cap={DONE_ROWS}
+            unread={unread}
+          />
         </ReplayUnmask>
       </DetailPage>
     </MemberDirectory>
