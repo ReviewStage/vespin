@@ -840,9 +840,6 @@ importers:
       effect:
         specifier: 'catalog:'
         version: 4.0.4
-      lucide-react:
-        specifier: 'catalog:'
-        version: 1.53.0(@types/react@19.2.18)(react@19.2.8)
       pg:
         specifier: 'catalog:'
         version: 8.23.1
@@ -1842,9 +1839,6 @@ importers:
       react-native-safe-area-context:
         specifier: 'catalog:'
         version: 5.11.1(react-native@0.88.1)(react@19.3.0)
-      react-native-screens:
-        specifier: 'catalog:'
-        version: 4.30.1(patch_hash=713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32)(react-native@0.88.1)(react@19.3.0)
       react-native-webview:
         specifier: 'catalog:'
         version: 14.0.1(react-native@0.88.1)(react@19.3.0)

@@ -72,6 +72,7 @@
       "project": ["src/**"]
     },
     "packages/service": {
+      "ignoreDependencies": ["@orpc/shared"],
       "entry": [
         "src/ui-messages/index.ts",
         "src/testing/index.ts",
