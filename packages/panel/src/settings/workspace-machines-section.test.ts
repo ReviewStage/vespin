@@ -142,6 +142,7 @@ test("an admin's Remove asks first, and then removes that machine of that worksp
     assert.fail("an admin's ⋯ is drawn");
 
   act(() => ellipsis.click());
+
   const remove =
     [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (each) => each.textContent === "Remove",

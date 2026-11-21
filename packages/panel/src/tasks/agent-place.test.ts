@@ -126,6 +126,7 @@ test("an agent on a machine its workspace owns names that machine, never the clo
     { machine: AGENT_MACHINE.WORKSPACE, mac: { name: "build-01", deviceId: DEVICE } },
     {},
   );
+
   assert.equal(label, "Machine: build-01");
 });
 
