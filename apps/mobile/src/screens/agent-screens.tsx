@@ -97,7 +97,9 @@ import {
   MenuChip,
   MenuRow,
   type MenuRowAct,
+  ModelChoicePopover,
   ModelChoiceSheet,
+  type ModelChoices,
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
@@ -1194,8 +1196,11 @@ function AgentConversation({
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
   });
 
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
-  const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
+  const barActs = regular && agent !== undefined;
+  // Note that a regular window's model choices pop over from the model chip rather than rising as a sheet, whichever opens them, the chip or the bar's subtitle; with no chip standing they keep the sheet.
+  const modelPopover = regular && openModels !== undefined && pick.model !== undefined;
 
   // Archive asks first. Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
   const askArchive = () => {
@@ -1269,7 +1274,18 @@ function AgentConversation({
       tools={
         agent === undefined ? undefined : <AgentMachineChip agent={agent} commands={commands} />
       }
-      trailing={<AgentModelChip pick={pick} onOpen={openModels} />}
+      trailing={
+        modelPopover ? (
+          <ModelChoicePopover
+            chip={<AgentModelChip pick={pick} onOpen={openModels} />}
+            presented={modelsShown}
+            onDismiss={() => setModelsShown(false)}
+            {...agentModelChoices(pick, mode)}
+          />
+        ) : (
+          <AgentModelChip pick={pick} onOpen={openModels} />
+        )
+      }
     />
   );
 
@@ -1317,12 +1333,14 @@ function AgentConversation({
 
   const asks = (
     <>
-      <AgentModelSheet
-        pick={pick}
-        mode={mode}
-        presented={modelsShown}
-        onDismiss={() => setModelsShown(false)}
-      />
+      {modelPopover ? null : (
+        <AgentModelSheet
+          pick={pick}
+          mode={mode}
+          presented={modelsShown}
+          onDismiss={() => setModelsShown(false)}
+        />
+      )}
       {merging === undefined || asked === undefined ? null : (
         <CardMergeAsk
           pullRequestKey={merging}
@@ -1605,64 +1623,70 @@ function AgentPage({
 }
 
 /**
- * The agent's model sheet (`ModelChoiceSheet`), as the desktop's model chip
- * opens its menu, each change sent at once and drawn on the agent as it is
- * asked, one the service refused reading back and saying why: its model,
- * among the models New agent offers that its harness runs, each under its
- * harness's mark, its effort right under it, and Fast where the model has a
- * fast version, which take effect from its next step; and last its
- * permission mode, each with its glyph and what it does, where its harness
- * takes one, which takes effect from its next turn. Done closes it.
+ * The agent's model choices, as the desktop's model chip opens its menu,
+ * each change sent at once and drawn on the agent as it is asked, one the
+ * service refused reading back and saying why: its model, among the models
+ * New agent offers that its harness runs, each under its harness's mark,
+ * its effort right under it, and Fast where the model has a fast version,
+ * which take effect from its next step; and last its permission mode, each
+ * with its glyph and what it does, where its harness takes one, which takes
+ * effect from its next turn. The page's own model and mode are handed in,
+ * so a change clears the one refusal and counts as the one latest change.
  */
-function AgentModelSheet({
-  pick,
-  mode,
-  presented,
-  onDismiss,
-}: {
-  /** The page's own model and mode, so a change from the sheet clears the one refusal and counts as the one latest change. */
-  readonly pick: AgentModelPick;
-  readonly mode: AgentMode | undefined;
-  readonly presented: boolean;
-  readonly onDismiss: () => void;
-}) {
+function agentModelChoices(pick: AgentModelPick, mode: AgentMode | undefined): ModelChoices {
   const models = pick.models.flatMap((option) => {
     const provider = providerOf(option.id);
 
     return provider === undefined ? [] : [{ ...option, provider }];
   });
 
+  return {
+    models,
+    model: pick.model,
+    onModel: pick.pickModel,
+    efforts: pick.efforts,
+    effort: pick.effort,
+    onEffort: pick.pickEffort,
+    fast: pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle },
+    note: pick.note,
+    mode:
+      mode === undefined
+        ? undefined
+        : {
+            title: PERMISSION_MODE_WORDS.QUESTION,
+            options: mode.modes.map((option) => ({
+              ...option,
+              symbol: PERMISSION_MODE_GLYPH[option.id],
+            })),
+            picked: mode.mode,
+            onPick: (picked) => {
+              const chosen = mode.modes.find((option) => option.id === picked);
+
+              if (chosen !== undefined) mode.choose(chosen.id);
+            },
+            footer: PERMISSION_MODE_WORDS.APPLIES,
+            note: mode.note,
+          },
+  };
+}
+
+/** The agent's model choices as a sheet (`ModelChoiceSheet`), as a compact window opens them; Done closes it. */
+function AgentModelSheet({
+  pick,
+  mode,
+  presented,
+  onDismiss,
+}: {
+  readonly pick: AgentModelPick;
+  readonly mode: AgentMode | undefined;
+  readonly presented: boolean;
+  readonly onDismiss: () => void;
+}) {
   return (
     <ModelChoiceSheet
       presented={presented}
       onDismiss={onDismiss}
-      models={models}
-      model={pick.model}
-      onModel={pick.pickModel}
-      efforts={pick.efforts}
-      effort={pick.effort}
-      onEffort={pick.pickEffort}
-      fast={pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle }}
-      note={pick.note}
-      mode={
-        mode === undefined
-          ? undefined
-          : {
-              title: PERMISSION_MODE_WORDS.QUESTION,
-              options: mode.modes.map((option) => ({
-                ...option,
-                symbol: PERMISSION_MODE_GLYPH[option.id],
-              })),
-              picked: mode.mode,
-              onPick: (picked) => {
-                const chosen = mode.modes.find((option) => option.id === picked);
-
-                if (chosen !== undefined) mode.choose(chosen.id);
-              },
-              footer: PERMISSION_MODE_WORDS.APPLIES,
-              note: mode.note,
-            }
-      }
+      {...agentModelChoices(pick, mode)}
     />
   );
 }

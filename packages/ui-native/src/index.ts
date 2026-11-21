@@ -212,7 +212,13 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { useMinute, useToday } from "./minute.js";
 
-export { type ModeChoice, ModelChoiceSheet, type ModelOption } from "./model-choice-sheet.js";
+export {
+  type ModeChoice,
+  ModelChoicePopover,
+  ModelChoiceSheet,
+  type ModelChoices,
+  type ModelOption,
+} from "./model-choice-sheet.js";
 
 export { SwitchRow } from "./option-rows.js";
 

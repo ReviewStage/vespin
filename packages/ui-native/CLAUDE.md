@@ -76,7 +76,8 @@ builds a control of its own.
   desktop composer does, its field on top, one line until its words wrap,
   and under it one row of the + and the capsules saying where the
   message runs, then at its end the model chip (`trailing`, whose sheet
-  holds the model, effort, Fast and the permission mode, each once),
+  holds the model, effort, Fast and the permission mode, each once, a
+  popover from the chip in a regular window, `ModelChoicePopover`),
   Dictate, and Send, a dictation under way standing its strip in the row's
   place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
   and its head, inside the same glass, holds an agent's
