@@ -342,7 +342,7 @@ export function useAgentComposer(
   const mentions = useMentionOffer(
     words,
     setWords,
-    { workspaceId: agent?.workspaceId, taskId },
+    { workspaceId: agent?.workspaceId, taskId, agentId },
     pillField.mentions,
   );
 

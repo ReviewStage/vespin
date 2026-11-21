@@ -35,12 +35,14 @@ export function cellFocusRingOff(): ModifierConfig {
  * takes it whether or not it has a subtitle, an empty one drawing none,
  * since adding or removing a modifier redraws everything under the view.
  */
-export function barSubtitle(bar: BarKind, subtitle: string | undefined): ModifierConfig {
+export function barSubtitle(
+  bar: BarKind,
+  subtitle: string | undefined,
+  leading = false,
+): ModifierConfig {
   return createModifier(
     bar === BAR_KIND.COLUMN ? MODIFIER.COLUMN_SUBTITLE : MODIFIER.STACK_SUBTITLE,
-    {
-      subtitle: subtitle ?? "",
-    },
+    { subtitle: subtitle ?? "", leading },
   );
 }
 

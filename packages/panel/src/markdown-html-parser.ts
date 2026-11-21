@@ -1,3 +1,4 @@
+import { forgetMarkdownTrees } from "@repo/ui/markdown-trees";
 import { queryOptions, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type * as RehypeRaw from "rehype-raw";
@@ -41,7 +42,9 @@ export default rehypeRaw;
 /**
  * The parser's chunk, imported once per window and kept for its life. Note
  * that a failure answers as a landing does, never tried again, so a reply
- * is drawn as the words it can be rather than never.
+ * is drawn as the words it can be rather than never, and that the trees
+ * drawn before it landed are forgotten as it lands, because they were drawn
+ * through the step that passed them untouched.
  */
 export const markdownHtmlParserQuery = queryOptions({
   queryKey: ["markdown-html-parser"] as const,
@@ -49,6 +52,7 @@ export const markdownHtmlParserQuery = queryOptions({
     import("rehype-raw").then(
       (module) => {
         parser = module.default;
+        forgetMarkdownTrees();
 
         return true;
       },

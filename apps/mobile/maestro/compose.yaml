@@ -1,4 +1,4 @@
-# compose.yaml -- an agent's composer: the message queued behind its turn listed over the field with Steer and Delete, a follow-up typed and sent, the + menu's Photos and MCP servers, the model chip's permission mode, a `/` offering the task's skills, an `@` picked into a pill, and the turn stopped.
+# compose.yaml -- an agent's composer: the messages queued behind its turn folded over the field under one line that opens them, each with Steer and Delete, a follow-up typed and sent, the + menu's Photos and MCP servers, the model chip's permission mode, a `/` offering the task's skills, an `@` picked into a pill, and the turn stopped.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -17,8 +17,11 @@ appId: dev.vespin.ios
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - extendedWaitUntil:
-    visible: "Then add a Resend button beside each pending invite."
+    visible: "2 queued"
     timeout: 30000
+# The two queued messages stand folded under one line, which a press opens.
+- tapOn: "2 queued"
+- assertVisible: "Then add a Resend button beside each pending invite."
 - assertVisible: "Steer"
 - assertVisible: "Stop"
 - assertVisible: "Add"

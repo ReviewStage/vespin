@@ -7,7 +7,6 @@ import {
   type StartCallFailure,
   TASK_CALL_FAILURE,
   TASK_PARENT_FAILURE,
-  type TaskListParts,
   type TasksView,
 } from "./tasks-view.js";
 import { IRREVERSIBLE_WORDS } from "./words.js";
@@ -104,7 +103,7 @@ export function documentRegion(
  * task was about and offer a few before it. The list is already newest
  * started first, and a task with no repository adds none.
  */
-export function recentRepositories(tasks: TaskListParts["tasks"]): string[] {
+export function recentRepositories(tasks: readonly Pick<TaskSummary, "repository">[]): string[] {
   const recent: string[] = [];
 
   for (const task of tasks) {

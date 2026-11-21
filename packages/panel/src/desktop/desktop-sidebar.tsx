@@ -166,7 +166,7 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors, useSteadyList } from "../steady-door.js";
-import { useTaskListCollections } from "../task-list-collections.js";
+import { useTaskListCollections, useTaskListRows } from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
@@ -503,38 +503,79 @@ function nestedRows(
 /**
  * The window's tasks newest active first, as one live query over its task
  * collection keeps them (`taskTime` under Updated: the later of a task's
- * own update and its agents' last settled activity), so a delivery moves
- * only the tasks it changed rather than sorting every task again.
+ * own update and its agents' last settled activity), each by its id alone.
+ * Note that the query selects nothing but the id, so a delivery that moves
+ * a task's row and leaves its place in the order tells the sidebar nothing,
+ * as each of an agent's turns starting does.
  */
-function useActivityOrder(): readonly TaskSummary[] {
+function useActivityOrder(): readonly Pick<TaskSummary, "id">[] {
   const collections = useTaskListCollections();
 
   return useLiveQuery({
     query: (q) =>
-      q.from({ task: collections.tasks }).orderBy(({ task }) => {
-        const agentsAt = coalesce(task.agents?.activityAt, 0);
+      q
+        .from({ task: collections.tasks })
+        .orderBy(({ task }) => {
+          const agentsAt = coalesce(task.agents?.activityAt, 0);
 
-        return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
-      }, "desc"),
+          return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
+        }, "desc")
+        .select(({ task }) => ({ id: task.id })),
   }).data;
 }
 
 /**
- * The listed workspace's tasks, pinned or not as `pinned` asks, as one live
- * query over the window's task collection keeps them, every workspace's
- * while none is listed (`TasksControl.listed`).
+ * The listed workspace's tasks, pinned or not as `pinned` asks, every
+ * workspace's while none is listed (`TasksControl.listed`), each as the
+ * window's task collection holds it.
+ *
+ * Note that the live query keeps each task's row with its agents' counts
+ * left out, the only part that moves while an agent works, and in their
+ * place only what the sidebar's lists read of them: whether a run's task
+ * still has an agent at work (`withoutFinishedRunTasks`), and whether the
+ * agents did anything since the reader last looked (`useUnreadTasks`). So a
+ * delivery that moves only a task's agents and changes neither draws no
+ * sidebar; each row hears its own task (`SidebarTask`). The rows it answers
+ * are the collection's own, read as the query last moved.
  */
 function useListedPart(workspaceId: string | undefined, pinned: boolean): readonly TaskSummary[] {
   const collections = useTaskListCollections();
 
-  return useLiveQuery({
+  const { data } = useLiveQuery({
     query: (q) =>
-      q.from({ task: collections.tasks }).where(({ task }) => {
-        const pin = pinned ? not(isUndefined(task.pinnedAt)) : isUndefined(task.pinnedAt);
+      q
+        .from({ task: collections.tasks })
+        .where(({ task }) => {
+          const pin = pinned ? not(isUndefined(task.pinnedAt)) : isUndefined(task.pinnedAt);
 
-        return workspaceId === undefined ? pin : and(eq(task.workspaceId, workspaceId), pin);
+          return workspaceId === undefined ? pin : and(eq(task.workspaceId, workspaceId), pin);
+        })
+        .select(({ task }) => {
+          const agentsAt = coalesce(task.agents?.activityAt, 0);
+          const newest = caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
+
+          return {
+            ...task,
+            agents: undefined,
+            runWorking: caseWhen(
+              and(eq(task.madeByRun, true), gt(coalesce(task.agents?.working, 0), 0)),
+              true,
+              false,
+            ),
+            changedSinceRead: caseWhen(gt(newest, task.readThrough), true, false),
+          };
+        }),
+  });
+
+  return useMemo(
+    () =>
+      data.flatMap((row): TaskSummary[] => {
+        const task = collections.tasks.get(row.id);
+
+        return task === undefined ? [] : [task];
       }),
-  }).data;
+    [data, collections.tasks],
+  );
 }
 
 /**
@@ -662,7 +703,7 @@ function useListedTasks(tasks: TasksControl): ListedTasks {
  */
 function inActivityOrder(
   tasks: readonly TaskSummary[],
-  order: readonly TaskSummary[],
+  order: readonly Pick<TaskSummary, "id">[],
 ): TaskSummary[] {
   const unordered = new Map(tasks.map((task) => [task.id, task] as const));
   const ordered: TaskSummary[] = [];
@@ -774,9 +815,8 @@ function TaskRows({
             task={task}
             current={context.marked(task.id, undefined)}
             open={context.current(task.id)}
-            unread={context.unread(task)}
+            unread={context.unread}
             now={context.now}
-            at={taskTime(task, TASK_ORDER.UPDATED)}
             repository={repository?.(task)}
             faces={faces}
             depth={held.depth}
@@ -862,6 +902,7 @@ const placeOf = (row: PinnedRow): PinPlace => row.place;
 function pinnedRows(
   pinned: readonly TaskSummary[],
   listed: (taskId: string) => TaskSummary | undefined,
+  listedAgent: (agentId: string) => ListedAgent | undefined,
   tasks: SidebarTasks,
 ): PinnedRow[] {
   const taskRows = pinned.map(
@@ -875,7 +916,7 @@ function pinnedRows(
   const taskAgentRows = tasks.taskAgentPins.flatMap((pin): PinnedRow[] => {
     // Note that an agent pinned on no task, a Manager, is drawn as its own row instead (`PinnedManagers`).
     const task = pin.taskId === null ? undefined : listed(pin.taskId);
-    const agent = tasks.liveAgents?.find((each) => each.id === pin.agentId);
+    const agent = tasks.agentsCarried ? listedAgent(pin.agentId) : undefined;
 
     if (task === undefined || agent === undefined) return [];
     const drawn = agentPinOf(pin, task, agent, tasks);
@@ -1157,9 +1198,8 @@ function PinnedRows({
               task={child}
               current={context.marked(child.id, undefined)}
               open={context.current(child.id)}
-              unread={context.unread(child)}
+              unread={context.unread}
               now={context.now}
-              at={taskTime(child, TASK_ORDER.UPDATED)}
               depth={held.depth}
               nest={nest}
               place={place}
@@ -1180,9 +1220,8 @@ function PinnedRows({
                 task={task}
                 current={context.marked(task.id, undefined)}
                 open={context.current(task.id)}
-                unread={context.unread(task)}
+                unread={context.unread}
                 now={context.now}
-                at={taskTime(task, TASK_ORDER.UPDATED)}
                 nest={nest}
                 place={place}
                 fold={held === undefined ? undefined : childTasksFold(held, context.onFoldTask)}
@@ -2314,9 +2353,11 @@ function SidebarColumn({
   const listedInbox = useListedInbox(tasks);
   // The list is the chosen workspace's; the unread marks above read every task.
   const listedTasks = useListedTasks(tasks);
+  const rows = useTaskListRows();
   // Note that while the view shows finished sub-tasks, those a parent's count names that the list holds not are read into it.
   useSubTaskReads(listedTasks.unheldSubTasks, taskView.view.finishedSubTasks && tasks.listRead);
-  const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, tasks);
+  // Note that a pinned agent is read by its id alone (`useTaskListRows`), so a step of any other agent's turn draws the sidebar nothing.
+  const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, rows.agent, tasks);
   const pinnedManagers = usePinnedManagers(tasks, tasks.taskAgentPins);
   // The pin the open task was opened from is marked in its task's place,
   // whichever of the task's tabs is shown, while its row still stands.
@@ -2707,8 +2748,11 @@ function SidebarColumn({
   // The tasks' rows chosen together, in the order drawn, those the runs leave undrawn among them, as one run, so ⇧-click chooses across the lists.
   const chooseOrder = drawn.map((task) => task.id);
   // Moving up and down the list as it reads: down from the home page, where
-  // no row is open, is the first row. The ends go no further.
-  const at = drawn.findIndex((task) => task.id === tasks.activeTaskId);
+  // no row is open, is the first row. The ends go no further. Note that we
+  // step from the task the window last asked for (`boundFor`), not the one the
+  // host has open, because presses faster than its round trip would otherwise
+  // each step from the same row.
+  const at = drawn.findIndex((task) => task.id === tasks.boundFor);
 
   const step = (by: number) => {
     const task = drawn[at + by];
@@ -3010,8 +3054,7 @@ function SidebarColumn({
                                   task={task}
                                   current={context.marked(task.id, undefined)}
                                   open={current(task.id)}
-                                  unread={unread(task)}
-                                  at={taskTime(task, TASK_ORDER.UPDATED)}
+                                  unread={unread}
                                   now={now}
                                   faces={context.faces}
                                   depth={held.depth}

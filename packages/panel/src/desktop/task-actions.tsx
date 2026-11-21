@@ -1,7 +1,13 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { FOLLOWING_WORDS } from "@repo/features/task-followers-model";
-import { type ChildTaskCount, repositoryLabel, taskFinished } from "@repo/features/task-list-model";
+import {
+  type ChildTaskCount,
+  repositoryLabel,
+  TASK_ORDER,
+  taskFinished,
+  taskTime,
+} from "@repo/features/task-list-model";
 import type { TaskRelationSubject } from "@repo/features/task-relation-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
@@ -104,6 +110,7 @@ import {
 import { useSteadyDoors } from "../steady-door.js";
 import {
   type TaskListRows,
+  useNamedTask,
   useTaskListCollections,
   useTaskListRow,
 } from "../task-list-collections.js";
@@ -1193,11 +1200,27 @@ function SidebarTaskCard({
  * hands focus back to the row.
  *
  */
-export function SidebarTask({ tasks, ...rest }: SidebarTaskProps): React.JSX.Element {
+export function SidebarTask({
+  tasks,
+  task: handed,
+  unread: unreadOf,
+  ...rest
+}: SidebarTaskProps): React.JSX.Element {
   const tab = useSteadyDoors(sidebarRowTab(tasks));
-  const opened = openedAs(openedTaskOf(tasks), rest.task.id);
+  const opened = openedAs(openedTaskOf(tasks), handed.id);
+  // Note that the row hears its own task, so a delivery moving it alone draws this row and not the sidebar (`useListedPart`); the task handed stands until the collection holds it.
+  const task = useNamedTask(handed.id, tasks.typedNames) ?? handed;
 
-  return <SidebarTaskRow {...useSteadyDoors(rest)} tasks={tab} opened={opened} />;
+  return (
+    <SidebarTaskRow
+      {...useSteadyDoors(rest)}
+      task={task}
+      unread={unreadOf(task)}
+      at={taskTime(task, TASK_ORDER.UPDATED)}
+      tasks={tab}
+      opened={opened}
+    />
+  );
 }
 
 /**
@@ -1231,12 +1254,10 @@ interface SidebarTaskProps {
   current: boolean;
   /** Whether the plan is open in the window, so its drafts are in reach and unmarked; a row the sidebar does not mark may be, as one opened from a pin, and is its own mark unless said. */
   open?: boolean;
-  /** Whether the task was saved since the developer last looked at it on this Mac. */
-  unread: boolean;
+  /** Whether a task was saved since the developer last looked at it on this Mac, which the row asks of its task as it stands. */
+  unread: (task: TaskSummary) => boolean;
   /** The time the row's last update is counted back from. */
   now: number;
-  /** The time the row shows, which the list's order chooses: its last update unless said. */
-  at?: number;
   /** The repository the row names, its owner's picture and its name, muted before its time, where the list hands one. */
   repository?: React.ReactNode;
   /** Which faces the row may wear (`rowFaceOf`): a filter by assignee says the one it names instead. */
@@ -1269,7 +1290,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   open = current,
   unread,
   now,
-  at = task.updatedAt,
+  at,
   repository,
   faces = EVERY_FACE,
   depth,
@@ -1278,8 +1299,12 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   fold,
   childCount,
   onOpen,
-}: Omit<SidebarTaskProps, "tasks"> & {
+}: Omit<SidebarTaskProps, "tasks" | "unread"> & {
   tasks: SidebarRowTab;
+  /** Whether the task was saved since the developer last looked at it on this Mac. */
+  unread: boolean;
+  /** The time the row shows: the later of its own update and its agents' last settled activity (`taskTime`). */
+  at: number;
   /** The open task where this row is it (`openedTaskOf`); none on every other row, so a save of the open document draws its row alone. */
   opened: OpenedTask | undefined;
 }): React.JSX.Element {

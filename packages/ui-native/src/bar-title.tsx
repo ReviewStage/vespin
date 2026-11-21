@@ -25,9 +25,16 @@ const styles = StyleSheet.create({
  * Note that it stays mounted with empty words, which draw no line, so the
  * line comes and goes without the host being made again.
  */
-export function StackSubtitle({ words }: { readonly words: string }) {
+export function StackSubtitle({
+  words,
+  leading = false,
+}: {
+  readonly words: string;
+  /** Whether the title and its subtitle stand at the bar's leading edge beside the back button, in the bar's own row, as a regular window's page stands them where a tab bar floats in the middle of that row; a build without it centers them. */
+  readonly leading?: boolean | undefined;
+}) {
   return (
-    <Host style={styles.probe} modifiers={[barSubtitle(BAR_KIND.STACK, words)]}>
+    <Host style={styles.probe} modifiers={[barSubtitle(BAR_KIND.STACK, words, leading)]}>
       <Spacer />
     </Host>
   );

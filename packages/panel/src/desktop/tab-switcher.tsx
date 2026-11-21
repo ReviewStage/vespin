@@ -46,7 +46,7 @@
  * glyph.
  */
 
-import type { AgentSummary } from "@repo/features/agent-wire";
+import type { AgentSummary, ListedAgent } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { agentName, automationRun } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
@@ -87,7 +87,7 @@ import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import type { TaskStep } from "../places/task-step.js";
 import type { RecentStep, RecentSteps } from "../places/window-history.js";
 import { type Place, type StepTitle, sameScreen } from "../places/window-steps.js";
-import { useNamedTask } from "../task-list-collections.js";
+import { useNamedTask, useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, type KindLook, PlanGlyph, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MainTab } from "../tasks/use-main-tabs.js";
@@ -247,10 +247,8 @@ function taskLook(
   };
 }
 
-/** An agent's card: the agent as its tab would wear it, read off every agent the window lists, its automation under it. */
-function agentLook(agentId: string, tasks: TasksControl): CardLook {
-  const agent = tasks.liveAgents?.find((each) => each.id === agentId);
-
+/** An agent's card: the agent as its tab would wear it, as the window lists it (`agent`), its automation under it. */
+function agentLook(agent: ListedAgent | undefined, tasks: TasksControl): CardLook {
   if (agent === undefined) {
     return {
       ...tabLook({ kind: TAB_KIND.AGENT, name: undefined, agent: undefined }),
@@ -267,13 +265,18 @@ function agentLook(agentId: string, tasks: TasksControl): CardLook {
 }
 
 /** How a card wears its screen, from what Back's list calls the step now and what the window holds of what it names, `task` the step's task as the window lists it. */
-function cardLook(step: RecentStep, tasks: TasksControl, task: TaskSummary | undefined): CardLook {
+function cardLook(
+  step: RecentStep,
+  tasks: TasksControl,
+  task: TaskSummary | undefined,
+  agent: ListedAgent | undefined,
+): CardLook {
   const { place, title, routed, params } = step;
 
   if (place.task !== undefined) return taskLook(place.task, title, task);
 
   if (routed === ROUTED_PLACE.AGENT && params.agentId !== undefined) {
-    return agentLook(params.agentId, tasks);
+    return agentLook(agent, tasks);
   }
 
   if (routed === ROUTED_PLACE.PERSON && params.userId !== undefined) {
@@ -317,7 +320,10 @@ function ScreenCard({
 }): React.JSX.Element {
   // The step's task as the window lists it, read by its id, so a delivery moving another task leaves the card as it is.
   const task = useNamedTask(step.place.task?.taskId, tasks.typedNames);
-  const look = cardLook(step, tasks, task);
+  // The step's agent, read by its id alone, so a step of any other agent's turn leaves the card as it is.
+  const agentId = step.routed === ROUTED_PLACE.AGENT ? step.params.agentId : undefined;
+  const agent = useTaskListRow(useTaskListCollections().agents, agentId);
+  const look = cardLook(step, tasks, task, tasks.agentsCarried ? agent : undefined);
 
   return (
     <TabCard

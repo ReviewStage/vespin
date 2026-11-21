@@ -72,7 +72,7 @@ import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
-import { cachedFile, cachedPlayed } from "../cached-media.js";
+import { cachedFile, cachedPicture, cachedPlayed } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
@@ -871,8 +871,8 @@ export interface ThreadFiles extends ThreadMediaRead {
   readonly retry: (attachmentId: string) => void;
 }
 
-/** What a file of the thread is read into, by its kind: a picture's `data:` address, or a video's, a sound clip's, or another file's address under the app's caches. */
-function sourceOf(
+/** What a file of the thread is read into, by its kind: its address under the app's caches, or a picture's `data:` address where no file can be named for its type. */
+async function sourceOf(
   each: InboxMessageMedia,
   read: { readonly contentType: string; readonly base64: string },
 ): Promise<string> {
@@ -888,8 +888,17 @@ function sourceOf(
         each.mediaType,
         read.base64,
       );
-    case INBOX_MEDIA.PICTURE:
-      return Promise.resolve(`data:${read.contentType};base64,${read.base64}`);
+    case INBOX_MEDIA.PICTURE: {
+      // Note that a picture is written to a file as it lands, as an agent's is, so a press opens Quick Look on that file at once rather than hashing and writing its bytes first.
+      const written = await cachedPicture(
+        INBOX_MEDIA_PREFIX,
+        each.attachmentId,
+        read.contentType,
+        read.base64,
+      );
+
+      return written ?? `data:${read.contentType};base64,${read.base64}`;
+    }
   }
 }
 

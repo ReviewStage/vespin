@@ -60,7 +60,7 @@ function saidOf(at: number) {
       tasks: tasksControl({ tasks: [task] }),
       task,
       current: false,
-      unread: false,
+      unread: () => false,
       now: NOW,
       onOpen: () => undefined,
     }),

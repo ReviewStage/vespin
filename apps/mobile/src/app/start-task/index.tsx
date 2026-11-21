@@ -1,4 +1,4 @@
-// index.tsx -- New task, Home's composer as a sheet, which the tab bar's round + opens, a task's New sub-task opens as a sub-task of the task the route's `parent` names, and a draft the share sheet kept opens prefilled, its pictures attached (`share-sheet.ts`).
+// index.tsx -- New task, Home's composer as a sheet, which the tab bar's round + opens, a task's New sub-task opens as a sub-task of the task the route's `parent` names, a section's + opens to file the task in the section `section` names, and a draft the share sheet kept opens prefilled, its pictures attached (`share-sheet.ts`).
 
 import { SHARE_DRAFT_PICTURE_FILES } from "@repo/features/ios-share-wire";
 import { useLocalSearchParams } from "expo-router";
@@ -31,8 +31,9 @@ function draftPictures(param: string | undefined): readonly string[] | undefined
 }
 
 export default function StartTaskRoute() {
-  const { parent, prompt, workspace, repository, pictures } = useLocalSearchParams<{
+  const { parent, section, prompt, workspace, repository, pictures } = useLocalSearchParams<{
     parent?: string;
+    section?: string;
     prompt?: string;
     workspace?: string;
     repository?: string;
@@ -42,6 +43,7 @@ export default function StartTaskRoute() {
   return (
     <NewTaskScreen
       parent={parent === "" ? undefined : parent}
+      section={section === "" ? undefined : section}
       draft={
         prompt === undefined
           ? undefined

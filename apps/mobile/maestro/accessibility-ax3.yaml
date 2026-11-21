@@ -59,7 +59,7 @@ appId: dev.vespin.ios
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
 - extendedWaitUntil:
-    visible: "Steer"
+    visible: "2 queued"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000

@@ -224,11 +224,13 @@ test("a pinned agent's tab of a task not open says its agent's name as the list 
     turnId: null,
   });
 
-  const live = drawPin(PIN, renamed, tasksControl({ tasks: [renamed], liveAgents: [followed] }));
+  listed.stand({ tasks: [renamed], taskAgents: [followed] });
+  const live = drawPin(PIN, renamed, tasksControl({ tasks: [renamed] }));
   assert.equal(live.textContent, "Expire stale invitations");
 
   act(() => root?.unmount());
   document.body.replaceChildren();
+  listed.stand({ tasks: [TASK], taskAgents: [] });
   const unnamed = drawPin(PIN, TASK);
   assert.equal(unnamed.textContent, "Expiry job");
 });

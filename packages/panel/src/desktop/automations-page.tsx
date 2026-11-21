@@ -95,6 +95,7 @@ import { PageIntro } from "../page-intro.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useToast } from "../toast.js";
@@ -963,6 +964,7 @@ function RunsPage({
   automations: ReturnType<typeof useAutomations>;
   room: ShellRoom;
 }): React.JSX.Element {
+  const collections = useTaskListCollections();
   const door = useAutomationsDoor(tasks);
   const now = useMinute();
   const workspace = tasks.workspace;
@@ -1027,7 +1029,7 @@ function RunsPage({
             shown={shown}
             mine={mine}
             now={now}
-            onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
+            onOpenAgent={(agentId) => openRunAgent(tasks, collections, agentId)}
             onOpenAutomation={(automationId) =>
               door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId })
             }
@@ -1213,6 +1215,7 @@ function AutomationsPages({
   tasks: TasksControl;
   room: ShellRoom;
 }): React.JSX.Element {
+  const collections = useTaskListCollections();
   const door = useAutomationsDoor(tasks);
   const standing = useAutomationsPlace();
   const workspace = tasks.workspace;
@@ -1300,7 +1303,7 @@ function AutomationsPages({
       repositories={tasks.newTask.repositoriesIn(workspace?.id)}
       writes={automations}
       onBack={crumbBack}
-      onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
+      onOpenAgent={(agentId) => openRunAgent(tasks, collections, agentId)}
       linked={place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined}
       placeLeave={tasks.placeLeave}
       room={room}

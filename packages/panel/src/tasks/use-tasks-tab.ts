@@ -17,12 +17,7 @@ import { type DescriptionMention, MENTION_KIND } from "@repo/features/mention-li
 import type { PageLine } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentMovedAt, agentStillWriting, agentsOfTask } from "@repo/features/task-agents-model";
-import type {
-  CodeRef,
-  ListedPullRequest,
-  TaskAgentPin,
-  TaskRelationKind,
-} from "@repo/features/task-wire";
+import type { CodeRef, TaskAgentPin, TaskRelationKind } from "@repo/features/task-wire";
 import {
   documentRegion,
   renamedRegion,
@@ -183,11 +178,7 @@ import {
 import { useTaskPullRequests } from "./use-task-work.js";
 import { useEndTerminalTab, useHeldTerminalTabs } from "./use-terminal-session.js";
 import { useWarmAgent } from "./use-warm-agent.js";
-import {
-  listedAgentIn,
-  useListedAgentPullRequests,
-  useListedAgents,
-} from "./use-workspace-agents.js";
+import { listedAgentIn, listedAgentsNow } from "./use-workspace-agents.js";
 import { sayRestored } from "./version-view.js";
 
 /**
@@ -537,10 +528,14 @@ export interface TasksControl {
    * any of it is saved, or none, which draws its saved name again.
    */
   onDraftName: (taskId: string, name: string | undefined) => void;
-  /** Every agent the list followed live carries, the archived ones among them, each with its own workspace and repository; none while it is not. */
-  liveAgents: readonly ListedAgent[] | undefined;
-  /** The pull request of every agent the list followed live carries that opened one, as its row keeps it; none while it is not. */
-  listedPullRequests: readonly ListedPullRequest[] | undefined;
+  /**
+   * Whether the list followed live carries the agents, the archived ones
+   * among them, in the task list's collections (`useTaskListCollections`);
+   * false until it says its lists are drawn. Note that the agents themselves
+   * are read where they are drawn, by id or by a query of their own, never
+   * here, so a step of any agent's turn draws no part that reads the tab.
+   */
+  agentsCarried: boolean;
   /** The window's one ask before leaving a page whose unsaved work would be lost (`places/place-leave.ts`). */
   placeLeave: PlaceLeave;
 }
@@ -1067,7 +1062,6 @@ export function useTasksTab(input: {
   }, [inboxElsewhere, listedStep, turnInbox]);
   // Every agent the list followed live carries, the archived ones among them; none until it says its lists are drawn.
   const agentsCarried = viewed.listed === true;
-  const liveAgents = useListedAgents(agentsCarried);
   const inboxWaiting = useInboxWaitingTasks();
   const signedIn = fixture !== undefined || input.signedIn;
   const page = tasksPage(viewed);
@@ -1116,7 +1110,7 @@ export function useTasksTab(input: {
     taskId: viewed.activeTaskId,
     repository:
       openDocument?.id === viewed.activeTaskId ? (openDocument?.repository ?? null) : null,
-    agentsFollowed: liveAgents !== undefined && openListed !== undefined,
+    agentsFollowed: agentsCarried && openListed !== undefined,
     onOpenIntegrations: input.onOpenIntegrations,
     onOpenApiKeys: input.onOpenApiKeys,
     me: input.accountId,
@@ -2216,7 +2210,12 @@ export function useTasksTab(input: {
     if (narrow) sidePanel.onSetOpen(false);
 
     if (mainTabs.remembers(taskId)) return;
-    const agentId = resumingAgentOf(taskId, liveAgents, inboxWaiting);
+
+    const agentId = resumingAgentOf(
+      taskId,
+      listedAgentsNow(listCollections, agentsCarried),
+      inboxWaiting,
+    );
 
     if (agentId !== undefined) mainTabs.onShow(taskId, agentTab(agentId));
     else if (narrow) mainTabs.onShow(taskId, MAIN_TAB.OVERVIEW);
@@ -3462,7 +3461,7 @@ export function useTasksTab(input: {
     : { onToggle: toggleSidePanel, onClose: closeSidePanelTab };
 
   // Note that the tab is handed back steady, so a part that holds while its share of the tab does (`memo`) holds for every draw that moved nothing it reads.
-  const steady = useSteadyDoors<Omit<TasksControl, "liveAgents" | "listedPullRequests">>({
+  const steady = useSteadyDoors<TasksControl>({
     page,
     shown,
     signedIn,
@@ -3675,16 +3674,8 @@ export function useTasksTab(input: {
     typedNamesNow,
     onDraftName: draftName,
     placeLeave,
+    agentsCarried,
   });
 
-  const listedPullRequests = useListedAgentPullRequests(agentsCarried);
-
-  // Note that the list's own rows are handed on past the steadying, as the
-  // document keeps them, since it already keeps a list's identity while no
-  // row of it moves, and a steady copy of every row is a place kept for each
-  // of thousands.
-  return useMemo(
-    () => ({ ...steady, liveAgents, listedPullRequests }),
-    [steady, liveAgents, listedPullRequests],
-  );
+  return steady;
 }

@@ -44,8 +44,9 @@ import { keptKey, useKept } from "../use-kept.js";
  * groups by progress before that grouping was removed. A fixture run draws no inbox, so it has nothing staged to keep apart. An automation's Runs panel keeps its width and whether it
  * stands on the same terms, one for every automation, as the side panel
  * keeps one for every plan, and so does the tree beside every File and
- * Changes tab, one width for them all, and a page's comments pane, one
- * width for every page.
+ * Changes tab, one width for them all, a page's comments pane, one
+ * width for every page, and a Manager's chat beside its overview, one width
+ * for every Manager.
  */
 
 /** Where the folds are kept in the renderer's storage. */
@@ -65,6 +66,7 @@ const STORAGE_KEY = {
   RUNS_PANEL: "app.automationRunsPanel",
   FILE_TREE_WIDTH: "app.fileTreeWidth",
   PAGE_COMMENTS_WIDTH: "app.pageCommentsWidth",
+  MANAGER_CHAT_WIDTH: "app.managerChatWidth",
 } as const;
 
 /** How wide an automation's Runs panel may stand, as the side panel is bounded. */
@@ -89,6 +91,18 @@ export const PAGE_COMMENTS_WIDTH = {
   MIN: 280,
   MAX: 560,
   DEFAULT: 320,
+} as const;
+
+/**
+ * How wide a Manager's chat may be dragged beside its overview, in CSS
+ * pixels, and where it starts: a conversation's measure, never so narrow
+ * that its box loses its buttons, and never so wide that the overview's
+ * two columns lose their room.
+ */
+export const MANAGER_CHAT_WIDTH = {
+  MIN: 320,
+  MAX: 720,
+  DEFAULT: 400,
 } as const;
 
 export const RUNS_PANEL_WIDTH = {
@@ -175,6 +189,7 @@ const KEPT = {
   INBOX_LIST_WIDTH: keptKey(STORAGE_KEY.INBOX_LIST_WIDTH, storedWidth),
   FILE_TREE_WIDTH: keptKey(STORAGE_KEY.FILE_TREE_WIDTH, storedWidth),
   PAGE_COMMENTS_WIDTH: keptKey(STORAGE_KEY.PAGE_COMMENTS_WIDTH, storedWidth),
+  MANAGER_CHAT_WIDTH: keptKey(STORAGE_KEY.MANAGER_CHAT_WIDTH, storedWidth),
   RUNS_PANEL: keptKey(STORAGE_KEY.RUNS_PANEL, storedRunsPanel),
 } as const;
 
@@ -402,6 +417,19 @@ export function usePageCommentsWidth(): FileTreeWidth {
   const onResize = useCallback((asked: number) => keep(clampPageCommentsWidth(asked)), [keep]);
 
   return { width: clampPageCommentsWidth(kept), onResize };
+}
+
+/** A Manager's chat width held within its bounds, in whole pixels. */
+function clampManagerChatWidth(width: number): number {
+  return Math.min(MANAGER_CHAT_WIDTH.MAX, Math.max(MANAGER_CHAT_WIDTH.MIN, Math.round(width)));
+}
+
+/** The width of a Manager's chat beside its overview, one for every Manager, the default until first dragged, and kept as it is. */
+export function useManagerChatWidth(): FileTreeWidth {
+  const [kept, keep] = useKept(KEPT.MANAGER_CHAT_WIDTH, MANAGER_CHAT_WIDTH.DEFAULT);
+  const onResize = useCallback((asked: number) => keep(clampManagerChatWidth(asked)), [keep]);
+
+  return { width: clampManagerChatWidth(kept), onResize };
 }
 
 /** A Runs panel width held within its bounds, in whole pixels. */

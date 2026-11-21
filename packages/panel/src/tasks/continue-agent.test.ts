@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import {
+  continuedByIds,
+  endLineOffersContinue,
+  endLineReason,
+} from "@repo/features/agent-continue-model";
 import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import {
@@ -43,14 +48,7 @@ import { composerEditor, editorBundleLanded, installEditorLayout } from "../test
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
-import {
-  continuedByIds,
-  endLineOffersContinue,
-  endLineOffersTryAgain,
-  endLineParts,
-  endLineReason,
-  startFailureNote,
-} from "./agent-model.js";
+import { endLineOffersTryAgain, endLineParts, startFailureNote } from "./agent-model.js";
 import { AgentTab } from "./agent-tab.js";
 import { ForkProvider } from "./fork-action.js";
 import type { AgentContinuer } from "./use-agents.js";
