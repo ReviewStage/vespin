@@ -4,16 +4,18 @@
  * A Manager is an agent of kind `manager` on no task, which the live task
  * list carries beside the tasks' agents (`tasklessLiveParam`), so the list
  * is the window's listed agents narrowed to the workspace's unarchived
- * Managers. It follows the live read, so a Manager made, renamed, archived,
- * or at work anywhere moves here as that read hears it, with no read of its
- * own to ask again. The ones the reader pinned stand under Pinned too
+ * Managers (`@repo/features/workspace-managers-model`, as the iOS app lists
+ * them too). It follows the live read, so a Manager made, renamed,
+ * archived, or at work anywhere moves here as that read hears it, with no
+ * read of its own to ask again. The ones the reader pinned stand under Pinned too
  * (`pinnedManagersOf`), in the order the pins stand, as the same read
  * carries the reader's pins.
  */
 
-import { AGENT_KIND, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
+import type { AgentSummary, ListedAgent } from "@repo/features/agent-wire";
 import { inPinOrder } from "@repo/features/pin-order";
 import type { TaskAgentPin } from "@repo/features/task-wire";
+import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { type AgentsControl, readAgentById } from "./use-agents.js";
@@ -23,26 +25,6 @@ interface WorkspaceManagers {
   /** The Managers; none while the live list carries no agents yet. */
   readonly managers: readonly ListedAgent[] | undefined;
   readonly agents: AgentsControl;
-}
-
-/** Newest started first, and by id among those started at one instant. */
-function newestFirst(a: ListedAgent, b: ListedAgent): number {
-  if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;
-
-  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
-}
-
-/** The workspace's unarchived Managers of `listed`, newest started first. */
-function managersOf(listed: readonly ListedAgent[], workspaceId: string): readonly ListedAgent[] {
-  return listed
-    .filter(
-      (agent) =>
-        agent.kind === AGENT_KIND.MANAGER &&
-        agent.taskId === null &&
-        agent.workspaceId === workspaceId &&
-        agent.archivedAt === undefined,
-    )
-    .toSorted(newestFirst);
 }
 
 /**
@@ -82,7 +64,7 @@ export function useWorkspaceManagers(
     () =>
       !listed || workspaceId === undefined || liveAgents === undefined
         ? undefined
-        : managersOf(liveAgents, workspaceId),
+        : workspaceManagersOf(liveAgents, workspaceId),
     [listed, workspaceId, liveAgents],
   );
 

@@ -39,6 +39,7 @@ import {
 } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
+  AGENT_KIND,
   AGENT_RUNTIME,
   AGENT_STATUS,
   type AgentQueueChange,
@@ -115,7 +116,11 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
-import type { ManagerFace } from "@repo/features/manager-face";
+import {
+  MANAGER_FACE_CHARACTER,
+  MANAGER_FACE_COLOR,
+  type ManagerFace,
+} from "@repo/features/manager-face";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
@@ -173,6 +178,7 @@ import {
   fixtureAgentPicture,
   fixtureAgentTranscript,
   fixtureLongTranscript,
+  fixtureManagerTranscript,
 } from "./fixture-agent-transcript.js";
 import {
   FIXTURE_PICTURE_PNG,
@@ -207,6 +213,7 @@ const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
   RUN_PROFILE.INBOX,
   RUN_PROFILE.INBOX_LARGE,
   RUN_PROFILE.PERSON,
+  RUN_PROFILE.TASKS_OPEN,
 ]);
 
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
@@ -270,6 +277,7 @@ const AGENT = {
   INVITES: "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
   DIGEST: "6fc08203-4b7d-4e95-90bd-7c8d9eafb0c6",
   ROUNDING: "70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7",
+  MANAGER: "81e2a425-6d3f-4a07-92df-9eafb0c1d2e8",
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
@@ -911,6 +919,7 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
       ),
       permissionMode: AGENT_PERMISSION_MODE.ASK,
       pendingApprovals: [INVITES_HELD],
+      startedByAgentId: AGENT.MANAGER,
     },
   ],
   // Note that the digest's agent runs on Codex, so the agents' marks show both harnesses.
@@ -926,6 +935,7 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
       ),
       model: CODEX_MODEL,
       runtime: AGENT_RUNTIME.CODEX,
+      startedByAgentId: AGENT.MANAGER,
     },
   ],
   [
@@ -933,6 +943,25 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
     agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
   ],
 ]);
+
+/** When the release Manager was started, which its chat counts from. */
+const MANAGER_STARTED = LANDED - 2 * HOUR;
+
+/**
+ * The workspace's one Manager, an agent on no task, which the Tasks list
+ * stands above Pinned and Search finds: at rest, its chat having said
+ * something since the account last read it, so its row stands unread. It
+ * started the invitations and digest agents, which its overview lists with
+ * the invitations agent's pull request.
+ */
+const MANAGER: AgentSummary = {
+  ...agentOn(AGENT.MANAGER, "", "Release manager", AGENT_STATUS.COMPLETED, 2 * HOUR),
+  taskId: null,
+  kind: AGENT_KIND.MANAGER,
+  face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.BLUE },
+  readThrough: MANAGER_STARTED,
+  saidAt: MANAGER_STARTED + 4 * MINUTE,
+};
 
 /** A task's agents as its row in the list counts them. */
 function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
@@ -1152,7 +1181,7 @@ const INVITES_PULL_REQUEST = {
   deletions: 37,
 } as const;
 
-/** The fixture's workspace where a list names none, as the panel's tasks fixture names it, with Task descriptions on. */
+/** The fixture's workspace where a list names none, as the panel's tasks fixture names it, with Task descriptions and Managers on. */
 const FIXTURE_WORKSPACE: Workspace = {
   id: FIXTURE_IDS.WORKSPACE,
   name: ADA.name,
@@ -1165,6 +1194,12 @@ const FIXTURE_WORKSPACE: Workspace = {
   experiments: [
     {
       experiment: EXPERIMENT.DESCRIPTIONS,
+      on: true,
+      changedBy: { id: ADA.userId, name: ADA.name },
+      changedAt: LANDED - 30 * DAY,
+    },
+    {
+      experiment: EXPERIMENT.MANAGERS,
       on: true,
       changedBy: { id: ADA.userId, name: ADA.name },
       changedAt: LANDED - 30 * DAY,
@@ -1634,6 +1669,14 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
         ];
   });
 
+  // Note that the Manager works on no task, so it stands in the fixture's workspace by itself.
+  const manager = {
+    ...MANAGER,
+    workspaceId: FIXTURE_IDS.WORKSPACE,
+    repository: null,
+    settledAt: MANAGER.createdAt,
+  };
+
   const invitesAgent = AGENTS.get(TASK.INVITES);
 
   // Note that the staged list is the whole answer, so it stands read, because Search waits on a list still being read before it says nothing matched.
@@ -1643,8 +1686,11 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     listed: true,
     listStatus: TASKS_READ.READY,
     taskAgents: [
-      ...(list.taskAgents ?? []).filter((agent) => !followed.some(({ id }) => id === agent.id)),
+      ...(list.taskAgents ?? []).filter(
+        (agent) => agent.id !== manager.id && !followed.some(({ id }) => id === agent.id),
+      ),
       ...followed,
+      manager,
     ],
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
@@ -2024,6 +2070,9 @@ const INVITES_TRANSCRIPT = withQueued(
 /** The rounding agent's finished run, long enough that its page opens far below its first row, its words wide in places: a link, a code block, and a table. */
 const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix ledger rounding");
 
+/** The release Manager's run, which its page draws as its chat. */
+const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
+
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
 function withQueued(transcript: AppTranscript): AppTranscript {
   const queued = [
@@ -2042,7 +2091,7 @@ function withQueued(transcript: AppTranscript): AppTranscript {
   return { ...transcript, word: { ...word, queue: { messages: queued, revision: 1 } } };
 }
 
-/** The transcripts main holds with the invitations and rounding agents' laid over them, one object for each of main's. */
+/** The transcripts main holds with the invitations and rounding agents' and the Manager's laid over them, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
@@ -2059,6 +2108,7 @@ function stagedTranscripts(
     ...held,
     [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
+    [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
@@ -2871,9 +2921,9 @@ function stagedItem(itemId: string): InboxItem | undefined {
   return [...INBOXES.values()].flat().find((each) => each.id === itemId);
 }
 
-/** One staged agent by its id, on whichever task it works. */
+/** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values()].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */

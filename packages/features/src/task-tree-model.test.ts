@@ -1,5 +1,7 @@
 import { expect, test } from "vitest";
+import { ASSIGNED_TO } from "./task-list-model.js";
 import {
+  DEFAULT_TASK_TREE_VIEW,
   searchedTasks,
   TASK_ROW_FACE,
   type TaskBranch,
@@ -9,6 +11,7 @@ import {
   taskTree,
 } from "./task-tree-model.js";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
+import { COMPLETED_WINDOW, TASKS_GROUPING, TASKS_ORDER } from "./tasks-page-model.js";
 
 /**
  * task-tree-model.test.ts -- the phone's Tasks list holds each of the
@@ -17,11 +20,19 @@ import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
  * rest under their repository, and a teammate's task they follow under
  * Following; a search finds a settled task by its key;
  * a row nests under the nearest shallower row above it, however deep;
+ * the view the reader chose stands their tasks as the Tasks page would;
  * a row wears a teammate's face, the unassigned mark, or none for the reader's own.
  */
 
 const READER = "user-ada";
 const WORKSPACE = "workspace-acme";
+
+/** The view the tab starts from, the sidebar's own, as the reader has not changed it. */
+const SIDEBAR_VIEW = {
+  treeView: DEFAULT_TASK_TREE_VIEW,
+  personName: (userId: string) => userId,
+  now: 0,
+} as const;
 
 /** A branch as the test reads it: a row's name, or its name and the branches under it. */
 type Named = string | readonly [string, readonly Named[]];
@@ -86,6 +97,7 @@ test("the tree stands each open task once: pinned, sectioned, nested, then by re
     readerId: READER,
     noRepository: "No repository",
     tasksHead: "My tasks",
+    ...SIDEBAR_VIEW,
   });
 
   expect(drawn(tree)).toEqual([
@@ -115,6 +127,7 @@ test("a child task put in a section stands there with its own child tasks, not u
     readerId: READER,
     noRepository: "No repository",
     tasksHead: "My tasks",
+    ...SIDEBAR_VIEW,
   });
 
   expect(drawn(tree)).toEqual([
@@ -140,6 +153,7 @@ test("a teammate's open sub-task stands under the reader's parent, whatever its 
     readerId: READER,
     noRepository: "No repository",
     tasksHead: "My tasks",
+    ...SIDEBAR_VIEW,
   });
 
   expect(drawn(tree)).toEqual([["", "Invites", "  Invite copy"]]);
@@ -169,12 +183,55 @@ test("Following holds the open tasks the reader follows that no other list holds
     readerId: READER,
     noRepository: "No repository",
     tasksHead: "My tasks",
+    ...SIDEBAR_VIEW,
   });
 
   expect(drawn(tree)).toEqual([
     ["Pinned", "Digest"],
     ["Following", "Billing", "  Billing copy"],
     ["", "Invites"],
+  ]);
+});
+
+test("the view the reader chose stands their tasks: whose, grouped, ordered, finished lately, sub-tasks beside their parents", () => {
+  const day = 24 * 60 * 60 * 1000;
+  const now = 100 * day;
+  const grace = { assignee: { userId: "user-grace", name: "Grace Hopper" } };
+
+  const tree = taskTree({
+    view: {
+      tasks: [
+        task("Invites", TASK_STATUS.IN_PROGRESS, "ada/relay", 50),
+        task("Invite copy", TASK_STATUS.TODO, "ada/relay", 60, {
+          parentTaskId: "Invites",
+          ...grace,
+        }),
+        task("Billing", TASK_STATUS.TODO, "ada/ledger", 30, grace),
+        task("Archive", TASK_STATUS.BACKLOG, "ada/ledger", 10),
+        task("Rounding", TASK_STATUS.DONE, "ada/ledger", 70, { completedAt: now - 2 * day }),
+        task("Payouts", TASK_STATUS.DONE, "ada/ledger", 80, { completedAt: now - 20 * day }),
+      ],
+    },
+    workspaceId: WORKSPACE,
+    readerId: READER,
+    noRepository: "No repository",
+    tasksHead: "Everyone's tasks",
+    treeView: {
+      assignedTo: { kind: ASSIGNED_TO.ANYONE },
+      statuses: [],
+      grouping: TASKS_GROUPING.STATUS,
+      order: TASKS_ORDER.NAME,
+      completed: COMPLETED_WINDOW.PAST_WEEK,
+      subTasks: true,
+    },
+    personName: (userId) => userId,
+    now,
+  });
+
+  expect(drawn(tree)).toEqual([
+    ["In progress", "Invites"],
+    ["Todo", "Billing", "Invite copy"],
+    ["Done", "Rounding"],
   ]);
 });
 

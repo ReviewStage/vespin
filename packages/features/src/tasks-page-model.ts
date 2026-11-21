@@ -1,10 +1,4 @@
-import {
-  repositoryParts,
-  TASK_ORDER,
-  tasksById,
-  taskTime,
-  topTasks,
-} from "@repo/features/task-list-model";
+import { repositoryParts, TASK_ORDER, tasksById, taskTime, topTasks } from "./task-list-model.js";
 import {
   DESCRIPTION_ACTOR,
   isTaskSettled,
@@ -15,7 +9,7 @@ import {
   type TaskPriority,
   type TaskStatus,
   type TaskSummary,
-} from "@repo/features/task-wire";
+} from "./task-wire.js";
 
 /**
  * tasks-page-model.ts -- how the Tasks page filters, groups, orders, and draws the workspace's tasks, in its List and on its Board.
@@ -164,6 +158,41 @@ export const COMPLETED_WINDOW = {
 } as const;
 
 export type CompletedWindow = (typeof COMPLETED_WINDOW)[keyof typeof COMPLETED_WINDOW];
+
+/** What a grouping is called, on the Tasks page's Group by and the iPhone's alike. */
+export const TASKS_GROUPING_WORDS = {
+  [TASKS_GROUPING.STATUS]: "Status",
+  [TASKS_GROUPING.PRIORITY]: "Priority",
+  [TASKS_GROUPING.REPOSITORY]: "Repository",
+  [TASKS_GROUPING.ASSIGNEE]: "Assignee",
+  [TASKS_GROUPING.CREATOR]: "Creator",
+  [TASKS_GROUPING.NONE]: "None",
+} as const satisfies Record<TasksGrouping, string>;
+
+/** What an order is called, on the Tasks page's Order by and the iPhone's alike. */
+export const TASKS_ORDER_WORDS = {
+  [TASKS_ORDER.PRIORITY]: "Priority",
+  [TASKS_ORDER.UPDATED]: "Last updated",
+  [TASKS_ORDER.CREATED]: "Created",
+  [TASKS_ORDER.NAME]: "Name",
+} as const satisfies Record<TasksOrder, string>;
+
+/** What each completed window is called, in the order Show completed lists them. */
+export const COMPLETED_WINDOW_WORDS = {
+  [COMPLETED_WINDOW.NONE]: "None",
+  [COMPLETED_WINDOW.PAST_WEEK]: "Past week",
+  [COMPLETED_WINDOW.PAST_MONTH]: "Past month",
+  [COMPLETED_WINDOW.ALL]: "All",
+} as const satisfies Record<CompletedWindow, string>;
+
+/** What the View options menus call their choices: the submenus that group and order the tasks, the window of finished work, the switch that stands each sub-task beside its parent, as Linear's "Sub-issues" does, rather than only under it, and the act that puts the view back. */
+export const TASKS_VIEW_WORDS = {
+  GROUP_BY: "Group by",
+  ORDER_BY: "Order by",
+  SHOW_COMPLETED: "Show completed",
+  SHOW_SUB_TASKS: "Show sub-tasks",
+  RESET_VIEW: "Reset view",
+} as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -504,6 +533,15 @@ export function showsSettledInFull(filter: TasksFilter, display: TasksDisplay): 
     namedByFilter(filter, TASK_STATUS.DONE) ||
     namedByFilter(filter, TASK_STATUS.CANCELED)
   );
+}
+
+/** Whether the completed window keeps a task standing: every open one, and a settled one finished within the window, as of `now`. */
+export function standsCompleted(
+  task: TaskSummary,
+  completed: CompletedWindow,
+  now: number,
+): boolean {
+  return !isTaskSettled(statusOf(task)) || inWindow(completed, finishedAt(task), now);
 }
 
 /** Whether a group may hold settled tasks: any group but one of a status still open. */

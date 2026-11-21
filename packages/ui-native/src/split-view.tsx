@@ -67,8 +67,9 @@ export type BarMenuAction = {
   readonly onPress: () => void;
 };
 
-/** One group of a menu's acts, set apart from the rest by the system's rule, as Mail's ⋯ groups Reply apart from Move: its acts, then the menus within it. */
+/** One group of a menu's acts, set apart from the rest by the system's rule, as Mail's ⋯ groups Reply apart from Move: its switches, such as a list's Show sub-tasks, checked as the system checks them, then its acts, then the menus within it. */
 export type BarMenuGroup = {
+  readonly choices?: readonly MenuChoice[] | undefined;
   readonly actions: readonly BarMenuAction[];
   readonly submenus?: readonly BarMenu[] | undefined;
 };
@@ -150,15 +151,25 @@ type SplitViewProps = {
   readonly onSidebarShownChange: (shown: boolean) => void;
 };
 
-/** What a group is told apart by, since it has no name of its own: the words of its first act, or of its first menu. */
+/** What a group is told apart by, since it has no name of its own: the words of its first act, of its first menu, or of its first switch. */
 export function groupKey(group: BarMenuGroup): string {
-  return group.actions[0]?.label ?? group.submenus?.[0]?.label ?? "";
+  return group.actions[0]?.label ?? group.submenus?.[0]?.label ?? group.choices?.[0]?.label ?? "";
 }
 
-/** A menu's acts and the menus within it, as SwiftUI's buttons and menus. */
+/** A menu's switches, acts, and the menus within it, as SwiftUI's toggles, buttons, and menus. */
 function MenuActs({ group }: { readonly group: BarMenuGroup }) {
+  const colors = useColors();
+
   return (
     <>
+      {(group.choices ?? []).map((choice) => (
+        <Toggle
+          key={choice.id ?? choice.label}
+          {...choiceContent(choice, colors)}
+          isOn={choice.on}
+          onIsOnChange={() => choice.onPress()}
+        />
+      ))}
       {group.actions.map((action) => (
         <SwiftUIButton
           key={action.label}
@@ -209,7 +220,7 @@ export const BarMenuButton = memo(function BarMenuButton({
         />
       ))}
       {menu.actions.length === 0 ? null : <Divider />}
-      <MenuActs group={menu} />
+      <MenuActs group={{ actions: menu.actions, submenus: menu.submenus }} />
       {(menu.groups ?? []).map((group) => (
         <Fragment key={groupKey(group)}>
           <Divider />
@@ -261,15 +272,23 @@ export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMen
   const barred = new Set(acts.map((act) => act.label));
 
   const kept = (group: BarMenuGroup): BarMenuGroup => ({
+    choices: group.choices,
     actions: group.actions.filter((action) => !barred.has(action.label)),
     submenus: group.submenus?.filter((submenu) => !barred.has(submenu.label)),
   });
 
   const groups = menu.groups
     ?.map(kept)
-    .filter((group) => group.actions.length > 0 || (group.submenus ?? []).length > 0);
+    .filter(
+      (group) =>
+        group.actions.length > 0 ||
+        (group.submenus ?? []).length > 0 ||
+        (group.choices ?? []).length > 0,
+    );
 
-  return { ...menu, ...kept(menu), groups };
+  const { actions, submenus } = kept(menu);
+
+  return { ...menu, actions, submenus, groups };
 }
 
 /**

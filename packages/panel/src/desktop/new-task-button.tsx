@@ -1,7 +1,7 @@
 import type { TaskStanding } from "@repo/features/task-wire";
+import { TASKS_GROUP, type TasksGroupHead } from "@repo/features/tasks-page-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BUTTON_SIZE, ComposeIcon, IconButton, PlusIcon, Tooltip } from "@repo/ui";
-import { TASKS_GROUP, type TasksGroupHead } from "@repo/ui/tasks-page-model";
 import { memo } from "react";
 import { useSteadyDoor } from "../steady-door.js";
 import type { QuickAddInto } from "../tasks/use-new-task.js";

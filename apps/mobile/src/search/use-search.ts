@@ -4,7 +4,8 @@
  * Each kind is found by its own list's search over the host's document, so
  * a row found here is one its own tab would find: the Tasks tab's
  * (`useTasksListing`, every task of the workspace whatever its status), the
- * Inbox's under All (`useInboxListing`), and the agents the task list holds.
+ * Inbox's under All (`useInboxListing`), and the agents the task list holds,
+ * the workspace's Managers among them where it lists them (`use-managers.ts`).
  * Each is then ranked by what its row says (`@repo/features/search-found-model`),
  * as ⌘K ranks its rows. The Tasks listing also asks the service for the
  * tasks the query finds past the list the host holds, which the host draws
@@ -20,10 +21,12 @@ import {
 } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASKS_READ } from "@repo/features/tasks-view";
+import { isManager } from "@repo/features/workspace-managers-model";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { INBOX_FEED } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useMemo } from "react";
+import { useManagersListed } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useListedAgents,
@@ -88,15 +91,16 @@ export function useSearchFound(typed: string): SearchFound {
   const { data: listStatus } = useQuery({ ...appStateQuery, select: selectListStatus });
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
+  const managersListed = useManagersListed(workspace?.id);
 
   const ranked = useMemo(() => {
     const tasksById = new Map(listedTasks.map((task) => [task.id, task]));
 
-    // Note that an archived agent is left out, as a task's page leaves it out of its Agents, and so is one on no task, a Manager, which no screen here draws.
+    // Note that an archived agent is left out, as a task's page leaves it out of its Agents, and so is one on no task, but a Manager while the workspace lists its Managers, as the Tasks tab does.
     const agents = listedAgents.filter(
       (agent) =>
         agent.archivedAt === undefined &&
-        agent.taskId !== null &&
+        (agent.taskId !== null || (managersListed && isManager(agent))) &&
         (workspace === undefined || agent.workspaceId === workspace.id),
     );
 
@@ -120,6 +124,7 @@ export function useSearchFound(typed: string): SearchFound {
     inboxShown,
     listedTasks,
     listedAgents,
+    managersListed,
     pullRequests,
     workspace,
     waiting,

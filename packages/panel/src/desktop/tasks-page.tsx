@@ -1,15 +1,5 @@
 import { TASK_PRIORITY_ORDER, TASK_STATUS } from "@repo/features/task-wire";
 import {
-  CHOICE_BAR_LOOK,
-  CHOICE_BAR_SIZE,
-  ChoiceBar,
-  TEXT_ELEMENT,
-  TEXT_VARIANT,
-  Text,
-  Toolbar,
-} from "@repo/ui";
-import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import {
   BOARD_PROPERTIES,
   COMPLETED_WINDOW,
   DEFAULT_BOARD_DISPLAY,
@@ -26,7 +16,17 @@ import {
   type TaskProperty,
   type TasksDisplay,
   type TasksFilter,
-} from "@repo/ui/tasks-page-model";
+} from "@repo/features/tasks-page-model";
+import {
+  CHOICE_BAR_LOOK,
+  CHOICE_BAR_SIZE,
+  ChoiceBar,
+  TEXT_ELEMENT,
+  TEXT_VARIANT,
+  Text,
+  Toolbar,
+} from "@repo/ui";
+import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { Predicate, Schema, SchemaTransformation } from "effect";
 import { KanbanIcon, ListFilterIcon, ListIcon, SlidersHorizontalIcon } from "lucide-react";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";

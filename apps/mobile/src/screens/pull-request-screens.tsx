@@ -1,9 +1,10 @@
-// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and Open on GitHub in the bar's ⋯.
+// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and in the bar's ⋯ the changes to where it stands (Ready for review, Convert to draft, Close, Reopen) and Open on GitHub.
 
 import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
   type AgentOverviewPullRequest,
   CHECK_STATE,
+  PULL_REQUEST_STATE,
   type PullRequestCheck,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -12,11 +13,13 @@ import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import {
   CHECK_WORDS,
+  CLOSE_WORDS,
   checksCountOf,
   checksSummaryOf,
   conversationCount,
   isLivePullRequest,
   isMergeWrite,
+  isStateAction,
   MERGE_ACTION,
   MERGE_BUSY_WORDS,
   MERGE_METHOD_WORDS,
@@ -26,7 +29,10 @@ import {
   mergeActionFor,
   mergeSentence,
   PULL_REQUEST_READ_WORDS,
+  PULL_REQUEST_STATE_ACTION_WORDS,
   PULL_REQUEST_STATE_LABEL,
+  type PullRequestStateAction,
+  pullRequestStateActions,
   QUEUE_WARNING,
   queuedLabel,
   REVIEW_WORDS,
@@ -49,6 +55,7 @@ import {
   EmptyState,
   FACE_KIND,
   GLYPH,
+  type Glyph,
   githubFace,
   glyphSymbol,
   LIST_LOOK,
@@ -58,6 +65,7 @@ import {
   MarkRow,
   MergeActRow,
   markdownShows,
+  NOTICE_KIND,
   PATH_PART,
   PullRequestHead,
   REVIEW_LOOK,
@@ -65,6 +73,7 @@ import {
   Screen,
   STATUS_TONE,
   useColors,
+  useFailureNotices,
   WordsRow,
   WriteNoteRow,
 } from "@repo/ui-native";
@@ -248,6 +257,15 @@ interface AskedPress {
   readonly ask: MergeAsk;
 }
 
+/** Whether two keys name the same pull request. */
+function sameKey(one: PullRequestKey, other: PullRequestKey): boolean {
+  return (
+    one.workspaceId === other.workspaceId &&
+    one.repository === other.repository &&
+    one.number === other.number
+  );
+}
+
 /** The merge the pull request offers as it stands, by GitHub's live state; none where it isn't live. */
 function offeredActionOf(
   pullRequest: AgentOverviewPullRequest | undefined,
@@ -290,25 +308,58 @@ function methodsOffered(pullRequest: AgentOverviewPullRequest | undefined): read
   return chooses ? (pullRequest?.merging?.methods ?? []) : [];
 }
 
+/** The glyph each change to where the pull request stands leads its item with, the panel's own. */
+const STATE_ACTION_GLYPHS = {
+  [PULL_REQUEST_ACTION.READY_FOR_REVIEW]: GLYPH.PULL_REQUEST,
+  [PULL_REQUEST_ACTION.CONVERT_TO_DRAFT]: GLYPH.PULL_REQUEST_DRAFT,
+  [PULL_REQUEST_ACTION.CLOSE]: GLYPH.PULL_REQUEST_CLOSED,
+  [PULL_REQUEST_ACTION.REOPEN]: GLYPH.PULL_REQUEST,
+} as const satisfies Record<PullRequestStateAction, Glyph>;
+
+/** One change to where the pull request stands, as the bar's ⋯ offers it. */
+interface StateChange {
+  readonly action: PullRequestStateAction;
+  readonly disabled: boolean;
+  readonly onPress: () => void;
+}
+
 /** The heading of a pull request's description, as the task page heads its own. */
 const DESCRIPTION_WORDS = "Description";
 
 /**
  * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
- * Copy GitHub link and Open on GitHub, then Refresh. The merge stands in
- * the page under the heading, where the panel's head stands it, so the
- * bar's title keeps its place.
+ * the changes to where the pull request stands, as the panel's state pill
+ * offers them, Close in red, then Copy GitHub link and Open on GitHub,
+ * then Refresh. The merge stands in the page under the heading, where the
+ * panel's head stands it, so the bar's title keeps its place.
  */
 function PullRequestToolbar({
   url,
+  changes,
   onRefresh,
 }: {
   readonly url: string | undefined;
+  readonly changes: readonly StateChange[];
   readonly onRefresh: () => void;
 }) {
   return (
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+        {changes.length === 0 ? null : (
+          <Stack.Toolbar.Menu inline>
+            {changes.map((change) => (
+              <Stack.Toolbar.MenuAction
+                key={change.action}
+                icon={glyphSymbol(STATE_ACTION_GLYPHS[change.action])}
+                destructive={change.action === PULL_REQUEST_ACTION.CLOSE}
+                disabled={change.disabled}
+                onPress={change.onPress}
+              >
+                {PULL_REQUEST_STATE_ACTION_WORDS[change.action]}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
+        )}
         {url === undefined ? null : (
           <Stack.Toolbar.Menu inline>
             <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={() => copyLink(url)}>
@@ -446,17 +497,52 @@ function PullRequestPage({
   const press = shownPressOf(pullRequest, method, writes.pending);
   const offered = offeredActionOf(pullRequest);
 
-  const asks =
-    asked !== undefined &&
-    asked.action === offered &&
-    asked.on.workspaceId === key.workspaceId &&
-    asked.on.repository === key.repository &&
-    asked.on.number === key.number;
+  const notices = useFailureNotices();
+  // The pull request whose Close stands asked about, since it is or may be in the merge queue.
+  const [closing, setClosing] = useState<PullRequestKey | undefined>(undefined);
+  const asks = asked !== undefined && asked.action === offered && sameKey(asked.on, key);
+  const open = pullRequest?.state === PULL_REQUEST_STATE.OPEN;
+  const inQueue = open && queued !== null;
+  // Note that a place in the queue left unread, as a read with no merge box leaves it, may be one, so Close asks of it as of one queued: only a read saying it holds it nowhere lets Close act at once, as the panel's does.
+  const mayBeQueued = inQueue || (open && pullRequest?.merging === undefined);
+  const closeAsks = closing !== undefined && sameKey(closing, key) && mayBeQueued;
 
   // Note that a question is dropped as soon as the pull request no longer offers what it asks about, rather than only when its alert says it went, so it never stands again by itself the next time it offers that.
   useEffect(() => {
     if (asked !== undefined && !asks) setAsked(undefined);
   }, [asked, asks]);
+  useEffect(() => {
+    if (closing !== undefined && !closeAsks) setClosing(undefined);
+  }, [closing, closeAsks]);
+
+  // Note that a Close that acted at once offers Reopen as its Undo, as the panel's toast does, since it can be taken back; one that may leave the queue asks first instead, since reopening does not queue it again.
+  const close = () =>
+    void writes.write({ action: PULL_REQUEST_ACTION.CLOSE }).then((went) => {
+      if (!went) return;
+
+      notices.say({
+        kind: NOTICE_KIND.DONE,
+        words: CLOSE_WORDS.CLOSED,
+        undo: () => void writes.write({ action: PULL_REQUEST_ACTION.REOPEN }),
+      });
+    });
+
+  const changes: readonly StateChange[] = (
+    pullRequest === undefined ? [] : pullRequestStateActions(pullRequest.state, inQueue)
+  ).map((action) => ({
+    action,
+    disabled: writes.pending !== undefined,
+    onPress: () => {
+      if (action !== PULL_REQUEST_ACTION.CLOSE) {
+        void writes.write({ action });
+      } else if (mayBeQueued) {
+        setClosing(key);
+      } else {
+        close();
+      }
+    },
+  }));
+
   useScreenActivity((workspaces) =>
     agent === undefined || agent.taskId === null || title === undefined
       ? undefined
@@ -489,7 +575,7 @@ function PullRequestPage({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar url={url} onRefresh={() => void retry()} />
+      <PullRequestToolbar url={url} changes={changes} onRefresh={() => void retry()} />
     </>
   );
 
@@ -550,7 +636,12 @@ function PullRequestPage({
           state={state}
           queued={queued !== null || (pullRequest === undefined && listed?.queued === true)}
           stateLabel={
-            queued !== null ? queuedLabel(queued.position) : PULL_REQUEST_STATE_LABEL[state]
+            // Note that a change to where it stands says itself while it is out, as the panel's pill reads "Closing…".
+            isStateAction(writes.pending)
+              ? `${PULL_REQUEST_STATE_ACTION_WORDS[writes.pending]}…`
+              : queued !== null
+                ? queuedLabel(queued.position)
+                : PULL_REQUEST_STATE_LABEL[state]
           }
           branches={
             pullRequest === undefined
@@ -675,17 +766,32 @@ function PullRequestPage({
         )}
       </ListSection>
     </RowList>,
-    <ConfirmAsk
-      title={asked?.ask.title ?? MERGE_WORDS.MERGE_QUESTION}
-      message={asked?.ask.message ?? `#${key.number} ${title}`}
-      act={asked?.words ?? ""}
-      presented={asks}
-      onAct={() => {
-        setAsked(undefined);
+    <>
+      <ConfirmAsk
+        title={asked?.ask.title ?? MERGE_WORDS.MERGE_QUESTION}
+        message={asked?.ask.message ?? `#${key.number} ${title}`}
+        act={asked?.words ?? ""}
+        presented={asks}
+        onAct={() => {
+          setAsked(undefined);
 
-        if (asked !== undefined && asks) void writes.write(asked.request);
-      }}
-      onDismiss={() => setAsked(undefined)}
-    />,
+          if (asked !== undefined && asks) void writes.write(asked.request);
+        }}
+        onDismiss={() => setAsked(undefined)}
+      />
+      <ConfirmAsk
+        title={CLOSE_WORDS.QUESTION}
+        message={inQueue ? CLOSE_WORDS.QUEUED : CLOSE_WORDS.UNKNOWN}
+        act={PULL_REQUEST_STATE_ACTION_WORDS[PULL_REQUEST_ACTION.CLOSE]}
+        destructive
+        presented={closeAsks}
+        onAct={() => {
+          setClosing(undefined);
+
+          if (closeAsks) void writes.write({ action: PULL_REQUEST_ACTION.CLOSE });
+        }}
+        onDismiss={() => setClosing(undefined)}
+      />
+    </>,
   );
 }
