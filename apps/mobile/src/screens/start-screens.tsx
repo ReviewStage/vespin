@@ -49,13 +49,14 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useNavigation, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useListedTasks } from "../host/host-provider.js";
+import { forgetNewTaskDraft, savedNewTaskDraft, saveNewTaskDraft } from "../new-task-draft.js";
 import { useOnTab } from "../tab-route.js";
 import {
   CLOUD,
@@ -74,7 +75,12 @@ import {
 import { useTaskPlacing } from "../tasks/use-tasks.js";
 import { useAttachedPictures } from "../use-attached-pictures.js";
 import { useDictation } from "../use-dictation.js";
-import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
+import {
+  DISCARD_WORDS,
+  type KeptWords,
+  SAVE_DRAFT_WORDS,
+  useKeptWords,
+} from "../use-kept-words.js";
 import { type MentionOffer, useMentionOffer } from "../use-mention-offer.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
@@ -146,25 +152,48 @@ const LANDING = {
 
 type Landing = (typeof LANDING)[keyof typeof LANDING];
 
+/** What a page that can keep its draft for later does with it: keeps it, where it holds words to keep, and lets a kept one go, as a discard does. */
+interface DraftSaving {
+  /** Keeps the draft's words for the next time the page opens; none where it holds no words, such as pictures alone, which are never kept. */
+  readonly save: (() => void) | undefined;
+  readonly discard: () => void;
+}
+
 /**
  * The page's bar: its name, and the system's ✕ at its leading edge (Cancel
  * to VoiceOver), as a new conversation's page closes; and the ask the ✕
  * raises while the page holds a draft, and the question Talk asks first
  * while another call stands. Start and Talk stand at the composer's end,
- * as Send and Talk do on an agent's page.
+ * as Send and Talk do on an agent's page. Where the page can keep its draft
+ * (`saving`), as New task can, the ✕ over a draft opens the system's menu
+ * from the ✕ itself, Discard draft in red and Save draft, as Mail's compose
+ * asks from its Cancel, and a swipe down the sheet held for the draft asks
+ * the same two in the system's sheet, since nothing can open the ✕'s menu
+ * for it.
  */
 function SheetBar({
   title,
   kept,
   talk,
+  saving,
 }: {
   readonly title: string;
   readonly kept: KeptWords;
   /** Talk where the page offers it, whose question stands here; none where it offers none. */
   readonly talk?: NewAgentTalk | undefined;
+  /** What keeps the draft for later and lets a kept one go, where the page can keep one; the ✕ asks Discard draft alone where none is given. */
+  readonly saving?: DraftSaving | undefined;
 }) {
   const colors = useColors();
   const close = useCloseSheet(kept);
+  const save = saving?.save;
+
+  // Note that the draft is let go before the sheet closes, so the swipe the stack holds for it never stops the close a pick asked for.
+  const closeAfter = (then: () => void) => {
+    then();
+    kept.release();
+    close();
+  };
 
   // Note that the options are made once for their title and colors, because the stack sets a screen's options again whenever a new object comes, which a key typed would make.
   const options = useMemo(
@@ -185,19 +214,47 @@ function SheetBar({
       <Stack.Screen options={options} />
       <Stack.Toolbar placement="left">
         {/* Note that the page closes with the system's ✕, as a new conversation's page does, its word kept for VoiceOver. */}
-        <Stack.Toolbar.Button
-          icon={glyphSymbol(GLYPH.CLOSE)}
-          accessibilityLabel={WORDS.CANCEL}
-          onPress={close}
-        />
+        {saving !== undefined && kept.drafted ? (
+          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.CLOSE)} accessibilityLabel={WORDS.CANCEL}>
+            <Stack.Toolbar.MenuAction destructive onPress={() => closeAfter(saving.discard)}>
+              {DISCARD_WORDS.DISCARD}
+            </Stack.Toolbar.MenuAction>
+            {save === undefined ? null : (
+              <Stack.Toolbar.MenuAction onPress={() => closeAfter(save)}>
+                {SAVE_DRAFT_WORDS.SAVE}
+              </Stack.Toolbar.MenuAction>
+            )}
+          </Stack.Toolbar.Menu>
+        ) : (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.CLOSE)}
+            accessibilityLabel={WORDS.CANCEL}
+            onPress={close}
+          />
+        )}
       </Stack.Toolbar>
       {talk === undefined ? null : <ConfirmAsk destructive {...talk.switching} />}
+      {/* Note that where the draft can be saved, the ask names no question, as Mail's asks only Delete Draft or Save Draft. */}
       <ConfirmAsk
-        title={DISCARD_WORDS.QUESTION}
+        title={save === undefined ? DISCARD_WORDS.QUESTION : undefined}
         act={DISCARD_WORDS.DISCARD}
         destructive
+        second={
+          save === undefined
+            ? undefined
+            : {
+                label: SAVE_DRAFT_WORDS.SAVE,
+                onPress: () => {
+                  save();
+                  kept.discard();
+                },
+              }
+        }
         presented={kept.asking}
-        onAct={kept.discard}
+        onAct={() => {
+          saving?.discard();
+          kept.discard();
+        }}
         onDismiss={kept.stay}
       />
     </>
@@ -1060,6 +1117,42 @@ function useStartedIn(
 }
 
 /**
+ * New task's draft kept for later in `workspaceId`, the workspace the task
+ * would start in: the words saved there fill the empty field once that
+ * workspace is known, and what keeps the words typed and lets the saved ones
+ * go. Note that none is read or kept where `workspaceId` is undefined, such
+ * as under a share draft, whose own words stand, or before a sub-task's
+ * parent is read.
+ */
+function useSavedDraft(
+  workspaceId: string | undefined,
+  prompt: string,
+  setPrompt: (words: string) => void,
+): DraftSaving {
+  const filled = useRef(false);
+
+  useEffect(() => {
+    if (filled.current || workspaceId === undefined) return;
+    filled.current = true;
+    const saved = savedNewTaskDraft(workspaceId);
+
+    if (saved !== undefined && prompt === "") setPrompt(saved);
+  }, [workspaceId, prompt, setPrompt]);
+
+  const words = prompt.trim();
+
+  return {
+    save:
+      workspaceId === undefined || words === ""
+        ? undefined
+        : () => saveNewTaskDraft(workspaceId, prompt),
+    discard: () => {
+      if (workspaceId !== undefined) forgetNewTaskDraft(workspaceId);
+    },
+  };
+}
+
+/**
  * New task, Home's composer as a page of its own: the task described and the
  * pictures that go with it, the task it is related to, picked from the +
  * and shown at the page's head once picked, and, as capsules under the
@@ -1105,6 +1198,7 @@ export function NewTaskScreen({
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
   const kept = useKeptWords(drafted);
   const { starting, go } = useClosingStart(kept, setNote, LANDING.TASK);
+  const saving = useSavedDraft(draft === undefined ? workspaceId : undefined, prompt, setPrompt);
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
   // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
@@ -1144,6 +1238,7 @@ export function NewTaskScreen({
 
   const start = () => {
     if (!drafted) return;
+    saving.discard();
     go(
       () =>
         startTask({
@@ -1185,7 +1280,7 @@ export function NewTaskScreen({
 
   return (
     <>
-      <SheetBar title={WORDS.NEW_TASK} kept={kept} talk={talk} />
+      <SheetBar title={WORDS.NEW_TASK} kept={kept} talk={talk} saving={saving} />
       <StartModelSheet
         pick={pick}
         presented={modelsShown}

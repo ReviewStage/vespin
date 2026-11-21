@@ -38,12 +38,18 @@ const DESTRUCTIVE_ROLE = "destructive";
 /** Where an ask's host stands: the size of nothing, so a screen draws it beside whatever it shows. */
 const NO_SIZE = { position: "absolute" } as const;
 
-/** Where an action sheet's act and Cancel stand among its buttons: the act first, as iOS leads with it. */
-const SHEET_BUTTON = { ACT: 0, CANCEL: 1 } as const;
+/** Where an action sheet's act stands among its buttons: first, as iOS leads with it, its second act, where it offers one, after it, and Cancel last. */
+const SHEET_BUTTON = { ACT: 0, SECOND: 1 } as const;
+
+/** A second act an ask offers beside its first, such as Save draft beside Discard draft, as Mail's compose asks. */
+type SecondAct = {
+  readonly label: string;
+  readonly onPress: () => void;
+};
 
 type ConfirmAskProps = {
-  /** The question, as the panel's confirm asks it: "Remove from the merge queue?" */
-  readonly title: string;
+  /** The question, as the panel's confirm asks it: "Remove from the merge queue?"; none where the acts say it alone, as Mail's Discard Draft and Save Draft do. Note that a gated ask always asks one. */
+  readonly title?: string | undefined;
   /** What the act costs, under the question. */
   readonly message?: string | undefined;
   /** The act's own words, beside Cancel. */
@@ -58,9 +64,11 @@ type ConfirmAskProps = {
   readonly gate?: string | undefined;
   /** What the gate's words are, which picks the keyboard its field raises, such as the address keyboard for an account's address. */
   readonly gateKind?: WordsKind | undefined;
+  /** A second act beside the first, in the system's own ink, such as Save draft beside Discard draft; none where the ask offers one act. Note that a gated ask takes none. */
+  readonly second?: SecondAct | undefined;
   readonly presented: boolean;
   readonly onAct: () => void;
-  /** Called as the ask goes, by its act or Cancel. */
+  /** Called as the ask goes, by either act or Cancel. */
   readonly onDismiss: () => void;
 };
 
@@ -94,7 +102,7 @@ function GatedConfirm({
   return (
     <Host matchContents style={NO_SIZE}>
       <Alert
-        title={title}
+        title={title ?? ""}
         isPresented={presented}
         onIsPresentedChange={(shown) => {
           if (!shown) onDismiss();
@@ -137,8 +145,8 @@ function GatedConfirm({
 /**
  * The ask as UIKit's own question, raised as it's presented: in a compact
  * window an action sheet from the screen's foot, its act first, red where
- * it takes something away, and the system's own Cancel; in a regular one an
- * alert with Cancel and its act. Note that it's raised once each time
+ * it takes something away, then its second act where it offers one, and the
+ * system's own Cancel; in a regular one an alert with Cancel and its acts. Note that it's raised once each time
  * `presented` turns true, and that an answer coming after the caller let
  * the question go, after the ask unmounted, or to an earlier question acts
  * on nothing, since UIKit's question can't be taken down from React Native.
@@ -148,16 +156,18 @@ function SystemConfirm({
   message,
   act,
   destructive = false,
+  second,
   presented,
   onAct,
   onDismiss,
   compact,
 }: ConfirmAskProps & { readonly compact: boolean }) {
   // The newest answers, which an answer reads as it lands.
-  const live = useRef({ onAct, onDismiss });
+  const live = useRef({ onAct, onDismiss, onSecond: second?.onPress });
   useEffect(() => {
-    live.current = { onAct, onDismiss };
+    live.current = { onAct, onDismiss, onSecond: second?.onPress };
   });
+  const secondLabel = second?.label;
   // The question raised and still answerable, by its own token: none once `presented` turns false or the ask unmounts, so a second run of the effect never raises it twice, and an answer to an earlier question, or one landing after the ask went, acts on nothing.
   const standing = useRef<symbol | undefined>(undefined);
 
@@ -176,43 +186,48 @@ function SystemConfirm({
     const raise = Symbol("raise");
     standing.current = raise;
 
-    const answer = (acted: boolean) => {
+    const answer = (picked: number | undefined) => {
       if (standing.current !== raise) return;
 
       const now = live.current;
 
-      if (acted) now.onAct();
+      if (picked === SHEET_BUTTON.ACT) now.onAct();
+
+      if (picked === SHEET_BUTTON.SECOND) now.onSecond?.();
 
       now.onDismiss();
     };
 
     if (compact) {
       // Note that a sheet with nothing taken away names no button red, the act standing first in the system's own ink.
+      const options = secondLabel === undefined ? [act] : [act, secondLabel];
+
       const sheet: ActionSheetIOSOptions = {
         title,
         message,
-        options: [act, CANCEL.LABEL],
-        cancelButtonIndex: SHEET_BUTTON.CANCEL,
+        options: [...options, CANCEL.LABEL],
+        cancelButtonIndex: options.length,
         destructiveButtonIndex: destructive ? SHEET_BUTTON.ACT : [],
       };
 
-      ActionSheetIOS.showActionSheetWithOptions(sheet, (index) =>
-        answer(index === SHEET_BUTTON.ACT),
-      );
+      ActionSheetIOS.showActionSheetWithOptions(sheet, answer);
 
       return;
     }
 
-    SystemAlert.alert(title, message, [
-      { text: CANCEL.LABEL, style: CANCEL.ROLE, onPress: () => answer(false) },
+    SystemAlert.alert(title ?? "", message, [
+      { text: CANCEL.LABEL, style: CANCEL.ROLE, onPress: () => answer(undefined) },
       {
         text: act,
         style: destructive ? DESTRUCTIVE_ROLE : "default",
-        isPreferred: true,
-        onPress: () => answer(true),
+        isPreferred: secondLabel === undefined,
+        onPress: () => answer(SHEET_BUTTON.ACT),
       },
+      ...(secondLabel === undefined
+        ? []
+        : [{ text: secondLabel, isPreferred: true, onPress: () => answer(SHEET_BUTTON.SECOND) }]),
     ]);
-  }, [presented, compact, title, message, act, destructive]);
+  }, [presented, compact, title, message, act, destructive, secondLabel]);
 
   return null;
 }
