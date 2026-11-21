@@ -1,5 +1,5 @@
 /**
- * billing.test.ts -- a workspace's billing to its owner, over the test's own database and a faked Stripe: while billing is off, setting it up and managing it refuse and nothing reaches Stripe; while it is on, setting up opens Checkout in setup mode, and once set up the Portal opens on the workspace's own customer. Synthetic accounts, workspaces, and ids throughout.
+ * billing.test.ts -- a workspace's billing to its owner, over the test's own database and a faked Stripe: while billing is off, setting it up and managing it refuse and nothing reaches Stripe; while it is on, setting up opens Checkout in setup mode, and once set up the Portal opens on the workspace's own customer; an account outside the workspace, or a member who is no owner or admin, reads and opens none of it. Synthetic accounts, workspaces, and ids throughout.
  */
 
 import assert from "node:assert/strict";
@@ -11,7 +11,7 @@ import {
   recordStripeCustomer,
 } from "@repo/database/models/workspace-billing";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openWorkspace, WORKSPACE_ROLE } from "@repo/database/testing";
 import { INCLUDED_USAGE_MICRO_USD } from "@repo/database/usage-vocabulary";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Effect, Layer, Redacted } from "effect";
@@ -142,5 +142,34 @@ it.layer(getTestDB())("a workspace's billing", (it) => {
           return_url: `${ORIGIN}/app`,
         });
       }),
+  );
+
+  it.effect("refuses an outsider and a member who is no owner or admin, and calls no Stripe", () =>
+    Effect.gen(function* () {
+      vi.stubEnv("APP_DEPLOYMENT_ORIGIN", ORIGIN);
+      const owner = yield* openAccount;
+      const member = yield* openAccount;
+      const outsider = yield* openAccount;
+      const acme = yield* openWorkspace(owner);
+      yield* joinWorkspace(acme, member, WORKSPACE_ROLE.MEMBER);
+      yield* recordMetronomeCustomer(acme, `customer-${acme}`);
+      yield* recordStripeCustomer(acme, `cus_${randomUUID()}`);
+      const fake = stripe();
+      const services = Layer.merge(fake.layer, environment(true));
+
+      for (const [caller, refusal] of [
+        [outsider, HOSTED_REFUSAL.NOT_FOUND],
+        [member, HOSTED_REFUSAL.NOT_PERMITTED],
+      ] as const) {
+        for (const operation of [billingStatus, billingSetup, billingPortal]) {
+          assert.deepEqual(
+            yield* operation(caller, acme).pipe(Effect.provide(services), Effect.flip),
+            refusal,
+          );
+        }
+      }
+
+      assert.deepEqual(fake.sent, []);
+    }),
   );
 });
