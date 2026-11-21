@@ -449,6 +449,8 @@ function AgentComposerBar({
   useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
   // Note that a message sent now denies the calls waiting only where Send would not queue it behind the turn.
   const denies = waiting !== undefined && !composer.sendQueues;
+  // Note that while a `/` or an `@` offers its list, the threads line and the denial's line step aside, so the list stands alone over the field, as Messages' and Slack's suggestions do, and comes back once a pick closes it.
+  const picking = composer.skills !== undefined || composer.mentions !== undefined;
 
   const head =
     threads === undefined &&
@@ -463,7 +465,7 @@ function AgentComposerBar({
     note === undefined ? undefined : (
       <>
         {ending}
-        {threads === undefined ? null : (
+        {threads === undefined || picking ? null : (
           <ThreadsLine
             words={threads.line.words}
             waiting={threads.line.waiting}
@@ -491,7 +493,7 @@ function AgentComposerBar({
           <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
-        {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
+        {denies && !picking ? <DeniesWaiting onShow={onShowWaiting} /> : null}
         <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
         {note === undefined ? null : <AskNote words={note} />}
       </>

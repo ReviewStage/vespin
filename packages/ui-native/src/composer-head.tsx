@@ -319,8 +319,9 @@ export type MentionSuggestionGroup = {
  * address and a task's key after the name, and
  * the row picked written into the message; what stands where nothing
  * matches said in the muted ink. It stands over the field inside the
- * composer's glass, as the skills a `/` offers do, and scrolls past a few
- * rows, so the field stays in sight over the keyboard.
+ * composer's glass, as Messages and Slack stand theirs right over the
+ * keyboard, its rows scrolling with the head they stand in, so the field
+ * stays in sight.
  */
 export function MentionSuggestions({
   groups,
@@ -333,7 +334,6 @@ export function MentionSuggestions({
   readonly onPick: (group: string, id: string) => void;
 }) {
   const colors = useColors();
-  const large = useAccessibilitySize();
 
   if (groups.length === 0) {
     if (empty === undefined) return null;
@@ -347,9 +347,8 @@ export function MentionSuggestions({
     );
   }
 
-  const shown = groups.reduce((count, group) => count + group.rows.length, 0);
-
-  const rows = (
+  // Note that the rows scroll with the composer's head, its one scroller (`BarHead`), never in a scroller of their own inside it, which cut a row through and scrolled inside a scroll.
+  return (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
       {groups.map((group) => (
         <VStack key={group.title} alignment="leading" spacing={0}>
@@ -375,14 +374,6 @@ export function MentionSuggestions({
         </VStack>
       ))}
     </VStack>
-  );
-
-  if (large || shown <= SUGGESTIONS_SHOWN) return rows;
-
-  return (
-    <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
-      {rows}
-    </ScrollView>
   );
 }
 

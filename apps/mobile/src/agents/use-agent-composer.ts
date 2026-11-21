@@ -345,7 +345,7 @@ export function useAgentComposer(
   const mentions = useMentionOffer(
     words,
     setWords,
-    { workspaceId: agent?.workspaceId, taskId },
+    { workspaceId: agent?.workspaceId, taskId, agentId },
     {
       word: atWord,
       pick: (mention) => pillField.current?.pick(mentionPill(mention.name, mention.target)),
