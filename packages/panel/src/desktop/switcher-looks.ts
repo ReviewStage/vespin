@@ -34,23 +34,58 @@ export function heldLook(strip: LookStrip, taskId: string, tab: StripTab): HeldL
   return held.get(taskId)?.get(strip)?.get(tabKey(tab));
 }
 
-/** Hands over how a strip draws its tabs for `taskId`, each time it draws them. */
+/**
+ * Hands over how a strip draws its tabs for `taskId`, each time it draws
+ * them. A tab handed with no look draws itself and hands its own look over
+ * (`useTabLook`), which the strip's set keeps as that tab last handed it.
+ */
 export function useStripLooks(
   strip: LookStrip,
   taskId: string | undefined,
-  drawn: readonly { readonly tab: StripTab; readonly look: TabLook }[],
+  drawn: readonly { readonly tab: StripTab; readonly look: TabLook | undefined }[],
 ): void {
   useEffect(() => {
     if (taskId === undefined) return;
+    const strips = held.get(taskId) ?? new Map<LookStrip, ReadonlyMap<string, HeldLook>>();
+    const last = strips.get(strip);
 
     const looks = new Map(
-      drawn.map(({ tab, look }) => [
-        tabKey(tab),
-        { icon: look.icon, label: look.label, endMark: look.endMark },
-      ]),
+      drawn.flatMap(({ tab, look }): [string, HeldLook][] => {
+        const key = tabKey(tab);
+
+        if (look !== undefined) {
+          return [[key, { icon: look.icon, label: look.label, endMark: look.endMark }]];
+        }
+
+        const kept = last?.get(key);
+
+        return kept === undefined ? [] : [[key, kept]];
+      }),
     );
 
+    strips.set(strip, looks);
+    held.set(taskId, strips);
+  });
+}
+
+/**
+ * Hands over how one tab of a strip draws itself for `taskId`, each time it
+ * draws, where its strip leaves its look to it (`useStripLooks`), so a tab
+ * drawn again alone, as an agent's is on a step of its turn, is worn as it
+ * now stands; nothing while it draws no look.
+ */
+export function useTabLook(
+  strip: LookStrip,
+  taskId: string | undefined,
+  tab: StripTab,
+  look: TabLook | undefined,
+): void {
+  useEffect(() => {
+    if (taskId === undefined || look === undefined) return;
     const strips = held.get(taskId) ?? new Map<LookStrip, ReadonlyMap<string, HeldLook>>();
+    const looks = new Map(strips.get(strip));
+
+    looks.set(tabKey(tab), { icon: look.icon, label: look.label, endMark: look.endMark });
     strips.set(strip, looks);
     held.set(taskId, strips);
   });

@@ -191,7 +191,7 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
       : {
           link: { workspace, place: { kind: LINK_DESTINATION.AGENT, agentId } },
           thing: LINK_THING.AGENT,
-          name: tasks.agents.agents?.find((each) => each.id === agentId)?.title ?? undefined,
+          name: tasks.agents.rowNow(agentId)?.title ?? undefined,
         };
 
   const tabPlace = tasks.sidePanel.open

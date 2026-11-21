@@ -114,7 +114,7 @@ function drawn(): HTMLElement {
               steps: { back: [], forward: [] },
               onGoTo: ignore,
             },
-            subject: taskVersionSubject(tasks),
+            subject: taskVersionSubject(tasks, undefined),
             account: {
               status: ACCOUNT_STATUS.SIGNED_IN,
               email: "dev@example.com",

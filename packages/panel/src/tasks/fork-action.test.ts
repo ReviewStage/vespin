@@ -10,6 +10,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
+import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -112,6 +113,8 @@ function drawn(input: {
       ),
     ),
   );
+  // The pointer comes onto the message, as a reader's does to reach its actions.
+  pointAtTurns(container);
   const fork = container.querySelector<HTMLButtonElement>(`button[aria-label="${FORK_LABEL}"]`);
 
   return { container, fork, forks, opened };
@@ -280,6 +283,8 @@ async function forkedAtInTab(
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+  // The pointer comes onto the messages, as a reader's does to reach their actions.
+  pointAtTurns(container);
 
   for (const button of container.querySelectorAll<HTMLButtonElement>(
     `button[aria-label="${FORK_LABEL}"]`,

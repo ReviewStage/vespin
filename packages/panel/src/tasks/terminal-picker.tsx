@@ -3,7 +3,6 @@ import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import { PlusIcon, Shortcut } from "@repo/ui";
 import { CommandDialog, type CommandGroup } from "@repo/ui/command";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import type { AgentsControl } from "./use-agents.js";
 
 /**
  * terminal-picker.tsx -- the palette a terminal command opens on a task with no coding agent: its one offer, to start one.
@@ -39,22 +38,20 @@ function PickerFoot(): React.JSX.Element {
 
 export function TerminalPicker({
   open,
-  agents,
+  read,
   onStartAgent,
   start,
   onClose,
 }: {
   open: boolean;
-  agents: AgentsControl;
+  /** Whether the task's agents have been read. */
+  read: boolean;
   /** Starts a coding agent on the task. */
   onStartAgent: () => void;
   /** Whether a coding agent can start on the task now. */
   start: { readonly available: boolean };
   onClose: () => void;
 }): React.JSX.Element {
-  // Note that a task whose agents are not read yet offers nothing until they are.
-  const read = agents.agents !== undefined;
-
   const groups: readonly CommandGroup[] = read
     ? [
         {

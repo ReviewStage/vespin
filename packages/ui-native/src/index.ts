@@ -138,7 +138,12 @@ export {
   HeldCallBanner,
 } from "./held-call.js";
 
-export { type HeldAct, type Keeping, KeepingProvider } from "./held-menu.js";
+export {
+  type HeldAct,
+  type Keeping,
+  KeepingProvider,
+  type ViewedPicture,
+} from "./held-menu.js";
 
 export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
 

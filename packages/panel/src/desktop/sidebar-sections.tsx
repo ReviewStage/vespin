@@ -69,7 +69,7 @@ import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { useSectionWrites, useTaskSections } from "../tasks/use-pin-writes.js";
-import { useReadMarks } from "../tasks/use-task-looks.js";
+import { useReadMark } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
@@ -880,13 +880,13 @@ function SidebarSection({
   const standing = drawn.tasks.filter(context.current);
   const menu = useMenu(tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
-  const reads = useReadMarks();
+  const markRead = useReadMark();
   const held = drawn.tasks;
 
   const groups = sectionActionGroups(drawn, context, {
     opener: ellipsis,
     onMarkRead: () => {
-      for (const task of held.filter(context.unread)) reads.mark(task, false);
+      for (const task of held.filter(context.unread)) markRead(task, false);
     },
   });
 

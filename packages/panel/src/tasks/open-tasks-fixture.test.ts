@@ -20,7 +20,7 @@ test("a select opens the task it names, and a close leaves it", () => {
   const named = listed.find((task) => task.name === "Search ranking: redesign");
 
   assert.ok(named !== undefined, "the profile lists its tasks");
-  assert.equal(fixtureTasksView(RUN)?.activeTaskId, undefined);
+  assert.equal(fixtureTasksView(RUN)?.activeTaskId, listed[0]?.id);
   assert.deepEqual(fixtureActAnswer(RUN, ACT_KIND.TASKS_SELECT, { taskId: named.id }), {
     answer: true,
   });
