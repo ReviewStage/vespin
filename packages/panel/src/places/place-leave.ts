@@ -62,6 +62,13 @@ export interface PlaceLeave {
    * unasked only then.
    */
   readonly arrive: (move: (free: boolean) => void, landed: () => void) => void;
+  /**
+   * Whether a move made now leaves no page unasked: no ask stands, or a way
+   * out passes it, as `arrive` tells its `move`. So a door writing past the
+   * router's blocker, as the history's step written with a task's open,
+   * writes only then, and otherwise moves through the router, which asks.
+   */
+  readonly free: () => boolean;
   /** Says the move under way stays where the window stands, as a door asking for the place already standing does (`places/routed-exits.ts`'s `stay`). */
   readonly stays: () => void;
   /**
@@ -234,6 +241,7 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
 
         askUpFront(standing.current, landed);
       },
+      free: () => standing.current === undefined || passing.current,
       stays: () => {
         stayed.current = true;
       },

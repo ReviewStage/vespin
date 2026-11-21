@@ -1312,7 +1312,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   const pins = usePinWrites(tasks.typedNamesNow);
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
-  const reads = useReadMarks();
+  const markRead = useReadMark();
   const coarse = useCoarsePointer();
   const worn = rowFaceOf(task, useMemberDirectory(), faces);
   const chosen = useContext(ChosenTasksContext)(task.id);
@@ -1340,7 +1340,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   const rowSubject = useFocusedRowKeys(
     item,
     shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id),
-    () => reads.mark(task, !unread),
+    () => markRead(task, !unread),
     () => pins.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN),
     statusDrawn ? () => setStatusAsks((asks) => asks + 1) : undefined,
   );

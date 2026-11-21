@@ -72,6 +72,7 @@ import {
   MarkdownMessage,
 } from "../markdown-message.js";
 import { useCreator } from "../member-directory.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { useToast } from "../toast.js";
 import { useWorkspaceExperiment, useWorkspaceExperimentOnSince } from "../workspace-experiments.js";
@@ -1543,7 +1544,9 @@ export const DescriptionBody = memo(function DescriptionBody({
   // picker read the description is not under its text, so nothing after it is
   // written over that text. A save not taken leaves the date as it was, as an
   // unticked box goes back, and says so.
-  const dated = useMutation(
+  // Note that only the call is held, because nothing here draws where a date's write stands, and a mutation followed
+  // would draw the whole description again as the page mounts and its options are first set.
+  const dated = useMutationCalls(
     descriptionAtRestMutation(
       task.id,
       descriptionWrites,
