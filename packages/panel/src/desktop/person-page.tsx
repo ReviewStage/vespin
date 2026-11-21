@@ -110,7 +110,7 @@ import { QUERY_ROOT } from "../query-keys.js";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
 import { useShortcutTargetsOf } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useTaskListCollections, useTaskListRow, useTasksAbout } from "../task-list-collections.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home-row.js";
@@ -121,7 +121,11 @@ import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-age
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems } from "../tasks/use-waiting-items.js";
-import { useListedAgentPullRequests, useListedAgents } from "../tasks/use-workspace-agents.js";
+import {
+  agentTaskIds,
+  useAgentsStartedBy,
+  useListedAgentPullRequests,
+} from "../tasks/use-workspace-agents.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
@@ -278,7 +282,9 @@ function AgentRow({
   /** Where it stands in its section's run of rows (`VirtualTaskRows`). */
   place: VirtualRowPlace;
 }): React.JSX.Element {
-  const { task, agent, at } = each;
+  const { task, agent: handed, at } = each;
+  // Note that the row reads its own agent, since the page's are held still while a step of its turn moves nothing the page lays out (`useAgentsStartedBy`).
+  const agent = useTaskListRow(useTaskListCollections().agents, handed.id) ?? handed;
   const { models } = agents;
   const subject = listedRowSubject(agent, at, { models, me: tasks.me, pullRequests });
 
@@ -1001,16 +1007,22 @@ function PersonColumn({
   const { workspace: standing, landing } = usePersonRoute();
   // What a phone's bar picks up from the page's header once it scrolls away.
   const [pickUp, setPickUp] = useState<ToolbarPickUp>({ name: "", shown: false });
-  // The listed workspace's tasks, or every task while none is listed, as the sidebar lists them.
-  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+  // Note that only their agents are read, and those only for what lays the page out, so a step of anyone's turn draws no page (`useAgentsStartedBy`).
+  const liveAgents = useAgentsStartedBy(tasks.agentsCarried, { userId });
+  const theirTaskIds = useMemo(() => agentTaskIds(liveAgents), [liveAgents]);
+
+  // The listed workspace's tasks, or every task while none is listed, that are theirs or their agents', as the sidebar lists them.
+  const listed = useTasksAbout(tasks.typedNames, tasks.workspace?.id, {
+    userId,
+    taskIds: theirTaskIds,
+  });
+
   // Named as the list names them, else as the members read does, else by the name the page was opened with, else as the former members read does; nobody's name where none does.
   const { members, readerId, former, refused, retry } = useMemberDirectory();
   const member = members?.find((each) => each.userId === userId);
   const known = opened === undefined ? undefined : { userId, name: opened };
   // Note that someone who left having only revised or answered is named by the former members read alone, since a link to them opens with no name.
   const left = former?.find((each) => each.userId === userId);
-  // Note that every agent is read only while the page stands, since it lists the person's agents among them.
-  const liveAgents = useListedAgents(tasks.agentsCarried);
   const listedPullRequests = useListedAgentPullRequests(tasks.agentsCarried);
   const ref = personRef(userId, listed, liveAgents) ?? member ?? known ?? left;
   const person = personActor(ref, members, readerId, former);
