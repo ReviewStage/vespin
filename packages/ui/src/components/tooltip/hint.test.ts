@@ -40,7 +40,8 @@ import { RowHint, RowHintOptions, Tooltip } from "./hint.js";
  * of its own, whether the control is the page's own element or a component;
  * words that take no focus, which a reader's cursor only walks over, own
  * them as hidden text read at their end, their own words as they were; and a
- * control whose own name says them is told them by no other way.
+ * control whose own name says them is told them by no other way. Its
+ * description follows its hint's words as they change, and goes with it.
  */
 
 const roots: Root[] = [];
@@ -665,6 +666,22 @@ test("a control is described by its hint from its first render, before any point
   assert.equal(document.querySelector('[role="tooltip"]'), null, "no hint is drawn");
   assert.deepEqual(wordsNamedBy(copy), ["Copies the address", "Copy link"]);
   assert.deepEqual(wordsNamedBy(stop), ["Stop the agent"]);
+});
+
+test("a control's description follows its hint's words as they change, and leaves the page with the control", () => {
+  const draw = (label: string) =>
+    createElement(Tooltip, {
+      label,
+      children: createElement("button", { type: "button", "aria-label": "Copy" }, "⧉"),
+    });
+
+  const container = mount(draw("Copy link"));
+  const root = roots.at(-1) ?? assert.fail("the root");
+  const control = container.querySelector("button") ?? assert.fail("the control");
+  act(() => root.render(draw("Copied")));
+  assert.deepEqual(wordsNamedBy(control), ["Copied"]);
+  act(() => root.render(createElement("p", null, "gone")));
+  assert.equal(document.body.textContent, "gone", "no words are left behind");
 });
 
 test("a control whose own name already says its hint is told it by its name alone", () => {

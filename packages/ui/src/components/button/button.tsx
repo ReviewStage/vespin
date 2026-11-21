@@ -541,43 +541,56 @@ function DoneMark({
 /**
  * A busy button's landing check: drawn from its landing, held through its
  * hold, then faded out as its words fade back over it, on the same beat, so
- * the one hands over to the other rather than leaving at once.
+ * the one hands over to the other rather than leaving at once. It is
+ * mounted only from its landing until it is gone (`useLanded`'s `mark`),
+ * so a button that never lands mounts none.
  */
-function LandingMark({
-  landed,
-  onShown,
-}: {
-  landed: boolean;
-  onShown: () => void;
-}): React.JSX.Element | null {
-  const shown = useDisclosure(landed);
+function LandingMark({ landing }: { landing: Landing }): React.JSX.Element | null {
+  const shown = useDisclosure(landing.landed, landing.gone);
 
   if (!shown.mounted) return null;
 
-  return <DoneMark hold leaving={shown.leaving} held={shown.ref} onShown={onShown} />;
+  return <DoneMark hold leaving={shown.leaving} held={shown.ref} onShown={landing.settle} />;
 }
 
-type UseLandedResult = { landed: boolean; settle: () => void };
+/** A busy button's landing as its check is drawn from it. */
+interface Landing {
+  /** Whether its press has just landed, until its check has stood its hold. */
+  readonly landed: boolean;
+  /** Whether its check is to be mounted: landed, or fading out after. */
+  readonly mark: boolean;
+  /** Ends the check's hold. */
+  readonly settle: () => void;
+  /** Takes the check out once its fade is done. */
+  readonly gone: () => void;
+}
 
 /**
  * Whether a busy button's press has just landed: from the draw its ring
  * leaves on, told it `succeeded`, until its check has stood its hold, which
  * `settle` ends. Note that the ring's leaving is read as the draw sees it
  * rather than in an effect, so the check is in the first frame without it.
+ * Note that its check stays `mark`ed past `landed` until its fade is `gone`,
+ * so the button mounts the check only while it is on screen.
  */
-function useLanded(props: LandingProps): UseLandedResult {
+function useLanded(props: LandingProps): Landing {
   const busy = props.busy === true;
   const [wasBusy, setWasBusy] = useState(busy);
   const [landed, setLanded] = useState(false);
+  const [mark, setMark] = useState(false);
 
   if (busy !== wasBusy) {
+    const landing = !busy && props.succeeded === true;
     setWasBusy(busy);
-    setLanded(!busy && props.succeeded === true);
+    setLanded(landing);
+
+    if (landing) setMark(true);
   }
 
   const settle = useCallback(() => setLanded(false), []);
+  const gone = useCallback(() => setMark(false), []);
 
-  return { landed, settle };
+  return { landed, mark, settle, gone };
 }
 
 /**
@@ -636,7 +649,8 @@ export function Button({
   onDone?: (() => void) | undefined;
   children: ReactNode;
 }): React.JSX.Element {
-  const { landed, settle } = useLanded(props);
+  const landing = useLanded(props);
+  const { landed } = landing;
   const busy = props.busy === true;
   const ringShown = useSettled(busy);
   const shown = done || landed;
@@ -678,7 +692,11 @@ export function Button({
         )}
       </span>
       {ringShown ? <BusyRing /> : null}
-      {done ? <DoneMark onShown={onDone} /> : <LandingMark landed={landed} onShown={settle} />}
+      {done ? (
+        <DoneMark onShown={onDone} />
+      ) : landing.mark ? (
+        <LandingMark landing={landing} />
+      ) : null}
     </ShadcnButton>
   );
 }
@@ -852,7 +870,8 @@ export function IconButton({
     /** What a quiet one lights: its glyph alone where it stands in a lit row, as a compact one does unasked, else a fill. */
     lights?: ButtonLight | undefined;
   }): React.JSX.Element {
-  const { landed, settle } = useLanded(props);
+  const landing = useLanded(props);
+  const { landed } = landing;
   const busy = props.busy === true;
   const ringShown = useSettled(busy);
 
@@ -886,7 +905,7 @@ export function IconButton({
         {submit === undefined ? icon : submitGlyph(submit)}
       </span>
       {ringShown ? <BusyRing /> : null}
-      <LandingMark landed={landed} onShown={settle} />
+      {landing.mark ? <LandingMark landing={landing} /> : null}
     </ShadcnButton>
   );
 }
