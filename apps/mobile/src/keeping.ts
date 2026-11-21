@@ -10,8 +10,9 @@
  * file, as an agent's are, a recording, and a file are taken as the file the
  * app wrote (`cached-media.ts`). Quick Look
  * reads a file too, so a picture is written the same way before it opens,
- * and one drawn from a web address is fetched under the caches first; Quick
- * Look's own share button then offers Copy and Save Image. Photos is
+ * and one drawn from a web address is fetched under the caches first, once,
+ * so it opens again from that file; Quick Look's own share button then
+ * offers Copy and Save Image. Photos is
  * asked for add-only access, once, the first time something is saved, and
  * a refusal says where it is allowed again rather than offering Try again.
  * A draft's Copy message puts its body on the pasteboard as rich text.
@@ -35,7 +36,7 @@ import {
   useFailureNotices,
 } from "@repo/ui-native";
 import { setImageAsync, setStringAsync } from "expo-clipboard";
-import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from "expo-crypto";
+import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { useMemo } from "react";
@@ -153,12 +154,37 @@ async function shared(kept: Kept): Promise<void> {
   await Share.share({ url: await fileOf(kept), title: kept.name });
 }
 
-/** A picture drawn from a web address, fetched under the app's caches in a folder of its own, under the name its address ends in. */
-async function fetchedPicture(source: string): Promise<string> {
-  const folder = new Directory(Paths.cache, `${FETCHED_PREFIX}-${randomUUID()}`);
+/** Each fetch of a web picture still under way, by its address, so a second press waits on the first rather than fetching it again. */
+const fetching = new Map<string, Promise<string>>();
+
+/** The picture fetched from `source`: the file in its folder where an earlier fetch left one, or a fetch begun now. */
+async function fetchedFile(source: string): Promise<string> {
+  const digest = await digestStringAsync(CryptoDigestAlgorithm.SHA256, source);
+  const folder = new Directory(Paths.cache, `${FETCHED_PREFIX}-${digest}`);
+  const [fetched] = folder.exists ? folder.list().filter((each) => each instanceof File) : [];
+
+  if (fetched !== undefined) return fetched.uri;
   folder.create({ intermediates: true, idempotent: true });
 
-  return (await File.downloadFileAsync(source, folder)).uri;
+  return (await File.downloadFileAsync(source, folder, { idempotent: true })).uri;
+}
+
+/**
+ * A picture drawn from a web address, fetched under the app's caches in a
+ * folder named by a digest of its address, under the name its address ends
+ * in. Note that a picture already fetched is the file in its folder, so a
+ * second press, or one after a relaunch, opens it with no fetch; and that the
+ * system moves a download into place only once it is whole, so a file there
+ * is never one cut short.
+ */
+function fetchedPicture(source: string): Promise<string> {
+  const under = fetching.get(source);
+
+  if (under !== undefined) return under;
+  const begun = fetchedFile(source).finally(() => fetching.delete(source));
+  fetching.set(source, begun);
+
+  return begun;
 }
 
 /** The file Quick Look reads: a picture written from its bytes or fetched from its address, or the file a recording or a file already is. */
