@@ -39,7 +39,7 @@ import type {
   MentionablePage,
   MentionablePullRequest,
 } from "./mention-picker.js";
-import type { AgentsControl } from "./use-agents.js";
+import { type AgentsControl, agentsNow, type HeldAgents } from "./use-agents.js";
 import { useOpenTask } from "./use-open-link.js";
 import { useAgentsListed, workspaceAgentsNow } from "./use-workspace-agents.js";
 import { workspaceAgentSearchQueryOptions } from "./workspace-agent-search.js";
@@ -198,7 +198,8 @@ const NO_AGENTS_HELD: readonly AgentSummary[] = [];
 /** What a place holds of a task beside its description's words: the pages agents showed on it, its agents as read, and the reader of the workspace's. */
 interface TaskHolding {
   readonly pages: readonly MentionablePage[] | undefined;
-  readonly agents: Pick<AgentsControl, "agents" | "archived" | "models" | "pullRequests">;
+  /** The task's agents, the open task's read as they stand when an `@` list reads them (`agentsNow`). */
+  readonly agents: HeldAgents;
   readonly readAgents: MentionAgentsReader | undefined;
 }
 
@@ -231,13 +232,20 @@ export function heldTaskMentions(
     repository,
     text: () => text ?? "",
     pages,
-    agents: (agents.agents ?? NO_AGENTS_HELD).map((agent) => {
-      const name = agentName(agent, agents.models);
+    // Note that the agents and their pull requests are read as an `@` list reads them, so a step of a turn hands the place no new value.
+    get agents() {
+      const held = agentsNow(agents);
 
-      return { id: agent.id, name, actor: agentActor(agent, name), summary: agent };
-    }),
+      return (held.agents ?? NO_AGENTS_HELD).map((agent) => {
+        const name = agentName(agent, held.models);
+
+        return { id: agent.id, name, actor: agentActor(agent, name), summary: agent };
+      });
+    },
     readAgents,
-    pullRequests: mentionablePullRequests(agents),
+    get pullRequests() {
+      return mentionablePullRequests(agentsNow(agents));
+    },
     doors: {
       ...doors,
       holder: text === undefined ? undefined : holder,

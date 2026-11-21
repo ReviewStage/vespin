@@ -20,7 +20,12 @@ import { and, eq, isNull, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTaskListCollections } from "../task-list-collections.js";
-import { type AgentsControl, readAgentById } from "./use-agents.js";
+import {
+  type AgentsControl,
+  placeAgents,
+  readAgentById,
+  type TaskAgentsControl,
+} from "./use-agents.js";
 
 /** The workspace's Managers as the sidebar draws them, and the agents control a Manager's row acts through. */
 interface WorkspaceManagers {
@@ -60,7 +65,7 @@ export function useWorkspaceManagers(
   workspaceId: string | undefined,
   listed: boolean,
   carried: boolean,
-  control: AgentsControl,
+  control: TaskAgentsControl,
 ): WorkspaceManagers {
   const queryClient = useQueryClient();
   const collections = useTaskListCollections();
@@ -91,7 +96,7 @@ export function useWorkspaceManagers(
   // Note that a Manager is read again by its own id before it is archived, because the window's control reads only the open task's agents.
   const agents = useMemo(
     (): AgentsControl => ({
-      ...control,
+      ...placeAgents(control),
       readAgent: (agentId: string) => readAgentById(queryClient, agentId),
     }),
     [control, queryClient],

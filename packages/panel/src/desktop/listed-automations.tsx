@@ -1,4 +1,4 @@
-import { and, isNull, isUndefined, not, useLiveQuery } from "@tanstack/react-db";
+import { and, eq, isNull, isUndefined, not, useLiveQuery } from "@tanstack/react-db";
 import { type ReactNode, useCallback } from "react";
 import { AutomationDirectory } from "../automation-directory.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
@@ -47,9 +47,21 @@ function useNamesAutomation(tasks: TasksControl): boolean {
     ({ taskId }) => taskId !== null && rows.task(taskId) !== undefined,
   );
 
-  const agents = [...(tasks.agents.agents ?? []), ...(tasks.agents.archived ?? [])];
+  // Note that the open task's agents a run started are read by their task alone, archived ones among them, so a step of any agent's turn moves no answer.
+  const openTaskId = tasks.activeTaskId;
 
-  return listed || agents.some((agent) => agent.automationId !== undefined);
+  const { data: openRuns } = useLiveQuery((q) =>
+    openTaskId === undefined
+      ? undefined
+      : q
+          .from({ agent: collections.agents })
+          .where(({ agent }) =>
+            and(eq(agent.taskId, openTaskId), not(isUndefined(agent.automationId))),
+          )
+          .select(({ agent }) => ({ id: agent.id })),
+  );
+
+  return listed || (openRuns ?? []).length > 0;
 }
 
 /** The listed workspace's automations for everything inside. */

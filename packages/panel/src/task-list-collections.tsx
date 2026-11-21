@@ -130,6 +130,29 @@ export function useTaskListRow<Row extends object>(
 }
 
 /**
+ * What `pick` reads of the row `key` names in `collection`, drawn again only
+ * when that changes, as a reader needing one fact of a row whose other
+ * fields move often takes it; `pick` of none where the collection holds no
+ * such row, or no key is given. Note that `pick` answers a value compared by
+ * identity, so it picks a primitive, never a fresh object.
+ */
+export function useTaskListRowAs<Row extends object, Picked>(
+  collection: Collection<Row, string>,
+  key: string | undefined,
+  pick: (row: Row | undefined) => Picked,
+): Picked {
+  const subscribe = useCallback(
+    (heard: RowHeard) =>
+      key === undefined ? LISTEN_TO_NOTHING() : listenToRow(collection, key, heard),
+    [collection, key],
+  );
+
+  const read = (): Picked => pick(key === undefined ? undefined : collection.get(key));
+
+  return useSyncExternalStore(subscribe, read, read);
+}
+
+/**
  * The task `taskId` names as the list holds it (`useTaskListRow`), its name
  * drawn as it is being typed where it is (`typedNames`); none where the list
  * holds no such task, or no id is given. The same object until that row or
@@ -344,14 +367,45 @@ export function useSteppedTasks(step: string | undefined): readonly TaskSummary[
 export interface TaskListRows {
   /** The task listed under `taskId`, its name as it is being typed where it is; none where the list holds none. */
   readonly task: (taskId: string) => TaskSummary | undefined;
-  /** The agent listed under `agentId`; none where the list holds none. */
-  readonly agent: (agentId: string) => ListedAgent | undefined;
+  /** The agent listed under `agentId`, by its task and what it is named by; none where the list holds none. */
+  readonly agent: (agentId: string) => NamedAgentRow | undefined;
 }
 
-/** The rows a reader by id asked for, by id, each as it read it last, and the stops of the listens following them. */
-interface AskedRows<Row> {
-  readonly read: Map<string, Row | undefined>;
+/** What a reader by id reads of an agent: its task and what it is named by (`agentName`), which a step of its turn never moves. */
+export type NamedAgentRow = Pick<
+  ListedAgent,
+  "id" | "taskId" | "title" | "model" | "automationName"
+>;
+
+/** What a reader by id reads of an agent's row; none for no row. */
+function namedAgentOf(row: ListedAgent | undefined): NamedAgentRow | undefined {
+  if (row === undefined) return undefined;
+  const { id, taskId, title, model, automationName } = row;
+
+  return automationName === undefined
+    ? { id, taskId, title, model }
+    : { id, taskId, title, model, automationName };
+}
+
+/** Whether two reads of an agent by id name it alike, so a step of its turn moves no reader. */
+function sameNamedAgent(a: NamedAgentRow | undefined, b: NamedAgentRow | undefined): boolean {
+  return (
+    a === b ||
+    (a !== undefined &&
+      b !== undefined &&
+      a.taskId === b.taskId &&
+      a.title === b.title &&
+      a.model === b.model &&
+      a.automationName === b.automationName)
+  );
+}
+
+/** The rows a reader by id asked for, by id, each as it read it last, the stops of the listens following them, and what it reads of a row (`pick`), compared by `same`. */
+interface AskedRows<Row, Read> {
+  readonly read: Map<string, Read | undefined>;
   readonly stops: Map<string, () => void>;
+  readonly pick: (row: Row | undefined) => Read | undefined;
+  readonly same: (a: Read | undefined, b: Read | undefined) => boolean;
 }
 
 /** Counts one more move of a row a reader asked for. */
@@ -362,21 +416,27 @@ const countMove = (moves: number): number => moves + 1;
  * `moved` of a row that moved between its read and now, since its listen
  * hears only what moves after it.
  */
-function followAsked<Row extends object>(
+function followAsked<Row extends object, Read>(
   collection: Collection<Row, string>,
-  asked: AskedRows<Row>,
+  asked: AskedRows<Row, Read>,
   moved: RowHeard,
 ): void {
   for (const [key, read] of asked.read) {
     if (asked.stops.has(key)) continue;
-    asked.stops.set(key, listenToRow(collection, key, moved));
 
-    if (collection.get(key) !== read) moved();
+    // Note that a move is told only where what the reader reads of the row moved, read against its last lookup.
+    const heard = () => {
+      if (!asked.same(asked.read.get(key), asked.pick(collection.get(key)))) moved();
+    };
+
+    asked.stops.set(key, listenToRow(collection, key, heard));
+
+    if (!asked.same(asked.pick(collection.get(key)), read)) moved();
   }
 }
 
 /** Stops following every row asked for, so the next commit follows them afresh. */
-function stopFollowing(asked: AskedRows<object>): void {
+function stopFollowing(asked: Pick<AskedRows<object, unknown>, "stops">): void {
   for (const stop of asked.stops.values()) stop();
   asked.stops.clear();
 }
@@ -395,9 +455,12 @@ export function useTaskListRows(typedNames: TaskNames = NO_NAMES_TYPED): TaskLis
   const collections = useTaskListCollections();
 
   // The ids asked for, followed once committed. Note that they only grow, as the rows a reader looks up are few.
-  const asked = useRef<{ tasks: AskedRows<TaskSummary>; agents: AskedRows<ListedAgent> }>({
-    tasks: { read: new Map(), stops: new Map() },
-    agents: { read: new Map(), stops: new Map() },
+  const asked = useRef<{
+    tasks: AskedRows<TaskSummary, TaskSummary>;
+    agents: AskedRows<ListedAgent, NamedAgentRow>;
+  }>({
+    tasks: { read: new Map(), stops: new Map(), pick: (row) => row, same: Object.is },
+    agents: { read: new Map(), stops: new Map(), pick: namedAgentOf, same: sameNamedAgent },
   }).current;
 
   const [moves, moved] = useReducer(countMove, 0);
@@ -423,7 +486,7 @@ export function useTaskListRows(typedNames: TaskNames = NO_NAMES_TYPED): TaskLis
         return row === undefined ? undefined : renamedTask(row, typedNames);
       },
       agent: (agentId: string) => {
-        const row = collections.agents.get(agentId);
+        const row = namedAgentOf(collections.agents.get(agentId));
         asked.agents.read.set(agentId, row);
 
         return row;

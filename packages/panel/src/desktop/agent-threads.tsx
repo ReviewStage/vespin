@@ -27,6 +27,7 @@ import {
 import { InboxList, InboxListNote, InboxPaneEmpty } from "../tasks/inbox-list.js";
 import { useInboxPager } from "../tasks/inbox-pager.js";
 import { InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
+import { useTaskAgents } from "../tasks/use-agents.js";
 import { useHeldInboxList } from "../tasks/use-held-inbox-list.js";
 import { useInboxReadMarks, useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
 import type { TaskInboxControl } from "../tasks/use-task-inbox.js";
@@ -120,7 +121,9 @@ export function AgentThreads({
   onChoose: (itemId: string | undefined) => void;
   onBack: () => void;
 }): React.JSX.Element {
-  const { agents, me } = tasks;
+  const { me } = tasks;
+  // Note that the card draws the task's agents' threads, so it reads their rows while it stands.
+  const agents = useTaskAgents(tasks.agents);
   const { open, settled } = inbox.board;
   // Note that a reminder is weighed on the window's clock, as the Inbox weighs it.
   const now = useMinute();

@@ -32,7 +32,7 @@ import {
 } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
-import { useAgents } from "./use-agents.js";
+import { useAgents, useTaskAgents } from "./use-agents.js";
 import { useHeldInboxList } from "./use-held-inbox-list.js";
 import { taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
@@ -304,17 +304,20 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     [taskless, taskId, askedItemId],
   );
 
-  const agents = useAgents({
-    taskId,
-    repository: chosenTask?.repository ?? null,
-    agentsFollowed: tasks.agentsCarried,
-    list: { failed: tasks.listFailed, onRetry: tasks.onRetryList },
-    // The Inbox draws no agent's composer, so nothing here opens Settings.
-    onOpenIntegrations: () => undefined,
-    onOpenApiKeys: () => undefined,
-    onStarted: () => undefined,
-    me: tasks.me,
-  });
+  // Note that the Inbox draws the chosen task's agents where it reads them, so their rows are read here.
+  const agents = useTaskAgents(
+    useAgents({
+      taskId,
+      repository: chosenTask?.repository ?? null,
+      agentsFollowed: tasks.agentsCarried,
+      list: { failed: tasks.listFailed, onRetry: tasks.onRetryList },
+      // The Inbox draws no agent's composer, so nothing here opens Settings.
+      onOpenIntegrations: () => undefined,
+      onOpenApiKeys: () => undefined,
+      onStarted: () => undefined,
+      me: tasks.me,
+    }),
+  );
 
   const liveScope = { taskId };
 

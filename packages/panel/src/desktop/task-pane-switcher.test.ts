@@ -24,7 +24,7 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { openTaskMenu, taskName } from "../testing/task-menu.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, taskAgentsOf, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { TASK_PANE, taskPaneOf } from "./task-pane-switcher.js";
@@ -180,11 +180,13 @@ function mount(
                     onChoose: (chosen) => told.push(`column ${JSON.stringify(chosen)}`),
                     onClose: (closed) => told.push(`close column ${JSON.stringify(closed)}`),
                   },
-                  agents: agentsControl({
-                    agents: [...held],
-                    agentIds: held.map((each) => each.id),
-                    onDiscardDraft: (draftId) => told.push(`discard ${draftId}`),
-                  }),
+                  agents: taskAgentsOf(
+                    agentsControl({
+                      agents: [...held],
+                      agentIds: held.map((each) => each.id),
+                      onDiscardDraft: (draftId) => told.push(`discard ${draftId}`),
+                    }),
+                  ),
                   sidePanel: {
                     ...tasksControl().sidePanel,
                     open: shown,

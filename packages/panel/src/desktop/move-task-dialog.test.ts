@@ -17,7 +17,7 @@ import { ellipsized } from "../testing/action-label.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, taskAgentsOf, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
@@ -361,7 +361,7 @@ function onTab(
     ...tasks,
     mainTabs: { ...tasks.mainTabs, tabs: [AGENT_TAB], tab },
     sidePanel: { ...tasks.sidePanel, ...sidePanel },
-    agents: agentsControl({ agents: [AGENT], agentIds: [AGENT.id] }),
+    agents: taskAgentsOf(agentsControl({ agents: [AGENT], agentIds: [AGENT.id] })),
   };
 }
 

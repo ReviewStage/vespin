@@ -134,7 +134,7 @@ import { type TaskRelationDoor, taskRelationMenuPanel } from "../tasks/task-rela
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import { NO_ASSIGNEE, PRIORITY_ROWS, useAssigneeRows } from "../tasks/task-standing.js";
-import type { AgentsControl } from "../tasks/use-agents.js";
+import type { TaskAgentsControl } from "../tasks/use-agents.js";
 import type { NewTask } from "../tasks/use-new-task.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
@@ -287,7 +287,7 @@ export function useTaskRowTab(tasks: TasksControl): TaskRowTab {
  */
 export interface OpenedTask {
   readonly task: Task;
-  readonly agents: AgentsControl;
+  readonly agents: TaskAgentsControl;
 }
 
 /** The task `tasks` has open and its agents; none while no document is drawn. */

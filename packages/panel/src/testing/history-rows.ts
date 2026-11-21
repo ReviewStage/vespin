@@ -89,33 +89,39 @@ function StandingEvery({
   tasks,
   taskAgents,
   taskPullRequests,
+  agentPullRequests,
   children,
 }: {
   tasks: readonly TaskSummary[];
   taskAgents: ListedTasks["taskAgents"];
   taskPullRequests: ListedTasks["taskPullRequests"];
+  agentPullRequests: ListedTasks["agentPullRequests"];
   children: ReactNode;
 }): ReactElement {
-  const [taskList] = useState(() => standingTaskList({ tasks, taskAgents, taskPullRequests }));
+  const [taskList] = useState(() =>
+    standingTaskList({ tasks, taskAgents, taskPullRequests, agentPullRequests }),
+  );
 
   useLayoutEffect(
-    () => taskList.stand({ tasks, taskAgents, taskPullRequests }),
-    [taskList, tasks, taskAgents, taskPullRequests],
+    () => taskList.stand({ tasks, taskAgents, taskPullRequests, agentPullRequests }),
+    [taskList, tasks, taskAgents, taskPullRequests, agentPullRequests],
   );
 
   return taskList.provide(children);
 }
 
-/** `element` over task collections holding every task and agent a test's tab lists (`listedTasks`, `listedAgents`), and the pull requests their lines name where given, as the window's root feeds them beside the tab it draws. */
+/** `element` over task collections holding every task and agent a test's tab lists (`listedTasks`, `listedAgents`), and the pull requests their lines and their agents name where given, as the window's root feeds them beside the tab it draws. */
 export function overEveryTask(
   tasks: TasksControl,
   element: ReactNode,
   taskPullRequests?: ListedTasks["taskPullRequests"],
+  agentPullRequests?: ListedTasks["agentPullRequests"],
 ): ReactElement {
   return createElement(StandingEvery, {
     tasks: listedTasksOf(tasks),
     taskAgents: listedAgentsOf(tasks),
     taskPullRequests,
+    agentPullRequests,
     children: element,
   });
 }

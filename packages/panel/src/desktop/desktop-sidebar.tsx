@@ -1,5 +1,5 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
-import type { AgentSummary, ListedAgent } from "@repo/features/agent-wire";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -166,7 +166,11 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors, useSteadyList } from "../steady-door.js";
-import { useTaskListCollections, useTaskListRows } from "../task-list-collections.js";
+import {
+  type NamedAgentRow,
+  useTaskListCollections,
+  useTaskListRows,
+} from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
@@ -873,7 +877,7 @@ function accountPinOf(
 function agentPinOf(
   pin: TaskAgentPin,
   task: TaskSummary,
-  agent: AgentSummary,
+  agent: NamedAgentRow,
   tasks: TasksControl,
 ): AgentPin {
   const drawn = {
@@ -902,7 +906,7 @@ const placeOf = (row: PinnedRow): PinPlace => row.place;
 function pinnedRows(
   pinned: readonly TaskSummary[],
   listed: (taskId: string) => TaskSummary | undefined,
-  listedAgent: (agentId: string) => ListedAgent | undefined,
+  listedAgent: (agentId: string) => NamedAgentRow | undefined,
   tasks: SidebarTasks,
 ): PinnedRow[] {
   const taskRows = pinned.map(
