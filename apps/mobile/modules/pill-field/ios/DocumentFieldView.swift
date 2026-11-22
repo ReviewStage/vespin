@@ -954,6 +954,11 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       storage.addAttribute(lineKey, value: facts, range: piece)
     }
 
+    // Note that words typed on the empty line a Return opened take the paragraph of the line it carries on, its list's mark and indent with it, which UIKit's typing would leave plain until the field was drawn again.
+    if let blockFrom, let style = storage.attribute(.paragraphStyle, at: blockFrom, effectiveRange: nil) {
+      storage.addAttribute(.paragraphStyle, value: style, range: piece)
+    }
+
     storage.removeAttribute(markStylesKey, range: piece)
     storage.removeAttribute(linkKey, range: piece)
 
