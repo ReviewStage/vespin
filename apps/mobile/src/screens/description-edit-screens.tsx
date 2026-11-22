@@ -325,13 +325,24 @@ function DescriptionEditor({
     });
   };
 
+  // Note that Save and Cancel first write the keys typed since the field's last frame, so neither reads the words from before them.
+  const saveTyped = () => {
+    field.current?.flush();
+    save();
+  };
+
+  const cancelTyped = () => {
+    field.current?.flush();
+    close();
+  };
+
   const ready =
     editor.sending === undefined &&
     (conflict !== undefined || pendingSave(editorRetried(editor)) !== undefined);
 
   return (
     <>
-      <EditorBar ready={ready} onSave={save} onCancel={close} />
+      <EditorBar ready={ready} onSave={saveTyped} onCancel={cancelTyped} />
       <ConfirmAsk
         title={DISCARD_CHANGES_WORDS.QUESTION}
         act={DISCARD_CHANGES_WORDS.DISCARD}

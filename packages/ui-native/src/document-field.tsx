@@ -118,12 +118,13 @@ const RAW_WORDS = { PICTURE: "Picture", BREAK: "Line break" } as const;
 /** The looks the field tells back that a block's runs keep. */
 const MARKS: ReadonlySet<string> = new Set(Object.values(INLINE_MARK));
 
-/** What the field hands its owner through its ref: a pick in place of the `@` word the caret stands in, plain words there, and the keyboard taken or let go, as the message box's handle offers them. */
+/** What the field hands its owner through its ref: a pick in place of the `@` word the caret stands in, plain words there, the keyboard taken or let go, as the message box's handle offers them, and the keys typed since its last frame written at once, before a save or a close reads the words. */
 export interface DocumentFieldHandle {
   readonly pick: (pill: Pill) => void;
   readonly rewrite: (words: string) => void;
   readonly focus: () => void;
   readonly blur: () => void;
+  readonly flush: () => void;
 }
 
 interface DocumentFieldProps {
@@ -154,6 +155,12 @@ interface Told {
 interface NativeToldEvent {
   readonly lines: readonly NativeToldLine[];
   readonly changes: number;
+}
+
+/** What the field told last, and the Markdown its lines were laid from. */
+interface PendingLines {
+  readonly told: NativeToldEvent;
+  readonly base: string;
 }
 
 /** No blocks, which the field holds while its words stand read only. */
@@ -318,19 +325,6 @@ export function DocumentField({
     pillGlyph: colors.TEXT_MUTED,
   };
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      pick: (pill) => {
-        void native.current?.insertPills([drawnPill(pill, repository)], toldWord(atWord.current));
-      },
-      rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
-      focus: () => void native.current?.focus(),
-      blur: () => void native.current?.blur(),
-    }),
-    [repository],
-  );
-
   const onCaret = ({ nativeEvent }: NativeSyntheticEvent<CaretLine>) => {
     const word = caretAtWord(nativeEvent);
 
@@ -364,15 +358,24 @@ export function DocumentField({
   };
 
   // The lines the field told last, written once a frame, so fast typing writes the document once for every frame rather than once for every key.
-  const pending = useRef<NativeToldEvent | undefined>(undefined);
+  const pending = useRef<PendingLines | undefined>(undefined);
   const frame = useRef<number | undefined>(undefined);
 
   const write = () => {
     frame.current = undefined;
-    const told = pending.current;
+    const held = pending.current;
 
-    if (told === undefined) return;
+    if (held === undefined) return;
     pending.current = undefined;
+    const { told } = held;
+
+    // Note that words handed from outside since the key, such as Use theirs, win over the lines told against the words before them: the keys are heard, so the field takes the words handed.
+    if (held.base !== handed.markdown) {
+      setSeen(told.changes);
+
+      return;
+    }
+
     const edited = editedBlocks(told.lines.map((line) => toldLine(line, files)));
     // Note that the document is written against the Markdown whose blocks were last handed, which the lines' sources name.
     const markdown = writtenDocument(handed.markdown, edited, files, read);
@@ -390,7 +393,7 @@ export function DocumentField({
   });
 
   const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {
-    pending.current = nativeEvent;
+    pending.current = { told: nativeEvent, base: handed.markdown };
     frame.current ??= requestAnimationFrame(() => latest.current());
   };
 
@@ -399,6 +402,23 @@ export function DocumentField({
       if (frame.current !== undefined) cancelAnimationFrame(frame.current);
     },
     [],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      pick: (pill) => {
+        void native.current?.insertPills([drawnPill(pill, repository)], toldWord(atWord.current));
+      },
+      rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
+      focus: () => void native.current?.focus(),
+      blur: () => void native.current?.blur(),
+      flush: () => {
+        if (frame.current !== undefined) cancelAnimationFrame(frame.current);
+        latest.current();
+      },
+    }),
+    [repository],
   );
 
   // Note that the read-only head is no field, so nothing waits on it as the field it stands in for.
