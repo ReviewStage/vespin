@@ -318,6 +318,21 @@ private let lineKey = NSAttributedString.Key("VespinLine")
 /// The address a run of words links to.
 private let linkKey = NSAttributedString.Key("VespinLink")
 
+/// A run of a list's items at one depth as the field draws them: their kind, the list they stand in, the number its first item took, and how many items it holds so far.
+private struct ListRun {
+  let kind: DocumentKind
+  var list: NSTextList?
+  let start: Int
+  var items: Int
+}
+
+/// The runs of a block's items standing open as its lines are drawn, outermost first, and whether a task drawn since broke their lists' paragraphs.
+private struct ListNesting {
+  let block: Int
+  let runs: [ListRun]
+  let broken: Bool
+}
+
 /// How far a list's, a task's and a quote's lines stand in from the edge.
 private enum DocumentSpace {
   static let indent: CGFloat = 24
@@ -756,7 +771,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   private func drawn(_ lines: [DocumentLine]) -> NSAttributedString {
     let built = NSMutableAttributedString()
     // Note that a list's items share one list at each depth, so its markers count on from one item to the next rather than each starting again, and a run of items nested under one stands in a list of its own inside its parent's, counting from one.
-    var nesting: (block: Int, lists: [(kind: DocumentKind, list: NSTextList?)])?
+    var nesting: ListNesting?
 
     for (index, line) in lines.enumerated() {
       let piece = NSMutableAttributedString()
@@ -848,32 +863,48 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     return base.fontDescriptor.withSymbolicTraits(traits).map { UIFont(descriptor: $0, size: 0) } ?? base
   }
 
-  /// The lists a list's item stands in, outermost first, each depth's run of items sharing one: the item's own list goes on where the item before it at its depth stood in the same kind of list, and starts anew otherwise; a task's level holds none, its box marking it.
-  private func itemLists(
-    _ facts: LineFacts,
-    in nesting: inout (block: Int, lists: [(kind: DocumentKind, list: NSTextList?)])?
-  ) -> [NSTextList] {
+  /// The lists a list's item stands in, outermost first, each depth's run of items sharing one: the item's own list goes on where the item before it at its depth stood in the same kind of list, and starts anew otherwise. A task stands in none, its box marking it, so where one stood between, the next item's lists are made anew counting on from where each stood, since a list's numbers count only its unbroken run of paragraphs.
+  private func itemLists(_ facts: LineFacts, in nesting: inout ListNesting?) -> [NSTextList] {
     guard facts.isListItem else {
       nesting = nil
       return []
     }
 
-    var stack = nesting?.block == facts.block ? nesting?.lists ?? [] : []
-    let depth = min(facts.nesting, stack.count)
+    let same = nesting?.block == facts.block
+    var runs = same ? nesting?.runs ?? [] : []
+    var broken = same && nesting?.broken == true
+    let depth = min(facts.nesting, runs.count)
     let kind = facts.itemKind
 
-    if depth < stack.count, stack[depth].kind == kind {
-      stack.removeSubrange((depth + 1)...)
+    if depth < runs.count, runs[depth].kind == kind {
+      runs.removeSubrange((depth + 1)...)
     } else {
-      stack.removeSubrange(depth...)
-      stack.append((kind, madeList(kind, depth: depth, start: depth == 0 ? facts.start : nil)))
+      runs.removeSubrange(depth...)
+      let start = depth == 0 ? facts.start ?? 1 : 1
+      runs.append(ListRun(kind: kind, list: madeList(kind, depth: depth, start: start), start: start, items: 0))
     }
 
-    nesting = (facts.block, stack)
-    return stack.compactMap(\.list)
+    runs[depth].items += 1
+
+    if kind == .taskList {
+      nesting = ListNesting(block: facts.block, runs: runs, broken: true)
+      return []
+    }
+
+    if broken {
+      for index in runs.indices where runs[index].list != nil {
+        // Note that the item counted just now is this one, so its list starts at its own number.
+        let before = runs[index].items - (index == depth ? 1 : 0)
+        runs[index].list = madeList(runs[index].kind, depth: index, start: runs[index].start + before)
+      }
+      broken = false
+    }
+
+    nesting = ListNesting(block: facts.block, runs: runs, broken: broken)
+    return runs.compactMap(\.list)
   }
 
-  /// A list of `kind`'s items at `depth`: bullets that change their mark with each depth, as Notes' do, or numbers from `start`; a nested task's list draws no mark, its box marking it, but stands in its parents' lists so a numbered run around it counts on; a task list at its block's own depth stands in none, as before nesting.
+  /// A list of `kind`'s items at `depth`: bullets that change their mark with each depth, as Notes' do, or numbers from `start`; none for a task, whose box marks it.
   private func madeList(_ kind: DocumentKind, depth: Int, start: Int?) -> NSTextList? {
     switch kind {
     case .bulletList:
@@ -883,8 +914,6 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       let list = NSTextList(markerFormat: NSTextList.MarkerFormat(rawValue: "{decimal}."), options: 0)
       list.startingItemNumber = start ?? 1
       return list
-    case .taskList where depth > 0:
-      return NSTextList(markerFormat: NSTextList.MarkerFormat(rawValue: ""), options: 0)
     default:
       return nil
     }
