@@ -46,6 +46,10 @@ appId: dev.vespin.ios
     id: "failure-notice-undo"
 - assertVisible: "Version history"
 - takeScreenshot: task-version-restored
+# Note that the notice stands over the list's first row, so the row is tapped only once it has gone.
+- extendedWaitUntil:
+    notVisible: "Version restored"
+    timeout: 10000
 # The newest version stands against Ada's draft: its sections written in or changed edged in green, and the draft's question struck in red.
 - tapOn: "Build the invite flow"
 - waitForAnimationToEnd
