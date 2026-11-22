@@ -64,6 +64,8 @@ export const TURN_FAILURE = {
   PLAN_LIMIT: "plan_limit",
   /** The model refused to answer the turn's newest model turn, and no other model retried it. */
   REFUSAL: "refusal",
+  /** The runner posted more of the turn's events at once than the service takes in one post, so it kept none of them and the launch was cut off. */
+  EVENTS_TOO_LARGE: "events_too_large",
 } as const;
 
 export type TurnFailure = (typeof TURN_FAILURE)[keyof typeof TURN_FAILURE];

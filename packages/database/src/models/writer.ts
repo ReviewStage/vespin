@@ -229,6 +229,8 @@ export interface SettledAgentTurn {
   readonly status: TurnStatus;
   /** The failure word a failed turn was settled with; null for any other end. */
   readonly failure: string | null;
+  /** What a failed turn's record says of its failure, as it was stored; null where it says nothing. */
+  readonly failureDetail: string | null;
   /** How long the turn ran: from its start, or its queueing for one that never started, to its settle. */
   readonly ranMs: number;
 }
@@ -1671,6 +1673,7 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
       turnId: event.turnId,
       status,
       failure: failure ?? null,
+      failureDetail: event.failureDetail?.slice(0, TURN_FAILURE_DETAIL.CHARS) ?? null,
       ranMs: Math.max(0, settledAt.getTime() - (startedAt ?? queuedAt).getTime()),
     });
   }

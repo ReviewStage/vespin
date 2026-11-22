@@ -52,6 +52,8 @@ const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.REFUSAL]: "the model provider's safeguards flagged this conversation",
   [AGENT_FAILURE.CONNECTION_LOST]:
     "the connection to the model's provider was lost and did not come back",
+  [AGENT_FAILURE.EVENTS_TOO_LARGE]:
+    "the run sent more at once than could be kept, such as a large file read whole; ask it to read less at a time",
   [AGENT_FAILURE.OTHER]: undefined,
 } as const satisfies Record<AgentFailure, string | undefined>;
 

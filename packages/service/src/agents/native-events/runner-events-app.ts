@@ -32,6 +32,7 @@ import {
 } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME, type ConversationRuntime } from "@repo/database/storage-vocabulary";
 import { AGENT_PAYER, type AgentPayer } from "@repo/features/agent-wire";
+import { formatBytes } from "@repo/features/number-format";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -1023,6 +1024,55 @@ const batchRefused = (
     }),
   );
 
+/** What a turn records whose runner posted a batch too large to take: how large it was, where the post said, and the bound it passed. */
+function tooLargeDetail(declared: string | null): string {
+  const bytes = Number(declared);
+  const bound = formatBytes(MAX_BODY_BYTES);
+  const size = Number.isFinite(bytes) && bytes > 0 ? formatBytes(bytes) : `over ${bound}`;
+
+  return (
+    `the agent's runner posted ${size} of the turn's events at once, such as a large file or PDF ` +
+    `read whole, more than the ${bound} the service takes in one post, so none of them were kept ` +
+    "and the run was cut off"
+  );
+}
+
+/**
+ * The turn a launch runs failed, saying why, where its runner posted a
+ * batch too large to take. Note that we fail it here rather than leave it
+ * to the sweep, because the runner never posts that batch again nor
+ * anything after it, its launch's end and why among them, so the turn
+ * would stand running until the sweep failed it as a runner lost, which
+ * says nothing of the cause to its page, to its starter, or to a carry-on,
+ * which would only run into it again. The post's admission names the
+ * launch the conversation now runs, so the turn failed is that launch's.
+ * Each one failed is reported as a failed native turn is.
+ */
+const tooLargeSettled = (
+  ids: { readonly agentId: string; readonly conversationId: string },
+  harness: ConversationRuntime,
+  declared: string | null,
+) =>
+  Effect.gen(function* () {
+    const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+    const detail = tooLargeDetail(declared);
+    const now = yield* Clock.currentTimeMillis;
+    const failure = TURN_FAILURE.EVENTS_TOO_LARGE;
+
+    const failed = yield* hostedStoreOrUnavailable(
+      settleRunnerLostTurns(writer, ids.conversationId, now, detail, undefined, failure),
+    );
+
+    for (const turnId of failed) {
+      const attributes = { ...ids, harness, turnId, failure, detail };
+      const message = `a ${harness} turn failed: ${failure}`;
+
+      yield* ErrorReporter.report(
+        Cause.fail(new NativeTurnFailed({ message, [ErrorReporter.attributes]: attributes })),
+      );
+    }
+  });
+
 /** POST: one batch of a runner's events, admitted by its bearer and applied once. */
 const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint")(function* <R>(
   options: RunnerEventsOptions<R>,
@@ -1060,11 +1110,16 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   const reader = read ?? NATIVE_READER[harness];
   const refusedFor = { agentId: agent.value.id, conversationId: target.conversationId };
 
+  const declared = request.headers.get("content-length");
+
   const body = yield* readBodyBytesEffect(MAX_BODY_BYTES).pipe(
     Effect.tapError((refusal) =>
-      batchRefused(refusedFor, refusal, {
-        bytes: request.headers.get("content-length") ?? `over ${MAX_BODY_BYTES}`,
-      }),
+      Effect.andThen(
+        batchRefused(refusedFor, refusal, { bytes: declared ?? `over ${MAX_BODY_BYTES}` }),
+        refusal.error === HOSTED_REFUSAL.REQUEST_TOO_LARGE.error
+          ? tooLargeSettled(refusedFor, harness, declared)
+          : Effect.void,
+      ),
     ),
   );
 

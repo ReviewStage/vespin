@@ -191,6 +191,7 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
           turnId,
           status: TURN_STATUS.SETTLED,
           failure: null,
+          failureDetail: null,
           ranMs: 1,
         }).pipe(Effect.provideService(SlackBot, bot));
         assert.equal(slack.posted.length, 1);

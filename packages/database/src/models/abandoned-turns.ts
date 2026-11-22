@@ -72,14 +72,15 @@ export type LostTurnEnd =
       readonly failureDetail: string;
     };
 
-/** The words a turn whose runner went away fails with: lost, past its deadline as its state, as a run its launch said failed, or as one its plan's limit cut short that no launch took up again. */
+/** The words a turn whose runner went away fails with: lost, past its deadline as its state, as a run its launch said failed, as one its plan's limit cut short that no launch took up again, or as one whose runner the service cut off by refusing its events as too large. */
 export type LostRunnerFailure =
   | typeof TURN_FAILURE.MODEL
   | typeof TURN_FAILURE.LINE_UNTAKEN
   | typeof TURN_FAILURE.NO_PROGRESS
   | typeof TURN_FAILURE.RUNNER_LOST
   | typeof TURN_FAILURE.DEADLINE
-  | typeof TURN_FAILURE.PLAN_LIMIT;
+  | typeof TURN_FAILURE.PLAN_LIMIT
+  | typeof TURN_FAILURE.EVENTS_TOO_LARGE;
 
 /** What a native agent's turn whose runner went away says it failed of, as a runner's own failed end says why; a caller that knows how the runner ended appends that after it. */
 export const RUNNER_LOST_DETAIL = "the agent's runner stopped before its turn ended";

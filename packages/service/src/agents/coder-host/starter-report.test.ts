@@ -129,6 +129,7 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
           turnId,
           status: TURN_STATUS.FAILED,
           failure: TURN_FAILURE.MODEL,
+          failureDetail: null,
           ranMs: 1,
         }).pipe(Effect.provide(githubReaching([]).layer));
         assert.equal(sentTo(agentSessions, sessionId).length, 1);
@@ -136,7 +137,7 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
   );
 
   it.effect(
-    "a failed turn that said nothing hands its failure, one the plan's limit stopped that limit, and one stopped nothing",
+    "a failed turn that said nothing hands its failure, with what its record says of it where it says anything, one the plan's limit stopped that limit, and one stopped nothing",
     () =>
       Effect.gen(function* () {
         const agentSessions = recordingSessions();
@@ -154,7 +155,18 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
           TURN_FAILURE.PLAN_LIMIT,
         ).pipe(Effect.provide(reporting(agentSessions)));
 
-        const [failed, limited, ...more] = sentTo(agentSessions, sessionId);
+        // A failure whose word alone says nothing of its cause hands the cause beside it.
+        yield* reportToStarter(agentSessions.sessionsFor, {
+          userId: agent.userId,
+          conversationId: agent.conversationId,
+          turnId: randomUUID(),
+          status: TURN_STATUS.FAILED,
+          failure: TURN_FAILURE.EVENTS_TOO_LARGE,
+          failureDetail: "the runner posted 4.3 MB of events at once",
+          ranMs: 1,
+        }).pipe(Effect.provide(githubReaching([]).layer));
+
+        const [failed, limited, detailed, ...more] = sentTo(agentSessions, sessionId);
         assert.equal(more.length, 0, more.join("\n"));
         assert.ok(
           failed?.includes(
@@ -168,6 +180,12 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
             "was stopped: the plan hit its usage limit and the turn could not go on. Its final message:",
           ),
           limited ?? "nothing was sent",
+        );
+        assert.ok(
+          detailed?.includes(
+            "failed its turn (events_too_large: the runner posted 4.3 MB of events at once). Its final message:",
+          ),
+          detailed ?? "nothing was sent",
         );
       }),
   );

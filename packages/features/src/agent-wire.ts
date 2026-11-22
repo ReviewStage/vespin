@@ -507,6 +507,8 @@ export const AGENT_FAILURE = {
   REFUSAL: "refusal",
   /** The harness lost its connection to the model's provider, and the provider's host never answered again within the runner's wait, or was lost again at once. */
   CONNECTION_LOST: "connection_lost",
+  /** The run sent more at once than the service takes in one post, such as a large file read whole, so the turn was cut off. */
+  EVENTS_TOO_LARGE: "events_too_large",
   OTHER: "other",
 } as const;
 

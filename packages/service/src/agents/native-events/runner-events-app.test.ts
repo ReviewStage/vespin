@@ -1380,6 +1380,61 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
+    "a batch too large to take is refused and fails the turn it cut off, saying why, rather than leaving it running for the sweep",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+
+        const accepted = {
+          sequence: 0,
+          message: { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+        };
+
+        // A subagent's read of a large PDF, as one tool result over the 4 MiB a post may hold.
+        const read = {
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_read",
+                content: [{ type: "text", text: "x".repeat(4_300_000) }],
+              },
+            ],
+          },
+          ...top,
+        };
+
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        yield* post(agent.bearer, [accepted as RunnerEvent]);
+        // SAFETY: the read is a user message in the pinned SDK's JSON shape, as above.
+        const refused = yield* post(agent.bearer, [{ sequence: 1, message: read } as RunnerEvent]);
+        assert.equal(refused.status, 413);
+        const db = yield* Database;
+
+        const ended = yield* db
+          .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
+          .from(turns)
+          .where(eq(turns.conversationId, agent.target.conversationId));
+
+        assert.deepEqual(
+          ended.map((turn) => [turn.status, turn.failure]),
+          [[TURN_STATUS.FAILED, "events_too_large"]],
+        );
+        assert.match(ended[0]?.detail ?? "", /none of them were kept and the run was cut off/u);
+        // The agent reads as failed for that reason, which its page words, rather than as a runner lost.
+        const [turn] = ended;
+        assert.equal(
+          agentFailureOf(turn && { ...turn, failureDetail: turn.detail }),
+          AGENT_FAILURE.EVENTS_TOO_LARGE,
+        );
+      }),
+  );
+
+  it.effect(
     "a goal's setting, the checker's verdict, and its settling stand in its turn as goal notices, not as words",
     () =>
       Effect.gen(function* () {

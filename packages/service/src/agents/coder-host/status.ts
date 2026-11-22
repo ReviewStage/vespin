@@ -231,6 +231,7 @@ export const SETTLED_FAILURES: readonly (readonly [TurnFailure, AgentFailure])[]
   [TURN_FAILURE.LINE_UNTAKEN, AGENT_FAILURE.LINE_UNTAKEN],
   [TURN_FAILURE.PLAN_LIMIT, AGENT_FAILURE.PLAN_LIMIT],
   [TURN_FAILURE.REFUSAL, AGENT_FAILURE.REFUSAL],
+  [TURN_FAILURE.EVENTS_TOO_LARGE, AGENT_FAILURE.EVENTS_TOO_LARGE],
 ];
 
 /** The host that lost a failed turn's run, by the name its turn records; nothing for any other turn. */

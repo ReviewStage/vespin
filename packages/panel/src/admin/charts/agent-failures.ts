@@ -25,6 +25,7 @@ const AGENT_FAILURE_LABEL = {
   [AGENT_FAILURE.PLAN_LIMIT]: "Plan limit, never relaunched",
   [AGENT_FAILURE.REFUSAL]: "Model refused",
   [AGENT_FAILURE.CONNECTION_LOST]: "Provider connection lost, never back",
+  [AGENT_FAILURE.EVENTS_TOO_LARGE]: "Events too large to post",
   [AGENT_FAILURE.OTHER]: "Other",
 } as const satisfies Record<AgentFailure, string>;
 

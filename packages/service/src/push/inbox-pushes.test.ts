@@ -301,6 +301,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         turnId: randomUUID(),
         status: TURN_STATUS.FAILED,
         failure: "timed_out",
+        failureDetail: null,
         ranMs: 1000,
       });
 
@@ -320,6 +321,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         conversationId,
         turnId: randomUUID(),
         failure: null,
+        failureDetail: null,
         ranMs: 1000,
       };
 
@@ -385,6 +387,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
             turnId,
             status: TURN_STATUS.SETTLED,
             failure: null,
+            failureDetail: null,
             ranMs: 1000,
           });
 
@@ -501,6 +504,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
               turnId: row.id,
               status,
               failure: null,
+              failureDetail: null,
               ranMs: 1000,
             };
           });

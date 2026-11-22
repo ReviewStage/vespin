@@ -8,9 +8,10 @@
  * (`@repo/database/models/writer`'s `SettledTurnListener`) hands the turn's
  * final words to the starter here, as a message from the agent
  * (`agent-message.ts`): under the agent's own name, opening on who sent it
- * and why its turn failed. A turn completed or stopped sends nothing, and
- * one that said nothing hands its failure alone. The words are cut to fit
- * one message.
+ * and why its turn failed: its failure word and what its record says of
+ * it, so the starter learns the real cause rather than a word alone. A
+ * turn completed or stopped sends nothing, and one that said nothing hands
+ * its failure alone. The words are cut to fit one message.
  *
  * The line goes under the turn's own id as its key, so a settle heard again
  * sends nothing twice (`steerAgent`'s repeat); one the service could not
@@ -42,14 +43,20 @@ import { MAX_MESSAGE_WORDS_CHARS } from "./agent-message.js";
 import { agentLineSender, steerAgent } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
-/** The room the head takes of a message's words, which the final words leave free. */
-const REPORT_HEAD_ROOM_CHARS = 500;
+/** The most characters of what a failed turn's record says of its failure the head carries; longer ones are cut. */
+const REPORT_DETAIL_CHARS = 400;
+
+/** The room the head takes of a message's words, which the final words leave free: its own words, the agent's mention, and the failure's detail. */
+const REPORT_HEAD_ROOM_CHARS = 500 + REPORT_DETAIL_CHARS;
 
 /** The most characters of the agent's final words the line carries; longer ones are cut. */
 const REPORT_WORDS_CHARS = MAX_MESSAGE_WORDS_CHARS - REPORT_HEAD_ROOM_CHARS;
 
 /** What the cut end of the final words says. */
 const CUT_MARK = "… (cut to fit; read_agent reads the rest)";
+
+/** What the cut end of a failure's detail says. */
+const DETAIL_CUT_MARK = "…";
 
 /** What the line says of a turn that ended in words of its own. */
 const NO_WORDS = "(it said nothing)";
@@ -93,15 +100,16 @@ export function lastSaid(journal: StoredUIMessage): string | undefined {
   return endTurnSummary(journal) ?? said.at(-1);
 }
 
+/** Words cut to at most `chars`, the cut end saying so by `mark`. */
+function cutTo(words: string, chars: number, mark: string): string {
+  return words.length > chars ? `${words.slice(0, chars - mark.length)}${mark}` : words;
+}
+
 /** The agent's final words: the last text its turn's journal holds, cut to fit; none where it said nothing. */
 function finalWords(journal: StoredUIMessage): string | undefined {
   const last = lastSaid(journal);
 
-  if (last === undefined) return undefined;
-
-  return last.length > REPORT_WORDS_CHARS
-    ? `${last.slice(0, REPORT_WORDS_CHARS - CUT_MARK.length)}${CUT_MARK}`
-    : last;
+  return last === undefined ? undefined : cutTo(last, REPORT_WORDS_CHARS, CUT_MARK);
 }
 
 /** How the failed turn ended, in the head's words. */
@@ -111,7 +119,11 @@ function ended(turn: SettledAgentTurn): string {
     return `was stopped: ${agentFailureWords(AGENT_FAILURE.PLAN_LIMIT, undefined)}`;
   }
 
-  return `failed its turn${turn.failure === null ? "" : ` (${turn.failure})`}`;
+  // Note that the record's detail goes beside the word, because the word alone, such as runner_lost, says nothing of the cause.
+  const said = cutTo(turn.failureDetail?.trim() ?? "", REPORT_DETAIL_CHARS, DETAIL_CUT_MARK);
+  const why = [turn.failure ?? "", said].filter((part) => part !== "").join(": ");
+
+  return `failed its turn${why === "" ? "" : ` (${why})`}`;
 }
 
 /** The line the starter receives: who it is from and how its turn failed, and its final words. */
