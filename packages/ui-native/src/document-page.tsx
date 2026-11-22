@@ -45,7 +45,8 @@ interface DocumentPageProps {
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
-  field: { flex: 1, paddingHorizontal: SPACE.EDGE, paddingTop: SPACE.ROW },
+  // Note that the field stands in from the page's edges by its margins rather than padding, which never reaches the text view's own words, so its words line up with the task page's.
+  field: { flex: 1, marginHorizontal: SPACE.EDGE },
   problem: { paddingHorizontal: SPACE.EDGE, paddingTop: SPACE.ROW },
 });
 

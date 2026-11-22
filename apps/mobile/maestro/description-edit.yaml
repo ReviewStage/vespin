@@ -44,8 +44,11 @@ env:
 # system's own acts, a page on: Bold, Italic, Strikethrough, Code and Link,
 # then Turn into, in the panel's words. Note that the menu's next page is
 # the system's own chevron, which VoiceOver hears as Next Page; a wide
-# window stands Format on the first page already.
-- doubleTapOn: "Context"
+# window stands Format on the first page already. The field is one element,
+# its whole document its words, as Notes' page is, so the double tap lands
+# at its middle, selecting the word there.
+- doubleTapOn:
+    id: "description-words"
 - waitForAnimationToEnd
 - runFlow:
     when:
