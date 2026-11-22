@@ -321,6 +321,8 @@ const LUCIDE_SYMBOLS = {
   LIST: "list",
   LIST_CHECKS: "list-checks",
   LIST_END: "list-end",
+  LIST_INDENT_DECREASE: "list-indent-decrease",
+  LIST_INDENT_INCREASE: "list-indent-increase",
   LIST_ORDERED: "list-ordered",
   LIST_TODO: "list-todo",
   LIST_TREE: "list-tree",

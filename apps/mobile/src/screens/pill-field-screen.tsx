@@ -52,7 +52,7 @@ const DOCUMENT = [
   "```",
 ].join("\n");
 
-/** The description the rich field opens on: each block it draws with no syntax, and a table and a diagram it stands as cards. */
+/** The description the rich field opens on: each block it draws with no syntax, items nested under a numbered one among them, and a table and a diagram it stands as cards. */
 const DESCRIPTION = [
   "# Teammate invitations",
   "",
@@ -62,6 +62,8 @@ const DESCRIPTION = [
   "- Resend an expired one",
   "",
   "1. Model",
+  "   - Memberships",
+  "     - [ ] Pending",
   "2. Screen",
   "",
   "- [x] Owners may withdraw",

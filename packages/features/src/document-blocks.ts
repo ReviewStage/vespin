@@ -74,10 +74,23 @@ export type InlineRun =
   | { readonly kind: typeof INLINE_RUN.PILL; readonly pill: Pill }
   | { readonly kind: typeof INLINE_RUN.RAW; readonly source: string };
 
+/** The list a nested list's line stands in, which may differ from its parent's, as bullets under a numbered item do. */
+export const LIST_MARKER = {
+  BULLET: "bullet",
+  ORDERED: "ordered",
+  TASK: "task",
+} as const;
+
+export type ListMarker = (typeof LIST_MARKER)[keyof typeof LIST_MARKER];
+
 /** A line of a block: a paragraph, a heading's words, a list's item with its box where it is a task, or a code block's text as one run. */
 export interface BlockLine {
   readonly runs: readonly InlineRun[];
   readonly checked?: boolean | undefined;
+  /** How deep a list's item stands under the block's own items, which stand at none. */
+  readonly depth?: number | undefined;
+  /** The list a nested item stands in; none at the block's own depth, where its kind says. */
+  readonly marker?: ListMarker | undefined;
 }
 
 /** A block's content, what the editor draws and changes. */
@@ -319,36 +332,64 @@ function itemChecked(
   return box === null ? undefined : box[1] !== " ";
 }
 
-/** A list read as its items, each one paragraph, or none where an item holds more, such as a nested list. */
+/** A list's items as lines at `depth`, each followed by the lines of the lists nested in it, or none where an item holds more than a paragraph and lists, such as a code block. */
+function listLines(
+  markdown: string,
+  node: RootContent & { readonly type: "list" },
+  files: ReadonlySet<string>,
+  depth: number,
+): BlockLine[] | undefined {
+  const lines: BlockLine[] = [];
+  const checks = node.children.map((item) => itemChecked(markdown, item));
+  const task = checks.some((checked) => checked !== undefined);
+
+  const marker =
+    node.ordered === true ? LIST_MARKER.ORDERED : task ? LIST_MARKER.TASK : LIST_MARKER.BULLET;
+
+  for (const [index, item] of node.children.entries()) {
+    const checked = checks[index];
+    const [paragraph, ...nested] = item.children;
+    const lists = nested.flatMap((child) => (child.type === "list" ? [child] : []));
+
+    if (lists.length < nested.length || paragraph?.type === "list") return undefined;
+
+    // Note that an empty task's box is its item's whole paragraph, so the line holds no words.
+    const empty = (item.checked === null || item.checked === undefined) && checked !== undefined;
+
+    const [read] =
+      paragraph === undefined || empty
+        ? [{ runs: [] }]
+        : (paragraphLines(markdown, [paragraph], files) ?? []);
+
+    if (read === undefined) return undefined;
+    const boxed = task ? { ...read, checked: checked === true } : read;
+    lines.push(depth === 0 ? boxed : { ...boxed, depth, marker });
+
+    for (const list of lists) {
+      const inner = listLines(markdown, list, files, depth + 1);
+
+      if (inner === undefined) return undefined;
+      lines.push(...inner);
+    }
+  }
+
+  return lines;
+}
+
+/** A list read as its items and the items nested under them, or none where an item holds more than a paragraph and lists. */
 function listContent(
   markdown: string,
   node: RootContent & { readonly type: "list" },
   files: ReadonlySet<string>,
 ): BlockContent | undefined {
-  const lines: BlockLine[] = [];
-  const checks = node.children.map((item) => itemChecked(markdown, item));
-  const task = checks.some((checked) => checked !== undefined);
+  const lines = listLines(markdown, node, files, 0);
 
-  for (const [index, item] of node.children.entries()) {
-    const checked = checks[index];
-    const [paragraph, ...rest] = item.children;
-
-    if (rest.length > 0) return undefined;
-
-    // Note that an empty task's box is its item's whole paragraph, so the line holds no words.
-    const empty = (item.checked === null || item.checked === undefined) && checked !== undefined;
-
-    const read =
-      paragraph === undefined || empty
-        ? [{ runs: [] }]
-        : paragraphLines(markdown, [paragraph], files);
-
-    if (read === undefined) return undefined;
-    lines.push(...read.map((line) => (task ? { ...line, checked: checked === true } : line)));
-  }
+  if (lines === undefined) return undefined;
 
   if (node.ordered === true)
     return { kind: BLOCK_KIND.ORDERED_LIST, start: node.start ?? 1, lines };
+
+  const task = node.children.some((item) => itemChecked(markdown, item) !== undefined);
 
   return { kind: task ? BLOCK_KIND.TASK_LIST : BLOCK_KIND.BULLET_LIST, lines };
 }
@@ -543,6 +584,56 @@ function printRuns(runs: readonly InlineRun[]): string {
     .join("");
 }
 
+/** The list a list block's own items stand in. */
+function topMarker(kind: BlockContent["kind"]): ListMarker {
+  if (kind === BLOCK_KIND.ORDERED_LIST) return LIST_MARKER.ORDERED;
+
+  return kind === BLOCK_KIND.TASK_LIST ? LIST_MARKER.TASK : LIST_MARKER.BULLET;
+}
+
+/**
+ * A list block printed as its items, each nested item indented to where its
+ * parent's words start (two spaces under `- `, three under `1. `), as
+ * CommonMark reads a nested list. A run of numbered items counts from the
+ * block's start at its own depth and from one beneath, starting again where
+ * a run of another kind or a shallower item stood between; an item is never
+ * deeper than one under the item before it.
+ */
+function printList(block: BlockContent, printed: readonly string[]): string {
+  const top = topMarker(block.kind);
+  const first = block.kind === BLOCK_KIND.ORDERED_LIST ? block.start : 1;
+  // The column each depth's words start at, the list it stands in, and the number its next item takes.
+  const columns: number[] = [];
+  const markers: ListMarker[] = [];
+  const numbers: number[] = [];
+
+  return block.lines
+    .map((line, index) => {
+      const depth = Math.min(line.depth ?? 0, columns.length);
+      const marker = depth === 0 ? top : (line.marker ?? LIST_MARKER.BULLET);
+      const lead = depth === 0 ? 0 : (columns[depth - 1] ?? 0);
+      const number = markers[depth] === marker ? (numbers[depth] ?? 1) : depth === 0 ? first : 1;
+
+      const mark =
+        marker === LIST_MARKER.ORDERED
+          ? `${number}. `
+          : marker === LIST_MARKER.TASK
+            ? `- [${line.checked === true ? "x" : " "}] `
+            : "- ";
+
+      // Note that a task's words start after its `- `, its box being the start of its paragraph, so what nests under it stands two spaces in.
+      columns.length = depth;
+      markers.length = depth;
+      numbers.length = depth;
+      columns.push(lead + (marker === LIST_MARKER.TASK ? 2 : mark.length));
+      markers.push(marker);
+      numbers.push(number + 1);
+
+      return `${" ".repeat(lead)}${mark}${printed[index] ?? ""}`;
+    })
+    .join("\n");
+}
+
 /** A code block printed between fences longer than any run of backticks in it. */
 function printCode(language: string, text: string): string {
   const longest = Math.max(2, ...(text.match(/`+/gu) ?? []).map((run) => run.length));
@@ -561,13 +652,9 @@ export function printBlock(block: BlockContent): string {
     case BLOCK_KIND.HEADING:
       return `${"#".repeat(Math.min(Math.max(block.level, 1), 6))} ${lines.join(" ")}`;
     case BLOCK_KIND.BULLET_LIST:
-      return lines.map((line) => `- ${line}`).join("\n");
     case BLOCK_KIND.ORDERED_LIST:
-      return lines.map((line, index) => `${block.start + index}. ${line}`).join("\n");
     case BLOCK_KIND.TASK_LIST:
-      return block.lines
-        .map((line, index) => `- [${line.checked === true ? "x" : " "}] ${lines[index] ?? ""}`)
-        .join("\n");
+      return printList(block, lines);
     case BLOCK_KIND.QUOTE:
       return lines
         .map((line) =>

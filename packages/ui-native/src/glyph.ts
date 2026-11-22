@@ -138,6 +138,10 @@ export const GLYPH = {
   BROWSER: lucide(LUCIDE_SYMBOL.APP_WINDOW_MAC),
   DATE: lucide(LUCIDE_SYMBOL.CALENDAR),
   PERSON: lucide(LUCIDE_SYMBOL.USER),
+  /** A list's item moved a step deeper, as Tab moves it. */
+  INDENT: lucide(LUCIDE_SYMBOL.LIST_INDENT_INCREASE),
+  /** A list's item moved a step back out, as Shift-Tab moves it. */
+  OUTDENT: lucide(LUCIDE_SYMBOL.LIST_INDENT_DECREASE),
   PEOPLE: lucide(LUCIDE_SYMBOL.USERS),
   FOLLOW: lucide(LUCIDE_SYMBOL.EYE),
   UNFOLLOW: lucide(LUCIDE_SYMBOL.EYE_OFF),

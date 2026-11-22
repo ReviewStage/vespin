@@ -95,6 +95,8 @@ export const LUCIDE_SYMBOL = {
   LIST: "List",
   LIST_CHECKS: "ListChecks",
   LIST_END: "ListEnd",
+  LIST_INDENT_DECREASE: "ListIndentDecrease",
+  LIST_INDENT_INCREASE: "ListIndentIncrease",
   LIST_ORDERED: "ListOrdered",
   LIST_TODO: "ListTodo",
   LIST_TREE: "ListTree",

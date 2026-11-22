@@ -7,6 +7,8 @@ import {
   type DocumentBlock,
   type EditedBlock,
   INLINE_RUN,
+  LIST_MARKER,
+  type ListMarker,
   LOCKED_KIND,
   type LockedKind,
 } from "@repo/features/document-blocks";
@@ -35,6 +37,10 @@ export interface FieldLine {
   readonly language?: string | undefined;
   readonly locked?: LockedKind | undefined;
   readonly checked?: boolean | undefined;
+  /** How deep a list's item stands under its block's own items, which stand at none. */
+  readonly depth?: number | undefined;
+  /** The list a nested item stands in, which may differ from its block's. */
+  readonly marker?: ListMarker | undefined;
   /** Which block of the document as read the line's block came from; none for one made in the field. */
   readonly from?: number | undefined;
   readonly runs: BlockLine["runs"];
@@ -52,7 +58,9 @@ const ONE_LINE_KINDS: ReadonlySet<BlockContent["kind"]> = new Set([
 const RULE_LINE: BlockLine = { runs: [] };
 
 /** What a line carries of its block, its kind's own facts with it. */
-function blockFacts(block: BlockContent): Omit<FieldLine, "block" | "from" | "runs" | "checked"> {
+function blockFacts(
+  block: BlockContent,
+): Omit<FieldLine, "block" | "from" | "runs" | "checked" | "depth" | "marker"> {
   switch (block.kind) {
     case BLOCK_KIND.HEADING:
       return { kind: block.kind, level: block.level };
@@ -96,9 +104,12 @@ function blockLines(
   return lines.map((line): FieldLine => {
     const laid: FieldLine = { ...facts, block: key, from, runs: line.runs };
 
-    if (line.checked === undefined) return laid;
+    const nested =
+      line.depth === undefined ? laid : { ...laid, depth: line.depth, marker: line.marker };
 
-    return { ...laid, checked: line.checked };
+    if (line.checked === undefined) return nested;
+
+    return { ...nested, checked: line.checked };
   });
 }
 
@@ -150,11 +161,18 @@ function blockOf(first: FieldLine, lines: readonly BlockLine[]): BlockContent {
   }
 }
 
-/** A line as a block's line: its runs, and its box where its block is a task list. */
+/** A line as a block's line: its runs, how deep it stands and in what list where it is nested, and its box where it stands in a task list, its block's or a nested one. */
 function blockLine(line: FieldLine): BlockLine {
-  if (line.kind !== BLOCK_KIND.TASK_LIST) return { runs: line.runs };
+  const depth = line.depth ?? 0;
 
-  return { runs: line.runs, checked: line.checked === true };
+  const nested: BlockLine =
+    depth > 0
+      ? { runs: line.runs, depth, marker: line.marker ?? LIST_MARKER.BULLET }
+      : { runs: line.runs };
+
+  const task = depth > 0 ? nested.marker === LIST_MARKER.TASK : line.kind === BLOCK_KIND.TASK_LIST;
+
+  return task ? { ...nested, checked: line.checked === true } : nested;
 }
 
 /**
