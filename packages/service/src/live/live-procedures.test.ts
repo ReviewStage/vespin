@@ -38,6 +38,7 @@ import {
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
+import { device } from "@repo/database/schemas/device";
 import { memoryRecall } from "@repo/database/schemas/memory";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
@@ -66,7 +67,12 @@ import { TASK_BROWSER_TABS_READ } from "@repo/features/browser-tabs-live";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
-import { DEVICE_ARCH, DEVICE_PLATFORM, MACHINE_OWNER } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_ARCH,
+  DEVICE_PLATFORM,
+  MACHINE_NETWORK,
+  MACHINE_OWNER,
+} from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { HOSTS_READ, hostsOfLiveRows } from "@repo/features/host-live";
 import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
@@ -116,6 +122,7 @@ import {
   WORKSPACE_MEMBERS_READ,
   WORKSPACES_READ,
 } from "@repo/features/workspace-live";
+import { WORKSPACE_MACHINES_READ } from "@repo/features/workspace-machine-live";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import {
   MESSAGE_ROLE,
@@ -172,6 +179,7 @@ import { liveProcedures } from "./live-procedures.js";
 import { pollSealer } from "./poll-sealer.js";
 import { agentOriginRead } from "./reads/agent-origin.js";
 import { agentTranscriptRead } from "./reads/agent-transcript.js";
+import { workspaceMachinesRead } from "./reads/workspace-machines.js";
 
 /**
  * The reads the desktop follows, answered by the procedure the way the
@@ -2003,6 +2011,62 @@ it.layer(getTestDB())("the account's hosts' live read", (it) => {
           hostsOfLiveRows(hosts, lapse).map((host) => host.name),
           ["fra-03"],
         );
+      }),
+  );
+});
+
+it.layer(getTestDB())("a workspace's machines' live read", (it) => {
+  it.effect(
+    "a member is answered their workspace's machines polled, never another workspace's, an outsider is not found, and no row of the statement reaches one",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const [owner, teammate, outsider] = [yield* openUser, yield* openUser, yield* openUser];
+        const workspaceId = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspaceId, teammate);
+        const elsewhere = yield* openWorkspace(outsider);
+
+        const machine = (organizationId: string, connectedBy: string, name: string) =>
+          db.insert(device).values({
+            id: randomUUID(),
+            organizationId,
+            connectedBy,
+            network: MACHINE_NETWORK.PUBLIC_ONLY,
+            name,
+            platform: DEVICE_PLATFORM.LINUX,
+            arch: DEVICE_ARCH.X64,
+            lastSeenAt: new Date(0),
+          });
+
+        yield* machine(workspaceId, owner, "fra-03");
+        yield* machine(elsewhere, outsider, "theirs");
+        const path = `/api/live/workspace-machines?workspaceId=${workspaceId}`;
+
+        const names = (bearer: string) =>
+          Effect.gen(function* () {
+            const polled = yield* ask({ bearer, path });
+            assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
+            const answer = Schema.decodeUnknownSync(WORKSPACE_MACHINES_READ.answer)(polled.body);
+            assert.equal(answer.url, LIVE_POLL_URL);
+
+            return Schema.decodeUnknownSync(WORKSPACE_MACHINES_READ.rows)({
+              machines: answer.queries.machines.rows,
+            }).machines.map(({ name }) => name);
+          });
+
+        assert.deepEqual(yield* names(owner), ["fra-03"]);
+        assert.deepEqual(yield* names(teammate), ["fra-03"], "any member reads them");
+        assert.deepEqual(yield* ask({ bearer: outsider, path }), {
+          status: HOSTED_HTTP_STATUS.NOT_FOUND,
+          body: { error: HOSTED_API_ERROR.NOT_FOUND },
+        });
+
+        const statement = Option.getOrThrow(
+          workspaceMachinesRead.statements({ userId: outsider, workspaceId }),
+        ).machines;
+
+        const sql = yield* SqlClient.SqlClient;
+        assert.deepEqual(yield* sql.unsafe(statement.sql, [...statement.params]), []);
       }),
   );
 });
