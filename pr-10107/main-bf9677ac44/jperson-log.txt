@@ -1,0 +1,10 @@
+== bundle PJjperson base bf9677ac44
+  built bf9677ac44 base app Vp10440.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-f10107: fails 0 shots 6 
+iphone-dark-f10107: fails 1 shots 1 Assert that "Recorded the invite flow.*" is visible... FAILED
+ipad27-light-f10107: fails 0 shots 6 
+ipad27-dark-f10107: fails 1 shots 1 Assert that "Recorded the invite flow.*" is visible... FAILED
