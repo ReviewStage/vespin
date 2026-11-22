@@ -134,7 +134,9 @@ env:
 # in the bar (`scroll-to.yaml`'s `BELOW`), because a scroll that stops once
 # it shows can leave it under the bar, as the scrolls before it leave it on
 # an iPad, where the tap landed on the status bar and scrolled the list to
-# its top, leaving the fold shut (STAG-3807).
+# its top, leaving the fold shut (STAG-3807). So the iPad needs no turn
+# upright for the fold, and no second tap: a tap that misses here has landed
+# under the bar, which a scroll clear of it mends.
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
