@@ -53,8 +53,8 @@ env:
 # own Settings. Note too that the switch is heard by its label and the line
 # under it ("On, Next: …") while on, and by its label alone while off, the
 # same words as its label's own child, which is never checked; so the switch
-# on is found by its line, and the switch off as the first "On" from the top,
-# which is the switch's row above its label.
+# on is found by its line, and the switch off as the second of the two "On"
+# matches, Maestro listing its label's child first (j10458b, every lane).
 - tapOn:
     text: "On, Next.*"
     checked: true
@@ -68,7 +68,7 @@ env:
 - tapOn:
     text: "On"
     checked: false
-    index: 0
+    index: 1
     point: "92%,50%"
 - assertVisible:
     text: "On, Next.*"
