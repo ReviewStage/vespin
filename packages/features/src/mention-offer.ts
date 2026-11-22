@@ -1,4 +1,4 @@
-// mention-offer.ts -- the people, agents, tasks, the description's sections, pages, threads, pull requests and dates an `@` typed in a phone's composer or description offers, as the panel's mention picker groups, words and narrows them by kind (`@people:`).
+// mention-offer.ts -- the people, agents, tasks, the description's sections, pages, threads, automations, pull requests, dates and machines an `@` typed in a phone's composer or description offers, as the panel's mention picker groups, words and narrows them by kind (`@people:`).
 
 import {
   type DateSpan,
@@ -8,6 +8,7 @@ import {
   suggestedDates,
 } from "./date-mention.js";
 import { descriptionSections } from "./description-sections.js";
+import { LINK_DESTINATION, linkOf } from "./link-grammar.js";
 import {
   MENTION_BROWSE,
   MENTION_FROM,
@@ -29,7 +30,9 @@ export const MENTION_OFFER_GROUP = {
   DESCRIPTION: "Description",
   PAGES: "Pages",
   THREADS: "Threads",
+  AUTOMATIONS: "Automations",
   PULL_REQUESTS: "Pull requests",
+  MACHINES: "Machines",
 } as const;
 
 /** What each thing an `@` offers is, which its row's glyph says. */
@@ -40,8 +43,10 @@ export const MENTION_OFFER_KIND = {
   SECTION: "section",
   PAGE: "page",
   THREAD: "thread",
+  AUTOMATION: "automation",
   PULL_REQUEST: "pull-request",
   DATE: "date",
+  MACHINE: "machine",
 } as const;
 
 export type MentionOfferKind = (typeof MENTION_OFFER_KIND)[keyof typeof MENTION_OFFER_KIND];
@@ -62,8 +67,10 @@ const OFFERED_FROM = [
   MENTION_FROM.DESCRIPTION,
   MENTION_FROM.PAGES,
   MENTION_FROM.THREADS,
+  MENTION_FROM.AUTOMATIONS,
   MENTION_FROM.PULL_REQUESTS,
   MENTION_FROM.DATES,
+  MENTION_FROM.MACHINES,
 ] as const satisfies readonly MentionFrom[];
 
 /** A kind an `@` on the phone may be narrowed to, by its word. */
@@ -77,8 +84,10 @@ const FROM_GROUP = {
   [MENTION_FROM.DESCRIPTION]: "Description",
   [MENTION_FROM.PAGES]: "Pages",
   [MENTION_FROM.THREADS]: "Threads",
+  [MENTION_FROM.AUTOMATIONS]: "Automations",
   [MENTION_FROM.PULL_REQUESTS]: "Pull requests",
   [MENTION_FROM.DATES]: "Dates",
+  [MENTION_FROM.MACHINES]: "Machines",
 } as const satisfies Record<MentionOfferFrom, string>;
 
 /** Each kind's sources, which its narrowed list searches. */
@@ -89,7 +98,9 @@ const FROM_SOURCE = {
   [MENTION_FROM.DESCRIPTION]: "description",
   [MENTION_FROM.PAGES]: "pages",
   [MENTION_FROM.THREADS]: "threads",
+  [MENTION_FROM.AUTOMATIONS]: "automations",
   [MENTION_FROM.PULL_REQUESTS]: "pullRequests",
+  [MENTION_FROM.MACHINES]: "machines",
 } as const satisfies Record<Exclude<MentionOfferFrom, typeof MENTION_FROM.DATES>, string>;
 
 /** What a description's rows say after their names, in the panel's words. */
@@ -156,7 +167,10 @@ export interface MentionSources {
   readonly description: readonly MentionCandidate[];
   readonly pages: readonly MentionCandidate[];
   readonly threads: readonly MentionCandidate[];
+  readonly automations: readonly MentionCandidate[];
   readonly pullRequests: readonly MentionCandidate[];
+  /** The workspace's machines, the reader's own first, as the panel's list stands them. */
+  readonly machines: readonly MentionCandidate[];
   /** The dates the words name; with none typed, the few a list narrowed to dates suggests. */
   readonly dates: (words: string) => readonly MentionCandidate[];
 }
@@ -270,6 +284,50 @@ export function descriptionCandidates(
   return [...sections, whole];
 }
 
+/** An automation an `@` offers, as the panel's picker offers it: by its name, saying what fires it, a pick writing its page's link. */
+export function automationCandidate(
+  automation: { readonly id: string; readonly name: string },
+  fires: string,
+  workspace: string,
+): MentionCandidate {
+  return {
+    id: automation.id,
+    kind: MENTION_OFFER_KIND.AUTOMATION,
+    name: automation.name,
+    detail: fires,
+    terms: [fires],
+    target: linkOf({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id }, workspace),
+  };
+}
+
+/** A machine a workspace owns, as an `@` offers it: its id, its name, who connected it, and what it runs. */
+export interface OfferedMachine {
+  readonly id: string;
+  readonly name: string;
+  readonly ownerId: string | null;
+  /** Words it is found by, such as its owner's name and its platform's. */
+  readonly terms: readonly string[];
+}
+
+/** The workspace's machines an `@` offers, as the panel's picker offers them: the reader's own first, each by its name, a pick writing its `mention://machine/` link. */
+export function machineCandidates(
+  machines: readonly OfferedMachine[],
+  readerId: string | undefined,
+  place: MentionPlace,
+): readonly MentionCandidate[] {
+  const own = (machine: OfferedMachine) => machine.ownerId !== null && machine.ownerId === readerId;
+
+  return [...machines.filter(own), ...machines.filter((machine) => !own(machine))].map(
+    (machine): MentionCandidate => ({
+      id: machine.id,
+      kind: MENTION_OFFER_KIND.MACHINE,
+      name: machine.name,
+      terms: machine.terms,
+      target: encodeMention({ kind: MENTION_KIND.MACHINE, machineId: machine.id }, place),
+    }),
+  );
+}
+
 /** Whether the words are a task's key typed whole, which leads its group, as the panel's keyed group leads. */
 function keyed(rows: readonly MentionOfferRow[], query: string): boolean {
   return rows.some(
@@ -327,7 +385,7 @@ function cappedGroup(
  * typed: the kinds they name, under Browse, then the date they name, then
  * Agents, Tasks (first where the words are a task's key), People, the
  * description's sections, Pages,
- * Threads and Pull requests, each the rows the words find, best first,
+ * Threads, Automations, Pull requests and Machines, each the rows the words find, best first,
  * four at most, a group finding more ending in the row that opens its kind
  * searched by the same words, a group finding none left out.
  */
@@ -379,7 +437,9 @@ export function mentionOffer(sources: MentionSources, query: string): MentionOff
     group(MENTION_FROM.DESCRIPTION),
     group(MENTION_FROM.PAGES),
     group(MENTION_FROM.THREADS),
+    group(MENTION_FROM.AUTOMATIONS),
     group(MENTION_FROM.PULL_REQUESTS),
+    group(MENTION_FROM.MACHINES),
   ];
 
   return { narrowed: undefined, groups: groups.filter((each) => each.rows.length > 0) };
