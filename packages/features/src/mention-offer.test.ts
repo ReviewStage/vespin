@@ -1,4 +1,4 @@
-// mention-offer.test.ts -- an `@` offers its groups in the panel's order, browses its kinds, narrows to one by its word before a colon, and writes a description's sections, a date, an automation and a machine as the panel's picks do.
+// mention-offer.test.ts -- an `@` offers its groups in the panel's order, browses its kinds, narrows to one by its word before a colon, and writes a description's sections, a date, an automation, a machine and a repository's paths as the panel's picks do.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -9,6 +9,7 @@ import {
   type MentionCandidate,
   machineCandidates,
   mentionOffer,
+  pathCandidates,
 } from "./mention-offer.js";
 
 describe("mentionOffer", () => {
@@ -29,6 +30,7 @@ describe("mentionOffer", () => {
     ),
     description: [],
     pages: [],
+    files: [],
     threads: [],
     automations: [],
     pullRequests: [],
@@ -130,5 +132,38 @@ describe("mentionOffer", () => {
         group.rows.map((each) => ("target" in each ? each.target : each.name)),
       ),
     ).toContainEqual(["https://vespin.dev/acme/automation/a1"]);
+  });
+
+  it("finds the repository's files and folders by their paths, each a pick writing its GitHub page at the default branch", () => {
+    const place = { workspace: "acme", repository: "acme/checkout" };
+
+    const files = pathCandidates(
+      [
+        { path: "apps/web/server/auth", folder: true },
+        { path: "apps/web/server/auth/session.ts", folder: false },
+      ],
+      place,
+    );
+
+    const offered = mentionOffer({ ...sources, files }, "files:auth");
+
+    expect(
+      offered.groups.flatMap((group) =>
+        group.rows.map((each) =>
+          "target" in each ? [each.name, each.detail, each.target] : [each.name],
+        ),
+      ),
+    ).toEqual([
+      [
+        "auth/",
+        "apps/web/server",
+        "https://github.com/acme/checkout/tree/HEAD/apps/web/server/auth",
+      ],
+      [
+        "session.ts",
+        "apps/web/server/auth",
+        "https://github.com/acme/checkout/blob/HEAD/apps/web/server/auth/session.ts",
+      ],
+    ]);
   });
 });

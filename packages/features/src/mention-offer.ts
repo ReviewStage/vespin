@@ -1,5 +1,6 @@
-// mention-offer.ts -- the people, agents, tasks, the description's sections, pages, threads, automations, pull requests, dates and machines an `@` typed in a phone's composer or description offers, as the panel's mention picker groups, words and narrows them by kind (`@people:`).
+// mention-offer.ts -- the people, agents, tasks, the description's sections, pages, the repository's files and folders, threads, automations, pull requests, dates and machines an `@` typed in a phone's composer or description offers, as the panel's mention picker groups, words and narrows them by kind (`@people:`).
 
+import { fileName } from "./code-ref-words.js";
 import {
   type DateSpan,
   dateChipText,
@@ -29,6 +30,7 @@ export const MENTION_OFFER_GROUP = {
   PEOPLE: "People",
   DESCRIPTION: "Description",
   PAGES: "Pages",
+  FILES: "Files and folders",
   THREADS: "Threads",
   AUTOMATIONS: "Automations",
   PULL_REQUESTS: "Pull requests",
@@ -42,6 +44,8 @@ export const MENTION_OFFER_KIND = {
   PERSON: "person",
   SECTION: "section",
   PAGE: "page",
+  FILE: "file",
+  FOLDER: "folder",
   THREAD: "thread",
   AUTOMATION: "automation",
   PULL_REQUEST: "pull-request",
@@ -66,6 +70,7 @@ const OFFERED_FROM = [
   MENTION_FROM.PEOPLE,
   MENTION_FROM.DESCRIPTION,
   MENTION_FROM.PAGES,
+  MENTION_FROM.FILES,
   MENTION_FROM.THREADS,
   MENTION_FROM.AUTOMATIONS,
   MENTION_FROM.PULL_REQUESTS,
@@ -83,6 +88,7 @@ const FROM_GROUP = {
   [MENTION_FROM.PEOPLE]: "People",
   [MENTION_FROM.DESCRIPTION]: "Description",
   [MENTION_FROM.PAGES]: "Pages",
+  [MENTION_FROM.FILES]: "Files and folders",
   [MENTION_FROM.THREADS]: "Threads",
   [MENTION_FROM.AUTOMATIONS]: "Automations",
   [MENTION_FROM.PULL_REQUESTS]: "Pull requests",
@@ -97,6 +103,7 @@ const FROM_SOURCE = {
   [MENTION_FROM.PEOPLE]: "people",
   [MENTION_FROM.DESCRIPTION]: "description",
   [MENTION_FROM.PAGES]: "pages",
+  [MENTION_FROM.FILES]: "files",
   [MENTION_FROM.THREADS]: "threads",
   [MENTION_FROM.AUTOMATIONS]: "automations",
   [MENTION_FROM.PULL_REQUESTS]: "pullRequests",
@@ -166,6 +173,8 @@ export interface MentionSources {
   /** The description's sections and the description whole, where the place stands in a task; none elsewhere. */
   readonly description: readonly MentionCandidate[];
   readonly pages: readonly MentionCandidate[];
+  /** The task's repository's files and folders at its default branch; none where it names no repository. */
+  readonly files: readonly MentionCandidate[];
   readonly threads: readonly MentionCandidate[];
   readonly automations: readonly MentionCandidate[];
   readonly pullRequests: readonly MentionCandidate[];
@@ -284,6 +293,41 @@ export function descriptionCandidates(
   return [...sections, whole];
 }
 
+/** A path of a repository's tree, and whether it is a folder. */
+export interface RepositoryPath {
+  readonly path: string;
+  readonly folder: boolean;
+}
+
+/**
+ * The repository's files and folders an `@` offers, as the panel's picker
+ * offers them: each by its own name, a folder's ending in `/`, saying the
+ * folder it stands in, found by its whole path, a pick writing its GitHub
+ * page at the default branch; none where the place names no repository.
+ */
+export function pathCandidates(
+  paths: readonly RepositoryPath[],
+  place: MentionPlace,
+): readonly MentionCandidate[] {
+  if (place.repository === null) return [];
+
+  return paths.map(({ path, folder }): MentionCandidate => {
+    const name = fileName(path);
+
+    return {
+      id: path,
+      kind: folder ? MENTION_OFFER_KIND.FOLDER : MENTION_OFFER_KIND.FILE,
+      name: folder ? `${name}/` : name,
+      detail: path.slice(0, -name.length - 1) || undefined,
+      terms: [path],
+      target: encodeMention(
+        folder ? { kind: MENTION_KIND.FOLDER, path } : { kind: MENTION_KIND.FILE, path },
+        place,
+      ),
+    };
+  });
+}
+
 /** An automation an `@` offers, as the panel's picker offers it: by its name, saying what fires it, a pick writing its page's link. */
 export function automationCandidate(
   automation: { readonly id: string; readonly name: string },
@@ -384,7 +428,7 @@ function cappedGroup(
  * words after the colon find, all of them with none typed. With words
  * typed: the kinds they name, under Browse, then the date they name, then
  * Agents, Tasks (first where the words are a task's key), People, the
- * description's sections, Pages,
+ * description's sections, Pages, Files and folders,
  * Threads, Automations, Pull requests and Machines, each the rows the words find, best first,
  * four at most, a group finding more ending in the row that opens its kind
  * searched by the same words, a group finding none left out.
@@ -436,6 +480,7 @@ export function mentionOffer(sources: MentionSources, query: string): MentionOff
     group(MENTION_FROM.PEOPLE),
     group(MENTION_FROM.DESCRIPTION),
     group(MENTION_FROM.PAGES),
+    group(MENTION_FROM.FILES),
     group(MENTION_FROM.THREADS),
     group(MENTION_FROM.AUTOMATIONS),
     group(MENTION_FROM.PULL_REQUESTS),

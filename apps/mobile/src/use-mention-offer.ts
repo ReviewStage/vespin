@@ -1,5 +1,5 @@
 /**
- * use-mention-offer.ts -- what an `@` being typed offers in a composer or a description, as the panel's mention picker offers it: the place's agents, tasks, people, the description's sections, pages, threads, automations, pull requests, dates and machines, and each pick sent as the mention's link the panel writes.
+ * use-mention-offer.ts -- what an `@` being typed offers in a composer or a description, as the panel's mention picker offers it: the place's agents, tasks, people, the description's sections, pages, the task's repository's files and folders, threads, automations, pull requests, dates and machines, and each pick sent as the mention's link the panel writes.
  *
  * An `@` starting the word the caret stands in offers, with nothing typed
  * after it, what the task suggests (its own agents, threads, pull requests
@@ -47,10 +47,13 @@ import {
   machineCandidates,
   mentionOffer,
   type PickedMention,
+  pathCandidates,
+  type RepositoryPath,
 } from "@repo/features/mention-offer";
 import { agentName } from "@repo/features/model-label";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
+import { TASK_TREE_ENTRY } from "@repo/features/task-wire";
 import { sinceText } from "@repo/features/time-format";
 import { taskKey } from "@repo/features/workspace-key";
 import { ACT_KIND } from "@repo/host/acts";
@@ -98,6 +101,8 @@ const KIND_GLYPH = {
   [MENTION_OFFER_KIND.PERSON]: GLYPH.PERSON,
   [MENTION_OFFER_KIND.SECTION]: GLYPH.HEADING,
   [MENTION_OFFER_KIND.PAGE]: GLYPH.PAGE,
+  [MENTION_OFFER_KIND.FILE]: GLYPH.FILE,
+  [MENTION_OFFER_KIND.FOLDER]: GLYPH.FOLDER,
   [MENTION_OFFER_KIND.THREAD]: GLYPH.THREAD,
   [MENTION_OFFER_KIND.AUTOMATION]: GLYPH.AUTOMATION,
   [MENTION_OFFER_KIND.PULL_REQUEST]: GLYPH.PULL_REQUEST,
@@ -112,12 +117,31 @@ const FROM_GLYPH = {
   [MENTION_FROM.PEOPLE]: GLYPH.PEOPLE,
   [MENTION_FROM.DESCRIPTION]: GLYPH.FILE_TEXT,
   [MENTION_FROM.PAGES]: GLYPH.PAGE,
+  [MENTION_FROM.FILES]: GLYPH.REPOSITORY,
   [MENTION_FROM.THREADS]: GLYPH.THREAD,
   [MENTION_FROM.AUTOMATIONS]: GLYPH.AUTOMATION,
   [MENTION_FROM.PULL_REQUESTS]: GLYPH.PULL_REQUEST,
   [MENTION_FROM.DATES]: GLYPH.DATE,
   [MENTION_FROM.MACHINES]: GLYPH.MAC,
 } as const satisfies Record<MentionOfferFrom, Glyph>;
+
+/** The repository's paths a task's `@` offers, read once per task and repository, as the panel holds them for the window's life. */
+const PATHS_QUERY_ROOT = "mention-repository-paths";
+
+/** The paths of the repository the task names, the whole tree at its default branch; a refusal fails the read, never an empty repository. */
+async function repositoryPaths(
+  acts: ReturnType<typeof useHostActs>,
+  taskId: string,
+): Promise<readonly RepositoryPath[]> {
+  const answer = await acts[ACT_KIND.TASKS_TREE]({ taskId, path: "", recursive: true });
+
+  if (!("folder" in answer)) throw new Error("The repository's paths were not read.");
+
+  return answer.folder.entries.map((entry) => ({
+    path: entry.name,
+    folder: entry.kind === TASK_TREE_ENTRY.FOLDER,
+  }));
+}
 
 /** What a page's row says after its name, as the panel's: a version past its first, else when it was shown. */
 function pageDetail(version: number, at: number, now: number): string {
@@ -213,6 +237,17 @@ export function useMentionOffer(
     acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }),
   );
   const held = useQuery({ ...appStateQuery, select: useMemo(() => heldOf(taskId), [taskId]) }).data;
+  // Note that the task's repository's paths are read once an `@` is typed and held while the app runs, as the panel holds them, since a repository's files rarely move while a word is typed.
+  const repository = tasks.find((task) => task.id === taskId)?.repository ?? null;
+
+  const { data: paths } = useQuery({
+    queryKey: [PATHS_QUERY_ROOT, taskId, repository],
+    enabled: asking && taskId !== undefined && repository !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+    queryFn: () => repositoryPaths(acts, taskId ?? ""),
+  });
+
   const taskPullRequests = useTaskListRow(useTaskListCollections().taskPullRequests, taskId);
   const markOf = useChipMarkOf();
 
@@ -368,6 +403,7 @@ export function useMentionOffer(
       })),
       description: sections,
       pages,
+      files: pathCandidates(paths ?? [], { workspace: step, repository }),
       threads,
       automations: (automations ?? []).map((automation) =>
         automationCandidate(
@@ -404,6 +440,8 @@ export function useMentionOffer(
     members,
     automations,
     machines,
+    paths,
+    repository,
     workspaceId,
     taskId,
     agentId,
