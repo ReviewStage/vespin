@@ -1,0 +1,99 @@
+Auto-merging apps/mobile/modules/pill-field/ios/DocumentFieldView.swift
+built main 34e576ff51 + #10456 a9c99881b2 as 79cae06f36
+description-edit.yaml from #10457 a3e4e6acf5
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 06:42:04 15140 MB
+curve 06:42:35 15001 MB
+curve 06:43:05 13956 MB
+curve 06:43:35 12614 MB
+curve 06:44:05 12444 MB
+curve 06:44:35 12167 MB
+curve 06:45:06 12087 MB
+curve 06:45:36 12008 MB
+curve 06:46:06 11716 MB
+curve 06:46:36 15757 MB
+curve 06:47:07 20038 MB
+curve 06:47:37 19979 MB
+curve 06:48:07 19920 MB
+curve 06:48:37 19907 MB
+curve 06:49:07 19784 MB
+curve 06:49:38 19623 MB
+curve 06:50:08 19517 MB
+curve 06:50:38 19484 MB
+curve 06:51:08 19413 MB
+curve 06:51:39 19397 MB
+curve 06:52:09 19359 MB
+curve 06:52:39 19271 MB
+curve 06:53:09 19246 MB
+curve 06:53:39 19232 MB
+curve 06:54:10 19220 MB
+curve 06:54:40 19196 MB
+curve 06:55:10 19177 MB
+curve 06:55:40 19152 MB
+curve 06:56:11 19137 MB
+curve 06:56:41 19004 MB
+curve 06:57:11 18798 MB
+curve 06:57:41 18766 MB
+curve 06:58:11 18740 MB
+curve 06:58:42 18706 MB
+curve 06:59:12 18575 MB
+curve 06:59:42 18502 MB
+curve 07:00:13 18447 MB
+curve 07:00:43 18406 MB
+curve 07:01:13 18361 MB
+curve 07:01:43 18316 MB
+curve 07:02:14 18208 MB
+curve 07:02:44 18118 MB
+curve 07:03:14 18051 MB
+curve 07:03:44 17524 MB
+curve 07:04:15 17354 MB
+curve 07:04:45 17270 MB
+curve 07:05:15 17231 MB
+curve 07:05:45 17188 MB
+curve 07:06:16 17134 MB
+curve 07:06:46 17044 MB
+curve 07:07:16 16876 MB
+curve 07:07:46 16807 MB
+curve 07:08:17 16703 MB
+curve 07:08:47 16630 MB
+curve 07:09:17 16444 MB
+curve 07:09:47 16347 MB
+curve 07:10:17 16305 MB
+curve 07:10:48 16161 MB
+curve 07:11:18 16091 MB
+curve 07:11:48 15913 MB
+curve 07:12:18 15986 MB
+curve 07:12:49 15771 MB
+curve 07:13:19 15962 MB
+curve 07:13:49 15847 MB
+curve 07:14:19 15785 MB
+curve 07:14:49 15773 MB
+curve 07:15:19 15529 MB
+BUILD EXIT 0 07:15:50
+sizes: Assets.car 23863128 bytes (main Vp10453.app 23859528), .app 119960 KB (main 119916 KB), zipped .app 45253549 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10456b.app: replacing existing signature
+p10456-iphone-light-pill-field: fails 1 shots 10 Assert that "(?s).*- Plan
+  - Model.*" is visible... FAILED
+p10456-iphone-light-description-edit: fails 0 shots 5 
+p10456-iphone-dark-pill-field: fails 1 shots 10 Assert that "(?s).*- Plan
+  - Model.*" is visible... FAILED
+p10456-iphone-dark-description-edit: fails 0 shots 5 
+p10456-ipad27-light-pill-field: fails 1 shots 11 Assert that "(?s).*- Plan
+  - Model
+- Ship.*" is visible... FAILED
+p10456-ipad27-light-description-edit: fails 0 shots 5 
+p10456-ipad27-dark-pill-field: fails 1 shots 11 Assert that "(?s).*- Plan
+  - Model
+- Ship.*" is visible... FAILED
+p10456-ipad27-dark-description-edit: fails 0 shots 5 
+p10456-iphone-light-nestA: fails NOSTART (steps 2, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB
+p10456-iphone-light-nestB1: fails 0 shots 1 
+nest probe: app pid 30764
+nest probe: lldb resumed after ~60 s
+p10456-iphone-light-nestB2: fails 0 shots 1 
+p10456-iphone-light-nestB3: fails 0 shots 2 
