@@ -1,0 +1,10 @@
+== bundle PJj10458b base a30e73307b
+  built a30e73307b base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-settings-automations: fails 1 shots 5 Assert that "On, Next.*" is visible... FAILED
+iphone-dark-settings-automations: fails 1 shots 5 Assert that "On, Next.*" is visible... FAILED
+ipad27-light-settings-automations: fails 1 shots 5 Assert that "On, Next.*" is visible... FAILED
+ipad27-dark-settings-automations: fails 1 shots 5 Assert that "On, Next.*" is visible... FAILED
