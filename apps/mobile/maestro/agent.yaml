@@ -130,36 +130,28 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-pull-request
-# Note that an iPad opens the fold upright and then turns back: in landscape
-# on iOS 27.2 the first tap on the fold does not take, where a tap by hand
-# does, which STAG-3807 traces, while upright it opens at once.
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - setOrientation: PORTRAIT
-      - waitForAnimationToEnd:
-          timeout: 5000
+# Note that once the fold shows it is drawn on clear under the agent's name
+# in the bar (`scroll-to.yaml`'s `BELOW`), because a scroll that stops once
+# it shows can leave it under the bar, as the scrolls before it leave it on
+# an iPad, where the tap landed on the status bar and scrolled the list to
+# its top, leaving the fold shut (STAG-3807).
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
       ELEMENT: ".*tool calls.*"
       DIRECTION: UP
       BESIDE: ${FLOATING_TABS}
-- waitForAnimationToEnd:
-    timeout: 5000
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*tool calls.*"
+      BELOW: "Build teammate invitations"
+      BESIDE: ${FLOATING_TABS}
 - tapOn: ".*tool calls.*"
 - assertVisible: "Read.*"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-fold
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - setOrientation: LANDSCAPE_LEFT
-      - waitForAnimationToEnd:
-          timeout: 5000
 # At the top, the page older than the transcript's first is read; the
 # fixture's first read is not heard back, so it offers Try again, and the
 # next lays the older turn before the first.
