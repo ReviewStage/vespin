@@ -1,0 +1,19 @@
+fatal: couldn't find remote ref refs/heads/pin2b/main-d5315
+FETCH FAILED pin2b/main-d5315
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-launch-root-reads
+FETCH FAILED pin2b/agent/ios-launch-root-reads
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-chip-marks-by-key
+FETCH FAILED pin2b/agent/ios-chip-marks-by-key
+screen.mp4 kept
+merging pin2b/main-d5315 at d531510b27
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging packages/host/src/fixture-inbox.ts
+merging pin2b/agent/ios-launch-root-reads at ce709d9e6b
+Auto-merging apps/mobile/src/splash.ts
+merging pin2b/agent/ios-chip-marks-by-key at 398c137ed4
+built 2ab5debb0c = probe + pin2b/main-d5315 pin2b/agent/ios-launch-root-reads pin2b/agent/ios-chip-marks-by-key (PROFILE=1)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ALLDONE
