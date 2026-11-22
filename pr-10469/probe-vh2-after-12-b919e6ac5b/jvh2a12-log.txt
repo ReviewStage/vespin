@@ -1,0 +1,21 @@
+pinned to b919e6ac5b
+== bundle PJjvh2a12 base b919e6ac5b
+  built b919e6ac5b base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-fprobevh2: fails 0 shots 6 
+[probe] lines since 2026-11-22 10:36:13:
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-22 10:37:50.740 E  Vespin[45112:b0abfd3] [com.facebook.react.log:javascript] [probe] gap 42 ms ending 1795372670740
+2026-11-22 10:37:50.880 E  Vespin[45112:b0abfd3] [com.facebook.react.log:javascript] [probe] gap 140 ms ending 1795372670880
+2026-11-22 10:37:51.257 E  Vespin[45112:b0abfd3] [com.facebook.react.log:javascript] [probe] gap 377 ms ending 1795372671257
+2026-11-22 10:38:04.564 E  Vespin[45112:b0abfd3] [com.facebook.react.log:javascript] [probe] gap 45 ms ending 1795372684564
+2026-11-22 10:38:08.091 E  Vespin[45112:b0abfd3] [com.facebook.react.log:javascript] [probe] gap 90 ms ending 1795372688091
+2026-11-22 10:38:08.946 E  Vespin[45112:b0abfd3] [com.facebook.react.log:javascript] [probe] mark task-commit 22745 1795372688946
+2026-11-22 10:38:09.098 E  Vespin[45112:b0abfd3] [com.facebook.react.log:javascript] [probe] gap 264 ms ending 1795372689099
+2026-11-22 10:38:22.657 E  Vespin[45112:b0abfd3] [com.facebook.react.log:javascript] [probe] gap 56 ms ending 1795372702658
+2026-11-22 10:38:29.960 E  Vespin[45112:b0abfd3] [com.facebook.react.log:javascript] [probe] gap 94 ms ending 1795372709961
+2026-11-22 10:38:59.292 Df log[45605:0] [com.apple.log:] log run noninteractively, parent: 45416 (launchd_sim), args: 'log' 'show' '--start' '2026-11-22 10:36:13' '--predicate' 'eventMessage CONTAINS "[probe]"' '--style' 'compact'
