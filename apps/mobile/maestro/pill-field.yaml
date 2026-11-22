@@ -107,10 +107,11 @@ appId: dev.vespin.ios
 - tapOn: "Mention Ada in the description for @Ad"
 - assertVisible: "(?s).*Ask \\[@Ada Lovelace\\]\\(https://vespin.dev/stage/person/u-ada\\).*"
 - takeScreenshot: document-field-mention
-# A list's item moves under the item before it, and back out, from Indent
-# and Outdent at the head of the bar's Turn into, as Tab and Shift-Tab move
-# it in Notes and Notion; a nested item is written two spaces in, under its
-# parent's words.
+# A list's item moves under the item before it, and back out, from the
+# bar's Indent and Outdent, as Tab and Shift-Tab move it in Notes and
+# Notion; the bar stands them only while the caret is in a list item, in
+# Strikethrough's and Code's place, which step into its Turn into. A nested
+# item is written two spaces in, under its parent's words.
 - scrollUntilVisible:
     element: "Clear description"
     direction: UP
@@ -120,19 +121,17 @@ appId: dev.vespin.ios
 - inputText: "Plan"
 - tapOn: "Turn into"
 - tapOn: "Bulleted list"
+- assertNotVisible: "Strikethrough"
 - pressKey: Enter
 - inputText: "Model"
-- tapOn: "Turn into"
 - tapOn: "Indent"
 - assertVisible: "(?s).*- [^\\n]*Plan\\n  - Model.*"
 - takeScreenshot: document-field-nested
-- tapOn: "Turn into"
 - tapOn: "Outdent"
 - assertVisible: "(?s).*- [^\\n]*Plan\\n- Model.*"
 # A Return on an empty nested item takes it a step back out, as a Return
 # on an empty item leaves a list in Notes and Notion, at the words' end as
 # anywhere.
-- tapOn: "Turn into"
 - tapOn: "Indent"
 - pressKey: Enter
 - pressKey: Enter

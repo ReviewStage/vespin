@@ -528,6 +528,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   /// The bar over the keyboard, and its buttons by the act each does.
   private var bar: UIToolbar?
   private var barItems: [(act: String, item: UIBarButtonItem)] = []
+  /// The bar's Outdent and Indent, standing in its last marks' place while the caret is in a list item, and whether the bar stands that way now.
+  private var moveItems: (outdent: UIBarButtonItem, indent: UIBarButtonItem)?
+  private var barInList = false
 
   /// The looks the next words typed at a caret take, where a mark was toggled with nothing selected, as Notes' Bold does.
   private var typingMarks: (at: Int, marks: [String])?
@@ -1176,11 +1179,18 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     return UIMenu(title: formats.title, children: [marks, blocks])
   }
 
-  /// Stands the bar over the keyboard: a button for each mark and the link, and the blocks behind one button's menu, each heard by its words.
+  /// The marks that step off the bar into Turn into's menu while a list item's two moves stand there: the last two, so the bar holds no more buttons than a phone fits.
+  private func marksAside() -> [FormatActRecord] {
+    guard let formats, moveItems != nil else { return [] }
+    return Array(formats.marks.suffix(2))
+  }
+
+  /// Stands the bar over the keyboard: a button for each mark, the link and the `@`, and the blocks behind one button's menu, each heard by its words. While the caret is in a list item, Outdent and Indent stand in the last marks' place, as Notion's bar offers them there, and those marks lead Turn into's menu.
   private func buildBar() {
     guard let formats, !offeredActs().isEmpty else {
       bar = nil
       barItems = []
+      moveItems = nil
       textView.inputAccessoryView = nil
       textView.reloadInputViews()
       return
@@ -1189,53 +1199,76 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let toolbar = UIToolbar(frame: CGRect(x: 0, y: 0, width: bounds.width, height: 44))
     toolbar.autoresizingMask = .flexibleWidth
     toolbar.tintColor = look.text
-    var items: [UIBarButtonItem] = []
     barItems = []
 
     for record in formats.marks + [formats.link, formats.mention].compactMap({ $0 }) {
-      let item = UIBarButtonItem(
-        image: glyphImage(record.glyph),
-        primaryAction: UIAction { [weak self] _ in self?.perform(record.act) }
-      )
-      item.accessibilityLabel = record.title
-      items.append(item)
-      barItems.append((record.act, item))
+      barItems.append((record.act, barButton(record)))
     }
 
-    let blocks = UIBarButtonItem(title: nil, image: glyphImage(formats.blocksGlyph), primaryAction: nil, menu: nil)
-    blocks.accessibilityLabel = formats.blocksTitle
-    // Note that the blocks stand in Turn into's own order wherever the menu opens, rather than turned over to start nearest the button.
-    blocks.preferredMenuElementOrder = .fixed
-    // Note that the blocks' menu is built as it opens, so its check stands on the block the caret is in now, and Outdent and Indent lead it, dimmed where the caret's item cannot move that way, since a phone's bar holds no more buttons than its marks and this one.
-    blocks.menu = UIMenu(children: [
-      UIDeferredMenuElement.uncached { [weak self] answer in
-        guard let self, let formats = self.formats else { return answer([]) }
-        let shifts = self.shiftable()
-        let moves = [(formats.outdent, shifts.shallower), (formats.indent, shifts.deeper)].compactMap { pair -> UIAction? in
-          guard let record = pair.0 else { return nil }
-          let action = self.menuAction(record)
-          if !pair.1 { action.attributes = .disabled }
-          return action
-        }
-        let blocks = formats.blocks.map(self.menuAction)
-        answer(moves.isEmpty ? blocks : [UIMenu(options: .displayInline, children: moves)] + blocks)
-      },
-    ])
-    items.append(.flexibleSpace())
-    items.append(blocks)
-    toolbar.items = items
-    toolbar.sizeToFit()
+    if let outdent = formats.outdent, let indent = formats.indent {
+      moveItems = (barButton(outdent), barButton(indent))
+    } else {
+      moveItems = nil
+    }
+
     bar = toolbar
+    layBar(inList: caretInList())
     textView.inputAccessoryView = toolbar
     textView.reloadInputViews()
     updateBar()
   }
 
-  /// Marks each of the bar's buttons on where the selection already stands that way, as Notes marks Bold.
+  /// One of the bar's buttons: the act's glyph, heard by its words.
+  private func barButton(_ record: FormatActRecord) -> UIBarButtonItem {
+    let item = UIBarButtonItem(
+      image: glyphImage(record.glyph),
+      primaryAction: UIAction { [weak self] _ in self?.perform(record.act) }
+    )
+    item.accessibilityLabel = record.title
+    return item
+  }
+
+  /// Whether the caret stands in a list item, where the bar offers Outdent and Indent.
+  private func caretInList() -> Bool {
+    moveItems != nil && caretParagraph()?.facts.isListItem == true
+  }
+
+  /// Lays the bar's buttons out: in a list item, the marks aside give their place to Outdent and Indent.
+  private func layBar(inList: Bool) {
+    guard let bar, let formats else { return }
+    barInList = inList
+    let aside: Set<String> = inList ? Set(marksAside().map(\.act)) : []
+    var items = barItems.filter { !aside.contains($0.act) }.map(\.item)
+    if inList, let moveItems { items += [moveItems.outdent, moveItems.indent] }
+
+    let blocks = UIBarButtonItem(title: nil, image: glyphImage(formats.blocksGlyph), primaryAction: nil, menu: nil)
+    blocks.accessibilityLabel = formats.blocksTitle
+    // Note that the blocks stand in Turn into's own order wherever the menu opens, rather than turned over to start nearest the button.
+    blocks.preferredMenuElementOrder = .fixed
+    // Note that the blocks' menu is built as it opens, so its check stands on the block the caret is in now, led by the marks that stepped aside for Outdent and Indent while the caret is in a list item.
+    blocks.menu = UIMenu(children: [
+      UIDeferredMenuElement.uncached { [weak self] answer in
+        guard let self, let formats = self.formats else { return answer([]) }
+        let aside: [UIAction] = self.barInList ? self.marksAside().map(self.menuAction) : []
+        let blocks = formats.blocks.map(self.menuAction)
+        answer(aside.isEmpty ? blocks : [UIMenu(options: .displayInline, children: aside)] + blocks)
+      },
+    ])
+    bar.setItems(items + [.flexibleSpace(), blocks], animated: false)
+    bar.sizeToFit()
+  }
+
+  /// Marks each of the bar's buttons on where the selection already stands that way, as Notes marks Bold, stands Outdent and Indent where the caret is in a list item, and dims each move its item cannot make.
   private func updateBar() {
+    let inList = caretInList()
+    if bar != nil, inList != barInList { layBar(inList: inList) }
     for (act, item) in barItems {
       item.isSelected = isOn(act)
     }
+    guard inList, let moveItems else { return }
+    let shifts = shiftable()
+    moveItems.outdent.isEnabled = shifts.shallower
+    moveItems.indent.isEnabled = shifts.deeper
   }
 
   /// Whether the selection already stands as an act makes it: every word selected in the mark, or with nothing selected, the words typed next; the line in the block; the words in a link.
