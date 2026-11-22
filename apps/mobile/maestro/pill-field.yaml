@@ -124,11 +124,11 @@ appId: dev.vespin.ios
 - inputText: "Model"
 - tapOn: "Turn into"
 - tapOn: "Indent"
-- assertVisible: "(?s).*- Plan\\n  - Model.*"
+- assertVisible: "(?s).*- [^\\n]*Plan\\n  - Model.*"
 - takeScreenshot: document-field-nested
 - tapOn: "Turn into"
 - tapOn: "Outdent"
-- assertVisible: "(?s).*- Plan\\n- Model.*"
+- assertVisible: "(?s).*- [^\\n]*Plan\\n- Model.*"
 # A Return on an empty nested item takes it a step back out, as a Return
 # on an empty item leaves a list in Notes and Notion, at the words' end as
 # anywhere.
@@ -137,5 +137,5 @@ appId: dev.vespin.ios
 - pressKey: Enter
 - pressKey: Enter
 - inputText: "Ship"
-- assertVisible: "(?s).*- Plan\\n  - Model\\n- Ship.*"
+- assertVisible: "(?s).*- [^\\n]*Plan\\n  - Model[^\\n]*\\n- +Ship.*"
 - takeScreenshot: document-field-nested-out

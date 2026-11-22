@@ -1506,8 +1506,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let end = NSMaxRange(paragraph) - (ends ? 1 : 0)
     // Note that the line before is read at its first character, as `heldLine` reads a line, since the line break that ends it may hold the looks the keyboard typed it in rather than the line's own.
     let before = lineBefore.flatMap { storage.attribute(lineKey, at: $0, effectiveRange: nil) as? LineFacts }
+    // Note that a line holding only spaces reads as empty, as it stands to the eye, since a Return before a space the keyboard laid after a word carries the space onto the line it opens.
+    let blank = end <= words || string.substring(with: NSRange(location: words, length: end - words)).trimmingCharacters(in: .whitespaces).isEmpty
     // Note that an empty last line's facts are its line before's, which it carries on.
-    return (facts, end <= words, caret == words, paragraph.length > 0 ? before : facts)
+    return (facts, blank, caret == words, paragraph.length > 0 ? before : facts)
   }
 
   /// The paragraph a caret at `caret` stands in: the empty line after a last line break where it stands past it, which `paragraphRange` reads as the line before, as `paragraphRanges` lists it.
