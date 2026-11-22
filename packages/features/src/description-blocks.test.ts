@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { descriptionBlocks } from "./description-blocks.js";
+import {
+  DESCRIPTION_HEAD_MOST,
+  descriptionBlocks,
+  descriptionHeadBlocks,
+} from "./description-blocks.js";
 
 // A comment's anchor must stand over its block's own Markdown, measured as the service measures it, or the thread lands on the wrong words.
 test("each block's span stands over its own Markdown, its quote its words with no Markdown and a hard break as a line, and a rule is drawn with nothing to quote", () => {
@@ -28,4 +32,16 @@ test("a block is drawn with the link definitions it names after it, and a defini
     },
     { from: 20, to: 26, drawn: "Plain.", quote: "Plain." },
   ]);
+});
+
+// A long description's page draws its head first, so a block it draws, and a thread on it, must stand where the whole description puts it.
+test("a long description's head holds its first blocks whole, each at its place in the whole, ending at a blank line", () => {
+  const section = (at: number) => `## Section ${at}\n\n${"Words of the section. ".repeat(40)}`;
+  const text = Array.from({ length: 12 }, (_, at) => section(at)).join("\n\n");
+  const head = descriptionHeadBlocks(text);
+  const whole = descriptionBlocks(text);
+
+  assert.ok(text.length > DESCRIPTION_HEAD_MOST);
+  assert.ok(head.length > 0 && head.length < whole.length);
+  assert.deepEqual(head, whole.slice(0, head.length));
 });

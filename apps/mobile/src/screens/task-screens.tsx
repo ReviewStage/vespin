@@ -2,7 +2,11 @@
 
 import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { descriptionBlocks } from "@repo/features/description-blocks";
+import {
+  descriptionBlocks,
+  descriptionHead,
+  descriptionHeadBlocks,
+} from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
@@ -243,6 +247,7 @@ import {
   useTasksWorkspace,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
+import { useWholeDescription } from "../tasks/use-whole-description.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
   PLUS_TAB,
@@ -2742,16 +2747,24 @@ function OverviewDescription({
   const openLink = useOpenLink(overview.task.workspaceId);
   const { task } = overview;
   const threads = useTaskComments(task.id);
-  const blocks = useMemo(() => descriptionBlocks(body), [body]);
+  // Note that a long description draws its head first and its whole a turn later, so its page never waits on the whole parse to stand.
+  const whole = useWholeDescription(body);
+
+  const blocks = useMemo(
+    () => (whole ? descriptionBlocks(body) : descriptionHeadBlocks(body)),
+    [body, whole],
+  );
+
   const onBlocks = threadsOnBlocks(threads, blocks);
   const { pictureSource, videoAt, fileAt } = useDescriptionPictures(body);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
 
   // Note that a chip's pull request is read through the task's own workspace, as the panel's is, whichever one the phone works in.
   const linkStanding = useLinkStandings(
-    useMemo(() => [body], [body]),
+    useMemo(() => [whole ? body : descriptionHead(body)], [body, whole]),
     task.repository,
     workspaces.find((each) => each.id === task.workspaceId),
+    whole,
   );
 
   const openThread = (threadId: string) =>

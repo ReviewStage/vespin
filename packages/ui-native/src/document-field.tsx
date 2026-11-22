@@ -1,6 +1,7 @@
 // document-field.tsx -- a document's rich field, as Notion edits a page: each block drawn with no syntax in the app's native document field, and the document written back with only the blocks that changed printed again.
 
 import { readerZone } from "@repo/features/date-mention";
+import { descriptionHead } from "@repo/features/description-blocks";
 import {
   BLOCK_KIND,
   type DocumentBlock,
@@ -171,22 +172,11 @@ interface PendingLines {
 /** No blocks, which the field holds while its words stand read only. */
 const NO_BLOCKS: readonly DocumentBlock[] = [];
 
-/** The most of a document its read-only words show while the field waits on its parse: more than a screen holds. */
-const HEAD_MOST = 4000;
-
 /** No files held. */
 const NO_FILES: ReadonlySet<string> = new Set();
 
 /** A link pressed in the read-only head, which opens nothing: the field stands in its place a frame later. */
 function openNoLink(): void {}
-
-/** The head of a document a screen shows first, ending at a blank line where one stands within it, so it cuts no paragraph. */
-function headOf(markdown: string): string {
-  if (markdown.length <= HEAD_MOST) return markdown;
-  const end = markdown.lastIndexOf("\n\n", HEAD_MOST);
-
-  return markdown.slice(0, end > 0 ? end : HEAD_MOST);
-}
 
 /** A card's words for a locked block: what it is, and the first line of its source. */
 function cardOf(locked: LockedKind, source: string): NativeCard {
@@ -430,7 +420,12 @@ export function DocumentField({
   if (!ready)
     return (
       <ScrollView style={style} contentInsetAdjustmentBehavior="automatic" scrollEnabled={false}>
-        <Markdown words={headOf(value)} repository={repository} onOpenLink={openNoLink} headings />
+        <Markdown
+          words={descriptionHead(value)}
+          repository={repository}
+          onOpenLink={openNoLink}
+          headings
+        />
       </ScrollView>
     );
 

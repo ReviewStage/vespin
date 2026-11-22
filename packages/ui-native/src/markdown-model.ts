@@ -40,6 +40,7 @@ import type {
   Nodes,
   Paragraph,
   PhrasingContent,
+  Root,
   RootContent,
   Table,
 } from "mdast";
@@ -399,11 +400,16 @@ export function markdownReplyButtons(
 /**
  * The GitHub pull requests' and issues' pages `words` name as chips, each
  * once, read as `markdownBlocks` reads them, so a screen holds each one's
- * standing while it draws them.
+ * standing while it draws them; `parse` reads the words' tree, a whole
+ * document's kept one where its page already parsed it.
  */
-export function markdownGithubPages(words: string, reading: MarkdownReading): readonly string[] {
+export function markdownGithubPages(
+  words: string,
+  reading: MarkdownReading,
+  parse: (words: string) => Root = markdownTree,
+): readonly string[] {
   if (markdownTooDeep(words)) return [];
-  const tree = markdownTree(words);
+  const tree = parse(words);
 
   return [...new Set(githubPagesUnder(tree, { reading, definitions: definitionsIn(tree) }))];
 }
