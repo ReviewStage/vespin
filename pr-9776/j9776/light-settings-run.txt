@@ -1,0 +1,91 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow f9776settings
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Tap on "Settings(, .*)?"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Ada Lovelace" is visible... COMPLETED
+Take screenshot settings... COMPLETED
+Scrolling DOWN until id: settings-notifications is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Assert that "Notifications.*", id: settings-notifications is visible... COMPLETED
+Assert that ".*When I'm away" is visible... COMPLETED
+Tap on id: settings-notifications... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Notifications, On" is visible... COMPLETED
+Assert that "Open iOS notification settings" is visible... COMPLETED
+Take screenshot settings-notifications... COMPLETED
+Tap on "Always"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot settings-notify-always... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Notifications.*", id: settings-notifications is visible... COMPLETED
+Assert that ".*Always" is visible... COMPLETED
+Scrolling DOWN until "Send feedback" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Assert that "What's new" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot settings-about... COMPLETED
+Scrolling UP until "Signed in with GitHub" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Signed in with GitHub"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Share usage data" is visible... COMPLETED
+Assert that "Sign out" is visible... COMPLETED
+Take screenshot settings-account... COMPLETED
+Tap on "Delete account"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Delete the account ada@example.com?" is visible... COMPLETED
+Take screenshot settings-delete-account... COMPLETED
+Tap on "Cancel"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Share usage data" is visible... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Tap on "Settings(, .*)?"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on id: settings-workspace... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Grace Hopper(, .*)?" is visible... COMPLETED
+Assert that "Alan Turing(, .*)?" is visible... COMPLETED
+Take screenshot settings-workspace... COMPLETED
+Tap on "Grace Hopper(, .*)?"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Role.*" is visible... COMPLETED
+Assert that "Make owner" is not visible... COMPLETED
+Assert that "Remove from workspace" is visible... COMPLETED
+Take screenshot settings-member... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "katherine@example.com" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot settings-workspace-invitations... COMPLETED
+Tap on "katherine@example.com"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Copy invite link" is visible... COMPLETED
+Assert that "Cancel invitation" is visible... COMPLETED
+Take screenshot settings-invitation... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Invite"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Invite as member" is visible... COMPLETED
+Take screenshot settings-workspace-invite... COMPLETED
+Tap on "Cancel"... COMPLETED
+Wait for animation to end... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Tap on "Settings(, .*)?"... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "Agents" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Agents"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Default permissions" is visible... COMPLETED
+Take screenshot settings-agents... COMPLETED
+Scrolling DOWN until "Commit author" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot settings-agents-more... COMPLETED

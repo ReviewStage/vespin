@@ -1,1 +1,10 @@
-  STALE BUNDLE, not built
+== bundle P9776 base 499c38b9cf
+  built 499c38b9cf base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+JS at 499c38b9cf
+light-settings: fails 0 shots 13 
+light-workspace-rename: fails 1 shots 1 Tap on "Workspace settings"... FAILED
+light-task-rename: fails 0 shots 2 
