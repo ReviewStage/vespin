@@ -169,6 +169,14 @@ describe("printBlock", () => {
       "**a _b_**",
     ],
     [
+      "a space typed at bold words' end outside their marks",
+      {
+        kind: BLOCK_KIND.PARAGRAPH,
+        lines: [{ runs: [words("seven "), words("days ", STRONG), words("soon")] }],
+      },
+      "seven **days** soon",
+    ],
+    [
       "inline code",
       { kind: BLOCK_KIND.PARAGRAPH, lines: [{ runs: [words("pnpm test", CODE)] }] },
       "`pnpm test`",
@@ -207,24 +215,37 @@ describe("printBlock", () => {
     expect(printBlock(block)).toBe(markdown);
   });
 
-  it("reads a printed line back as the same content", () => {
-    const block: BlockContent = {
-      kind: BLOCK_KIND.PARAGRAPH,
-      lines: [
-        {
-          runs: [
-            words("Ship "),
-            words("now", STRONG),
-            words(" or "),
-            words("later", STRONG, EMPHASIS),
-            words(", then "),
-            words("pnpm test", CODE),
-            words(" with 2 * 3."),
-          ],
-        },
-      ],
-    };
-
+  it.each<[string, BlockContent]>([
+    [
+      "a line of words in their looks",
+      {
+        kind: BLOCK_KIND.PARAGRAPH,
+        lines: [
+          {
+            runs: [
+              words("Ship "),
+              words("now", STRONG),
+              words(" or "),
+              words("later", STRONG, EMPHASIS),
+              words(", then "),
+              words("pnpm test", CODE),
+              words(" with 2 * 3."),
+            ],
+          },
+        ],
+      },
+    ],
+    [
+      "a task list holding an empty task",
+      {
+        kind: BLOCK_KIND.TASK_LIST,
+        lines: [
+          { runs: [words("Ship")], checked: true },
+          { runs: [], checked: false },
+        ],
+      },
+    ],
+  ])("reads %s printed back as the same content", (_, block) => {
     const [read] = documentBlocks(printBlock(block));
 
     expect(read?.lines).toEqual(block.lines);

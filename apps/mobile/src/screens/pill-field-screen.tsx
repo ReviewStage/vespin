@@ -1,4 +1,4 @@
-// pill-field-screen.tsx -- the pill field's scratch page: the field laid in with a mention of every kind and a picture's and a file's marker, the acts that put a pill in, and the Markdown it writes, so a flow shoots the field and its value side by side; and under them a document's field drawn in its looks as it is written.
+// pill-field-screen.tsx -- the pill field's scratch page: the field laid in with a mention of every kind and a picture's and a file's marker, the acts that put a pill in, and the Markdown it writes, so a flow shoots the field and its value side by side; and under them a document's field drawn in its looks as it is written, and a description edited as rich text with the Markdown it saves.
 
 import { nextPictureName } from "@repo/features/file-marker";
 import { filePill, mentionPill } from "@repo/features/pill-words";
@@ -7,6 +7,7 @@ import {
   BUTTON_SIZE,
   Button,
   type CaretAtWord,
+  DocumentField,
   InlineHost,
   Markdown,
   PillField,
@@ -50,6 +51,40 @@ const DOCUMENT = [
   "```",
 ].join("\n");
 
+/** The description the rich field opens on: each block it draws with no syntax, and a table and a diagram it stands as cards. */
+const DESCRIPTION = [
+  "# Teammate invitations",
+  "",
+  "Ask [@Dean Stratakos](https://vespin.dev/stage/person/u-dean) before an invite expires after **seven days**, or _never_; run `pnpm test`.",
+  "",
+  "- Withdraw a pending invite",
+  "- Resend an expired one",
+  "",
+  "1. Model",
+  "2. Screen",
+  "",
+  "- [x] Owners may withdraw",
+  "- [ ] Admins may withdraw",
+  "",
+  "> The link stops working once it is used.",
+  "",
+  "```ts",
+  "const days = 7;",
+  "```",
+  "",
+  "---",
+  "",
+  "| Role | May withdraw |",
+  "| - | - |",
+  "| Owner | yes |",
+  "",
+  "```mermaid",
+  "graph TD",
+  "  Invite-->Accept",
+  "```",
+  "",
+].join("\n");
+
 /** What the page's acts say. */
 const WORDS = {
   PLACEHOLDER: "Message",
@@ -67,6 +102,13 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   acts: { flexDirection: "row", flexWrap: "wrap", gap: SPACE.ROW },
+  document: {
+    height: 560,
+    padding: SPACE.ROW,
+    borderRadius: SPACE.PAGE,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  fill: { flex: 1 },
 });
 
 /** The shortest fence Markdown reads, which a longer run of backticks in the words would close early. */
@@ -95,6 +137,7 @@ export function PillFieldScreen() {
   const [files, setFiles] = useState<ReadonlySet<string>>(() => new Set(["Picture 1", "spec.pdf"]));
   const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
   const [writing, setWriting] = useState(DOCUMENT);
+  const [description, setDescription] = useState(DESCRIPTION);
 
   const attach = () => {
     const name = nextPictureName(files);
@@ -160,6 +203,17 @@ export function PillFieldScreen() {
           testID="pill-field-styled"
         />
       </View>
+      <View style={[styles.document, { borderColor: colors.CHIP_EDGE }]}>
+        <DocumentField
+          value={description}
+          onChange={setDescription}
+          repository={REPOSITORY}
+          placeholder={WORDS.PLACEHOLDER}
+          style={styles.fill}
+          testID="document-field"
+        />
+      </View>
+      <Markdown words={fenced(description)} repository={REPOSITORY} onOpenLink={openLink} />
     </ScrollView>
   );
 }
