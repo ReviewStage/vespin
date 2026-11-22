@@ -1,0 +1,21 @@
+pinned to 7263ff4473
+== bundle PJjatmain base 7263ff4473
+  built 7263ff4473 base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-compose: fails 1 shots 1 Assert that "Then add a Resend button beside each pending invite." is visible... FAILED
+iphone-light-description-edit: fails 0 shots 5 
+iphone-light-new-task: fails 0 shots 10 
+iphone-light-answer: fails 0 shots 16 
+iphone-light-inbox: fails 0 shots 16 
+iphone-light-fat1: fails 0 shots 4 
+iphone-light-fat2: fails 0 shots 2 
+ipad27-light-compose: fails 1 shots 7 Scrolling UP until "Done" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centeri
+ipad27-light-description-edit: fails 0 shots 5 
+ipad27-light-new-task: fails 0 shots 10 
+ipad27-light-answer: fails 0 shots 16 
+ipad27-light-inbox: fails 0 shots 14 
+ipad27-light-fat1: fails 0 shots 4 
+ipad27-light-fat2: fails 0 shots 2 

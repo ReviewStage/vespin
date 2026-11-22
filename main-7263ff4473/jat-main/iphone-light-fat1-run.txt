@@ -1,0 +1,50 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fat1
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... SKIPPED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+    Scrolling DOWN until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+Run subflows/scroll-in.yaml... COMPLETED
+Tap on "Edit description"... COMPLETED
+Assert that id: description-words is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on id: description-words at 95%,50%... COMPLETED
+Input text  @... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot desc-at-browse... COMPLETED
+Scrolling DOWN until "Files and folders|Machines|Automations" is visible with speed 40, visibility percentage 100%, timeout 5000 ms, with centering disabled... COMPLETED
+Take screenshot desc-at-browse-more... COMPLETED
+Input text description:... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot desc-at-description... COMPLETED
+Scrolling DOWN until "The whole description" is visible with speed 40, visibility percentage 100%, timeout 8000 ms, with centering disabled... COMPLETED
+Take screenshot desc-at-description-end... COMPLETED
