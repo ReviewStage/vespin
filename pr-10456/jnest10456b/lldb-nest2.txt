@@ -1,0 +1,158 @@
+(lldb) process attach --pid 14420
+Process 14420 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = signal SIGSTOP
+       frame #0: 0x00000001063b4b5c libsystem_kernel.dylib`mach_msg2_trap + 8
+libsystem_kernel.dylib`mach_msg2_trap:
+->  0x1063b4b5c <+8>: ret    
+
+libsystem_kernel.dylib`macx_swapon:
+    0x1063b4b60 <+0>: mov    x16, #-0x30               ; =-48 
+    0x1063b4b64 <+4>: svc    #0x80
+    0x1063b4b68 <+8>: ret    
+Target 0: (Vespin) stopped.
+Executable binary set to "/Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/C0D5A13C-0EC9-40FB-8067-856128ED8439/dev.vespin.ios-1795350902540.app/Vespin".
+Architecture set to: arm64-apple-ios-simulator.
+(lldb) command source -s 0 '/Users/deanstratakos/vespin-ipad-agent/nest10456b.lldb'
+Executing commands in '/Users/deanstratakos/vespin-ipad-agent/nest10456b.lldb'.
+(lldb) breakpoint set -r 'DocumentFieldView.*textView.*shouldChangeTextIn' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 1: 2 locations.
+(lldb) breakpoint set -r 'DocumentFieldView.*caretNestedLine' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 2: where = Vespin`DocumentFieldView.caretNestedLine(), address = 0x0000000104a68ebc
+(lldb) breakpoint set -r 'DocumentFieldView.*caretParagraph' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 3: where = Vespin`DocumentFieldView.caretParagraph(), address = 0x0000000104a72d20
+(lldb) breakpoint set -r 'DocumentFieldView.*shiftLines' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 4: where = Vespin`DocumentFieldView.shiftLines(by:), address = 0x0000000104a68f94
+(lldb) breakpoint set -r 'DocumentFieldView.*touchedIndexes' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 5: where = Vespin`DocumentFieldView.touchedIndexes(), address = 0x0000000104a71e3c
+(lldb) breakpoint set -r 'DocumentFieldView.*heldLines' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 6: where = Vespin`DocumentFieldView.heldLines(), address = 0x0000000104a67234
+(lldb) breakpoint set -r 'DocumentFieldView.*emptyLastLineFacts' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 7: where = Vespin`DocumentFieldView.emptyLastLineFacts(), address = 0x0000000104a6fdac
+(lldb) breakpoint set -r 'DocumentFieldView.*pendingAttributes' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 8: where = Vespin`DocumentFieldView.pendingAttributes(_:), address = 0x0000000104a6c044
+(lldb) breakpoint set -r 'DocumentFieldView.*relay\(' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 9: 4 locations.
+(lldb) breakpoint set -r 'DocumentFieldView.*keepPendingLine' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 10: where = Vespin`DocumentFieldView.keepPendingLine(), address = 0x0000000104a6aa90
+(lldb) breakpoint set -r 'DocumentFieldView.*updateBar' -G true -C "script print('T', __import__('time').time())" -C "bt 1"
+Breakpoint 11: no locations (pending).
+WARNING:  Unable to resolve breakpoint to any actual locations.
+(lldb) breakpoint list -b
+Current breakpoints:
+1: regex = 'DocumentFieldView.*textView.*shouldChangeTextIn', locations = 2, resolved = 2, hit count = 0 Options: enabled auto-continue 
+2: regex = 'DocumentFieldView.*caretNestedLine', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
+3: regex = 'DocumentFieldView.*caretParagraph', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
+4: regex = 'DocumentFieldView.*shiftLines', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
+5: regex = 'DocumentFieldView.*touchedIndexes', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
+6: regex = 'DocumentFieldView.*heldLines', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
+7: regex = 'DocumentFieldView.*emptyLastLineFacts', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
+8: regex = 'DocumentFieldView.*pendingAttributes', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
+9: regex = 'DocumentFieldView.*relay\(', locations = 4, resolved = 4, hit count = 0 Options: enabled auto-continue 
+10: regex = 'DocumentFieldView.*keepPendingLine', locations = 1, resolved = 1, hit count = 0 Options: enabled auto-continue 
+11: regex = 'DocumentFieldView.*updateBar', locations = 0 (pending) Options: enabled auto-continue 
+(lldb) continue
+(lldb)  script print('T', __import__('time').time())
+T 1795351029.745894
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+       frame #0: 0x0000000104a69aa8 Vespin`@objc DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:)
+(lldb)  script print('T', __import__('time').time())
+T 1795351029.770282
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.2
+       frame #0: 0x0000000104a79444 Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:)
+(lldb)  script print('T', __import__('time').time())
+T 1795351029.815446
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 2.1
+       frame #0: 0x0000000104a68ebc Vespin`DocumentFieldView.caretNestedLine()
+(lldb)  script print('T', __import__('time').time())
+T 1795351029.849587
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 3.1
+       frame #0: 0x0000000104a72d20 Vespin`DocumentFieldView.caretParagraph()
+(lldb)  script print('T', __import__('time').time())
+T 1795351029.973946
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 10.1
+       frame #0: 0x0000000104a6aa90 Vespin`DocumentFieldView.keepPendingLine()
+(lldb)  script print('T', __import__('time').time())
+T 1795351030.009699
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 6.1
+       frame #0: 0x0000000104a67234 Vespin`DocumentFieldView.heldLines()
+(lldb)  script print('T', __import__('time').time())
+T 1795351030.174728
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 6.1
+       frame #0: 0x0000000104a67234 Vespin`DocumentFieldView.heldLines()
+(lldb)  script print('T', __import__('time').time())
+T 1795351048.530175
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+       frame #0: 0x0000000104a69aa8 Vespin`@objc DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:)
+(lldb)  script print('T', __import__('time').time())
+T 1795351048.5551412
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.2
+       frame #0: 0x0000000104a79444 Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:)
+(lldb)  script print('T', __import__('time').time())
+T 1795351048.5792232
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 2.1
+       frame #0: 0x0000000104a68ebc Vespin`DocumentFieldView.caretNestedLine()
+(lldb)  script print('T', __import__('time').time())
+T 1795351048.6042361
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 3.1
+       frame #0: 0x0000000104a72d20 Vespin`DocumentFieldView.caretParagraph()
+(lldb)  script print('T', __import__('time').time())
+T 1795351048.6295922
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 10.1
+       frame #0: 0x0000000104a6aa90 Vespin`DocumentFieldView.keepPendingLine()
+(lldb)  script print('T', __import__('time').time())
+T 1795351048.665426
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 6.1
+       frame #0: 0x0000000104a67234 Vespin`DocumentFieldView.heldLines()
+(lldb)  script print('T', __import__('time').time())
+T 1795351048.7034922
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 6.1
+       frame #0: 0x0000000104a67234 Vespin`DocumentFieldView.heldLines()
+(lldb)  script print('T', __import__('time').time())
+T 1795351050.779726
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+       frame #0: 0x0000000104a69aa8 Vespin`@objc DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:)
+(lldb)  script print('T', __import__('time').time())
+T 1795351050.803888
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.2
+       frame #0: 0x0000000104a79444 Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:)
+(lldb)  script print('T', __import__('time').time())
+T 1795351050.8279932
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 2.1
+       frame #0: 0x0000000104a68ebc Vespin`DocumentFieldView.caretNestedLine()
+(lldb)  script print('T', __import__('time').time())
+T 1795351050.846679
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 3.1
+       frame #0: 0x0000000104a72d20 Vespin`DocumentFieldView.caretParagraph()
+(lldb)  script print('T', __import__('time').time())
+T 1795351050.8704278
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 10.1
+       frame #0: 0x0000000104a6aa90 Vespin`DocumentFieldView.keepPendingLine()
+(lldb)  script print('T', __import__('time').time())
+T 1795351050.9092858
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 6.1
+       frame #0: 0x0000000104a67234 Vespin`DocumentFieldView.heldLines()
+(lldb)  script print('T', __import__('time').time())
+T 1795351050.976536
+(lldb)  bt 1
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 6.1
+       frame #0: 0x0000000104a67234 Vespin`DocumentFieldView.heldLines()

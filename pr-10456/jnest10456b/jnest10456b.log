@@ -1,0 +1,6 @@
+A: fails NOSTART (steps 2, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB
+B1: fails 0 shots 1 
+pid 14420
+lldb resumed after ~60 s
+B2: fails 0 shots 1 
+B3: fails 0 shots 2 
