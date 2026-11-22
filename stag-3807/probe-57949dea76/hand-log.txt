@@ -1,0 +1,11 @@
+16:11:13 maestro 2.12.1, idb , app 57949dea76 on main base Vmain9.app
+16:12:34 turned LANDSCAPE_LEFT (Maestro setOrientation only)
+16:12:55 L-launched: fold=OPEN probe=[probe fold 0/0/0 touch 0/0/0 resp 0/0/0 mom 0/6 drag 0/0 busy 0 focus 0] at=[745 -1228 4_tool_calls]
+16:12:56 L: 0 swipes at x=1028 (85%); fold row: [745 -1228 4_tool_calls]
+16:13:04 L-0-before: fold=OPEN probe=[probe fold 0/0/0 touch 0/0/0 resp 0/0/0 mom 0/6 drag 0/0 busy 0 focus 0] at=[745 -1228 4_tool_calls]
+16:13:04 L: tap 1 at 745,-1228 (4_tool_calls)
+16:13:08 L-1-tap1-1s: fold=OPEN probe=[probe fold 0/0/0 touch 0/0/0 resp 0/0/0 mom 0/6 drag 0/0 busy 0 focus 0] at=[745 -1228 4_tool_calls]
+16:13:14 L-2-tap1-4s: fold=OPEN probe=[probe fold 0/0/0 touch 0/0/0 resp 0/0/0 mom 0/6 drag 0/0 busy 0 focus 0] at=[745 -1228 4_tool_calls]
+16:13:29 turned PORTRAIT (Maestro setOrientation only)
+16:13:48 P-0-before: fold=closed probe=[] at=[]
+16:13:48 P: no fold row in the tree, no tap

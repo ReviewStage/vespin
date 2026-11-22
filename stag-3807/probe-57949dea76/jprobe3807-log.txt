@@ -1,0 +1,8 @@
+== bundle PJjprobe3807 base 57949dea76
+  built 57949dea76 base app Vmain9.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-agent: fails 0 shots 26 
+ipad27-light-agent: fails 1 shots 9 Assert that "Read.*" is visible... FAILED
