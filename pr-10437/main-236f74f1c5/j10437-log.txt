@@ -1,0 +1,8 @@
+== bundle PJj10437 base 236f74f1c5
+  built 236f74f1c5 base app Vp10436.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-tasks: fails TIMEOUT (watchdog; steps 315, shots 32) 
+iphone-light-agent: fails 0 shots 26 
