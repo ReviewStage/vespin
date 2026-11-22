@@ -1,0 +1,35 @@
+native base built from main acef53fb35, carries af5619875a
+== bundle PJjlong base 7f04fea37a
+  built 7f04fea37a base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-flong1: fails 1 shots 3 Tap on "Cancel"... FAILED
+iphone-light-flong2: fails 0 shots 1 
+iphone-light-flong3: fails 0 shots 1 
+iphone-light-flong4: fails 0 shots 2 
+iphone-light-flong5: fails 0 shots 2 
+iphone-light-flong6: fails 0 shots 2 
+iphone-light-flong7: fails 1 shots 3 Assert that "Select Text" is visible... FAILED
+iphone-dark-flong1: fails 1 shots 3 Tap on "Cancel"... FAILED
+iphone-dark-flong2: fails 0 shots 1 
+iphone-dark-flong3: fails 0 shots 1 
+iphone-dark-flong4: fails 0 shots 2 
+iphone-dark-flong5: fails 0 shots 2 
+iphone-dark-flong6: fails 0 shots 2 
+iphone-dark-flong7: fails 1 shots 3 Assert that "Select Text" is visible... FAILED
+ipad27-light-flong1: fails 1 shots 1 Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 2000
+ipad27-light-flong2: fails 0 shots 1 
+ipad27-light-flong3: fails 0 shots 1 
+ipad27-light-flong4: fails 0 shots 2 
+ipad27-light-flong5: fails 0 shots 2 
+ipad27-light-flong6: fails 0 shots 2 
+ipad27-light-flong7: fails 1 shots 3 Assert that "Select Text" is visible... FAILED
+ipad27-dark-flong1: fails 1 shots 3 Tap on "Cancel"... FAILED
+ipad27-dark-flong2: fails 0 shots 1 
+ipad27-dark-flong3: fails 1 shots 1 Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 2000
+ipad27-dark-flong4: fails 1 shots 1 Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 2000
+ipad27-dark-flong5: fails 0 shots 2 
+ipad27-dark-flong6: fails 0 shots 2 
+ipad27-dark-flong7: fails 1 shots 3 Assert that "Select Text" is visible... FAILED
