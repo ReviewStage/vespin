@@ -1600,20 +1600,28 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
     guard !moved.isEmpty else { return }
 
-    // Note that the empty line after a last line break holds no character to keep its facts on, so moved, its facts are the ones the words typed next take, as a block chosen for it is.
-    if let last = moved.max(), last == lines.count - 1, emptyLastLineFacts() != nil, moved.count == 1 {
-      let facts = lines[last].facts
-      pendingLine = (textView.textStorage.length, facts)
-      textView.typingAttributes = pendingAttributes(facts)
-      // Note that the move is a change JavaScript hears, as an edit is, so an answer from before it is not drawn over it and a save holds it.
-      changes += 1
-      tell()
-      updateBar()
+    let boxesMove = moved.contains { (previous[$0].facts.itemKind == .taskList) != (lines[$0].facts.itemKind == .taskList) }
+    // Note that the empty line after a last line break holds no character to keep its facts on, so moved, its facts are the ones the words typed next take, as a block chosen for it is; a box it gains or loses is drawn, which gives it characters of its own.
+    let last = lines.count - 1
+    let emptyLastMoved = moved.contains(last) && emptyLastLineFacts() != nil && !boxesMove
+
+    if emptyLastMoved, moved.count == 1 {
+      holdLastLine(lines[last].facts)
       return
     }
 
-    let boxesMove = moved.contains { (previous[$0].facts.itemKind == .taskList) != (lines[$0].facts.itemKind == .taskList) }
     relay(lines, from: previous, keepUndo: !boxesMove)
+    // Note that an empty last item moved with the item above it keeps its own new depth, which the drawing, holding no character for it, would read from the item above.
+    if emptyLastMoved { holdLastLine(lines[last].facts) }
+  }
+
+  /// Keeps `facts` for the empty last line as the ones the words typed next take, and tells JavaScript, as an edit is told, so an answer from before it is not drawn over it and a save holds it.
+  private func holdLastLine(_ facts: LineFacts) {
+    pendingLine = (textView.textStorage.length, facts)
+    textView.typingAttributes = pendingAttributes(facts)
+    changes += 1
+    tell()
+    updateBar()
   }
 
   /// Draws block changes of the field's own, keeping the caret on the same words, and where the words stay the same, registers the lines before as the change's undo, whose redo is the lines after.
