@@ -1,0 +1,31 @@
+pinned to 81cae8d5e3
+== bundle PJjsl175c base 81cae8d5e3
+  built 81cae8d5e3 base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-fprobesl2: fails 1 shots 3 Scrolling UP until "Probe section 60" is visible with speed 100, visibility percentage 100%, timeout 120000 ms
+[probe] lines since 2026-11-22 11:40:36:
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-22 11:42:24.706 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 142 ms ending 1795376544706
+2026-11-22 11:42:25.051 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 345 ms ending 1795376545051
+2026-11-22 11:42:38.043 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 48 ms ending 1795376558043
+2026-11-22 11:42:42.422 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 93 ms ending 1795376562422
+2026-11-22 11:42:43.233 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] mark task-commit 180271 1795376563233
+2026-11-22 11:42:43.322 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 211 ms ending 1795376563323
+2026-11-22 11:42:43.399 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 42 ms ending 1795376563399
+2026-11-22 11:42:43.473 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795376563473
+2026-11-22 11:42:43.587 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 47 ms ending 1795376563588
+2026-11-22 11:42:43.757 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795376563757
+2026-11-22 11:42:43.798 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795376563798
+2026-11-22 11:42:43.937 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795376563937
+2026-11-22 11:42:44.228 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 183 ms ending 1795376564228
+2026-11-22 11:42:46.885 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 173 ms ending 1795376566885
+2026-11-22 11:42:47.171 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 158 ms ending 1795376567171
+2026-11-22 11:43:05.336 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795376585337
+2026-11-22 11:43:05.395 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 58 ms ending 1795376585395
+2026-11-22 11:46:06.271 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 43 ms ending 1795376766272
+2026-11-22 11:46:38.339 E  Vespin[78941:b0dc52b] [com.facebook.react.log:javascript] [probe] gap 61 ms ending 1795376798340
+2026-11-22 11:47:50.105 Df log[80204:0] [com.apple.log:] log run noninteractively, parent: 80049 (launchd_sim), args: 'log' 'show' '--start' '2026-11-22 11:40:36' '--predicate' 'eventMessage CONTAINS "[probe]"' '--style' 'compact'
