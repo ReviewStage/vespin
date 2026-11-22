@@ -1,4 +1,4 @@
-// asks.tsx -- the questions an act asks first, as the system asks them: one a row's act raises standing by that row, UIKit's own action sheet rising from the screen's foot in a compact window, its alert in a regular one, SwiftUI's alert where words must be typed, and the alert that asks for words, such as a rename or an address.
+// asks.tsx -- the questions an act asks first, as the system asks them: one a row's act raises standing by that row, UIKit's own action sheet in a compact window, centered as iOS 26 stands one no view raised, its alert in a regular one, SwiftUI's alert where words must be typed, and the alert that asks for words, such as a rename or an address.
 
 import {
   Alert,
@@ -144,7 +144,8 @@ function GatedConfirm({
 
 /**
  * The ask as UIKit's own question, raised as it's presented: in a compact
- * window an action sheet from the screen's foot, its act first, red where
+ * window an action sheet, which iOS 26 stands centered since no view of ours
+ * raised it, its act first, red where
  * it takes something away, then its second act where it offers one, and the
  * system's own Cancel; in a regular one an alert with Cancel and its acts. Note that it's raised once each time
  * `presented` turns true, and that an answer coming after the caller let
@@ -234,9 +235,12 @@ function SystemConfirm({
 
 /**
  * The question an act asks first, as iOS asks it. In a compact window it's
- * the system's action sheet, rising from the screen's foot whatever pressed
- * the act, a bar button, a menu or a row, its act first and red where it
- * takes something away, and the system's own Cancel. In a regular window,
+ * the system's action sheet, whatever pressed the act, a bar button, a menu
+ * or a row, its act first and red where it takes something away, and the
+ * system's own Cancel set apart below it. Note that iOS 26 stands it
+ * centered, as it stands any action sheet raised from no view: the act is
+ * pressed in a bar or a menu, which no view of ours stands on, so none is
+ * named (UIKit's own anchor reaches no iPhone through `ActionSheetIOS`). In a regular window,
  * and wherever words must be typed first, it's the system's alert, since an
  * iPad draws an action sheet as a popover from the view that presents it,
  * and the act is pressed in a bar, a menu or the menu bar, which no view of
