@@ -5,6 +5,12 @@
 import type { Definition, Nodes } from "mdast";
 import { markdownTree } from "./markdown-tree.js";
 
+/** What every picture Markdown draws opens with. */
+const PICTURE_OPENS = "![";
+
+/** No picture drawn. */
+const NO_PICTURES: readonly string[] = [];
+
 /** The definitions a text's reference-style links and pictures name, by their normalized label, the first of each as CommonMark reads it. */
 function definitionsOf(node: Nodes, found: Map<string, Definition>): void {
   if (node.type === "definition" && !found.has(node.identifier)) found.set(node.identifier, node);
@@ -29,6 +35,8 @@ function picturesOf(node: Nodes, definitions: ReadonlyMap<string, Definition>): 
 
 /** The address of every picture `text` draws, each once, in the order first drawn. */
 export function drawnPictureAddresses(text: string): readonly string[] {
+  // Note that a text with no `![` draws no picture, since every picture Markdown draws opens with it (inline, reference-style or between angle brackets), so it is never parsed: a long description's whole tree took seconds to build on a phone.
+  if (!text.includes(PICTURE_OPENS)) return NO_PICTURES;
   const tree = markdownTree(text);
   const definitions = new Map<string, Definition>();
   definitionsOf(tree, definitions);
