@@ -28,9 +28,12 @@ appId: dev.vespin.ios
 - assertVisible: "Earlier"
 - takeScreenshot: task-history
 # An older version opens whole, and its restore goes at once, offering Undo.
-- tapOn: "Earlier"
+# Note that it opens Ada's draft, whose three sections stand on one page,
+# rather than Earlier, which holds the draft's opening alone.
+- tapOn: "Ada Lovelace|You"
 - waitForAnimationToEnd
 - assertVisible: "Context"
+- assertVisible: "Open questions"
 - assertVisible: "Goal"
 - takeScreenshot: task-version
 - tapOn: "Restore this version"
