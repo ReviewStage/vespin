@@ -1,0 +1,75 @@
+built main 236f74f1c5 + #10440 a0d38cebbb as e2c1579721
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 20:25:33 13322 MB
+curve 20:26:03 13265 MB
+curve 20:26:33 11807 MB
+curve 20:27:03 18492 MB
+curve 20:27:34 18272 MB
+curve 20:28:04 18112 MB
+curve 20:28:34 17985 MB
+curve 20:29:04 17949 MB
+curve 20:29:34 17968 MB
+curve 20:30:04 17650 MB
+curve 20:30:34 17383 MB
+curve 20:31:05 17912 MB
+curve 20:31:35 17795 MB
+curve 20:32:05 17731 MB
+curve 20:32:35 17630 MB
+curve 20:33:06 17495 MB
+curve 20:33:36 17396 MB
+curve 20:34:06 17295 MB
+curve 20:34:36 17276 MB
+curve 20:35:06 17214 MB
+curve 20:35:37 17166 MB
+curve 20:36:07 17122 MB
+curve 20:36:37 17060 MB
+curve 20:37:07 16999 MB
+curve 20:37:38 16967 MB
+curve 20:38:08 16957 MB
+curve 20:38:38 16931 MB
+curve 20:39:08 16917 MB
+curve 20:39:38 16897 MB
+curve 20:40:09 16892 MB
+curve 20:40:39 16856 MB
+curve 20:41:09 16831 MB
+curve 20:41:39 16685 MB
+curve 20:42:10 16667 MB
+curve 20:42:40 16606 MB
+curve 20:43:10 16561 MB
+curve 20:43:40 16545 MB
+curve 20:44:10 16517 MB
+curve 20:44:41 16502 MB
+curve 20:45:11 16454 MB
+curve 20:45:41 16384 MB
+curve 20:46:11 16251 MB
+curve 20:46:42 15806 MB
+curve 20:47:12 15672 MB
+curve 20:47:42 15530 MB
+curve 20:48:12 15345 MB
+curve 20:48:43 15226 MB
+curve 20:49:13 15126 MB
+curve 20:49:43 15053 MB
+curve 20:50:13 15190 MB
+curve 20:50:43 15111 MB
+curve 20:51:14 14917 MB
+curve 20:51:44 14918 MB
+curve 20:52:14 14881 MB
+curve 20:52:44 14912 MB
+curve 20:53:14 14873 MB
+curve 20:53:44 14836 MB
+curve 20:54:15 14729 MB
+curve 20:54:45 14713 MB
+curve 20:55:15 14524 MB
+curve 20:55:45 14697 MB
+BUILD EXIT 0 20:56:15
+sizes: Assets.car 23859528 bytes (main Vp10436.app 23840456), .app 119932 KB (main 119776 KB), zipped .app 45236787 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10440c.app: replacing existing signature
+p10440-iphone-light-pill-field: fails 0 shots 9 
+p10440-iphone-dark-pill-field: fails 0 shots 9 
+p10440-ipad27-light-pill-field: fails 0 shots 9 
+p10440-ipad27-dark-pill-field: fails 0 shots 9 
