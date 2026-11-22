@@ -12,8 +12,10 @@ export interface NativePill {
   readonly heard: string;
 }
 
-/** A run of the words as the view takes it: plain words, or one pill. */
-type NativeRun = { readonly text: string } | { readonly pill: NativePill };
+/** A run of the words as the view takes it: plain words, with the looks they are drawn in where the field draws them (`@repo/features/markdown-styles`' `MARK_STYLE`), or one pill. */
+type NativeRun =
+  | { readonly text: string; readonly styles?: readonly string[] }
+  | { readonly pill: NativePill };
 
 /** The words handed to the view, and how many of its changes JavaScript had heard as it handed them, so words typed since are never set back. */
 export interface NativeValue {
