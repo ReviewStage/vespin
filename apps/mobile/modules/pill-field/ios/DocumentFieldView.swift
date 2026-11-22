@@ -736,7 +736,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let storage = textView.textStorage
 
     // Note that where the words stay as they stand, as a block's change or an item's move leaves them, only their looks are laid on again, since words laid in whole leave the keyboard's correction holding a range of the words it replaced, which it reads on the next key.
-    if keepUndo, next.string == storage.string {
+    let inPlace = keepUndo && next.string == storage.string
+
+    if inPlace {
       storage.beginEditing()
       next.enumerateAttributes(in: NSRange(location: 0, length: next.length)) { attributes, range, _ in
         storage.setAttributes(attributes, range: range)
@@ -758,9 +760,25 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       location = min(location + 2, length)
     }
     textView.selectedRange = NSRange(location: location, length: min(selected.length, length - location))
+    // Note that looks laid on in place leave UIKit typing in the looks the caret's words had before, as a list's item that moved would type its next line at its old depth, so the caret's own are handed it again.
+    if inPlace, let typing = typingAttributes(at: location) { textView.typingAttributes = typing }
     quiet = false
     placeholderLabel.isHidden = length > 0
     setNeedsLayout()
+  }
+
+  /// The looks the words typed at `location` take: those of the word before it on its line, else of the line's first word, as UIKit reads them; the line's paragraph and facts with them, an attachment's own left out.
+  private func typingAttributes(at location: Int) -> [NSAttributedString.Key: Any]? {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    guard storage.length > 0, location <= storage.length else { return nil }
+    let lineStart = location == 0 || string.character(at: location - 1) == 0x0A
+    let at = lineStart ? location : location - 1
+    // Note that an empty last line holds no character to read, its typing being the pending block's or the item's it carries on.
+    guard at < storage.length else { return nil }
+    var attributes = storage.attributes(at: at, effectiveRange: nil)
+    attributes[.attachment] = nil
+    return attributes
   }
 
   /// Lays each handed line's facts on the line held in its place, which only renames blocks and where they came from.
