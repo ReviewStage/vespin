@@ -3,7 +3,7 @@
  */
 
 import type { Definition, Nodes } from "mdast";
-import { markdownTree } from "./markdown-tree.js";
+import { keptMarkdownTree } from "./markdown-tree.js";
 
 /** What every picture Markdown draws opens with. */
 const PICTURE_OPENS = "![";
@@ -33,11 +33,12 @@ function picturesOf(node: Nodes, definitions: ReadonlyMap<string, Definition>): 
     : [];
 }
 
-/** The address of every picture `text` draws, each once, in the order first drawn. */
+/** The address of every picture the whole document `text` draws, each once, in the order first drawn. */
 export function drawnPictureAddresses(text: string): readonly string[] {
   // Note that a text with no `![` draws no picture, since every picture Markdown draws opens with it (inline, reference-style or between angle brackets), so it is never parsed: a long description's whole tree took seconds to build on a phone.
   if (!text.includes(PICTURE_OPENS)) return NO_PICTURES;
-  const tree = markdownTree(text);
+  // Note that the tree is the one the description's blocks read (`keptMarkdownTree`), so a page that draws a description and reads its pictures parses it once.
+  const tree = keptMarkdownTree(text);
   const definitions = new Map<string, Definition>();
   definitionsOf(tree, definitions);
 
