@@ -216,4 +216,18 @@ describe("mentionOffer", () => {
       "Build box",
     ]);
   });
+
+  it("reads the `@` word being typed out of the heading it stands in, so the section keeps its own name and anchor", () => {
+    const [section] = descriptionCandidates(
+      { taskId: "42", name: "Invite flow" },
+      "## Approach @description:\n\nSteps\n",
+      { workspace: "acme", repository: null },
+      "@description:",
+    );
+
+    expect([section?.name, section?.target]).toEqual([
+      "Approach",
+      "https://vespin.dev/acme/task/42#approach",
+    ]);
+  });
 });

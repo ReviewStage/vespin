@@ -260,18 +260,36 @@ export interface DescriptionHolder {
   readonly key?: string | undefined;
 }
 
+/** A heading as it stands once the `@` word being typed in it is taken out, so the word never names or anchors its section. */
+function headingWithout(heading: string, typing: string | undefined): string {
+  if (typing === undefined) return heading;
+
+  return heading
+    .split(" ")
+    .filter((word) => word !== typing)
+    .join(" ")
+    .trim();
+}
+
 /**
  * The description's rows, as the panel's picker offers them: each section by
  * its heading, a heading that spells no anchor left out, then the
- * description whole, which names the task and is found by its key.
+ * description whole, which names the task and is found by its key. The `@`
+ * word being typed, `typing`, is read out of the headings, since the words
+ * being edited hold it until a pick takes its place.
  */
 export function descriptionCandidates(
   holder: DescriptionHolder,
   text: string,
   place: MentionPlace,
+  typing?: string,
 ): readonly MentionCandidate[] {
   const { taskId, name, key } = holder;
-  const headings = descriptionSections(text).map((section) => section.heading);
+
+  const headings = descriptionSections(text).map((section) =>
+    headingWithout(section.heading, typing),
+  );
+
   const anchors = sectionAnchors(headings);
 
   const sections = headings.flatMap((heading, at): MentionCandidate[] => {
