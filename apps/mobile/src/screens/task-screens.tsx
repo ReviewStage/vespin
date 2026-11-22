@@ -2,11 +2,7 @@
 
 import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import {
-  descriptionBlocks,
-  descriptionHead,
-  descriptionHeadBlocks,
-} from "@repo/features/description-blocks";
+import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
@@ -220,6 +216,7 @@ import {
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
+import { useDescriptionRead } from "../tasks/use-description-read.js";
 import { useFollowWrite } from "../tasks/use-following.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
@@ -247,7 +244,6 @@ import {
   useTasksWorkspace,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
-import { useWholeDescription } from "../tasks/use-whole-description.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
   PLUS_TAB,
@@ -2747,15 +2743,10 @@ function OverviewDescription({
   const openLink = useOpenLink(overview.task.workspaceId);
   const { task } = overview;
   const threads = useTaskComments(task.id);
-  // Note that a long description draws its head first and its whole a turn later, so its page never waits on the whole parse to stand.
-  const whole = useWholeDescription(body);
+  // Note that a long description draws its head first and the rest slice by slice, so its page never waits on the whole parse to stand.
+  const { blocks, whole } = useDescriptionRead(body);
   // Note that the pictures, the chips' standings and an empty head's words read only what is drawn, so none parses the whole before it is ready.
   const shown = whole ? body : descriptionHead(body);
-
-  const blocks = useMemo(
-    () => (whole ? descriptionBlocks(body) : descriptionHeadBlocks(body)),
-    [body, whole],
-  );
 
   const onBlocks = threadsOnBlocks(threads, blocks);
   const { pictureSource, videoAt, fileAt } = useDescriptionPictures(shown);
