@@ -1,7 +1,7 @@
 // document-blocks.ts -- a Markdown document as the blocks a rich editor draws without syntax, each keeping its exact source, and the document written back from them with only the blocks that changed printed again.
 
 import type { Nodes, PhrasingContent, RootContent } from "mdast";
-import { markdownTree } from "./markdown-tree.js";
+import { keptMarkdownTree } from "./markdown-tree.js";
 import { PILL_RUN, type Pill, pillRuns } from "./pill-words.js";
 
 /**
@@ -421,7 +421,7 @@ export function documentBlocks(
   markdown: string,
   files: ReadonlySet<string> = new Set(),
 ): readonly DocumentBlock[] {
-  const nodes = markdownTree(markdown).children.flatMap((node) => {
+  const nodes = keptMarkdownTree(markdown).children.flatMap((node) => {
     const place = placeOf(node);
 
     return place === undefined ? [] : [{ node, ...place }];

@@ -22,7 +22,12 @@ import {
   type WritingAction,
 } from "@repo/settings/shortcuts";
 import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { type NativeSyntheticEvent, type StyleProp, View, type ViewStyle } from "react-native";
+import {
+  type NativeSyntheticEvent,
+  ScrollView,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import {
   type CaretAtWord,
   type CaretLine,
@@ -421,12 +426,12 @@ export function DocumentField({
     [repository],
   );
 
-  // Note that the read-only head is no field, so nothing waits on it as the field it stands in for.
+  // Note that the read-only head is no field, so nothing waits on it as the field it stands in for; it stands clear of the bar as the field's text view does.
   if (!ready)
     return (
-      <View style={style}>
+      <ScrollView style={style} contentInsetAdjustmentBehavior="automatic" scrollEnabled={false}>
         <Markdown words={headOf(value)} repository={repository} onOpenLink={openNoLink} headings />
-      </View>
+      </ScrollView>
     );
 
   return (
