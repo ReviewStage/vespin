@@ -1,0 +1,8 @@
+== bundle PJj10216 base 590dab3977
+  built 590dab3977 base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+p10216-iphone-light: fails 0 shots 3 
+p10216-iphone-dark: fails 0 shots 3 
