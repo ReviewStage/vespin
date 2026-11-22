@@ -60,6 +60,8 @@ export {
   type StandingCallCard,
 } from "./call.js";
 
+export type { CaretAtWord } from "./caret-at-word.js";
+
 export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
 export {
@@ -241,7 +243,7 @@ export { PersonHead } from "./person-head.js";
 
 export { PictureSet, type SetPicture } from "./picture-set.js";
 
-export { type CaretAtWord, PillField, type PillFieldHandle } from "./pill-field.js";
+export { PillField, type PillFieldHandle } from "./pill-field.js";
 
 export { ProblemLine } from "./problem-line.js";
 

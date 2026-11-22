@@ -12,7 +12,7 @@ import {
   type LockedKind,
   writtenDocument,
 } from "@repo/features/document-blocks";
-import { PILL_RUN, pillRuns } from "@repo/features/pill-words";
+import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import {
   WRITING_BLOCK,
   WRITING_MARK,
@@ -21,6 +21,14 @@ import {
 } from "@repo/settings/shortcuts";
 import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
+import {
+  type CaretAtWord,
+  type CaretLine,
+  caretAtWord,
+  drawnPill,
+  sameAtWord,
+  toldWord,
+} from "./caret-at-word.js";
 import { editedBlocks, editedLines, type FieldLine, fieldLines } from "./document-field-model.js";
 import {
   FORMAT_ACT,
@@ -58,6 +66,7 @@ const CARD_DETAIL_MOST = 80;
 /** The words of the field's format menus and its link's alert, the desktop's where it has them (`@repo/ui`'s link field). */
 const FORMAT_WORDS = {
   MENU: "Format",
+  MENTION: "Mention",
   TURN_INTO: "Turn into",
   LINK_MESSAGE: "Paste or type a link",
   REMOVE_LINK: "Remove link",
@@ -85,6 +94,7 @@ const FORMATS: NativeFormats = {
     formatAct(WRITING_MARK.CODE, FORMAT_ACT.CODE),
   ],
   link: formatAct(WRITING_MARK.LINK, FORMAT_ACT.LINK),
+  mention: { act: FORMAT_ACT.MENTION, title: FORMAT_WORDS.MENTION, glyph: GLYPH.PERSON },
   blocksTitle: FORMAT_WORDS.TURN_INTO,
   blocksGlyph: WRITING_GLYPH[WRITING_BLOCK.TEXT],
   blocks: [
@@ -105,8 +115,10 @@ const RAW_WORDS = { PICTURE: "Picture", BREAK: "Line break" } as const;
 /** The looks the field tells back that a block's runs keep. */
 const MARKS: ReadonlySet<string> = new Set(Object.values(INLINE_MARK));
 
-/** What the field hands its owner through its ref. */
+/** What the field hands its owner through its ref: a pick in place of the `@` word the caret stands in, plain words there, and the keyboard taken or let go, as the message box's handle offers them. */
 export interface DocumentFieldHandle {
+  readonly pick: (pill: Pill) => void;
+  readonly rewrite: (words: string) => void;
   readonly focus: () => void;
   readonly blur: () => void;
 }
@@ -122,6 +134,8 @@ interface DocumentFieldProps {
   readonly repository?: string | null | undefined;
   readonly placeholder?: string | undefined;
   readonly editable?: boolean | undefined;
+  /** The `@` word the caret stands in as it changes, which a mention offer reads; none once the caret stands in none. */
+  readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string | undefined;
 }
@@ -224,6 +238,7 @@ export function DocumentField({
   repository = null,
   placeholder,
   editable,
+  onAtWord,
   style,
   testID,
 }: DocumentFieldProps) {
@@ -232,6 +247,8 @@ export function DocumentField({
   // How many changes the field has told, which the lines handed it say were heard, so it never sets back words typed since.
   const [seen, setSeen] = useState(0);
   const [told, setTold] = useState<Told | undefined>(undefined);
+  // The `@` word the caret last stood in, which a pick replaces.
+  const atWord = useRef<CaretAtWord | undefined>(undefined);
 
   const handed = useMemo(() => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
@@ -262,11 +279,23 @@ export function DocumentField({
   useImperativeHandle(
     ref,
     () => ({
+      pick: (pill) => {
+        void native.current?.insertPills([drawnPill(pill, repository)], toldWord(atWord.current));
+      },
+      rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
       focus: () => void native.current?.focus(),
       blur: () => void native.current?.blur(),
     }),
-    [],
+    [repository],
   );
+
+  const onCaret = ({ nativeEvent }: NativeSyntheticEvent<CaretLine>) => {
+    const word = caretAtWord(nativeEvent);
+
+    if (sameAtWord(word, atWord.current)) return;
+    atWord.current = word;
+    onAtWord?.(word);
+  };
 
   // Note that the alert asks for the address in UIKit's own alert, as the desktop's link field asks in its popover, offering Remove link where the words hold one.
   const onLinkAsk = ({ nativeEvent }: NativeSyntheticEvent<{ readonly address: string }>) => {
@@ -318,6 +347,7 @@ export function DocumentField({
       formats={FORMATS}
       testID={testID}
       onLinkAsk={onLinkAsk}
+      onCaret={onCaret}
       onLines={onLines}
       onFocusChange={() => undefined}
     />

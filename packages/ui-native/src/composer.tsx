@@ -50,6 +50,7 @@ import {
 } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
+import type { CaretAtWord } from "./caret-at-word.js";
 import {
   BAR_EDGE,
   BAR_GLASS,
@@ -61,7 +62,7 @@ import {
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
-import { type CaretAtWord, PillField, type PillFieldHandle } from "./pill-field.js";
+import { PillField, type PillFieldHandle } from "./pill-field.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";

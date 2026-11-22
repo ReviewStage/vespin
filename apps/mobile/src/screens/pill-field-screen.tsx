@@ -8,6 +8,7 @@ import {
   Button,
   type CaretAtWord,
   DocumentField,
+  type DocumentFieldHandle,
   InlineHost,
   Markdown,
   PillField,
@@ -92,6 +93,7 @@ const WORDS = {
   ATTACH: "Attach a picture",
   CLEAR: "Clear",
   CLEAR_DESCRIPTION: "Clear description",
+  MENTION_IN_DESCRIPTION: "Mention Ada in the description",
 } as const;
 
 const styles = StyleSheet.create({
@@ -134,6 +136,8 @@ export function PillFieldScreen() {
   const colors = useColors();
   const openLink = useOpenLink();
   const field = useRef<PillFieldHandle>(null);
+  const documentField = useRef<DocumentFieldHandle>(null);
+  const [documentAtWord, setDocumentAtWord] = useState<CaretAtWord | undefined>(undefined);
   const [value, setValue] = useState(LAID_IN);
   const [files, setFiles] = useState<ReadonlySet<string>>(() => new Set(["Picture 1", "spec.pdf"]));
   const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
@@ -206,20 +210,36 @@ export function PillFieldScreen() {
           testID="pill-field-styled"
         />
       </View>
-      <InlineHost matchContents>
-        <Button
-          label={WORDS.CLEAR_DESCRIPTION}
-          look={BUTTON_LOOK.BORDERED}
-          size={BUTTON_SIZE.SMALL}
-          onPress={() => setDescription("")}
-        />
-      </InlineHost>
+      <View style={styles.acts}>
+        <InlineHost matchContents>
+          <Button
+            label={
+              documentAtWord === undefined
+                ? WORDS.MENTION_IN_DESCRIPTION
+                : `${WORDS.MENTION_IN_DESCRIPTION} for @${documentAtWord.query}`
+            }
+            look={BUTTON_LOOK.BORDERED}
+            size={BUTTON_SIZE.SMALL}
+            onPress={() => documentField.current?.pick(mentionPill(PICKED.name, PICKED.target))}
+          />
+        </InlineHost>
+        <InlineHost matchContents>
+          <Button
+            label={WORDS.CLEAR_DESCRIPTION}
+            look={BUTTON_LOOK.BORDERED}
+            size={BUTTON_SIZE.SMALL}
+            onPress={() => setDescription("")}
+          />
+        </InlineHost>
+      </View>
       <View style={[styles.document, { borderColor: colors.CHIP_EDGE }]}>
         <DocumentField
+          ref={documentField}
           value={description}
           onChange={setDescription}
           repository={REPOSITORY}
           placeholder={WORDS.PLACEHOLDER}
+          onAtWord={setDocumentAtWord}
           style={styles.fill}
           testID="document-field"
         />

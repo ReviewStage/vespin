@@ -65,6 +65,8 @@ struct FormatsRecord: Record {
   @Field var title: String = ""
   @Field var marks: [FormatActRecord] = []
   @Field var link: FormatActRecord? = nil
+  /// The bar's `@`, which types one, so a mention offer opens on it.
+  @Field var mention: FormatActRecord? = nil
   @Field var blocksTitle: String = ""
   @Field var blocksGlyph: String = ""
   @Field var blocks: [FormatActRecord] = []
@@ -74,6 +76,7 @@ struct FormatsRecord: Record {
 enum DocumentFormat {
   case mark(String)
   case link
+  case mention
   case block(DocumentKind, level: Int?)
 
   /// The act JavaScript names: a mark by `MarkStyle`'s name, `link`, or a block by its kind, a heading by `heading-<level>`.
@@ -85,6 +88,7 @@ enum DocumentFormat {
 
     switch act {
     case "link": self = .link
+    case "mention": self = .mention
     case "heading-1": self = .block(.heading, level: 1)
     case "heading-2": self = .block(.heading, level: 2)
     case "heading-3": self = .block(.heading, level: 3)
@@ -401,6 +405,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   let onHeight = EventDispatcher()
   let onFocusChange = EventDispatcher()
   let onLinkAsk = EventDispatcher()
+  let onCaret = EventDispatcher()
 
   private let textView = UITextView(usingTextLayoutManager: true)
   private let placeholderLabel = UILabel()
@@ -589,6 +594,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     placeholderLabel.isHidden = textView.textStorage.length > 0
     tell()
     keepCaretClear()
+    tellCaret()
     // Note that the bar is marked again once the typed words hold their looks, which they take only now.
     updateBar()
   }
@@ -614,6 +620,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
     updateBar()
     keepCaretClear()
+    guard !quiet else { return }
+    tellCaret()
   }
 
   /// The system's edit menu with the field's Format menu after its own acts, as Notes offers one.
@@ -945,7 +953,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     var items: [UIBarButtonItem] = []
     barItems = []
 
-    for record in formats.marks + [formats.link].compactMap({ $0 }) {
+    for record in formats.marks + [formats.link, formats.mention].compactMap({ $0 }) {
       let item = UIBarButtonItem(
         image: glyphImage(record.glyph),
         primaryAction: UIAction { [weak self] _ in self?.perform(record.act) }
@@ -993,6 +1001,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       return wordsAll(in: selected) { ($0[markStylesKey] as? [String] ?? []).contains(mark) }
     case .link:
       return selected.length > 0 && wordsAll(in: selected) { $0[linkKey] != nil }
+    case .mention:
+      return false
     case .block(let kind, let level):
       if let facts = emptyLastLineFacts() { return facts.drawnKind == kind && facts.level == level }
       // Note that only the lines a block change turns count, as `turnLines` counts them, so a card in the selection leaves the check standing.
@@ -1038,6 +1048,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     switch format {
     case .mark(let mark): toggleMark(mark)
     case .link: askLink()
+    case .mention: textView.insertText("@")
     case .block(let kind, let level): turnLines(into: kind, level: level)
     }
   }
@@ -1308,6 +1319,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   private func edited() {
     changes += 1
     tell()
+    tellCaret()
     updateBar()
   }
 
@@ -1339,6 +1351,90 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   @objc private func chorded(_ command: UIKeyCommand) {
     guard let act = command.propertyList as? String else { return }
     perform(act)
+  }
+
+  // MARK: Mentions
+
+  /// Tells JavaScript the caret's line before and after it, each attachment the object character, so the `@` word it stands in opens a mention offer, as the message box tells its own.
+  private func tellCaret() {
+    let string = textView.textStorage.string as NSString
+    let selected = textView.selectedRange
+    let caret = min(selected.location, string.length)
+    let end = min(NSMaxRange(selected), string.length)
+    let line = string.paragraphRange(for: NSRange(location: caret, length: 0))
+    let lineEnd = NSMaxRange(line) > line.location && NSMaxRange(line) <= string.length
+      && string.character(at: NSMaxRange(line) - 1) == 0x0A ? NSMaxRange(line) - 1 : NSMaxRange(line)
+    let afterEnd = max(lineEnd, end)
+
+    onCaret([
+      "before": string.substring(with: NSRange(location: line.location, length: caret - line.location)),
+      "after": string.substring(with: NSRange(location: end, length: afterEnd - end)),
+      "caret": caret,
+      "selected": selected.length > 0,
+    ])
+  }
+
+  /// The range a pick replaces: the `@` word where it still stands where JavaScript read it, else the nearest such words before the caret on its line, else the caret.
+  private func pickRange(over word: Word?) -> NSRange {
+    let string = textView.textStorage.string as NSString
+    let caret = textView.selectedRange
+    guard let word, !word.text.isEmpty else { return caret }
+    let length = (word.text as NSString).length
+    let read = NSRange(location: word.start, length: length)
+
+    if word.start >= 0, NSMaxRange(read) <= string.length, string.substring(with: read) == word.text {
+      return read
+    }
+
+    let lineStart = string.lineRange(for: NSRange(location: min(caret.location, string.length), length: 0)).location
+    let reach = min(NSMaxRange(caret) + length, string.length)
+    let found = string.range(of: word.text, options: .backwards, range: NSRange(location: lineStart, length: reach - lineStart))
+
+    return found.location == NSNotFound ? caret : found
+  }
+
+  /// Writes words in the range a pick names through the text view's own editing, so undo takes them back, each pill then laid on its object character, and all of it given its line's block and plain looks, the caret after it.
+  private func replacePicked(_ range: NSRange, with words: String, pills: [Pill]) {
+    let storage = textView.textStorage
+    guard editable, NSMaxRange(range) <= storage.length,
+      let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+      let end = textView.position(from: start, offset: range.length),
+      let replaced = textView.textRange(from: start, to: end)
+    else { return }
+    // Note that the line's facts are read before the words go, from what the range stands in, or the line break that ends it.
+    let factsAt = min(range.location, max(storage.length - 1, 0))
+    let facts = storage.length > 0 ? storage.attribute(lineKey, at: factsAt, effectiveRange: nil) as? LineFacts : nil
+    let paragraph = storage.length > 0 ? storage.attribute(.paragraphStyle, at: factsAt, effectiveRange: nil) : nil
+    let laid = NSRange(location: range.location, length: (words as NSString).length)
+
+    quiet = true
+    textView.replace(replaced, withText: words)
+    typed = nil
+    storage.beginEditing()
+    var attributes = wordAttributes(facts?.drawnKind ?? .paragraph, facts?.level, [], nil)
+    if let facts { attributes[lineKey] = facts }
+    if let paragraph { attributes[.paragraphStyle] = paragraph }
+    storage.setAttributes(attributes, range: laid)
+    for (index, pill) in pills.enumerated() {
+      let character = NSRange(location: laid.location + index * 2, length: 1)
+      storage.addAttribute(.attachment, value: PillAttachment(pill: pill, look: look), range: character)
+    }
+    storage.endEditing()
+    quiet = false
+    textView.selectedRange = NSRange(location: NSMaxRange(laid), length: 0)
+    placeholderLabel.isHidden = storage.length > 0
+    edited()
+  }
+
+  /// Puts the pills in place of the `@` word a pick names, or at the caret, each followed by a space, as the message box puts them.
+  func insertPills(_ pills: [Pill], over word: Word?) {
+    guard !pills.isEmpty else { return }
+    replacePicked(pickRange(over: word), with: Array(repeating: "\u{FFFC} ", count: pills.count).joined(), pills: pills)
+  }
+
+  /// Writes plain words in place of the `@` word a pick names, such as `@people:` as a kind is picked to narrow it.
+  func rewriteWord(_ text: String, over word: Word?) {
+    replacePicked(pickRange(over: word), with: text, pills: [])
   }
 
   // MARK: Telling JavaScript
