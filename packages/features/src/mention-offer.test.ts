@@ -229,5 +229,18 @@ describe("mentionOffer", () => {
       "Approach",
       "https://vespin.dev/acme/task/42#approach",
     ]);
+
+    const named = (text: string, typing: string) =>
+      descriptionCandidates(
+        { taskId: "42", name: "Invite flow" },
+        text,
+        { workspace: "acme", repository: null },
+        typing,
+      )[0]?.name;
+
+    expect([
+      named("## Approach @description:Ship it\n", "@description:Ship it"),
+      named("## Approach @description:Shipping\n", "@description:Ship"),
+    ]).toEqual(["Approach", "Approach @description:Shipping"]);
   });
 });
