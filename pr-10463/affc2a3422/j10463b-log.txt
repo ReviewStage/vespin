@@ -1,0 +1,9 @@
+== bundle PJj10463b base affc2a3422
+  built affc2a3422 base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-agent: fails 0 shots 32 
+iphone-dark-agent: fails 0 shots 32 
+ipad27-light-agent: fails 0 shots 32 
