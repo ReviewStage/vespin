@@ -58,8 +58,8 @@ function PageWords({
   const colors = useColors();
   const keyboard = useDockKeyboard();
   const room = useDockRoom();
-  // Note that the words end where the dock's offer begins while one stands, so the caret's line is never under it; the field keeps its own caret clear of the keyboard otherwise.
-  const foot = keyboard + (props.mentions === undefined ? 0 : room);
+  // Note that the words end where the dock's offer begins while one stands, so the caret's line is never under it; the field keeps its own caret clear of the keyboard otherwise, insetting its words for the part the keyboard covers, so a foot for the keyboard too would make room for it twice.
+  const foot = props.mentions === undefined ? 0 : keyboard + room;
 
   return (
     <View style={[styles.page, { backgroundColor: colors.GROUND }]}>
