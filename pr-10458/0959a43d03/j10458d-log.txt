@@ -1,0 +1,10 @@
+== bundle PJj10458d base 0959a43d03
+  built 0959a43d03 base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-settings-automations: fails 0 shots 7 
+iphone-dark-settings-automations: fails 0 shots 7 
+ipad27-light-settings-automations: fails 0 shots 7 
+ipad27-dark-settings-automations: fails 0 shots 7 
