@@ -1,4 +1,4 @@
-// description-edit-screens.tsx -- the sheet a task's description is edited whole in, as GitHub's iPhone app edits an issue's body: its Markdown source, its preview, and a save through the host as the panel's editor saves it.
+// description-edit-screens.tsx -- the sheet a task's description is edited whole in, as Notion edits a page: its blocks drawn with no syntax, formatted from the selection, people and things mentioned from an `@`, and a save through the host as the panel's editor saves it.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
@@ -15,6 +15,7 @@ import {
   pendingSave,
 } from "@repo/features/description-edit-model";
 import { KEEP_MINE, lastEditConflict } from "@repo/features/description-edit-words";
+import { mentionPill } from "@repo/features/pill-words";
 import { TASK_BOUNDS } from "@repo/features/task-wire";
 import type { TasksEditAnswer } from "@repo/features/tasks-view";
 import { ACT_UNREACHED_WORDS, readFailedWords, readingWords } from "@repo/features/words";
@@ -25,11 +26,13 @@ import {
   BUTTON_LOOK,
   BUZZ,
   buzz,
+  type CaretAtWord,
   ConfirmAsk,
+  type DocumentFieldHandle,
+  DocumentPage,
   EmptyState,
   GLYPH,
   glyphSymbol,
-  MarkdownEditor,
   NOTICE_KIND,
   useColors,
   useFailureNotices,
@@ -41,10 +44,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
-import { openInSafari } from "../open-link.js";
-import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { type TaskOverview, useTaskOverview } from "../tasks/use-tasks.js";
 import { DISCARD_CHANGES_WORDS, useKeptWords } from "../use-kept-words.js";
+import { useMentionOffer } from "../use-mention-offer.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** What the sheet says, in the panel's words where it has them. */
@@ -192,7 +194,19 @@ function DescriptionEditor({
     select: (state) => signedInAccountId(state.account),
   });
 
-  const pictures = useDescriptionPictures(editor.draft);
+  // The field's door, and the `@` word its caret stands in, which offers what the task can mention.
+  const field = useRef<DocumentFieldHandle>(null);
+  const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
+
+  const mentions = useMentionOffer(
+    { workspaceId: overview.workspace?.id, taskId: task.id },
+    {
+      word: atWord,
+      pick: (mention) => field.current?.pick(mentionPill(mention.name, mention.target)),
+      rewrite: (words) => field.current?.rewrite(words),
+    },
+  );
+
   const kept = useKeptWords(editor.draft !== editor.base);
   const close = useCloseSheet(kept);
 
@@ -326,19 +340,26 @@ function DescriptionEditor({
         onAct={kept.discard}
         onDismiss={kept.stay}
       />
-      <MarkdownEditor
-        words={editor.draft}
-        onWords={(words) => update(editorTyped(live.current, words))}
+      <DocumentPage
+        ref={field}
+        value={editor.draft}
+        onChange={(words) => update(editorTyped(live.current, words))}
         placeholder={WORDS.PLACEHOLDER}
-        label={WORDS.TITLE}
-        testId={WORDS_TEST_ID}
-        disabled={editor.sending !== undefined}
+        editable={editor.sending === undefined}
         problem={problemOf(editor, conflict?.note)}
         repository={task.repository}
-        onOpenLink={openInSafari}
-        pictureSource={pictures.pictureSource}
-        videoAt={pictures.videoAt}
-        fileAt={pictures.fileAt}
+        onAtWord={setAtWord}
+        mentions={
+          mentions === undefined
+            ? undefined
+            : {
+                groups: mentions.groups,
+                empty: mentions.empty,
+                crumb: mentions.crumb,
+                onPick: mentions.pick,
+              }
+        }
+        testID={WORDS_TEST_ID}
       />
     </>
   );

@@ -39,12 +39,11 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** How many lines the words take before anything is typed, and the most they grow to before they scroll. */
 const WORDS_LINES = { min: 4, max: 12 } as const;
 
-/** Where a sheet's words stand: a row of a Form on the surface, a row holding one line such as a name, a row holding one line kept from sight such as a key or a token, as a password field keeps it, or a page of its own, growing with no bound as Mail's message body does, such as a description's Markdown. */
+/** Where a sheet's words stand: a row of a Form on the surface, a row holding one line such as a name, or a row holding one line kept from sight such as a key or a token, as a password field keeps it. */
 export const WORDS_LOOK = {
   ROW: "row",
   LINE: "line",
   SECRET: "secret",
-  PAGE: "page",
 } as const;
 
 type WordsLook = (typeof WORDS_LOOK)[keyof typeof WORDS_LOOK];
@@ -156,10 +155,6 @@ export function WordsField({
   const bounds = {
     [WORDS_LOOK.ROW]: [lineLimit(WORDS_LINES), listRowBackground(colors.RAISED)],
     [WORDS_LOOK.LINE]: [listRowBackground(colors.RAISED)],
-    [WORDS_LOOK.PAGE]: [
-      lineLimit(),
-      frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-    ],
   }[look];
 
   return (

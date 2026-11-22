@@ -1,0 +1,76 @@
+# description-edit.yaml -- a task's description edited whole, as Notion edits a page: its blocks drawn with no syntax, a table as a card, the selection formatted from the edit menu's Format and the bar over the keyboard, and a person mentioned from an `@`.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, as every flow is, so no server is
+# reached; the fixture's Teammate invitations holds a description with
+# headings, lists, a quote, code, a table and mentions, and answers a save.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- scrollUntilVisible:
+    element: "Teammate invitations"
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+# The Description's Edit, heard as Edit description, opens the sheet on the
+# description as the page read it: headings, bold and italic words, the
+# lists' marks and the quote drawn as the page draws them, with no Markdown
+# syntax, and the table as a card the phone does not edit.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Edit description"
+      BESIDE: ${FLOATING_TABS}
+- tapOn: "Edit description"
+- extendedWaitUntil:
+    visible:
+      id: "description-words"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-sheet
+# A word selected opens the system's edit menu, its Format after the
+# system's own acts, a page on: Bold, Italic, Strikethrough, Code and Link,
+# then Turn into, in the panel's words. Note that the menu's next page is
+# the system's own chevron, which VoiceOver hears as Next Page; a wide
+# window stands Format on the first page already.
+- doubleTapOn: "Context"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible: "Format"
+    commands:
+      - tapOn: "Next Page"
+- tapOn: "Format"
+- assertVisible: "Turn into"
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-format
+- tapOn: "Italic"
+# The bar over the keyboard holds the same marks, Link, Mention, and Turn
+# into, each heard by its words.
+- assertVisible: "Bold"
+- assertVisible: "Mention"
+- takeScreenshot: description-edit-bar
+# Mention types an `@`, which offers what the task can mention over the
+# keyboard, as a composer's `@` offers it; a pick stands as the person's
+# pill in the word's place.
+- tapOn: "Mention"
+- inputText: "Ad"
+- assertVisible: "Ada Lovelace"
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-mention
+- tapOn: "Ada Lovelace"
+- waitForAnimationToEnd
+- assertNotVisible: "Ada Lovelace.*You"
+- takeScreenshot: description-edit-mentioned

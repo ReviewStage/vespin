@@ -437,8 +437,17 @@ export function documentBlocks(
 }
 
 /** A block's content as words to compare, its source and where it came from aside. */
+/** Each block's content key once worked out, so a document written again and again, as each key typed writes it, works out its read blocks' keys once. */
+const CONTENT_KEYS = new WeakMap<DocumentBlock | EditedBlock, string>();
+
 function contentKey(block: DocumentBlock | EditedBlock): string {
-  return JSON.stringify({ ...block, source: undefined, from: undefined });
+  const kept = CONTENT_KEYS.get(block);
+
+  if (kept !== undefined) return kept;
+  const key = JSON.stringify({ ...block, source: undefined, from: undefined });
+  CONTENT_KEYS.set(block, key);
+
+  return key;
 }
 
 /** Words escaped so they read back as words: a mark's character, and at a line's start what would read as a block's mark. */
@@ -589,14 +598,16 @@ export function printBlock(block: BlockContent): string {
  * content is still what it was read as is its exact source, and a changed or
  * new one is printed (`printBlock`) with a blank line after it, the last
  * keeping the document's own ending. A document written with CR LF line
- * endings has its printed blocks written with them too.
+ * endings has its printed blocks written with them too. A caller writing the
+ * same document again and again, as an editor does on each key, hands the
+ * blocks it already read (`read`), so the document is not parsed again.
  */
 export function writtenDocument(
   markdown: string,
   edited: readonly EditedBlock[],
   files: ReadonlySet<string> = new Set(),
+  read: readonly DocumentBlock[] = documentBlocks(markdown, files),
 ): string {
-  const read = documentBlocks(markdown, files);
   const ending = markdown.includes(CRLF) ? CRLF : "\n";
   // Note that the blank lines closing the document are found by trimming rather than by a pattern, which would try every run of spaces in a long document again from each of its characters.
   const close = markdown.slice(markdown.trimEnd().length);

@@ -106,6 +106,8 @@ export { DocumentField, type DocumentFieldHandle } from "./document-field.js";
 
 export { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
 
+export { DocumentPage, type DocumentPageMentions } from "./document-page.js";
+
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
@@ -200,8 +202,6 @@ export {
 export { MachineAskSheet } from "./machine-ask-sheet.js";
 
 export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
-
-export { MarkdownEditor } from "./markdown-editor.js";
 
 export { markdownGithubPages, markdownReplyButtons, markdownShows } from "./markdown-model.js";
 

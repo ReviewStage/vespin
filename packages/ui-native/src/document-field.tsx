@@ -19,7 +19,7 @@ import {
   WRITING_SHORTCUTS,
   type WritingAction,
 } from "@repo/settings/shortcuts";
-import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
 import {
   type CaretAtWord,
@@ -147,6 +147,12 @@ interface Told {
   readonly lines: readonly FieldLine[];
 }
 
+/** What the field tells after a change: its lines, and how many changes it has made. */
+interface NativeToldEvent {
+  readonly lines: readonly NativeToldLine[];
+  readonly changes: number;
+}
+
 /** No files held. */
 const NO_FILES: ReadonlySet<string> = new Set();
 
@@ -250,12 +256,15 @@ export function DocumentField({
   // The `@` word the caret last stood in, which a pick replaces.
   const atWord = useRef<CaretAtWord | undefined>(undefined);
 
+  // Note that the document the field itself wrote is handed back as the lines it told, written against the same Markdown, rather than read again, which would drop a paragraph's edge spaces and its empty paragraphs.
+  const own = told !== undefined && told.markdown === value;
+  const base = own ? told.base : value;
+  // The blocks the Markdown the lines stand on reads as, read once for each Markdown: the field's lines are laid from them, and each key's write is laid against them.
+  const read = useMemo(() => documentBlocks(base, files), [base, files]);
+
   const handed = useMemo(() => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
-    // Note that the document the field itself wrote is handed back as the lines it told, written against the same Markdown, rather than read again, which would drop a paragraph's edge spaces and its empty paragraphs.
-    const own = told !== undefined && told.markdown === value;
-    const base = own ? told.base : value;
-    const laid = own ? told.lines : fieldLines(documentBlocks(value, files));
+    const laid = own ? told.lines : fieldLines(read);
 
     const lines = laid.map(
       (line): NativeDocumentLine => ({
@@ -265,7 +274,7 @@ export function DocumentField({
     );
 
     return { markdown: base, value: { lines, seen } };
-  }, [value, files, repository, seen, told]);
+  }, [own, told, read, base, repository, seen]);
 
   const look = {
     text: colors.TEXT,
@@ -321,20 +330,43 @@ export function DocumentField({
     });
   };
 
-  const onLines = ({
-    nativeEvent,
-  }: NativeSyntheticEvent<{
-    readonly lines: readonly NativeToldLine[];
-    readonly changes: number;
-  }>) => {
-    const edited = editedBlocks(nativeEvent.lines.map((line) => toldLine(line, files)));
+  // The lines the field told last, written once a frame, so fast typing writes the document once for every frame rather than once for every key.
+  const pending = useRef<NativeToldEvent | undefined>(undefined);
+  const frame = useRef<number | undefined>(undefined);
+
+  const write = () => {
+    frame.current = undefined;
+    const told = pending.current;
+
+    if (told === undefined) return;
+    pending.current = undefined;
+    const edited = editedBlocks(told.lines.map((line) => toldLine(line, files)));
     // Note that the document is written against the Markdown whose blocks were last handed, which the lines' sources name.
-    const markdown = writtenDocument(handed.markdown, edited, files);
-    setSeen(nativeEvent.changes);
+    const markdown = writtenDocument(handed.markdown, edited, files, read);
+    setSeen(told.changes);
     setTold({ markdown, base: handed.markdown, lines: editedLines(edited) });
 
     if (markdown !== value) onChange(markdown);
   };
+
+  // Note that the frame's write reads the newest render's Markdown and blocks, which a render between the key and the frame may have handed.
+  const latest = useRef(write);
+
+  useEffect(() => {
+    latest.current = write;
+  });
+
+  const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {
+    pending.current = nativeEvent;
+    frame.current ??= requestAnimationFrame(() => latest.current());
+  };
+
+  useEffect(
+    () => () => {
+      if (frame.current !== undefined) cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
 
   return (
     <NativeDocumentField
