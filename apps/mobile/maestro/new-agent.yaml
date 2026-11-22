@@ -38,7 +38,8 @@ appId: dev.vespin.ios
 # fixture's first model, and opens the model sheet: Effort and Fast lead it,
 # then the catalog, each model once under its harness, by the panel's name
 # for it ("Sonnet 5.5"); a pick keeps the effort it lists nearest the one
-# shown, and Done closes the sheet.
+# shown. Done closes the sheet; a regular window presents it as a popover
+# from the capsule, with no Done, which a tap off it closes.
 - tapOn: "Opus 5.5.*"
 - assertVisible: "Effort"
 - assertVisible: ".*Sonnet 5.5"
@@ -46,7 +47,18 @@ appId: dev.vespin.ios
 - takeScreenshot: new-agent-models
 - tapOn: ".*Sonnet 5.5"
 - waitForAnimationToEnd
-- tapOn: "Done"
+# Note that the popover's tap off comes first, so it never follows the sheet's Done and lands on the page behind.
+- runFlow:
+    when:
+      notVisible: "Done"
+    file: subflows/dismiss.yaml
+    env:
+      POINT: "25%, 30%"
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
 - assertVisible: "Sonnet 5.5.*"
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-picked
