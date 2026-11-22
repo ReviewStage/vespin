@@ -1,0 +1,452 @@
+(lldb) process attach --pid 99019
+Process 99019 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = signal SIGSTOP
+       frame #0: 0x0000000104b88b5c libsystem_kernel.dylib`mach_msg2_trap + 8
+libsystem_kernel.dylib`mach_msg2_trap:
+->  0x104b88b5c <+8>: ret    
+
+libsystem_kernel.dylib`macx_swapon:
+    0x104b88b60 <+0>: mov    x16, #-0x30               ; =-48 
+    0x104b88b64 <+4>: svc    #0x80
+    0x104b88b68 <+8>: ret    
+Target 0: (Vespin) stopped.
+Executable binary set to "/Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/71A9688E-82CC-4501-81F6-BCD21543F10A/dev.vespin.ios-1795349375346.app/Vespin".
+Architecture set to: arm64-apple-ios-simulator.
+(lldb) command source -s 0 '/Users/deanstratakos/vespin-ipad-agent/nest10456.lldb'
+Executing commands in '/Users/deanstratakos/vespin-ipad-agent/nest10456.lldb'.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 655 -G true -C "frame info"
+Breakpoint 1: no locations (pending).
+WARNING:  Unable to resolve breakpoint to any actual locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 656 -G true -C "frame info"
+Breakpoint 2: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 36 at DocumentFieldView.swift:659:19, address = 0x00000001030b5468
+(lldb) breakpoint set -f DocumentFieldView.swift -l 657 -G true -C "frame info"
+Breakpoint 3: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 36 at DocumentFieldView.swift:659:19, address = 0x00000001030b5468
+(lldb) breakpoint set -f DocumentFieldView.swift -l 658 -G true -C "frame info"
+Breakpoint 4: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 36 at DocumentFieldView.swift:659:19, address = 0x00000001030b5468
+(lldb) breakpoint set -f DocumentFieldView.swift -l 659 -G true -C "frame info"
+Breakpoint 5: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 36 at DocumentFieldView.swift:659:19, address = 0x00000001030b5468
+(lldb) breakpoint set -f DocumentFieldView.swift -l 660 -G true -C "frame info"
+Breakpoint 6: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 108 at DocumentFieldView.swift:660:35, address = 0x00000001030b54b0
+(lldb) breakpoint set -f DocumentFieldView.swift -l 661 -G true -C "frame info"
+Breakpoint 7: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 128 at DocumentFieldView.swift:661:34, address = 0x00000001030b54c4
+(lldb) breakpoint set -f DocumentFieldView.swift -l 662 -G true -C "frame info"
+Breakpoint 8: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 164 at DocumentFieldView.swift:662:19, address = 0x00000001030b54e8
+(lldb) breakpoint set -f DocumentFieldView.swift -l 663 -G true -C "frame info"
+Breakpoint 9: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 172 at DocumentFieldView.swift:663:9, address = 0x00000001030b54f0
+(lldb) breakpoint set -f DocumentFieldView.swift -l 664 -G true -C "frame info"
+Breakpoint 10: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 184 at DocumentFieldView.swift:664:9, address = 0x00000001030b54fc
+(lldb) breakpoint set -f DocumentFieldView.swift -l 665 -G true -C "frame info"
+Breakpoint 11: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 188 at DocumentFieldView.swift:668:56, address = 0x00000001030b5500
+(lldb) breakpoint set -f DocumentFieldView.swift -l 666 -G true -C "frame info"
+Breakpoint 12: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 188 at DocumentFieldView.swift:668:56, address = 0x00000001030b5500
+(lldb) breakpoint set -f DocumentFieldView.swift -l 667 -G true -C "frame info"
+Breakpoint 13: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 188 at DocumentFieldView.swift:668:56, address = 0x00000001030b5500
+(lldb) breakpoint set -f DocumentFieldView.swift -l 668 -G true -C "frame info"
+Breakpoint 14: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 188 at DocumentFieldView.swift:668:56, address = 0x00000001030b5500
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1323 -G true -C "frame info"
+Breakpoint 15: no locations (pending).
+WARNING:  Unable to resolve breakpoint to any actual locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1324 -G true -C "frame info"
+Breakpoint 16: where = Vespin`DocumentFieldView.emptyLastLineFacts() + 24 at DocumentFieldView.swift:1326:18, address = 0x00000001030abdc4
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1325 -G true -C "frame info"
+Breakpoint 17: where = Vespin`DocumentFieldView.emptyLastLineFacts() + 24 at DocumentFieldView.swift:1326:18, address = 0x00000001030abdc4
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1326 -G true -C "frame info"
+Breakpoint 18: where = Vespin`DocumentFieldView.emptyLastLineFacts() + 24 at DocumentFieldView.swift:1326:18, address = 0x00000001030abdc4
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1327 -G true -C "frame info"
+Breakpoint 19: where = Vespin`DocumentFieldView.emptyLastLineFacts() + 80 at DocumentFieldView.swift:1327:29, address = 0x00000001030abdfc
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1328 -G true -C "frame info"
+Breakpoint 20: where = Vespin`DocumentFieldView.emptyLastLineFacts() + 88 at DocumentFieldView.swift:1328:38, address = 0x00000001030abe04
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1329 -G true -C "frame info"
+Breakpoint 21: where = Vespin`DocumentFieldView.emptyLastLineFacts() + 104 at DocumentFieldView.swift:1329:11, address = 0x00000001030abe14
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1330 -G true -C "frame info"
+Breakpoint 22: 2 locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1331 -G true -C "frame info"
+Breakpoint 23: where = Vespin`DocumentFieldView.emptyLastLineFacts() + 256 at DocumentFieldView.swift:1331:12, address = 0x00000001030abeac
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1382 -G true -C "frame info"
+Breakpoint 24: no locations (pending).
+WARNING:  Unable to resolve breakpoint to any actual locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1383 -G true -C "frame info"
+Breakpoint 25: where = Vespin`DocumentFieldView.keepPendingLine() + 20 at DocumentFieldView.swift:1385:5, address = 0x00000001030a6aa4
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1384 -G true -C "frame info"
+Breakpoint 26: where = Vespin`DocumentFieldView.keepPendingLine() + 20 at DocumentFieldView.swift:1385:5, address = 0x00000001030a6aa4
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1385 -G true -C "frame info"
+Breakpoint 27: where = Vespin`DocumentFieldView.keepPendingLine() + 20 at DocumentFieldView.swift:1385:5, address = 0x00000001030a6aa4
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1386 -G true -C "frame info"
+Breakpoint 28: where = Vespin`DocumentFieldView.keepPendingLine() + 40 at DocumentFieldView.swift:1386:18, address = 0x00000001030a6ab8
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1387 -G true -C "frame info"
+Breakpoint 29: where = Vespin`DocumentFieldView.keepPendingLine() + 104 at DocumentFieldView.swift:1387:25, address = 0x00000001030a6af8
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1388 -G true -C "frame info"
+Breakpoint 30: where = Vespin`DocumentFieldView.keepPendingLine() + 140 at DocumentFieldView.swift:1388:24, address = 0x00000001030a6b1c
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1452 -G true -C "frame info"
+Breakpoint 31: no locations (pending).
+WARNING:  Unable to resolve breakpoint to any actual locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1453 -G true -C "frame info"
+Breakpoint 32: where = Vespin`DocumentFieldView.caretParagraph() + 32 at DocumentFieldView.swift:1455:19, address = 0x00000001030aed40
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1454 -G true -C "frame info"
+Breakpoint 33: where = Vespin`DocumentFieldView.caretParagraph() + 32 at DocumentFieldView.swift:1455:19, address = 0x00000001030aed40
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1455 -G true -C "frame info"
+Breakpoint 34: where = Vespin`DocumentFieldView.caretParagraph() + 32 at DocumentFieldView.swift:1455:19, address = 0x00000001030aed40
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1456 -G true -C "frame info"
+Breakpoint 35: where = Vespin`DocumentFieldView.caretParagraph() + 64 at DocumentFieldView.swift:1456:26, address = 0x00000001030aed60
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1457 -G true -C "frame info"
+Breakpoint 36: where = Vespin`DocumentFieldView.caretParagraph() + 84 at DocumentFieldView.swift:1457:44, address = 0x00000001030aed74
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1458 -G true -C "frame info"
+Breakpoint 37: where = Vespin`DocumentFieldView.caretParagraph() + 112 at DocumentFieldView.swift:1458:28, address = 0x00000001030aed90
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1459 -G true -C "frame info"
+Breakpoint 38: where = Vespin`DocumentFieldView.caretParagraph() + 140 at DocumentFieldView.swift:1459:36, address = 0x00000001030aedac
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1460 -G true -C "frame info"
+Breakpoint 39: where = Vespin`DocumentFieldView.caretParagraph() + 156 at DocumentFieldView.swift:1460:19, address = 0x00000001030aedbc
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1461 -G true -C "frame info"
+Breakpoint 40: where = Vespin`DocumentFieldView.caretParagraph() + 192 at DocumentFieldView.swift:1461:37, address = 0x00000001030aede0
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1462 -G true -C "frame info"
+Breakpoint 41: where = Vespin`DocumentFieldView.caretParagraph() + 336 at DocumentFieldView.swift:1463:59, address = 0x00000001030aee70
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1463 -G true -C "frame info"
+Breakpoint 42: where = Vespin`DocumentFieldView.caretParagraph() + 336 at DocumentFieldView.swift:1463:59, address = 0x00000001030aee70
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1464 -G true -C "frame info"
+Breakpoint 43: where = Vespin`DocumentFieldView.caretParagraph() + 364 at DocumentFieldView.swift:1464:38, address = 0x00000001030aee8c
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1465 -G true -C "frame info"
+Breakpoint 44: where = Vespin`DocumentFieldView.caretParagraph() + 376 at DocumentFieldView.swift:1465:36, address = 0x00000001030aee98
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1466 -G true -C "frame info"
+Breakpoint 45: where = Vespin`DocumentFieldView.caretParagraph() + 668 at DocumentFieldView.swift:1466:37, address = 0x00000001030aefbc
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1467 -G true -C "frame info"
+Breakpoint 46: where = Vespin`DocumentFieldView.caretParagraph() + 676 at DocumentFieldView.swift:1467:37, address = 0x00000001030aefc4
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1468 -G true -C "frame info"
+Breakpoint 47: where = Vespin`DocumentFieldView.caretParagraph() + 684 at DocumentFieldView.swift:1468:17, address = 0x00000001030aefcc
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1469 -G true -C "frame info"
+Breakpoint 48: where = Vespin`DocumentFieldView.caretParagraph() + 864 at DocumentFieldView.swift:1471:67, address = 0x00000001030af080
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1470 -G true -C "frame info"
+Breakpoint 49: where = Vespin`DocumentFieldView.caretParagraph() + 864 at DocumentFieldView.swift:1471:67, address = 0x00000001030af080
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1471 -G true -C "frame info"
+Breakpoint 50: where = Vespin`DocumentFieldView.caretParagraph() + 864 at DocumentFieldView.swift:1471:67, address = 0x00000001030af080
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1472 -G true -C "frame info"
+Breakpoint 51: where = Vespin`DocumentFieldView.caretParagraph() + 408 at DocumentFieldView.swift:1472:3, address = 0x00000001030aeeb8
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1473 -G true -C "frame info"
+Breakpoint 52: no locations (pending).
+WARNING:  Unable to resolve breakpoint to any actual locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1474 -G true -C "frame info"
+Breakpoint 53: where = Vespin`DocumentFieldView.caretNestedLine() + 20 at DocumentFieldView.swift:1476:11, address = 0x00000001030a4ed0
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1475 -G true -C "frame info"
+Breakpoint 54: where = Vespin`DocumentFieldView.caretNestedLine() + 20 at DocumentFieldView.swift:1476:11, address = 0x00000001030a4ed0
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1476 -G true -C "frame info"
+Breakpoint 55: 2 locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1493 -G true -C "frame info"
+Breakpoint 56: no locations (pending).
+WARNING:  Unable to resolve breakpoint to any actual locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1494 -G true -C "frame info"
+Breakpoint 57: where = Vespin`DocumentFieldView.shiftLines(by:) + 36 at DocumentFieldView.swift:1496:20, address = 0x00000001030a4fb8
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1495 -G true -C "frame info"
+Breakpoint 58: where = Vespin`DocumentFieldView.shiftLines(by:) + 36 at DocumentFieldView.swift:1496:20, address = 0x00000001030a4fb8
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1496 -G true -C "frame info"
+Breakpoint 59: where = Vespin`DocumentFieldView.shiftLines(by:) + 36 at DocumentFieldView.swift:1496:20, address = 0x00000001030a4fb8
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1497 -G true -C "frame info"
+Breakpoint 60: 2 locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1498 -G true -C "frame info"
+Breakpoint 61: 2 locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1499 -G true -C "frame info"
+Breakpoint 62: where = Vespin`DocumentFieldView.shiftLines(by:) + 348 at DocumentFieldView.swift:1499:24, address = 0x00000001030a50f0
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1500 -G true -C "frame info"
+Breakpoint 63: where = Vespin`DocumentFieldView.shiftLines(by:) + 440 at DocumentFieldView.swift:1501:33, address = 0x00000001030a514c
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1501 -G true -C "frame info"
+Breakpoint 64: where = Vespin`DocumentFieldView.shiftLines(by:) + 440 at DocumentFieldView.swift:1501:33, address = 0x00000001030a514c
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1502 -G true -C "frame info"
+Breakpoint 65: where = Vespin`<+544> [inlined] generic specialization <VespinPillField.DocumentLine> of Swift.Array._checkSubscript(_: Swift.Int, wasNativeTypeChecked: Swift.Bool) -> Swift._DependenceToken at DocumentFieldView.swift:1502:23, address = 0x00000001030a51b4
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1503 -G true -C "frame info"
+Breakpoint 66: where = Vespin`<+568> [inlined] VespinPillField.LineFacts.drawnKind.getter : VespinPillField.DocumentKind at DocumentFieldView.swift:1503:24, address = 0x00000001030a51cc
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1504 -G true -C "frame info"
+Breakpoint 67: where = Vespin`DocumentFieldView.shiftLines(by:) + 684 at DocumentFieldView.swift:1504:36, address = 0x00000001030a5240
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1505 -G true -C "frame info"
+Breakpoint 68: where = Vespin`DocumentFieldView.shiftLines(by:) + 988 at DocumentFieldView.swift:1505:19, address = 0x00000001030a5370
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1506 -G true -C "frame info"
+Breakpoint 69: where = Vespin`DocumentFieldView.shiftLines(by:) + 992 at DocumentFieldView.swift:1507:7, address = 0x00000001030a5374
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1507 -G true -C "frame info"
+Breakpoint 70: where = Vespin`DocumentFieldView.shiftLines(by:) + 992 at DocumentFieldView.swift:1507:7, address = 0x00000001030a5374
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1508 -G true -C "frame info"
+Breakpoint 71: where = Vespin`DocumentFieldView.shiftLines(by:) + 1216 at DocumentFieldView.swift:1509:24, address = 0x00000001030a5454
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1509 -G true -C "frame info"
+Breakpoint 72: where = Vespin`DocumentFieldView.shiftLines(by:) + 1216 at DocumentFieldView.swift:1509:24, address = 0x00000001030a5454
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1510 -G true -C "frame info"
+Breakpoint 73: where = Vespin`DocumentFieldView.shiftLines(by:) + 1388 at DocumentFieldView.swift:1510:97, address = 0x00000001030a5500
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1511 -G true -C "frame info"
+Breakpoint 74: where = Vespin`<+1480> [inlined] generic specialization <Swift.Int> of Swift.Set.insert(__owned τ_0_0) -> (inserted: Swift.Bool, memberAfterInsert: τ_0_0) at <compiler-generated>:1511:15, address = 0x00000001030a555c
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1512 -G true -C "frame info"
+Breakpoint 75: where = Vespin`DocumentFieldView.shiftLines(by:) + 1540 at DocumentFieldView.swift:1515:12, address = 0x00000001030a5598
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1513 -G true -C "frame info"
+Breakpoint 76: where = Vespin`DocumentFieldView.shiftLines(by:) + 1540 at DocumentFieldView.swift:1515:12, address = 0x00000001030a5598
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1514 -G true -C "frame info"
+Breakpoint 77: where = Vespin`DocumentFieldView.shiftLines(by:) + 1540 at DocumentFieldView.swift:1515:12, address = 0x00000001030a5598
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1515 -G true -C "frame info"
+Breakpoint 78: where = Vespin`DocumentFieldView.shiftLines(by:) + 1540 at DocumentFieldView.swift:1515:12, address = 0x00000001030a5598
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1516 -G true -C "frame info"
+Breakpoint 79: 2 locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1517 -G true -C "frame info"
+Breakpoint 80: 2 locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1518 -G true -C "frame info"
+Breakpoint 81: 2 locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1519 -G true -C "frame info"
+Breakpoint 82: where = Vespin`<+1656> [inlined] generic specialization <VespinPillField.DocumentLine> of Swift.Array._checkSubscript(_: Swift.Int, wasNativeTypeChecked: Swift.Bool) -> Swift._DependenceToken at <compiler-generated>:1519:24, address = 0x00000001030a560c
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1520 -G true -C "frame info"
+Breakpoint 83: where = Vespin`DocumentFieldView.shiftLines(by:) + 1684 at DocumentFieldView.swift:1520:22, address = 0x00000001030a5628
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1521 -G true -C "frame info"
+Breakpoint 84: where = Vespin`DocumentFieldView.shiftLines(by:) + 1772 at DocumentFieldView.swift:1521:35, address = 0x00000001030a5680
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1522 -G true -C "frame info"
+Breakpoint 85: where = Vespin`<+1880> [inlined] VespinPillField.DocumentFieldView.updateBar() -> () at DocumentFieldView.swift:1522:7, address = 0x00000001030a56ec
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1523 -G true -C "frame info"
+Breakpoint 86: where = Vespin`DocumentFieldView.shiftLines(by:) + 2636 at DocumentFieldView.swift:1527:5, address = 0x00000001030a59e0
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1524 -G true -C "frame info"
+Breakpoint 87: where = Vespin`DocumentFieldView.shiftLines(by:) + 2636 at DocumentFieldView.swift:1527:5, address = 0x00000001030a59e0
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1525 -G true -C "frame info"
+Breakpoint 88: where = Vespin`DocumentFieldView.shiftLines(by:) + 2636 at DocumentFieldView.swift:1527:5, address = 0x00000001030a59e0
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1526 -G true -C "frame info"
+Breakpoint 89: 2 locations.
+(lldb) breakpoint set -f DocumentFieldView.swift -l 658 -G true -C "frame variable text range line"
+Breakpoint 90: where = Vespin`specialized DocumentFieldView.textView(_:shouldChangeTextIn:replacementText:) + 36 at DocumentFieldView.swift:659:19, address = 0x00000001030b5468
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1504 -G true -C "frame variable index depth shift"
+Breakpoint 91: where = Vespin`DocumentFieldView.shiftLines(by:) + 684 at DocumentFieldView.swift:1504:36, address = 0x00000001030a5240
+(lldb) breakpoint set -f DocumentFieldView.swift -l 1516 -G true -C "frame variable moved touched"
+Breakpoint 92: 2 locations.
+(lldb) continue
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed60 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1456:26 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed74 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1457:44 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed90 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1458:28 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedac Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1459:36 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedbc Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1460:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aeeb8 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1472:3 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=0, length=0, text="P") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=0, length=0, text="P") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=0, length=0, text="P") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=0, length=0, text="P") at DocumentFieldView.swift:659:19 [opt]
+warning: Vespin was compiled with optimization - stepping may behave oddly; variables may not be available.
+(lldb)  frame variable text range line
+error: Aborting reading of commands after command #0: 'frame variable text range line' failed with error: <user expression 0>:1:1: use of undeclared identifier 'line'
+   1 | line
+     | ^
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed60 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1456:26 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed74 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1457:44 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed90 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1458:28 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedac Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1459:36 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedbc Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1460:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aeeb8 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1472:3 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=0, length=0, text="P") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=0, length=0, text="P") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=0, length=0, text="P") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=0, length=0, text="P") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed60 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1456:26 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed74 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1457:44 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed90 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1458:28 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedac Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1459:36 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedbc Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1460:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aede0 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1461:37 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aeeb8 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1472:3 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=1, length=0, text="l") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=1, length=0, text="l") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=1, length=0, text="l") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=1, length=0, text="l") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame variable text range line
+error: Aborting reading of commands after command #0: 'frame variable text range line' failed with error: <user expression 0>:1:1: use of undeclared identifier 'line'
+   1 | line
+     | ^
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed60 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1456:26 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed74 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1457:44 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed90 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1458:28 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedac Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1459:36 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedbc Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1460:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aede0 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1461:37 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aeeb8 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1472:3 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=1, length=0, text="l") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=1, length=0, text="l") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=1, length=0, text="l") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=1, length=0, text="l") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=2, length=0, text="a") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=2, length=0, text="a") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=2, length=0, text="a") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=2, length=0, text="a") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame variable text range line
+error: Aborting reading of commands after command #0: 'frame variable text range line' failed with error: <user expression 0>:1:1: use of undeclared identifier 'line'
+   1 | line
+     | ^
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed60 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1456:26 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed74 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1457:44 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed90 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1458:28 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedac Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1459:36 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedbc Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1460:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aede0 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1461:37 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aeeb8 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1472:3 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=2, length=0, text="a") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=2, length=0, text="a") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=2, length=0, text="a") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=2, length=0, text="a") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=3, length=0, text="n") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=3, length=0, text="n") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=3, length=0, text="n") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5468 Vespin`specialized DocumentFieldView.textView(range=location=3, length=0, text="n") at DocumentFieldView.swift:659:19 [opt]
+(lldb)  frame variable text range line
+error: Aborting reading of commands after command #0: 'frame variable text range line' failed with error: <user expression 0>:1:1: use of undeclared identifier 'line'
+   1 | line
+     | ^
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a4ed0 Vespin`DocumentFieldView.caretNestedLine() at DocumentFieldView.swift:1476:11 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed40 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1455:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed60 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1456:26 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed74 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1457:44 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aed90 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1458:28 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedac Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1459:36 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aedbc Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1460:19 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aede0 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1461:37 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030aeeb8 Vespin`DocumentFieldView.caretParagraph() at DocumentFieldView.swift:1472:3 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=3, length=0, text="n") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=3, length=0, text="n") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=3, length=0, text="n") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030b5500 Vespin`specialized DocumentFieldView.textView(range=location=3, length=0, text="n") at DocumentFieldView.swift:668:56 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
+(lldb)  frame info
+frame #0: 0x00000001030a6aa4 Vespin`DocumentFieldView.keepPendingLine() at DocumentFieldView.swift:1385:5 [opt]
