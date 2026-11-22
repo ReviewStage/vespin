@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { type FakeResponder, fakeHttpClientLayer } from "@repo/wire/testing";
 import { Deferred, Exit } from "effect";
-import type { RunnerEvent } from "../protocol.js";
+import { RUNNER_EVENTS_MAX_BYTES, type RunnerEvent } from "../protocol.js";
 
 /** How a fake events route answers one post: take it, fail as a server, or fail before answering. */
 export const ANSWER = {
@@ -50,6 +50,12 @@ export function makeFakeService(options: {
 
     if (answer === ANSWER.SERVER_ERROR) return new Response(null, { status: 503 });
     const body = String(init.body);
+
+    // A body past the route's bound is refused for good, as the real route refuses it.
+    if (Buffer.byteLength(body) > RUNNER_EVENTS_MAX_BYTES) {
+      return new Response(null, { status: 413 });
+    }
+
     bodies.push(body);
     const batch: { events: RunnerEvent[] } = JSON.parse(body);
     const last = applied.at(-1)?.sequence ?? options.firstSequence - 1;

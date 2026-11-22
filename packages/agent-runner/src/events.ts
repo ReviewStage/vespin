@@ -5,7 +5,10 @@
  * one before it, and a batch that fails is posted again whole with the same
  * numbers, which the service applies at most once. Everything emitted while a post
  * is in flight waits in the queue and goes in the next batch, so a stream of
- * partial messages costs a post per round trip rather than per token. Beside
+ * partial messages costs a post per round trip rather than per token. A batch
+ * whose body would pass what the service takes (`RUNNER_EVENTS_MAX_BYTES`)
+ * goes as several posts, in order, and no event carries a picture's bytes,
+ * so a tool's answer of many pictures never ends the launch. Beside
  * the sender, a heartbeat posts a batch with no events every
  * `RUNNER_HEARTBEAT` for as long as the launch runs, once each, since the
  * next is never far, so the service touches the sandbox through a harness's
@@ -27,9 +30,9 @@ import {
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import {
+  RUNNER_EVENTS_MAX_BYTES,
   RUNNER_HEARTBEAT,
   type RunnerEvent,
-  type RunnerEventBatch,
   type RunnerMessage,
 } from "./protocol.js";
 
@@ -104,6 +107,12 @@ export interface EventSink {
 /** What a secret is replaced with wherever an event carried it. */
 const REDACTED = "[redacted]";
 
+/** The `type` of an image or document block's source that carries its bytes inline, as the Messages API spells it. */
+const BASE64_SOURCE = "base64";
+
+/** What a base64 source's bytes are replaced with in an event. */
+const BYTES_LEFT_OUT = "";
+
 /** A value as it crosses to the service: JSON's own shapes. */
 type Json = string | number | boolean | null | readonly Json[] | { readonly [key: string]: Json };
 
@@ -112,24 +121,70 @@ function redactedText(text: string, secrets: readonly string[]): string {
   return secrets.reduce((scrubbing, secret) => scrubbing.replaceAll(secret, REDACTED), text);
 }
 
-/** A value with every secret taken out of each string in it, keys included. */
+/** Whether a value is a base64 source, as an image or document block carries its bytes (`{ type: "base64", data }`). */
+function isBase64Source(value: { readonly [key: string]: Json }): boolean {
+  return value.type === BASE64_SOURCE && Predicate.isString(value.data);
+}
+
+/**
+ * A value with every secret taken out of each string in it, keys included,
+ * and every base64 source's bytes left out. Note that the bytes are left out
+ * because the service reads a tool's pictures as `[image]` and never their
+ * bytes, while a PDF's pages read as pictures run to megabytes in one answer,
+ * past what one post may carry (`RUNNER_EVENTS_MAX_BYTES`).
+ */
 function redacted(value: Json, secrets: readonly string[]): Json {
   if (Predicate.isString(value)) return redactedText(value, secrets);
 
   if (Array.isArray(value)) return value.map((each) => redacted(each, secrets));
 
   if (!Predicate.isObject(value)) return value;
+  const kept = isBase64Source(value) ? { ...value, data: BYTES_LEFT_OUT } : value;
 
   return Object.fromEntries(
-    Object.entries(value).map(([key, each]) => [
+    Object.entries(kept).map(([key, each]) => [
       redactedText(key, secrets),
       redacted(each, secrets),
     ]),
   );
 }
 
+/** A batch's body around its events, each already spelled as JSON. */
+function bodyOf(events: readonly string[]): string {
+  return `{"events":[${events.join(",")}]}`;
+}
+
 /**
- * A batch as the text the service is sent, with every secret the launch holds taken
+ * Events, in order, as the fewest bodies each within `maxBytes`. An event
+ * that alone passes the bound goes in a body of its own, which the service
+ * then refuses as it would have refused the whole batch.
+ */
+function bodiesWithin(events: readonly string[], maxBytes: number): string[] {
+  const bodies: string[] = [];
+  let held: string[] = [];
+  let bytes = Buffer.byteLength(bodyOf([]));
+
+  for (const event of events) {
+    // One more byte for the comma that sets the event apart from the one before it.
+    const size = Buffer.byteLength(event) + 1;
+
+    if (held.length > 0 && bytes + size > maxBytes) {
+      bodies.push(bodyOf(held));
+      held = [];
+      bytes = Buffer.byteLength(bodyOf([]));
+    }
+
+    held.push(event);
+    bytes += size;
+  }
+
+  if (held.length > 0) bodies.push(bodyOf(held));
+
+  return bodies;
+}
+
+/**
+ * An event as the text the service is sent, with every secret the launch holds taken
  * out. Note that we scrub every event, the SDK's included, because a tool's
  * output or a CLI's error is text the runner never wrote, and a command the
  * agent runs may print a credential it can read: on a host the credential
@@ -140,28 +195,28 @@ function redacted(value: Json, secrets: readonly string[]): Json {
  * Note too that we scrub the strings themselves, before they are spelled as
  * JSON, so no escape can hide a secret or be cut in half by its removal.
  */
-function batchText(batch: RunnerEventBatch, secrets: readonly Redacted.Redacted[]): string {
+function eventText(event: RunnerEvent, secrets: readonly Redacted.Redacted[]): string {
   const values = secrets.flatMap((secret) => {
     const value = Redacted.value(secret);
 
     return value === "" ? [] : [value];
   });
 
-  // Note that the batch is JSON already, as the SDK parsed it from the CLI's stdout.
-  const json: Json = JSON.parse(JSON.stringify(batch));
+  // Note that the event is JSON already, as the SDK parsed it from the CLI's stdout.
+  const json: Json = JSON.parse(JSON.stringify(event));
 
   return JSON.stringify(redacted(json, values));
 }
 
-/** One batch, posted once: taken, or why the service did not take it. */
+/** One batch's body, posted once: taken, or why the service did not take it. */
 function postOnce(
   client: HttpClient.HttpClient,
   options: SinkOptions,
-  batch: RunnerEventBatch,
+  body: string,
 ): Effect.Effect<void, EventsUndelivered> {
   const request = HttpClientRequest.post(options.url).pipe(
     HttpClientRequest.bearerToken(options.bearer),
-    HttpClientRequest.bodyText(batchText(batch, options.secrets), "application/json"),
+    HttpClientRequest.bodyText(body, "application/json"),
   );
 
   return client.execute(request).pipe(
@@ -186,9 +241,9 @@ function postOnce(
 const postBatch = Effect.fn("agent-runner/postBatch")(function* (
   client: HttpClient.HttpClient,
   options: SinkOptions,
-  batch: RunnerEventBatch,
+  body: string,
 ) {
-  return yield* postOnce(client, options, batch).pipe(
+  return yield* postOnce(client, options, body).pipe(
     Effect.retry({
       schedule: POST_BACKOFF,
       while: (error) => error.transient,
@@ -212,7 +267,11 @@ export const openEventSink = Effect.fn("agent-runner/openEventSink")(function* (
   const sendAll = Effect.gen(function* () {
     for (;;) {
       const events = yield* Queue.takeBetween(queue, 1, BATCH_MAX);
-      yield* postBatch(client, { ...options, secrets }, { events });
+      const texts = events.map((event) => eventText(event, secrets));
+
+      for (const body of bodiesWithin(texts, RUNNER_EVENTS_MAX_BYTES)) {
+        yield* postBatch(client, options, body);
+      }
     }
   }).pipe(Effect.catchIf(Cause.isDone, () => Effect.void));
 
@@ -222,9 +281,7 @@ export const openEventSink = Effect.fn("agent-runner/openEventSink")(function* (
   // Note that `Effect.schedule` waits one interval before the first beat, as the schedule's first step sleeps.
   const heartbeat = yield* Effect.forkScoped(
     Effect.schedule(
-      Effect.ignore(
-        Effect.suspend(() => postOnce(client, { ...options, secrets }, { events: [] })),
-      ),
+      Effect.ignore(Effect.suspend(() => postOnce(client, options, bodyOf([])))),
       Schedule.spaced(Duration.millis(RUNNER_HEARTBEAT.EVERY_MS)),
     ),
   );

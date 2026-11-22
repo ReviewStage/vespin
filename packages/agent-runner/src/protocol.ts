@@ -1307,6 +1307,13 @@ export interface RunnerEventBatch {
 }
 
 /**
+ * The most bytes one batch's body may hold: the service refuses a larger one
+ * for good, under the platform's own bound on a request's body, so the runner
+ * splits its batches to stay within it.
+ */
+export const RUNNER_EVENTS_MAX_BYTES = 4 * 1024 * 1024;
+
+/**
  * How often a launch tells the service it still runs, as a batch with no events,
  * for as long as it runs, on its own timer whatever its harness says. A harness
  * may say nothing for an hour while a background command or a wakeup it waits
