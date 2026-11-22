@@ -154,33 +154,37 @@ function bodyOf(events: readonly string[]): string {
   return `{"events":[${events.join(",")}]}`;
 }
 
+/** One body to post, and how many of the events it was taken from it holds. */
+interface FirstBody {
+  readonly body: string;
+  readonly count: number;
+}
+
 /**
- * Events, in order, as the fewest bodies each within `maxBytes`. An event
- * that alone passes the bound goes in a body of its own, which the service
- * then refuses as it would have refused the whole batch.
+ * The first body of the events given, in order, as many of them as stay
+ * within `maxBytes`, each scrubbed as it is taken (`eventText`), and how many
+ * it holds. An event that alone passes the bound goes in a body of its own,
+ * which the service then refuses as it would have refused the whole batch.
  */
-function bodiesWithin(events: readonly string[], maxBytes: number): string[] {
-  const bodies: string[] = [];
-  let held: string[] = [];
+function firstBodyWithin(
+  events: readonly RunnerEvent[],
+  secrets: readonly Redacted.Redacted[],
+  maxBytes: number,
+): FirstBody {
+  const held: string[] = [];
   let bytes = Buffer.byteLength(bodyOf([]));
 
   for (const event of events) {
+    const text = eventText(event, secrets);
     // One more byte for the comma that sets the event apart from the one before it.
-    const size = Buffer.byteLength(event) + 1;
+    const size = Buffer.byteLength(text) + 1;
 
-    if (held.length > 0 && bytes + size > maxBytes) {
-      bodies.push(bodyOf(held));
-      held = [];
-      bytes = Buffer.byteLength(bodyOf([]));
-    }
-
-    held.push(event);
+    if (held.length > 0 && bytes + size > maxBytes) break;
+    held.push(text);
     bytes += size;
   }
 
-  if (held.length > 0) bodies.push(bodyOf(held));
-
-  return bodies;
+  return { body: bodyOf(held), count: held.length };
 }
 
 /**
@@ -266,11 +270,13 @@ export const openEventSink = Effect.fn("agent-runner/openEventSink")(function* (
 
   const sendAll = Effect.gen(function* () {
     for (;;) {
-      const events = yield* Queue.takeBetween(queue, 1, BATCH_MAX);
-      const texts = events.map((event) => eventText(event, secrets));
+      let left: readonly RunnerEvent[] = yield* Queue.takeBetween(queue, 1, BATCH_MAX);
 
-      for (const body of bodiesWithin(texts, RUNNER_EVENTS_MAX_BYTES)) {
+      // Note that each body is scrubbed only as it is posted, so a secret withheld while the body before it was in flight is out of it.
+      while (left.length > 0) {
+        const { body, count } = firstBodyWithin(left, secrets, RUNNER_EVENTS_MAX_BYTES);
         yield* postBatch(client, options, body);
+        left = left.slice(count);
       }
     }
   }).pipe(Effect.catchIf(Cause.isDone, () => Effect.void));
