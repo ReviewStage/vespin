@@ -137,5 +137,11 @@ appId: dev.vespin.ios
 - pressKey: Enter
 - pressKey: Enter
 - inputText: "Ship"
-- assertVisible: "(?s).*- [^\\n]*Plan\\n  - Model[^\\n]*\\n- +Ship.*"
 - takeScreenshot: document-field-nested-out
+# Note that the field now stands three lines tall over the keyboard, which
+# can hide the Markdown under it, so the keyboard is lowered and the page
+# scrolled to the Markdown before it is read.
+- runFlow: subflows/lower-keyboard.yaml
+- scrollUntilVisible:
+    element: "(?s).*- [^\\n]*Plan\\n  - Model[^\\n]*\\n- +Ship.*"
+    direction: DOWN
