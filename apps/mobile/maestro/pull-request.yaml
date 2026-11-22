@@ -166,9 +166,10 @@ env:
 # Note that iOS never hears a chip as an element of its own, since it stands
 # in its line as a view, so the line is found by what it is heard as
 # (`heardLine`), "Pull request: pull request #128", the chip named by its
-# key alone, and pressed where the chip stands: just past "Pull request:",
-# a third of the way along an iPhone's line and a fifth along an iPad's,
-# whose reading column holds a line about twice as long. Note that the page
+# key alone, and pressed where the chip stands: 130 pt from the line's
+# leading edge, just past "Pull request:" in the body style, the same on an
+# iPhone's line and an iPad's twice as long, where a share of the line's
+# width lands on the words before the chip. Note that the page
 # is swiped at its right side rather than scrolled from the screen's center,
 # since a landscape iPad's center falls in the list column beside the task,
 # which never holds the chip.
@@ -181,20 +182,9 @@ env:
           start: 85%, 70%
           end: 85%, 35%
       - waitForAnimationToEnd
-- runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - tapOn:
-          text: "Pull request: pull request #128.*"
-          point: "34%, 50%"
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - tapOn:
-          text: "Pull request: pull request #128.*"
-          point: "18%, 50%"
+- tapOn:
+    text: "Pull request: pull request #128.*"
+    point: "130, 12"
 - extendedWaitUntil:
     visible: "Ready to merge"
     timeout: 30000
