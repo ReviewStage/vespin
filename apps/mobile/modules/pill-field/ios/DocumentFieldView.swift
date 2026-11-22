@@ -870,7 +870,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     }
 
     nesting = (facts.block, stack)
-    return stack.compactMap(\.list)
+    // Note that a task's paragraph stands in no list, since its box is its mark and a list would draw its parent's mark beside the box.
+    return kind == .taskList ? [] : stack.compactMap(\.list)
   }
 
   /// A list of `kind`'s items at `depth`: bullets that change their mark with each depth, as Notes' do, or numbers from `start`; none for a task, whose box marks it.
@@ -1064,7 +1065,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     var items: [UIBarButtonItem] = []
     barItems = []
 
-    for record in formats.marks + [formats.link, formats.mention, formats.outdent, formats.indent].compactMap({ $0 }) {
+    for record in formats.marks + [formats.link, formats.mention].compactMap({ $0 }) {
       let item = UIBarButtonItem(
         image: glyphImage(record.glyph),
         primaryAction: UIAction { [weak self] _ in self?.perform(record.act) }
@@ -1078,10 +1079,19 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     blocks.accessibilityLabel = formats.blocksTitle
     // Note that the blocks stand in Turn into's own order wherever the menu opens, rather than turned over to start nearest the button.
     blocks.preferredMenuElementOrder = .fixed
-    // Note that the blocks' menu is built as it opens, so its check stands on the block the caret is in now.
+    // Note that the blocks' menu is built as it opens, so its check stands on the block the caret is in now, and Outdent and Indent lead it, dimmed where the caret's item cannot move that way, since a phone's bar holds no more buttons than its marks and this one.
     blocks.menu = UIMenu(children: [
       UIDeferredMenuElement.uncached { [weak self] answer in
-        answer(self?.formats?.blocks.compactMap { self?.menuAction($0) } ?? [])
+        guard let self, let formats = self.formats else { return answer([]) }
+        let shifts = self.shiftable()
+        let moves = [(formats.outdent, shifts.shallower), (formats.indent, shifts.deeper)].compactMap { pair -> UIAction? in
+          guard let record = pair.0 else { return nil }
+          let action = self.menuAction(record)
+          if !pair.1 { action.attributes = .disabled }
+          return action
+        }
+        let blocks = formats.blocks.map(self.menuAction)
+        answer(moves.isEmpty ? blocks : [UIMenu(options: .displayInline, children: moves)] + blocks)
       },
     ])
     items.append(.flexibleSpace())
@@ -1096,13 +1106,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// Marks each of the bar's buttons on where the selection already stands that way, as Notes marks Bold.
   private func updateBar() {
-    let shifts = shiftable()
-
     for (act, item) in barItems {
       item.isSelected = isOn(act)
-      // Note that Indent and Outdent stand dimmed where the caret stands in no list's item that could move that way, as Notes dims them.
-      if act == "indent" { item.isEnabled = shifts.deeper }
-      if act == "outdent" { item.isEnabled = shifts.shallower }
     }
   }
 

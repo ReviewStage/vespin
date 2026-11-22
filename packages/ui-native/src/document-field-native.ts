@@ -94,7 +94,7 @@ export interface NativeFormats {
   readonly blocksTitle: string;
   readonly blocksGlyph: string;
   readonly blocks: readonly NativeFormatAct[];
-  /** The bar's moves of a list's items a step deeper and back, which Tab and Shift-Tab make too. */
+  /** The moves of a list's items a step back out and deeper, leading Turn into's menu, which Shift-Tab and Tab make too. */
   readonly indent?: NativeFormatAct | undefined;
   readonly outdent?: NativeFormatAct | undefined;
 }
