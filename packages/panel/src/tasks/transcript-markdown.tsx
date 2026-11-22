@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, createContext, type ReactNode, useContext, useMemo } from "react";
 import { colorable, coloringQueryOptions } from "../code-coloring.js";
 import { copyRichThroughShell, copyThroughShell } from "../copy-feedback.js";
-import { DescriptionDiagram } from "../description-diagram.js";
+import { DescriptionDiagram, DIAGRAM_OPENING } from "../description-diagram.js";
 import { TextLink } from "../text-link.js";
 import { fenceHeading, SUGGESTION_LANGUAGE, suggests } from "./code-fence-heading.js";
 import { useOpenLink } from "./use-open-link.js";
@@ -253,7 +253,9 @@ export function TranscriptCodeBlock({
  * the renderer a description draws with), over the code card it falls back to
  * while the diagram draws or where Mermaid refuses it, and any other as a code
  * card. Note that a fence still streaming stays a code card, so a half-written
- * diagram is never handed to Mermaid.
+ * diagram is never handed to Mermaid, and that a press on the picture opens it
+ * over the window in any room, since a reply's column, and a Manager's chat
+ * bubble narrower still, draws a wide diagram too small to read.
  */
 function TranscriptFence(props: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
   const openTail = useContext(OpenFenceTail);
@@ -264,7 +266,7 @@ function TranscriptFence(props: ComponentProps<"code"> & MarkdownNodeProps): Rea
 
   if (language !== DIAGRAM_LANGUAGE || streaming) return source;
 
-  return <DescriptionDiagram code={code} source={source} />;
+  return <DescriptionDiagram code={code} source={source} opening={DIAGRAM_OPENING.ANYWHERE} />;
 }
 
 /**

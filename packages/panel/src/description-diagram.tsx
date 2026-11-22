@@ -36,9 +36,25 @@ import { AttachmentViewer } from "./tasks/attachment-viewer.js";
  * wide one's words past reading, so where the room is narrow or the window
  * is worked by a finger a tap on the picture, or its head's Full screen,
  * opens it over the window at its own pixels, to be moved about and pinched
- * (`tasks/attachment-viewer.tsx`). With a mouse in a wide room the picture
- * takes no press, and the head offers no Full screen (`tasks.css`).
+ * (`tasks/attachment-viewer.tsx`). With a mouse in a wide room a
+ * description's picture takes no press, and its head offers no Full screen,
+ * while a transcript's, a Manager's chat's among them, opens in any room
+ * (`DIAGRAM_OPENING`).
  */
+
+/**
+ * Where a pointer's press on a diagram opens it over the window: only in a
+ * narrow room or on a finger's device, as a description's does, whose press
+ * opens its section to be edited; or in any room, as a transcript's and a
+ * Manager's chat's do, whose column or bubble leaves a wide diagram small
+ * and whose press means nothing else.
+ */
+export const DIAGRAM_OPENING = {
+  NARROW: "narrow",
+  ANYWHERE: "anywhere",
+} as const;
+
+export type DiagramOpening = (typeof DIAGRAM_OPENING)[keyof typeof DIAGRAM_OPENING];
 
 /** What a diagram opened over the window is named, its header's title and the file Download saves. */
 const DIAGRAM_FILE = "Diagram.svg";
@@ -53,8 +69,10 @@ const HEAD_CLASS =
 /** The shell standing as one pane, a phone's, which the stylesheet reads off its `data-room` (`shell-room.ts`). */
 const NARROW_ROOM = '[data-room="narrow"]';
 
-/** Whether a press on `element` opens its diagram over the window: in a narrow room, or on a device worked by a finger, asked as the press lands. */
-function opensFullScreen(element: Element): boolean {
+/** Whether a press on `element` opens its diagram over the window: in any room where it opens anywhere, else in a narrow room or on a device worked by a finger, asked as the press lands. */
+function opensFullScreen(element: Element, opening: DiagramOpening): boolean {
+  if (opening === DIAGRAM_OPENING.ANYWHERE) return true;
+
   return coarsePointerNow() || element.closest(NARROW_ROOM) !== null;
 }
 
@@ -122,11 +140,13 @@ function DiagramCard({
   source,
   shown,
   kept,
+  opening,
 }: {
   code: string;
   source: ReactNode;
   shown: CodeShown;
   kept: boolean;
+  opening: DiagramOpening;
 }): React.JSX.Element {
   const { drawing: drawingNow, retry } = useDrawing(code, useAppearance());
   const [fullScreen, setFullScreen] = useState(false);
@@ -136,7 +156,8 @@ function DiagramCard({
   // Note that this draws what a press would do, where `opensFullScreen` asks again as the press lands.
   const coarse = useCoarsePointer();
   const room = useContext(ShellRoomContext);
-  const pointerOpens = coarse || room === SHELL_ROOM.NARROW;
+  const anywhere = opening === DIAGRAM_OPENING.ANYWHERE;
+  const pointerOpens = anywhere || coarse || room === SHELL_ROOM.NARROW;
   const outsideText = kept ? false : undefined;
 
   return (
@@ -155,7 +176,7 @@ function DiagramCard({
               {shown.showingCode ? DIAGRAM_WORDS.SHOW_DIAGRAM : DIAGRAM_WORDS.SHOW_CODE}
             </Button>
             {pictureShown ? (
-              <span className="hidden pointer-coarse:flex shell-narrow:flex">
+              <span className={anywhere ? "flex" : "hidden pointer-coarse:flex shell-narrow:flex"}>
                 <Button onClick={() => setFullScreen(true)}>{FULL_SCREEN_LABEL}</Button>
               </span>
             ) : null}
@@ -173,7 +194,7 @@ function DiagramCard({
               // head's Full screen stands only where a finger's tap would open it too.
               const keyed = event.detail === 0;
 
-              if (!keyed && !opensFullScreen(event.currentTarget)) return;
+              if (!keyed && !opensFullScreen(event.currentTarget, opening)) return;
               // The press is the picture's, so the section around it does not open to be edited.
               event.stopPropagation();
               setFullScreen(true);
@@ -195,9 +216,12 @@ function DiagramCard({
 export function DescriptionDiagram({
   code,
   source,
+  opening = DIAGRAM_OPENING.NARROW,
 }: {
   code: string;
   source: ReactNode;
+  /** Where a pointer's press opens it over the window; only in a narrow room or on a finger's device unless given. */
+  opening?: DiagramOpening | undefined;
 }): React.JSX.Element {
   const [showingCode, setShowingCode] = useState(false);
 
@@ -207,6 +231,7 @@ export function DescriptionDiagram({
       source={source}
       shown={{ showingCode, onShowCode: setShowingCode }}
       kept={false}
+      opening={opening}
     />
   );
 }
@@ -233,6 +258,7 @@ export function EditorDiagramCard({ diagram }: { diagram: EditorDiagram }): Reac
       source={<LaidElement element={diagram.source} />}
       shown={{ showingCode: diagram.showingCode, onShowCode: diagram.showCode }}
       kept
+      opening={DIAGRAM_OPENING.NARROW}
     />
   );
 }

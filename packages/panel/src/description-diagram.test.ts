@@ -427,6 +427,15 @@ test("with a mouse in a wide room a tap on a diagram opens nothing over the wind
   assert.equal(viewer(), null);
 });
 
+test("with a mouse in a wide room a click on a reply's diagram, as a Manager's chat draws one, opens it over the window", async () => {
+  const code = "flowchart LR\n  Invite --> Join";
+  const reply = await drawn(createElement(TranscriptWords, { text: mermaidFence(code) }));
+
+  act(() => tap(picture(reply)));
+
+  assert.ok(viewer(), "the diagram opens over the window");
+});
+
 test("in a wide room the keyboard's press on a diagram, named for what it does, opens it over the window", async () => {
   const code = "flowchart LR\n  Invite --> Join";
   const page = await drawn(createElement(DescriptionBody, { task: taskWith(mermaidFence(code)) }));
