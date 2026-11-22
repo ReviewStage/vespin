@@ -726,6 +726,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     // Note that a block chosen for the empty last line stays with the line while the caret is elsewhere, and its look comes back with the caret.
     if typed == nil, let pendingLine, textView.selectedRange == NSRange(location: pendingLine.at, length: 0) {
       textView.typingAttributes = pendingAttributes(pendingLine.facts)
+    } else {
+      forgetTypedFacts()
     }
 
     updateBar()
@@ -780,6 +782,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       location = min(location + 2, length)
     }
     textView.selectedRange = NSRange(location: location, length: min(selected.length, length - location))
+    forgetTypedFacts()
     quiet = false
     placeholderLabel.isHidden = length > 0
     setNeedsLayout()
@@ -802,6 +805,13 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
     storage.endEditing()
     quiet = false
+    forgetTypedFacts()
+  }
+
+  /// Lets go of the line facts UIKit types with, which it copies from the words at the caret and keeps as they stood, though JavaScript renames each line's block on each answer and a move lays new facts on in place; words typed with none take their line's own (`heldLine` reads a line by the facts its words hold, else the line before). A block chosen for the empty last line keeps its facts, which are the ones its words take.
+  private func forgetTypedFacts() {
+    if let pendingLine, textView.selectedRange == NSRange(location: pendingLine.at, length: 0) { return }
+    textView.typingAttributes[lineKey] = nil
   }
 
   /// The lines drawn: each a paragraph in its block's look, a task led by its box, a rule and a card as one character across the line, and a line break after every line but the last.
@@ -1064,10 +1074,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let caret = min(textView.selectedRange.location, string.length)
     let paragraph = caretLine(caret)
     guard textView.selectedRange.length == 0, paragraph.location > 0 else { return }
-    let before = string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0)).location
-    guard let facts = storage.attribute(lineKey, at: before, effectiveRange: nil) as? LineFacts,
+    let before = string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0))
+    guard let facts = heldFacts(before),
       facts.isListItem, facts.itemKind != .taskList,
-      let style = storage.attribute(.paragraphStyle, at: before, effectiveRange: nil) as? NSParagraphStyle,
+      let style = storage.attribute(.paragraphStyle, at: before.location, effectiveRange: nil) as? NSParagraphStyle,
       !style.textLists.isEmpty
     else { return }
     let ends = NSMaxRange(paragraph) > paragraph.location && string.character(at: NSMaxRange(paragraph) - 1) == 0x0A
@@ -1075,11 +1085,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
     if words == 0 {
       textView.typingAttributes[.paragraphStyle] = style
-      textView.typingAttributes[lineKey] = facts
       return
     }
 
-    let own = storage.attribute(lineKey, at: paragraph.location, effectiveRange: nil) as? LineFacts
+    let own = heldFacts(paragraph)
     let drawn = storage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
     guard own == nil || own?.block == facts.block, drawn?.textLists.isEmpty ?? true else { return }
     let selected = textView.selectedRange
@@ -1496,16 +1505,16 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let caret = min(textView.selectedRange.location, string.length)
     let paragraph = caretLine(caret)
     let lineBefore = paragraph.location > 0 ? string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0)).location : nil
-    let factsAt = paragraph.length > 0 ? paragraph.location : lineBefore ?? -1
-    guard factsAt >= 0, factsAt < string.length,
-      let facts = storage.attribute(lineKey, at: factsAt, effectiveRange: nil) as? LineFacts
-    else { return nil }
+    let lineBeforeRange = lineBefore.map { string.paragraphRange(for: NSRange(location: $0, length: 0)) }
+    let beforeFacts = lineBeforeRange.flatMap(heldFacts)
+    let pending = paragraph.length == 0 ? pendingLine.flatMap { $0.at == caret ? $0.facts : nil } : nil
+    guard let facts = pending ?? (paragraph.length > 0 ? heldFacts(paragraph) : nil) ?? beforeFacts else { return nil }
     let ends = NSMaxRange(paragraph) > paragraph.location && string.character(at: NSMaxRange(paragraph) - 1) == 0x0A
     let boxed = paragraph.length > 0 && storage.attribute(.attachment, at: paragraph.location, effectiveRange: nil) is TaskBoxAttachment
     let words = paragraph.location + (boxed ? 2 : 0)
     let end = NSMaxRange(paragraph) - (ends ? 1 : 0)
-    // Note that the line before is read at its first character, as `heldLine` reads a line, since the line break that ends it may hold the looks the keyboard typed it in rather than the line's own.
-    let before = lineBefore.flatMap { storage.attribute(lineKey, at: $0, effectiveRange: nil) as? LineFacts }
+    // Note that the line before is read as `heldLine` reads a line, by the first facts its words hold, since a line break or words typed may hold none.
+    let before = beforeFacts
     // Note that a line holding only spaces reads as empty, as it stands to the eye, since a Return before a space the keyboard laid after a word carries the space onto the line it opens.
     let blank = end <= words || string.substring(with: NSRange(location: words, length: end - words)).trimmingCharacters(in: .whitespaces).isEmpty
     // Note that an empty last line's facts are its line before's, which it carries on.
@@ -1517,6 +1526,17 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let string = textView.textStorage.string as NSString
     let atEmptyEnd = caret == string.length && (string.length == 0 || string.character(at: string.length - 1) == 0x0A)
     return atEmptyEnd ? NSRange(location: caret, length: 0) : string.paragraphRange(for: NSRange(location: caret, length: 0))
+  }
+
+  /// The facts the words of a paragraph hold, the first that holds any, as `heldLine` reads its line's.
+  private func heldFacts(_ paragraph: NSRange) -> LineFacts? {
+    var held: LineFacts?
+    textView.textStorage.enumerateAttribute(lineKey, in: paragraph) { value, _, stop in
+      guard let value = value as? LineFacts else { return }
+      held = value
+      stop.pointee = true
+    }
+    return held
   }
 
   /// The nested list item the caret stands in with nothing selected, whether its words are empty and whether the caret stands at their start; none elsewhere.
