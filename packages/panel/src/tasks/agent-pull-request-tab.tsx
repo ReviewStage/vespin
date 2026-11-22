@@ -3075,13 +3075,13 @@ function useConversationAnchors(input: {
  * merge control, in one row; then its branches, who opened it and
  * when, and its reviewers, in one line), then a row of tabs, Conversation,
  * Checks, Chapters, and Files changed (`AgentChangesTab`), each with its count, and
- * Review at its end while it is open. Each tab stands once shown, the others hidden, so
+ * Review at its end, merged or closed too. Each tab stands once shown, the others hidden, so
  * switching draws what each last read rather than asking GitHub again. The
- * header's reads, the pull request and its conversation, whose reviews say
- * where each reviewer stands, and the chapters, whose state their tab
- * wears, are asked as the tab is shown; the checks and the files as their
- * tab is first shown, the files also as
- * Chapters is, whose diff draws them. Only a read saying there is no
+ * header's reads, the pull request, its conversation, whose reviews say
+ * where each reviewer stands, and its checks, whose deployments its Preview
+ * opens, and the chapters, whose state their tab wears, are asked as the tab
+ * is shown; the files as their tab is first shown, and also as Chapters is,
+ * whose diff draws them. Only a read saying there is no
  * pull request takes the header and the tabs away, and one saying the
  * workspace no longer reaches its repository stands in their place with
  * the press that mends it; a read that failed otherwise says so in its own
