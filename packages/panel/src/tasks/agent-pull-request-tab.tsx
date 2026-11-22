@@ -313,83 +313,23 @@ import { linkPressOf, type OpenHere, OpenHereFirst, useOpenLink } from "./use-op
  * agent-pull-request-tab.tsx -- one pull request's tab in the side panel, by its repository and number: the pull request as GitHub holds it, laid out as stage-cli's pull request page: a fixed header, then tabs for its conversation, its checks, its chapters, and its files.
  *
  * The overview is three parts the host holds while the tab shows
- * (`repositoryPullRequestQuery` and its siblings in `live-reads.ts`), each
- * read from GitHub by the service on the App's token through the workspace
- * of the task holding the strip rather than anyone's own, so nothing here
- * reads on a clock: the host asks each as the tab is shown, as a window
- * comes forward, and on Retry or Refresh, and all of them again together as
- * the task list's line for the pull request moves: its state, its checks,
- * its place in the queue, or its head, which a push moves. Each lands on its
- * own, and a tab drawn again draws the last answers at once: the pull request
- * itself (its description, branches, mergeability, and people); its
- * conversation, whose reviews say where each reviewer the header draws
- * stands; and its checks, whose deployments the header's Preview opens, as
- * stage-cli's header reads them. What the app already holds of
- * the pull request, as GitHub has it now or as the task's agents listed it, draws the pill, the title,
- * and the Files changed tab's count at once; each part stands as a skeleton
- * until its read lands, and says so with its own Retry where its read
- * failed, the other parts and the tabs standing. Refresh reads again all
- * three, each part drawn
- * standing until its answer lands; an agent with no pull request yet says
- * that.
+ * (`repositoryPullRequestQuery` and its siblings in `live-reads.ts`): the
+ * pull request itself, its conversation, and its checks. The service reads
+ * each from GitHub on the App's token, through the workspace of the task
+ * holding the strip rather than anyone's own. Nothing here reads on a clock:
+ * the host asks each part as the tab is shown, as a window comes forward,
+ * and on Retry or Refresh, and all three again as the task list's line for
+ * the pull request moves (its state, its checks, its place in the queue, or
+ * its head, which a push moves). Each part lands on its own, stands as a
+ * skeleton until then, and says so with its own Retry where its read
+ * failed, the other parts standing. A tab drawn again draws the last
+ * answers at once, and what the app already holds of the pull request draws
+ * the pill, the title, and the Files changed count from the first frame.
  *
- * The header stays put while the tab under it scrolls, and spends as few
- * rows as it can; on a phone, where it would take half the screen, it folds
- * away over the view as the view scrolls, at the finger's pace, to its
- * title's one line, and back at the top again (`useHeaderFold`). Its first row is the title's: the pill wearing the pull
- * request's mark and the word for where it stands, its title and number
- * (⌘-click opens it on GitHub), the title first in the markup so a screen
- * reader names it before the pill drawn ahead of it, and at the row's end, while it is open or a
- * draft, the merge control saying what can happen now, its panel holding
- * GitHub's own sentence and the presses (`merge-box.tsx`), with Preview
- * first where a deployment of its head serves an address, opening it or, for
- * several, a menu of their environments (`PreviewControl`). Open on GitHub
- * and Refresh stand in the side panel's own ⋯ over the tab, which the tab
- * hands them to while it is drawn (`useHandedTabActions`). Under it one
- * line, wrapping where it must:
- * its branches, with the stack it stands in beside them
- * (`pull-request-stack.tsx`) and the lines it changes, those left to review
- * while some files are viewed (`linesOf`); who opened it and when, as the Changes tab
- * names them (`pull-request-people.tsx`), with its reviewers' first faces
- * wearing where each stands, the reviewer and label pickers, and its labels
- * in their GitHub colors (`pull-request-labels.tsx`) at the line's end, so
- * a pull request with no labels spends no line on them. Under it, a row of
- * tabs ending in Review, merged or closed too, as GitHub takes a review
- * then (`pull-request-review.tsx`), each tab its glyph, its name, and a quiet
- * count: Conversation, its description and its comments and
- * reviews in time order, as GitHub renders them (`body_html`), drawn
- * through the transcript's own markdown drawing (`GitHubWords`), with an
- * image GitHub serves read through the service on the App's token and
- * opened over the window in the file viewer (`pull-request-pictures.tsx`)
- * and any other drawn as its link, as ReviewStage/stage draws them; Checks, its head's deployments, the newest of each
- * environment, each opening the address it serves, over every check on its
- * head, those that failed first, then those still running, each opening
- * its page, counted in the color of how they went; Chapters
- * (`agent-chapters-tab.tsx`), its diff told as chapters to review in order,
- * each over its own hunks in Files changed's list, its count saying
- * where they stand: being made, failed, out of date, or how many, and how
- * many viewed once any is; and Files changed (`AgentChangesTab`), its own bar and
- * tree, counted by its files as Chapters counts its chapters. A phone, and
- * a panel too narrow for every tab's name, names the chosen tab alone and
- * draws the others by their glyphs and counts, the chosen one too only
- * where even that does not fit, and a folded row leaves "viewed" out of
- * every count. A review carries the
- * threads on lines it started, each on the card every annotation on code
- * stands on (`annotation-card.tsx`): its file and lines in the strip over
- * its head, then the end of the hunk it was made on, drawn as Files changed
- * draws a diff with its own lines lit (`file-diff.tsx`), and its comments;
- * one resolved or outdated by a later push is folded closed under its head,
- * which says which, until opened. The description and every comment wear their
- * reactions under their words, as GitHub draws them
- * (`pull-request-reactions.tsx`). A thread's file and lines take it to
- * Files changed, and its ⋯ to the other view or its link copied, each
- * through the window's route for the thread's link, which brings it into
- * view there (`thread-reveal.tsx`). The Description and the Conversation
- * each fold under a heading that sticks to the view's top while it is in
- * view, the Conversation's ending in View options holding stage-cli's two
- * filters, Hide resolved and Hide bots, each counting what it leaves out; the filters and the folds
- * are kept across launches (`conversation-filters.ts`). Every name and word here is
- * the repository's, which the screen recording masks, and a diff's lines
+ * The title comes first in the header's markup, so a screen reader names it
+ * before the pill drawn ahead of it. On a phone the header folds away over
+ * the view as the view scrolls (`useHeaderFold`). Every name and word here
+ * is the repository's, which the screen recording masks, and a diff's lines
  * are left out of it whole (`file-diff.tsx`).
  */
 
@@ -424,7 +364,6 @@ const chaptersTabLoaded = (): boolean => chaptersTabLanded;
 const VIEW_CLASS =
   "pull-request-view [--ui-scroll-band:var(--pull-request-band)] [&[hidden]]:hidden";
 
-/** The tab's own words. */
 const PULL_REQUEST_WORDS = {
   READING: PULL_REQUEST_READ_WORDS.READING,
   READING_CHECKS: PULL_REQUEST_READ_WORDS.READING_CHECKS,
@@ -598,12 +537,6 @@ function durationOf(check: PullRequestCheck): string | undefined {
   return ran < RAN_AT_LEAST_MS ? undefined : workingTime(ran);
 }
 
-/**
- * What the side panel's toolbar ⋯ offers on the pull request: its address
- * on GitHub copied, it opened on GitHub, which ⇧⌘O runs while the tab is
- * chosen and the panel holds the keys (`side-panel.tsx`), and the page read
- * again, dimmed while a read is out, which a refresh would only repeat.
- */
 /** The keys the Pull request tab's ⋯ hands the side panel, which its Open on GitHub prints. */
 const PULL_REQUEST_TAB_KEYS: readonly KeyedCommand[] = [APP_COMMAND.OPEN_ON_GITHUB];
 
@@ -615,6 +548,12 @@ function pullRequestTabSubject(url: string): ShortcutSubject {
   );
 }
 
+/**
+ * What the side panel's toolbar ⋯ offers on the pull request: its address
+ * on GitHub copied, it opened on GitHub, which ⇧⌘O runs while the tab is
+ * chosen and the panel holds the keys (`side-panel.tsx`), and the page read
+ * again, dimmed while a read is out, which a refresh would only repeat.
+ */
 function pullRequestActions(
   url: string,
   reading: boolean,
@@ -919,7 +858,7 @@ function Checks({
       ) : (
         <CheckList>
           {checks.map((check, at) => (
-            // Note that two checks may share a name across Apps, so a row is keyed by its place too.
+            // Note that two checks may share a name across Apps, so a row is keyed by its place.
             <CheckRow key={`${at}`} pictures={pictures} check={check} live={live} />
           ))}
         </CheckList>
@@ -1745,7 +1684,6 @@ function EntryList({ children }: { children: ReactNode }): React.JSX.Element {
   );
 }
 
-/** One entry's card. */
 function EntryFrame({
   children,
   ...props
@@ -2901,7 +2839,7 @@ function ConversationView({
   );
 }
 
-/** One of the overview's reads, as `useChangesReads` holds the changes, and whether it has been asked yet. */
+/** Whether a read, one of the overview's or `useChangesReads`'s, has been asked yet. */
 function askedYet(read: { readonly answer: unknown; readonly out: boolean }): boolean {
   return read.answer !== undefined || read.out;
 }
@@ -3196,7 +3134,7 @@ interface PullRequestTabProps {
   tree: TreeShown;
   view: PullRequestView;
   onView: (view: PullRequestView) => void;
-  /** Hears what the side panel's toolbar ⋯ offers while the tab is drawn, Open on GitHub and Refresh (`useHandedTabActions`); none where no toolbar draws them. */
+  /** Hears what the side panel's toolbar ⋯ offers while the tab is drawn (`useHandedTabActions`); none where no toolbar draws them. */
   onActions?: HandTabActions | undefined;
 }
 
@@ -3442,7 +3380,7 @@ function PullRequestTabBody({
     [pullRequest.workspaceId, pullRequest.repository],
   );
 
-  // The header's parts are held while the tab is shown, the conversation among them for where its reviewers stand, the checks for the deployments its Preview opens, and the pull request as GitHub holds it now, which names a tab and its pin by its title.
+  // The header's parts are held only while the tab is shown.
   const asked = shown ? pullRequest : undefined;
 
   const pullRequestRead = usePartRead(
@@ -3515,8 +3453,6 @@ function PullRequestTabBody({
     unreachable !== undefined ||
     [parts.pullRequest, parts.checks, parts.conversation].some((part) => part.kind === PART.NONE);
 
-  // The toolbar's ⋯ copies and opens the pull request on GitHub and reads it again while the header draws it,
-  // Refresh dimmed while a read is out; a read saying there is none takes them away with the header.
   // Note that the ⋯'s Refresh reads Files changed again too where its view was shown, because it is the one Refresh
   // on the screen, Files changed's ⋯ offering none of its own; a write reads back without it.
   const refreshAllNow = useRef<() => void>(refresh);
