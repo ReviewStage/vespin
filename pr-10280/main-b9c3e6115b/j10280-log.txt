@@ -1,0 +1,10 @@
+== bundle PJj10280 base b9c3e6115b
+  built b9c3e6115b base app Vp10440.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-pull-request: fails 0 shots 17 
+iphone-dark-pull-request: fails 0 shots 17 
+ipad27-light-pull-request: fails 1 shots 7 Assert that "Ready to merge" is visible... FAILED
+ipad27-dark-pull-request: fails 1 shots 7 Assert that "Ready to merge" is visible... FAILED
