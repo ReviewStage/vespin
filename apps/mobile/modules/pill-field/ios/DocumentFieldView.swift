@@ -658,8 +658,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       let returned = text == "\n" && range.length == 0 && line.empty
       let deleted = text.isEmpty && range.length == 1 && line.atStart
       if returned || deleted {
-        // Note that the move waits for the key's own handling to end, as a move from the menu does, since UIKit sets its typing back as it stood once a key it was refused ends.
-        DispatchQueue.main.async { [weak self] in self?.shiftLines(by: -1) }
+        shiftLines(by: -1)
         return false
       }
     }
