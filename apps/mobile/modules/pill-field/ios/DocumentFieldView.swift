@@ -1228,6 +1228,25 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     return item
   }
 
+  /// PROBE: what the caret's line reads as, logged with each bar update.
+  private func probeBar(_ inList: Bool) {
+    let string = textView.textStorage.string as NSString
+    let caret = min(textView.selectedRange.location, string.length)
+    let paragraph = caretLine(caret)
+    let held = paragraph.length > 0 ? heldFacts(paragraph) : nil
+    let read = caretParagraph()
+    let words = paragraph.length > 0 ? string.substring(with: paragraph).replacingOccurrences(of: "\n", with: "⏎") : ""
+    let lines = heldLines()
+    let around = lines.map { "\($0.facts.kind)/\($0.facts.block)/\($0.facts.depth ?? -1)" }.joined(separator: " ")
+    NSLog(
+      "PROBE10472 inList=%@ barInList=%@ moves=%@ bar=%@ caret=%d par=%d+%d words=[%@] held=%@ read=%@/%d pending=%@ lines=%@",
+      String(inList), String(barInList), String(moveItems != nil), String(bar != nil), caret, paragraph.location, paragraph.length,
+      String(words.prefix(40)), held.map { "\($0.kind)/\($0.block)" } ?? "nil",
+      read.map { $0.facts.kind } ?? "nil", read?.facts.nesting ?? -1,
+      pendingLine.map { "\($0.at):\($0.facts.kind)" } ?? "nil", String(around.suffix(600))
+    )
+  }
+
   /// Whether the caret stands in a list item, where the bar offers Outdent and Indent.
   private func caretInList() -> Bool {
     moveItems != nil && caretParagraph()?.facts.isListItem == true
@@ -1261,6 +1280,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   /// Marks each of the bar's buttons on where the selection already stands that way, as Notes marks Bold, stands Outdent and Indent where the caret is in a list item, and dims each move its item cannot make.
   private func updateBar() {
     let inList = caretInList()
+    probeBar(inList)
     if bar != nil, inList != barInList { layBar(inList: inList) }
     for (act, item) in barItems {
       item.isSelected = isOn(act)
