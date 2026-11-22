@@ -10,7 +10,7 @@ import { EmptyState, GLYPH, MarkdownPage, SCREEN_GROUND, Screen } from "@repo/ui
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { useHostActs } from "../../host/host-provider.js";
-import { useOpenLink } from "../../open-link.js";
+import { LINK_OPENS, useOpenLink } from "../../open-link.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
@@ -81,7 +81,7 @@ const NO_BAR_TITLE = "";
 export default function SkillScreen() {
   const { skill = "", name = "" } = useLocalSearchParams<{ skill: string; name: string }>();
   const acts = useHostActs();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(undefined, LINK_OPENS.OUT_OF_SHEET);
   const [read, setRead] = useState<SkillRead>({ kind: SKILL_READ.READING });
   const [round, setRound] = useState(0);
 
