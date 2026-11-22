@@ -1,0 +1,71 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow f10078
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Set orientation PORTRAIT... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+  Swipe from (80%, 27%) to (45%, 27%) in 900 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot inbox-trailing... COMPLETED
+  Tap on (Optional) "Recorded the invite flow.*"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Swipe from (8%, 27%) to (38%, 27%) in 900 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot inbox-leading... COMPLETED
+  Tap on (Optional) "Recorded the invite flow.*"... COMPLETED
+Run flow when true is true... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+Run flow when false is true... SKIPPED
+Tap on point (50%, 8%)... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... SKIPPED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Scrolling DOWN until "Launch checklist" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+  Swipe from (8%, 50%) to (38%, 50%) in 900 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot task-leading... COMPLETED
+  Tap on (Optional) "Launch checklist"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Swipe from (80%, 50%) to (45%, 50%) in 900 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot task-trailing... COMPLETED
+  Tap on (Optional) "Launch checklist"... COMPLETED
+Run flow when true is true... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+Run flow when false is true... SKIPPED
+Tap on point (50%, 8%)... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling UP until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... FAILED
+
+No visible element found: "Teammate invitations"
+
+Could not find a visible element matching selector: "Teammate invitations"
+Tip: Try adjusting the following settings to improve detection:
+- `timeout`: current = 20000ms → Increase if you need more time to find the element
+- `speed`: current = 40 (0-100 scale) → Increase for faster scrolling if element is far away
+- `waitToSettleTimeoutMs`: current = Not defined → Set this value (e.g., 500ms) if your UI updates frequently between scrolls
+- `visibilityPercentage`: current = 100% → Lower this value if you want to detect partially visible elements
+- `centerElement`: current = true → Disable if you don't need the element to be centered after finding it
+
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sj10078/iphone-dark-f10078/2026-11-22_120736
