@@ -695,6 +695,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     }
     typed = nil
     landed = nil
+    takePendingLine()
     keepPendingLine()
     keepItemDrawn()
     linkRange = nil
@@ -1037,6 +1038,25 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     quiet = false
   }
 
+  /// Lays the block chosen for the empty last line on the words now typed there, where the typing did not take it, as a key the field refused leaves UIKit typing in the looks it had before; the line is then drawn as the block it is.
+  private func takePendingLine() {
+    guard let pendingLine else { return }
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    guard pendingLine.at < string.length else { return }
+    let line = string.paragraphRange(for: NSRange(location: pendingLine.at, length: 0))
+    guard line.location == pendingLine.at, line.length > 0,
+      storage.attribute(lineKey, at: line.location, effectiveRange: nil) as? LineFacts !== pendingLine.facts
+    else { return }
+    quiet = true
+    storage.addAttribute(lineKey, value: pendingLine.facts, range: line)
+    quiet = false
+    self.pendingLine = nil
+    let selected = textView.selectedRange
+    redraw(heldLines(), keepUndo: true)
+    textView.selectedRange = selected
+  }
+
   /// Draws the caret's line as the list item it is read as (`heldLine` carries the line before on) where UIKit typed it plain, as on the line a Return opens at a list's end: an empty line's words typed next take the item's paragraph and facts, and a line already typed plain is drawn again, keeping its undo, since its words are unchanged.
   private func keepItemDrawn() {
     let storage = textView.textStorage
@@ -1044,7 +1064,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let caret = min(textView.selectedRange.location, string.length)
     let paragraph = string.paragraphRange(for: NSRange(location: caret, length: 0))
     guard textView.selectedRange.length == 0, paragraph.location > 0 else { return }
-    let before = paragraph.location - 1
+    let before = string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0)).location
     guard let facts = storage.attribute(lineKey, at: before, effectiveRange: nil) as? LineFacts,
       facts.isListItem, facts.itemKind != .taskList,
       let style = storage.attribute(.paragraphStyle, at: before, effectiveRange: nil) as? NSParagraphStyle,
@@ -1475,7 +1495,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let string = storage.string as NSString
     let caret = min(textView.selectedRange.location, string.length)
     let paragraph = string.paragraphRange(for: NSRange(location: caret, length: 0))
-    let factsAt = paragraph.length > 0 ? paragraph.location : caret - 1
+    let lineBefore = paragraph.location > 0 ? string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0)).location : nil
+    let factsAt = paragraph.length > 0 ? paragraph.location : lineBefore ?? -1
     guard factsAt >= 0, factsAt < string.length,
       let facts = storage.attribute(lineKey, at: factsAt, effectiveRange: nil) as? LineFacts
     else { return nil }
@@ -1483,10 +1504,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let boxed = paragraph.length > 0 && storage.attribute(.attachment, at: paragraph.location, effectiveRange: nil) is TaskBoxAttachment
     let words = paragraph.location + (boxed ? 2 : 0)
     let end = NSMaxRange(paragraph) - (ends ? 1 : 0)
-    let before = paragraph.location > 0
-      ? storage.attribute(lineKey, at: paragraph.location - 1, effectiveRange: nil) as? LineFacts
-      : nil
-    // Note that an empty last line's facts are the line break's before it, which are its line before's too.
+    // Note that the line before is read at its first character, as `heldLine` reads a line, since the line break that ends it may hold the looks the keyboard typed it in rather than the line's own.
+    let before = lineBefore.flatMap { storage.attribute(lineKey, at: $0, effectiveRange: nil) as? LineFacts }
+    // Note that an empty last line's facts are its line before's, which it carries on.
     return (facts, end <= words, caret == words, paragraph.length > 0 ? before : facts)
   }
 
