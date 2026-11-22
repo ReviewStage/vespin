@@ -178,11 +178,13 @@ function RecentRuns({
   const read = useAutomationRuns(automationId);
   const runs = read.rows;
 
-  // Note that navigate, not push, goes back to the tabs under the sheet, closing it, and opens the agent on them.
+  // Note that dismissTo pops the root stack back to the tabs under the sheet, closing it, and opens the agent on them, because navigate pushed the tabs anew inside an iPhone's sheet.
   const openAgent = (run: AutomationRunSummary) => {
     const agentId = run.agent?.id;
 
-    return agentId === undefined ? undefined : () => router.navigate(onTab(iosAgentRoute(agentId)));
+    return agentId === undefined
+      ? undefined
+      : () => router.dismissTo(onTab(iosAgentRoute(agentId)));
   };
 
   return (
