@@ -1,4 +1,4 @@
-// mention-offer.test.ts -- an `@` offers its groups in the panel's order, browses its kinds, narrows to one by its word before a colon, and writes a description's sections, a date, an automation, a machine and a repository's paths as the panel's picks do.
+// mention-offer.test.ts -- an `@` offers its groups in the panel's order, browses its kinds, narrows to one by its word before a colon, and writes a description's sections, a date, an automation, a machine and a repository's paths as the panel's picks do, walking into a folder as its → does.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -112,7 +112,7 @@ describe("mentionOffer", () => {
         { id: "m1", name: "Build box", ownerId: "u-sam", terms: ["Sam Ito"] },
         { id: "m2", name: "Dean's Mac", ownerId: "u-dean", terms: ["Dean Reyes"] },
       ],
-      "u-dean",
+      { readerId: "u-dean", followerIds: new Set() },
       place,
     );
 
@@ -164,6 +164,56 @@ describe("mentionOffer", () => {
         "apps/web/server/auth",
         "https://github.com/acme/checkout/blob/HEAD/apps/web/server/auth/session.ts",
       ],
+    ]);
+  });
+
+  it("walks into a folder, which heads its own list to be named, and steps back out to the folder it stands in", () => {
+    const place = { workspace: "acme", repository: "acme/checkout" };
+
+    const files = pathCandidates(
+      [
+        { path: "apps", folder: true },
+        { path: "apps/web", folder: true },
+        { path: "apps/web/index.ts", folder: false },
+        { path: "apps/README.md", folder: false },
+      ],
+      place,
+    );
+
+    const offered = mentionOffer({ ...sources, files }, "files:apps/");
+
+    expect(offered.narrowed).toEqual({ from: "files", name: "apps/", back: "files:" });
+
+    expect(
+      offered.groups.flatMap((group) =>
+        group.rows.map((each) => ("target" in each ? [each.name, each.walk] : [each.name])),
+      ),
+    ).toEqual([
+      ["apps/", undefined],
+      ["web/", "files:apps/web/"],
+      ["README.md", undefined],
+    ]);
+
+    expect(mentionOffer({ ...sources, files }, "files:apps/web/").narrowed?.back).toBe(
+      "files:apps/",
+    );
+  });
+
+  it("stands the reader's machines first, then the task's followers', then everyone else's", () => {
+    const machines = machineCandidates(
+      [
+        { id: "m1", name: "Build box", ownerId: "u-sam", terms: [] },
+        { id: "m2", name: "Ada's Mac", ownerId: "u-ada", terms: [] },
+        { id: "m3", name: "Dean's Mac", ownerId: "u-dean", terms: [] },
+      ],
+      { readerId: "u-dean", followerIds: new Set(["u-ada"]) },
+      { workspace: "acme", repository: null },
+    );
+
+    expect(machines.map((machine) => machine.name)).toEqual([
+      "Dean's Mac",
+      "Ada's Mac",
+      "Build box",
     ]);
   });
 });

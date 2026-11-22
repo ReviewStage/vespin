@@ -132,6 +132,8 @@ export interface MentionCandidate {
   readonly terms?: readonly string[] | undefined;
   /** The link a pick writes, as the panel's mention writes it (`encodeMention`). */
   readonly target: string;
+  /** The query a press writes to walk into it, as a folder's row opens its paths, rather than naming it; none for a row a press names. */
+  readonly walk?: string | undefined;
   /** The name a pick writes where it is not the row's, as a date's row says "Tomorrow" and writes the day it names whole, as the panel's does. */
   readonly written?: string | undefined;
 }
@@ -160,7 +162,14 @@ export interface MentionGroup {
 
 /** What an `@` word offers: its groups, and the kind it is narrowed to, which its crumb names; none for every kind. */
 export interface MentionOffered {
-  readonly narrowed: { readonly from: MentionOfferFrom; readonly name: string } | undefined;
+  readonly narrowed:
+    | {
+        readonly from: MentionOfferFrom;
+        readonly name: string;
+        /** The query a press on the crumb writes where it steps back out of a folder walked into rather than to every kind. */
+        readonly back?: string | undefined;
+      }
+    | undefined;
   readonly groups: readonly MentionGroup[];
 }
 
@@ -178,7 +187,7 @@ export interface MentionSources {
   readonly threads: readonly MentionCandidate[];
   readonly automations: readonly MentionCandidate[];
   readonly pullRequests: readonly MentionCandidate[];
-  /** The workspace's machines, the reader's own first, as the panel's list stands them. */
+  /** The workspace's machines, the reader's own first, then the task's followers', as the panel's list stands them. */
   readonly machines: readonly MentionCandidate[];
   /** The dates the words name; with none typed, the few a list narrowed to dates suggests. */
   readonly dates: (words: string) => readonly MentionCandidate[];
@@ -302,8 +311,10 @@ export interface RepositoryPath {
 /**
  * The repository's files and folders an `@` offers, as the panel's picker
  * offers them: each by its own name, a folder's ending in `/`, saying the
- * folder it stands in, found by its whole path, a pick writing its GitHub
- * page at the default branch; none where the place names no repository.
+ * folder it stands in, found by its whole path, a file's pick writing its
+ * GitHub page at the default branch and a folder's press walking into it,
+ * where the folder heads its own list to be named; none where the place
+ * names no repository.
  */
 export function pathCandidates(
   paths: readonly RepositoryPath[],
@@ -320,6 +331,7 @@ export function pathCandidates(
       name: folder ? `${name}/` : name,
       detail: path.slice(0, -name.length - 1) || undefined,
       terms: [path],
+      walk: folder ? narrowingQuery(MENTION_FROM.FILES, `${path}/`) : undefined,
       target: encodeMention(
         folder ? { kind: MENTION_KIND.FOLDER, path } : { kind: MENTION_KIND.FILE, path },
         place,
@@ -353,23 +365,34 @@ export interface OfferedMachine {
   readonly terms: readonly string[];
 }
 
-/** The workspace's machines an `@` offers, as the panel's picker offers them: the reader's own first, each by its name, a pick writing its `mention://machine/` link. */
+/** The workspace's machines an `@` offers, as the panel's picker offers them: the reader's own first, then the task's followers', then everyone else's, each by its name, a pick writing its `mention://machine/` link. */
 export function machineCandidates(
   machines: readonly OfferedMachine[],
-  readerId: string | undefined,
+  people: { readonly readerId: string | undefined; readonly followerIds: ReadonlySet<string> },
   place: MentionPlace,
 ): readonly MentionCandidate[] {
-  const own = (machine: OfferedMachine) => machine.ownerId !== null && machine.ownerId === readerId;
+  const rank = ({ ownerId }: OfferedMachine) =>
+    ownerId === null
+      ? 2
+      : ownerId === people.readerId
+        ? 0
+        : people.followerIds.has(ownerId)
+          ? 1
+          : 2;
 
-  return [...machines.filter(own), ...machines.filter((machine) => !own(machine))].map(
-    (machine): MentionCandidate => ({
-      id: machine.id,
-      kind: MENTION_OFFER_KIND.MACHINE,
-      name: machine.name,
-      terms: machine.terms,
-      target: encodeMention({ kind: MENTION_KIND.MACHINE, machineId: machine.id }, place),
-    }),
-  );
+  return machines
+    .map((machine, at) => ({ machine, at }))
+    .sort((one, other) => rank(one.machine) - rank(other.machine) || one.at - other.at)
+    .map(({ machine }) => machine)
+    .map(
+      (machine): MentionCandidate => ({
+        id: machine.id,
+        kind: MENTION_OFFER_KIND.MACHINE,
+        name: machine.name,
+        terms: machine.terms,
+        target: encodeMention({ kind: MENTION_KIND.MACHINE, machineId: machine.id }, place),
+      }),
+    );
 }
 
 /** Whether the words are a task's key typed whole, which leads its group, as the panel's keyed group leads. */
@@ -420,6 +443,42 @@ function cappedGroup(
   };
 }
 
+/** The folder a path stands in, or "" at the repository's root. */
+function parentOf(path: string): string {
+  return path.slice(0, Math.max(0, path.lastIndexOf("/")));
+}
+
+/**
+ * A folder walked into, as the panel's → walks one: with the words after
+ * `files:` a folder's path and a `/`, the folder itself first, a pick naming
+ * it, then what stands in it, its folders walking on; its crumb names the
+ * folder and steps back out to the one it stands in, or to every path from
+ * the root. None where the words name no folder.
+ */
+function walkedFolder(
+  files: readonly MentionCandidate[],
+  term: string,
+): MentionOffered | undefined {
+  if (!term.endsWith("/")) return undefined;
+  const path = term.slice(0, -1);
+  const folder = files.find((row) => row.kind === MENTION_OFFER_KIND.FOLDER && row.id === path);
+
+  if (folder === undefined) return undefined;
+  const inside = files.filter((row) => parentOf(row.id) === path);
+  const up = parentOf(path);
+
+  return {
+    narrowed: {
+      from: MENTION_FROM.FILES,
+      name: folder.name,
+      back: narrowingQuery(MENTION_FROM.FILES, up === "" ? "" : `${up}/`),
+    },
+    groups: [
+      { title: folder.name, rows: [{ ...folder, walk: undefined }, ...inside].slice(0, PER_KIND) },
+    ],
+  };
+}
+
 /**
  * What an `@` offers for what is typed after it, as the panel's picker
  * offers it. With nothing typed: what the place suggests, then Browse, a
@@ -440,6 +499,9 @@ export function mentionOffer(sources: MentionSources, query: string): MentionOff
 
   if (typed !== undefined && from !== undefined) {
     const term = query.slice(typed.entry.length).trim();
+    const walked = from === MENTION_FROM.FILES ? walkedFolder(sources.files, term) : undefined;
+
+    if (walked !== undefined) return walked;
     const rows = fromRows(sources, from, term);
     const found = term === "" ? rows : matching(rows, term);
     const name = FROM_GROUP[from];
