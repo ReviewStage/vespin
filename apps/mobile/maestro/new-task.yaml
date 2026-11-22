@@ -86,7 +86,15 @@ env:
 - assertVisible: "Save draft"
 - waitForAnimationToEnd
 - takeScreenshot: new-task-swipe-ask
-- tapOn: "Cancel"
+# Note that the ask's own Cancel is found under its Save draft, because the
+# ✕ is heard as Cancel too, and on an iPad a bare Cancel found the ✕ under
+# the alert, which left the ask standing.
+- tapOn:
+    text: "Cancel"
+    below: "Save draft"
+- extendedWaitUntil:
+    notVisible: "Save draft"
+    timeout: 5000
 - assertVisible: "Show who sent each pending invite."
 - tapOn: "Cancel"
 - assertVisible: "Discard draft"
