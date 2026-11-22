@@ -1,0 +1,10 @@
+== bundle PJj10340 base 81bc2e3641
+  built 81bc2e3641 base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-new-task: fails 0 shots 10 
+iphone-dark-new-task: fails 0 shots 10 
+ipad27-light-new-task: fails 0 shots 10 
+ipad27-dark-new-task: fails 0 shots 10 
