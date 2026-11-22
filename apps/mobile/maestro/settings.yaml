@@ -102,13 +102,14 @@ appId: dev.vespin.ios
 - assertVisible: "Grace Hopper(, .*)?"
 - assertVisible: "Alan Turing(, .*)?"
 - takeScreenshot: settings-workspace
-# A member's row pushes their page: the owner picks an admin's role, hands
-# them the workspace, or removes them, each its own row, Remove in red at the
-# foot.
+# A member's row pushes their page: the owner picks an admin's role or
+# removes them, Remove in red at the foot. The fixture's workspace is the
+# account's personal one, which is never handed to another member, so the
+# page offers no Make owner (`memberActs`).
 - tapOn: "Grace Hopper(, .*)?"
 - waitForAnimationToEnd
 - assertVisible: "Role.*"
-- assertVisible: "Make owner"
+- assertNotVisible: "Make owner"
 - assertVisible: "Remove from workspace"
 - takeScreenshot: settings-member
 - tapOn:

@@ -30,6 +30,7 @@ import {
   type LongPressGroup,
   NOTICE_KIND,
   ROW_ACTION_TONE,
+  RowForEach,
   RowList,
   Screen,
   useColors,
@@ -244,30 +245,32 @@ function History({ taskId: id }: { readonly taskId: string }) {
             history.older === HISTORY_READ.FAILED ? VERSION_HISTORY_WORDS.OLDER_UNREAD : undefined
           }
         >
-          {revisions.map((line, index) => (
-            <VersionRow
-              key={line.seq}
-              writer={versionWriter(line.lastEdit, pictureOf, harnessOf(line.agentId))}
-              name={revisionWriterName(line.lastEdit, history.readerId)}
-              summary={revisionSummary(line)}
-              at={line.lastEdit.at}
-              now={now}
-              current={line.seq === newest}
-              first={index === 0}
-              menu={versionMenu(line.seq, line.seq === newest)}
-              onPress={() =>
-                router.push({
-                  pathname: onOwnTab(VERSION_ROUTE),
-                  params: {
-                    id,
-                    seq: String(line.seq),
-                    at: String(line.lastEdit.at),
-                    newest: String(newest),
-                  },
-                })
-              }
-            />
-          ))}
+          {/* Note that the versions are recycled as the list scrolls, as the Inbox's rows are, so a page of fifty mounts only the rows near the screen. */}
+          <RowForEach data={revisions} keyOf={(line) => `${line.seq}`}>
+            {(line) => (
+              <VersionRow
+                writer={versionWriter(line.lastEdit, pictureOf, harnessOf(line.agentId))}
+                name={revisionWriterName(line.lastEdit, history.readerId)}
+                summary={revisionSummary(line)}
+                at={line.lastEdit.at}
+                now={now}
+                current={line.seq === newest}
+                first={line.seq === newest}
+                menu={versionMenu(line.seq, line.seq === newest)}
+                onPress={() =>
+                  router.push({
+                    pathname: onOwnTab(VERSION_ROUTE),
+                    params: {
+                      id,
+                      seq: String(line.seq),
+                      at: String(line.lastEdit.at),
+                      newest: String(newest),
+                    },
+                  })
+                }
+              />
+            )}
+          </RowForEach>
           {earlier === undefined ? null : (
             <LinkRow
               symbol={GLYPH.MORE}
@@ -345,23 +348,26 @@ function VersionWords({
   readonly onOpenLink: (address: string) => void;
 }) {
   const unchanged = !first && !diff.changed;
+  const placed = useMemo(() => diff.units.map((unit, at) => ({ unit, at })), [diff]);
 
+  // Note that the sections are recycled as the page scrolls, as the task page's description is, so a long description's version mounts and reads as Markdown only the sections near the screen, rather than every one as it opens.
   return (
     <RowList look={LIST_LOOK.PLAIN}>
       <ListSection footer={unchanged ? VERSION_HISTORY_WORDS.NO_CHANGE : undefined}>
-        {diff.units.map((unit, at) => (
-          <WordsRow
-            // A section's heading may stand twice, struck and written again, so its place keys it.
-            key={at}
-            words={unit.plain}
-            change={unit.change}
-            last={at === diff.units.length - 1}
-            onOpenLink={onOpenLink}
-            pictureSource={pictureSource}
-            videoAt={videoAt}
-            fileAt={fileAt}
-          />
-        ))}
+        {/* A section's heading may stand twice, struck and written again, so its place keys it. */}
+        <RowForEach data={placed} keyOf={({ at }) => `${at}`}>
+          {({ unit, at }) => (
+            <WordsRow
+              words={unit.plain}
+              change={unit.change}
+              last={at === placed.length - 1}
+              onOpenLink={onOpenLink}
+              pictureSource={pictureSource}
+              videoAt={videoAt}
+              fileAt={fileAt}
+            />
+          )}
+        </RowForEach>
       </ListSection>
     </RowList>
   );
