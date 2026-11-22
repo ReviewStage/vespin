@@ -1,0 +1,14 @@
+== bundle PJj10312 base 782f8738cf
+  built 782f8738cf base app Vp10440.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-ftop10312: fails 0 shots 3 
+iphone-light-tasks: fails 0 shots 35 
+iphone-dark-ftop10312: fails 0 shots 3 
+iphone-dark-tasks: fails 0 shots 35 
+ipad27-light-ftop10312: fails 0 shots 3 
+ipad27-light-tasks: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+ipad27-dark-ftop10312: fails 0 shots 3 
+ipad27-dark-tasks: fails 0 shots 34 
