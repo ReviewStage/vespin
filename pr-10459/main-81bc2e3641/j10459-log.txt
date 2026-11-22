@@ -1,0 +1,10 @@
+== bundle PJj10459 base 81bc2e3641
+  built 81bc2e3641 base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-agent: fails 0 shots 32 
+iphone-dark-agent: fails 1 shots 28 Assert that "Fork to new agent" is visible... FAILED
+ipad27-light-agent: fails 0 shots 32 
+ipad27-dark-agent: fails 0 shots 32 
