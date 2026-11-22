@@ -38,6 +38,21 @@ env:
           end: "75%, 75%"
           duration: 400
 - waitForAnimationToEnd
+# Note that the words in sight can still leave the card's Merge under the
+# dock's chips and composer, which take its tap, so the transcript is
+# lifted a little at a time while Merge stands below the dock's Approval.
+- repeat:
+    while:
+      visible:
+        text: "Merge"
+        below: "Approval"
+    times: 4
+    commands:
+      - swipe:
+          start: "75%, 60%"
+          end: "75%, 45%"
+          duration: 400
+      - waitForAnimationToEnd
 - takeScreenshot: pull-request-card
 # Note that the card's Merge is found below the words its row follows,
 # because while the transcript lays out its rows a fresh row can stand
