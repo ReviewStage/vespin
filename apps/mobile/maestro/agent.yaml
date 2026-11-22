@@ -514,11 +514,15 @@ env:
 # new agent and Rewind conversation to here, since the teammate's line
 # follows it. Note that its ⋯ is found as the "More" under the turn's last
 # words, because the page's own ⋯ in the bar is "More" too and stands first.
+# Note too that the words are scrolled to clear under the bar (`BELOW`), so
+# the row of acts under them stands well above the dock; a centered scroll
+# left the row under the dock's chips on the dark iPhone, where the tap
+# opened the Inbox chip's thread.
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
       ELEMENT: ".*71 of the 120 invites sent were accepted.*"
-      DIRECTION: UP
+      BELOW: "Build teammate invitations"
       BESIDE: ${FLOATING_TABS}
 - tapOn:
     text: "More"
