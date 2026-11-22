@@ -8,9 +8,9 @@
  * the iOS app, reads it here from the shared parse (`markdown-tree.ts`).
  */
 
-import type { Nodes } from "mdast";
+import type { Nodes, Root } from "mdast";
 import { DESCRIPTION_COMMENT_BOUNDS } from "./description-comment-wire.js";
-import { keptMarkdownTree } from "./markdown-tree.js";
+import { keptMarkdownTree, markdownTree } from "./markdown-tree.js";
 
 /** One block of a description: its span in the Markdown, the Markdown it is drawn from, and its words as a thread on it quotes them. */
 export interface DescriptionBlock {
@@ -21,6 +21,9 @@ export interface DescriptionBlock {
   /** Its words with no Markdown, each inner block on a line of its own, at most a quote's length; none where it holds no words to comment on, such as a rule or raw HTML. */
   readonly quote: string | undefined;
 }
+
+/** The most of a description a screen draws before its whole parse: more than a screen holds. */
+export const DESCRIPTION_HEAD_MOST = 4000;
 
 /** The byte-order mark a pasted body may open with, which the parse skips and counts no offset for. */
 const BYTE_ORDER_MARK = "﻿";
@@ -61,12 +64,42 @@ function referenced(node: Nodes): readonly string[] {
 }
 
 /**
+ * The head of a description a screen draws first, at most
+ * `DESCRIPTION_HEAD_MOST` characters, ending at a blank line where one
+ * stands within it, so it cuts no paragraph; the whole where it is short.
+ */
+export function descriptionHead(text: string): string {
+  if (text.length <= DESCRIPTION_HEAD_MOST) return text;
+  const end = text.lastIndexOf("\n\n", DESCRIPTION_HEAD_MOST);
+
+  return text.slice(0, end > 0 ? end : DESCRIPTION_HEAD_MOST);
+}
+
+/**
  * The description's blocks, in order: each top-level block but a link
  * definition, which draws nothing, with its span in `text`, the Markdown it
  * is drawn from, and its quote, cut to the longest quote a thread keeps.
  */
 export function descriptionBlocks(text: string): readonly DescriptionBlock[] {
-  const nodes = keptMarkdownTree(text).children;
+  return blocksIn(text, keptMarkdownTree(text));
+}
+
+/**
+ * The blocks of the description's head (`descriptionHead`), as
+ * `descriptionBlocks` reads them, each at its place in the whole: what a
+ * page draws at once while the whole is parsed. Note that the head is parsed
+ * on its own rather than kept, so it never pushes a whole document out of
+ * the kept trees.
+ */
+export function descriptionHeadBlocks(text: string): readonly DescriptionBlock[] {
+  const head = descriptionHead(text);
+
+  return blocksIn(head, markdownTree(head));
+}
+
+/** The blocks `tree`, the parse of `text`, holds. */
+function blocksIn(text: string, tree: Root): readonly DescriptionBlock[] {
+  const nodes = tree.children;
   // Note that the parse counts offsets from after a leading byte-order mark, while the service counts them in the text as it is.
   const shift = text.startsWith(BYTE_ORDER_MARK) ? BYTE_ORDER_MARK.length : 0;
 

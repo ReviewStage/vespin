@@ -14,6 +14,7 @@ import {
   linkStandingOf,
 } from "@repo/features/link-standing-model";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { keptMarkdownTree, markdownTree } from "@repo/features/markdown-tree";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { markdownGithubPages } from "@repo/ui-native";
@@ -30,12 +31,15 @@ const NO_PAGES: readonly string[] = [];
  * What GitHub holds of the pull requests and issues `words` link to, each
  * held followed while the caller stands, read through `workspace` where its
  * GitHub App is connected, as the chip in `Markdown` reads it by its page;
- * none for a page unread, unanswered, or GitHub holds no such page.
+ * none for a page unread, unanswered, or GitHub holds no such page. Where
+ * `whole` says each of `words` is a whole document a page also draws, such
+ * as a task's description, its kept parse is read rather than a second one.
  */
 export function useLinkStandings(
   words: readonly string[],
   repository: string | null,
   workspace: Workspace | undefined,
+  whole = false,
 ): (page: string) => LinkStanding | undefined {
   const acts = useHostActs();
   const workspaceId = workspace?.github?.active === true ? workspace.id : undefined;
@@ -45,8 +49,10 @@ export function useLinkStandings(
     // Note that only a page's own address is read here, so no moment or zone a date's chip counts from matters.
     const reading = { repository, now: 0, zone: "UTC" };
 
-    return [...new Set(words.flatMap((each) => markdownGithubPages(each, reading)))];
-  }, [words, repository, workspaceId]);
+    const parse = whole ? keptMarkdownTree : markdownTree;
+
+    return [...new Set(words.flatMap((each) => markdownGithubPages(each, reading, parse)))];
+  }, [words, repository, workspaceId, whole]);
 
   useLiveFollows(
     pages,
