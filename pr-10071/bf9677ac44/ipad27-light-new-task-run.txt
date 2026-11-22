@@ -1,0 +1,85 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow new-task
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "New task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Assert that "ada/relay" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-task-sheet... COMPLETED
+Input text Let a workspace owner revoke a pending invite.... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Tap on "ada/relay"... COMPLETED
+Assert that "ada/ledger" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-task-repositories... COMPLETED
+Tap on "ada/ledger"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-task-filled... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Describe the task" is not visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-task-started... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "New task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Input text Audit the invite emails for broken links.... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Tap on id: new-task-attach... COMPLETED
+Tap on "Task relation"... COMPLETED
+Tap on "Blocked by"... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Blocked by · Teammate invitations" is visible... COMPLETED
+Take screenshot new-task-relation... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "New task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Input text Show who sent each pending invite.... COMPLETED
+Tap on "Cancel"... COMPLETED
+Assert that "Discard draft?" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-task-discard... COMPLETED
+Tap on "Discard draft"... COMPLETED
+Assert that "Describe the task" is not visible... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "New task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-task-add... COMPLETED
+Tap on id: new-task-attach... COMPLETED
+Tap on "Photos"... COMPLETED
+Assert that "Describe the task" is not visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-task-picker... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Swipe from (50%, 6%) to (50%, 85%) in 600 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+  Run flow when "Describe the task" is not visible...
+  Run flow when "Describe the task" is not visible... SKIPPED
+Run flow when true is true... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+Run flow when false is true... SKIPPED
+Assert that "Describe the task" is visible... COMPLETED
+Tap on "Cancel"... COMPLETED
+Assert that "Describe the task" is not visible... COMPLETED

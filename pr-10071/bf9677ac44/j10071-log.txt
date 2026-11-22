@@ -1,0 +1,10 @@
+== bundle PJ10071 base bf9677ac44
+  built bf9677ac44 base app Vp10440.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-new-agent: fails 0 shots 4 
+iphone-light-new-task: fails 0 shots 8 
+ipad27-light-new-agent: fails 1 shots 3 Tap on "Done"... FAILED
+ipad27-light-new-task: fails 0 shots 8 
