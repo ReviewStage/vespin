@@ -1,0 +1,8 @@
+== bundle P9988 base 7263ff4473
+  built 7263ff4473 base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-pull-request: fails 0 shots 17 
+ipad27-light-pull-request: fails 0 shots 17 
