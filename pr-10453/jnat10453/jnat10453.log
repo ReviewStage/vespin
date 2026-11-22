@@ -1,0 +1,81 @@
+built main 782f8738cf + #10446 (on main) #10453 dc047af91a as 94d08ff125
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 02:27:20 28020 MB
+curve 02:27:50 27942 MB
+curve 02:28:21 26527 MB
+curve 02:28:51 25762 MB
+curve 02:29:21 25603 MB
+curve 02:29:51 25346 MB
+curve 02:30:21 25329 MB
+curve 02:30:52 25315 MB
+curve 02:31:22 25236 MB
+curve 02:31:52 24465 MB
+curve 02:32:22 24432 MB
+curve 02:32:52 24169 MB
+curve 02:33:23 23980 MB
+curve 02:33:53 23827 MB
+curve 02:34:23 24428 MB
+curve 02:34:53 24371 MB
+curve 02:35:23 24310 MB
+curve 02:35:54 24204 MB
+curve 02:36:24 24034 MB
+curve 02:36:54 23900 MB
+curve 02:37:24 23824 MB
+curve 02:37:54 23801 MB
+curve 02:38:24 23741 MB
+curve 02:38:55 23658 MB
+curve 02:39:25 23640 MB
+curve 02:39:55 23617 MB
+curve 02:40:25 23604 MB
+curve 02:40:55 23580 MB
+curve 02:41:26 23561 MB
+curve 02:41:56 23542 MB
+curve 02:42:26 23516 MB
+curve 02:42:56 23500 MB
+curve 02:43:26 23351 MB
+curve 02:43:57 23321 MB
+curve 02:44:27 23297 MB
+curve 02:44:57 23263 MB
+curve 02:45:27 23230 MB
+curve 02:45:57 23187 MB
+curve 02:46:27 23162 MB
+curve 02:46:58 23100 MB
+curve 02:47:28 22976 MB
+curve 02:47:58 22591 MB
+curve 02:48:28 22439 MB
+curve 02:48:59 22370 MB
+curve 02:49:29 22252 MB
+curve 02:49:59 22073 MB
+curve 02:50:29 21956 MB
+curve 02:50:59 21857 MB
+curve 02:51:30 21799 MB
+curve 02:52:00 21783 MB
+curve 02:52:30 21706 MB
+curve 02:53:00 21679 MB
+curve 02:53:30 21618 MB
+curve 02:54:01 21563 MB
+curve 02:54:31 21521 MB
+curve 02:55:01 21520 MB
+curve 02:55:31 21492 MB
+curve 02:56:01 21369 MB
+curve 02:56:32 21343 MB
+curve 02:57:02 21306 MB
+curve 02:57:32 21187 MB
+curve 02:58:02 21186 MB
+curve 02:58:32 21182 MB
+curve 02:59:03 21177 MB
+curve 02:59:33 21180 MB
+curve 03:00:03 21144 MB
+curve 03:00:33 21098 MB
+BUILD EXIT 0 03:01:03
+sizes: Assets.car 23859528 bytes (main Vp10440.app 23859528), .app 119932 KB (main 119916 KB), zipped .app 45238571 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10453.app: replacing existing signature
+p10453-iphone-light-description-edit: fails 2 shots 3   Tap on "Next Page"... FAILED
+p10453-iphone-dark-description-edit: fails 0 shots 5 
+p10453-ipad27-light-description-edit: fails 0 shots 5 
+p10453-ipad27-dark-description-edit: fails 0 shots 5 
