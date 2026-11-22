@@ -114,7 +114,12 @@ env:
     timeout: 5000
 - takeScreenshot: accessibility-pull-request
 # A decide's card: its Recommended tag on a line of its own under the
-# option's label, its word whole rather than broken inside the tag.
+# option's label, its word whole rather than broken inside the tag. Note
+# that the Inbox's row is scrolled to through `to-row.yaml`, because an
+# iPad's list is a column beside the page it opens, which a scroll at the
+# window's middle never moves; and that the tag is scrolled up to, because
+# a thread opens at its newest end, its decide's options running down past
+# the window at this size, the recommended one first.
 - launchApp:
     arguments:
       fixture: inbox
@@ -122,14 +127,14 @@ env:
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 30000
-- scrollUntilVisible:
-    element: "How should a finished turn end\\?"
-    direction: DOWN
-    centerElement: true
+- runFlow:
+    file: subflows/to-row.yaml
+    env:
+      ROW: "How should a finished turn end\\?"
 - tapOn: "How should a finished turn end\\?"
 - scrollUntilVisible:
     element: "Recommended"
-    direction: DOWN
+    direction: UP
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-decide
