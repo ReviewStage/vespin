@@ -1,5 +1,5 @@
 /**
- * use-mention-offer.ts -- what an `@` being typed offers in a composer, as the panel's mention picker offers it: the place's agents, tasks, people, pages, threads, pull requests and dates, and each pick sent as the mention's link.
+ * use-mention-offer.ts -- what an `@` being typed offers in a composer or a description, as the panel's mention picker offers it: the place's agents, tasks, people, the description's sections, pages, threads, pull requests and dates, and each pick sent as the mention's link the panel writes.
  *
  * An `@` starting the word the caret stands in offers, with nothing typed
  * after it, what the task suggests (its own agents, threads, pull requests
@@ -32,6 +32,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_FROM, typedMentionKind } from "@repo/features/mention-kind";
 import {
   dateCandidates,
+  descriptionCandidates,
   isKindChoice,
   MENTION_NO_MATCH,
   MENTION_OFFER_KIND,
@@ -89,6 +90,7 @@ const KIND_GLYPH = {
   [MENTION_OFFER_KIND.AGENT]: GLYPH.AGENT,
   [MENTION_OFFER_KIND.TASK]: GLYPH.TASK,
   [MENTION_OFFER_KIND.PERSON]: GLYPH.PERSON,
+  [MENTION_OFFER_KIND.SECTION]: GLYPH.HEADING,
   [MENTION_OFFER_KIND.PAGE]: GLYPH.PAGE,
   [MENTION_OFFER_KIND.THREAD]: GLYPH.THREAD,
   [MENTION_OFFER_KIND.PULL_REQUEST]: GLYPH.PULL_REQUEST,
@@ -100,6 +102,7 @@ const FROM_GLYPH = {
   [MENTION_FROM.AGENTS]: GLYPH.AGENT,
   [MENTION_FROM.TASKS]: GLYPH.TASK,
   [MENTION_FROM.PEOPLE]: GLYPH.PEOPLE,
+  [MENTION_FROM.DESCRIPTION]: GLYPH.FILE_TEXT,
   [MENTION_FROM.PAGES]: GLYPH.PAGE,
   [MENTION_FROM.THREADS]: GLYPH.THREAD,
   [MENTION_FROM.PULL_REQUESTS]: GLYPH.PULL_REQUEST,
@@ -176,10 +179,12 @@ export function useMentionOffer(
     readonly taskId: string | undefined;
     /** The agent whose composer it is, which its own `@` never offers, as the panel's leaves it out. */
     readonly agentId?: string | undefined;
+    /** The words of the task's description being edited, whose sections its `@` offers, the task itself standing among them rather than among the tasks, as the panel's description offers them. */
+    readonly description?: string | undefined;
   },
   pills: MentionPills,
 ): MentionsOffered | undefined {
-  const { workspaceId, taskId, agentId } = place;
+  const { workspaceId, taskId, agentId, description } = place;
   const { word } = pills;
   const asking = word !== undefined && workspaceId !== undefined;
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
@@ -228,21 +233,37 @@ export function useMentionOffer(
     const ownTasks = tasks.filter((task) => task.workspaceId === workspaceId);
     const taskNamed = new Map(ownTasks.map((task) => [task.id, task.name]));
 
-    const taskRows = ownTasks.map((task): MentionCandidate => {
-      const key =
-        workspace === undefined || task.number === undefined
-          ? undefined
-          : taskKey(workspace.name, task.number);
+    const keyOf = (number: number | undefined) =>
+      workspace === undefined || number === undefined ? undefined : taskKey(workspace.name, number);
 
-      return {
-        id: task.id,
-        kind: MENTION_OFFER_KIND.TASK,
-        name: task.name,
-        detail: key,
-        key,
-        target: marked({ kind: LINK_DESTINATION.TASK, taskId: task.id }),
-      };
+    const described = ownTasks.find((task) => task.id === taskId);
+    // Note that a description's task stands as its description whole rather than among the tasks, as the panel's does.
+    const describing = description === undefined ? undefined : described;
+
+    const taskRows = ownTasks.flatMap((task): MentionCandidate[] => {
+      if (task === describing) return [];
+      const key = keyOf(task.number);
+
+      return [
+        {
+          id: task.id,
+          kind: MENTION_OFFER_KIND.TASK,
+          name: task.name,
+          detail: key,
+          key,
+          target: marked({ kind: LINK_DESTINATION.TASK, taskId: task.id }),
+        },
+      ];
     });
+
+    const sections =
+      describing === undefined || description === undefined
+        ? []
+        : descriptionCandidates(
+            { taskId: describing.id, name: describing.name, key: keyOf(describing.number) },
+            description,
+            { workspace: step, repository: null },
+          );
 
     const pages = (taskId === undefined ? [] : (held?.pages ?? [])).map(
       (page): MentionCandidate => ({
@@ -264,17 +285,15 @@ export function useMentionOffer(
 
         return holder === undefined
           ? []
-          : items.map((item) => ({ item, threadTaskId, holder, own: threadTaskId === taskId }));
+          : items.map((item) => ({ item, holder, own: threadTaskId === taskId }));
       })
       .sort(
         (one, other) =>
           Number(other.own) - Number(one.own) || other.item.updatedAt - one.item.updatedAt,
       )
-      .map(({ item, threadTaskId, holder, own }): ThreadCandidate => {
-        const target = linkOf(
-          { kind: LINK_DESTINATION.INBOX_ITEM, taskId: threadTaskId, itemId: item.id },
-          step,
-        );
+      .map(({ item, holder, own }): ThreadCandidate => {
+        // Note that a thread is linked by itself alone, as the panel's mention writes it.
+        const target = linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id }, step);
 
         // Note that a thread wears what its last line asks, as its Inbox row does, and a plain message keeps the thread's glyph.
         const look = INBOX_LINE_LOOK[inboxLineKind(item)];
@@ -334,6 +353,7 @@ export function useMentionOffer(
         terms: [member.email],
         target: marked({ kind: LINK_DESTINATION.PERSON, userId: member.userId }),
       })),
+      description: sections,
       pages,
       threads,
       pullRequests,
@@ -352,6 +372,7 @@ export function useMentionOffer(
     workspaceId,
     taskId,
     agentId,
+    description,
     workspace,
     word,
     held,
@@ -395,7 +416,7 @@ export function useMentionOffer(
       buzz(BUZZ.SELECTION);
 
       if (isKindChoice(row)) return retype(row.query);
-      pills.pick({ name: row.name, target: row.target });
+      pills.pick({ name: row.written ?? row.name, target: row.target });
     },
   };
 }
