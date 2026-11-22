@@ -732,7 +732,21 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     // Note that a link asked for is let go once the words are drawn anew, since the words it was asked for may stand elsewhere now.
     linkRange = nil
     linkWords = nil
-    textView.attributedText = drawn(lines)
+    let next = drawn(lines)
+    let storage = textView.textStorage
+
+    // Note that where the words stay as they stand, as a block's change or an item's move leaves them, only their looks are laid on again, since words laid in whole leave the keyboard's correction holding a range of the words it replaced, which it reads on the next key.
+    if keepUndo, next.string == storage.string {
+      storage.beginEditing()
+      next.enumerateAttributes(in: NSRange(location: 0, length: next.length)) { attributes, range, _ in
+        storage.setAttributes(attributes, range: range)
+      }
+      storage.endEditing()
+      if let layout = textView.textLayoutManager { layout.invalidateLayout(for: layout.documentRange) }
+    } else {
+      textView.attributedText = next
+    }
+
     if !keepUndo { textView.undoManager?.removeAllActions() }
     let length = textView.textStorage.length
     // Note that a field drawn empty types a plain paragraph, rather than in the looks of the words it last held, which UIKit would keep for the next words typed.
