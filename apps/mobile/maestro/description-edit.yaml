@@ -47,16 +47,18 @@ env:
 # window stands Format on the first page already. The field is one element,
 # its whole document its words, as Notes' page is, so the taps land at its
 # leading edge halfway down, where a line's first word stands rather than
-# the blank past a short line's end. Note that a tap takes the keyboard
-# first, as a person's does, since a double tap on a field not yet typed in
-# spends its first tap on the keyboard rising.
+# the blank past a short line's end. The word is selected as a person
+# selects without a double tap: a tap takes the keyboard and stands the
+# caret at the word's end, a tap on the caret opens the edit menu, and its
+# Select takes the word, so no step waits on a double tap's timing.
 - tapOn:
     id: "description-words"
     point: "8%,50%"
 - waitForAnimationToEnd
-- doubleTapOn:
+- tapOn:
     id: "description-words"
     point: "8%,50%"
+- tapOn: "Select"
 - waitForAnimationToEnd
 - runFlow:
     when:
