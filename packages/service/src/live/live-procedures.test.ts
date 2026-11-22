@@ -9,6 +9,7 @@ import { pointBrowserTab, upsertBrowserTab } from "@repo/database/models/agent-b
 import { recordAgentSandboxBooting } from "@repo/database/models/agent-sandboxes";
 import { createAgent, pinAgent } from "@repo/database/models/agent-store";
 import { startDescriptionCommentThread } from "@repo/database/models/description-comments";
+import { notePullRequestsMoved } from "@repo/database/models/github-pull-request-moves";
 import { approveHostPairing, openHostPairing } from "@repo/database/models/host-pairing-store";
 import { enrollOwnDevice, removeHost } from "@repo/database/models/host-store";
 import {
@@ -105,6 +106,10 @@ import {
   pullRequestChaptersOfLive,
   REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
 } from "@repo/features/pull-request-chapters-live";
+import {
+  pullRequestMovedOfLive,
+  REPOSITORY_PULL_REQUEST_MOVED_READ,
+} from "@repo/features/pull-request-moved-live";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import { SOUND_CLIP_SLOT, SOUND_CLIP_TYPE } from "@repo/features/sound-clip-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
@@ -167,6 +172,7 @@ import {
   type FakeGitHub,
   githubReaching,
   type InstallationFixture,
+  repositoryIdOf,
 } from "../testing/github-app-fake.js";
 import { hostedAnswer } from "../testing/hosted-route.js";
 import {
@@ -179,6 +185,7 @@ import { liveProcedures } from "./live-procedures.js";
 import { pollSealer } from "./poll-sealer.js";
 import { agentOriginRead } from "./reads/agent-origin.js";
 import { agentTranscriptRead } from "./reads/agent-transcript.js";
+import { repositoryPullRequestMovedRead } from "./reads/pull-request-moved.js";
 import { workspaceMachinesRead } from "./reads/workspace-machines.js";
 
 /**
@@ -2396,6 +2403,65 @@ it.layer(getTestDB())("a pull request's chapters' live read", (it) => {
 
         assert.deepEqual(yield* askChapters({ bearer: stranger, ...throughAgent }), notFound);
         assert.deepEqual(yield* askChapters({ bearer: stranger, ...byRepository }), notFound);
+      }),
+  );
+});
+
+it.layer(getTestDB())("a pull request's move's live read", (it) => {
+  it.effect(
+    "a member is answered when the pull request last moved polled, an account outside the workspace is not found, and no row of the statement reaches one",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const stranger = yield* openUser;
+        const workspaceId = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspaceId, teammate);
+        yield* openWorkspace(stranger);
+        yield* connectWorkspaceGitHub(workspaceId, RELAY_INSTALLATION);
+        const repositoryId = repositoryIdOf(RELAY);
+
+        yield* notePullRequestsMoved(
+          repositoryId,
+          [{ number: 7, head: { ref: "invitations", sha: "c0ffee1" } }],
+          new Date(1_000),
+        );
+
+        const moved = {
+          path: "/api/live/repository-pull-request-moved",
+          query: { workspaceId, repository: RELAY_FULL_NAME, number: "7" },
+          github: githubReaching([RELAY_INSTALLATION]),
+        };
+
+        const polled = yield* askChapters({ bearer: teammate, ...moved });
+        assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
+
+        const answer = Schema.decodeUnknownSync(REPOSITORY_PULL_REQUEST_MOVED_READ.answer)(
+          polled.body,
+        );
+
+        assert.equal(answer.url, LIVE_POLL_URL);
+        assert.deepEqual(
+          pullRequestMovedOfLive(answer.queries.moved.rows ?? []),
+          Option.some({ movedAt: 1_000, headSha: "c0ffee1" }),
+        );
+        assert.deepEqual(yield* askChapters({ bearer: stranger, ...moved }), {
+          status: HOSTED_HTTP_STATUS.NOT_FOUND,
+          body: { error: HOSTED_API_ERROR.NOT_FOUND },
+        });
+
+        const statement = Option.getOrThrow(
+          repositoryPullRequestMovedRead.statements({
+            userId: stranger,
+            workspaceId,
+            repository: RELAY_FULL_NAME,
+            number: "7",
+            repositoryId: String(repositoryId),
+          }),
+        ).moved;
+
+        const sql = yield* SqlClient.SqlClient;
+        assert.deepEqual(yield* sql.unsafe(statement.sql, [...statement.params]), []);
       }),
   );
 });
