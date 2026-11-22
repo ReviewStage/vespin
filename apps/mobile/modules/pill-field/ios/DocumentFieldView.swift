@@ -760,7 +760,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let storage = textView.textStorage
 
     // Note that where the words stay as they stand, as a block's change or an item's move leaves them, only their looks are laid on again, since words laid in whole leave the keyboard's correction holding a range of the words it replaced, which it reads on the next key.
-    if keepUndo, next.string == storage.string {
+    let inPlace = keepUndo && next.string == storage.string
+
+    if inPlace {
       storage.beginEditing()
       next.enumerateAttributes(in: NSRange(location: 0, length: next.length)) { attributes, range, _ in
         storage.setAttributes(attributes, range: range)
@@ -782,6 +784,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       location = min(location + 2, length)
     }
     textView.selectedRange = NSRange(location: location, length: min(selected.length, length - location))
+    // Note that looks laid on in place leave UIKit typing in the looks the caret's words had before, a moved item's old depth among them, so the next words would draw at it; the caret's own looks are handed it again, its line's facts left out, as ever.
+    if inPlace, let typing = lineLooks(at: location) { textView.typingAttributes = typing }
     forgetTypedFacts()
     quiet = false
     placeholderLabel.isHidden = length > 0
@@ -806,6 +810,20 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     storage.endEditing()
     quiet = false
     forgetTypedFacts()
+  }
+
+  /// The looks the words typed at `location` take: those of the word before it on its line, else of the line's first character, as UIKit reads them, an attachment's own and the line's facts left out; none on the empty last line, whose typing the line it carries on or a block chosen for it gives.
+  private func lineLooks(at location: Int) -> [NSAttributedString.Key: Any]? {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    guard location <= storage.length else { return nil }
+    let lineStart = location == 0 || string.character(at: location - 1) == 0x0A
+    let at = lineStart ? location : location - 1
+    guard at < storage.length else { return nil }
+    var looks = storage.attributes(at: at, effectiveRange: nil)
+    looks[.attachment] = nil
+    looks[lineKey] = nil
+    return looks
   }
 
   /// Lets go of the line facts UIKit types with, which it copies from the words at the caret and keeps as they stood, though JavaScript renames each line's block on each answer and a move lays new facts on in place; words typed with none take their line's own (`heldLine` reads a line by the facts its words hold, else the line before). A block chosen for the empty last line keeps its facts, which are the ones its words take.
