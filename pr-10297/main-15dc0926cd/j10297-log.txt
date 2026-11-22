@@ -1,0 +1,18 @@
+== bundle PJj10297 base 15dc0926cd
+  built 15dc0926cd base app Vp10440.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-managers: fails 0 shots 6 
+iphone-light-tasks: fails 0 shots 35 
+iphone-light-search: fails 0 shots 5 
+iphone-dark-managers: fails 0 shots 6 
+iphone-dark-tasks: fails 0 shots 35 
+iphone-dark-search: fails 0 shots 5 
+ipad27-light-managers: fails 0 shots 6 
+ipad27-light-tasks: fails 0 shots 34 
+ipad27-light-search: fails 0 shots 5 
+ipad27-dark-managers: fails 0 shots 6 
+ipad27-dark-tasks: fails 0 shots 34 
+ipad27-dark-search: fails 0 shots 5 
