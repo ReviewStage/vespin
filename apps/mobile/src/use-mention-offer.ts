@@ -86,6 +86,7 @@ import {
 } from "./host/host-provider.js";
 import { useLiveFollow } from "./host/live-follow.js";
 import { useListedMembers } from "./member-pictures.js";
+import { useModelCatalog } from "./tasks/use-start.js";
 import { useOfferedWorkspaceMachines } from "./workspace-machines.js";
 
 /** What a person's row says after their name where it is the reader, as the panel's picker says it. */
@@ -182,6 +183,8 @@ function suggestion(row: MentionOfferRow, marks: ReadonlyMap<string, ChipMark>):
     mark: marks.get(row.target),
     name: row.name,
     detail: row.detail,
+    // Note that a folder's row walks into it rather than naming it, as the panel's → does; the folder heads its own list to be named.
+    opens: row.walk !== undefined,
   };
 }
 
@@ -250,6 +253,8 @@ export function useMentionOffer(
 
   const taskPullRequests = useTaskListRow(useTaskListCollections().taskPullRequests, taskId);
   const markOf = useChipMarkOf();
+  // Note that an agent with no title is named by its model as the catalog calls it, as the panel's rows name it, so a pick writes the name the desktop's would.
+  const catalog = useModelCatalog();
 
   const { offer, marks } = useMemo((): Offered => {
     if (!asking || step === undefined) return { offer: NO_OFFER, marks: new Map() };
@@ -274,7 +279,7 @@ export function useMentionOffer(
     const agentRow = (agent: (typeof ownAgents)[number]): MentionCandidate => ({
       id: agent.id,
       kind: MENTION_OFFER_KIND.AGENT,
-      name: agentName(agent),
+      name: agentName(agent, catalog?.models),
       target: marked({ kind: LINK_DESTINATION.AGENT, agentId: agent.id }),
     });
 
@@ -423,7 +428,14 @@ export function useMentionOffer(
             machine.platform === undefined ? undefined : DEVICE_PLATFORM_NAME[machine.platform],
           ].filter((term) => term !== undefined),
         })),
-        members.find((member) => member.you)?.userId,
+        {
+          readerId: members.find((member) => member.you)?.userId,
+          followerIds: new Set(
+            (tasks.find((task) => task.id === taskId)?.followers ?? []).map(
+              (follower) => follower.userId,
+            ),
+          ),
+        },
         { workspace: step, repository: null },
       ),
       dates: (words: string) =>
@@ -433,6 +445,7 @@ export function useMentionOffer(
     return { offer: mentionOffer(sources, word.query), marks };
   }, [
     markOf,
+    catalog,
     asking,
     step,
     agents,
@@ -470,7 +483,8 @@ export function useMentionOffer(
           name: narrowed.name,
           glyph: FROM_GLYPH[narrowed.from],
           // Note that the way back keeps the words searched and deletes the `kind:`, as the panel's crumb does.
-          onBack: () => retype(word.query.slice(typed.entry.length)),
+          // Note that a folder walked into steps back out to the folder it stands in.
+          onBack: () => retype(narrowed.back ?? word.query.slice(typed.entry.length)),
         };
 
   return {
@@ -489,6 +503,8 @@ export function useMentionOffer(
       buzz(BUZZ.SELECTION);
 
       if (isKindChoice(row)) return retype(row.query);
+
+      if (row.walk !== undefined) return retype(row.walk);
       pills.pick({ name: row.written ?? row.name, target: row.target });
     },
   };
