@@ -808,7 +808,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       if whole.length == 0 { continue }
       piece.addAttribute(lineKey, value: line.facts, range: whole)
       let lists = itemLists(line.facts, in: &nesting)
-      piece.addAttribute(.paragraphStyle, value: paragraphStyle(line.facts, lists: lists), range: whole)
+      let underMark = line.facts.itemKind == .taskList && line.facts.nesting > 0
+        && nesting.map { $0.runs.count >= 2 && $0.runs[$0.runs.count - 2].list != nil } == true
+      piece.addAttribute(.paragraphStyle, value: paragraphStyle(line.facts, lists: lists, underMark: underMark), range: whole)
       piece.enumerateAttribute(.font, in: whole) { value, range, _ in
         if value == nil { piece.addAttributes(wordAttributes(kind, line.facts.level, [], nil), range: range) }
       }
@@ -938,8 +940,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     return list
   }
 
-  /// A line's paragraph: its lists' markers and its indent, a step further in for each depth it is nested, a quote's indent, and the room between blocks.
-  private func paragraphStyle(_ facts: LineFacts, lists: [NSTextList]) -> NSParagraphStyle {
+  /// A line's paragraph: its lists' markers and its indent, a step further in for each depth it is nested, a quote's indent, and the room between blocks. A task nested under a bulleted or numbered item stands a step further in still, since the system sets a listed item's words in past its indent by its mark, and the box goes under the parent's words rather than its mark.
+  private func paragraphStyle(_ facts: LineFacts, lists: [NSTextList], underMark: Bool = false) -> NSParagraphStyle {
     let style = NSMutableParagraphStyle()
     style.paragraphSpacing = DocumentSpace.blockGap
     if !lists.isEmpty { style.textLists = lists }
@@ -951,8 +953,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       style.firstLineHeadIndent = nested + DocumentSpace.indent
       style.paragraphSpacing = DocumentSpace.itemGap
     case .taskList:
-      style.headIndent = nested
-      style.firstLineHeadIndent = nested
+      let under = underMark ? DocumentSpace.indent : 0
+      style.headIndent = nested + under
+      style.firstLineHeadIndent = nested + under
       style.paragraphSpacing = DocumentSpace.itemGap
     case .quote:
       style.headIndent = DocumentSpace.quoteIndent
