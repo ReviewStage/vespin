@@ -496,6 +496,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   /// The words an edit typed, where they stand once it lands, whose block and looks are carried on to them.
   private var typed: NSRange?
 
+  /// The words the last edit the text itself saw laid in, which the keyboard's own edits, such as a prediction it commits, lay in without asking the field first.
+  private var landed: NSRange?
+
   var look = Look() {
     didSet {
       guard look != oldValue else { return }
@@ -565,6 +568,14 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       object: nil
     )
 
+    // Note that the text's own word of each edit is kept, so the block and looks carry on to words the keyboard lays in without asking, as it commits a prediction typed as marked words.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(textEdited(_:)),
+      name: NSTextStorage.didProcessEditingNotification,
+      object: textView.textStorage
+    )
+
     registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (view: DocumentFieldView, _: UITraitCollection) in
       view.redraw(view.heldLines())
     }
@@ -580,6 +591,14 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       width: bounds.width - textView.textContainerInset.left - textView.textContainerInset.right,
       height: line
     )
+  }
+
+  @objc private func textEdited(_ notification: Notification) {
+    let storage = textView.textStorage
+    guard !quiet, storage.editedMask.contains(.editedCharacters), storage.editedRange.location != NSNotFound,
+      storage.editedRange.length > 0
+    else { return }
+    landed = storage.editedRange
   }
 
   @objc private func keyboardMoved(_ notification: Notification) {
@@ -669,11 +688,13 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   func textViewDidChange(_ textView: UITextView) {
     guard !quiet else { return }
-    if let typed {
-      carryOn(to: typed)
-      boxNewTask(after: typed)
+    // Note that the words the text itself saw laid in are the ones carried on to, the range asked about being the field's guess before the keyboard lays them.
+    if let piece = landed ?? typed {
+      carryOn(to: piece)
+      boxNewTask(after: piece)
     }
     typed = nil
+    landed = nil
     keepPendingLine()
     keepItemDrawn()
     linkRange = nil
