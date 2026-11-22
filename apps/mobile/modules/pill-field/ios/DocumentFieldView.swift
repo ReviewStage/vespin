@@ -675,6 +675,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     }
     typed = nil
     keepPendingLine()
+    keepItemDrawn()
     linkRange = nil
     linkWords = nil
     changes += 1
@@ -986,11 +987,6 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       storage.addAttribute(lineKey, value: facts, range: piece)
     }
 
-    // Note that words typed on the empty line a Return opened take the paragraph of the line it carries on, its list's mark and indent with it, which UIKit's typing would leave plain until the field was drawn again.
-    if let blockFrom, let style = storage.attribute(.paragraphStyle, at: blockFrom, effectiveRange: nil) {
-      storage.addAttribute(.paragraphStyle, value: style, range: piece)
-    }
-
     storage.removeAttribute(markStylesKey, range: piece)
     storage.removeAttribute(linkKey, range: piece)
 
@@ -1025,6 +1021,36 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
     storage.endEditing()
     quiet = false
+  }
+
+  /// Draws the caret's line as the list item it is read as (`heldLine` carries the line before on) where UIKit typed it plain, as on the line a Return opens at a list's end: an empty line's words typed next take the item's paragraph and facts, and a line already typed plain is drawn again, keeping its undo, since its words are unchanged.
+  private func keepItemDrawn() {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    let caret = min(textView.selectedRange.location, string.length)
+    let paragraph = string.paragraphRange(for: NSRange(location: caret, length: 0))
+    guard textView.selectedRange.length == 0, paragraph.location > 0 else { return }
+    let before = paragraph.location - 1
+    guard let facts = storage.attribute(lineKey, at: before, effectiveRange: nil) as? LineFacts,
+      facts.isListItem, facts.itemKind != .taskList,
+      let style = storage.attribute(.paragraphStyle, at: before, effectiveRange: nil) as? NSParagraphStyle,
+      !style.textLists.isEmpty
+    else { return }
+    let ends = NSMaxRange(paragraph) > paragraph.location && string.character(at: NSMaxRange(paragraph) - 1) == 0x0A
+    let words = paragraph.length - (ends ? 1 : 0)
+
+    if words == 0 {
+      textView.typingAttributes[.paragraphStyle] = style
+      textView.typingAttributes[lineKey] = facts
+      return
+    }
+
+    let own = storage.attribute(lineKey, at: paragraph.location, effectiveRange: nil) as? LineFacts
+    let drawn = storage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+    guard own == nil || own?.block == facts.block, drawn?.textLists.isEmpty ?? true else { return }
+    let selected = textView.selectedRange
+    redraw(heldLines(), keepUndo: true)
+    textView.selectedRange = selected
   }
 
   /// Leads a task line a Return opened with its own unchecked box, the caret after it, as a checklist's Return does in Notes and Notion: the line after a typed line break, where its block is a task list and no box leads it.
