@@ -1,0 +1,14 @@
+#9967 not on main yet
+#9970 not on main yet
+#9972 not on main yet
+#9973 not on main yet
+#9977 not on main yet
+== bundle PM74C base 499c38b9cf
+  built 499c38b9cf base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+p9574-iphone-light a: fails 0 shots 2 
+  p9574-iphone-light: line (44, 465, 386, 508), tap 334,498
+p9574-iphone-light b: fails 1 shots 2 Assert that ".*Which morning should it land.*" is visible... FAILED
