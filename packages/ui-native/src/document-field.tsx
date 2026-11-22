@@ -3,6 +3,7 @@
 import { readerZone } from "@repo/features/date-mention";
 import {
   BLOCK_KIND,
+  type DocumentBlock,
   documentBlocks,
   INLINE_MARK,
   INLINE_RUN,
@@ -12,6 +13,7 @@ import {
   type LockedKind,
   writtenDocument,
 } from "@repo/features/document-blocks";
+import { markdownTreeKept } from "@repo/features/markdown-tree";
 import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import {
   WRITING_BLOCK,
@@ -20,7 +22,7 @@ import {
   type WritingAction,
 } from "@repo/settings/shortcuts";
 import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
+import { type NativeSyntheticEvent, type StyleProp, View, type ViewStyle } from "react-native";
 import {
   type CaretAtWord,
   type CaretLine,
@@ -44,6 +46,7 @@ import {
   type NativeToldRun,
 } from "./document-field-native.js";
 import { GLYPH, WRITING_GLYPH } from "./glyph.js";
+import { Markdown } from "./markdown.js";
 import type { MarkdownReading } from "./markdown-model.js";
 import { pillLook } from "./pill-look.js";
 import { askForWords, WORDS_KIND, type WordsAct } from "./system-asks.js";
@@ -153,8 +156,25 @@ interface NativeToldEvent {
   readonly changes: number;
 }
 
+/** No blocks, which the field holds while its words stand read only. */
+const NO_BLOCKS: readonly DocumentBlock[] = [];
+
+/** The most of a document its read-only words show while the field waits on its parse: more than a screen holds. */
+const HEAD_MOST = 4000;
+
 /** No files held. */
 const NO_FILES: ReadonlySet<string> = new Set();
+
+/** A link pressed in the read-only head, which opens nothing: the field stands in its place a frame later. */
+function openNoLink(): void {}
+
+/** The head of a document a screen shows first, ending at a blank line where one stands within it, so it cuts no paragraph. */
+function headOf(markdown: string): string {
+  if (markdown.length <= HEAD_MOST) return markdown;
+  const end = markdown.lastIndexOf("\n\n", HEAD_MOST);
+
+  return markdown.slice(0, end > 0 ? end : HEAD_MOST);
+}
 
 /** A card's words for a locked block: what it is, and the first line of its source. */
 function cardOf(locked: LockedKind, source: string): NativeCard {
@@ -259,8 +279,21 @@ export function DocumentField({
   // Note that the document the field itself wrote is handed back as the lines it told, written against the same Markdown, rather than read again, which would drop a paragraph's edge spaces and its empty paragraphs.
   const own = told !== undefined && told.markdown === value;
   const base = own ? told.base : value;
+  // Whether the field reads its blocks yet: at once where the page drew these words, whose parse is kept (`markdownTree`), and otherwise after its read-only head has drawn, so the sheet never stands empty while a long description parses.
+  const [ready, setReady] = useState(() => markdownTreeKept(value));
+
+  useEffect(() => {
+    if (ready) return;
+    const frame = requestAnimationFrame(() => setReady(true));
+
+    return () => cancelAnimationFrame(frame);
+  }, [ready]);
+
   // The blocks the Markdown the lines stand on reads as, read once for each Markdown: the field's lines are laid from them, and each key's write is laid against them.
-  const read = useMemo(() => documentBlocks(base, files), [base, files]);
+  const read = useMemo(
+    () => (ready ? documentBlocks(base, files) : NO_BLOCKS),
+    [ready, base, files],
+  );
 
   const handed = useMemo(() => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
@@ -367,6 +400,14 @@ export function DocumentField({
     },
     [],
   );
+
+  // Note that the read-only head is no field, so nothing waits on it as the field it stands in for.
+  if (!ready)
+    return (
+      <View style={style}>
+        <Markdown words={headOf(value)} repository={repository} onOpenLink={openNoLink} headings />
+      </View>
+    );
 
   return (
     <NativeDocumentField
