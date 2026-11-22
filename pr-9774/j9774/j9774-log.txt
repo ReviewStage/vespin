@@ -1,1 +1,13 @@
-  STALE BUNDLE, not built
+== bundle P9774 base c38ac7ec65
+  built c38ac7ec65 base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+JS at c38ac7ec65
+light-chips: fails 0 shots 5 
+light-edge: Status chip bounds 16,189-138,217; tap at 77,183: menu did not open
+light-following: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+dark-chips: fails 0 shots 5 
+dark-edge: Status chip bounds 16,189-138,217; tap at 77,183: menu did not open
+dark-following: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
