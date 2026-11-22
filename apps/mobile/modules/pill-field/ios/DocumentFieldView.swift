@@ -922,25 +922,6 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     }
   }
 
-  /// The list a list's line stands in, one per block, made the first time a block's line asks for it; none for a line in no list.
-  private func textList(_ facts: LineFacts, in lists: inout [Int: NSTextList]) -> NSTextList? {
-    if let made = lists[facts.block] { return made }
-
-    let list: NSTextList
-    switch facts.drawnKind {
-    case .bulletList:
-      list = NSTextList(markerFormat: .disc, options: 0)
-    case .orderedList:
-      list = NSTextList(markerFormat: NSTextList.MarkerFormat(rawValue: "{decimal}."), options: 0)
-      list.startingItemNumber = facts.start ?? 1
-    default:
-      return nil
-    }
-
-    lists[facts.block] = list
-    return list
-  }
-
   /// A line's paragraph: its lists' markers and its indent, a step further in for each depth it is nested, a quote's indent, and the room between blocks. A task nested under a bulleted or numbered item stands a step further in still, since the system sets a listed item's words in past its indent by its mark, and the box goes under the parent's words rather than its mark.
   private func paragraphStyle(_ facts: LineFacts, lists: [NSTextList], underMark: Bool = false) -> NSParagraphStyle {
     let style = NSMutableParagraphStyle()
@@ -1004,9 +985,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     if let pendingLine, pendingLine.at == piece.location {
       let line = NSRange(location: piece.location, length: storage.length - piece.location)
       storage.addAttribute(lineKey, value: pendingLine.facts, range: line)
-      var lists: [Int: NSTextList] = [:]
-      let list = textList(pendingLine.facts, in: &lists)
-      storage.addAttribute(.paragraphStyle, value: paragraphStyle(pendingLine.facts, lists: [list].compactMap { $0 }), range: line)
+      storage.addAttribute(.paragraphStyle, value: paragraphStyle(pendingLine.facts, lists: lastLineLists(pendingLine.facts)), range: line)
       self.pendingLine = nil
       restyleWords(in: line)
     }
@@ -1370,13 +1349,19 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     edited()
   }
 
-  /// The attributes the words typed on an empty last line take from the block chosen for it.
+  /// The attributes the words typed on an empty last line take from the block chosen for it, its lists those the lines above it leave open.
   private func pendingAttributes(_ facts: LineFacts) -> [NSAttributedString.Key: Any] {
-    var lists: [Int: NSTextList] = [:]
-    var attributes = wordAttributes(facts.drawnKind, facts.level, [], nil)
+    var attributes = wordAttributes(facts.itemKind, facts.level, [], nil)
     attributes[lineKey] = facts
-    attributes[.paragraphStyle] = paragraphStyle(facts, lists: [textList(facts, in: &lists)].compactMap { $0 })
+    attributes[.paragraphStyle] = paragraphStyle(facts, lists: lastLineLists(facts))
     return attributes
+  }
+
+  /// The lists the last line stands in with `facts`, the lines above it laid first, so a nested item at the words' end stands in its parents' lists.
+  private func lastLineLists(_ facts: LineFacts) -> [NSTextList] {
+    var nesting: ListNesting?
+    for line in heldLines().dropLast() { _ = itemLists(line.facts, in: &nesting) }
+    return itemLists(facts, in: &nesting)
   }
 
   /// Keeps the block chosen for the empty last line on that line as edits elsewhere move it, and lets it go once an edit takes the line away.
@@ -1512,6 +1497,16 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     }
 
     guard !moved.isEmpty else { return }
+
+    // Note that the empty line after a last line break holds no character to keep its facts on, so moved, its facts are the ones the words typed next take, as a block chosen for it is.
+    if let last = moved.max(), last == lines.count - 1, emptyLastLineFacts() != nil, moved.count == 1 {
+      let facts = lines[last].facts
+      pendingLine = (textView.textStorage.length, facts)
+      textView.typingAttributes = pendingAttributes(facts)
+      updateBar()
+      return
+    }
+
     let boxesMove = moved.contains { (previous[$0].facts.itemKind == .taskList) != (lines[$0].facts.itemKind == .taskList) }
     relay(lines, from: previous, keepUndo: !boxesMove)
   }
