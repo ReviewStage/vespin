@@ -97,6 +97,15 @@ export function descriptionHeadBlocks(text: string): readonly DescriptionBlock[]
   return blocksIn(head, markdownTree(head));
 }
 
+/**
+ * The blocks `tree`, the parse of `text` or of its first slices
+ * (`markdown-slices.ts`), holds, as `descriptionBlocks` reads them: what a
+ * page draws while the rest of a long description is read.
+ */
+export function descriptionBlocksIn(text: string, tree: Root): readonly DescriptionBlock[] {
+  return blocksIn(text, tree);
+}
+
 /** The blocks `tree`, the parse of `text`, holds. */
 function blocksIn(text: string, tree: Root): readonly DescriptionBlock[] {
   const nodes = tree.children;

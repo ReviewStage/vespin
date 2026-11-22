@@ -50,10 +50,21 @@ export function keptMarkdownTree(text: string): Root {
   }
 
   const tree = markdownTree(text);
+  keepMarkdownTree(text, tree);
+
+  return tree;
+}
+
+/**
+ * Keeps `tree` as the whole document `text`'s, as `keptMarkdownTree` keeps
+ * its own parse, for a document read a slice at a time
+ * (`markdown-slices.ts`) and joined into the tree one parse would make, so
+ * its readers share it as they share any kept tree.
+ */
+export function keepMarkdownTree(text: string, tree: Root): void {
+  KEPT.delete(text);
   KEPT.set(text, tree);
   const oldest = KEPT.size > KEPT_MOST ? KEPT.keys().next().value : undefined;
 
   if (oldest !== undefined) KEPT.delete(oldest);
-
-  return tree;
 }
