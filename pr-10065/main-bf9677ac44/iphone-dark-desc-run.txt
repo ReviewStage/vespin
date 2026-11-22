@@ -1,0 +1,34 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fdesc-phone
+Set orientation PORTRAIT... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on id: tasks-tab... COMPLETED
+Assert that "Teammate invitations" is visible... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "Description" is visible with speed 40, visibility percentage 100%, timeout 15000 ms, with centering enabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-1-description-header...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Tap on "More", Index: 0... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-2-menu... COMPLETED
+Tap on "Edit description"... COMPLETED
+Assert that (Optional) "zz-no-such-words" is visible... WARNED
+Tap on id: description-words... COMPLETED
+Input text  Edited on the Mac.... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-3-write... COMPLETED
+Tap on "Preview"... COMPLETED
+Assert that (Optional) "zz-no-such-words" is visible... WARNED
+Take screenshot ${P}-4-preview... COMPLETED
+Tap on "(Close|Cancel)", Index: 0... COMPLETED
+Assert that (Optional) "zz-no-such-words" is visible... WARNED
+Take screenshot ${P}-5-discard... COMPLETED

@@ -1,0 +1,18 @@
+== bundle PJDESC65 base bf9677ac44
+  built bf9677ac44 base app Vp10440.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-desc: fails 0 shots 8 
+iphone-light-conflict: fails 0 shots 3 
+iphone-light-verwrap: fails 0 shots 3 
+iphone-dark-desc: fails 0 shots 8 
+iphone-dark-conflict: fails 0 shots 3 
+iphone-dark-verwrap: fails 0 shots 3 
+ipad27-light-desc: fails 0 shots 8 
+ipad27-light-conflict: fails 0 shots 3 
+ipad27-light-verwrap: fails 0 shots 3 
+ipad27-dark-desc: fails 0 shots 8 
+ipad27-dark-conflict: fails 0 shots 3 
+ipad27-dark-verwrap: fails 0 shots 3 
