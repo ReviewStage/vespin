@@ -262,13 +262,15 @@ export interface DescriptionHolder {
 
 /** A heading as it stands once the `@` word being typed in it is taken out, so the word never names or anchors its section. */
 function headingWithout(heading: string, typing: string | undefined): string {
-  if (typing === undefined) return heading;
+  if (typing === undefined || typing === "") return heading;
+  // Note that the word is matched whole, its words in a row with nothing but space around them, since a query may hold spaces (`@description:Ship it`) and a heading may hold a longer word it begins.
+  const words = typing.trim().split(/\s+/u);
+  const held = heading.split(/\s+/u);
+  const at = held.findIndex((_, start) => words.every((word, step) => held[start + step] === word));
 
-  return heading
-    .split(" ")
-    .filter((word) => word !== typing)
-    .join(" ")
-    .trim();
+  if (at === -1) return heading;
+
+  return [...held.slice(0, at), ...held.slice(at + words.length)].join(" ").trim();
 }
 
 /**
