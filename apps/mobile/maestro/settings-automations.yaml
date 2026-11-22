@@ -50,22 +50,26 @@ env:
 # The switch turns it off at once, as the host draws a switch turned, and on
 # again. Note that the switch is pressed where it stands, at the row's
 # trailing end, because a press on the row's words turns nothing, as in iOS's
-# own Settings.
+# own Settings. Note too that the switch's row is heard by its label and the
+# line under it ("On, Next: …") while on, and by its label alone while off,
+# the same words as its label's own child; Maestro keeps only the deepest of
+# a row and a child that both match, so the switch off is never its "On".
+# It is pressed instead by its control, the row's one child whose words are
+# its value, "0" while off.
 - tapOn:
-    text: "On"
+    text: "On, Next.*"
     checked: true
     point: "92%,50%"
-- assertVisible:
-    text: "On"
-    checked: false
+- assertNotVisible:
+    text: "On.*"
+    checked: true
+- assertNotVisible: "On, Next.*"
 - waitForAnimationToEnd
 - takeScreenshot: settings-automation-off
 - tapOn:
-    text: "On"
-    checked: false
-    point: "92%,50%"
+    text: "0"
 - assertVisible:
-    text: "On"
+    text: "On, Next.*"
     checked: true
 - waitForAnimationToEnd
 - scrollUntilVisible:
