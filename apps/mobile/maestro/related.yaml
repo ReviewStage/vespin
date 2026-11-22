@@ -8,7 +8,8 @@ appId: dev.vespin.ios
 # on the Teammate invitations task under its invitations agent
 # (`@repo/host/fixture-inbox`). Note that a chip in a message opens on the
 # tab the path menu does (`useOpenLink` through `useOnTab`), but stands mid-line, where
-# no element of its own is heard, so no flow taps it.
+# no element of its own is heard, so a flow taps one only where it leads its
+# own line, a little in from the line's edge (`person.yaml`).
 - launchApp:
     clearState: true
     arguments:

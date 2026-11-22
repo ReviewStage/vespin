@@ -307,7 +307,8 @@ function transcriptMessages(
         { type: "step-start" },
         {
           type: "text",
-          text: "A resend mints a fresh link and keeps the pending membership, so the member list doesn't change.",
+          // Note that a person's chip leads the reply's last line, so `person.yaml` holds it inside a message the agent page wraps in its own long-press menu.
+          text: "A resend mints a fresh link and keeps the pending membership, so the member list doesn't change.\n\n[@Grace Hopper](https://vespin.dev/personal/person/user-grace) asked for it.",
         },
         toolPart(
           AGENT_TOOL.READ_FILE,
