@@ -46,9 +46,11 @@ env:
 # the system's own chevron, which VoiceOver hears as Next Page; a wide
 # window stands Format on the first page already. The field is one element,
 # its whole document its words, as Notes' page is, so the double tap lands
-# at its middle, selecting the word there.
+# at its leading edge halfway down, where a line's first word stands rather
+# than the blank past a short line's end.
 - doubleTapOn:
     id: "description-words"
+    point: "8%,50%"
 - waitForAnimationToEnd
 - runFlow:
     when:
