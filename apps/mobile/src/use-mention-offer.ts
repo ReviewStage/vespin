@@ -316,6 +316,7 @@ export function useMentionOffer(
             { taskId: describing.id, name: describing.name, key: keyOf(describing.number) },
             description,
             { workspace: step, repository: null },
+            `${MENTION_SIGIL}${word.query}`,
           );
 
     const pages = (taskId === undefined ? [] : (held?.pages ?? [])).map(

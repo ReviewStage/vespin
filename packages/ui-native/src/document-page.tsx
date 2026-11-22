@@ -10,7 +10,7 @@ import {
   MentionSuggestions,
 } from "./composer-head.js";
 import { DocumentField, type DocumentFieldHandle } from "./document-field.js";
-import { GlassBar, GlassDock, useDockKeyboard, useDockRoom } from "./glass-bar.js";
+import { BarHead, GlassBar, GlassDock, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -98,12 +98,15 @@ export function DocumentPage({ ref, ...props }: DocumentPageProps) {
   const bar =
     mentions === undefined ? null : (
       <GlassBar>
-        <MentionSuggestions
-          groups={mentions.groups}
-          empty={mentions.empty}
-          crumb={mentions.crumb}
-          onPick={mentions.onPick}
-        />
+        {/* Note that the offer stands in the head a composer's does, which scrolls past its share of the room over the keyboard, so a long list never runs up under the sheet's bar. */}
+        <BarHead>
+          <MentionSuggestions
+            groups={mentions.groups}
+            empty={mentions.empty}
+            crumb={mentions.crumb}
+            onPick={mentions.onPick}
+          />
+        </BarHead>
       </GlassBar>
     );
 
