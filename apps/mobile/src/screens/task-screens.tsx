@@ -2749,6 +2749,8 @@ function OverviewDescription({
   const threads = useTaskComments(task.id);
   // Note that a long description draws its head first and its whole a turn later, so its page never waits on the whole parse to stand.
   const whole = useWholeDescription(body);
+  // Note that the pictures, the chips' standings and an empty head's words read only what is drawn, so none parses the whole before it is ready.
+  const shown = whole ? body : descriptionHead(body);
 
   const blocks = useMemo(
     () => (whole ? descriptionBlocks(body) : descriptionHeadBlocks(body)),
@@ -2756,12 +2758,12 @@ function OverviewDescription({
   );
 
   const onBlocks = threadsOnBlocks(threads, blocks);
-  const { pictureSource, videoAt, fileAt } = useDescriptionPictures(body);
+  const { pictureSource, videoAt, fileAt } = useDescriptionPictures(shown);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
 
   // Note that a chip's pull request is read through the task's own workspace, as the panel's is, whichever one the phone works in.
   const linkStanding = useLinkStandings(
-    useMemo(() => [whole ? body : descriptionHead(body)], [body, whole]),
+    useMemo(() => [shown], [shown]),
     task.repository,
     workspaces.find((each) => each.id === task.workspaceId),
     whole,
@@ -2777,7 +2779,7 @@ function OverviewDescription({
     return (
       <ListSection title={WORDS.DESCRIPTION} act={edit}>
         <WordsRow
-          words={body}
+          words={shown}
           repository={task.repository}
           onOpenLink={openLink}
           pictureSource={pictureSource}
