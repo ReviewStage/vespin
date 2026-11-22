@@ -637,6 +637,12 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             "",
             "The recording is under this. The expired page is still the placeholder.",
             "",
+            // Note that each person's chip leads its own line, so `person.yaml` taps it near the line's start, since a chip mid-line has no element of its own.
+            "[@Grace Hopper](https://vespin.dev/personal/person/user-grace) reviewed the flow.",
+            "",
+            // Note that this names someone no member is, whose page says so.
+            "[@Nobody Known](https://vespin.dev/personal/person/user-nobody) was asked too.",
+            "",
             // Note that this links a settled thread, outside the Open list, so a flow can push it over this one and come back to step on from here.
             "It goes out with the digest, on the day [@Which day the digest goes out](https://vespin.dev/personal/inbox/81e2a425-6d9f-4ab7-92df-00000000000d) settled.",
           ].join("\n"),
