@@ -1,0 +1,84 @@
+Auto-merging apps/mobile/modules/pill-field/ios/DocumentFieldView.swift
+Auto-merging packages/ui-native/src/document-field.tsx
+built main 499c38b9cf + #10456 85591961c9 as 6949a175df
+description-edit.yaml is main's (7f04fea37a)
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 12:39:04 17719 MB
+curve 12:39:34 17611 MB
+curve 12:40:04 16204 MB
+curve 12:40:34 15458 MB
+curve 12:41:05 15307 MB
+curve 12:41:35 15073 MB
+curve 12:42:05 15045 MB
+curve 12:42:35 15021 MB
+curve 12:43:05 14958 MB
+curve 12:43:35 14932 MB
+curve 12:44:06 14582 MB
+curve 12:44:36 14374 MB
+curve 12:45:06 14070 MB
+curve 12:45:36 14621 MB
+curve 12:46:06 14593 MB
+curve 12:46:37 14560 MB
+curve 12:47:07 14500 MB
+curve 12:47:37 14377 MB
+curve 12:48:07 14211 MB
+curve 12:48:37 14148 MB
+curve 12:49:08 14121 MB
+curve 12:49:38 14081 MB
+curve 12:50:08 14065 MB
+curve 12:50:38 14029 MB
+curve 12:51:09 13943 MB
+curve 12:51:39 13925 MB
+curve 12:52:09 13903 MB
+curve 12:52:39 13891 MB
+curve 12:53:09 13867 MB
+curve 12:53:40 13849 MB
+curve 12:54:10 13832 MB
+curve 12:54:40 13808 MB
+curve 12:55:10 13791 MB
+curve 12:55:41 13527 MB
+curve 12:56:11 13454 MB
+curve 12:56:41 13425 MB
+curve 12:57:11 13400 MB
+curve 12:57:41 13368 MB
+curve 12:58:12 13332 MB
+curve 12:58:42 13304 MB
+curve 12:59:12 13259 MB
+curve 12:59:42 13139 MB
+curve 13:00:13 13067 MB
+curve 13:00:43 12476 MB
+curve 13:01:13 12360 MB
+curve 13:01:43 12276 MB
+curve 13:02:14 12118 MB
+curve 13:02:44 11971 MB
+curve 13:03:14 11888 MB
+curve 13:03:44 11795 MB
+curve 13:04:14 11702 MB
+curve 13:04:44 11701 MB
+curve 13:05:15 11611 MB
+curve 13:05:45 11529 MB
+curve 13:06:15 11421 MB
+curve 13:06:45 11838 MB
+curve 13:07:15 15937 MB
+curve 13:07:45 16785 MB
+curve 13:08:16 16736 MB
+curve 13:08:46 16529 MB
+curve 13:09:16 16528 MB
+curve 13:09:46 16527 MB
+curve 13:10:17 16494 MB
+BUILD EXIT 0 13:10:47
+sizes: Assets.car 23863128 bytes (main Vp10453.app 23859528), .app 119980 KB (main 119916 KB), zipped .app 45252950 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10456d.app: replacing existing signature
+p10456-iphone-light-pill-field: fails 0 shots 11 
+p10456-iphone-light-description-edit: fails 0 shots 5 
+p10456-iphone-dark-pill-field: fails 0 shots 11 
+p10456-iphone-dark-description-edit: fails 0 shots 5 
+p10456-ipad27-light-pill-field: fails 0 shots 11 
+p10456-ipad27-light-description-edit: fails 0 shots 5 
+p10456-ipad27-dark-pill-field: fails 0 shots 11 
+p10456-ipad27-dark-description-edit: fails 0 shots 5 
