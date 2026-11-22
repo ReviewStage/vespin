@@ -870,11 +870,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     }
 
     nesting = (facts.block, stack)
-    // Note that a task's paragraph stands in no list, since its box is its mark and a list would draw its parent's mark beside the box.
-    return kind == .taskList ? [] : stack.compactMap(\.list)
+    return stack.compactMap(\.list)
   }
 
-  /// A list of `kind`'s items at `depth`: bullets that change their mark with each depth, as Notes' do, or numbers from `start`; none for a task, whose box marks it.
+  /// A list of `kind`'s items at `depth`: bullets that change their mark with each depth, as Notes' do, or numbers from `start`; a nested task's list draws no mark, its box marking it, but stands in its parents' lists so a numbered run around it counts on; a task list at its block's own depth stands in none, as before nesting.
   private func madeList(_ kind: DocumentKind, depth: Int, start: Int?) -> NSTextList? {
     switch kind {
     case .bulletList:
@@ -884,6 +883,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       let list = NSTextList(markerFormat: NSTextList.MarkerFormat(rawValue: "{decimal}."), options: 0)
       list.startingItemNumber = start ?? 1
       return list
+    case .taskList where depth > 0:
+      return NSTextList(markerFormat: NSTextList.MarkerFormat(rawValue: ""), options: 0)
     default:
       return nil
     }
