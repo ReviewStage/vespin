@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny, Always allow and Allow under it and the working line saying it waits on you, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, its options sheet opened from the page's menu, its model, Fast, permission mode, and MCP servers changed there, and its ⋯ menu's Rename, Pin, Move to ›, and Archive; its threads line over the box, which opens the thread it names; then an agent whose transcript stands empty.
+# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny, Always allow and Allow under it and the working line saying it waits on you, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, its options sheet opened from the page's menu, its model, Fast, permission mode, and MCP servers changed there, and its ⋯ menu's Rename, Pin, Move to ›, and Archive; its threads line over the box, which opens the thread it names; a sent line's Edit, and a finished turn's Rewind conversation to here and Fork to new agent; then an agent whose transcript stands empty.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -464,6 +464,108 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-threads-line-opened
+# The panel's message acts, launched afresh, since the agent was archived
+# above and an archived agent offers no rewind or fork. A long press on the
+# reader's own line of words alone offers Edit after Copy link, which lays
+# its words in the composer under "Editing message" with Cancel, and Cancel
+# gives the composer back what it held.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- extendedWaitUntil:
+    visible: "Keep the old link working until the new one is sent."
+    timeout: 30000
+- longPressOn: "Keep the old link working until the new one is sent."
+- assertVisible: "Copy message"
+- assertVisible: "Edit"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-line-menu
+- tapOn: "Edit"
+- assertVisible: "Editing message"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-edit
+- tapOn: "Cancel"
+- assertNotVisible: "Editing message"
+# The keyboard Edit raised goes down on a drag from the transcript into it,
+# as `compose.yaml` lowers it.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - swipe:
+          start: "50%, 25%"
+          end: "50%, 92%"
+          duration: 600
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - swipe:
+          start: "85%, 25%"
+          end: "85%, 92%"
+          duration: 600
+- waitForAnimationToEnd:
+    timeout: 5000
+# The second turn, finished, ends on its row of acts, whose ⋯ holds Fork to
+# new agent and Rewind conversation to here, since the teammate's line
+# follows it. Note that its ⋯ is found as the "More" under the turn's last
+# words, because the page's own ⋯ in the bar is "More" too and stands first.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*71 of the 120 invites sent were accepted.*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- tapOn:
+    text: "More"
+    below: ".*71 of the 120 invites sent were accepted.*"
+- assertVisible: "Fork to new agent"
+- assertVisible: "Rewind conversation to here"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-turn-more
+# Rewind asks first, in the panel's words, its act in red; put away, it
+# drops nothing.
+- tapOn: "Rewind conversation to here"
+- assertVisible: "Rewind conversation to this message.*"
+- assertVisible: "Rewind conversation"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-rewind-ask
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Rewind conversation to this message.*"
+- assertVisible: "The digest should count pending invites separately from members."
+# Fork opens New agent as the panel's forked draft: headed by the agent and
+# the message's opening words, its Send lit with the box empty, which the
+# fixture answers with a new agent starting.
+- tapOn:
+    text: "More"
+    below: ".*71 of the 120 invites sent were accepted.*"
+- tapOn: "Fork to new agent"
+- extendedWaitUntil:
+    visible: "Fork of .* at .*71 of the 120.*"
+    timeout: 5000
+- assertVisible: "Ask to make changes"
+- runFlow:
+    file: subflows/lower-keyboard.yaml
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-fork
+- tapOn: "Send"
+- extendedWaitUntil:
+    notVisible: "Fork of .*"
+    timeout: 5000
+- assertNotVisible:
+    id: "ask-note"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-fork-started
 # An agent whose transcript is not read yet, or could not be: the fixture
 # holds none for this id, so the list stands empty and its empty state, which
 # is SwiftUI's, stands in the rows' place in a host of its own, rather than
