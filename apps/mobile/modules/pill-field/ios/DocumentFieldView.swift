@@ -53,6 +53,51 @@ struct DocumentValueRecord: Record {
   @Field var seen: Int = 0
 }
 
+/// One act the edit menu and the keyboard bar offer on the selection: what it does, as `DocumentFormat` names it, and its words and glyph in the panel's vocabulary.
+struct FormatActRecord: Record {
+  @Field var act: String = ""
+  @Field var title: String = ""
+  @Field var glyph: String = ""
+}
+
+/// The acts the field offers on its selection: its marks, a link, and the blocks a line is turned into, under the menus' own words.
+struct FormatsRecord: Record {
+  @Field var title: String = ""
+  @Field var marks: [FormatActRecord] = []
+  @Field var link: FormatActRecord? = nil
+  @Field var blocksTitle: String = ""
+  @Field var blocksGlyph: String = ""
+  @Field var blocks: [FormatActRecord] = []
+}
+
+/// What a format act does: a mark toggled on the selection, a link asked for, or the selection's lines turned into a block.
+enum DocumentFormat {
+  case mark(String)
+  case link
+  case block(DocumentKind, level: Int?)
+
+  /// The act JavaScript names: a mark by `MarkStyle`'s name, `link`, or a block by its kind, a heading by `heading-<level>`.
+  init?(_ act: String) {
+    if let style = MarkStyle(rawValue: act), [MarkStyle.strong, .emphasis, .strike, .code].contains(style) {
+      self = .mark(act)
+      return
+    }
+
+    switch act {
+    case "link": self = .link
+    case "heading-1": self = .block(.heading, level: 1)
+    case "heading-2": self = .block(.heading, level: 2)
+    case "heading-3": self = .block(.heading, level: 3)
+    default:
+      guard let kind = DocumentKind(rawValue: act), turnable.contains(kind) else { return nil }
+      self = .block(kind, level: nil)
+    }
+  }
+}
+
+/// The blocks a line is turned into, each holding words as a line of its own; a code block, a rule, and a card are made only on the desktop.
+private let turnable: Set<DocumentKind> = [.paragraph, .heading, .bulletList, .orderedList, .taskList, .quote]
+
 /// What a block is, as `@repo/features/document-blocks`' `BLOCK_KIND` names it.
 enum DocumentKind: String {
   case paragraph
@@ -216,6 +261,8 @@ private enum DocumentSpace {
   static let cardHeight: CGFloat = 52
   static let cardRadius: CGFloat = 10
   static let cardPadding: CGFloat = 12
+  /// How far above the keyboard the caret's line stands once the field scrolls it clear.
+  static let caretClearance: CGFloat = 12
 }
 
 // MARK: - What a line draws besides its words
@@ -353,6 +400,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   let onLines = EventDispatcher()
   let onHeight = EventDispatcher()
   let onFocusChange = EventDispatcher()
+  let onLinkAsk = EventDispatcher()
 
   private let textView = UITextView(usingTextLayoutManager: true)
   private let placeholderLabel = UILabel()
@@ -371,6 +419,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       guard look != oldValue else { return }
       placeholderLabel.textColor = look.placeholder
       textView.tintColor = look.tint
+      bar?.tintColor = look.text
       redraw(heldLines())
     }
   }
@@ -385,6 +434,30 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   var editable = true {
     didSet { textView.isEditable = editable }
   }
+
+  /// The acts the field offers on its selection, in the edit menu and the bar over the keyboard; none for a field that offers none.
+  var formats: FormatsRecord? {
+    didSet { buildBar() }
+  }
+
+  /// The bar over the keyboard, and its buttons by the act each does.
+  private var bar: UIToolbar?
+  private var barItems: [(act: String, item: UIBarButtonItem)] = []
+
+  /// The looks the next words typed at a caret take, where a mark was toggled with nothing selected, as Notes' Bold does.
+  private var typingMarks: (at: Int, marks: [String])?
+
+  /// The words a link is asked for, kept while JavaScript asks for its address.
+  private var linkRange: NSRange?
+
+  /// Where the keyboard's top stands in the window, none while no keyboard stands.
+  private var keyboardTop: CGFloat?
+
+  /// The words a link is asked for, which the address is laid on only where they still stand.
+  private var linkWords: String?
+
+  /// The block an empty last line is turned into before anything is typed on it, which holds no character to keep it: where the line stands, and its facts, which the words typed there take.
+  private var pendingLine: (at: Int, facts: LineFacts)?
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -431,12 +504,40 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
       let window
     else { return }
+    // Note that the frame is the screen's, which a window in Split View or Stage Manager does not share, and that only a keyboard docked to the window's foot covers the field: one going away ends below the window, and a floating or undocked one stands clear of its foot, so neither moves the words. A hardware keyboard's shortcut bar is docked, and covers only its own height. The bar over the keyboard is the text view's own accessory, so the frame holds it.
+    let docked = window.convert(frame, from: window.screen.coordinateSpace)
+    let atFoot = docked.height > 0 && docked.minY < window.bounds.maxY && docked.maxY >= window.bounds.maxY - 1
+    keyboardTop = atFoot ? docked.minY : nil
+    keepCaretClear()
+  }
+
+  /// Keeps the caret above the keyboard while the field is typed in, as Notes keeps it: the field insets its words for the part of it the keyboard covers, measured again on each edit and each move of the caret since the page around it may have moved; scrolls its words to the caret; and where the keyboard covers the caret all the same, as when the field stands low on a page, scrolls the page that holds it until the caret's line stands clear.
+  private func keepCaretClear() {
+    guard let window else { return }
     let mine = convert(bounds, to: window)
-    let covered = max(0, mine.maxY - frame.minY)
+    let covered = keyboardTop.map { max(0, min(mine.height, mine.maxY - $0)) } ?? 0
     textView.contentInset.bottom = covered
     textView.verticalScrollIndicatorInsets.bottom = covered
-    if textView.isFirstResponder { textView.scrollRangeToVisible(textView.selectedRange) }
+    guard textView.isFirstResponder, let keyboardTop, let end = textView.selectedTextRange?.end else { return }
+    textView.scrollRangeToVisible(textView.selectedRange)
+    let caret = textView.convert(textView.caretRect(for: end), to: window)
+    let clear = keyboardTop - DocumentSpace.caretClearance
+    guard caret.maxY > clear, let page = holdingScrollView() else { return }
+    let lowest = max(0, page.contentSize.height + page.adjustedContentInset.bottom - page.bounds.height)
+    let offset = min(page.contentOffset.y + caret.maxY - clear, lowest)
+    page.setContentOffset(CGPoint(x: page.contentOffset.x, y: offset), animated: true)
   }
+
+  /// The nearest scroll view the field stands in, the page it scrolls with.
+  private func holdingScrollView() -> UIScrollView? {
+    var view = superview
+    while let current = view {
+      if let scroll = current as? UIScrollView { return scroll }
+      view = current.superview
+    }
+    return nil
+  }
+
 
   // MARK: Doors JavaScript opens
 
@@ -481,9 +582,15 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       boxNewTask(after: typed)
     }
     typed = nil
+    keepPendingLine()
+    linkRange = nil
+    linkWords = nil
     changes += 1
     placeholderLabel.isHidden = textView.textStorage.length > 0
     tell()
+    keepCaretClear()
+    // Note that the bar is marked again once the typed words hold their looks, which they take only now.
+    updateBar()
   }
 
   func textViewDidBeginEditing(_ textView: UITextView) {
@@ -494,15 +601,46 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     onFocusChange(["focused": false])
   }
 
+  func textViewDidChangeSelection(_ textView: UITextView) {
+    // Note that a caret moved anywhere but where the words typed next go lets go of the looks a mark set for them; an edit under way moves it there itself.
+    if typed == nil, let typingMarks, textView.selectedRange != NSRange(location: typingMarks.at, length: 0) {
+      self.typingMarks = nil
+    }
+
+    // Note that a block chosen for the empty last line stays with the line while the caret is elsewhere, and its look comes back with the caret.
+    if typed == nil, let pendingLine, textView.selectedRange == NSRange(location: pendingLine.at, length: 0) {
+      textView.typingAttributes = pendingAttributes(pendingLine.facts)
+    }
+
+    updateBar()
+    keepCaretClear()
+  }
+
+  /// The system's edit menu with the field's Format menu after its own acts, as Notes offers one.
+  func textView(
+    _ textView: UITextView,
+    editMenuForTextIn range: NSRange,
+    suggestedActions: [UIMenuElement]
+  ) -> UIMenu? {
+    guard editable, let menu = formatMenu() else { return nil }
+    return UIMenu(children: suggestedActions + [menu])
+  }
+
   // MARK: Drawing
 
-  /// Draws the lines anew, keeping the caret where it stood, as near as the new words allow.
-  private func redraw(_ lines: [DocumentLine]) {
+  /// Draws the lines anew, keeping the caret where it stood, as near as the new words allow. Words laid in whole leave nothing for undo's earlier steps to stand on, so they are let go, but where the words are the same as before, as a block's change of kind leaves them, which keeps its own undo.
+  private func redraw(_ lines: [DocumentLine], keepUndo: Bool = false) {
     let selected = textView.selectedRange
     quiet = true
+    pendingLine = nil
+    // Note that a link asked for is let go once the words are drawn anew, since the words it was asked for may stand elsewhere now.
+    linkRange = nil
+    linkWords = nil
     textView.attributedText = drawn(lines)
-    textView.undoManager?.removeAllActions()
+    if !keepUndo { textView.undoManager?.removeAllActions() }
     let length = textView.textStorage.length
+    // Note that a field drawn empty types a plain paragraph, rather than in the looks of the words it last held, which UIKit would keep for the next words typed.
+    if length == 0 { textView.typingAttributes = wordAttributes(.paragraph, nil, [], nil) }
     var location = min(selected.location, length)
     // Note that a caret standing before a task's box goes after it, so the words typed next are the task's.
     if selected.length == 0, location < length,
@@ -708,6 +846,25 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       }
     }
 
+    // Note that words typed on an empty last line turned into a block take its facts, which nothing held until now.
+    if let pendingLine, pendingLine.at == piece.location {
+      let line = NSRange(location: piece.location, length: storage.length - piece.location)
+      storage.addAttribute(lineKey, value: pendingLine.facts, range: line)
+      var lists: [Int: NSTextList] = [:]
+      let list = textList(pendingLine.facts, in: &lists)
+      storage.addAttribute(.paragraphStyle, value: paragraphStyle(pendingLine.facts, list: list), range: line)
+      self.pendingLine = nil
+      restyleWords(in: line)
+    }
+
+    // Note that a mark toggled with nothing selected gives the words typed next its looks, and goes on with the words typed after them.
+    if let typingMarks, typingMarks.at == piece.location {
+      storage.removeAttribute(markStylesKey, range: piece)
+      if !typingMarks.marks.isEmpty { storage.addAttribute(markStylesKey, value: typingMarks.marks, range: piece) }
+      restyleWords(in: piece)
+      self.typingMarks = (NSMaxRange(piece), typingMarks.marks)
+    }
+
     storage.endEditing()
     quiet = false
   }
@@ -740,6 +897,450 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     quiet = false
   }
 
+  // MARK: Formatting
+
+  /// A glyph by its name in the app's asset catalog, at the body's size, as the bar's buttons and the menus draw it.
+  private func glyphImage(_ name: String) -> UIImage? {
+    guard !name.isEmpty else { return nil }
+    let configuration = UIImage.SymbolConfiguration(font: bodyFont(), scale: .medium)
+    return UIImage(named: name, in: nil, with: configuration) ?? UIImage(systemName: name, withConfiguration: configuration)
+  }
+
+  /// The acts the field offers, in the order the menus and the bar stand them: the marks, a link, then each block.
+  private func offeredActs() -> [FormatActRecord] {
+    guard let formats else { return [] }
+    return formats.marks + [formats.link].compactMap { $0 } + formats.blocks
+  }
+
+  /// An act as the menus offer it: its words and glyph, checked where the selection already stands that way.
+  private func menuAction(_ record: FormatActRecord) -> UIAction {
+    let action = UIAction(title: record.title, image: glyphImage(record.glyph)) { [weak self] _ in
+      self?.perform(record.act)
+    }
+    action.state = isOn(record.act) ? .on : .off
+    return action
+  }
+
+  /// The Format menu: the marks and the link side by side, then the blocks a line is turned into under their own menu, as the desktop's toolbar and Turn into stand.
+  private func formatMenu() -> UIMenu? {
+    guard let formats, !offeredActs().isEmpty else { return nil }
+    let marks = UIMenu(options: .displayInline, children: (formats.marks + [formats.link].compactMap { $0 }).map(menuAction))
+    let blocks = UIMenu(title: formats.blocksTitle, image: glyphImage(formats.blocksGlyph), children: formats.blocks.map(menuAction))
+    return UIMenu(title: formats.title, children: [marks, blocks])
+  }
+
+  /// Stands the bar over the keyboard: a button for each mark and the link, and the blocks behind one button's menu, each heard by its words.
+  private func buildBar() {
+    guard let formats, !offeredActs().isEmpty else {
+      bar = nil
+      barItems = []
+      textView.inputAccessoryView = nil
+      textView.reloadInputViews()
+      return
+    }
+
+    let toolbar = UIToolbar(frame: CGRect(x: 0, y: 0, width: bounds.width, height: 44))
+    toolbar.autoresizingMask = .flexibleWidth
+    toolbar.tintColor = look.text
+    var items: [UIBarButtonItem] = []
+    barItems = []
+
+    for record in formats.marks + [formats.link].compactMap({ $0 }) {
+      let item = UIBarButtonItem(
+        image: glyphImage(record.glyph),
+        primaryAction: UIAction { [weak self] _ in self?.perform(record.act) }
+      )
+      item.accessibilityLabel = record.title
+      items.append(item)
+      barItems.append((record.act, item))
+    }
+
+    let blocks = UIBarButtonItem(title: nil, image: glyphImage(formats.blocksGlyph), primaryAction: nil, menu: nil)
+    blocks.accessibilityLabel = formats.blocksTitle
+    // Note that the blocks stand in Turn into's own order wherever the menu opens, rather than turned over to start nearest the button.
+    blocks.preferredMenuElementOrder = .fixed
+    // Note that the blocks' menu is built as it opens, so its check stands on the block the caret is in now.
+    blocks.menu = UIMenu(children: [
+      UIDeferredMenuElement.uncached { [weak self] answer in
+        answer(self?.formats?.blocks.compactMap { self?.menuAction($0) } ?? [])
+      },
+    ])
+    items.append(.flexibleSpace())
+    items.append(blocks)
+    toolbar.items = items
+    toolbar.sizeToFit()
+    bar = toolbar
+    textView.inputAccessoryView = toolbar
+    textView.reloadInputViews()
+    updateBar()
+  }
+
+  /// Marks each of the bar's buttons on where the selection already stands that way, as Notes marks Bold.
+  private func updateBar() {
+    for (act, item) in barItems {
+      item.isSelected = isOn(act)
+    }
+  }
+
+  /// Whether the selection already stands as an act makes it: every word selected in the mark, or with nothing selected, the words typed next; the line in the block; the words in a link.
+  private func isOn(_ act: String) -> Bool {
+    guard let format = DocumentFormat(act) else { return false }
+    let selected = textView.selectedRange
+
+    switch format {
+    case .mark(let mark):
+      if selected.length == 0 { return caretMarks().contains(mark) }
+      return wordsAll(in: selected) { ($0[markStylesKey] as? [String] ?? []).contains(mark) }
+    case .link:
+      return selected.length > 0 && wordsAll(in: selected) { $0[linkKey] != nil }
+    case .block(let kind, let level):
+      if let facts = emptyLastLineFacts() { return facts.drawnKind == kind && facts.level == level }
+      // Note that only the lines a block change turns count, as `turnLines` counts them, so a card in the selection leaves the check standing.
+      let lines = touchedLines().filter { turnable.contains($0.facts.drawnKind) }
+      return !lines.isEmpty && lines.allSatisfy { $0.facts.drawnKind == kind && $0.facts.level == level }
+    }
+  }
+
+  /// The looks the words typed at the caret take: those a mark toggled there set, else the looks of the words before it on its line.
+  private func caretMarks() -> [String] {
+    let caret = textView.selectedRange.location
+    if let typingMarks, typingMarks.at == caret { return typingMarks.marks }
+    let string = textView.textStorage.string as NSString
+    guard caret > 0, caret <= string.length, string.character(at: caret - 1) != 0x0A else { return [] }
+    return textView.textStorage.attribute(markStylesKey, at: caret - 1, effectiveRange: nil) as? [String] ?? []
+  }
+
+  /// Whether every character of words in the range, past attachments and line breaks, holds as `test` asks; a range holding none does not.
+  private func wordsAll(in range: NSRange, _ test: ([NSAttributedString.Key: Any]) -> Bool) -> Bool {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    var any = false
+    var all = true
+
+    storage.enumerateAttributes(in: range) { attributes, piece, stop in
+      guard attributes[.attachment] == nil,
+        !string.substring(with: piece).trimmingCharacters(in: .newlines).isEmpty
+      else { return }
+      any = true
+      if !test(attributes) {
+        all = false
+        stop.pointee = true
+      }
+    }
+
+    return any && all
+  }
+
+  /// Does an act on the selection, as the edit menu, the bar, and a key command ask.
+  private func perform(_ act: String) {
+    guard editable, let format = DocumentFormat(act) else { return }
+
+    switch format {
+    case .mark(let mark): toggleMark(mark)
+    case .link: askLink()
+    case .block(let kind, let level): turnLines(into: kind, level: level)
+    }
+  }
+
+  /// Toggles a mark on the selected words, on where any lacks it and off where all hold it, or with nothing selected on the words typed next.
+  private func toggleMark(_ mark: String) {
+    let storage = textView.textStorage
+    let selected = textView.selectedRange
+
+    if selected.length == 0 {
+      var marks = caretMarks().filter { $0 != mark }
+      if !isOn(mark) { marks.append(mark) }
+      typingMarks = (selected.location, marks)
+      updateBar()
+      return
+    }
+
+    let on = !isOn(mark)
+    quiet = true
+    storage.beginEditing()
+    storage.enumerateAttribute(markStylesKey, in: selected) { value, piece, _ in
+      var marks = (value as? [String] ?? []).filter { $0 != mark }
+      if on { marks.append(mark) }
+      storage.addAttribute(markStylesKey, value: marks, range: piece)
+    }
+    restyleWords(in: selected)
+    storage.endEditing()
+    quiet = false
+    edited()
+  }
+
+  /// Draws the words in the range in their lines' faces and their looks again, after their looks changed; attachments keep theirs.
+  private func restyleWords(in range: NSRange) {
+    let storage = textView.textStorage
+    guard NSMaxRange(range) <= storage.length else { return }
+
+    storage.enumerateAttributes(in: range) { attributes, piece, _ in
+      guard attributes[.attachment] == nil else { return }
+      let facts = attributes[lineKey] as? LineFacts
+      let marks = attributes[markStylesKey] as? [String] ?? []
+      let link = attributes[linkKey] as? String
+      storage.removeAttribute(.strikethroughStyle, range: piece)
+      storage.removeAttribute(.underlineStyle, range: piece)
+      storage.removeAttribute(.backgroundColor, range: piece)
+      storage.removeAttribute(linkKey, range: piece)
+      storage.addAttributes(wordAttributes(facts?.drawnKind ?? .paragraph, facts?.level, marks, link), range: piece)
+    }
+  }
+
+  /// The paragraphs the view holds, as `heldLines` reads them, an empty last line after a line break among them.
+  private func paragraphRanges() -> [NSRange] {
+    let string = textView.textStorage.string as NSString
+    var ranges: [NSRange] = []
+    var location = 0
+
+    while location < string.length {
+      let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
+      ranges.append(paragraph)
+      location = NSMaxRange(paragraph)
+    }
+
+    if string.length > 0, string.character(at: string.length - 1) == 0x0A {
+      ranges.append(NSRange(location: string.length, length: 0))
+    }
+
+    return ranges
+  }
+
+  /// The indexes of the lines the selection stands in, the caret's one where nothing is selected.
+  private func touchedIndexes() -> [Int] {
+    let string = textView.textStorage.string as NSString
+    let selected = textView.selectedRange
+    let start = min(selected.location, string.length)
+    let touched = string.paragraphRange(for: NSRange(location: start, length: min(selected.length, string.length - start)))
+    let ranges = paragraphRanges()
+
+    // Note that the empty line after a last line break holds no character, so it is touched only by the caret standing in it.
+    return ranges.indices.filter { index in
+      let paragraph = ranges[index]
+      return NSIntersectionRange(paragraph, touched).length > 0
+        || (paragraph.length == 0 && paragraph.location == start)
+    }
+  }
+
+  /// The lines the selection stands in, as the view holds them.
+  private func touchedLines() -> [DocumentLine] {
+    let lines = heldLines()
+    return touchedIndexes().compactMap { $0 < lines.count ? lines[$0] : nil }
+  }
+
+  /// Whether the caret stands on an empty last line, or in an empty field, which no character holds facts for: the facts a block change gave it, else the line's before it, else a paragraph's; none where the caret stands elsewhere.
+  private func emptyLastLineFacts() -> LineFacts? {
+    let string = textView.textStorage.string as NSString
+    let selected = textView.selectedRange
+    let atEnd = selected.length == 0 && selected.location == string.length
+    guard atEnd, string.length == 0 || string.character(at: string.length - 1) == 0x0A else { return nil }
+    if let pendingLine, pendingLine.at == string.length { return pendingLine.facts }
+    return heldLines().last?.facts ?? LineFacts(block: -1, kind: DocumentKind.paragraph.rawValue)
+  }
+
+  /// Turns an empty last line into a block before anything is typed on it: a task's box is laid at once, which then holds the line's facts; any other block is kept as pending facts the words typed next take, and the caret's look is the block's.
+  private func turnEmptyLastLine(into kind: DocumentKind, level: Int?, current: LineFacts) {
+    let storage = textView.textStorage
+    let at = storage.length
+    let off = current.drawnKind == kind && current.level == level
+    let target = off ? DocumentKind.paragraph : kind
+    let key = (heldLines().map(\.facts.block).max() ?? 0) + 1
+    let facts = LineFacts(
+      block: key,
+      kind: target.rawValue,
+      level: target == .heading ? level : nil,
+      start: target == .orderedList ? 1 : nil,
+      checked: target == .taskList ? false : nil
+    )
+    let attributes = pendingAttributes(facts)
+
+    guard target == .taskList else {
+      pendingLine = (at, facts)
+      textView.typingAttributes = attributes
+      updateBar()
+      return
+    }
+
+    let box = NSMutableAttributedString(attachment: TaskBoxAttachment(checked: false, look: look))
+    box.append(NSAttributedString(string: " "))
+    box.addAttributes(attributes, range: NSRange(location: 0, length: box.length))
+    quiet = true
+    storage.insert(box, at: at)
+    textView.selectedRange = NSRange(location: at + box.length, length: 0)
+    quiet = false
+    placeholderLabel.isHidden = true
+    edited()
+  }
+
+  /// The attributes the words typed on an empty last line take from the block chosen for it.
+  private func pendingAttributes(_ facts: LineFacts) -> [NSAttributedString.Key: Any] {
+    var lists: [Int: NSTextList] = [:]
+    var attributes = wordAttributes(facts.drawnKind, facts.level, [], nil)
+    attributes[lineKey] = facts
+    attributes[.paragraphStyle] = paragraphStyle(facts, list: textList(facts, in: &lists))
+    return attributes
+  }
+
+  /// Keeps the block chosen for the empty last line on that line as edits elsewhere move it, and lets it go once an edit takes the line away.
+  private func keepPendingLine() {
+    guard let pendingLine else { return }
+    let string = textView.textStorage.string as NSString
+    let stands = string.length == 0 || string.character(at: string.length - 1) == 0x0A
+    self.pendingLine = stands ? (string.length, pendingLine.facts) : nil
+  }
+
+  /// Where a point of the words stands as a line and a place in that line's words, a task's box and its space not counted, so a block change that lays or takes away a box keeps the caret on the same words.
+  private func linePlace(of location: Int) -> (line: Int, offset: Int) {
+    let storage = textView.textStorage
+    let ranges = paragraphRanges()
+    let index = ranges.lastIndex { $0.location <= location } ?? 0
+    guard index < ranges.count else { return (0, location) }
+    let start = ranges[index].location
+    let boxed = start < storage.length && storage.attribute(.attachment, at: start, effectiveRange: nil) is TaskBoxAttachment
+    return (index, max(0, location - start - (boxed ? 2 : 0)))
+  }
+
+  /// The point of the words a line and a place in its words stand at, past a task's box.
+  private func location(of place: (line: Int, offset: Int)) -> Int {
+    let storage = textView.textStorage
+    let ranges = paragraphRanges()
+    guard place.line < ranges.count else { return storage.length }
+    let paragraph = ranges[place.line]
+    let boxed = paragraph.location < storage.length
+      && storage.attribute(.attachment, at: paragraph.location, effectiveRange: nil) is TaskBoxAttachment
+    let start = paragraph.location + (boxed ? 2 : 0)
+    let ends = NSMaxRange(paragraph) > paragraph.location && NSMaxRange(paragraph) <= storage.length
+      && (storage.string as NSString).character(at: NSMaxRange(paragraph) - 1) == 0x0A
+    return min(start + place.offset, NSMaxRange(paragraph) - (ends ? 1 : 0))
+  }
+
+  /// Turns the selection's lines into a block, each made in the field, or back into paragraphs where they all stand as it already; a code line, a rule, and a card are left as they stand. The caret stays on the same words, and where the words are unchanged, as all but a to-do list's box leave them, one Undo takes the change back.
+  private func turnLines(into kind: DocumentKind, level: Int?) {
+    if let current = emptyLastLineFacts() {
+      turnEmptyLastLine(into: kind, level: level, current: current)
+      return
+    }
+
+    let previous = heldLines()
+    var lines = previous
+    let indexes = touchedIndexes().filter { $0 < lines.count && turnable.contains(lines[$0].facts.drawnKind) }
+    guard !indexes.isEmpty else { return }
+    let off = indexes.allSatisfy { lines[$0].facts.drawnKind == kind && lines[$0].facts.level == level }
+    let target = off ? DocumentKind.paragraph : kind
+    var key = (lines.map(\.facts.block).max() ?? 0) + 1
+
+    for index in indexes {
+      // Note that a line already a task keeps its box as it stands, and only a line made a task starts unchecked.
+      let held = lines[index].facts
+      let checked = target == .taskList ? (held.drawnKind == .taskList ? held.checked ?? false : false) : nil
+      lines[index] = DocumentLine(
+        facts: LineFacts(
+          block: key,
+          kind: target.rawValue,
+          level: target == .heading ? level : nil,
+          start: target == .orderedList ? 1 : nil,
+          checked: checked
+        ),
+        runs: lines[index].runs
+      )
+      // Note that a list's lines share one key, so they are one list, while a heading's or a paragraph's each stand alone.
+      if [.paragraph, .heading, .quote].contains(target) { key += 1 }
+    }
+
+    let boxesMove = indexes.contains { (previous[$0].facts.drawnKind == .taskList) != (lines[$0].facts.drawnKind == .taskList) }
+    relay(lines, from: previous, keepUndo: !boxesMove)
+  }
+
+  /// Draws block changes of the field's own, keeping the caret on the same words, and where the words stay the same, registers the lines before as the change's undo, whose redo is the lines after.
+  private func relay(_ lines: [DocumentLine], from previous: [DocumentLine], keepUndo: Bool) {
+    let selected = textView.selectedRange
+    let start = linePlace(of: selected.location)
+    let end = linePlace(of: NSMaxRange(selected))
+    redraw(lines, keepUndo: keepUndo)
+    let from = location(of: start)
+    let to = max(location(of: end), from)
+    textView.selectedRange = NSRange(location: from, length: to - from)
+
+    if keepUndo {
+      textView.undoManager?.registerUndo(withTarget: self) { view in
+        view.relay(previous, from: view.heldLines(), keepUndo: true)
+      }
+    }
+
+    edited()
+  }
+
+  /// Asks JavaScript for the address of the selected words' link, keeping the words it is asked for.
+  private func askLink() {
+    let selected = textView.selectedRange
+    guard selected.length > 0 else { return }
+    linkRange = selected
+    linkWords = (textView.textStorage.string as NSString).substring(with: selected)
+    let address = textView.textStorage.attribute(linkKey, at: selected.location, effectiveRange: nil) as? String
+    onLinkAsk(["address": address ?? ""])
+  }
+
+  /// Lays the address JavaScript was given on the words its link was asked for, or takes their link off where it is empty.
+  func setLink(_ address: String) {
+    let storage = textView.textStorage
+    guard let range = linkRange, NSMaxRange(range) <= storage.length else { return }
+    let asked = linkWords
+    linkRange = nil
+    linkWords = nil
+    // Note that the address is laid only where the words it was asked for still stand, since the document may have been handed anew while the alert stood.
+    guard (storage.string as NSString).substring(with: range) == asked else { return }
+    let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    quiet = true
+    storage.beginEditing()
+    if trimmed.isEmpty {
+      storage.removeAttribute(linkKey, range: range)
+    } else {
+      storage.addAttribute(linkKey, value: trimmed, range: range)
+    }
+    restyleWords(in: range)
+    storage.endEditing()
+    quiet = false
+    edited()
+  }
+
+  /// What a format act's change does, as a change typed does: counts it and tells JavaScript, and marks the bar again.
+  private func edited() {
+    changes += 1
+    tell()
+    updateBar()
+  }
+
+  /// The marks' and the link's chords, the desktop's own (`@repo/settings`' `WRITING_SHORTCUTS`), which a hardware keyboard answers while the field has the caret.
+  override var keyCommands: [UIKeyCommand]? {
+    guard textView.isFirstResponder, let formats else { return nil }
+    let chords: [String: (String, UIKeyModifierFlags)] = [
+      MarkStyle.strong.rawValue: ("b", .command),
+      MarkStyle.emphasis.rawValue: ("i", .command),
+      MarkStyle.strike.rawValue: ("x", [.command, .shift]),
+      MarkStyle.code.rawValue: ("e", .command),
+      "link": ("k", .command),
+    ]
+
+    return (formats.marks + [formats.link].compactMap { $0 }).compactMap { record in
+      guard let chord = chords[record.act] else { return nil }
+      let command = UIKeyCommand(
+        title: record.title,
+        action: #selector(chorded(_:)),
+        input: chord.0,
+        modifierFlags: chord.1,
+        propertyList: record.act
+      )
+      command.wantsPriorityOverSystemBehavior = true
+      return command
+    }
+  }
+
+  @objc private func chorded(_ command: UIKeyCommand) {
+    guard let act = command.propertyList as? String else { return }
+    perform(act)
+  }
+
   // MARK: Telling JavaScript
 
   /// The lines the view holds: each paragraph's block, read from its words or, for an empty one, from the line break before it, and its runs, a task's box read as its line's checked rather than as words.
@@ -762,7 +1363,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     // Note that a Return typed at the words' end leaves an empty last line, which carries on the block of the line before it.
     if string.character(at: string.length - 1) == 0x0A {
       let end = NSRange(location: string.length, length: 0)
-      lines.append(heldLine(end, in: end, after: lines.last?.facts))
+      let pending = pendingLine.flatMap { $0.at == string.length ? $0.facts : nil }
+      lines.append(heldLine(end, in: end, after: pending ?? lines.last?.facts))
     }
 
     return lines

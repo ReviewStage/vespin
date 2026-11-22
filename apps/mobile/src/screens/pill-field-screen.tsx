@@ -91,6 +91,7 @@ const WORDS = {
   MENTION: "Mention Ada",
   ATTACH: "Attach a picture",
   CLEAR: "Clear",
+  CLEAR_DESCRIPTION: "Clear description",
 } as const;
 
 const styles = StyleSheet.create({
@@ -152,6 +153,8 @@ export function PillFieldScreen() {
       // Note that the page starts under the stack's bar, as UIKit insets a scroller under a translucent bar, since React Native's scroller insets nothing by default and the field stood under the bar.
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
+      // Note that a drag lowers the keyboard, as a sheet's page does, so a field the keyboard stood over can be reached again without another field keeping it.
+      keyboardDismissMode="on-drag"
     >
       <View style={[styles.field, { borderColor: colors.CHIP_EDGE }]}>
         <PillField
@@ -203,6 +206,14 @@ export function PillFieldScreen() {
           testID="pill-field-styled"
         />
       </View>
+      <InlineHost matchContents>
+        <Button
+          label={WORDS.CLEAR_DESCRIPTION}
+          look={BUTTON_LOOK.BORDERED}
+          size={BUTTON_SIZE.SMALL}
+          onPress={() => setDescription("")}
+        />
+      </InlineHost>
       <View style={[styles.document, { borderColor: colors.CHIP_EDGE }]}>
         <DocumentField
           value={description}

@@ -13,21 +13,32 @@ import {
   writtenDocument,
 } from "@repo/features/document-blocks";
 import { PILL_RUN, pillRuns } from "@repo/features/pill-words";
+import {
+  WRITING_BLOCK,
+  WRITING_MARK,
+  WRITING_SHORTCUTS,
+  type WritingAction,
+} from "@repo/settings/shortcuts";
 import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
-import { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
+import { editedBlocks, editedLines, type FieldLine, fieldLines } from "./document-field-model.js";
 import {
+  FORMAT_ACT,
+  type FormatAct,
   type NativeCard,
   NativeDocumentField,
   type NativeDocumentFieldDoors,
   type NativeDocumentLine,
   type NativeDocumentRun,
+  type NativeFormatAct,
+  type NativeFormats,
   type NativeToldLine,
   type NativeToldRun,
 } from "./document-field-native.js";
-import { GLYPH } from "./glyph.js";
+import { GLYPH, WRITING_GLYPH } from "./glyph.js";
 import type { MarkdownReading } from "./markdown-model.js";
 import { pillLook } from "./pill-look.js";
+import { askForWords, WORDS_KIND, type WordsAct } from "./system-asks.js";
 import { useColors } from "./tokens/colors.js";
 
 /** What a card says a locked block is, as the description page names it. */
@@ -43,6 +54,50 @@ const CARD_DETAIL = "Edit on the desktop";
 
 /** The most of a card's first line it shows. */
 const CARD_DETAIL_MOST = 80;
+
+/** The words of the field's format menus and its link's alert, the desktop's where it has them (`@repo/ui`'s link field). */
+const FORMAT_WORDS = {
+  MENU: "Format",
+  TURN_INTO: "Turn into",
+  LINK_MESSAGE: "Paste or type a link",
+  REMOVE_LINK: "Remove link",
+  DONE: "Done",
+} as const;
+
+/** A writing action as the field offers it: what it does, in the panel's words and glyph. */
+function formatAct(action: WritingAction, act: FormatAct): NativeFormatAct {
+  return { act, title: WRITING_SHORTCUTS[action].label, glyph: WRITING_GLYPH[action] };
+}
+
+/**
+ * What the field offers on its selection, in its edit menu and the bar over
+ * the keyboard: the desktop toolbar's marks and link, then the blocks its
+ * Turn into offers that a line of words can be, each in the panel's words
+ * and glyph (`@repo/settings`' `WRITING_SHORTCUTS`). A code block and a
+ * divider are made on the desktop.
+ */
+const FORMATS: NativeFormats = {
+  title: FORMAT_WORDS.MENU,
+  marks: [
+    formatAct(WRITING_MARK.BOLD, FORMAT_ACT.STRONG),
+    formatAct(WRITING_MARK.ITALIC, FORMAT_ACT.EMPHASIS),
+    formatAct(WRITING_MARK.STRIKE, FORMAT_ACT.STRIKE),
+    formatAct(WRITING_MARK.CODE, FORMAT_ACT.CODE),
+  ],
+  link: formatAct(WRITING_MARK.LINK, FORMAT_ACT.LINK),
+  blocksTitle: FORMAT_WORDS.TURN_INTO,
+  blocksGlyph: WRITING_GLYPH[WRITING_BLOCK.TEXT],
+  blocks: [
+    formatAct(WRITING_BLOCK.TEXT, FORMAT_ACT.PARAGRAPH),
+    formatAct(WRITING_BLOCK.HEADING_1, FORMAT_ACT.HEADING_1),
+    formatAct(WRITING_BLOCK.HEADING_2, FORMAT_ACT.HEADING_2),
+    formatAct(WRITING_BLOCK.HEADING_3, FORMAT_ACT.HEADING_3),
+    formatAct(WRITING_BLOCK.BULLETED_LIST, FORMAT_ACT.BULLET_LIST),
+    formatAct(WRITING_BLOCK.NUMBERED_LIST, FORMAT_ACT.ORDERED_LIST),
+    formatAct(WRITING_BLOCK.TODO_LIST, FORMAT_ACT.TASK_LIST),
+    formatAct(WRITING_BLOCK.QUOTE, FORMAT_ACT.QUOTE),
+  ],
+};
 
 /** What a picture or a line break kept as its source draws as in the words. */
 const RAW_WORDS = { PICTURE: "Picture", BREAK: "Line break" } as const;
@@ -69,6 +124,13 @@ interface DocumentFieldProps {
   readonly editable?: boolean | undefined;
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string | undefined;
+}
+
+/** What the field last told: the Markdown it wrote, the Markdown that was written against, and its lines as the blocks it wrote read them. */
+interface Told {
+  readonly markdown: string;
+  readonly base: string;
+  readonly lines: readonly FieldLine[];
 }
 
 /** No files held. */
@@ -169,19 +231,24 @@ export function DocumentField({
   const native = useRef<NativeDocumentFieldDoors>(null);
   // How many changes the field has told, which the lines handed it say were heard, so it never sets back words typed since.
   const [seen, setSeen] = useState(0);
+  const [told, setTold] = useState<Told | undefined>(undefined);
 
   const handed = useMemo(() => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
+    // Note that the document the field itself wrote is handed back as the lines it told, written against the same Markdown, rather than read again, which would drop a paragraph's edge spaces and its empty paragraphs.
+    const own = told !== undefined && told.markdown === value;
+    const base = own ? told.base : value;
+    const laid = own ? told.lines : fieldLines(documentBlocks(value, files));
 
-    const lines = fieldLines(documentBlocks(value, files)).map(
+    const lines = laid.map(
       (line): NativeDocumentLine => ({
         ...line,
         runs: line.runs.map((run) => nativeRun(run, line, reading)),
       }),
     );
 
-    return { markdown: value, value: { lines, seen } };
-  }, [value, files, repository, seen]);
+    return { markdown: base, value: { lines, seen } };
+  }, [value, files, repository, seen, told]);
 
   const look = {
     text: colors.TEXT,
@@ -201,6 +268,30 @@ export function DocumentField({
     [],
   );
 
+  // Note that the alert asks for the address in UIKit's own alert, as the desktop's link field asks in its popover, offering Remove link where the words hold one.
+  const onLinkAsk = ({ nativeEvent }: NativeSyntheticEvent<{ readonly address: string }>) => {
+    // Note that both acts take a cleared address, which takes the words' link off, as the desktop's field does.
+    const done: WordsAct = {
+      label: FORMAT_WORDS.DONE,
+      onWords: (address) => void native.current?.setLink(address),
+      takesBlank: true,
+    };
+
+    const remove: WordsAct = {
+      label: FORMAT_WORDS.REMOVE_LINK,
+      onWords: () => void native.current?.setLink(""),
+      takesBlank: true,
+    };
+
+    askForWords({
+      title: WRITING_SHORTCUTS[WRITING_MARK.LINK].label,
+      message: FORMAT_WORDS.LINK_MESSAGE,
+      initial: nativeEvent.address,
+      kind: WORDS_KIND.URL,
+      acts: nativeEvent.address === "" ? [done] : [remove, done],
+    });
+  };
+
   const onLines = ({
     nativeEvent,
   }: NativeSyntheticEvent<{
@@ -211,8 +302,9 @@ export function DocumentField({
     // Note that the document is written against the Markdown whose blocks were last handed, which the lines' sources name.
     const markdown = writtenDocument(handed.markdown, edited, files);
     setSeen(nativeEvent.changes);
+    setTold({ markdown, base: handed.markdown, lines: editedLines(edited) });
 
-    if (markdown !== handed.markdown) onChange(markdown);
+    if (markdown !== value) onChange(markdown);
   };
 
   return (
@@ -223,7 +315,9 @@ export function DocumentField({
       look={look}
       placeholder={placeholder}
       editable={editable}
+      formats={FORMATS}
       testID={testID}
+      onLinkAsk={onLinkAsk}
       onLines={onLines}
       onFocusChange={() => undefined}
     />

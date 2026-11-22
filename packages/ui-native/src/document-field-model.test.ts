@@ -1,8 +1,13 @@
 // document-field-model.test.ts -- a document laid into a rich field's lines and told back unchanged writes the same bytes, and a Return typed in it makes the block a rich editor's Return makes.
 
-import { documentBlocks, INLINE_RUN, writtenDocument } from "@repo/features/document-blocks";
+import {
+  BLOCK_KIND,
+  documentBlocks,
+  INLINE_RUN,
+  writtenDocument,
+} from "@repo/features/document-blocks";
 import { describe, expect, it } from "vitest";
-import { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
+import { editedBlocks, editedLines, type FieldLine, fieldLines } from "./document-field-model.js";
 
 /** A description holding each block the field draws, and a table it stands as a card. */
 const DOCUMENT = [
@@ -62,5 +67,27 @@ describe("editedBlocks", () => {
     const lines = returnedAfter(fieldLines(documentBlocks(markdown)), 1, "three");
 
     expect(writtenDocument(markdown, editedBlocks(lines))).toBe("- one\n- two\n- three\n");
+  });
+
+  it("lays a field's lines back out of the blocks they write, its edge spaces and empty paragraph kept", () => {
+    const markdown = "# Plan\n\nBody.\n";
+    const laid = fieldLines(documentBlocks(markdown));
+
+    const typed: FieldLine[] = [
+      ...laid,
+      { block: laid.length, kind: BLOCK_KIND.PARAGRAPH, runs: [] },
+      {
+        block: laid.length + 1,
+        kind: BLOCK_KIND.PARAGRAPH,
+        runs: [{ kind: INLINE_RUN.WORDS, text: "Ask ", marks: [] }],
+      },
+    ];
+
+    const edited = editedBlocks(typed);
+
+    expect(editedBlocks(editedLines(edited))).toEqual(edited);
+    expect(writtenDocument(markdown, editedBlocks(editedLines(edited)))).toBe(
+      writtenDocument(markdown, edited),
+    );
   });
 });

@@ -81,7 +81,7 @@ public final class PillFieldModule: Module {
     }
 
     View(DocumentFieldView.self) {
-      Events("onLines", "onHeight", "onFocusChange")
+      Events("onLines", "onHeight", "onFocusChange", "onLinkAsk")
 
       Prop("value") { (view: DocumentFieldView, value: DocumentValueRecord) in
         view.take(value.lines.map(DocumentLine.init), seen: value.seen)
@@ -97,6 +97,14 @@ public final class PillFieldModule: Module {
 
       Prop("editable") { (view: DocumentFieldView, editable: Bool?) in
         view.editable = editable ?? true
+      }
+
+      Prop("formats") { (view: DocumentFieldView, formats: FormatsRecord?) in
+        view.formats = formats
+      }
+
+      AsyncFunction("setLink") { (view: DocumentFieldView, address: String) in
+        view.setLink(address)
       }
 
       AsyncFunction("focus") { (view: DocumentFieldView) in

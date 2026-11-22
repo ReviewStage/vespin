@@ -11,6 +11,12 @@ import {
   type TaskSectionGlyph,
   type TaskSectionIcon,
 } from "@repo/features/task-section-wire";
+import {
+  WRITING_BLOCK,
+  WRITING_INSERT,
+  WRITING_MARK,
+  type WritingAction,
+} from "@repo/settings/shortcuts";
 import type { SfSymbol } from "./sf-symbol.js";
 import type { StatusTone } from "./tokens/colors.js";
 import { EVERY_LUCIDE_SYMBOL } from "./tokens/every-lucide-symbol.js";
@@ -428,3 +434,22 @@ export const UNASSIGNED_UNDER: MarkLayer = {
   glyph: unassignedMark(UNASSIGNED_SYMBOL.SEAT),
   opacity: UNASSIGNED_SEAT_OPACITY,
 };
+
+/** Each writing action's glyph, as the desktop's format toolbar, Turn into, and `/` menu draw it (`@repo/ui`'s `WritingGlyph`). */
+export const WRITING_GLYPH = {
+  [WRITING_MARK.BOLD]: lucide(LUCIDE_SYMBOL.BOLD),
+  [WRITING_MARK.ITALIC]: lucide(LUCIDE_SYMBOL.ITALIC),
+  [WRITING_MARK.STRIKE]: lucide(LUCIDE_SYMBOL.STRIKETHROUGH),
+  [WRITING_MARK.CODE]: lucide(LUCIDE_SYMBOL.CODE),
+  [WRITING_MARK.LINK]: lucide(LUCIDE_SYMBOL.LINK),
+  [WRITING_BLOCK.TEXT]: lucide(LUCIDE_SYMBOL.TYPE),
+  [WRITING_BLOCK.HEADING_1]: lucide(LUCIDE_SYMBOL.HEADING_1),
+  [WRITING_BLOCK.HEADING_2]: lucide(LUCIDE_SYMBOL.HEADING_2),
+  [WRITING_BLOCK.HEADING_3]: lucide(LUCIDE_SYMBOL.HEADING_3),
+  [WRITING_BLOCK.BULLETED_LIST]: lucide(LUCIDE_SYMBOL.LIST),
+  [WRITING_BLOCK.NUMBERED_LIST]: lucide(LUCIDE_SYMBOL.LIST_ORDERED),
+  [WRITING_BLOCK.TODO_LIST]: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
+  [WRITING_BLOCK.QUOTE]: lucide(LUCIDE_SYMBOL.TEXT_QUOTE),
+  [WRITING_BLOCK.CODE_BLOCK]: lucide(LUCIDE_SYMBOL.SQUARE_CODE),
+  [WRITING_INSERT.DIVIDER]: lucide(LUCIDE_SYMBOL.MINUS),
+} as const satisfies Record<WritingAction, Glyph>;
