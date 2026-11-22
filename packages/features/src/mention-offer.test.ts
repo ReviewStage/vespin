@@ -1,11 +1,13 @@
-// mention-offer.test.ts -- an `@` offers its groups in the panel's order, browses its kinds, narrows to one by its word before a colon, and writes a description's sections and a date as the panel's picks do.
+// mention-offer.test.ts -- an `@` offers its groups in the panel's order, browses its kinds, narrows to one by its word before a colon, and writes a description's sections, a date, an automation and a machine as the panel's picks do.
 
 import { describe, expect, it } from "vitest";
 import {
+  automationCandidate,
   dateCandidates,
   descriptionCandidates,
   MENTION_OFFER_KIND,
   type MentionCandidate,
+  machineCandidates,
   mentionOffer,
 } from "./mention-offer.js";
 
@@ -28,7 +30,9 @@ describe("mentionOffer", () => {
     description: [],
     pages: [],
     threads: [],
+    automations: [],
     pullRequests: [],
+    machines: [],
     dates: (words: string) => (words === "" ? [] : [row(MENTION_OFFER_KIND.DATE, "Tomorrow")]),
   };
 
@@ -92,5 +96,39 @@ describe("mentionOffer", () => {
     });
 
     expect([tomorrow?.name, tomorrow?.written]).toEqual(["Tomorrow", "Nov 23, 2026"]);
+  });
+
+  it("finds the workspace's automations and machines, the reader's own machine first, each a pick writing the panel's link", () => {
+    const place = { workspace: "acme", repository: null };
+
+    const automations = [
+      automationCandidate({ id: "a1", name: "Nightly triage" }, "Every day at 9:00 AM", "acme"),
+    ];
+
+    const machines = machineCandidates(
+      [
+        { id: "m1", name: "Build box", ownerId: "u-sam", terms: ["Sam Ito"] },
+        { id: "m2", name: "Dean's Mac", ownerId: "u-dean", terms: ["Dean Reyes"] },
+      ],
+      "u-dean",
+      place,
+    );
+
+    const offered = mentionOffer({ ...sources, automations, machines }, "machines:");
+
+    expect(
+      offered.groups.flatMap((group) =>
+        group.rows.map((each) => [each.name, "target" in each ? each.target : undefined]),
+      ),
+    ).toEqual([
+      ["Dean's Mac", "mention://machine/m2"],
+      ["Build box", "mention://machine/m1"],
+    ]);
+
+    expect(
+      mentionOffer({ ...sources, automations, machines }, "triage").groups.map((group) =>
+        group.rows.map((each) => ("target" in each ? each.target : each.name)),
+      ),
+    ).toContainEqual(["https://vespin.dev/acme/automation/a1"]);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * use-mention-offer.ts -- what an `@` being typed offers in a composer or a description, as the panel's mention picker offers it: the place's agents, tasks, people, the description's sections, pages, threads, pull requests and dates, and each pick sent as the mention's link the panel writes.
+ * use-mention-offer.ts -- what an `@` being typed offers in a composer or a description, as the panel's mention picker offers it: the place's agents, tasks, people, the description's sections, pages, threads, automations, pull requests, dates and machines, and each pick sent as the mention's link the panel writes.
  *
  * An `@` starting the word the caret stands in offers, with nothing typed
  * after it, what the task suggests (its own agents, threads, pull requests
@@ -18,7 +18,9 @@
  */
 
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { automationTriggerText } from "@repo/features/automation-list-model";
 import { readerZone } from "@repo/features/date-mention";
+import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { entityOfDestination } from "@repo/features/entity-kind";
 import { inboxLineKind } from "@repo/features/inbox-list-model";
 import {
@@ -31,6 +33,7 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_FROM, typedMentionKind } from "@repo/features/mention-kind";
 import {
+  automationCandidate,
   dateCandidates,
   descriptionCandidates,
   isKindChoice,
@@ -41,6 +44,7 @@ import {
   type MentionOfferFrom,
   type MentionOfferKind,
   type MentionOfferRow,
+  machineCandidates,
   mentionOffer,
   type PickedMention,
 } from "@repo/features/mention-offer";
@@ -68,6 +72,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { useWorkspaceAutomations } from "./automations/use-automations.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import {
   useHostActs,
@@ -78,6 +83,7 @@ import {
 } from "./host/host-provider.js";
 import { useLiveFollow } from "./host/live-follow.js";
 import { useListedMembers } from "./member-pictures.js";
+import { useOfferedWorkspaceMachines } from "./workspace-machines.js";
 
 /** What a person's row says after their name where it is the reader, as the panel's picker says it. */
 const YOU = "You";
@@ -93,8 +99,10 @@ const KIND_GLYPH = {
   [MENTION_OFFER_KIND.SECTION]: GLYPH.HEADING,
   [MENTION_OFFER_KIND.PAGE]: GLYPH.PAGE,
   [MENTION_OFFER_KIND.THREAD]: GLYPH.THREAD,
+  [MENTION_OFFER_KIND.AUTOMATION]: GLYPH.AUTOMATION,
   [MENTION_OFFER_KIND.PULL_REQUEST]: GLYPH.PULL_REQUEST,
   [MENTION_OFFER_KIND.DATE]: GLYPH.DATE,
+  [MENTION_OFFER_KIND.MACHINE]: GLYPH.MAC,
 } as const satisfies Record<MentionOfferKind, Glyph>;
 
 /** The glyph each kind's row under Browse, and its crumb, lead with, as the panel's kind rows lead with theirs. */
@@ -105,8 +113,10 @@ const FROM_GLYPH = {
   [MENTION_FROM.DESCRIPTION]: GLYPH.FILE_TEXT,
   [MENTION_FROM.PAGES]: GLYPH.PAGE,
   [MENTION_FROM.THREADS]: GLYPH.THREAD,
+  [MENTION_FROM.AUTOMATIONS]: GLYPH.AUTOMATION,
   [MENTION_FROM.PULL_REQUESTS]: GLYPH.PULL_REQUEST,
   [MENTION_FROM.DATES]: GLYPH.DATE,
+  [MENTION_FROM.MACHINES]: GLYPH.MAC,
 } as const satisfies Record<MentionOfferFrom, Glyph>;
 
 /** What a page's row says after its name, as the panel's: a version past its first, else when it was shown. */
@@ -192,6 +202,9 @@ export function useMentionOffer(
   const workspace = workspaces.find(({ id }) => id === workspaceId);
   const acts = useHostActs();
   const members = useListedMembers(asking ? workspaceId : undefined);
+  // Note that the workspace's automations and machines are followed only while an `@` is typed, as its members are.
+  const automations = useWorkspaceAutomations(asking ? workspaceId : undefined).rows;
+  const machines = useOfferedWorkspaceMachines(asking ? workspaceId : undefined);
   // Note that the tasks and agents are read only while an `@` is typed, as its members are, so a change to any of the account's while none is, as each step of a working agent's turn makes, draws the composer's page nothing again.
   const agents = useListedAgents(asking);
   const tasks = useListedTasks(asking);
@@ -356,7 +369,27 @@ export function useMentionOffer(
       description: sections,
       pages,
       threads,
+      automations: (automations ?? []).map((automation) =>
+        automationCandidate(
+          automation,
+          automationTriggerText(automation.trigger, automation.repositories ?? []),
+          step,
+        ),
+      ),
       pullRequests,
+      machines: machineCandidates(
+        machines.map((machine) => ({
+          id: machine.id,
+          name: machine.name,
+          ownerId: machine.connectedBy,
+          terms: [
+            members.find((member) => member.userId === machine.connectedBy)?.name,
+            machine.platform === undefined ? undefined : DEVICE_PLATFORM_NAME[machine.platform],
+          ].filter((term) => term !== undefined),
+        })),
+        members.find((member) => member.you)?.userId,
+        { workspace: step, repository: null },
+      ),
       dates: (words: string) =>
         dateCandidates(words, now, readerZone(), { workspace: step, repository: null }),
     };
@@ -369,6 +402,8 @@ export function useMentionOffer(
     agents,
     tasks,
     members,
+    automations,
+    machines,
     workspaceId,
     taskId,
     agentId,
