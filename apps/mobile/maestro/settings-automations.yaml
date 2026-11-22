@@ -51,28 +51,27 @@ env:
 # again. Note that the switch is pressed where it stands, at the row's
 # trailing end, because a press on the row's words turns nothing, as in iOS's
 # own Settings. Note too that the switch is heard by its label and the line
-# under it ("On, Next: …") while on, and by its label alone while off, and
-# holds its label's own words as a child that is never checked, so it is
-# found as the element holding that child.
+# under it ("On, Next: …") while on, and by its label alone while off, the
+# same words as its label's own child, which is never checked; so the switch
+# on is found by its line, and the switch off as the first "On" from the top,
+# which is the switch's row above its label.
 - tapOn:
-    text: "On(, .*)?"
-    containsChild: "On"
+    text: "On, Next.*"
     checked: true
     point: "92%,50%"
-- assertVisible:
-    text: "On"
-    containsChild: "On"
-    checked: false
+- assertNotVisible:
+    text: "On.*"
+    checked: true
+- assertNotVisible: "On, Next.*"
 - waitForAnimationToEnd
 - takeScreenshot: settings-automation-off
 - tapOn:
     text: "On"
-    containsChild: "On"
     checked: false
+    index: 0
     point: "92%,50%"
 - assertVisible:
-    text: "On, .*"
-    containsChild: "On"
+    text: "On, Next.*"
     checked: true
 - waitForAnimationToEnd
 - scrollUntilVisible:
