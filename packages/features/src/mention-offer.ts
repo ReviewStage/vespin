@@ -1,4 +1,4 @@
-// mention-offer.ts -- the people, agents, tasks, pages, threads, pull requests and dates an `@` typed in a phone's composer offers, as the panel's mention picker groups, words and narrows them by kind (`@people:`).
+// mention-offer.ts -- the people, agents, tasks, the description's sections, pages, threads, pull requests and dates an `@` typed in a phone's composer or description offers, as the panel's mention picker groups, words and narrows them by kind (`@people:`).
 
 import {
   type DateSpan,
@@ -7,6 +7,7 @@ import {
   dateOfWords,
   suggestedDates,
 } from "./date-mention.js";
+import { descriptionSections } from "./description-sections.js";
 import {
   MENTION_BROWSE,
   MENTION_FROM,
@@ -14,7 +15,7 @@ import {
   narrowingQuery,
   typedMentionKind,
 } from "./mention-kind.js";
-import { encodeMention, MENTION_KIND, type MentionPlace } from "./mention-link.js";
+import { encodeMention, MENTION_KIND, type MentionPlace, sectionAnchors } from "./mention-link.js";
 import { searchHit } from "./search-score.js";
 import { noMatchWords, showMoreWords, TERM } from "./words.js";
 
@@ -25,6 +26,7 @@ export const MENTION_OFFER_GROUP = {
   AGENTS: "Agents",
   TASKS: "Tasks",
   PEOPLE: "People",
+  DESCRIPTION: "Description",
   PAGES: "Pages",
   THREADS: "Threads",
   PULL_REQUESTS: "Pull requests",
@@ -35,6 +37,7 @@ export const MENTION_OFFER_KIND = {
   AGENT: "agent",
   TASK: "task",
   PERSON: "person",
+  SECTION: "section",
   PAGE: "page",
   THREAD: "thread",
   PULL_REQUEST: "pull-request",
@@ -56,6 +59,7 @@ const OFFERED_FROM = [
   MENTION_FROM.AGENTS,
   MENTION_FROM.TASKS,
   MENTION_FROM.PEOPLE,
+  MENTION_FROM.DESCRIPTION,
   MENTION_FROM.PAGES,
   MENTION_FROM.THREADS,
   MENTION_FROM.PULL_REQUESTS,
@@ -70,6 +74,7 @@ const FROM_GROUP = {
   [MENTION_FROM.AGENTS]: "Agents",
   [MENTION_FROM.TASKS]: "Tasks",
   [MENTION_FROM.PEOPLE]: "People",
+  [MENTION_FROM.DESCRIPTION]: "Description",
   [MENTION_FROM.PAGES]: "Pages",
   [MENTION_FROM.THREADS]: "Threads",
   [MENTION_FROM.PULL_REQUESTS]: "Pull requests",
@@ -81,10 +86,17 @@ const FROM_SOURCE = {
   [MENTION_FROM.AGENTS]: "agents",
   [MENTION_FROM.TASKS]: "tasks",
   [MENTION_FROM.PEOPLE]: "people",
+  [MENTION_FROM.DESCRIPTION]: "description",
   [MENTION_FROM.PAGES]: "pages",
   [MENTION_FROM.THREADS]: "threads",
   [MENTION_FROM.PULL_REQUESTS]: "pullRequests",
 } as const satisfies Record<Exclude<MentionOfferFrom, typeof MENTION_FROM.DATES>, string>;
+
+/** What a description's rows say after their names, in the panel's words. */
+const DESCRIPTION_WORDS = {
+  SECTION: "Section",
+  WHOLE: "The whole description",
+} as const;
 
 /** What stands where nothing typed matches, in the panel's words. */
 export const MENTION_NO_MATCH = noMatchWords(TERM.RESULT);
@@ -102,6 +114,8 @@ export interface MentionCandidate {
   readonly terms?: readonly string[] | undefined;
   /** The link a pick writes, as the panel's mention writes it (`encodeMention`). */
   readonly target: string;
+  /** The name a pick writes where it is not the row's, as a date's row says "Tomorrow" and writes the day it names whole, as the panel's does. */
+  readonly written?: string | undefined;
 }
 
 /**
@@ -132,12 +146,14 @@ export interface MentionOffered {
   readonly groups: readonly MentionGroup[];
 }
 
-/** What an `@` offers from: what the place suggests (its own agents, threads, pull requests and pages, as the panel's Suggested holds them), then every agent, task, person, page, thread and pull request the place reads, and the dates the words name. */
+/** What an `@` offers from: what the place suggests (its own agents, threads, pull requests and pages, as the panel's Suggested holds them), then every agent, task, person, section of the description, page, thread and pull request the place reads, and the dates the words name. */
 export interface MentionSources {
   readonly suggested: readonly MentionCandidate[];
   readonly agents: readonly MentionCandidate[];
   readonly tasks: readonly MentionCandidate[];
   readonly people: readonly MentionCandidate[];
+  /** The description's sections and the description whole, where the place stands in a task; none elsewhere. */
+  readonly description: readonly MentionCandidate[];
   readonly pages: readonly MentionCandidate[];
   readonly threads: readonly MentionCandidate[];
   readonly pullRequests: readonly MentionCandidate[];
@@ -184,6 +200,7 @@ function dateCandidate(
     kind: MENTION_OFFER_KIND.DATE,
     name: dateChipText(date, now, zone),
     detail: dateLabel(date, zone),
+    written: dateLabel(date, zone),
     target,
   };
 }
@@ -202,6 +219,55 @@ export function dateCandidates(
   const date = dateOfWords(query, now, zone);
 
   return date === undefined ? [] : [dateCandidate(date, now, zone, place)];
+}
+
+/** The task a description is held by, as its rows name it: its id, its name, and its key where the workspace numbers it. */
+export interface DescriptionHolder {
+  readonly taskId: string;
+  readonly name: string;
+  readonly key?: string | undefined;
+}
+
+/**
+ * The description's rows, as the panel's picker offers them: each section by
+ * its heading, a heading that spells no anchor left out, then the
+ * description whole, which names the task and is found by its key.
+ */
+export function descriptionCandidates(
+  holder: DescriptionHolder,
+  text: string,
+  place: MentionPlace,
+): readonly MentionCandidate[] {
+  const { taskId, name, key } = holder;
+  const headings = descriptionSections(text).map((section) => section.heading);
+  const anchors = sectionAnchors(headings);
+
+  const sections = headings.flatMap((heading, at): MentionCandidate[] => {
+    const anchor = anchors[at] ?? "";
+
+    if (anchor === "") return [];
+
+    return [
+      {
+        id: anchor,
+        kind: MENTION_OFFER_KIND.SECTION,
+        name: heading,
+        detail: DESCRIPTION_WORDS.SECTION,
+        target: encodeMention({ kind: MENTION_KIND.SECTION, taskId, anchor }, place),
+      },
+    ];
+  });
+
+  const whole: MentionCandidate = {
+    id: taskId,
+    kind: MENTION_OFFER_KIND.TASK,
+    name,
+    detail: DESCRIPTION_WORDS.WHOLE,
+    key,
+    target: encodeMention({ kind: MENTION_KIND.TASK, taskId }, place),
+  };
+
+  return [...sections, whole];
 }
 
 /** Whether the words are a task's key typed whole, which leads its group, as the panel's keyed group leads. */
@@ -259,7 +325,8 @@ function cappedGroup(
  * (`people:dea`), that kind alone under its crumb, up to fifty rows the
  * words after the colon find, all of them with none typed. With words
  * typed: the kinds they name, under Browse, then the date they name, then
- * Agents, Tasks (first where the words are a task's key), People, Pages,
+ * Agents, Tasks (first where the words are a task's key), People, the
+ * description's sections, Pages,
  * Threads and Pull requests, each the rows the words find, best first,
  * four at most, a group finding more ending in the row that opens its kind
  * searched by the same words, a group finding none left out.
@@ -309,6 +376,7 @@ export function mentionOffer(sources: MentionSources, query: string): MentionOff
     group(MENTION_FROM.AGENTS),
     ...(leadsWithKey ? [] : [tasks]),
     group(MENTION_FROM.PEOPLE),
+    group(MENTION_FROM.DESCRIPTION),
     group(MENTION_FROM.PAGES),
     group(MENTION_FROM.THREADS),
     group(MENTION_FROM.PULL_REQUESTS),

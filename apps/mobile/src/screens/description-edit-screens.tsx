@@ -199,7 +199,7 @@ function DescriptionEditor({
   const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
 
   const mentions = useMentionOffer(
-    { workspaceId: overview.workspace?.id, taskId: task.id },
+    { workspaceId: overview.workspace?.id, taskId: task.id, description: editor.draft },
     {
       word: atWord,
       pick: (mention) => field.current?.pick(mentionPill(mention.name, mention.target)),
