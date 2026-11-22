@@ -1,0 +1,59 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow pill-field
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, pillField=true})... COMPLETED
+Assert that "Mention Ada" is visible... COMPLETED
+Assert that id: pill-field is visible... COMPLETED
+Take screenshot pill-field-laid-in... COMPLETED
+Tap on "Clear"... COMPLETED
+Assert that "Message" is visible... COMPLETED
+Tap on id: pill-field... COMPLETED
+Input text Ping @Ad... COMPLETED
+Assert that "Mention Ada for @Ad" is visible... COMPLETED
+Tap on "Mention Ada for @Ad"... COMPLETED
+Assert that ".*\[@Ada Lovelace\]\(https://vespin.dev/stage/person/u-ada\).*" is visible... COMPLETED
+Input text with ... COMPLETED
+Tap on "Attach a picture"... COMPLETED
+Assert that ".*\[Picture 2\].*" is visible... COMPLETED
+Take screenshot pill-field-picked... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Take screenshot pill-field-written... COMPLETED
+Scrolling DOWN until id: pill-field-styled is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pill-field-styled... COMPLETED
+Tap on id: pill-field-styled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pill-field-styled-caret... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Scrolling DOWN until id: document-field is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot document-field... COMPLETED
+Swiping in UP direction on id: document-field... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot document-field-cards... COMPLETED
+Assert that "(?s).*\| Role \| May withdraw \|\n\| - \| - \|.*" is visible... COMPLETED
+Scrolling UP until "Clear description" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Clear description"... COMPLETED
+Tap on id: document-field... COMPLETED
+Tap on "Bold"... FAILED
+
+Element not found: Text matching regex: Bold
+
+Element with Text matching regex: Bold not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjnat10440/p10440-iphone-dark-pill-field/2026-11-21_182045

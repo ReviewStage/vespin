@@ -1,0 +1,75 @@
+built main 95d09e20c7 + #10440 7903c0934e as db687c0b1e
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 17:48:19 19941 MB
+curve 17:48:49 19831 MB
+curve 17:49:19 18014 MB
+curve 17:49:49 17914 MB
+curve 17:50:20 17767 MB
+curve 17:50:50 17498 MB
+curve 17:51:20 17477 MB
+curve 17:51:50 17395 MB
+curve 17:52:20 17386 MB
+curve 17:52:51 17224 MB
+curve 17:53:21 17020 MB
+curve 17:53:51 16808 MB
+curve 17:54:21 17354 MB
+curve 17:54:51 17316 MB
+curve 17:55:22 17281 MB
+curve 17:55:52 17190 MB
+curve 17:56:22 16964 MB
+curve 17:56:52 16825 MB
+curve 17:57:23 16792 MB
+curve 17:57:53 16761 MB
+curve 17:58:23 16727 MB
+curve 17:58:53 16591 MB
+curve 17:59:23 16518 MB
+curve 17:59:54 16500 MB
+curve 18:00:24 16485 MB
+curve 18:00:54 16421 MB
+curve 18:01:24 16401 MB
+curve 18:01:54 16371 MB
+curve 18:02:25 16348 MB
+curve 18:02:55 16205 MB
+curve 18:03:25 16163 MB
+curve 18:03:55 16148 MB
+curve 18:04:26 16105 MB
+curve 18:04:56 16069 MB
+curve 18:05:26 16024 MB
+curve 18:05:56 15977 MB
+curve 18:06:26 15805 MB
+curve 18:06:57 15209 MB
+curve 18:07:27 15035 MB
+curve 18:07:57 14846 MB
+curve 18:08:27 14738 MB
+curve 18:08:57 14661 MB
+curve 18:09:28 14582 MB
+curve 18:09:58 14475 MB
+curve 18:10:28 14420 MB
+curve 18:10:58 14309 MB
+curve 18:11:28 14246 MB
+curve 18:11:59 14102 MB
+curve 18:12:29 14073 MB
+curve 18:12:59 14088 MB
+curve 18:13:29 14029 MB
+curve 18:13:59 13910 MB
+curve 18:14:30 13890 MB
+curve 18:15:00 13893 MB
+curve 18:15:30 13892 MB
+curve 18:16:00 13845 MB
+BUILD EXIT 0 18:16:30
+sizes: Assets.car 23859528 bytes (main Vp10436.app 23840456), .app 119928 KB (main 119776 KB), zipped .app 45235283 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10440.app: replacing existing signature
+p10440-iphone-light-pill-field: fails 1 shots 8 Tap on "Bold"... FAILED
+p10440-iphone-dark-pill-field: fails 1 shots 8 Tap on "Bold"... FAILED
+p10440-iphone-light-agent: fails 0 shots 26 
+p10440-iphone-light-freply10314: fails 0 shots 2 
+p10440-iphone-light-new-task: fails 2 shots 9   Assert that "Select up to .*" is visible... FAILED
+p10440-ipad27-light-pill-field: fails 1 shots 9 Tap on "Mention Ada in the description for @Ad"... FAILED
+p10440-ipad27-light-fagent10418: fails 0 shots 26 
+p10440-ipad27-light-freply10314: fails 0 shots 2 
+p10440-ipad27-light-new-task: fails 0 shots 8 
