@@ -3,6 +3,7 @@
 import { readerZone } from "@repo/features/date-mention";
 import {
   BLOCK_KIND,
+  type DocumentBlock,
   documentBlocks,
   INLINE_MARK,
   INLINE_RUN,
@@ -12,6 +13,7 @@ import {
   type LockedKind,
   writtenDocument,
 } from "@repo/features/document-blocks";
+import { markdownTreeKept } from "@repo/features/markdown-tree";
 import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import {
   WRITING_BLOCK,
@@ -19,8 +21,13 @@ import {
   WRITING_SHORTCUTS,
   type WritingAction,
 } from "@repo/settings/shortcuts";
-import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
+import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import {
+  type NativeSyntheticEvent,
+  ScrollView,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import {
   type CaretAtWord,
   type CaretLine,
@@ -44,6 +51,7 @@ import {
   type NativeToldRun,
 } from "./document-field-native.js";
 import { GLYPH, WRITING_GLYPH } from "./glyph.js";
+import { Markdown } from "./markdown.js";
 import type { MarkdownReading } from "./markdown-model.js";
 import { pillLook } from "./pill-look.js";
 import { askForWords, WORDS_KIND, type WordsAct } from "./system-asks.js";
@@ -115,12 +123,13 @@ const RAW_WORDS = { PICTURE: "Picture", BREAK: "Line break" } as const;
 /** The looks the field tells back that a block's runs keep. */
 const MARKS: ReadonlySet<string> = new Set(Object.values(INLINE_MARK));
 
-/** What the field hands its owner through its ref: a pick in place of the `@` word the caret stands in, plain words there, and the keyboard taken or let go, as the message box's handle offers them. */
+/** What the field hands its owner through its ref: a pick in place of the `@` word the caret stands in, plain words there, the keyboard taken or let go, as the message box's handle offers them, and the keys typed since its last frame written at once, before a save or a close reads the words. */
 export interface DocumentFieldHandle {
   readonly pick: (pill: Pill) => void;
   readonly rewrite: (words: string) => void;
   readonly focus: () => void;
   readonly blur: () => void;
+  readonly flush: () => void;
 }
 
 interface DocumentFieldProps {
@@ -147,8 +156,37 @@ interface Told {
   readonly lines: readonly FieldLine[];
 }
 
+/** What the field tells after a change: its lines, and how many changes it has made. */
+interface NativeToldEvent {
+  readonly lines: readonly NativeToldLine[];
+  readonly changes: number;
+}
+
+/** What the field told last, and the Markdown its lines were laid from. */
+interface PendingLines {
+  readonly told: NativeToldEvent;
+  readonly base: string;
+}
+
+/** No blocks, which the field holds while its words stand read only. */
+const NO_BLOCKS: readonly DocumentBlock[] = [];
+
+/** The most of a document its read-only words show while the field waits on its parse: more than a screen holds. */
+const HEAD_MOST = 4000;
+
 /** No files held. */
 const NO_FILES: ReadonlySet<string> = new Set();
+
+/** A link pressed in the read-only head, which opens nothing: the field stands in its place a frame later. */
+function openNoLink(): void {}
+
+/** The head of a document a screen shows first, ending at a blank line where one stands within it, so it cuts no paragraph. */
+function headOf(markdown: string): string {
+  if (markdown.length <= HEAD_MOST) return markdown;
+  const end = markdown.lastIndexOf("\n\n", HEAD_MOST);
+
+  return markdown.slice(0, end > 0 ? end : HEAD_MOST);
+}
 
 /** A card's words for a locked block: what it is, and the first line of its source. */
 function cardOf(locked: LockedKind, source: string): NativeCard {
@@ -250,12 +288,28 @@ export function DocumentField({
   // The `@` word the caret last stood in, which a pick replaces.
   const atWord = useRef<CaretAtWord | undefined>(undefined);
 
+  // Note that the document the field itself wrote is handed back as the lines it told, written against the same Markdown, rather than read again, which would drop a paragraph's edge spaces and its empty paragraphs.
+  const own = told !== undefined && told.markdown === value;
+  const base = own ? told.base : value;
+  // Whether the field reads its blocks yet: at once where the page drew these words, whose parse is kept (`markdownTree`), and otherwise after its read-only head has drawn, so the sheet never stands empty while a long description parses.
+  const [ready, setReady] = useState(() => markdownTreeKept(value));
+
+  useEffect(() => {
+    if (ready) return;
+    const frame = requestAnimationFrame(() => setReady(true));
+
+    return () => cancelAnimationFrame(frame);
+  }, [ready]);
+
+  // The blocks the Markdown the lines stand on reads as, read once for each Markdown: the field's lines are laid from them, and each key's write is laid against them.
+  const read = useMemo(
+    () => (ready ? documentBlocks(base, files) : NO_BLOCKS),
+    [ready, base, files],
+  );
+
   const handed = useMemo(() => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
-    // Note that the document the field itself wrote is handed back as the lines it told, written against the same Markdown, rather than read again, which would drop a paragraph's edge spaces and its empty paragraphs.
-    const own = told !== undefined && told.markdown === value;
-    const base = own ? told.base : value;
-    const laid = own ? told.lines : fieldLines(documentBlocks(value, files));
+    const laid = own ? told.lines : fieldLines(read);
 
     const lines = laid.map(
       (line): NativeDocumentLine => ({
@@ -265,7 +319,7 @@ export function DocumentField({
     );
 
     return { markdown: base, value: { lines, seen } };
-  }, [value, files, repository, seen, told]);
+  }, [own, told, read, base, repository, seen]);
 
   const look = {
     text: colors.TEXT,
@@ -275,19 +329,6 @@ export function DocumentField({
     pillWords: colors.TEXT,
     pillGlyph: colors.TEXT_MUTED,
   };
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      pick: (pill) => {
-        void native.current?.insertPills([drawnPill(pill, repository)], toldWord(atWord.current));
-      },
-      rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
-      focus: () => void native.current?.focus(),
-      blur: () => void native.current?.blur(),
-    }),
-    [repository],
-  );
 
   const onCaret = ({ nativeEvent }: NativeSyntheticEvent<CaretLine>) => {
     const word = caretAtWord(nativeEvent);
@@ -321,20 +362,77 @@ export function DocumentField({
     });
   };
 
-  const onLines = ({
-    nativeEvent,
-  }: NativeSyntheticEvent<{
-    readonly lines: readonly NativeToldLine[];
-    readonly changes: number;
-  }>) => {
-    const edited = editedBlocks(nativeEvent.lines.map((line) => toldLine(line, files)));
+  // The lines the field told last, written once a frame, so fast typing writes the document once for every frame rather than once for every key.
+  const pending = useRef<PendingLines | undefined>(undefined);
+  const frame = useRef<number | undefined>(undefined);
+
+  const write = () => {
+    frame.current = undefined;
+    const held = pending.current;
+
+    if (held === undefined) return;
+    pending.current = undefined;
+    const { told } = held;
+
+    // Note that words handed from outside since the key, such as Use theirs, win over the lines told against the words before them: the keys are heard, so the field takes the words handed.
+    if (held.base !== handed.markdown) {
+      setSeen(told.changes);
+
+      return;
+    }
+
+    const edited = editedBlocks(told.lines.map((line) => toldLine(line, files)));
     // Note that the document is written against the Markdown whose blocks were last handed, which the lines' sources name.
-    const markdown = writtenDocument(handed.markdown, edited, files);
-    setSeen(nativeEvent.changes);
+    const markdown = writtenDocument(handed.markdown, edited, files, read);
+    setSeen(told.changes);
     setTold({ markdown, base: handed.markdown, lines: editedLines(edited) });
 
     if (markdown !== value) onChange(markdown);
   };
+
+  // Note that the frame's write reads the newest render's Markdown and blocks, which a render between the key and the frame may have handed.
+  const latest = useRef(write);
+
+  useEffect(() => {
+    latest.current = write;
+  });
+
+  const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {
+    pending.current = { told: nativeEvent, base: handed.markdown };
+    frame.current ??= requestAnimationFrame(() => latest.current());
+  };
+
+  useEffect(
+    () => () => {
+      if (frame.current !== undefined) cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      pick: (pill) => {
+        void native.current?.insertPills([drawnPill(pill, repository)], toldWord(atWord.current));
+      },
+      rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
+      focus: () => void native.current?.focus(),
+      blur: () => void native.current?.blur(),
+      flush: () => {
+        if (frame.current !== undefined) cancelAnimationFrame(frame.current);
+        latest.current();
+      },
+    }),
+    [repository],
+  );
+
+  // Note that the read-only head is no field, so nothing waits on it as the field it stands in for; it stands clear of the bar as the field's text view does.
+  if (!ready)
+    return (
+      <ScrollView style={style} contentInsetAdjustmentBehavior="automatic" scrollEnabled={false}>
+        <Markdown words={headOf(value)} repository={repository} onOpenLink={openNoLink} headings />
+      </ScrollView>
+    );
 
   return (
     <NativeDocumentField

@@ -10,7 +10,7 @@
 
 import type { Nodes } from "mdast";
 import { DESCRIPTION_COMMENT_BOUNDS } from "./description-comment-wire.js";
-import { markdownTree } from "./markdown-tree.js";
+import { keptMarkdownTree } from "./markdown-tree.js";
 
 /** One block of a description: its span in the Markdown, the Markdown it is drawn from, and its words as a thread on it quotes them. */
 export interface DescriptionBlock {
@@ -66,7 +66,7 @@ function referenced(node: Nodes): readonly string[] {
  * is drawn from, and its quote, cut to the longest quote a thread keeps.
  */
 export function descriptionBlocks(text: string): readonly DescriptionBlock[] {
-  const nodes = markdownTree(text).children;
+  const nodes = keptMarkdownTree(text).children;
   // Note that the parse counts offsets from after a leading byte-order mark, while the service counts them in the text as it is.
   const shift = text.startsWith(BYTE_ORDER_MARK) ? BYTE_ORDER_MARK.length : 0;
 
