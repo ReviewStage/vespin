@@ -1,0 +1,55 @@
+pinned to 81cae8d5e3
+== bundle PJjsl175d base 81cae8d5e3
+  built 81cae8d5e3 base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-fprobesl3: fails 0 shots 6 
+[probe] lines since 2026-11-22 12:16:57:
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-22 12:18:38.129 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 166 ms ending 1795378718129
+2026-11-22 12:18:38.466 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 337 ms ending 1795378718466
+2026-11-22 12:18:54.151 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 99 ms ending 1795378734151
+2026-11-22 12:18:55.057 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] mark task-commit 180271 1795378735057
+2026-11-22 12:18:55.143 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 208 ms ending 1795378735143
+2026-11-22 12:18:55.226 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 46 ms ending 1795378735226
+2026-11-22 12:18:55.333 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795378735334
+2026-11-22 12:18:55.415 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 43 ms ending 1795378735415
+2026-11-22 12:18:55.591 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 45 ms ending 1795378735591
+2026-11-22 12:18:55.773 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 43 ms ending 1795378735773
+2026-11-22 12:18:56.065 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 187 ms ending 1795378736065
+2026-11-22 12:18:58.820 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 151 ms ending 1795378738820
+2026-11-22 12:19:03.328 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 143 ms ending 1795378743328
+2026-11-22 12:19:30.464 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 46 ms ending 1795378770465
+2026-11-22 12:19:34.630 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 44 ms ending 1795378774630
+2026-11-22 12:19:38.428 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 42 ms ending 1795378778428
+2026-11-22 12:20:15.413 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 44 ms ending 1795378815413
+2026-11-22 12:21:16.861 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 43 ms ending 1795378876862
+2026-11-22 12:21:42.944 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 42 ms ending 1795378902945
+2026-11-22 12:23:28.843 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795379008844
+2026-11-22 12:26:16.342 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795379176344
+2026-11-22 12:26:20.160 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795379180161
+2026-11-22 12:26:47.294 E  Vespin[11456:b1007a7] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795379207295
+2026-11-22 12:28:01.642 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 241 ms ending 1795379281643
+2026-11-22 12:28:02.038 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 397 ms ending 1795379282040
+2026-11-22 12:28:14.298 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 46 ms ending 1795379294300
+2026-11-22 12:28:16.760 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 108 ms ending 1795379296762
+2026-11-22 12:28:17.748 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] mark task-commit 180271 1795379297750
+2026-11-22 12:28:17.815 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 196 ms ending 1795379297816
+2026-11-22 12:28:17.866 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 52 ms ending 1795379297868
+2026-11-22 12:28:17.908 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 42 ms ending 1795379297910
+2026-11-22 12:28:17.951 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 43 ms ending 1795379297953
+2026-11-22 12:28:18.099 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 42 ms ending 1795379298100
+2026-11-22 12:28:18.273 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 49 ms ending 1795379298275
+2026-11-22 12:28:18.719 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 169 ms ending 1795379298721
+2026-11-22 12:28:21.284 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 148 ms ending 1795379301285
+2026-11-22 12:28:26.009 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 174 ms ending 1795379306011
+2026-11-22 12:28:49.359 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795379329361
+2026-11-22 12:28:57.314 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 46 ms ending 1795379337316
+2026-11-22 12:29:23.509 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795379363511
+2026-11-22 12:29:51.426 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 41 ms ending 1795379391428
+2026-11-22 12:29:55.266 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 47 ms ending 1795379395268
+2026-11-22 12:33:28.229 E  Vespin[13920:b106e1d] [com.facebook.react.log:javascript] [probe] gap 44 ms ending 1795379608232
+2026-11-22 12:37:35.499 Df log[15765:0] [com.apple.log:] log run noninteractively, parent: 15633 (launchd_sim), args: 'log' 'show' '--start' '2026-11-22 12:16:57' '--predicate' 'eventMessage CONTAINS "[probe]"' '--style' 'compact'
