@@ -32,6 +32,7 @@ import { useKeeping } from "../keeping.js";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
+import { useNewTaskDraftsSignOut } from "../new-task-draft.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useRecentOpenedSignOut } from "../search/recent-opened.js";
@@ -104,8 +105,8 @@ const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set([
   "fullScreenModal",
 ]);
 
-/** The pages that start work, which open over the whole window as a new conversation does, rather than as a sheet. */
-const START_PAGE: ReadonlySet<string> = new Set([SHEET_ROUTE.START_TASK, SHEET_ROUTE.START_AGENT]);
+/** The pages that start work over the whole window as a new conversation does, rather than as a sheet: New agent. */
+const START_PAGE: ReadonlySet<string> = new Set([SHEET_ROUTE.START_AGENT]);
 
 /** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. Note that a screen's layout draws inside its screen's navigation, so `useFocusShown` hears the sheet's own focus. */
 function SheetNoticeLayer({ children }: { readonly children: ReactNode }) {
@@ -194,6 +195,7 @@ function GuardedScreens() {
   useInboxWidget(signedIn);
   useSystemActivity(signedIn);
   useRecentOpenedSignOut(signedIn);
+  useNewTaskDraftsSignOut(signedIn);
   useCrashReportAccount();
   useOfflineNotice();
   useNoticeForAccount();
@@ -242,10 +244,10 @@ function GuardedScreens() {
             name={SHEET_ROUTE.SETTINGS}
             options={{ presentation: sheetPresentation, title: "Settings" }}
           />
-          {/* Note that New task and New agent open over the whole window in every window, as Messages, ChatGPT and Claude open a new conversation, on the page's plain ground, their composer docked on the keyboard. */}
+          {/* Note that New task opens as a sheet at its full height, as Mail's compose does, so a swipe down closes it, held while it holds a draft, which its ✕ and the swipe ask about first (Discard draft or Save draft); New agent opens over the whole window in every window, as Messages, ChatGPT and Claude open a new conversation, on the page's plain ground, its composer docked on the keyboard. */}
           <Stack.Screen
             name={SHEET_ROUTE.START_TASK}
-            options={{ presentation: "fullScreenModal", title: "New task" }}
+            options={{ presentation: sheetPresentation, title: "New task" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.START_AGENT}

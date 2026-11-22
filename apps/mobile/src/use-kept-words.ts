@@ -11,6 +11,11 @@ export const DISCARD_WORDS = {
   DISCARD: "Discard draft",
 } as const;
 
+/** What a page that can keep its draft for later offers beside Discard draft, as Mail's Save Draft does. */
+export const SAVE_DRAFT_WORDS = {
+  SAVE: "Save draft",
+} as const;
+
 /** What the ask before an edit of words already saved goes says, as iOS's own editors ask it. */
 export const DISCARD_CHANGES_WORDS = {
   QUESTION: "Discard changes?",
@@ -19,6 +24,8 @@ export const DISCARD_CHANGES_WORDS = {
 
 /** What keeps a sheet's draft, its words typed and pictures attached: whether it asks before they go, and its answers. */
 export interface KeptWords {
+  /** Whether the sheet holds a draft, words typed or a picture attached, which its close asks about first. */
+  readonly drafted: boolean;
   /** Whether the sheet asks whether to discard its draft, after a Cancel or a swipe down. */
   readonly asking: boolean;
   /** Lets the sheet go, its draft with it, as the ask's Discard draft does. */
@@ -41,6 +48,7 @@ export function useKeptWords(drafted: boolean): KeptWords {
   const disable = usePreventRemove(drafted && !letGo, ({ repeat }) => setLeave(() => repeat));
 
   return {
+    drafted,
     asking: leave !== undefined,
     discard: () => {
       setLetGo(true);
