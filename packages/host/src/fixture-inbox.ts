@@ -1531,7 +1531,7 @@ const INSTALLED_SKILL_FILES: ReadonlyMap<
     "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e51",
     {
       skillFile:
-        "---\nname: release-notes\ndescription: Write a release's notes from the pull requests merged since the last tag.\n---\n\n# Release notes\n\nList each merged pull request under its kind.\n",
+        "---\nname: release-notes\ndescription: Write a release's notes from the pull requests merged since the last tag.\n---\n\n# Release notes\n\nList each merged pull request under its kind.\n\n[@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60) holds this release's checklist.\n",
       files: [
         { path: "SKILL.md", bytes: 214 },
         { path: "template.md", bytes: 1_204 },

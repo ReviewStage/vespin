@@ -1,9 +1,11 @@
-# settings-skills.yaml -- Settings › Skills on the Inbox fixture: the account's own skills, each saying where its files came from, one opened to its SKILL.md and its files, and a skill's Delete asked first and canceled.
+# settings-skills.yaml -- Settings › Skills on the Inbox fixture: the account's own skills, each saying where its files came from, one opened to its SKILL.md and its files, a skill's Delete asked first and canceled, and a vespin.dev link on a skill's page opening its task on the tabs, Settings closed.
 #
 # Launched on the host's Inbox fixture, whose account holds two skills of
 # its own and answers a skill's read itself (`@repo/host/fixture-inbox`), so
 # no server is reached.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 - launchApp:
     clearState: true
@@ -43,3 +45,31 @@ appId: dev.vespin.ios
     env:
       QUESTION: "Delete pr-style?"
 - assertVisible: "pr-style"
+# A vespin.dev link on a skill's page opens its task on the tabs, the
+# Settings sheet closed, as an automation's run opens its agent. On an
+# iPhone the task is pushed on Tasks, whose Back goes to its list, where a
+# page pushed inside the sheet would stand with no Back at all; on an iPad
+# the task stands beside the Tasks list. Note that the link leads its line,
+# so the line is pressed at its leading edge, as `person.yaml` presses a chip.
+- tapOn: "release-notes"
+- assertVisible: "Files"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: ".*holds this release's checklist.*"
+- tapOn:
+    text: ".*holds this release's checklist.*"
+    point: "6%,50%"
+- waitForAnimationToEnd
+- assertVisible: "Created by .*"
+- assertNotVisible: "Files"
+- takeScreenshot: settings-skill-link
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn:
+          id: "BackButton"
+      - waitForAnimationToEnd
+- assertVisible: "Weekly digest email"
+- assertNotVisible: "release-notes"
+- takeScreenshot: settings-skill-link-back
