@@ -1,9 +1,10 @@
-# dismiss-ask.yaml -- puts a confirmation away without its act, and requires its question gone: on an iPhone a tap off its action sheet, and on an iPad its alert's Cancel.
+# dismiss-ask.yaml -- puts a confirmation away without its act, and requires its question gone: its Cancel, or a tap off it where it stands none.
 #
-# Note that iOS 26 draws a compact window's confirmation as an action sheet
-# anchored at the screen's foot with no Cancel, a tap off it canceling, while
-# a regular window's alert keeps its Cancel. The tap off the sheet goes first,
-# only where no Cancel stands, so an iPad's alert is never tapped through.
+# Note that iOS 26 stands an action sheet no view raised centered with its
+# own Cancel, as `ConfirmAsk` raises a compact window's, and a regular
+# window's alert keeps its Cancel too; an action sheet anchored to a view
+# stands none, a tap off it canceling. The tap off goes only where no Cancel
+# stands, so an alert is never tapped through.
 # `QUESTION` is the confirmation's title as the flow asserted it.
 appId: dev.vespin.ios
 env:

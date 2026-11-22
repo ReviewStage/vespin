@@ -31,9 +31,10 @@ builds a control of its own.
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
   merge under its heading), `ConfirmAsk` (the question
-  an act asks first: the system's action sheet from the screen's foot in a
-  compact window, its act first, and its alert in a regular one or where
-  words must be typed), `WordsAsk` (the system's alert words are typed in,
+  an act asks first: the system's action sheet in a compact window, its act
+  first and Cancel below it, which iOS 26 stands centered since no view of
+  ours raised it, and its alert in a regular one or where words must be
+  typed), `WordsAsk` (the system's alert words are typed in,
   such as an invitation's address), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField` (its `SECRET` look the system's secure field, for a key or
   a token pasted), `AttachRow`, and `MenuPickRow` for a form's words,

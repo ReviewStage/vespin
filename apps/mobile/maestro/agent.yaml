@@ -413,8 +413,8 @@ env:
           file: subflows/dismiss.yaml
 - assertNotVisible: "Permanently delete"
 # Archive asks first, in the panel's words, since the agent still works and
-# archiving it stops it; putting the question away (a tap off the iPhone's
-# action sheet, the iPad alert's Cancel) leaves it.
+# archiving it stops it; putting the question away (its Cancel, on the
+# iPhone's action sheet and the iPad's alert alike) leaves it.
 - runFlow:
     file: subflows/bar-act.yaml
     env:
@@ -533,10 +533,19 @@ env:
     timeout: 5000
 - takeScreenshot: agent-turn-more
 # Rewind asks first, in the panel's words, its act in red; put away, it
-# drops nothing.
+# drops nothing. On an iPhone it is UIKit's action sheet, which iOS 26
+# stands centered since no view of ours raised it: its act first and
+# Cancel set apart below it.
 - tapOn: "Rewind conversation to here"
 - assertVisible: "Rewind conversation to this message.*"
 - assertVisible: "Rewind conversation"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - assertVisible:
+          text: "Cancel"
+          below: "Rewind conversation"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-rewind-ask
