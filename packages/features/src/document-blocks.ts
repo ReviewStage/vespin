@@ -343,8 +343,8 @@ function listLines(
   const checks = node.children.map((item) => itemChecked(markdown, item));
   const task = checks.some((checked) => checked !== undefined);
 
-  const marker =
-    node.ordered === true ? LIST_MARKER.ORDERED : task ? LIST_MARKER.TASK : LIST_MARKER.BULLET;
+  // Note that a numbered list of tasks, and a nested numbered list counting from other than one, print back as neither, so each stays a card.
+  if (node.ordered === true && (task || (depth > 0 && (node.start ?? 1) !== 1))) return undefined;
 
   for (const [index, item] of node.children.entries()) {
     const checked = checks[index];
@@ -362,7 +362,19 @@ function listLines(
         : (paragraphLines(markdown, [paragraph], files) ?? []);
 
     if (read === undefined) return undefined;
-    const boxed = task ? { ...read, checked: checked === true } : read;
+
+    // Note that a nested item is a task by its own box, so plain items beside tasks stay plain; the block's own items take the block's kind, as before nesting.
+    const boxed = (depth === 0 ? task : checked !== undefined)
+      ? { ...read, checked: checked === true }
+      : read;
+
+    const marker =
+      node.ordered === true
+        ? LIST_MARKER.ORDERED
+        : checked === undefined
+          ? LIST_MARKER.BULLET
+          : LIST_MARKER.TASK;
+
     lines.push(depth === 0 ? boxed : { ...boxed, depth, marker });
 
     for (const list of lists) {

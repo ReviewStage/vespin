@@ -1587,6 +1587,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       let facts = lines[last].facts
       pendingLine = (textView.textStorage.length, facts)
       textView.typingAttributes = pendingAttributes(facts)
+      // Note that the move is a change JavaScript hears, as an edit is, so an answer from before it is not drawn over it and a save holds it.
+      changes += 1
+      tell()
       updateBar()
       return
     }

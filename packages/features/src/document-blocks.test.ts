@@ -92,6 +92,13 @@ describe("documentBlocks", () => {
     ]);
   });
 
+  it.each([
+    ["a numbered list of tasks", "1. [ ] Ship\n2. [x] Test\n"],
+    ["a nested numbered list counting from other than one", "- Plan\n\n  3. Model\n  4. Screen\n"],
+  ])("keeps %s as a card, since it would print back otherwise", (_, markdown) => {
+    expect(documentBlocks(markdown).map((block) => block.kind)).toEqual([BLOCK_KIND.LOCKED]);
+  });
+
   it("reads a mention as its pill between words", () => {
     const mention = "[@Ada Lovelace](https://vespin.dev/stage/person/u-ada)";
     const [block] = documentBlocks(`Ask ${mention} now`);
@@ -288,6 +295,17 @@ describe("printBlock", () => {
       },
     ],
     ["a list nested three deep under numbered items, each item editable", NESTED],
+    [
+      "tasks and plain items nested side by side, each in its own list",
+      {
+        kind: BLOCK_KIND.BULLET_LIST,
+        lines: [
+          { runs: [words("Ship")] },
+          { runs: [words("Done")], checked: true, depth: 1, marker: LIST_MARKER.TASK },
+          { runs: [words("Note")], depth: 1, marker: LIST_MARKER.BULLET },
+        ],
+      },
+    ],
   ])("reads %s printed back as the same content", (_, block) => {
     const [read] = documentBlocks(printBlock(block));
 
