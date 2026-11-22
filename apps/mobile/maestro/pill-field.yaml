@@ -140,8 +140,12 @@ appId: dev.vespin.ios
 - takeScreenshot: document-field-nested-out
 # Note that the field now stands three lines tall over the keyboard, which
 # can hide the Markdown under it, so the keyboard is lowered and the page
-# scrolled to the Markdown before it is read.
+# scrolled to the Markdown; the Markdown is then waited on until it reads
+# as the field wrote it, since the field writes its words once a frame.
 - runFlow: subflows/lower-keyboard.yaml
 - scrollUntilVisible:
-    element: "(?s).*- [^\\n]*Plan\\n  - Model[^\\n]*\\n- +Ship.*"
+    element: "(?s).*- [^\\n]*Plan\\n.*"
     direction: DOWN
+- extendedWaitUntil:
+    visible: "(?s).*- [^\\n]*Plan\\n  - Model[^\\n]*\\n- +Ship.*"
+    timeout: 10000
