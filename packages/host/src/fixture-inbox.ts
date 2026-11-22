@@ -185,6 +185,7 @@ import {
   fixtureAgentOlderMessages,
   fixtureAgentPicture,
   fixtureAgentTranscript,
+  fixtureDigestTranscript,
   fixtureLongTranscript,
   fixtureManagerTranscript,
 } from "./fixture-agent-transcript.js";
@@ -903,6 +904,10 @@ function agentOn(
 /** When the invitations agent's run began, which its transcript counts from. */
 const INVITES_STARTED = LANDED - 3 * DAY;
 
+/** How long before the fixture landed the digest agent's run began, which its transcript counts from. */
+const DIGEST_AGO = 4 * HOUR;
+const DIGEST_STARTED = LANDED - DIGEST_AGO;
+
 /**
  * The call the invitations agent holds for the account's answer, as it asks
  * before a shell command in Ask mode: its last turn's test run, which its
@@ -945,7 +950,7 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
         TASK.DIGEST,
         "Send the weekly digest",
         AGENT_STATUS.RUNNING,
-        4 * HOUR,
+        DIGEST_AGO,
       ),
       model: CODEX_MODEL,
       runtime: AGENT_RUNTIME.CODEX,
@@ -2116,6 +2121,9 @@ const INVITES_TRANSCRIPT = withQueued(
 /** The rounding agent's finished run, long enough that its page opens far below its first row, its words wide in places: a link, a code block, and a table. */
 const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix ledger rounding");
 
+/** The digest agent's run, which the weekly digest automation's newest run opens. */
+const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the weekly digest");
+
 /** The release Manager's run, which its page draws as its chat. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
 
@@ -2137,7 +2145,7 @@ function withQueued(transcript: AppTranscript): AppTranscript {
   return { ...transcript, word: { ...word, queue: { messages: queued, revision: 1 } } };
 }
 
-/** The transcripts main holds with the invitations and rounding agents' and the Manager's laid over them, one object for each of main's. */
+/** The transcripts main holds with the invitations, rounding, and digest agents' and the Manager's laid over them, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
@@ -2154,6 +2162,7 @@ function stagedTranscripts(
     ...held,
     [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
+    [AGENT.DIGEST]: { ...held[AGENT.DIGEST], [OWN_TRANSCRIPT]: { rows: DIGEST_TRANSCRIPT } },
     [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
   };
 
@@ -3061,7 +3070,7 @@ const AUTOMATION_RUNS: ReadonlyMap<string, readonly AutomationRunSummary[]> = ne
         1,
         LANDED - DIGEST_DUE.LAST,
         { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: DIGEST_DUE.LAST },
-        { id: AGENT.DIGEST, title: "Write the weekly digest", status: AGENT_STATUS.COMPLETED },
+        { id: AGENT.DIGEST, title: "Send the weekly digest", status: AGENT_STATUS.RUNNING },
       ),
       automationRun(
         2,

@@ -1,4 +1,4 @@
-# settings-automations.yaml -- Settings › Automations on the Inbox fixture: the workspace's automations, the workspace's first and Ada's own after, each with what fires it and how its newest run went; a row's Run now and switch in its long press menu; an automation's page, read-only, with its switch, Run now, and recent runs; and a run opening the agent it started.
+# settings-automations.yaml -- Settings › Automations on the Inbox fixture: the workspace's automations, the workspace's first and Ada's own after, each with what fires it and how its newest run went; a row's Run now and switch in its long press menu; an automation's page, read-only, with its switch turned off and on, Run now, and recent runs; and a run opening the agent it started on the tabs, Settings closed, so Back goes to the Tasks list.
 #
 # Launched on the host's Inbox fixture, whose workspace holds three
 # automations and their runs (`@repo/host/fixture-inbox`'s
@@ -47,17 +47,42 @@ env:
 - assertVisible: "Run now"
 - assertVisible: "Trigger"
 - takeScreenshot: settings-automation
-# The switch turns it off at once, as the host draws a switch turned.
-- tapOn: "On"
+# The switch turns it off at once, as the host draws a switch turned, and on
+# again. Note that the switch is pressed where it stands, at the row's
+# trailing end, because a press on the row's words turns nothing, as in iOS's
+# own Settings.
+- tapOn:
+    text: "On"
+    checked: true
+    point: "92%,50%"
+- assertVisible:
+    text: "On"
+    checked: false
 - waitForAnimationToEnd
 - takeScreenshot: settings-automation-off
-- tapOn: "On"
+- tapOn:
+    text: "On"
+    checked: false
+    point: "92%,50%"
+- assertVisible:
+    text: "On"
+    checked: true
 - waitForAnimationToEnd
 - scrollUntilVisible:
-    element: "Write the weekly digest"
+    element: "Send the weekly digest"
 - takeScreenshot: settings-automation-runs
-# A run opens the agent it started, on the tabs, the Settings sheet gone.
-- tapOn: "Write the weekly digest"
+# A run opens the agent it started, on the tabs, the Settings sheet gone:
+# its transcript drawn, and Back going to the tabs rather than to the
+# automation's page, which a page pushed inside the sheet would.
+- tapOn: "Send the weekly digest"
 - waitForAnimationToEnd
+- assertVisible: ".*merged pull requests.*"
 - assertNotVisible: "Recent runs"
 - takeScreenshot: settings-automation-agent
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+- assertVisible: "Weekly digest email"
+- assertNotVisible: "Weekly digest"
+- assertNotVisible: "Recent runs"
+- takeScreenshot: settings-automation-agent-back

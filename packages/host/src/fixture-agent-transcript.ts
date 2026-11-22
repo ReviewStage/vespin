@@ -1,5 +1,5 @@
 /**
- * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; the rounding agent's, ten finished turns with wide words; and the release Manager's short chat.
+ * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; the rounding agent's, ten finished turns with wide words; the digest agent's short run, still at work; and the release Manager's short chat.
  *
  * The Inbox fixture lays it on the document where the host holds an
  * agent's transcript (`LIVE_READ.TRANSCRIPT`), so the panel's agent page
@@ -383,6 +383,50 @@ export function fixtureAgentTranscript(
   return {
     messages: transcriptMessages(startedAt, reader),
     cursor: "3:0",
+    word: { status: AGENT_STATUS.RUNNING, runStartedAt: startedAt, title, caughtUp: true },
+    pages: 1,
+  };
+}
+
+/**
+ * The digest agent's transcript, its instants counted from `startedAt`: the
+ * weekly digest automation's prompt, which began the run, and the agent's
+ * turn on it, still at work on its last call, so the page an automation's
+ * run opens draws a transcript.
+ */
+export function fixtureDigestTranscript(
+  startedAt: number,
+  reader: { readonly userId: string; readonly name: string },
+  title: string,
+): AppTranscript {
+  const messages: readonly AgentTranscriptMessage[] = [
+    asked(
+      "fixture-digest-ask",
+      startedAt,
+      "Summarize what merged and what is still open this week, and post it to the team's digest.",
+      reader,
+    ),
+    {
+      id: "fixture-digest-work",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        { type: "step-start" },
+        {
+          type: "text",
+          text: "Reading this week's merged pull requests before I write the digest.",
+        },
+        runningPart(AGENT_TOOL.BASH, "fixture-digest-merged", {
+          command: "gh pr list --state merged --limit 50",
+          description: "List this week's merged pull requests",
+        }),
+      ],
+      startedAt: startedAt + MINUTE,
+    },
+  ];
+
+  return {
+    messages,
+    cursor: "1:0",
     word: { status: AGENT_STATUS.RUNNING, runStartedAt: startedAt, title, caughtUp: true },
     pages: 1,
   };
