@@ -1,0 +1,99 @@
+probe rows 8278, commands 474, frames 14246
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
+cold-launch | 4 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | -1 | None | None | -1 | None
+inbox-row | 6 | topTouchEnd | 633 | 0 | 0 | 0 | 0 | None | 114 | 0 | 258 | 308 | 948 | 1193 | 24
+back-from-thread | 5 | topTouchEnd | 703 | 0 | 0 | 0 | 0 | None | 35 | 0 | -19 | 141 | 826 | 1397 | 68
+more-menu | 6 | topTouchEnd | 710 | 0 | 0 | 0 | 0 | None | 0 | 0 | -23 | 192 | 902 | 1064 | 33
+new-task | 6 | topTouchEnd | 640 | 0 | 0 | 0 | 0 | None | 226 | 0 | 6 | 421 | 1064 | 1214 | 20
+new-task-cancel | 5 | topTouchEnd | 771 | 0 | 0 | 0 | 0 | None | 0 | 0 | -17 | 202 | 973 | 770 | 20
+switcher-open | 6 | topTouchEnd | 777 | 0 | 0 | 0 | 0 | None | 0 | 0 | -28 | 150 | 931 | 1058 | 60
+switch-workspace | 5 | topIsOnChange | 617 | 0 | 0 | 0 | 0 | None | 0 | 0 | -24 | 144 | 761 | 1314 | 32
+switch-back | 5 | topIsOnChange | 549 | 0 | 0 | 0 | 0 | None | 59 | 0 | -20 | 147 | 709 | 1319 | 25
+tab-tasks | 6 | topTouchEnd | 755 | 0 | 0 | 0 | 0 | None | 0 | 0 | -20 | 94 | 849 | 940 | 22
+tab-inbox | 5 | topTouchEnd | 735 | 0 | 0 | 0 | 0 | None | 0 | 0 | -21 | 107 | 839 | 1589 | 18
+tasks-row | 6 | topTouchEnd | 648 | 0 | 0 | 0 | 0 | None | 268 | 0 | 70 | 390 | 1024 | 1172 | 203
+back-from-task | 5 | topTouchEnd | 881 | 0 | 0 | 0 | 0 | None | 48 | 0 | -21 | 130 | 1005 | 1026 | 72
+status-chip-open | 7 | topTouchEnd | 768 | 0 | 0 | 0 | 0 | None | 0 | 0 | 84 | 190 | 988 | 1220 | 24
+status-pick | 6 | topWindowChange | 358 | 0 | 0 | 0 | 0 | None | 20 | 0 | 84 | 405 | 720 | 1744 | 180
+send | 4 | topTouchEnd | 729 | 0 | 0 | 0 | 0 | None | 17 | 0 | -1 | 193 | 938 | 254 | 52
+agent-row | 6 | topTouchEnd | 655 | 0 | 0 | 0 | 0 | None | 126 | 0 | 57 | 202 | 857 | 1229 | 145
+back-from-agent | 5 | topTouchEnd | 749 | 0 | 0 | 0 | 0 | None | 319 | 0 | -22 | 138 | 891 | 1693 | 22
+inbox-row-plain | 6 | topTouchEnd | 611 | 0 | 0 | 0 | 0 | None | 44 | 0 | 197 | 199 | 839 | 1161 | 22
+back-from-plain | 5 | topTouchEnd | 609 | 0 | 0 | 0 | 0 | None | 0 | 0 | -20 | 141 | 752 | 1396 | 48
+inbox-row-long | 6 | topTouchEnd | 732 | 0 | 0 | 0 | 0 | None | 202 | 0 | 292 | 292 | 1004 | 1264 | 25
+back-from-long | 5 | topTouchEnd | 768 | 0 | 0 | 0 | 0 | None | 34 | 0 | -22 | 134 | 901 | 1422 | 28
+
+most rendered components per path (summed over its taps):
+cold-launch: 
+inbox-row: 
+back-from-thread: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+switcher-open: 
+switch-workspace: 
+switch-back: 
+tab-tasks: 
+tab-inbox: 
+tasks-row: 
+back-from-task: 
+status-chip-open: 
+status-pick: 
+send: 
+agent-row: 
+back-from-agent: 
+inbox-row-plain: 
+back-from-plain: 
+inbox-row-long: 
+back-from-long: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+cold-launch: 
+inbox-row: 
+back-from-thread: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+switcher-open: 
+switch-workspace: 
+switch-back: 
+tab-tasks: 
+tab-inbox: 
+tasks-row: 
+back-from-task: 
+status-chip-open: 
+status-pick: 
+send: 
+agent-row: 
+back-from-agent: 
+inbox-row-plain: 
+back-from-plain: 
+inbox-row-long: 
+back-from-long: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+cold-launch: markdown 0.0, rest 0.0
+inbox-row: markdown 0.0, rest 0.0
+back-from-thread: markdown 0.0, rest 0.0
+more-menu: markdown 0.0, rest 0.0
+new-task: markdown 0.0, rest 0.0
+new-task-cancel: markdown 0.0, rest 0.0
+switcher-open: markdown 0.0, rest 0.0
+switch-workspace: markdown 0.0, rest 0.0
+switch-back: markdown 0.0, rest 0.0
+tab-tasks: markdown 0.0, rest 0.0
+tab-inbox: markdown 0.0, rest 0.0
+tasks-row: markdown 0.0, rest 0.0
+back-from-task: markdown 0.0, rest 0.0
+status-chip-open: markdown 0.0, rest 0.0
+status-pick: markdown 0.0, rest 0.0
+send: markdown 0.0, rest 0.0
+agent-row: markdown 0.0, rest 0.0
+back-from-agent: markdown 0.0, rest 0.0
+inbox-row-plain: markdown 0.0, rest 0.0
+back-from-plain: markdown 0.0, rest 0.0
+inbox-row-long: markdown 0.0, rest 0.0
+back-from-long: markdown 0.0, rest 0.0
+
+whole run: 471s, 0 commits, 0 components rendered, 22600 ms of stalls over 182 stalls
+events: topTransitionProgress×3617, topHeaderHeightChange×942, topGlobalEvent×568, topWindowChange×303, topLoad×181, topLoadEnd×181, topLoadStart×181, topWillAppear×129, topWords×123, topFinishTransitioning×120, topWillDisappear×108, topAppear×105, topTouchStart×103, topTouchEnd×103, topDisappear×86
