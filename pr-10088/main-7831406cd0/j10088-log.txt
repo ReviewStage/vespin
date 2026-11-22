@@ -1,0 +1,10 @@
+== bundle PJj10088 base 7831406cd0
+  built 7831406cd0 base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-f10088: fails 0 shots 3 
+iphone-dark-f10088: fails 0 shots 3 
+ipad27-light-f10088: fails 0 shots 3 
+ipad27-dark-f10088: fails 0 shots 3 
