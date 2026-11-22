@@ -1,0 +1,90 @@
+built main 4bf1e5d3cd + #10436 0538f7da3a as 329151ae75
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 15:07:27 15764 MB
+curve 15:07:57 15477 MB
+curve 15:08:27 13632 MB
+curve 15:08:58 13415 MB
+curve 15:09:28 13241 MB
+curve 15:09:58 13039 MB
+curve 15:10:28 13012 MB
+curve 15:10:58 12921 MB
+curve 15:11:29 12492 MB
+curve 15:12:00 11522 MB
+curve 15:12:30 14834 MB
+curve 15:13:00 14483 MB
+curve 15:13:30 14421 MB
+curve 15:14:01 14256 MB
+curve 15:14:31 14765 MB
+curve 15:15:01 14700 MB
+curve 15:15:31 14658 MB
+curve 15:16:01 14633 MB
+curve 15:16:32 14532 MB
+curve 15:17:02 14411 MB
+curve 15:17:32 14257 MB
+curve 15:18:02 14064 MB
+curve 15:18:32 14043 MB
+curve 15:19:03 13906 MB
+curve 15:19:33 13856 MB
+curve 15:20:03 13822 MB
+curve 15:20:33 13798 MB
+curve 15:21:04 13742 MB
+curve 15:21:34 13721 MB
+curve 15:22:04 13702 MB
+curve 15:22:34 13686 MB
+curve 15:23:04 13674 MB
+curve 15:23:35 13659 MB
+curve 15:24:05 13639 MB
+curve 15:24:35 13621 MB
+curve 15:25:05 13597 MB
+curve 15:25:35 13582 MB
+curve 15:26:05 13547 MB
+curve 15:26:36 13393 MB
+curve 15:27:06 13369 MB
+curve 15:27:36 13338 MB
+curve 15:28:06 13319 MB
+curve 15:28:37 13288 MB
+curve 15:29:07 13260 MB
+curve 15:29:37 13239 MB
+curve 15:30:07 13208 MB
+curve 15:30:37 13159 MB
+curve 15:31:08 13033 MB
+curve 15:31:38 13034 MB
+curve 15:32:08 12552 MB
+curve 15:32:38 12442 MB
+curve 15:33:08 12378 MB
+curve 15:33:39 12204 MB
+curve 15:34:09 12133 MB
+curve 15:34:39 12061 MB
+curve 15:35:09 11993 MB
+curve 15:35:39 11854 MB
+curve 15:36:10 11835 MB
+curve 15:36:40 11747 MB
+curve 15:37:10 11714 MB
+curve 15:37:40 11594 MB
+curve 15:38:10 11549 MB
+curve 15:38:41 11514 MB
+curve 15:39:11 11529 MB
+curve 15:39:41 11499 MB
+curve 15:40:11 11469 MB
+curve 15:40:41 11422 MB
+curve 15:41:11 11305 MB
+curve 15:41:42 11295 MB
+curve 15:42:12 11312 MB
+curve 15:42:42 11270 MB
+BUILD EXIT 0 15:43:12
+sizes: Assets.car 23840456 bytes (main Vmain9.app 23840456), .app 119800 KB (main 119568 KB), zipped .app 45195156 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10428.app: replacing existing signature
+p10436-iphone-light-pill-field: fails 0 shots 7 
+p10436-iphone-dark-pill-field: fails 0 shots 7 
+p10436-iphone-light-fagent10418: fails 1 shots 1 Assert that "Add a way to resend an invite that expired." is visible... FAILED
+p10436-iphone-light-freply10314: fails 0 shots 2 
+p10436-iphone-light-new-task: fails 0 shots 9 
+p10436-ipad27-light-pill-field: fails 0 shots 7 
+p10436-ipad27-light-fagent10418: fails 0 shots 26 
+p10436-ipad27-light-freply10314: fails 0 shots 2 
+p10436-ipad27-light-new-task: fails 0 shots 8 
