@@ -1,0 +1,107 @@
+Auto-merging apps/mobile/modules/pill-field/ios/DocumentFieldView.swift
+built main 3a70b3003f + (built chore/probe-nest-3 06ced97330 in place of main + #10456) as 06ced97330
+description-edit.yaml from #10457 a3e4e6acf5
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 09:22:44 13426 MB
+curve 09:23:15 13409 MB
+curve 09:23:45 12200 MB
+curve 09:24:15 17599 MB
+curve 09:24:45 17360 MB
+curve 09:25:16 17028 MB
+curve 09:25:46 17013 MB
+curve 09:26:16 16951 MB
+curve 09:26:46 16948 MB
+curve 09:27:16 16927 MB
+curve 09:27:46 16828 MB
+curve 09:28:17 16572 MB
+curve 09:28:47 16431 MB
+curve 09:29:17 16410 MB
+curve 09:29:47 16913 MB
+curve 09:30:17 16750 MB
+curve 09:30:48 16700 MB
+curve 09:31:18 16685 MB
+curve 09:31:48 16556 MB
+curve 09:32:18 16333 MB
+curve 09:32:48 16248 MB
+curve 09:33:18 16234 MB
+curve 09:33:49 16162 MB
+curve 09:34:19 16149 MB
+curve 09:34:49 16012 MB
+curve 09:35:19 15923 MB
+curve 09:35:49 15913 MB
+curve 09:36:20 15888 MB
+curve 09:36:50 15846 MB
+curve 09:37:20 15774 MB
+curve 09:37:50 15754 MB
+curve 09:38:21 15743 MB
+curve 09:38:51 15738 MB
+curve 09:39:21 15730 MB
+curve 09:39:51 15717 MB
+curve 09:40:21 15702 MB
+curve 09:40:51 15692 MB
+curve 09:41:22 15673 MB
+curve 09:41:52 15659 MB
+curve 09:42:22 15639 MB
+curve 09:42:52 15604 MB
+curve 09:43:23 15590 MB
+curve 09:43:53 15557 MB
+curve 09:44:23 15547 MB
+curve 09:44:53 15511 MB
+curve 09:45:23 15408 MB
+curve 09:45:54 15383 MB
+curve 09:46:24 15354 MB
+curve 09:46:54 15336 MB
+curve 09:47:24 15293 MB
+curve 09:47:55 15224 MB
+curve 09:48:25 15031 MB
+curve 09:48:55 15020 MB
+curve 09:49:25 14624 MB
+curve 09:49:55 14561 MB
+curve 09:50:26 14430 MB
+curve 09:50:56 14318 MB
+curve 09:51:26 14286 MB
+curve 09:51:56 14171 MB
+curve 09:52:27 14062 MB
+curve 09:52:57 14018 MB
+curve 09:53:27 13974 MB
+curve 09:53:57 13911 MB
+curve 09:54:27 13842 MB
+curve 09:54:58 13801 MB
+curve 09:55:28 13728 MB
+curve 09:55:58 13729 MB
+curve 09:56:28 13720 MB
+curve 09:56:58 13677 MB
+curve 09:57:29 13632 MB
+curve 09:57:59 13615 MB
+curve 09:58:29 13356 MB
+curve 09:58:59 13336 MB
+curve 09:59:29 13294 MB
+curve 09:59:59 13267 MB
+curve 10:00:30 13235 MB
+curve 10:01:00 13221 MB
+curve 10:01:30 13234 MB
+curve 10:02:00 13222 MB
+curve 10:02:31 13210 MB
+curve 10:03:01 13193 MB
+curve 10:03:31 13176 MB
+curve 10:04:01 13015 MB
+curve 10:04:31 12948 MB
+curve 10:05:02 12947 MB
+curve 10:05:32 12942 MB
+curve 10:06:02 12942 MB
+curve 10:06:32 12888 MB
+BUILD EXIT 0 10:07:02
+sizes: Assets.car 23863128 bytes (main Vp10453.app 23859528), .app 119980 KB (main 119916 KB), zipped .app 45254893 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnest3.app: replacing existing signature
+p10456-iphone-light-nest3-1: fails 0 shots 1 
+p10456-iphone-light-nest3-2: fails 0 shots 1 
+p10456-iphone-light-nest3-3: fails 0 shots 1 
+p10456-iphone-light-nest3-4: fails 0 shots 1 
+p10456-iphone-light-nest3-5a: fails 0 shots 1 
+p10456-iphone-light-nest3-5b: fails 0 shots 1 
+p10456-iphone-light-nest3-6: fails 0 shots 1 

@@ -1,0 +1,14 @@
+== step 1
+'Plan'
+== step 2
+'Plan'
+== step 3
+'Plan\nAd '
+== step 4
+'Plan\nAd '
+== step 5a
+'Plan\nAd\n  '
+== step 5b
+'Plan\nAd\n  '
+== step 6
+'Plan\nAd\nO  '
