@@ -1062,7 +1062,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let storage = textView.textStorage
     let string = storage.string as NSString
     let caret = min(textView.selectedRange.location, string.length)
-    let paragraph = string.paragraphRange(for: NSRange(location: caret, length: 0))
+    let paragraph = caretLine(caret)
     guard textView.selectedRange.length == 0, paragraph.location > 0 else { return }
     let before = string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0)).location
     guard let facts = storage.attribute(lineKey, at: before, effectiveRange: nil) as? LineFacts,
@@ -1494,7 +1494,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let storage = textView.textStorage
     let string = storage.string as NSString
     let caret = min(textView.selectedRange.location, string.length)
-    let paragraph = string.paragraphRange(for: NSRange(location: caret, length: 0))
+    let paragraph = caretLine(caret)
     let lineBefore = paragraph.location > 0 ? string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0)).location : nil
     let factsAt = paragraph.length > 0 ? paragraph.location : lineBefore ?? -1
     guard factsAt >= 0, factsAt < string.length,
@@ -1508,6 +1508,13 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let before = lineBefore.flatMap { storage.attribute(lineKey, at: $0, effectiveRange: nil) as? LineFacts }
     // Note that an empty last line's facts are its line before's, which it carries on.
     return (facts, end <= words, caret == words, paragraph.length > 0 ? before : facts)
+  }
+
+  /// The paragraph a caret at `caret` stands in: the empty line after a last line break where it stands past it, which `paragraphRange` reads as the line before, as `paragraphRanges` lists it.
+  private func caretLine(_ caret: Int) -> NSRange {
+    let string = textView.textStorage.string as NSString
+    let atEmptyEnd = caret == string.length && (string.length == 0 || string.character(at: string.length - 1) == 0x0A)
+    return atEmptyEnd ? NSRange(location: caret, length: 0) : string.paragraphRange(for: NSRange(location: caret, length: 0))
   }
 
   /// The nested list item the caret stands in with nothing selected, whether its words are empty and whether the caret stands at their start; none elsewhere.
