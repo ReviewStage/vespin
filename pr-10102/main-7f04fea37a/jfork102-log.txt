@@ -1,0 +1,10 @@
+== bundle PJjfork102 base 7f04fea37a
+  built 7f04fea37a base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-f10102: fails 1 shots 6 Long press on "Add a way to resend an invite that expired."... FAILED
+iphone-dark-f10102: fails 1 shots 6 Long press on "Add a way to resend an invite that expired."... FAILED
+ipad27-light-f10102: fails 1 shots 6 Long press on "Add a way to resend an invite that expired."... FAILED
+ipad27-dark-f10102: fails 1 shots 6 Long press on "Add a way to resend an invite that expired."... FAILED
