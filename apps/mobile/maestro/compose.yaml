@@ -1,8 +1,10 @@
-# compose.yaml -- an agent's composer: the messages queued behind its turn under the "2 queued" capsule over the field, which opens them, each with Steer and Delete, a follow-up typed and sent, the + menu's Photos and MCP servers, the model chip's permission mode, a `/` offering the task's skills, an `@` picked into a pill, and the turn stopped.
+# compose.yaml -- an agent's composer: the messages queued behind its turn under the "2 queued" capsule over the field, which opens them, each with Steer and Delete, a follow-up typed and sent, the + menu's Photos and MCP servers, the model chip's permission mode, a `/` offering the task's skills, an `@` picked into a pill, a folder walked into and a file picked, and the turn stopped.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 # Note that each wait for the screen to settle is capped at five seconds,
 # because the page draws its agent still running, whose mark never stops
 # moving, so an uncapped wait always ran to Maestro's fifteen.
@@ -19,7 +21,14 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "2 queued"
     timeout: 30000
-# The two queued messages stand behind their capsule over the field, which a press opens.
+# The two queued messages stand behind their capsule over the field, which a
+# press opens. Note that the capsules' row scrolls sideways where they outrun
+# the column, as an iPhone's do, leaving the queue's capsule cut at the row's
+# edge, so the row is swiped to bring it whole first: a tap aims at a
+# capsule's middle, which stood past the row's edge.
+- swipe:
+    from: "#128"
+    direction: LEFT
 - tapOn: "2 queued"
 - assertVisible: "Then add a Resend button beside each pending invite."
 - assertVisible: "Steer"
@@ -92,12 +101,24 @@ appId: dev.vespin.ios
 - assertVisible:
     text: "Approve for me.*"
     selected: true
-# Note that the sheet is scrolled back to its head for Done, which drawing
+# Note that a regular window presents the model sheet as a popover from the
+# chip, with no Done, which a tap off it closes, as New agent's does; a
+# compact window's sheet is scrolled back to its head for Done, which drawing
 # it up on a short window, the iPhone Duo's, scrolled out of sight.
-- scrollUntilVisible:
-    element: "Done"
-    direction: UP
-- tapOn: "Done"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    file: subflows/dismiss.yaml
+    env:
+      POINT: "25%, 30%"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: "Done"
+          direction: UP
+      - tapOn: "Done"
 # A `/` typed offers the task's skills over the field, narrowed as the name
 # is typed, and a press writes the skill's word into the message.
 - tapOn:
@@ -128,7 +149,23 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: compose-mention-picked
-- eraseText: 40
+# The task's repository's files and folders, read whole, stand behind
+# `@files:`: a folder's row walks into it, as the desktop's → does, its
+# paths standing under it, and a file's press stands its pill, linked to its
+# GitHub page.
+- inputText: " @files:src/"
+- assertVisible: "invites/"
+- tapOn: "invites/"
+- assertVisible: "resend-link.ts"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-mention-folder
+- tapOn: "resend-link.ts"
+- assertNotVisible: "expiry.ts"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-mention-file
+- eraseText: 80
 - swipe:
     start: "50%, 25%"
     end: "50%, 92%"
