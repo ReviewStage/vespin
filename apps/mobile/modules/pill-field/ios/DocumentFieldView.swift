@@ -468,6 +468,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     super.init(appContext: appContext)
     textView.delegate = self
     textView.backgroundColor = .clear
+    // Note that the words are inset for the whole safe area, the bar over them included, wherever the field stands: under automatic, iPadOS 26 counts no form sheet's bar, so a sheet's first line stood under it.
+    textView.contentInsetAdjustmentBehavior = .always
     textView.textContainer.lineFragmentPadding = 0
     textView.allowsEditingTextAttributes = false
     textView.adjustsFontForContentSizeCategory = true
