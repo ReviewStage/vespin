@@ -39,33 +39,30 @@ Run subflows/tab.yaml... COMPLETED
 Scrolling DOWN until "Launch checklist" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
 Wait for animation to end... COMPLETED
 Run flow when ${FLOATING_TABS != 'true'} is true...
-  Swipe from (8%, 50%) to (38%, 50%) in 900 ms... COMPLETED
+  Swiping in RIGHT direction on "Launch checklist"... COMPLETED
   Wait for animation to end... COMPLETED
   Take screenshot task-leading... COMPLETED
-  Tap on (Optional) "Launch checklist"... COMPLETED
+  Swiping in LEFT direction on "Launch checklist"... COMPLETED
   Wait for animation to end... COMPLETED
-  Swipe from (80%, 50%) to (45%, 50%) in 900 ms... COMPLETED
+  Swiping in LEFT direction on "Launch checklist"... COMPLETED
   Wait for animation to end... COMPLETED
   Take screenshot task-trailing... COMPLETED
-  Tap on (Optional) "Launch checklist"... COMPLETED
+  Swiping in RIGHT direction on "Launch checklist"... COMPLETED
+  Wait for animation to end... COMPLETED
 Run flow when true is true... COMPLETED
 Run flow when ${FLOATING_TABS == 'true'} is true...
 Run flow when false is true... SKIPPED
 Tap on point (50%, 8%)... COMPLETED
 Wait for animation to end... COMPLETED
-Scrolling UP until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... FAILED
-
-No visible element found: "Teammate invitations"
-
-Could not find a visible element matching selector: "Teammate invitations"
-Tip: Try adjusting the following settings to improve detection:
-- `timeout`: current = 20000ms → Increase if you need more time to find the element
-- `speed`: current = 40 (0-100 scale) → Increase for faster scrolling if element is far away
-- `waitToSettleTimeoutMs`: current = Not defined → Set this value (e.g., 500ms) if your UI updates frequently between scrolls
-- `visibilityPercentage`: current = 100% → Lower this value if you want to detect partially visible elements
-- `centerElement`: current = true → Disable if you don't need the element to be centered after finding it
-
-
-==== Debug output (logs & screenshots) ====
-
-/Users/deanstratakos/vespin-ipad-agent/out/sj10078/iphone-light-f10078/2026-11-22_120542
+Scrolling UP until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Scrolling DOWN until "Build teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+  Swipe from (80%, 50%) to (45%, 50%) in 900 ms... COMPLETED
+Run flow when true is true... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+Run flow when false is true... SKIPPED
+Wait for animation to end... COMPLETED
+Take screenshot agent-trailing... COMPLETED

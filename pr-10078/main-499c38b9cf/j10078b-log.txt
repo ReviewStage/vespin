@@ -1,0 +1,8 @@
+== bundle PJj10078b base 499c38b9cf
+  built 499c38b9cf base app Vp10453.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-f10078: fails 0 shots 5 
+iphone-dark-f10078: fails 0 shots 5 
