@@ -40,7 +40,7 @@
     "effect": "catalog:",
     "husky": "9.1.7",
     "knip": "6.47.0",
-    "lint-staged": "17.6.1",
+    "lint-staged": "17.6.2",
     "oxlint": "1.94.0",
     "tsx": "catalog:",
     "turbo": "2.11.13",
