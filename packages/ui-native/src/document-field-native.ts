@@ -28,6 +28,8 @@ interface NativeLineFacts {
   readonly language?: string | undefined;
   readonly locked?: string | undefined;
   readonly checked?: boolean | undefined;
+  readonly depth?: number | undefined;
+  readonly marker?: string | undefined;
   readonly from?: number | undefined;
 }
 
@@ -61,6 +63,8 @@ export const FORMAT_ACT = {
   CODE: "code",
   LINK: "link",
   MENTION: "mention",
+  INDENT: "indent",
+  OUTDENT: "outdent",
   PARAGRAPH: "paragraph",
   HEADING_1: "heading-1",
   HEADING_2: "heading-2",
@@ -90,6 +94,9 @@ export interface NativeFormats {
   readonly blocksTitle: string;
   readonly blocksGlyph: string;
   readonly blocks: readonly NativeFormatAct[];
+  /** The moves of a list's items a step back out and deeper, leading Turn into's menu, which Shift-Tab and Tab make too. */
+  readonly indent?: NativeFormatAct | undefined;
+  readonly outdent?: NativeFormatAct | undefined;
 }
 
 /** The doors the view opens to JavaScript through its ref. */

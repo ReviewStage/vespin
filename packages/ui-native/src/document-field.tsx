@@ -10,6 +10,8 @@ import {
   INLINE_RUN,
   type InlineMark,
   type InlineRun,
+  LIST_MARKER,
+  type ListMarker,
   LOCKED_KIND,
   type LockedKind,
   writtenDocument,
@@ -77,6 +79,8 @@ const FORMAT_WORDS = {
   MENU: "Format",
   MENTION: "Mention",
   TURN_INTO: "Turn into",
+  INDENT: "Indent",
+  OUTDENT: "Outdent",
   LINK_MESSAGE: "Paste or type a link",
   REMOVE_LINK: "Remove link",
   DONE: "Done",
@@ -91,8 +95,9 @@ function formatAct(action: WritingAction, act: FormatAct): NativeFormatAct {
  * What the field offers on its selection, in its edit menu and the bar over
  * the keyboard: the desktop toolbar's marks and link, then the blocks its
  * Turn into offers that a line of words can be, each in the panel's words
- * and glyph (`@repo/settings`' `WRITING_SHORTCUTS`). A code block and a
- * divider are made on the desktop.
+ * and glyph (`@repo/settings`' `WRITING_SHORTCUTS`), led on the bar's Turn
+ * into by Outdent and Indent, which move a list's items as Shift-Tab and Tab
+ * do. A code block and a divider are made on the desktop.
  */
 const FORMATS: NativeFormats = {
   title: FORMAT_WORDS.MENU,
@@ -116,6 +121,8 @@ const FORMATS: NativeFormats = {
     formatAct(WRITING_BLOCK.TODO_LIST, FORMAT_ACT.TASK_LIST),
     formatAct(WRITING_BLOCK.QUOTE, FORMAT_ACT.QUOTE),
   ],
+  indent: { act: FORMAT_ACT.INDENT, title: FORMAT_WORDS.INDENT, glyph: GLYPH.INDENT },
+  outdent: { act: FORMAT_ACT.OUTDENT, title: FORMAT_WORDS.OUTDENT, glyph: GLYPH.OUTDENT },
 };
 
 /** What a picture or a line break kept as its source draws as in the words. */
@@ -238,12 +245,17 @@ const LOCKED_KINDS: ReadonlyMap<string, LockedKind> = new Map(
   Object.values(LOCKED_KIND).map((kind) => [kind, kind]),
 );
 
+const LIST_MARKERS: ReadonlyMap<string, ListMarker> = new Map(
+  Object.values(LIST_MARKER).map((marker) => [marker, marker]),
+);
+
 /** A line the field tells back as the model's line, a kind it does not know read as a paragraph. */
 function toldLine(line: NativeToldLine, files: ReadonlySet<string>): FieldLine {
   return {
     ...line,
     kind: BLOCK_KINDS.get(line.kind) ?? BLOCK_KIND.PARAGRAPH,
     locked: line.locked === undefined ? undefined : LOCKED_KINDS.get(line.locked),
+    marker: line.marker === undefined ? undefined : LIST_MARKERS.get(line.marker),
     runs: line.runs.map((run) => toldRun(run, files)),
   };
 }

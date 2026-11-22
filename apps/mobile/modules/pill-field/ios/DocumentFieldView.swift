@@ -43,6 +43,8 @@ struct DocumentLineRecord: Record {
   @Field var language: String? = nil
   @Field var locked: String? = nil
   @Field var checked: Bool? = nil
+  @Field var depth: Int? = nil
+  @Field var marker: String? = nil
   @Field var from: Int? = nil
   @Field var runs: [DocumentRunRecord] = []
 }
@@ -70,6 +72,9 @@ struct FormatsRecord: Record {
   @Field var blocksTitle: String = ""
   @Field var blocksGlyph: String = ""
   @Field var blocks: [FormatActRecord] = []
+  /// The bar's moves of a list's items a step deeper and back, as Tab and Shift-Tab move them.
+  @Field var indent: FormatActRecord? = nil
+  @Field var outdent: FormatActRecord? = nil
 }
 
 /// What a format act does: a mark toggled on the selection, a link asked for, or the selection's lines turned into a block.
@@ -77,6 +82,8 @@ enum DocumentFormat {
   case mark(String)
   case link
   case mention
+  case indent
+  case outdent
   case block(DocumentKind, level: Int?)
 
   /// The act JavaScript names: a mark by `MarkStyle`'s name, `link`, or a block by its kind, a heading by `heading-<level>`.
@@ -89,6 +96,8 @@ enum DocumentFormat {
     switch act {
     case "link": self = .link
     case "mention": self = .mention
+    case "indent": self = .indent
+    case "outdent": self = .outdent
     case "heading-1": self = .block(.heading, level: 1)
     case "heading-2": self = .block(.heading, level: 2)
     case "heading-3": self = .block(.heading, level: 3)
@@ -115,6 +124,32 @@ enum DocumentKind: String {
   case locked
 }
 
+/// The list a nested item stands in, as `@repo/features/document-blocks`' `LIST_MARKER` names it, which may differ from its block's own.
+enum ListMarker: String {
+  case bullet
+  case ordered
+  case task
+
+  /// The list a list block's own items stand in; none for a block that is no list.
+  init?(_ kind: DocumentKind) {
+    switch kind {
+    case .bulletList: self = .bullet
+    case .orderedList: self = .ordered
+    case .taskList: self = .task
+    default: return nil
+    }
+  }
+
+  /// The block kind an item in this list draws as.
+  var kind: DocumentKind {
+    switch self {
+    case .bullet: .bulletList
+    case .ordered: .orderedList
+    case .task: .taskList
+    }
+  }
+}
+
 /// The block a line belongs to, kept on its words as an attribute, so a line a Return types carries it on.
 final class LineFacts: NSObject {
   let block: Int
@@ -125,6 +160,10 @@ final class LineFacts: NSObject {
   let locked: String?
   let checked: Bool?
   let from: Int?
+  /// How deep a list's item stands under its block's own items, which stand at none.
+  let depth: Int?
+  /// The list a nested item stands in, as `ListMarker` names it.
+  let marker: String?
 
   init(_ record: DocumentLineRecord) {
     block = record.block
@@ -135,6 +174,8 @@ final class LineFacts: NSObject {
     locked = record.locked
     checked = record.checked
     from = record.from
+    depth = record.depth
+    marker = record.marker
   }
 
   init(
@@ -145,7 +186,9 @@ final class LineFacts: NSObject {
     language: String? = nil,
     locked: String? = nil,
     checked: Bool? = nil,
-    from: Int? = nil
+    from: Int? = nil,
+    depth: Int? = nil,
+    marker: String? = nil
   ) {
     self.block = block
     self.kind = kind
@@ -155,14 +198,29 @@ final class LineFacts: NSObject {
     self.locked = locked
     self.checked = checked
     self.from = from
+    self.depth = depth
+    self.marker = marker
   }
 
   var drawnKind: DocumentKind { DocumentKind(rawValue: kind) ?? .paragraph }
 
+  /// Whether the line is a list's item, its block's own or a nested one.
+  var isListItem: Bool { ListMarker(drawnKind) != nil }
+
+  /// How deep the line stands, none for a line at its block's own depth.
+  var nesting: Int { isListItem ? max(0, depth ?? 0) : 0 }
+
+  /// What the line draws as: a nested item as its own list's item, any other line as its block.
+  var itemKind: DocumentKind {
+    guard nesting > 0 else { return drawnKind }
+    return (marker.flatMap(ListMarker.init(rawValue:)) ?? .bullet).kind
+  }
+
   /// Whether two lines draw alike: everything but which block they belong to and where it came from.
   func drawsAs(_ other: LineFacts) -> Bool {
     kind == other.kind && level == other.level && start == other.start && language == other.language
-      && locked == other.locked && checked == other.checked
+      && locked == other.locked && checked == other.checked && nesting == other.nesting
+      && (nesting == 0 || itemKind == other.itemKind)
   }
 
   override func isEqual(_ object: Any?) -> Bool {
@@ -181,6 +239,10 @@ final class LineFacts: NSObject {
     if let locked { facts["locked"] = locked }
     if let checked { facts["checked"] = checked }
     if let from { facts["from"] = from }
+    if nesting > 0 {
+      facts["depth"] = nesting
+      facts["marker"] = ListMarker(itemKind)?.rawValue ?? ListMarker.bullet.rawValue
+    }
     return facts
   }
 }
@@ -255,6 +317,21 @@ private let lineKey = NSAttributedString.Key("VespinLine")
 
 /// The address a run of words links to.
 private let linkKey = NSAttributedString.Key("VespinLink")
+
+/// A run of a list's items at one depth as the field draws them: their kind, the list they stand in, the number its first item took, and how many items it holds so far.
+private struct ListRun {
+  let kind: DocumentKind
+  var list: NSTextList?
+  let start: Int
+  var items: Int
+}
+
+/// The runs of a block's items standing open as its lines are drawn, outermost first, and whether a task drawn since broke their lists' paragraphs.
+private struct ListNesting {
+  let block: Int
+  let runs: [ListRun]
+  let broken: Bool
+}
 
 /// How far a list's, a task's and a quote's lines stand in from the edge.
 private enum DocumentSpace {
@@ -419,6 +496,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   /// The words an edit typed, where they stand once it lands, whose block and looks are carried on to them.
   private var typed: NSRange?
 
+  /// The words the last edit the text itself saw laid in, which the keyboard's own edits, such as a prediction it commits, lay in without asking the field first.
+  private var landed: NSRange?
+
   var look = Look() {
     didSet {
       guard look != oldValue else { return }
@@ -490,6 +570,14 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       object: nil
     )
 
+    // Note that the text's own word of each edit is kept, so the block and looks carry on to words the keyboard lays in without asking, as it commits a prediction typed as marked words.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(textEdited(_:)),
+      name: NSTextStorage.didProcessEditingNotification,
+      object: textView.textStorage
+    )
+
     registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (view: DocumentFieldView, _: UITraitCollection) in
       view.redraw(view.heldLines())
     }
@@ -505,6 +593,14 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       width: bounds.width - textView.textContainerInset.left - textView.textContainerInset.right,
       height: line
     )
+  }
+
+  @objc private func textEdited(_ notification: Notification) {
+    let storage = textView.textStorage
+    guard !quiet, storage.editedMask.contains(.editedCharacters), storage.editedRange.location != NSNotFound,
+      storage.editedRange.length > 0
+    else { return }
+    landed = storage.editedRange
   }
 
   @objc private func keyboardMoved(_ notification: Notification) {
@@ -578,18 +674,32 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   // MARK: The text view's delegate
 
   func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+    // Note that a Return on a nested item with no words, and a Delete at a nested item's start, move it out a step rather than end the list or join it to the item before, as Notes and Notion do.
+    if let line = caretNestedLine() {
+      let returned = text == "\n" && range.length == 0 && line.empty
+      let deleted = text.isEmpty && range.length == 1 && line.atStart
+      if returned || deleted {
+        shiftLines(by: -1)
+        return false
+      }
+    }
+
     typed = NSRange(location: range.location, length: (text as NSString).length)
     return true
   }
 
   func textViewDidChange(_ textView: UITextView) {
     guard !quiet else { return }
-    if let typed {
-      carryOn(to: typed)
-      boxNewTask(after: typed)
+    // Note that the words the text itself saw laid in are the ones carried on to, the range asked about being the field's guess before the keyboard lays them.
+    if let piece = landed ?? typed {
+      carryOn(to: piece)
+      boxNewTask(after: piece)
     }
     typed = nil
+    landed = nil
+    takePendingLine()
     keepPendingLine()
+    keepItemDrawn()
     linkRange = nil
     linkWords = nil
     changes += 1
@@ -618,6 +728,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     // Note that a block chosen for the empty last line stays with the line while the caret is elsewhere, and its look comes back with the caret.
     if typed == nil, let pendingLine, textView.selectedRange == NSRange(location: pendingLine.at, length: 0) {
       textView.typingAttributes = pendingAttributes(pendingLine.facts)
+    } else {
+      forgetTypedFacts()
     }
 
     updateBar()
@@ -646,7 +758,23 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     // Note that a link asked for is let go once the words are drawn anew, since the words it was asked for may stand elsewhere now.
     linkRange = nil
     linkWords = nil
-    textView.attributedText = drawn(lines)
+    let next = drawn(lines)
+    let storage = textView.textStorage
+
+    // Note that where the words stay as they stand, as a block's change or an item's move leaves them, only their looks are laid on again, since words laid in whole leave the keyboard's correction holding a range of the words it replaced, which it reads on the next key.
+    let inPlace = keepUndo && next.string == storage.string
+
+    if inPlace {
+      storage.beginEditing()
+      next.enumerateAttributes(in: NSRange(location: 0, length: next.length)) { attributes, range, _ in
+        storage.setAttributes(attributes, range: range)
+      }
+      storage.endEditing()
+      if let layout = textView.textLayoutManager { layout.invalidateLayout(for: layout.documentRange) }
+    } else {
+      textView.attributedText = next
+    }
+
     if !keepUndo { textView.undoManager?.removeAllActions() }
     let length = textView.textStorage.length
     // Note that a field drawn empty types a plain paragraph, rather than in the looks of the words it last held, which UIKit would keep for the next words typed.
@@ -658,6 +786,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       location = min(location + 2, length)
     }
     textView.selectedRange = NSRange(location: location, length: min(selected.length, length - location))
+    // Note that looks laid on in place leave UIKit typing in the looks the caret's words had before, a moved item's old depth among them, so the next words would draw at it; the caret's own looks are handed it again, its line's facts left out, as ever.
+    if inPlace, let typing = lineLooks(at: location) { textView.typingAttributes = typing }
+    forgetTypedFacts()
     quiet = false
     placeholderLabel.isHidden = length > 0
     setNeedsLayout()
@@ -680,17 +811,38 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
     storage.endEditing()
     quiet = false
+    forgetTypedFacts()
+  }
+
+  /// The looks the words typed at `location` take: those of the word before it on its line, else of the line's first character, as UIKit reads them, an attachment's own and the line's facts left out; none on the empty last line, whose typing the line it carries on or a block chosen for it gives.
+  private func lineLooks(at location: Int) -> [NSAttributedString.Key: Any]? {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    guard location <= storage.length else { return nil }
+    let lineStart = location == 0 || string.character(at: location - 1) == 0x0A
+    let at = lineStart ? location : location - 1
+    guard at < storage.length else { return nil }
+    var looks = storage.attributes(at: at, effectiveRange: nil)
+    looks[.attachment] = nil
+    looks[lineKey] = nil
+    return looks
+  }
+
+  /// Lets go of the line facts UIKit types with, which it copies from the words at the caret and keeps as they stood, though JavaScript renames each line's block on each answer and a move lays new facts on in place; words typed with none take their line's own (`heldLine` reads a line by the facts its words hold, else the line before). A block chosen for the empty last line keeps its facts, which are the ones its words take.
+  private func forgetTypedFacts() {
+    if let pendingLine, textView.selectedRange == NSRange(location: pendingLine.at, length: 0) { return }
+    textView.typingAttributes[lineKey] = nil
   }
 
   /// The lines drawn: each a paragraph in its block's look, a task led by its box, a rule and a card as one character across the line, and a line break after every line but the last.
   private func drawn(_ lines: [DocumentLine]) -> NSAttributedString {
     let built = NSMutableAttributedString()
-    // Note that a list's lines share one list, so its markers count on from one item to the next rather than each starting again.
-    var lists: [Int: NSTextList] = [:]
+    // Note that a list's items share one list at each depth, so its markers count on from one item to the next rather than each starting again, and a run of items nested under one stands in a list of its own inside its parent's, counting from one.
+    var nesting: ListNesting?
 
     for (index, line) in lines.enumerated() {
       let piece = NSMutableAttributedString()
-      let kind = line.facts.drawnKind
+      let kind = line.facts.itemKind
 
       if kind == .taskList {
         let box = TaskBoxAttachment(checked: line.facts.checked == true, look: look)
@@ -722,8 +874,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       let whole = NSRange(location: 0, length: piece.length)
       if whole.length == 0 { continue }
       piece.addAttribute(lineKey, value: line.facts, range: whole)
-      let list = textList(line.facts, in: &lists)
-      piece.addAttribute(.paragraphStyle, value: paragraphStyle(line.facts, list: list), range: whole)
+      let lists = itemLists(line.facts, in: &nesting)
+      let underMark = line.facts.itemKind == .taskList && line.facts.nesting > 0
+        && nesting.map { $0.runs.count >= 2 && $0.runs[$0.runs.count - 2].list != nil } == true
+      piece.addAttribute(.paragraphStyle, value: paragraphStyle(line.facts, lists: lists, underMark: underMark), range: whole)
       piece.enumerateAttribute(.font, in: whole) { value, range, _ in
         if value == nil { piece.addAttributes(wordAttributes(kind, line.facts.level, [], nil), range: range) }
       }
@@ -778,41 +932,78 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     return base.fontDescriptor.withSymbolicTraits(traits).map { UIFont(descriptor: $0, size: 0) } ?? base
   }
 
-  /// The list a list's line stands in, one per block, made the first time a block's line asks for it; none for a line in no list.
-  private func textList(_ facts: LineFacts, in lists: inout [Int: NSTextList]) -> NSTextList? {
-    if let made = lists[facts.block] { return made }
+  /// The lists a list's item stands in, outermost first, each depth's run of items sharing one: the item's own list goes on where the item before it at its depth stood in the same kind of list, and starts anew otherwise. A task stands in none, its box marking it, so where one stood between, the next item's lists are made anew counting on from where each stood, since a list's numbers count only its unbroken run of paragraphs.
+  private func itemLists(_ facts: LineFacts, in nesting: inout ListNesting?) -> [NSTextList] {
+    guard facts.isListItem else {
+      nesting = nil
+      return []
+    }
 
-    let list: NSTextList
-    switch facts.drawnKind {
+    let same = nesting?.block == facts.block
+    var runs = same ? nesting?.runs ?? [] : []
+    var broken = same && nesting?.broken == true
+    let depth = min(facts.nesting, runs.count)
+    let kind = facts.itemKind
+
+    if depth < runs.count, runs[depth].kind == kind {
+      runs.removeSubrange((depth + 1)...)
+    } else {
+      runs.removeSubrange(depth...)
+      let start = depth == 0 ? facts.start ?? 1 : 1
+      runs.append(ListRun(kind: kind, list: madeList(kind, depth: depth, start: start), start: start, items: 0))
+    }
+
+    runs[depth].items += 1
+
+    if kind == .taskList {
+      nesting = ListNesting(block: facts.block, runs: runs, broken: true)
+      return []
+    }
+
+    if broken {
+      for index in runs.indices where runs[index].list != nil {
+        // Note that the item counted just now is this one, so its list starts at its own number.
+        let before = runs[index].items - (index == depth ? 1 : 0)
+        runs[index].list = madeList(runs[index].kind, depth: index, start: runs[index].start + before)
+      }
+      broken = false
+    }
+
+    nesting = ListNesting(block: facts.block, runs: runs, broken: broken)
+    return runs.compactMap(\.list)
+  }
+
+  /// A list of `kind`'s items at `depth`: bullets that change their mark with each depth, as Notes' do, or numbers from `start`; none for a task, whose box marks it.
+  private func madeList(_ kind: DocumentKind, depth: Int, start: Int?) -> NSTextList? {
+    switch kind {
     case .bulletList:
-      list = NSTextList(markerFormat: .disc, options: 0)
+      let marks: [NSTextList.MarkerFormat] = [.disc, .circle, .square]
+      return NSTextList(markerFormat: marks[depth % marks.count], options: 0)
     case .orderedList:
-      list = NSTextList(markerFormat: NSTextList.MarkerFormat(rawValue: "{decimal}."), options: 0)
-      list.startingItemNumber = facts.start ?? 1
+      let list = NSTextList(markerFormat: NSTextList.MarkerFormat(rawValue: "{decimal}."), options: 0)
+      list.startingItemNumber = start ?? 1
+      return list
     default:
       return nil
     }
-
-    lists[facts.block] = list
-    return list
   }
 
-  /// A line's paragraph: its list's marker and indent, a quote's indent, and the room between blocks.
-  private func paragraphStyle(_ facts: LineFacts, list: NSTextList?) -> NSParagraphStyle {
+  /// A line's paragraph: its lists' markers and its indent, a step further in for each depth it is nested, a quote's indent, and the room between blocks. A task nested under a bulleted or numbered item stands a step further in still, since the system sets a listed item's words in past its indent by its mark, and the box goes under the parent's words rather than its mark.
+  private func paragraphStyle(_ facts: LineFacts, lists: [NSTextList], underMark: Bool = false) -> NSParagraphStyle {
     let style = NSMutableParagraphStyle()
     style.paragraphSpacing = DocumentSpace.blockGap
-    if let list { style.textLists = [list] }
+    if !lists.isEmpty { style.textLists = lists }
+    let nested = DocumentSpace.indent * CGFloat(facts.nesting)
 
-    switch facts.drawnKind {
-    case .bulletList:
-      style.headIndent = DocumentSpace.indent
-      style.firstLineHeadIndent = DocumentSpace.indent
-      style.paragraphSpacing = DocumentSpace.itemGap
-    case .orderedList:
-      style.headIndent = DocumentSpace.indent
-      style.firstLineHeadIndent = DocumentSpace.indent
+    switch facts.itemKind {
+    case .bulletList, .orderedList:
+      style.headIndent = nested + DocumentSpace.indent
+      style.firstLineHeadIndent = nested + DocumentSpace.indent
       style.paragraphSpacing = DocumentSpace.itemGap
     case .taskList:
+      let under = underMark ? DocumentSpace.indent : 0
+      style.headIndent = nested + under
+      style.firstLineHeadIndent = nested + under
       style.paragraphSpacing = DocumentSpace.itemGap
     case .quote:
       style.headIndent = DocumentSpace.quoteIndent
@@ -860,9 +1051,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     if let pendingLine, pendingLine.at == piece.location {
       let line = NSRange(location: piece.location, length: storage.length - piece.location)
       storage.addAttribute(lineKey, value: pendingLine.facts, range: line)
-      var lists: [Int: NSTextList] = [:]
-      let list = textList(pendingLine.facts, in: &lists)
-      storage.addAttribute(.paragraphStyle, value: paragraphStyle(pendingLine.facts, list: list), range: line)
+      storage.addAttribute(.paragraphStyle, value: paragraphStyle(pendingLine.facts, lists: lastLineLists(pendingLine.facts)), range: line)
       self.pendingLine = nil
       restyleWords(in: line)
     }
@@ -879,6 +1068,54 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     quiet = false
   }
 
+  /// Lays the block chosen for the empty last line on the words now typed there, where the typing did not take it, as a key the field refused leaves UIKit typing in the looks it had before; the line is then drawn as the block it is.
+  private func takePendingLine() {
+    guard let pendingLine else { return }
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    guard pendingLine.at < string.length else { return }
+    let line = string.paragraphRange(for: NSRange(location: pendingLine.at, length: 0))
+    guard line.location == pendingLine.at, line.length > 0,
+      storage.attribute(lineKey, at: line.location, effectiveRange: nil) as? LineFacts !== pendingLine.facts
+    else { return }
+    quiet = true
+    storage.addAttribute(lineKey, value: pendingLine.facts, range: line)
+    quiet = false
+    self.pendingLine = nil
+    let selected = textView.selectedRange
+    redraw(heldLines(), keepUndo: true)
+    textView.selectedRange = selected
+  }
+
+  /// Draws the caret's line as the list item it is read as (`heldLine` carries the line before on) where UIKit typed it plain, as on the line a Return opens at a list's end: an empty line's words typed next take the item's paragraph and facts, and a line already typed plain is drawn again, keeping its undo, since its words are unchanged.
+  private func keepItemDrawn() {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    let caret = min(textView.selectedRange.location, string.length)
+    let paragraph = caretLine(caret)
+    guard textView.selectedRange.length == 0, paragraph.location > 0 else { return }
+    let before = string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0))
+    guard let facts = heldFacts(before),
+      facts.isListItem, facts.itemKind != .taskList,
+      let style = storage.attribute(.paragraphStyle, at: before.location, effectiveRange: nil) as? NSParagraphStyle,
+      !style.textLists.isEmpty
+    else { return }
+    let ends = NSMaxRange(paragraph) > paragraph.location && string.character(at: NSMaxRange(paragraph) - 1) == 0x0A
+    let words = paragraph.length - (ends ? 1 : 0)
+
+    if words == 0 {
+      textView.typingAttributes[.paragraphStyle] = style
+      return
+    }
+
+    let own = heldFacts(paragraph)
+    let drawn = storage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+    guard own == nil || own?.block == facts.block, drawn?.textLists.isEmpty ?? true else { return }
+    let selected = textView.selectedRange
+    redraw(heldLines(), keepUndo: true)
+    textView.selectedRange = selected
+  }
+
   /// Leads a task line a Return opened with its own unchecked box, the caret after it, as a checklist's Return does in Notes and Notion: the line after a typed line break, where its block is a task list and no box leads it.
   private func boxNewTask(after piece: NSRange) {
     let storage = textView.textStorage
@@ -887,7 +1124,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     guard piece.length > 0, start <= storage.length, string.character(at: start - 1) == 0x0A else { return }
     let factsAt = start < storage.length ? start : start - 1
     guard let facts = storage.attribute(lineKey, at: factsAt, effectiveRange: nil) as? LineFacts,
-      facts.drawnKind == .taskList
+      facts.itemKind == .taskList
     else { return }
     if start < storage.length, storage.attribute(.attachment, at: start, effectiveRange: nil) is TaskBoxAttachment {
       return
@@ -969,10 +1206,19 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     blocks.accessibilityLabel = formats.blocksTitle
     // Note that the blocks stand in Turn into's own order wherever the menu opens, rather than turned over to start nearest the button.
     blocks.preferredMenuElementOrder = .fixed
-    // Note that the blocks' menu is built as it opens, so its check stands on the block the caret is in now.
+    // Note that the blocks' menu is built as it opens, so its check stands on the block the caret is in now, and Outdent and Indent lead it, dimmed where the caret's item cannot move that way, since a phone's bar holds no more buttons than its marks and this one.
     blocks.menu = UIMenu(children: [
       UIDeferredMenuElement.uncached { [weak self] answer in
-        answer(self?.formats?.blocks.compactMap { self?.menuAction($0) } ?? [])
+        guard let self, let formats = self.formats else { return answer([]) }
+        let shifts = self.shiftable()
+        let moves = [(formats.outdent, shifts.shallower), (formats.indent, shifts.deeper)].compactMap { pair -> UIAction? in
+          guard let record = pair.0 else { return nil }
+          let action = self.menuAction(record)
+          if !pair.1 { action.attributes = .disabled }
+          return action
+        }
+        let blocks = formats.blocks.map(self.menuAction)
+        answer(moves.isEmpty ? blocks : [UIMenu(options: .displayInline, children: moves)] + blocks)
       },
     ])
     items.append(.flexibleSpace())
@@ -1003,7 +1249,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       return wordsAll(in: selected) { ($0[markStylesKey] as? [String] ?? []).contains(mark) }
     case .link:
       return selected.length > 0 && wordsAll(in: selected) { $0[linkKey] != nil }
-    case .mention:
+    case .mention, .indent, .outdent:
       return false
     case .block(let kind, let level):
       if let facts = emptyLastLineFacts() { return facts.drawnKind == kind && facts.level == level }
@@ -1051,6 +1297,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     case .mark(let mark): toggleMark(mark)
     case .link: askLink()
     case .mention: textView.insertText("@")
+    case .indent: shiftLines(by: 1)
+    case .outdent: shiftLines(by: -1)
     case .block(let kind, let level): turnLines(into: kind, level: level)
     }
   }
@@ -1185,13 +1433,19 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     edited()
   }
 
-  /// The attributes the words typed on an empty last line take from the block chosen for it.
+  /// The attributes the words typed on an empty last line take from the block chosen for it, its lists those the lines above it leave open.
   private func pendingAttributes(_ facts: LineFacts) -> [NSAttributedString.Key: Any] {
-    var lists: [Int: NSTextList] = [:]
-    var attributes = wordAttributes(facts.drawnKind, facts.level, [], nil)
+    var attributes = wordAttributes(facts.itemKind, facts.level, [], nil)
     attributes[lineKey] = facts
-    attributes[.paragraphStyle] = paragraphStyle(facts, list: textList(facts, in: &lists))
+    attributes[.paragraphStyle] = paragraphStyle(facts, lists: lastLineLists(facts))
     return attributes
+  }
+
+  /// The lists the last line stands in with `facts`, the lines above it laid first, so a nested item at the words' end stands in its parents' lists.
+  private func lastLineLists(_ facts: LineFacts) -> [NSTextList] {
+    var nesting: ListNesting?
+    for line in heldLines().dropLast() { _ = itemLists(line.facts, in: &nesting) }
+    return itemLists(facts, in: &nesting)
   }
 
   /// Keeps the block chosen for the empty last line on that line as edits elsewhere move it, and lets it go once an edit takes the line away.
@@ -1245,7 +1499,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     for index in indexes {
       // Note that a line already a task keeps its box as it stands, and only a line made a task starts unchecked.
       let held = lines[index].facts
-      let checked = target == .taskList ? (held.drawnKind == .taskList ? held.checked ?? false : false) : nil
+      let checked = target == .taskList ? (held.itemKind == .taskList ? held.checked ?? false : false) : nil
       lines[index] = DocumentLine(
         facts: LineFacts(
           block: key,
@@ -1260,8 +1514,116 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       if [.paragraph, .heading, .quote].contains(target) { key += 1 }
     }
 
-    let boxesMove = indexes.contains { (previous[$0].facts.drawnKind == .taskList) != (lines[$0].facts.drawnKind == .taskList) }
+    let boxesMove = indexes.contains { (previous[$0].facts.itemKind == .taskList) != (lines[$0].facts.itemKind == .taskList) }
     relay(lines, from: previous, keepUndo: !boxesMove)
+  }
+
+  /// The paragraph the selection starts in, read alone rather than the whole document, as a keystroke asks of it: its line's facts, whether its words are empty, and whether the caret stands at their start, past a task's box; an empty last line holds the facts of the line break before it.
+  private func caretParagraph() -> (facts: LineFacts, empty: Bool, atStart: Bool, before: LineFacts?)? {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    let caret = min(textView.selectedRange.location, string.length)
+    let paragraph = caretLine(caret)
+    let lineBefore = paragraph.location > 0 ? string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0)).location : nil
+    let lineBeforeRange = lineBefore.map { string.paragraphRange(for: NSRange(location: $0, length: 0)) }
+    let beforeFacts = lineBeforeRange.flatMap(heldFacts)
+    let pending = paragraph.length == 0 ? pendingLine.flatMap { $0.at == caret ? $0.facts : nil } : nil
+    guard let facts = pending ?? (paragraph.length > 0 ? heldFacts(paragraph) : nil) ?? beforeFacts else { return nil }
+    let ends = NSMaxRange(paragraph) > paragraph.location && string.character(at: NSMaxRange(paragraph) - 1) == 0x0A
+    let boxed = paragraph.length > 0 && storage.attribute(.attachment, at: paragraph.location, effectiveRange: nil) is TaskBoxAttachment
+    let words = paragraph.location + (boxed ? 2 : 0)
+    let end = NSMaxRange(paragraph) - (ends ? 1 : 0)
+    // Note that the line before is read as `heldLine` reads a line, by the first facts its words hold, since a line break or words typed may hold none.
+    let before = beforeFacts
+    // Note that a line holding only spaces reads as empty, as it stands to the eye, since a Return before a space the keyboard laid after a word carries the space onto the line it opens.
+    let blank = end <= words || string.substring(with: NSRange(location: words, length: end - words)).trimmingCharacters(in: .whitespaces).isEmpty
+    // Note that an empty last line's facts are its line before's, which it carries on.
+    return (facts, blank, caret == words, paragraph.length > 0 ? before : facts)
+  }
+
+  /// The paragraph a caret at `caret` stands in: the empty line after a last line break where it stands past it, which `paragraphRange` reads as the line before, as `paragraphRanges` lists it.
+  private func caretLine(_ caret: Int) -> NSRange {
+    let string = textView.textStorage.string as NSString
+    let atEmptyEnd = caret == string.length && (string.length == 0 || string.character(at: string.length - 1) == 0x0A)
+    return atEmptyEnd ? NSRange(location: caret, length: 0) : string.paragraphRange(for: NSRange(location: caret, length: 0))
+  }
+
+  /// The facts the words of a paragraph hold, the first that holds any, as `heldLine` reads its line's.
+  private func heldFacts(_ paragraph: NSRange) -> LineFacts? {
+    var held: LineFacts?
+    textView.textStorage.enumerateAttribute(lineKey, in: paragraph) { value, _, stop in
+      guard let value = value as? LineFacts else { return }
+      held = value
+      stop.pointee = true
+    }
+    return held
+  }
+
+  /// The nested list item the caret stands in with nothing selected, whether its words are empty and whether the caret stands at their start; none elsewhere.
+  private func caretNestedLine() -> (empty: Bool, atStart: Bool)? {
+    guard textView.selectedRange.length == 0, let line = caretParagraph(), line.facts.nesting > 0 else { return nil }
+    return (line.empty, line.atStart)
+  }
+
+  /// How deep each line may stand: one under the list item before it in its block, and at its block's own depth where none stands before it.
+  private func deepest(_ index: Int, in lines: [DocumentLine]) -> Int {
+    guard index > 0, lines[index - 1].facts.block == lines[index].facts.block, lines[index - 1].facts.isListItem
+    else { return 0 }
+    return lines[index - 1].facts.nesting + 1
+  }
+
+  /// Whether the caret's list item could move a step deeper, under the item before it, and a step back out, read from its paragraph and the one before alone.
+  private func shiftable() -> (deeper: Bool, shallower: Bool) {
+    guard let line = caretParagraph(), line.facts.isListItem else { return (false, false) }
+    let before = line.before.flatMap { $0.block == line.facts.block && $0.isListItem ? $0 : nil }
+    return (before.map { line.facts.nesting <= $0.nesting } ?? false, line.facts.nesting > 0)
+  }
+
+  /// Moves the selection's list items a step deeper or back out, as Tab and Shift-Tab do in Notes and Notion, each with the items nested under it: an item stands at most one deeper than the item before it in its list and never shallower than its list's own items; nested, it keeps its own list, and back at its list's own depth it takes its list's kind. The caret stays on the same words, and where no task's box comes or goes, one Undo takes the move back.
+  private func shiftLines(by step: Int) {
+    let previous = heldLines()
+    var lines = previous
+    let touched = touchedIndexes().filter { $0 < lines.count && lines[$0].facts.isListItem }
+    var moved = Set<Int>()
+
+    for index in touched where !moved.contains(index) {
+      let held = lines[index].facts
+      let depth = held.nesting
+      let shift = max(0, min(depth + step, deepest(index, in: lines))) - depth
+      guard shift != 0 else { continue }
+      var end = index + 1
+      while end < lines.count, lines[end].facts.block == held.block, lines[end].facts.nesting > depth { end += 1 }
+
+      for each in index..<end {
+        lines[each] = DocumentLine(facts: lines[each].facts.at(depth: lines[each].facts.nesting + shift), runs: lines[each].runs)
+        moved.insert(each)
+      }
+    }
+
+    guard !moved.isEmpty else { return }
+
+    let boxesMove = moved.contains { (previous[$0].facts.itemKind == .taskList) != (lines[$0].facts.itemKind == .taskList) }
+    // Note that the empty line after a last line break holds no character to keep its facts on, so moved, its facts are the ones the words typed next take, as a block chosen for it is; a box it gains or loses is drawn, which gives it characters of its own.
+    let last = lines.count - 1
+    let emptyLastMoved = moved.contains(last) && emptyLastLineFacts() != nil && !boxesMove
+
+    if emptyLastMoved, moved.count == 1 {
+      holdLastLine(lines[last].facts)
+      return
+    }
+
+    relay(lines, from: previous, keepUndo: !boxesMove)
+    // Note that an empty last item moved with the item above it keeps its own new depth, which the drawing, holding no character for it, would read from the item above.
+    if emptyLastMoved { holdLastLine(lines[last].facts) }
+  }
+
+  /// Keeps `facts` for the empty last line as the ones the words typed next take, and tells JavaScript, as an edit is told, so an answer from before it is not drawn over it and a save holds it.
+  private func holdLastLine(_ facts: LineFacts) {
+    pendingLine = (textView.textStorage.length, facts)
+    textView.typingAttributes = pendingAttributes(facts)
+    changes += 1
+    tell()
+    updateBar()
   }
 
   /// Draws block changes of the field's own, keeping the caret on the same words, and where the words stay the same, registers the lines before as the change's undo, whose redo is the lines after.
@@ -1336,7 +1698,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       "link": ("k", .command),
     ]
 
-    return (formats.marks + [formats.link].compactMap { $0 }).compactMap { record in
+    let marks: [UIKeyCommand] = (formats.marks + [formats.link].compactMap { $0 }).compactMap { record in
       guard let chord = chords[record.act] else { return nil }
       let command = UIKeyCommand(
         title: record.title,
@@ -1348,6 +1710,25 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       command.wantsPriorityOverSystemBehavior = true
       return command
     }
+
+    // Note that Tab and Shift-Tab move a list's items only while the caret stands in one, so elsewhere Tab moves on to the next field as the system's does.
+    guard caretParagraph()?.facts.isListItem == true else { return marks }
+    let shifts = [(formats.indent, UIKeyModifierFlags()), (formats.outdent, UIKeyModifierFlags.shift)]
+      .compactMap { pair -> UIKeyCommand? in
+        guard let record = pair.0 else { return nil }
+        let flags = pair.1
+        let command = UIKeyCommand(
+          title: record.title,
+          action: #selector(chorded(_:)),
+          input: "\t",
+          modifierFlags: flags,
+          propertyList: record.act
+        )
+        command.wantsPriorityOverSystemBehavior = true
+        return command
+      }
+
+    return marks + shifts
   }
 
   @objc private func chorded(_ command: UIKeyCommand) {
@@ -1480,7 +1861,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     }
     var facts = held ?? before ?? LineFacts(block: -1, kind: DocumentKind.paragraph.rawValue)
     // Note that a task is checked only by its own box, so a line a Return opened in a checked task starts unchecked.
-    if facts.drawnKind == .taskList { facts = facts.with(checked: false) }
+    if facts.itemKind == .taskList { facts = facts.with(checked: false) }
     var runs: [DocumentRun] = []
 
     storage.enumerateAttributes(in: content) { attributes, range, _ in
@@ -1501,7 +1882,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
       var text = string.substring(with: range)
       // Note that the space after a task's box is the box's, no word of the line.
-      if facts.drawnKind == .taskList, range.location == content.location + 1, runs.isEmpty, text.hasPrefix(" ") {
+      if facts.itemKind == .taskList, range.location == content.location + 1, runs.isEmpty, text.hasPrefix(" ") {
         text.removeFirst()
       }
       if text.isEmpty { return }
@@ -1535,7 +1916,27 @@ extension LineFacts {
       language: language,
       locked: locked,
       checked: checked,
-      from: from
+      from: from,
+      depth: depth,
+      marker: marker
+    )
+  }
+
+  /// The same item at another depth: nested, it keeps its own list, the block's where it stood at the block's own depth; brought to its block's own depth, it takes its block's list; a task keeps its box, and an item made a task starts unchecked.
+  func at(depth next: Int) -> LineFacts {
+    let marker = next == 0 ? nil : ListMarker(itemKind)?.rawValue
+    let drawn = next == 0 ? drawnKind : (marker.flatMap(ListMarker.init(rawValue:)) ?? .bullet).kind
+    return LineFacts(
+      block: block,
+      kind: kind,
+      level: level,
+      start: start,
+      language: language,
+      locked: locked,
+      checked: drawn == .taskList ? checked ?? false : nil,
+      from: from,
+      depth: next == 0 ? nil : next,
+      marker: marker
     )
   }
 }

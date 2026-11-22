@@ -10,6 +10,7 @@ import {
   INLINE_RUN,
   type InlineMark,
   type InlineRun,
+  LIST_MARKER,
   LOCKED_KIND,
   printBlock,
   writtenDocument,
@@ -17,6 +18,31 @@ import {
 import { mentionPill } from "./pill-words.js";
 
 const { STRONG, EMPHASIS, CODE } = INLINE_MARK;
+
+/** A numbered list with bullets under its first item and a numbered run under a bullet, as an agent nests a plan's steps. */
+const NESTED: BlockContent = {
+  kind: BLOCK_KIND.ORDERED_LIST,
+  start: 1,
+  lines: [
+    { runs: [{ kind: INLINE_RUN.WORDS, text: "Model", marks: [] }] },
+    {
+      runs: [{ kind: INLINE_RUN.WORDS, text: "memberships", marks: [] }],
+      depth: 1,
+      marker: LIST_MARKER.BULLET,
+    },
+    {
+      runs: [{ kind: INLINE_RUN.WORDS, text: "pending", marks: [] }],
+      depth: 2,
+      marker: LIST_MARKER.ORDERED,
+    },
+    {
+      runs: [{ kind: INLINE_RUN.WORDS, text: "accepted", marks: [] }],
+      depth: 2,
+      marker: LIST_MARKER.ORDERED,
+    },
+    { runs: [{ kind: INLINE_RUN.WORDS, text: "Screen", marks: [] }] },
+  ],
+};
 
 /** An agent-written description: a heading, a paragraph, a table, a Mermaid diagram, HTML, and a list. */
 const DOCUMENT = [
@@ -64,6 +90,13 @@ describe("documentBlocks", () => {
       [BLOCK_KIND.LOCKED, LOCKED_KIND.HTML],
       [BLOCK_KIND.BULLET_LIST],
     ]);
+  });
+
+  it.each([
+    ["a numbered list of tasks", "1. [ ] Ship\n2. [x] Test\n"],
+    ["a nested numbered list counting from other than one", "- Plan\n\n  3. Model\n  4. Screen\n"],
+  ])("keeps %s as a card, since it would print back otherwise", (_, markdown) => {
+    expect(documentBlocks(markdown).map((block) => block.kind)).toEqual([BLOCK_KIND.LOCKED]);
   });
 
   it("reads a mention as its pill between words", () => {
@@ -211,6 +244,22 @@ describe("printBlock", () => {
       { kind: BLOCK_KIND.CODE, language: "ts", lines: [{ runs: [words("let a = 1")] }] },
       "```ts\nlet a = 1\n```",
     ],
+    [
+      "nested items each indented to where their parent's words start, a numbered run counting from one",
+      NESTED,
+      "1. Model\n   - memberships\n     1. pending\n     2. accepted\n2. Screen",
+    ],
+    [
+      "a task nested under a task, two spaces in",
+      {
+        kind: BLOCK_KIND.TASK_LIST,
+        lines: [
+          { runs: [words("Ship")], checked: true },
+          { runs: [words("Test")], checked: false, depth: 1, marker: LIST_MARKER.TASK },
+        ],
+      },
+      "- [x] Ship\n  - [ ] Test",
+    ],
   ])("prints %s", (_, block, markdown) => {
     expect(printBlock(block)).toBe(markdown);
   });
@@ -242,6 +291,18 @@ describe("printBlock", () => {
         lines: [
           { runs: [words("Ship")], checked: true },
           { runs: [], checked: false },
+        ],
+      },
+    ],
+    ["a list nested three deep under numbered items, each item editable", NESTED],
+    [
+      "tasks and plain items nested side by side, each in its own list",
+      {
+        kind: BLOCK_KIND.BULLET_LIST,
+        lines: [
+          { runs: [words("Ship")] },
+          { runs: [words("Done")], checked: true, depth: 1, marker: LIST_MARKER.TASK },
+          { runs: [words("Note")], depth: 1, marker: LIST_MARKER.BULLET },
         ],
       },
     ],

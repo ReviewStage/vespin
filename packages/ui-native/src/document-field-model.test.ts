@@ -4,6 +4,7 @@ import {
   BLOCK_KIND,
   documentBlocks,
   INLINE_RUN,
+  LIST_MARKER,
   writtenDocument,
 } from "@repo/features/document-blocks";
 import { describe, expect, it } from "vitest";
@@ -67,6 +68,16 @@ describe("editedBlocks", () => {
     const lines = returnedAfter(fieldLines(documentBlocks(markdown)), 1, "three");
 
     expect(writtenDocument(markdown, editedBlocks(lines))).toBe("- one\n- two\n- three\n");
+  });
+
+  it("writes an item the field indented under the item before it, in a list of its own", () => {
+    const markdown = "1. Model\n2. Screen\n3. Ship\n";
+
+    const lines = fieldLines(documentBlocks(markdown)).map((line, index) =>
+      index === 1 ? { ...line, depth: 1, marker: LIST_MARKER.BULLET } : line,
+    );
+
+    expect(writtenDocument(markdown, editedBlocks(lines))).toBe("1. Model\n   - Screen\n2. Ship\n");
   });
 
   it("lays a field's lines back out of the blocks they write, its edge spaces and empty paragraph kept", () => {

@@ -107,3 +107,45 @@ appId: dev.vespin.ios
 - tapOn: "Mention Ada in the description for @Ad"
 - assertVisible: "(?s).*Ask \\[@Ada Lovelace\\]\\(https://vespin.dev/stage/person/u-ada\\).*"
 - takeScreenshot: document-field-mention
+# A list's item moves under the item before it, and back out, from Indent
+# and Outdent at the head of the bar's Turn into, as Tab and Shift-Tab move
+# it in Notes and Notion; a nested item is written two spaces in, under its
+# parent's words.
+- scrollUntilVisible:
+    element: "Clear description"
+    direction: UP
+- tapOn: "Clear description"
+- tapOn:
+    id: "document-field"
+- inputText: "Plan"
+- tapOn: "Turn into"
+- tapOn: "Bulleted list"
+- pressKey: Enter
+- inputText: "Model"
+- tapOn: "Turn into"
+- tapOn: "Indent"
+- assertVisible: "(?s).*- [^\\n]*Plan\\n  - Model.*"
+- takeScreenshot: document-field-nested
+- tapOn: "Turn into"
+- tapOn: "Outdent"
+- assertVisible: "(?s).*- [^\\n]*Plan\\n- Model.*"
+# A Return on an empty nested item takes it a step back out, as a Return
+# on an empty item leaves a list in Notes and Notion, at the words' end as
+# anywhere.
+- tapOn: "Turn into"
+- tapOn: "Indent"
+- pressKey: Enter
+- pressKey: Enter
+- inputText: "Ship"
+- takeScreenshot: document-field-nested-out
+# Note that the field now stands three lines tall over the keyboard, which
+# can hide the Markdown under it, so the keyboard is lowered and the page
+# scrolled to the Markdown; the Markdown is then waited on until it reads
+# as the field wrote it, since the field writes its words once a frame.
+- runFlow: subflows/lower-keyboard.yaml
+- scrollUntilVisible:
+    element: "(?s).*- [^\\n]*Plan\\n.*"
+    direction: DOWN
+- extendedWaitUntil:
+    visible: "(?s).*- [^\\n]*Plan\\n  - Model[^\\n]*\\n- +Ship.*"
+    timeout: 10000
