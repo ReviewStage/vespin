@@ -1,17 +1,15 @@
 // pill-field.tsx -- the app's one field of words that draws mentions and files' markers as pills inside them, as the panel's box draws its chips, while its value stays the Markdown the wire carries.
 
-import { type AtWord, atWordAround } from "@repo/features/at-word";
 import { readerZone } from "@repo/features/date-mention";
 import { styledRuns } from "@repo/features/markdown-styles";
 import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
+import { type CaretAtWord, caretAtWord, drawnPill, sameAtWord, toldWord } from "./caret-at-word.js";
 import {
-  type NativePill,
   NativePillField,
   type NativePillFieldDoors,
   type NativeValue,
-  type NativeWord,
   type NativeWords,
 } from "./pill-field-native.js";
 import { pillLook } from "./pill-look.js";
@@ -19,13 +17,6 @@ import { useColors } from "./tokens/colors.js";
 
 /** No files held: every marker stays words. */
 const NO_FILES: ReadonlySet<string> = new Set();
-
-/** The `@` word the caret stands in, and the drawn words a pick replaces: where they start and end, and the words themselves, `@` and all. */
-export interface CaretAtWord extends AtWord {
-  readonly start: number;
-  readonly end: number;
-  readonly text: string;
-}
 
 /**
  * What a screen does to the field: puts a pill in place of the `@` word the
@@ -65,39 +56,6 @@ interface PillFieldProps {
   readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
   readonly testID?: string | undefined;
-}
-
-/** The `@` word the caret ends where nothing is selected, with the drawn words a pick replaces: the `@`, what is typed after it, and the rest of the word past the caret. */
-function caretAtWord(words: NativeWords): CaretAtWord | undefined {
-  if (words.selected) return undefined;
-  const word = atWordAround(words.before, words.after);
-
-  if (word === undefined) return undefined;
-  const typed = `@${word.query}`;
-
-  return {
-    ...word,
-    start: words.caret - typed.length,
-    end: words.caret + word.rest,
-    text: typed + words.after.slice(0, word.rest),
-  };
-}
-
-/** The `@` word as the native field finds it again: where it stood and its words; none where the caret stands in none. */
-function toldWord(word: CaretAtWord | undefined): NativeWord | undefined {
-  return word === undefined ? undefined : { start: word.start, text: word.text };
-}
-
-/** A pill as the native field draws it: its Markdown, and its look as the chip it becomes once sent. */
-function drawnPill(pill: Pill, repository: string | null): NativePill {
-  const reading = { repository, now: Date.now(), zone: readerZone() };
-
-  return { markdown: pill.markdown, ...pillLook(pill, reading) };
-}
-
-/** Whether two `@` words are the same word at the same place. */
-function sameAtWord(one: CaretAtWord | undefined, other: CaretAtWord | undefined): boolean {
-  return one?.query === other?.query && one?.start === other?.start && one?.end === other?.end;
 }
 
 /**

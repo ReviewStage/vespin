@@ -81,7 +81,7 @@ public final class PillFieldModule: Module {
     }
 
     View(DocumentFieldView.self) {
-      Events("onLines", "onHeight", "onFocusChange", "onLinkAsk")
+      Events("onLines", "onHeight", "onFocusChange", "onLinkAsk", "onCaret")
 
       Prop("value") { (view: DocumentFieldView, value: DocumentValueRecord) in
         view.take(value.lines.map(DocumentLine.init), seen: value.seen)
@@ -105,6 +105,14 @@ public final class PillFieldModule: Module {
 
       AsyncFunction("setLink") { (view: DocumentFieldView, address: String) in
         view.setLink(address)
+      }
+
+      AsyncFunction("insertPills") { (view: DocumentFieldView, pills: [PillRecord], word: WordRecord?) in
+        view.insertPills(pills.map(Pill.init), over: word.map(Word.init))
+      }
+
+      AsyncFunction("rewriteWord") { (view: DocumentFieldView, text: String, word: WordRecord?) in
+        view.rewriteWord(text, over: word.map(Word.init))
       }
 
       AsyncFunction("focus") { (view: DocumentFieldView) in

@@ -3,7 +3,8 @@
 import { requireNativeView } from "expo";
 import type { ComponentType, Ref } from "react";
 import type { NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
-import type { NativeLook, NativePill } from "./pill-field-native.js";
+import type { CaretLine } from "./caret-at-word.js";
+import type { NativeLook, NativePill, NativeWord } from "./pill-field-native.js";
 
 /** A block the phone does not edit, drawn as a card: the source it keeps, and what its card says. */
 export interface NativeCard {
@@ -59,6 +60,7 @@ export const FORMAT_ACT = {
   STRIKE: "strike",
   CODE: "code",
   LINK: "link",
+  MENTION: "mention",
   PARAGRAPH: "paragraph",
   HEADING_1: "heading-1",
   HEADING_2: "heading-2",
@@ -83,6 +85,8 @@ export interface NativeFormats {
   readonly title: string;
   readonly marks: readonly NativeFormatAct[];
   readonly link?: NativeFormatAct | undefined;
+  /** The bar's `@`, which types one, so a mention offer opens on it. */
+  readonly mention?: NativeFormatAct | undefined;
   readonly blocksTitle: string;
   readonly blocksGlyph: string;
   readonly blocks: readonly NativeFormatAct[];
@@ -94,6 +98,10 @@ export interface NativeDocumentFieldDoors {
   blur(): Promise<void>;
   /** Lays the address on the words a link was asked for, or takes their link off where it is empty. */
   setLink(address: string): Promise<void>;
+  /** Puts the pills in place of the `@` word a pick names, found again by its words, or at the caret. */
+  insertPills(pills: readonly NativePill[], word: NativeWord | undefined): Promise<void>;
+  /** Writes plain words in place of the `@` word a pick names. */
+  rewriteWord(text: string, word: NativeWord | undefined): Promise<void>;
 }
 
 interface NativeDocumentFieldProps {
@@ -107,6 +115,8 @@ interface NativeDocumentFieldProps {
   readonly testID?: string | undefined;
   /** A link asked for on the selected words, with the address they hold, empty where none. */
   readonly onLinkAsk: (event: NativeSyntheticEvent<{ readonly address: string }>) => void;
+  /** The caret's line around it, after each edit and each move of the caret. */
+  readonly onCaret: (event: NativeSyntheticEvent<CaretLine>) => void;
   readonly onLines: (
     event: NativeSyntheticEvent<{
       readonly lines: readonly NativeToldLine[];
