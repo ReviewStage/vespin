@@ -1,0 +1,84 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow pill-field
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, pillField=true})... COMPLETED
+Assert that "Mention Ada" is visible... COMPLETED
+Assert that id: pill-field is visible... COMPLETED
+Take screenshot pill-field-laid-in... COMPLETED
+Tap on "Clear"... COMPLETED
+Assert that "Message" is visible... COMPLETED
+Tap on id: pill-field... COMPLETED
+Input text Ping @Ad... COMPLETED
+Assert that "Mention Ada for @Ad" is visible... COMPLETED
+Tap on "Mention Ada for @Ad"... COMPLETED
+Assert that ".*\[@Ada Lovelace\]\(https://vespin.dev/stage/person/u-ada\).*" is visible... COMPLETED
+Input text with ... COMPLETED
+Tap on "Attach a picture"... COMPLETED
+Assert that ".*\[Picture 2\].*" is visible... COMPLETED
+Take screenshot pill-field-picked... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Take screenshot pill-field-written... COMPLETED
+Scrolling DOWN until id: pill-field-styled is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pill-field-styled... COMPLETED
+Tap on id: pill-field-styled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pill-field-styled-caret... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Scrolling DOWN until id: document-field is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot document-field... COMPLETED
+Swiping in UP direction on id: document-field... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot document-field-cards... COMPLETED
+Assert that "(?s).*\| Role \| May withdraw \|\n\| - \| - \|.*" is visible... COMPLETED
+Scrolling UP until "Clear description" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Clear description"... COMPLETED
+Tap on id: document-field... COMPLETED
+Tap on "Bold"... COMPLETED
+Input text Ship... COMPLETED
+Assert that "(?s).*\*\*Ship\*\*.*" is visible... COMPLETED
+Tap on "Turn into"... COMPLETED
+Tap on "Heading 1"... COMPLETED
+Assert that "(?s).*# \*\*Ship\*\*.*" is visible... COMPLETED
+Take screenshot document-field-formatted... COMPLETED
+Scrolling UP until "Clear description" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Clear description"... COMPLETED
+Tap on id: document-field... COMPLETED
+Input text Ask @Ad... COMPLETED
+Tap on "Mention Ada in the description for @Ad"... COMPLETED
+Assert that "(?s).*Ask \[@Ada Lovelace\]\(https://vespin.dev/stage/person/u-ada\).*" is visible... COMPLETED
+Take screenshot document-field-mention... COMPLETED
+Scrolling UP until "Clear description" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Clear description"... COMPLETED
+Tap on id: document-field... COMPLETED
+Input text Plan... COMPLETED
+Tap on "Turn into"... COMPLETED
+Tap on "Bulleted list"... COMPLETED
+Assert that "Strikethrough" is not visible... COMPLETED
+Press Enter key... COMPLETED
+Input text Model... COMPLETED
+Tap on "Indent"... COMPLETED
+Assert that "(?s).*- [^\n]*Plan\n  - Model.*" is visible... COMPLETED
+Take screenshot document-field-nested... COMPLETED
+Tap on "Outdent"... COMPLETED
+Assert that "(?s).*- [^\n]*Plan\n- Model.*" is visible... COMPLETED
+Tap on "Indent"... COMPLETED
+Press Enter key... COMPLETED
+Press Enter key... COMPLETED
+Input text Ship... COMPLETED
+Take screenshot document-field-nested-out... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Scrolling DOWN until "(?s).*- [^\n]*Plan\n.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Assert that "(?s).*- [^\n]*Plan\n  - Model[^\n]*\n- +Ship.*" is visible... COMPLETED
