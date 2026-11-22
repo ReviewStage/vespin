@@ -146,6 +146,7 @@ import {
   TASK_PRIORITY,
   TASK_SKILL_SOURCE,
   TASK_STATUS,
+  TASK_TREE_ENTRY,
   type Task,
   type TaskSummary,
 } from "@repo/features/task-wire";
@@ -2440,6 +2441,21 @@ const INTEGRATION_TOOLS: AppStateSnapshot[typeof LIVE_READ.INTEGRATION_TOOLS] = 
 };
 
 /** The skills the invitations task's repository keeps, as the service finds them. */
+/** The invitations task's repository at its default branch, as one recursive read lists it. */
+const INVITES_TREE = {
+  path: "",
+  repository: "ada/relay",
+  branch: "main",
+  entries: [
+    { name: "README.md", kind: TASK_TREE_ENTRY.FILE },
+    { name: "src", kind: TASK_TREE_ENTRY.FOLDER },
+    { name: "src/invites", kind: TASK_TREE_ENTRY.FOLDER },
+    { name: "src/invites/expiry.ts", kind: TASK_TREE_ENTRY.FILE },
+    { name: "src/invites/resend-link.ts", kind: TASK_TREE_ENTRY.FILE },
+  ],
+  truncated: false,
+} as const;
+
 const SKILLS = {
   repository: "ada/relay",
   branch: "main",
@@ -3550,6 +3566,14 @@ const ANSWERS: StagedAnswers = {
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
+  // The invitations task's repository's tree, read whole as an `@` reads its files and folders; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
+  [ACT_KIND.TASKS_TREE]: (asked) =>
+    "taskId" in asked &&
+    asked.taskId === TASK.INVITES &&
+    asked.recursive === true &&
+    asked.path === ""
+      ? { folder: INVITES_TREE }
+      : { failure: TASK_CALL_FAILURE.UNANSWERED },
   [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
     const held = stagedAgent(agentId);
 
