@@ -97,14 +97,32 @@ function roundMark(round: number) {
 /** How much of Send's look stands while there is nothing to send, as Messages' gray arrow stands before a word is typed. */
 const IDLE_OPACITY = 0.2;
 
-/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
-function roundModifiers(colors: ReturnType<typeof useColors>) {
+/** How far the press frame stands past the round on each side at the default text size, which it keeps as the reader's text grows the round. */
+const ROUND_MARGIN = (PRESS_SIZE - SEND_SIZE) / 2;
+
+/**
+ * The round button's press frame: Apple's least target at the default text
+ * size, and past it the round with the same margin around it. Note that a
+ * frame of the least target alone let a round grown by the reader's text
+ * fill it, so at AX3 Send met the glass's edge while the + kept its room.
+ */
+function roundFrame(round: number) {
+  const side = round + ROUND_MARGIN * 2;
+
+  return [
+    frame({ minWidth: side, minHeight: side }),
+    SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+  ];
+}
+
+/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside its press frame. */
+function roundModifiers(colors: ReturnType<typeof useColors>, round: number) {
   return [
     buttonStyle("borderedProminent"),
     SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
     foregroundStyle(colors.GROUND),
-    ...PRESS_FRAME,
+    ...roundFrame(round),
   ];
 }
 
@@ -122,7 +140,7 @@ function idleRoundModifiers(colors: ReturnType<typeof useColors>, round: number)
     frame({ width: round, height: round }),
     background(colors.TEXT, SwiftModifiers.shapes.circle()),
     opacity(IDLE_OPACITY),
-    ...PRESS_FRAME,
+    ...roundFrame(round),
   ];
 }
 
@@ -386,7 +404,7 @@ function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
     return (
       <Button
         onPress={saving.onSave}
-        modifiers={[...roundModifiers(colors), accessibilityLabel(SAVING_WORDS.SAVE)]}
+        modifiers={[...roundModifiers(colors, round), accessibilityLabel(SAVING_WORDS.SAVE)]}
       >
         {mark}
       </Button>
@@ -397,7 +415,7 @@ function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
     <Menu
       label={mark}
       onPrimaryAction={saving.onSave}
-      modifiers={[...roundModifiers(colors), accessibilityLabel(SAVING_WORDS.SAVE)]}
+      modifiers={[...roundModifiers(colors, round), accessibilityLabel(SAVING_WORDS.SAVE)]}
     >
       <Button {...actContent(SAVING_WORDS.STEER, GLYPH.STEER)} onPress={saving.onSteer} />
     </Menu>
@@ -444,7 +462,7 @@ function SendButton({
       <ProgressView
         modifiers={[
           frame({ width: round, height: round }),
-          ...PRESS_FRAME,
+          ...roundFrame(round),
           tint(colors.TEXT_MUTED),
           accessibilityLabel("Stopping"),
         ]}
@@ -454,7 +472,10 @@ function SendButton({
 
   if (empty && onStop !== undefined) {
     return (
-      <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
+      <Button
+        onPress={onStop}
+        modifiers={[...roundModifiers(colors, round), accessibilityLabel("Stop")]}
+      >
         <Image {...glyphImage(GLYPH.STOP_TURN)} size={stopSize} modifiers={roundMark(round)} />
       </Button>
     );
@@ -464,7 +485,7 @@ function SendButton({
     return (
       <Button
         onPress={onTalk}
-        modifiers={[...roundModifiers(colors), accessibilityLabel(TALK_LABEL.TALK)]}
+        modifiers={[...roundModifiers(colors, round), accessibilityLabel(TALK_LABEL.TALK)]}
       >
         <Image {...glyphImage(GLYPH.TALK)} size={sendSize} modifiers={roundMark(round)} />
       </Button>
@@ -478,7 +499,7 @@ function SendButton({
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        ...(sendable ? roundModifiers(colors) : idleRoundModifiers(colors, round)),
+        ...(sendable ? roundModifiers(colors, round) : idleRoundModifiers(colors, round)),
         disabled(!sendable),
         accessibilityLabel(act?.label ?? "Send"),
       ]}
@@ -946,7 +967,12 @@ function ComposerRow({
     <VStack
       alignment="leading"
       spacing={TOOL_SPACING}
-      modifiers={[onGeometryChange(({ width }) => measured("row")(width)), ROW_SIDES]}
+      modifiers={[
+        // Note that the row is measured as the room the glass gives it, never its own content's width, since an end holding its whole width past that room had grown the row, and the glass with it, to fit, so the end always seemed to fit (`endFits`).
+        frame({ minWidth: 0, maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        onGeometryChange(({ width }) => measured("row")(width)),
+        ROW_SIDES,
+      ]}
     >
       {capsulesOwnLine(widths) ? (
         <>
