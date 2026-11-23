@@ -12,7 +12,7 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 15000
@@ -36,7 +36,7 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       fixture: inbox
-      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
 - runFlow:
     file: subflows/tab.yaml
     env:
@@ -57,7 +57,7 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
 - extendedWaitUntil:
     visible: "2 queued"
     timeout: 15000
@@ -77,7 +77,7 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       fixture: inbox
-      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 15000
