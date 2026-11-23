@@ -1,0 +1,60 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "composedMessage CONTAINS "PROBEINLINE""
+Timestamp               Ty Process[PID:TID]
+2026-11-23 01:44:47.616 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE open nonce=1 start=false line=1 window=false press-to-open=766ms
+2026-11-23 01:44:47.787 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE focusAt asked window=true chars=160481
+2026-11-23 01:44:47.787 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE focusAt layoutIfNeeded=0.0ms
+2026-11-23 01:44:47.787 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE focusAt closestPosition=0.1ms
+2026-11-23 01:44:48.003 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE focusAt becomeFirstResponder=215.4ms (keyboard and its accessory, iOS's)
+2026-11-23 01:44:48.016 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE focusAt=229ms first=true
+2026-11-23 01:44:48.688 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=183.73ms whole=true height=170893 told=nil chars=160481 container=99999999 scrolls=true content=212350
+2026-11-23 01:44:48.779 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.03ms whole=false height=170893 told=Optional(170893.0) chars=160481 container=99999999 scrolls=true content=170893
+2026-11-23 01:44:48.781 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.03ms whole=false height=170893 told=Optional(170893.0) chars=160481 container=99999999 scrolls=true content=170893
+2026-11-23 01:44:51.076 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.59ms chars=160482
+2026-11-23 01:44:51.101 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170893 told=Optional(170893.0) chars=160482 container=99999999 scrolls=true content=170893
+2026-11-23 01:44:58.385 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.41ms chars=160483
+2026-11-23 01:44:58.413 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170893 told=Optional(170893.0) chars=160483 container=99999999 scrolls=true content=170893
+2026-11-23 01:44:58.479 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.45ms chars=160484
+2026-11-23 01:44:58.506 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170893 told=Optional(170893.0) chars=160484 container=99999999 scrolls=true content=170893
+2026-11-23 01:44:58.631 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=2.17ms chars=160485
+2026-11-23 01:44:58.658 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170893.0) chars=160485 container=99999999 scrolls=true content=170910
+2026-11-23 01:44:59.441 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=0.24ms chars=160486
+2026-11-23 01:44:59.468 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160486 container=99999999 scrolls=true content=170919
+2026-11-23 01:44:59.536 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.49ms chars=160487
+2026-11-23 01:44:59.562 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160487 container=99999999 scrolls=true content=170919
+2026-11-23 01:44:59.630 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.46ms chars=160488
+2026-11-23 01:44:59.656 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160488 container=99999999 scrolls=true content=170919
+2026-11-23 01:44:59.721 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.43ms chars=160489
+2026-11-23 01:44:59.747 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160489 container=99999999 scrolls=true content=170919
+2026-11-23 01:44:59.812 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.52ms chars=160490
+2026-11-23 01:44:59.838 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160490 container=99999999 scrolls=true content=170919
+2026-11-23 01:44:59.906 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.58ms chars=160491
+2026-11-23 01:44:59.933 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160491 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:00.000 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.64ms chars=160492
+2026-11-23 01:45:00.027 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160492 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:00.096 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.44ms chars=160493
+2026-11-23 01:45:00.122 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160493 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:00.187 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.47ms chars=160494
+2026-11-23 01:45:00.214 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160494 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:00.280 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.49ms chars=160495
+2026-11-23 01:45:00.306 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160495 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:00.372 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.50ms chars=160496
+2026-11-23 01:45:00.398 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.02ms whole=false height=170919 told=Optional(170919.0) chars=160496 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:00.937 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.82ms chars=160497
+2026-11-23 01:45:00.965 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160497 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:01.040 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.93ms chars=160498
+2026-11-23 01:45:01.071 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160498 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:01.143 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.51ms chars=160499
+2026-11-23 01:45:01.169 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160499 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:01.241 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.62ms chars=160500
+2026-11-23 01:45:01.268 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160500 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:01.335 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.52ms chars=160501
+2026-11-23 01:45:01.365 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160501 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:01.435 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.53ms chars=160502
+2026-11-23 01:45:01.464 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160502 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:01.532 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.68ms chars=160503
+2026-11-23 01:45:01.561 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160503 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:01.627 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE refreshMarks=1.47ms chars=160504
+2026-11-23 01:45:01.656 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=170919 told=Optional(170919.0) chars=160504 container=99999999 scrolls=true content=170919
+2026-11-23 01:45:03.126 Df Vespin[35157:b3c5b44] (Foundation) PROBEINLINE wordsHeight=0.04ms whole=false height=170919 told=Optional(170919.0) chars=160504 container=99999999 scrolls=true content=170919
+Child process terminated with signal 15: Terminated
