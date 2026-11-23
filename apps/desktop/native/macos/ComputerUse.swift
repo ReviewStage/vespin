@@ -17,7 +17,8 @@ import UniformTypeIdentifiers
 ///
 /// - `permissions`, `request_permissions`: whether it may capture windows and
 ///   post input, the second raising macOS's own prompts first and opening the
-///   System Settings pane of the first grant still missing.
+///   System Settings pane of the first grant still missing, with a small
+///   panel beside it holding the app's icon to drag into the pane's list.
 /// - `list_apps`: the running apps a person uses, each with its icon.
 /// - `list_installed_apps`: the apps installed in the usual folders, by name
 ///   and bundle id, without icons, which `describe_app` draws one at a time.
@@ -184,19 +185,183 @@ private func permissions() -> [String: Any] {
     ["screen_recording": CGPreflightScreenCaptureAccess(), "accessibility": AXIsProcessTrusted()]
 }
 
-/// The Privacy & Security panes of System Settings where each grant is switched on.
-private let SCREEN_RECORDING_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-private let ACCESSIBILITY_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+/// One grant: the Privacy & Security pane of System Settings where it is switched on, its name there, and whether macOS holds it now.
+private struct Grant: Sendable {
+    let pane: String
+    let name: String
+    let held: @Sendable () -> Bool
+}
 
-/// Asks macOS for the grants the app lacks, by its own prompts, which also list the app in each pane, then opens the pane of the first still missing, since macOS prompts only once and the switch is the developer's to flip there.
-private func requestPermissions() -> [String: Any] {
+private let SCREEN_RECORDING = Grant(
+    pane: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+    name: "Screen Recording", held: { CGPreflightScreenCaptureAccess() })
+private let ACCESSIBILITY = Grant(
+    pane: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+    name: "Accessibility", held: { AXIsProcessTrusted() })
+
+/// Asks macOS for the grants the app lacks, by its own prompts, which also list the app in each pane, then opens the pane of the first still missing, since macOS prompts only once and the switch is the developer's to flip there, with the app's icon beside it to drag into the list.
+private func requestPermissions() async -> [String: Any] {
     if !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
     let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
     _ = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
-    let missing = !CGPreflightScreenCaptureAccess() ? SCREEN_RECORDING_PANE : !AXIsProcessTrusted() ? ACCESSIBILITY_PANE : nil
-    if let pane = missing, let url = URL(string: pane) { NSWorkspace.shared.open(url) }
+    if let grant = [SCREEN_RECORDING, ACCESSIBILITY].first(where: { !$0.held() }), let url = URL(string: grant.pane) {
+        NSWorkspace.shared.open(url)
+        await MainActor.run { grantPanel.show(grant) }
+    }
     return permissions()
 }
+
+// MARK: - Grant panel
+
+/// The app macOS holds the grants against: the one that spawned this helper, as its responsible process, which the developer drags into the pane's list.
+private let parentBundleURL = NSRunningApplication(processIdentifier: getppid())?.bundleURL
+
+private let SYSTEM_SETTINGS_BUNDLE_ID = "com.apple.systempreferences"
+private let GRANT_PANEL_SIZE = NSSize(width: 260, height: 168)
+private let GRANT_PANEL_GAP: CGFloat = 12
+private let GRANT_ICON_EDGE: CGFloat = 64
+private let GRANT_CHECK_NANOSECONDS: UInt64 = 500_000_000
+/// How long the panel waits for System Settings' window to show before it stands where it is.
+private let GRANT_PLACE_CHECKS = 10
+
+/// System Settings' window, on AppKit's points, its bottom left the main display's; nothing where it shows none.
+private func systemSettingsFrame() -> NSRect? {
+    guard
+        let settings = NSRunningApplication.runningApplications(withBundleIdentifier: SYSTEM_SETTINGS_BUNDLE_ID).first,
+        let listed = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[String: Any]]
+    else { return nil }
+    let frames = listed.compactMap { window -> CGRect? in
+        guard
+            window[kCGWindowOwnerPID as String] as? pid_t == settings.processIdentifier,
+            window[kCGWindowLayer as String] as? Int == 0,
+            let bounds = window[kCGWindowBounds as String] as? NSDictionary
+        else { return nil }
+        return CGRect(dictionaryRepresentation: bounds)
+    }
+    guard let frame = frames.max(by: { $0.width * $0.height < $1.width * $1.height }) else { return nil }
+    // Note that the window server's top left is the main display's, which AppKit's bottom left is under by that display's height.
+    let height = NSScreen.screens.first?.frame.height ?? 0
+    return NSRect(x: frame.minX, y: height - frame.maxY, width: frame.width, height: frame.height)
+}
+
+/// The panel's place beside a window: to its right, bottom edges level, or to its left where the right runs off its screen.
+private func grantPanelOrigin(beside window: NSRect) -> NSPoint {
+    let screen = (NSScreen.screens.first { $0.frame.intersects(window) } ?? NSScreen.main)?.visibleFrame ?? window
+    let size = GRANT_PANEL_SIZE
+    let right = window.maxX + GRANT_PANEL_GAP
+    let x = right + size.width <= screen.maxX ? right : max(screen.minX, window.minX - GRANT_PANEL_GAP - size.width)
+    let y = min(max(window.minY, screen.minY), screen.maxY - size.height)
+    return NSPoint(x: x, y: y)
+}
+
+/// The app's icon, which drags its bundle's file URL as Finder drags an app, so a Privacy & Security list takes it.
+private final class AppDragView: NSView, NSDraggingSource {
+    private let app: URL
+    private let icon: NSImage
+
+    init(app: URL) {
+        self.app = app
+        icon = NSWorkspace.shared.icon(forFile: app.path)
+        super.init(frame: NSRect(x: 0, y: 0, width: GRANT_ICON_EDGE, height: GRANT_ICON_EDGE))
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var intrinsicContentSize: NSSize { NSSize(width: GRANT_ICON_EDGE, height: GRANT_ICON_EDGE) }
+
+    override func draw(_ dirtyRect: NSRect) { icon.draw(in: bounds) }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
+
+    override func mouseDragged(with event: NSEvent) {
+        let item = NSDraggingItem(pasteboardWriter: app as NSURL)
+        item.setDraggingFrame(bounds, contents: icon)
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .outsideApplication ? .copy : []
+    }
+}
+
+/// A small floating panel beside the pane a grant is switched on in, holding the app's icon to drag into its list. One
+/// stands at a time; it closes as the grant comes, as System Settings goes, or by its close button.
+@MainActor
+private final class GrantPanel {
+    private var panel: NSPanel?
+    private var checking: Task<Void, Never>?
+
+    func show(_ grant: Grant) {
+        close()
+        guard let app = parentBundleURL else { return }
+        let made = NSPanel(
+            contentRect: NSRect(origin: .zero, size: GRANT_PANEL_SIZE),
+            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
+            backing: .buffered, defer: false)
+        made.titleVisibility = .hidden
+        made.titlebarAppearsTransparent = true
+        made.isReleasedWhenClosed = false
+        made.hidesOnDeactivate = false
+        made.level = .floating
+        made.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        made.contentView = contents(grant, app: app)
+        if let screen = NSScreen.main?.visibleFrame {
+            made.setFrameOrigin(NSPoint(
+                x: screen.maxX - GRANT_PANEL_SIZE.width - GRANT_PANEL_GAP, y: screen.minY + GRANT_PANEL_GAP))
+        }
+        made.orderFrontRegardless()
+        panel = made
+        checking = Task { @MainActor [weak self] in await self?.check(grant, panel: made) }
+    }
+
+    func close() {
+        checking?.cancel()
+        checking = nil
+        panel?.close()
+        panel = nil
+    }
+
+    private func contents(_ grant: Grant, app: URL) -> NSView {
+        let name = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
+        let headline = NSTextField(labelWithString: "Drag \(name) into the list")
+        headline.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+        let detail = NSTextField(wrappingLabelWithString: "to allow \(grant.name), or turn it on where it's listed.")
+        detail.alignment = .center
+        detail.textColor = .secondaryLabelColor
+        detail.preferredMaxLayoutWidth = GRANT_PANEL_SIZE.width - 2 * GRANT_PANEL_GAP
+        let stack = NSStackView(views: [AppDragView(app: app), headline, detail])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 6
+        stack.edgeInsets = NSEdgeInsets(top: 28, left: GRANT_PANEL_GAP, bottom: GRANT_PANEL_GAP, right: GRANT_PANEL_GAP)
+        return stack
+    }
+
+    /// Places the panel once beside System Settings' window as it shows, then closes it once the grant is held, System Settings has gone, or the developer closed it.
+    private func check(_ grant: Grant, panel: NSPanel) async {
+        var checks = 0
+        var placed = false
+        while !Task.isCancelled, panel.isVisible, !grant.held() {
+            if !placed, let window = systemSettingsFrame() {
+                panel.setFrameOrigin(grantPanelOrigin(beside: window))
+                placed = true
+            } else if placed || checks >= GRANT_PLACE_CHECKS,
+                NSRunningApplication.runningApplications(withBundleIdentifier: SYSTEM_SETTINGS_BUNDLE_ID).isEmpty
+            {
+                break
+            }
+            checks += 1
+            try? await Task.sleep(nanoseconds: GRANT_CHECK_NANOSECONDS)
+        }
+        guard !Task.isCancelled else { return }
+        if self.panel === panel { close() }
+    }
+}
+
+@MainActor private let grantPanel = GrantPanel()
 
 private func requireAccessibility() throws {
     guard AXIsProcessTrusted() else {
@@ -2099,7 +2264,7 @@ private func stopRecording(_ request: [String: Any]) async throws -> [String: An
 
 private let OPERATIONS: [String: ([String: Any]) async throws -> [String: Any]] = [
     "permissions": { _ in permissions() },
-    "request_permissions": { _ in requestPermissions() },
+    "request_permissions": { _ in await requestPermissions() },
     "list_apps": { _ in listApps() },
     "list_installed_apps": { _ in listInstalledApps() },
     "describe_app": describeApp,
