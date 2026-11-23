@@ -40,8 +40,8 @@ const heldRowSchema = Schema.Struct({ key: Schema.String, position: Schema.Numbe
 /** The last place a read holds a key at, none where it holds none. */
 const lastPositionSchema = Schema.Struct({ last: Schema.NullOr(Schema.Number) });
 
-/** A `row` row's JSON, as a load reads it in held order. */
-const loadedRowSchema = Schema.Struct({ row: Schema.fromJsonString(Schema.Unknown) });
+/** A `row` row's JSON, as a load reads it in held order, before it is parsed. */
+const loadedRowSchema = Schema.Struct({ row: Schema.String });
 
 /** A `cursor` row's JSON, none where the read answered none. */
 const cursorRowSchema = Schema.Struct({
@@ -185,7 +185,7 @@ function loadedFrom(connection: LocalDatabaseConnection, name: KeptName): KeptLo
     )
     .all(name.read, workspace);
   const decodeStart = performance.now();
-  const rows = decodeLoadedRows(raw).map(({ row }) => row);
+  const rows = decodeLoadedRows(raw).map(({ row }) => JSON.parse(row));
   const decodeEnd = performance.now();
   launchProbe(`kept-load:${name.read}`, {
     rows: rows.length,
