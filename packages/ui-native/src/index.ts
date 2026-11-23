@@ -104,6 +104,13 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
+export {
+  ConversationEntryRow,
+  type EntryStanding,
+  type ThreadComment,
+  ThreadRow,
+} from "./conversation-rows.js";
+
 export { type DockChip, DockChips, DockPanel } from "./dock-chips.js";
 
 export {

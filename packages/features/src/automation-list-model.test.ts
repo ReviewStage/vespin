@@ -4,6 +4,7 @@ import { AGENT_FAILURE, AGENT_STATUS } from "./agent-wire.js";
 import {
   AUTOMATION_NEXT,
   AUTOMATION_RUN_STANDING,
+  AUTOMATIONS_ORDER,
   automationGroups,
   automationNext,
   automationRunLine,
@@ -89,6 +90,43 @@ test("the workspace's automations come before the personal ones, and an owner wi
   ]);
   assert.deepEqual(automationGroups([]), []);
 });
+
+test.each([
+  [AUTOMATIONS_ORDER.CREATED, ["d", "b", "c", "a"]],
+  [AUTOMATIONS_ORDER.NAME, ["a", "b", "d", "c"]],
+  [AUTOMATIONS_ORDER.LAST_RUN, ["c", "d", "a", "b"]],
+  [AUTOMATIONS_ORDER.NEXT_RUN, ["d", "c", "a", "b"]],
+])(
+  "an owner's automations stand in the %s order, one with no run last and a tie to the newest made",
+  (order, ids) => {
+    const listed = [
+      automation("a", {
+        name: "Audit",
+        createdAt: 10,
+        nextRunAt: 500,
+        lastRun: run({ firedAt: 50 }),
+      }),
+      automation("b", { name: "check deploys", createdAt: 30, enabled: false, nextRunAt: null }),
+      automation("c", {
+        name: "Weekly digest",
+        createdAt: 20,
+        nextRunAt: 200,
+        lastRun: run({ firedAt: 80 }),
+      }),
+      automation("d", {
+        name: "Nightly sweep",
+        createdAt: 40,
+        nextRunAt: 200,
+        lastRun: run({ firedAt: 50 }),
+      }),
+    ];
+
+    assert.deepEqual(
+      automationGroups(listed, order).flatMap((group) => group.automations.map(({ id }) => id)),
+      ids,
+    );
+  },
+);
 
 test("a one-time automation that ran and stands paused is finished, in no owner's group, and one its run set going again is not", () => {
   const once = {

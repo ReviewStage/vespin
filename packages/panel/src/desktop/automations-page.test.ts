@@ -310,7 +310,7 @@ test("with no automations the page says what one is, and with no workspace liste
   assert.deepEqual(listed(), [WORKSPACE.id], "no list is read with no workspace listed");
 });
 
-test("the list's title is its bar's heading, and Create with an agent and New automation end the bar", async () => {
+test("the list's title is its bar's heading, and View options, Create with an agent, and New automation end the bar", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
 
@@ -323,8 +323,39 @@ test("the list's title is its bar's heading, and Create with an agent and New au
     [...(actions?.querySelectorAll("button") ?? [])].map(
       (each) => each.getAttribute("aria-label") ?? each.textContent,
     ),
-    ["Create with an agent", "New automation"],
+    ["View options", "Create with an agent", "New automation"],
   );
+});
+
+test("View options orders each owner's automations by name, and the order is kept on this Mac", async () => {
+  window.localStorage.clear();
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
+  await settle();
+
+  act(() => button("View options").click());
+
+  for (const name of ["Order by", "Name"]) {
+    const item = [
+      ...document.querySelectorAll<HTMLElement>('[role="menu"]:not([data-leaving]) .ui-menu-item'),
+    ].find((each) => each.querySelector(".ui-menu-item-label")?.textContent === name);
+
+    act(() => (item ?? assert.fail(`no menu item ${name}`)).click());
+  }
+
+  const byName = [
+    ["Dependency bumps", "Acme"],
+    ["Nightly flaky-test sweep", "Acme"],
+    ["Morning digest", "Only you"],
+  ];
+
+  assert.deepEqual(rows(page), byName);
+  act(() => world.root?.unmount());
+  document.body.innerHTML = "";
+
+  const again = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
+  await settle();
+  assert.deepEqual(rows(again), byName, "kept as it was left");
+  window.localStorage.clear();
 });
 
 test("with no workspace chosen the bar's two acts stay reachable by keyboard, press nothing, and say why on hover", async () => {

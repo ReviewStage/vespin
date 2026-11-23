@@ -84,6 +84,10 @@ const IOS_ROUTE = {
   PULL_REQUEST_FILES: "files",
   /** The checks run on a pull request's head, under its own route. */
   PULL_REQUEST_CHECKS: "checks",
+  /** One review thread of a pull request, by GitHub's id for it, under its own route. */
+  PULL_REQUEST_THREAD: "thread",
+  /** A new comment on a pull request, under its own route. */
+  PULL_REQUEST_COMMENT: "comment",
   /** A person's page in the workspace the phone works in. */
   PERSON: "/tasks/person",
 } as const;
@@ -270,6 +274,27 @@ export function iosPullRequestChecksRoute(pullRequest: {
   readonly number: number;
 }): string {
   return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_CHECKS}`;
+}
+
+/** The app's route for one review thread of a pull request, by GitHub's id for it, where its comments are read and replied to. */
+export function iosPullRequestThreadRoute(
+  pullRequest: {
+    readonly workspaceId: string;
+    readonly repository: string;
+    readonly number: number;
+  },
+  threadId: string,
+): string {
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_THREAD}/${encodeURIComponent(threadId)}`;
+}
+
+/** The app's route for a new comment on a pull request, at the foot of its conversation. */
+export function iosPullRequestCommentRoute(pullRequest: {
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly number: number;
+}): string {
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_COMMENT}`;
 }
 
 /**

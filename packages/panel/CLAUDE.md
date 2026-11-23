@@ -121,8 +121,8 @@ written on `EXPERIMENT_SCOPE`:
   EXPERIMENT.X)` for the workspace it is about.
 - **Account** when it changes only what one member sees, or what the agents
   that member starts do, and what it leaves behind reads well to a teammate
-  with it off (Skills, Turn changes, Rewind restores files, Done and
-  follow-ups). Each member chooses it, carried on the settings snapshot, and a
+  with it off (Skills, Turn changes, Rewind restores files). Each member
+  chooses it, carried on the settings snapshot, and a
   surface asks with `selectExperiment(EXPERIMENT.X)` over `appStateQuery`.
   The service gates the agent's own behavior by the account that started it
   (`agent.userId`), and a member's request by the member asking.

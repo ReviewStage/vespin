@@ -338,7 +338,7 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
  * token. A line on a gated tool of ours is told by whether the agent's
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
- * `edit_description`, its reply by `end_turn`, or a Manager's by
+ * `edit_description`, a Manager's reply by
  * `send_to_user`, which stands for its threads' and unclear request's lines
  * too, and its threads by
  * `post_thread`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
@@ -361,7 +361,6 @@ export function coderInstructions(
   // An agent on no task has no description to record in and no status to keep.
   const describes = ownTask !== undefined && offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
-  const endsTurns = offers(standing, AGENT_TOOL.END_TURN);
   const chats = offers(standing, AGENT_TOOL.SEND_TO_USER);
   const posts = offers(standing, INBOX_TOOLS.POST.name);
   const showsPages = offers(standing, AGENT_TOOL.SHOW_PAGE);
@@ -387,9 +386,7 @@ export function coderInstructions(
       : []),
     chats
       ? chatLine(posts)
-      : endsTurns
-        ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
-        : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
+      : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
     ...(posts && !chats
       ? [
           `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`,
@@ -421,6 +418,15 @@ export interface ManagerPlace {
   readonly name: string | null;
   /** The Mac it runs on, by id; none for one in the cloud. */
   readonly deviceId: string | null;
+  /** The repositories it was made with, its checkout's first, which the tasks it makes work in. */
+  readonly repositories: readonly string[];
+}
+
+/** Where a Manager's tasks work: one of its repositories, or, where it has none, whichever repository the work is in. */
+function managerRepositoryOf(repositories: readonly string[]): string {
+  if (repositories.length === 0) return "in the right repository";
+
+  return `with \`repository\` set to whichever of your repositories it works in: ${repositories.map((each) => `\`${each}\``).join(", ")}`;
 }
 
 /** The `runsOn` a Manager passes `start_agent`, its own machine's, written as the tool takes it. */
@@ -445,7 +451,7 @@ export function managerInstructions(place: ManagerPlace): string {
   return [
     `You are a Manager in this workspace. You manage its work as a real manager would, by delegating, triaging, and organizing; you do work yourself only when it is too small to be worth starting an agent for.`,
     `Your chat opens with this greeting, shown to people as your first message: "${managerGreeting(place.name)}" So don't introduce yourself again; answer what they ask, and from then on work on your own.`,
-    `To start work, first make a task with \`${AGENT_TOOL.CREATE_TASK}\`: named, assigned to whoever asked, in the right repository. Then start an agent on it with \`${AGENT_TOOL.START_AGENT}\`, with \`runsOn\` ${managerRunsOnOf(place)} and your repositories, choosing its model and effort for the work (\`${AGENT_TOOL.LIST_MODELS}\`).`,
+    `To start work, first make a task with \`${AGENT_TOOL.CREATE_TASK}\`: named, assigned to whoever asked, ${managerRepositoryOf(place.repositories)}. Then start an agent on it with \`${AGENT_TOOL.START_AGENT}\`, with \`runsOn\` ${managerRunsOnOf(place)}, choosing its model and effort for the work (\`${AGENT_TOOL.LIST_MODELS}\`).`,
     `Lay work out as a good engineering manager would, with Linear's hygiene: split it into tasks, group related ones under a parent task (\`parentTaskId\`, \`subTaskIds\`), and name what must land first with \`blockedBy\`. Split work that can run in parallel across several agents rather than leaving it to one big agent doing everything. One task is one logical change, ideally one pull request; two changes never share a task, even related ones. Give each task a clear name, the right assignee, and a description of what is decided and what is not.`,
     `Open each brief with "You're an agent started by ${manager}, for <the person who asked>.", then a line of project context, what is known and what to read first, what is decided and what is not, and the agent's job and what to hand back to you with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
     `Relay what people tell you, in your chat or on a thread, to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
@@ -497,6 +503,8 @@ export interface AgentInstructionsContext {
   /** The kinds of GitHub activity its starter turned off as wakes, which it is told it reads itself; none where none is off. */
   readonly wakesOff?: readonly GitHubWake[] | undefined;
   readonly harness: CoderHarness;
+  /** The repositories the agent works in, its own first (`readAgentRepositories`), which a Manager is told; its row's alone, where unread. */
+  readonly repositories?: readonly string[] | undefined;
   /** Where the agent's machine keeps its checkout and the files the service reads back; where every sandbox keeps them, where unsaid. */
   readonly place?:
     | {
@@ -555,5 +563,8 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
   // A Manager's lines follow the coder's, so a coder's instructions stay as they were.
   if (agent.kind !== AGENT_KIND.MANAGER) return coder;
 
-  return `${coder}\n${managerInstructions({ name: agent.title, deviceId: agent.machine === AGENT_MACHINE.DEVICE ? (agent.deviceId ?? null) : null })}`;
+  const repositories =
+    context.repositories ?? (agent.repository === null ? [] : [agent.repository]);
+
+  return `${coder}\n${managerInstructions({ name: agent.title, deviceId: agent.machine === AGENT_MACHINE.DEVICE ? (agent.deviceId ?? null) : null, repositories })}`;
 }

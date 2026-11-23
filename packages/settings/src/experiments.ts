@@ -20,8 +20,6 @@ export const EXPERIMENT = {
   COMPUTER_USE: "computer-use",
   /** Rewind restores files: a rewind or an edit of a message may put the agent's files back as they stood before it, from the checkout its runner records before each turn. */
   REWIND_FILES: "rewind-files",
-  /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
-  TURN_END: "turn-end",
   /** Turn changes: the files a turn changed, drawn under its words, and the Turn changes tab a file there opens, the diff of the checkouts the runner records before each turn. */
   TURN_CHANGES: "turn-changes",
   /** Merge queue: every pull request GitHub's merge queues hold across the repositories the workspace's tasks work in, on a page of its own. */
@@ -180,16 +178,6 @@ export const EXPERIMENTS = [
     name: "Rewind restores files",
     detail:
       "Rewinding or editing a message can also put the agent's files back to how they stood before it.",
-    owner: "Dean",
-    since: "2026-11-10",
-  },
-  {
-    key: EXPERIMENT.TURN_END,
-    scope: EXPERIMENT_SCOPE.ACCOUNT,
-    listed: true,
-    name: "Done and follow-ups",
-    detail:
-      "When an agent you started finishes, it says what it needs from you, or that it's done, with follow-ups to send.",
     owner: "Dean",
     since: "2026-11-10",
   },

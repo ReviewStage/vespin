@@ -81,10 +81,23 @@ export type ScriptedStep =
 export interface AgentScript {
   readonly cue: string;
   readonly turns: readonly (readonly ScriptedStep[])[];
+  /** How long the script waits before each event it writes. */
+  readonly pace: Duration.Duration;
 }
 
-/** How long the script waits before each event it writes, so a journey sees the turn stream rather than land whole. */
-const PACE = Duration.millis(250);
+/** One turn's steps and the wait before each event it writes. */
+interface ScriptedTurn {
+  readonly steps: readonly ScriptedStep[];
+  readonly pace: Duration.Duration;
+}
+
+/**
+ * The wait a script a journey watches stream takes before each event, so the
+ * journey sees the turn stream rather than land whole. Note that a script no
+ * journey watches stream waits none, because its waits only spend the
+ * journey's time budget on a cold first launch.
+ */
+const STREAM_PACE = Duration.millis(250);
 
 /**
  * The scripts the end-to-end journeys play: words and a tool call that
@@ -96,6 +109,7 @@ const PACE = Duration.millis(250);
 export const E2E_AGENT_SCRIPTS: readonly AgentScript[] = [
   {
     cue: "[script:stream]",
+    pace: STREAM_PACE,
     turns: [
       [
         { say: "Reading the repository first. The README says where to start." },
@@ -112,6 +126,7 @@ export const E2E_AGENT_SCRIPTS: readonly AgentScript[] = [
   },
   {
     cue: "[script:ask]",
+    pace: Duration.zero,
     turns: [
       [
         { say: "I need one decision before I go on." },
@@ -184,7 +199,7 @@ function postedAsk(agent: Agent, posted: Extract<ScriptedStep, { readonly ask: u
 }
 
 /** One scripted turn played into the conversation of the message it answers: started, its line taken, each step written a beat apart, and ended. */
-function playedTurn(account: string, message: SessionMessage, steps: readonly ScriptedStep[]) {
+function playedTurn(account: string, message: SessionMessage, { steps, pace }: ScriptedTurn) {
   return Effect.gen(function* () {
     const found = yield* readAgentOfConversation(account, message.conversationId);
 
@@ -197,14 +212,14 @@ function playedTurn(account: string, message: SessionMessage, steps: readonly Sc
       conversationId: agent.conversationId,
     };
 
-    yield* Effect.sleep(PACE);
+    yield* Effect.sleep(pace);
     const turnId = yield* turnIdOf(message);
     const turn = { conversationId: sessionKey(agent.conversationId), turnId };
     let sequence = 0;
 
     const tell = (body: RunEventBody) =>
       Effect.andThen(
-        Effect.sleep(PACE),
+        Effect.sleep(pace),
         writer.consume(target, { ...body, ...turn, sequence: ++sequence }),
       );
 
@@ -279,16 +294,16 @@ export function scriptedAgentSessionsLayer(
   const [fallback] = scripts;
 
   /** The conversation's next turn, its script chosen by the first message it hears. */
-  const nextTurn = (message: SessionMessage): readonly ScriptedStep[] => {
+  const nextTurn = (message: SessionMessage): ScriptedTurn => {
     const words = wordsOf(message);
     const standing = played.get(message.conversationId);
     const script = standing?.script ?? scripts.find((each) => words.includes(each.cue)) ?? fallback;
 
-    if (script === undefined) return [];
+    if (script === undefined) return { steps: [], pace: Duration.zero };
     const turns = standing?.turns ?? 0;
     played.set(message.conversationId, { script, turns: turns + 1 });
 
-    return script.turns[Math.min(turns, script.turns.length - 1)] ?? [];
+    return { steps: script.turns[Math.min(turns, script.turns.length - 1)] ?? [], pace: script.pace };
   };
 
   return Layer.effect(

@@ -7,11 +7,9 @@ import { afterEach, expect, test } from "vitest";
 import { ManagerFacePicker } from "./manager-face-picker.js";
 
 /**
- * manager-face-picker.test.ts -- a picker on no face rings nothing, and a
- * color pressed there picks it on the first character; a press on a
- * character keeps the color standing, and an arrow along the colors chooses
- * as it lands, keeping the character; each row says which of its options is
- * chosen.
+ * manager-face-picker.test.ts -- the face standing is the one pressed; a
+ * search keeps the faces whose name holds every word typed, in any order,
+ * and Enter picks the first it found.
  */
 
 declare global {
@@ -27,51 +25,64 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-/** The picker over a face it keeps itself, starting on none. */
+/** The picker over a face it keeps itself, starting on a blue ghost. */
 function Picker(): React.JSX.Element {
-  const [face, setFace] = useState<ManagerFace | undefined>(undefined);
+  const [face, setFace] = useState<ManagerFace>({ character: "ghost", color: "blue" });
 
   return createElement(ManagerFacePicker, { face, onChange: setFace });
 }
 
-/** The names of the options each row says are chosen, Character's then Color's. */
-function chosen(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('[role="radio"][aria-checked="true"]')].map(
-    (option) => option.getAttribute("aria-label") ?? "",
+/** The names of the faces the grid offers. */
+function offered(container: HTMLElement): string[] {
+  return [...container.querySelectorAll("fieldset button")].map(
+    (choice) => choice.getAttribute("aria-label") ?? "",
   );
 }
 
-function option(container: HTMLElement, group: string, name: string): HTMLButtonElement {
-  const found = container.querySelector<HTMLButtonElement>(
-    `[role="radiogroup"][aria-label="${group}"] [aria-label="${name}"]`,
+/** The names of the faces pressed. */
+function pressed(container: HTMLElement): string[] {
+  return [...container.querySelectorAll('fieldset button[aria-pressed="true"]')].map(
+    (choice) => choice.getAttribute("aria-label") ?? "",
   );
-
-  if (found === null) throw new Error(`no ${name} in ${group}`);
-
-  return found;
 }
 
-test("a color pressed on no face takes the first character, a character pressed keeps the color, and an arrow along the colors chooses as it lands", () => {
+/** Types `words` into the search as a reader does. */
+function search(field: HTMLInputElement, words: string): void {
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, words);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+test("a search keeps the faces whose name holds every word typed, and Enter picks the first found", () => {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Picker)));
 
-  expect(chosen(container)).toEqual([]);
+  expect(offered(container)).toHaveLength(36);
+  expect(pressed(container)).toEqual(["Blue ghost"]);
 
-  act(() => option(container, "Color", "Pink").click());
-  expect(chosen(container)).toEqual(["Ghost", "Pink"]);
+  const field = container.querySelector<HTMLInputElement>('input[type="search"], input');
 
-  act(() => option(container, "Character", "Mug").click());
-  expect(chosen(container)).toEqual(["Mug", "Pink"]);
+  if (field === null) throw new Error("no search");
+  search(field, "cat purple");
+  expect(offered(container)).toEqual(["Purple cat"]);
 
-  const pink = option(container, "Color", "Pink");
-  act(() => pink.focus());
+  search(field, "bubble");
+  expect(offered(container)).toEqual([
+    "Yellow speech bubble",
+    "Green speech bubble",
+    "Blue speech bubble",
+    "Pink speech bubble",
+    "Purple speech bubble",
+    "Peach speech bubble",
+  ]);
+
   act(() => {
-    pink.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
 
-  expect(chosen(container)).toEqual(["Mug", "Purple"]);
-  expect(document.activeElement?.getAttribute("aria-label")).toBe("Purple");
+  expect(pressed(container)).toEqual(["Yellow speech bubble"]);
 });

@@ -24,6 +24,7 @@ import {
   CHECK_SUMMARY,
   type CheckState,
   CONVERSATION_ENTRY,
+  DIFF_SIDE,
   type GitHubPerson,
   MERGE_STATE,
   PATCH_OMITTED,
@@ -43,6 +44,7 @@ import {
   MERGE_METHOD,
   PULL_REQUEST_ACTION,
   type PullRequestActionRequest,
+  REACTION,
 } from "@repo/features/pull-request-write-wire";
 import type { AppRepositoryPullRequestHeld, AppStateSnapshot } from "./app-state.js";
 import { FIXTURE_IDS } from "./fixture-stage.js";
@@ -126,6 +128,23 @@ export function pullRequestMovedBy(
   const move = pullRequestMoveOf(request);
 
   return move === undefined ? undefined : { ...moved, move };
+}
+
+/** The review threads a fixture run resolved, true, or opened again, false, by GitHub's id for each. */
+export type ThreadResolves = ReadonlyMap<string, boolean>;
+
+/** The thread a change resolves or opens again, and which; none for a change to anything else. */
+export function threadResolveOf(
+  request: PullRequestActionRequest,
+): { readonly threadId: string; readonly resolved: boolean } | undefined {
+  switch (request.action) {
+    case PULL_REQUEST_ACTION.RESOLVE_THREAD:
+      return { threadId: request.threadId, resolved: true };
+    case PULL_REQUEST_ACTION.UNRESOLVE_THREAD:
+      return { threadId: request.threadId, resolved: false };
+    default:
+      return undefined;
+  }
 }
 
 /** One check, begun `ago` before the fixture landed and run for `ran`; one still running has run for none. */
@@ -331,6 +350,38 @@ function entry(
     : { kind: CONVERSATION_ENTRY.REVIEW, by, state, html: `<p>${body}</p>`, body, at, url };
 }
 
+/** The thread the failing pull request's review started on its expiry check, answered by its author. */
+const EXPIRY_THREAD = {
+  path: "src/invites/expiry.ts",
+  line: 20,
+  startLine: 18,
+  originalLine: 20,
+  originalStartLine: 18,
+  side: DIFF_SIDE.RIGHT,
+  startSide: DIFF_SIDE.RIGHT,
+  diffHunk: "@@ -15,3 +15,6 @@ export function expired(invite: Invite): boolean {",
+  resolved: false,
+  outdated: false,
+  id: "PRRT_expiry",
+  comments: [
+    {
+      by: GRACE,
+      html: "<p>This reads <code>Date.now()</code> twice.</p>",
+      body: "This reads `Date.now()` twice.",
+      at: LANDED - 15 * MINUTE,
+      url: `${REPOSITORY_URL}/pull/127#discussion_r18`,
+    },
+    {
+      by: ADA,
+      html: "<p>Good catch, it takes the request's time now.</p>",
+      body: "Good catch, it takes the request's time now.",
+      at: LANDED - 5 * MINUTE,
+      url: `${REPOSITORY_URL}/pull/127#discussion_r19`,
+    },
+  ],
+  more: 0,
+} as const;
+
 /** Each one's conversation: where its reviewers stand, and its comments and reviews, oldest first. */
 const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerView> = new Map([
   [
@@ -368,13 +419,23 @@ const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerVie
       pullRequest: {
         reviewers: [{ by: GRACE, state: REVIEW_STATE.CHANGES_REQUESTED }],
         conversation: [
-          entry(
-            127,
-            GRACE,
-            "An invite made just under seven days ago expires mid-accept.",
-            15 * MINUTE,
-            REVIEW_STATE.CHANGES_REQUESTED,
-          ),
+          {
+            ...entry(
+              127,
+              GRACE,
+              [
+                "An invite made just under seven days ago expires mid-accept: the check reads the clock once when the page loads and again when the invite is taken.",
+                "",
+                "- Read the clock once per request",
+                "- Treat the seventh day as still open",
+              ].join("\n"),
+              15 * MINUTE,
+              REVIEW_STATE.CHANGES_REQUESTED,
+            ),
+            threads: [EXPIRY_THREAD],
+            subject: "PRR_expiry",
+            reactions: [{ content: REACTION.THUMBS_UP, count: 1 }],
+          },
         ],
         earlier: 0,
       },
@@ -443,8 +504,47 @@ function movedState(
   }
 }
 
-/** One slice's reads as last laid, by the read the host held, with the moves laid over it. */
-type LaidReads = WeakMap<object, { readonly moves: PullRequestMoves; readonly staged: object }>;
+/** No thread resolved or opened again yet. */
+const NO_RESOLVES: ThreadResolves = new Map();
+
+/** Each conversation with its threads standing as `resolves` left them, those it names none of as staged. */
+function resolvedConversations(
+  resolves: ThreadResolves,
+): ReadonlyMap<number, RepositoryOverviewConversationAnswerView> {
+  if (resolves.size === 0) return CONVERSATIONS;
+
+  return new Map(
+    [...CONVERSATIONS].map(([number, answer]) => [
+      number,
+      "failure" in answer || answer.pullRequest === null
+        ? answer
+        : {
+            pullRequest: {
+              ...answer.pullRequest,
+              conversation: answer.pullRequest.conversation.map((entry) =>
+                entry.threads === undefined
+                  ? entry
+                  : {
+                      ...entry,
+                      threads: entry.threads.map((thread) => ({
+                        ...thread,
+                        resolved:
+                          (thread.id === undefined ? undefined : resolves.get(thread.id)) ??
+                          thread.resolved,
+                      })),
+                    },
+              ),
+            },
+          },
+    ]),
+  );
+}
+
+/** One slice's reads as last laid, by the read the host held, with the moves and the threads' resolves laid over it. */
+type LaidReads = WeakMap<
+  object,
+  { readonly moves: PullRequestMoves; readonly resolves: ThreadResolves; readonly staged: object }
+>;
 
 /**
  * Each slice's reads as last laid, so laying the same again hands the store
@@ -463,11 +563,12 @@ function laid<Part>(
   cache: LaidReads,
   held: AppRepositoryPullRequestHeld<Part>,
   moves: PullRequestMoves,
+  resolves: ThreadResolves,
   parts: () => ReadonlyMap<number, Part>,
 ): AppRepositoryPullRequestHeld<Part> {
   const kept = cache.get(held);
 
-  if (kept?.moves === moves) {
+  if (kept?.moves === moves && kept.resolves === resolves) {
     // SAFETY: a read's entry is only ever written below, from that same read.
     return kept.staged as AppRepositoryPullRequestHeld<Part>;
   }
@@ -486,7 +587,7 @@ function laid<Part>(
     },
   };
 
-  cache.set(held, { moves, staged });
+  cache.set(held, { moves, resolves, staged });
 
   return staged;
 }
@@ -499,6 +600,7 @@ function laid<Part>(
 export function pullRequestPartsAppState(
   state: AppStateSnapshot,
   moves: PullRequestMoves,
+  resolves: ThreadResolves = NO_RESOLVES,
 ): AppStateSnapshot {
   const pullRequests = () =>
     new Map<number, RepositoryOverviewPullRequestAnswerView>(
@@ -519,19 +621,22 @@ export function pullRequestPartsAppState(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST],
       moves,
+      resolves,
       pullRequests,
     ),
     [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: laid(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS],
       moves,
+      resolves,
       checks,
     ),
     [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: laid(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION],
       moves,
-      () => CONVERSATIONS,
+      resolves,
+      () => resolvedConversations(resolves),
     ),
   };
 }
