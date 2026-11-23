@@ -43,6 +43,7 @@ import {
   MERGE_METHOD,
   PULL_REQUEST_ACTION,
   type PullRequestActionRequest,
+  REACTION,
 } from "@repo/features/pull-request-write-wire";
 import type { AppRepositoryPullRequestHeld, AppStateSnapshot } from "./app-state.js";
 import { FIXTURE_IDS } from "./fixture-stage.js";
@@ -414,6 +415,8 @@ const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerVie
               REVIEW_STATE.CHANGES_REQUESTED,
             ),
             threads: [EXPIRY_THREAD],
+            subject: "PRR_expiry",
+            reactions: [{ content: REACTION.THUMBS_UP, count: 1 }],
           },
         ],
         earlier: 0,

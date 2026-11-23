@@ -25,6 +25,7 @@
 
 import type { GitHubPerson, ReactionGroup } from "@repo/features/agent-wire";
 import { formatCount } from "@repo/features/number-format";
+import { ADD_REACTION_WORDS, REACTION_FACES } from "@repo/features/pull-request-model";
 import {
   PULL_REQUEST_ACTION,
   REACTION,
@@ -54,25 +55,10 @@ import { useMemberDirectory } from "../member-directory.js";
 import { noop, useThreadWriting } from "./pull-request-thread-actions.js";
 import { PullRequestWriteNote, usePullRequestWrites } from "./pull-request-writes.js";
 
-/** Each reaction's emoji, its name as GitHub says it, and its name on Add reaction's menu. */
-const REACTION_FACES = {
-  [REACTION.THUMBS_UP]: { emoji: "👍", name: "thumbs up", item: "Thumbs up" },
-  [REACTION.THUMBS_DOWN]: { emoji: "👎", name: "thumbs down", item: "Thumbs down" },
-  [REACTION.LAUGH]: { emoji: "😄", name: "laugh", item: "Laugh" },
-  [REACTION.HOORAY]: { emoji: "🎉", name: "hooray", item: "Hooray" },
-  [REACTION.CONFUSED]: { emoji: "😕", name: "confused", item: "Confused" },
-  [REACTION.HEART]: { emoji: "❤️", name: "heart", item: "Heart" },
-  [REACTION.ROCKET]: { emoji: "🚀", name: "rocket", item: "Rocket" },
-  [REACTION.EYES]: { emoji: "👀", name: "eyes", item: "Eyes" },
-} as const satisfies Record<
-  Reaction,
-  { readonly emoji: string; readonly name: string; readonly item: string }
->;
-
 /** GitHub's order, which the row keeps. */
 const REACTION_ORDER: readonly Reaction[] = Object.values(REACTION);
 
-const ADD_REACTION = "Add reaction";
+const ADD_REACTION = ADD_REACTION_WORDS;
 
 /** What a reaction's tooltip says: who gave it, as many as the read named, the rest counted. */
 function reactedWords(names: readonly string[], count: number, name: string): string {
