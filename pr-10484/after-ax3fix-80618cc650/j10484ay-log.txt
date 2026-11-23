@@ -1,0 +1,10 @@
+pinned to 80618cc650
+accessibility-ax3.yaml: AX3 name corrected to UICTContentSizeCategoryAccessibilityXL for this run (4 launches)
+== bundle PJj10484ay base 80618cc650
+  built 80618cc650 base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-accessibility-ax3: fails 1 shots 4 Assert that "2 queued" is visible... FAILED
