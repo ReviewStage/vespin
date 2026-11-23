@@ -29,8 +29,22 @@ import {
  * first render until all of it was done, about 0.9 s of a cold launch at a
  * busy account's scale on the iPhone 18 Pro simulator.
  */
+/** PROBE ONLY: each hop the host's scheduler made, counted with how long it waited, for the launch probe to write. */
+const hops = { count: 0, totalMs: 0, maxMs: 0, firstSecondCount: 0 };
+(globalThis as Record<string, unknown>).__launchYields = hops;
+const hopped = (queued: number) => {
+  const waited = performance.now() - queued;
+  hops.count += 1;
+  hops.totalMs += waited;
+  hops.maxMs = Math.max(hops.maxMs, waited);
+};
+
 const yieldingScheduler = new Scheduler.MixedScheduler("async", (run) => {
-  const timer = setTimeout(run, 0);
+  const queued = performance.now();
+  const timer = setTimeout(() => {
+    hopped(queued);
+    run();
+  }, 0);
 
   return () => clearTimeout(timer);
 });

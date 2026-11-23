@@ -95,6 +95,7 @@ export function probeFlush(reason: string): void {
       ),
       marks: marks.map((mark) => ({ ...mark, t: at(mark.t) })),
       stalls: stalls.map(([from, to]) => [at(from), at(to), Math.round(to - from)]),
+      yields: (globalThis as Record<string, unknown>).__launchYields ?? null,
     });
 
     const file = new File(Paths.document, "launch-probe.json");
