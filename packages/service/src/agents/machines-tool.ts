@@ -5,13 +5,11 @@
  * `start_agent` may run an agent: the cloud, each Mac and host of the
  * member the call acts for, the agent's starter or the member the MCP
  * server admitted, as a start's runsOn reads them (`devicesSeenSince`),
- * and, for a coding agent, each machine its workspace owns
- * (`workspaceOwnedMachinesOf`), which runs every member's agents, each with
- * the runsOn to pass and whether it beat lately (`MAC_PRESENCE.FRESH_MS`).
- * Note that of the members' devices only that member's own are read, since
- * a start runs on no one else's; and that the member MCP server lists no
- * workspace's machine, since its list names no workspace, though its start
- * may name one by its name in the workspace the start lands in.
+ * each with the runsOn to pass and whether it beat lately
+ * (`MAC_PRESENCE.FRESH_MS`). Note that of the members' devices only that
+ * member's own are read, since a start runs on no one else's; and that no
+ * machine a workspace owns is listed, since `start_agent` offers none until
+ * one can run an agent (`OFFERED_START_RUNS_ON`).
  *
  * `macTools`, for a coding agent alone, is where `run_on_mac` and
  * `computer` may go from its conversation: the machines `routeOf` would
@@ -59,9 +57,8 @@ export const LIST_MACHINES_TOOL = {
   name: AGENT_TOOL.LIST_MACHINES,
   description:
     "List the machines you may name: runsOn, each place " +
-    `${AGENT_TOOL.START_AGENT} may run an agent, the cloud, each Mac and host of the member ` +
-    "who started you, and each machine your workspace owns, which runs every member's agents, " +
-    "by id and name, with the runsOn value to pass as it stands and whether it " +
+    `${AGENT_TOOL.START_AGENT} may run an agent, the cloud and each Mac and host of the member ` +
+    "who started you, by id and name, with the runsOn value to pass as it stands and whether it " +
     `is online; and macTools, each machine ${AGENT_TOOL.RUN_ON_MAC} and ${AGENT_TOOL.COMPUTER} ` +
     "may reach from this conversation (your task's assignee's, or your starter's where it has " +
     "none, and those of followers who let the task's agents use theirs), by id, name, and owner, " +
@@ -145,7 +142,7 @@ const macToolsOf = (target: ConversationTarget) =>
     });
   });
 
-/** One call of `list_machines` by a coding agent: where a start may run, as its starter's and its workspace's, and where its Mac tools may go. */
+/** One call of `list_machines` by a coding agent: where a start may run, as its starter's, and where its Mac tools may go. */
 export function runAgentListMachines(
   agent: { readonly userId: string; readonly organizationId: string },
   target: ConversationTarget,
@@ -159,7 +156,8 @@ export function runAgentListMachines(
     Effect.gen(function* () {
       const answer: WireRecord = {
         status: ACTION_RESULT_STATUS.ACCEPTED,
-        runsOn: yield* runsOnOf(agent.userId, agent.organizationId),
+        // Note that PR 8 of the workspace-hosts rollout (STAG-3712) passes agent.organizationId again, listing the workspace's machines once start_agent offers them.
+        runsOn: yield* runsOnOf(agent.userId),
         macTools: yield* macToolsOf(target),
       };
 
