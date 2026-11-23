@@ -1,10 +1,10 @@
-import {
+import type {
   safeValidateUIMessages,
-  type ToolSet,
-  type UIDataTypes,
-  type UIMessage,
-  type UIMessagePart,
-  type UITools,
+  ToolSet,
+  UIDataTypes,
+  UIMessage,
+  UIMessagePart,
+  UITools,
 } from "ai";
 import { Effect, Result } from "effect";
 import { readEither, SchemaRefusalError } from "../effect/index.js";
@@ -267,11 +267,12 @@ export function readStoredUIMessagesEither(
   }
 
   // The SDK's validator answers its refusal as a value, so a rejection is a defect and not a refusal.
+  // Note that the SDK is loaded as the first rows are read (`sdkValidator`), not as this module loads.
   // Note that a stored row is held to the SDK's structure alone, not to each tool's schemas, because
   // the write door admitted it under the same registry (`writer.ts`'s `admitted`), and walking every
   // tool's input and output again on every page is the read's cost, not its safety.
-  const validated = Effect.promise(() =>
-    safeValidateUIMessages<ValidatedMessage>(
+  const validated = Effect.promise(async () =>
+    (await sdkValidator())<ValidatedMessage>(
       storedRow
         ? { messages }
         : {
@@ -288,6 +289,16 @@ export function readStoredUIMessagesEither(
     result.success ? readStoredMessages(result.data) : refuse(SCHEMA_REFUSAL.MALFORMED, []),
   );
 }
+
+/**
+ * The SDK's validator, loaded the first time rows are read rather than as
+ * this module loads. Note that the SDK, and the zod its schemas stand on, are
+ * about a megabyte of modules, which every bundle importing this door
+ * evaluated as it started, the iOS app's launch among them, though it reads no
+ * stored rows; a module import is cached, so each later read waits on nothing.
+ */
+const sdkValidator = (): Promise<typeof safeValidateUIMessages> =>
+  import("ai").then((sdk) => sdk.safeValidateUIMessages);
 
 /** The boundary entry point every store caller reads a `SchemaRead` from. */
 export function readStoredUIMessages(
