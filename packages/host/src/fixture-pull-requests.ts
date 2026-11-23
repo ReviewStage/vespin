@@ -665,6 +665,7 @@ export function pullRequestPartsAppState(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED],
       moves,
+      resolves,
       viewedMarks,
     ),
   };
