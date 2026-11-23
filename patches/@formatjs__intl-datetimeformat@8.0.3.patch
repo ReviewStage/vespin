@@ -1,0 +1,105 @@
+diff --git a/index.js b/index.js
+index 6b279b5d8eb7c2d4b0f48e4cd2493290d9b34eef..cd3926b283e573f048779a1cc8d5c8fee149a44f 100755
+--- a/index.js
++++ b/index.js
+@@ -2579,13 +2579,23 @@ function unpack(data) {
+ 	const packedZones = data.zones;
+ 	const zones = {};
+ 	for (const d of packedZones) {
+-		const [zone, ...zoneData] = d.split("|");
+-		zones[zone] = zoneData.map((z) => z.split(",")).map(([ts, abbrvIndex, offsetIndex, dst]) => [
+-			ts === "" ? -Infinity : parseInt(ts, 36),
+-			abbrvs[+abbrvIndex],
+-			offsets[+offsetIndex],
+-			dst === "1"
+-		]);
++		const bar = d.indexOf("|");
++		const zone = bar === -1 ? d : d.slice(0, bar);
++		let unpacked;
++		// Each zone is unpacked as it is first read, since unpacking every zone up front was most of the polyfill's start.
++		Object.defineProperty(zones, zone, {
++			configurable: true,
++			enumerable: true,
++			get: function() {
++				if (unpacked === undefined) unpacked = (bar === -1 ? [] : d.slice(bar + 1).split("|")).map((z) => z.split(",")).map(([ts, abbrvIndex, offsetIndex, dst]) => [
++					ts === "" ? -Infinity : parseInt(ts, 36),
++					abbrvs[+abbrvIndex],
++					offsets[+offsetIndex],
++					dst === "1"
++				]);
++				return unpacked;
++			}
++		});
+ 	}
+ 	return zones;
+ }
+diff --git a/polyfill-force.js b/polyfill-force.js
+index 6a2f526230c5bf0bc3c62edd1425d493cc1ef528..93b45c73bb92d781b8bec6ea56f44bc732982fea 100755
+--- a/polyfill-force.js
++++ b/polyfill-force.js
+@@ -2588,13 +2588,23 @@ function unpack(data) {
+ 	const packedZones = data.zones;
+ 	const zones = {};
+ 	for (const d of packedZones) {
+-		const [zone, ...zoneData] = d.split("|");
+-		zones[zone] = zoneData.map((z) => z.split(",")).map(([ts, abbrvIndex, offsetIndex, dst]) => [
+-			ts === "" ? -Infinity : parseInt(ts, 36),
+-			abbrvs[+abbrvIndex],
+-			offsets[+offsetIndex],
+-			dst === "1"
+-		]);
++		const bar = d.indexOf("|");
++		const zone = bar === -1 ? d : d.slice(0, bar);
++		let unpacked;
++		// Each zone is unpacked as it is first read, since unpacking every zone up front was most of the polyfill's start.
++		Object.defineProperty(zones, zone, {
++			configurable: true,
++			enumerable: true,
++			get: function() {
++				if (unpacked === undefined) unpacked = (bar === -1 ? [] : d.slice(bar + 1).split("|")).map((z) => z.split(",")).map(([ts, abbrvIndex, offsetIndex, dst]) => [
++					ts === "" ? -Infinity : parseInt(ts, 36),
++					abbrvs[+abbrvIndex],
++					offsets[+offsetIndex],
++					dst === "1"
++				]);
++				return unpacked;
++			}
++		});
+ 	}
+ 	return zones;
+ }
+diff --git a/polyfill.js b/polyfill.js
+index 6f44dda5885369794922698a4a358ac17c3ef8f1..d2bec9b87e92d100834b73baf5f4b56a8d00f538 100755
+--- a/polyfill.js
++++ b/polyfill.js
+@@ -2588,13 +2588,23 @@ function unpack(data) {
+ 	const packedZones = data.zones;
+ 	const zones = {};
+ 	for (const d of packedZones) {
+-		const [zone, ...zoneData] = d.split("|");
+-		zones[zone] = zoneData.map((z) => z.split(",")).map(([ts, abbrvIndex, offsetIndex, dst]) => [
+-			ts === "" ? -Infinity : parseInt(ts, 36),
+-			abbrvs[+abbrvIndex],
+-			offsets[+offsetIndex],
+-			dst === "1"
+-		]);
++		const bar = d.indexOf("|");
++		const zone = bar === -1 ? d : d.slice(0, bar);
++		let unpacked;
++		// Each zone is unpacked as it is first read, since unpacking every zone up front was most of the polyfill's start.
++		Object.defineProperty(zones, zone, {
++			configurable: true,
++			enumerable: true,
++			get: function() {
++				if (unpacked === undefined) unpacked = (bar === -1 ? [] : d.slice(bar + 1).split("|")).map((z) => z.split(",")).map(([ts, abbrvIndex, offsetIndex, dst]) => [
++					ts === "" ? -Infinity : parseInt(ts, 36),
++					abbrvs[+abbrvIndex],
++					offsets[+offsetIndex],
++					dst === "1"
++				]);
++				return unpacked;
++			}
++		});
+ 	}
+ 	return zones;
+ }
