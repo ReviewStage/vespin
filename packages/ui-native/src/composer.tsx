@@ -160,6 +160,9 @@ const FIELD_TRAILING = SPACE.TIGHT;
 /** The most lines the field grows to before it scrolls its words; fewer at an accessibility size, where six of its lines with the keyboard up left the transcript over it no room, and one on the composer's one line (`useOneLine`), where a line more stood its row behind the keyboard. */
 const FIELD_LINES = { REGULAR: 6, LARGE: 3, ONE_LINE: 1 } as const;
 
+/** The least width the field keeps on the composer's one line (`useOneLine`), in points: four presses' widths, room for a few words, so what is picked beside it gives way, its name cut, before the field does. */
+const ONE_LINE_FIELD_MIN = PRESS_SIZE * 4;
+
 /** What the + is named by, whether it opens one act or a menu. */
 export const ADD_LABEL = "Add";
 
@@ -719,6 +722,7 @@ function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts 
 
   // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so its text view is sized at that one width as its words change, rather than asking its ideal width too.
   const span = frame({
+    ...(oneLine && { minWidth: ONE_LINE_FIELD_MIN }),
     minHeight: PRESS_SIZE,
     maxWidth: Number.POSITIVE_INFINITY,
     alignment: "leading",
@@ -1082,8 +1086,9 @@ function useOneLine(props: ComposerProps): boolean {
 /**
  * The line a composer's field stands in where its row stands under it: the
  * field alone, or, on one line (`useOneLine`), the + before it and what is
- * picked, Dictate, a call's presses, and Send after it, each at its whole
- * width, the field taking the rest at one line's height. The capsules step
+ * picked, Dictate, a call's presses, and Send after it, the presses at their
+ * whole width, the field taking the rest at one line's height but never
+ * less than its least (`ONE_LINE_FIELD_MIN`). The capsules step
  * aside there with the dock, since beside the model at an accessibility size
  * they left the field a few words' width, and they stand again once the
  * keyboard goes. Note that the field keeps
@@ -1106,9 +1111,14 @@ function FieldLine({
     <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
       {oneLine ? <AddPress menu={addMenu} onAdd={onAdd} testId={testIds?.add} /> : null}
       {parts.field}
+      {/* Note that what is picked stands at no fixed width here, so at the largest sizes its name is cut rather than the field squeezed past its least width; the presses keep theirs. */}
+      {oneLine && trailing !== undefined ? (
+        <HStack modifiers={[frame({ minHeight: PRESS_SIZE }), padding({ trailing: TOOL_SPACING })]}>
+          {trailing}
+        </HStack>
+      ) : null}
       {oneLine ? (
         <HStack spacing={TOOL_SPACING} modifiers={beside}>
-          {trailing}
           {dictation === undefined ? null : (
             <DictationPress
               glyph={GLYPH.DICTATE}
