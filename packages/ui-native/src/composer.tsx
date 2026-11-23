@@ -866,6 +866,11 @@ function capsulesOwnLine(widths: RowWidths): boolean {
   return widths.row > 0 && widths.capsules > room;
 }
 
+/** Whether what stands at the row's end may hold its whole width: where it fits the row, its widest kept (`measuredEnd`) so the choice never turns back as it gives way; a row not yet measured holds it. */
+function endFits(widths: RowWidths): boolean {
+  return widths.row === 0 || widths.end <= widths.row;
+}
+
 /**
  * The row under the field, as the desktop composer's foot stands it: the +
  * at its start and the capsules saying where the message runs after it,
@@ -911,13 +916,13 @@ function ComposerRow({
     </HStack>
   );
 
-  // Note that what is picked for the message, such as the model, is offered the row first and holds its whole words (`fixedSize`), so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room; a priority alone still left the agent page's chip "Op…" beside the capsules' scroll.
+  // Note that what is picked for the message, such as the model, is offered the row first and holds its whole words (`fixedSize`) while they fit the row, so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room; a priority alone still left the agent page's chip "Op…" beside the capsules' scroll. Past the row's width, as at an accessibility size on a narrow screen, it gives way and cuts the name instead, so Send never stands past the row's edge.
   const end = (
     <HStack
       spacing={TOOL_SPACING}
       modifiers={[
         layoutPriority(1),
-        fixedSize(),
+        ...(endFits(widths) ? [fixedSize()] : []),
         onGeometryChange(({ width }) => measuredEnd(width)),
       ]}
     >
