@@ -30,6 +30,7 @@ import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import { type CallAgentLine, callAgentLine } from "@repo/features/call-agent-line";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -103,6 +104,8 @@ const UNNAMED_AGENT = "Agent";
 interface StandingVoiceCall extends VoiceCallState {
   readonly agentName: string;
   readonly provider: ModelProvider | undefined;
+  /** A Manager's face, which its tile wears; none for any other agent. */
+  readonly face: ManagerFace | undefined;
   readonly taskName: string | undefined;
   /** What the agent does: absent while it is idle, and its command while it runs one. */
   readonly agent: CallAgentLine | undefined;
@@ -236,6 +239,7 @@ function useStandingFacts(call: VoiceCallState | undefined) {
   return {
     agentName: agent === undefined ? UNNAMED_AGENT : agentName(agent),
     provider: agent === undefined ? undefined : providerOf(agent.model),
+    face: agent?.face,
     taskName,
     agent: callAgentLine(agent?.status, messages ?? []),
   };
@@ -367,6 +371,7 @@ export function useStandingCallCard(
     card: {
       agentName: call.agentName,
       harness: call.provider,
+      face: call.face,
       taskName: call.taskName,
       line: callLineWords(call.stage, call.agent),
       presses: {

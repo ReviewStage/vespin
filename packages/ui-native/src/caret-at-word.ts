@@ -3,6 +3,7 @@
 import { type AtWord, atWordAround } from "@repo/features/at-word";
 import { readerZone } from "@repo/features/date-mention";
 import type { Pill } from "@repo/features/pill-words";
+import type { ChipMarkOf } from "./chip-mark-model.js";
 import type { NativePill, NativeWord } from "./pill-field-native.js";
 import { pillLook } from "./pill-look.js";
 
@@ -42,11 +43,11 @@ export function toldWord(word: CaretAtWord | undefined): NativeWord | undefined 
   return word === undefined ? undefined : { start: word.start, text: word.text };
 }
 
-/** A pill as the native field draws it: its Markdown, and its look as the chip it becomes once sent. */
-export function drawnPill(pill: Pill, repository: string | null): NativePill {
+/** A pill as the native field draws it: its Markdown, and its look as the chip it becomes once sent, a Manager's face where `markOf` holds it. */
+export function drawnPill(pill: Pill, repository: string | null, markOf?: ChipMarkOf): NativePill {
   const reading = { repository, now: Date.now(), zone: readerZone() };
 
-  return { markdown: pill.markdown, ...pillLook(pill, reading) };
+  return { markdown: pill.markdown, ...pillLook(pill, reading, markOf) };
 }
 
 /** Whether two `@` words are the same word at the same place. */

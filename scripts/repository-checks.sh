@@ -174,6 +174,11 @@ node "$APP_REPO_ROOT/packages/brand/scripts/generate-surface-shared.mjs" --check
 # ProviderMark into @repo/ui-native's assets; --check fails if one drifted.
 pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-provider-marks.ts --check
 
+# The iOS app's Manager faces are the desktop's, each character at rest and
+# at work rendered from @repo/ui's ManagerFace into @repo/ui-native's assets;
+# --check fails if one drifted.
+pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-manager-faces.ts --check
+
 # The constants clients build /api/ URLs from are the other half of that
 # table: a path constant can outlive its route and nothing fails until
 # production answers 404. Every /api/ literal and path builder under

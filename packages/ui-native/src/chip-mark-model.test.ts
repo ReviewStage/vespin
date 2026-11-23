@@ -3,6 +3,7 @@
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_SITE } from "@repo/features/link-site";
+import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { describe, expect, it } from "vitest";
@@ -12,16 +13,21 @@ import { STATUS_TONE } from "./tokens/status-tone.js";
 
 const RELAY = { id: "w-relay", name: "Relay" };
 
+const FACE = { character: MANAGER_FACE_CHARACTER.CAT, color: MANAGER_FACE_COLOR.PINK };
+
 const HELD: ChipMarksHeld = {
   taskStatus: (taskId) => (taskId === "t-alerts" ? TASK_STATUS.IN_PROGRESS : undefined),
-  agentModel: (agentId) => (agentId === "a-1" ? "anthropic/claude-opus-5.5" : undefined),
+  // Note that the Manager runs on a model too, so its chip wears its face over its harness's mark.
+  agentModel: (agentId) =>
+    agentId === "a-1" || agentId === "a-manager" ? "anthropic/claude-opus-5.5" : undefined,
+  managerFace: (agentId) => (agentId === "a-manager" ? { face: FACE, working: true } : undefined),
   member: (userId) =>
     userId === "u-grace" ? { name: "Grace Hopper", picture: undefined } : undefined,
   workspace: (slug) => (slug === "relay" ? RELAY : undefined),
 };
 
 describe("a chip's mark", () => {
-  it("is its entity's own where the app holds it: a task's status, an agent's harness, a person's face, a workspace's tile", () => {
+  it("is its entity's own where the app holds it: a task's status, an agent's harness, a Manager's face, a person's face, a workspace's tile", () => {
     expect(chipMarkOf({ kind: ENTITY_KIND.PLAN, taskId: "t-alerts" }, HELD)).toEqual({
       kind: CHIP_MARK.GLYPH,
       glyph: GLYPH.STATUS_IN_PROGRESS,
@@ -30,6 +36,11 @@ describe("a chip's mark", () => {
     expect(chipMarkOf({ kind: ENTITY_KIND.AGENT, agentId: "a-1" }, HELD)).toEqual({
       kind: CHIP_MARK.HARNESS,
       harness: MODEL_PROVIDER.ANTHROPIC,
+    });
+    expect(chipMarkOf({ kind: ENTITY_KIND.AGENT, agentId: "a-manager" }, HELD)).toEqual({
+      kind: CHIP_MARK.MANAGER,
+      face: FACE,
+      working: true,
     });
     expect(chipMarkOf({ kind: ENTITY_KIND.PERSON, userId: "u-grace" }, HELD)).toEqual({
       kind: CHIP_MARK.FACE,

@@ -81,3 +81,16 @@ export const BRAND_PALETTE = {
     AVATAR_INK: "#cf7b26",
   },
 } as const;
+
+// The fill a Manager's face is drawn in, by the word its color is stored as
+// (@repo/features/manager-face's MANAGER_FACE_COLOR), in the light theme and
+// the dark: the same values @repo/ui's manager-face.css names
+// --ui-color-manager-face-*, which the iOS app's faces are filled with.
+export const MANAGER_FACE_FILL = {
+  yellow: { LIGHT: "#f9c74f", DARK: "#ffd882" },
+  green: { LIGHT: "#8fd47a", DARK: "#a6e191" },
+  blue: { LIGHT: "#6cc4f5", DARK: "#83d1fb" },
+  pink: { LIGHT: "#f78fcb", DARK: "#fda7dc" },
+  purple: { LIGHT: "#b08cff", DARK: "#c5a6ff" },
+  peach: { LIGHT: "#ff9a6c", DARK: "#ffb08a" },
+} as const;

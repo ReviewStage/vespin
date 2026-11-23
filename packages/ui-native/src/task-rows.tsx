@@ -34,6 +34,7 @@ import { VERSION_CHANGE, type VersionUnit } from "@repo/features/description-ver
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { LinkStanding } from "@repo/features/link-standing-model";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import {
@@ -232,6 +233,8 @@ type AgentRowProps = {
   readonly name: string;
   /** The provider whose harness it runs in, whose mark its tile wears; the hard hat where it is not known. */
   readonly harness?: ModelProvider | undefined;
+  /** A Manager's face, which leads the row in its tile's place, livelier while it works, as the panel's sidebar row wears it (`ManagerGlyph`); none for any other agent. */
+  readonly face?: ManagerFace | undefined;
   readonly state: AgentRowState;
   /** Where it runs: "Cloud", or the device's name. */
   readonly runsOn: string;
@@ -409,7 +412,14 @@ export function AgentRow(props: AgentRowProps) {
         unread={props.unread === true}
         faded={false}
         fold={fold === undefined ? undefined : <FoldChevron fold={fold} words={folding} />}
-        lead={<AgentTile harness={harness} size={tile} />}
+        lead={
+          <AgentTile
+            harness={harness}
+            size={tile}
+            face={props.face}
+            working={state === AGENT_ROW_STATE.WORKING}
+          />
+        }
         title={name}
         ink={colors.TEXT}
         end={

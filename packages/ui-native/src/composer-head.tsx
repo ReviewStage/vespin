@@ -16,7 +16,7 @@ import {
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { Avatar, AvatarPhoto, HarnessMark } from "./marks.js";
+import { Avatar, AvatarPhoto, HarnessMark, MANAGER_FACE_SEAT, ManagerFace } from "./marks.js";
 import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -186,7 +186,7 @@ const SUGGESTION_HEIGHT = PRESS_SIZE + 6;
  * glyph, so the names line up whatever leads them: the mark of the entity
  * it names, as the chip a pick writes leads with it (`ChipMark`), a
  * person's photo or letters, a task's status ring in its tone, an agent's
- * harness, a pull request's state, a thread's ask; else its kind's glyph in
+ * harness or a Manager's face, a pull request's state, a thread's ask; else its kind's glyph in
  * the muted ink. It is never heard, since the name beside it is.
  */
 function SuggestionMark({
@@ -209,6 +209,15 @@ function SuggestionMark({
       );
     case CHIP_MARK.HARNESS:
       return <HarnessMark provider={mark.harness} size={size} />;
+    case CHIP_MARK.MANAGER:
+      return (
+        <ManagerFace
+          face={mark.face}
+          size={size}
+          working={mark.working}
+          seat={MANAGER_FACE_SEAT.WORDS}
+        />
+      );
     case CHIP_MARK.GLYPH:
       return (
         <Image

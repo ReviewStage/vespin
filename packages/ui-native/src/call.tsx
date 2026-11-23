@@ -20,6 +20,7 @@ import {
   lineLimit,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { CALL_CONTROL_LABEL } from "@repo/features/voice-call-words";
 import { StyleSheet } from "react-native";
@@ -55,6 +56,8 @@ export interface StandingCallCard {
   readonly agentName: string;
   /** The harness the agent's tile wears; none where it is not known. */
   readonly harness: ModelProvider | undefined;
+  /** A Manager's face, which stands in its tile's place; none for any other agent. */
+  readonly face?: ManagerFace | undefined;
   /** The call's task by name; none where its task is not listed. */
   readonly taskName: string | undefined;
   /** Where the call stands or what its agent does, in words; none while it is up and its agent idle. */
@@ -203,7 +206,11 @@ export function CallCardRow({
           spacing={SPACE.TIGHT * 2}
           modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
         >
-          <AgentTile harness={call.harness} size={inline ? TILE_SIZE.INLINE : TILE_SIZE.FULL} />
+          <AgentTile
+            harness={call.harness}
+            face={call.face}
+            size={inline ? TILE_SIZE.INLINE : TILE_SIZE.FULL}
+          />
           <VStack alignment="leading" spacing={0}>
             <Text
               modifiers={[

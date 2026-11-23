@@ -12,7 +12,7 @@ import { basename, join } from "node:path";
 import plist, { type PlistValue } from "@expo/plist";
 import { everyLucideSymbol } from "@repo/brand/every-lucide-symbol";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
-import { BRAND_PALETTE } from "@repo/brand/palette";
+import { BRAND_PALETTE, MANAGER_FACE_FILL } from "@repo/brand/palette";
 import { PRODUCT_MARK_SYMBOL_TEMPLATE } from "@repo/brand/product-mark-symbol";
 import {
   CLAWD_PATH,
@@ -24,6 +24,7 @@ import {
   TASK_PRIORITY_SYMBOL_TEMPLATES,
   TASK_STATUS_SYMBOL_TEMPLATES,
 } from "@repo/brand/task-status-symbols";
+import type { ManagerFaceColor } from "@repo/features/manager-face";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
@@ -137,6 +138,23 @@ const IMAGE_SETS = [
 // `IntegrationMarks/<provider>`.
 const INTEGRATION_MARKS = "../../packages/ui-native/assets/provider-marks";
 const INTEGRATION_MARKS_FOLDER = "IntegrationMarks";
+
+// Where a Manager's faces are kept, as the desktop draws them: each
+// character at rest and at work, `<character>-<rest|working>.svg`, its body
+// in `currentColor` (`@repo/ui`'s `scripts/native-manager-faces.ts` renders
+// them from `ManagerFace`). Each is written under the catalog's
+// `ManagerFaces` folder once in every color a face may be, its body filled
+// with the color's light fill and, for the dark appearance, its dark one, as
+// `<character>-<state>-<color>`, which `@repo/ui-native`'s `managerFaceAsset`
+// reads, so a face is one vector image the system draws and caches, never a
+// picture fetched or a view built of shapes.
+const MANAGER_FACES = "../../packages/ui-native/assets/manager-faces";
+const MANAGER_FACES_FOLDER = "ManagerFaces";
+
+// Note that every color a face may be is filled, a stored color with no fill failing here.
+const MANAGER_FACE_FILLS: Readonly<
+  Record<ManagerFaceColor, { readonly LIGHT: string; readonly DARK: string }>
+> = MANAGER_FACE_FILL;
 
 // The pictures `AgentTile` draws that have no vector: Codex's, OpenAI's own
 // picture in its own colors, from the files the panel serves, at one, two,
@@ -865,6 +883,53 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         };
 
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+      }
+
+      const facesFolder = join(catalog, MANAGER_FACES_FOLDER);
+      mkdirSync(facesFolder, { recursive: true });
+
+      writeFileSync(
+        join(facesFolder, "Contents.json"),
+        `${JSON.stringify({ info: { author: "xcode", version: 1 }, properties: { "provides-namespace": true } }, null, 2)}\n`,
+      );
+
+      const faces = join(projectRoot, MANAGER_FACES);
+
+      for (const file of readdirSync(faces).filter((name) => name.endsWith(".svg"))) {
+        const face = basename(file, ".svg");
+        const drawn = readFileSync(join(faces, file), "utf8");
+
+        for (const [color, fill] of Object.entries(MANAGER_FACE_FILLS)) {
+          const name = `${face}-${color}`;
+          const imageSet = join(facesFolder, `${name}.imageset`);
+          mkdirSync(imageSet, { recursive: true });
+          writeFileSync(
+            join(imageSet, `${name}.svg`),
+            drawn.replaceAll("currentColor", fill.LIGHT),
+          );
+          writeFileSync(
+            join(imageSet, `${name}-dark.svg`),
+            drawn.replaceAll("currentColor", fill.DARK),
+          );
+
+          const contents = {
+            images: [
+              { filename: `${name}.svg`, idiom: "universal" },
+              {
+                appearances: [{ appearance: "luminosity", value: "dark" }],
+                filename: `${name}-dark.svg`,
+                idiom: "universal",
+              },
+            ],
+            info: { author: "xcode", version: 1 },
+            properties: {
+              "preserves-vector-representation": true,
+              "template-rendering-intent": "original",
+            },
+          };
+
+          writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+        }
       }
 
       for (const set of PICTURE_SETS) {

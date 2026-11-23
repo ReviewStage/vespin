@@ -44,12 +44,21 @@ export function barSubtitle(
   bar: BarKind,
   subtitle: string | undefined,
   leading = false,
+  titleMark?: BarTitleMark,
 ): ModifierConfig {
-  return createModifier(
-    bar === BAR_KIND.COLUMN ? MODIFIER.COLUMN_SUBTITLE : MODIFIER.STACK_SUBTITLE,
-    { subtitle: subtitle ?? "", leading },
-  );
+  if (bar === BAR_KIND.COLUMN)
+    return createModifier(MODIFIER.COLUMN_SUBTITLE, { subtitle: subtitle ?? "", leading });
+
+  return createModifier(MODIFIER.STACK_SUBTITLE, {
+    subtitle: subtitle ?? "",
+    leading,
+    title: titleMark?.title ?? "",
+    titleMark: titleMark?.asset ?? "",
+  });
 }
+
+/** A picture of the asset catalog a stack's bar leads its title with, such as a Manager's face, and the title it leads. */
+export type BarTitleMark = { readonly title: string; readonly asset: string };
 
 /**
  * A list the native stack's bar follows as it scrolls, so a tab root's large

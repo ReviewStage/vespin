@@ -4,6 +4,7 @@ import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-pictu
 import type { AgentStatus, PullRequestState } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import { type InboxThreadMessage, needsYouWords } from "@repo/features/inbox-list-model";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { plainWords } from "@repo/features/plain-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
@@ -14,6 +15,7 @@ import { CALL_KIND, madeCallLine } from "@repo/features/turn-rows";
 import { identityLetter } from "@repo/features/workspace-tile";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { managerFaceAsset } from "./manager-face-look.js";
 import {
   HARNESS_MARK_ASSET,
   LETTER_SCALE,
@@ -192,6 +194,8 @@ type AgentPreviewFacts = {
   readonly name: string;
   /** The provider whose harness it runs in, whose mark its tile wears; the hard hat where it is not known. */
   readonly harness?: ModelProvider | undefined;
+  /** A Manager's face, which stands in its tile's place; none for any other agent. */
+  readonly face?: ManagerFace | undefined;
   readonly status: AgentStatus;
   readonly task?: PreviewTask | undefined;
   /** The model it runs on, as the panel's chip names it. */
@@ -413,12 +417,26 @@ function agentStateMark(status: AgentStatus, look: PreviewLook): PreviewNode | u
   return undefined;
 }
 
-/** An agent's tile, its harness's mark on the brand's well, or the hard hat where the harness is not known, as `AgentTile` draws it. */
+/** A tile with no well, so a Manager's face, which draws its own body, stands on the preview's ground alone. */
+const NO_WELL = "#00000000";
+
+/** An agent's tile, its harness's mark on the brand's well, or the hard hat where the harness is not known, as `AgentTile` draws it; a Manager's face in its place, at rest, as its row wears it (`managerFaceAsset`). */
 function agentTile(
   harness: ModelProvider | undefined,
   size: number,
   look: PreviewLook,
+  face?: ManagerFace | undefined,
 ): PreviewNode {
+  if (face !== undefined)
+    return {
+      kind: PREVIEW_NODE.TILE,
+      size,
+      corner: 0,
+      well: NO_WELL,
+      ink: look.colors.TEXT,
+      mark: { asset: managerFaceAsset(face, false), side: size },
+    };
+
   return {
     kind: PREVIEW_NODE.TILE,
     size,
@@ -617,7 +635,10 @@ function agentNodes(
 
   return [
     taskPath(facts.task, look),
-    row(SPACE.ROW, [agentTile(facts.harness, MARK_SIZE.AVATAR, look), heading(facts.name, look)]),
+    row(SPACE.ROW, [
+      agentTile(facts.harness, MARK_SIZE.AVATAR, look, facts.face),
+      heading(facts.name, look),
+    ]),
     row(SPACE.TIGHT + 2, [
       agentStateMark(facts.status, look),
       line(lineOf([agentStateWords(facts.status), facts.model, facts.runsOn]), look),

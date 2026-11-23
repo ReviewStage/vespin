@@ -1,4 +1,4 @@
-// chip-mark.tsx -- the mark a chip in a line of words leads with for the entity it names, as the panel's `entity-mark.tsx` draws it: a task's status, an agent's harness, a person's face, a thread's ask, a workspace's tile.
+// chip-mark.tsx -- the mark a chip in a line of words leads with for the entity it names, as the panel's `entity-mark.tsx` draws it: a task's status, an agent's harness or a Manager's face, a person's face, a thread's ask, a workspace's tile.
 
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { identityLetter } from "@repo/features/workspace-tile";
@@ -12,6 +12,7 @@ import {
   INTEGRATION_MARK_TEMPLATE,
   LINK_SITE_MARK_ASSET,
 } from "./integration-marks.js";
+import { managerFaceAsset } from "./manager-face-look.js";
 import { HARNESS_MARK_ASSET, TILE_ROUNDING } from "./mark-look.js";
 import { type BrandColors, toneColor } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
@@ -172,6 +173,16 @@ export function ChipMarkView({
       return (
         <Photo
           source={{ uri: HARNESS_MARK_ASSET[mark.harness] }}
+          style={{ width: size, height: size }}
+          resizeMode="contain"
+          accessibilityElementsHidden
+        />
+      );
+    case CHIP_MARK.MANAGER:
+      // Note that among words a face is too small to hold the working disc, so its mood alone says it works, as the panel's face among words does.
+      return (
+        <Photo
+          source={{ uri: managerFaceAsset(mark.face, mark.working) }}
           style={{ width: size, height: size }}
           resizeMode="contain"
           accessibilityElementsHidden

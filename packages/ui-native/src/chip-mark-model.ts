@@ -3,6 +3,7 @@
 import { ENTITY_KIND, type Entity } from "@repo/features/entity-kind";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import type { LinkSite } from "@repo/features/link-site";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { TASK_STATUS_TONE } from "@repo/features/task-standing-words";
@@ -20,6 +21,8 @@ export const CHIP_MARK = {
   FACE: "face",
   /** The mark of the harness an agent runs in. */
   HARNESS: "harness",
+  /** A Manager's face, livelier while it works. */
+  MANAGER: "manager",
   /** A workspace's tile. */
   TILE: "tile",
   /** The mark of the integration a link's page is on, as the desktop draws it. */
@@ -37,6 +40,11 @@ export type ChipMark =
       readonly picture?: string | undefined;
     }
   | { readonly kind: typeof CHIP_MARK.HARNESS; readonly harness: ModelProvider }
+  | {
+      readonly kind: typeof CHIP_MARK.MANAGER;
+      readonly face: ManagerFace;
+      readonly working: boolean;
+    }
   | { readonly kind: typeof CHIP_MARK.TILE; readonly workspace: SwitcherWorkspace }
   | { readonly kind: typeof CHIP_MARK.PROVIDER; readonly provider: IntegrationProvider }
   | { readonly kind: typeof CHIP_MARK.SITE; readonly site: LinkSite };
@@ -49,6 +57,10 @@ export interface ChipMarksHeld {
   readonly taskStatus: (taskId: string) => TaskStatus | undefined;
   /** The catalog id of the model an agent runs on, which its harness is read off. */
   readonly agentModel: (agentId: string) => string | undefined;
+  /** A Manager's face, and whether it works, which its face wears; none for any other agent. */
+  readonly managerFace: (
+    agentId: string,
+  ) => { readonly face: ManagerFace; readonly working: boolean } | undefined;
   readonly member: (
     userId: string,
   ) => { readonly name: string; readonly picture: string | undefined } | undefined;
@@ -72,8 +84,8 @@ function linkMark(link: Extract<Entity, { readonly kind: typeof ENTITY_KIND.LINK
 
 /**
  * The mark a chip leads with for `entity`, as the panel's chip does: a task
- * (or a version of its description) its status ring in its tone, an agent
- * its harness's mark, a person their face, a workspace its tile, and a
+ * (or a version of its description) its status ring in its tone, a Manager
+ * its face, any other agent its harness's mark, a person their face, a workspace its tile, and a
  * link its provider's mark (`linkMark`). Every other kind, and any the app holds
  * nothing of, keeps its kind's own glyph.
  */
@@ -84,6 +96,9 @@ export function chipMarkOf(entity: Entity, held: ChipMarksHeld): ChipMark | unde
     case ENTITY_KIND.VERSION:
       return taskMark(held.taskStatus(entity.taskId));
     case ENTITY_KIND.AGENT: {
+      const manager = held.managerFace(entity.agentId);
+
+      if (manager !== undefined) return { kind: CHIP_MARK.MANAGER, ...manager };
       const model = held.agentModel(entity.agentId);
       const harness = model === undefined ? undefined : providerOf(model);
 

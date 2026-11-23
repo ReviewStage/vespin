@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -185,12 +185,22 @@ internal struct ColumnSubtitleModifier: ViewModifier, Record {
 /// the bar's own row. Note that a centered title had nowhere to stand on an
 /// iPad whose tab bar floats in the middle of that row, so UIKit dropped it
 /// with its subtitle into a row of its own over the page's content.
+///
+/// Where it names a `titleMark`, a picture of the asset catalog such as a
+/// Manager's face, it leads `title` with it as the item's attributed title
+/// (iOS 26), the picture standing as tall as the title's line, drawn for the
+/// screen's appearance and again as it changes; it clears that title as it
+/// clears its subtitle.
 internal struct StackSubtitleModifier: ViewModifier, Record {
   @Field var subtitle: String = ""
   @Field var leading: Bool = false
+  @Field var title: String = ""
+  @Field var titleMark: String = ""
 
   func body(content: Content) -> some View {
-    content.background(StackSubtitleProbe(subtitle: subtitle, leading: leading))
+    content.background(
+      StackSubtitleProbe(subtitle: subtitle, leading: leading, title: title, titleMark: titleMark)
+    )
   }
 }
 
@@ -198,6 +208,8 @@ internal struct StackSubtitleModifier: ViewModifier, Record {
 private struct StackSubtitleProbe: UIViewRepresentable {
   let subtitle: String
   let leading: Bool
+  let title: String
+  let titleMark: String
 
   func makeUIView(context: Context) -> StackSubtitleView {
     StackSubtitleView()
@@ -205,6 +217,7 @@ private struct StackSubtitleProbe: UIViewRepresentable {
 
   func updateUIView(_ view: StackSubtitleView, context: Context) {
     view.leading = leading
+    view.marked = titleMark.isEmpty || title.isEmpty ? nil : (title: title, mark: titleMark)
     view.subtitle = subtitle
   }
 
@@ -218,6 +231,8 @@ private final class StackSubtitleView: UIView {
   private weak var item: UINavigationItem?
   private var written: String?
   private var styleFound: UINavigationItem.ItemStyle?
+  /// The attributed title this probe wrote, so it clears only its own.
+  private var writtenTitle: NSAttributedString?
 
   var subtitle = "" {
     didSet { write() }
@@ -227,10 +242,21 @@ private final class StackSubtitleView: UIView {
     didSet { write() }
   }
 
+  /// The title to lead with a picture, and the picture's name in the asset catalog; none for a plain title.
+  var marked: (title: String, mark: String)? {
+    didSet {
+      if marked?.title != oldValue?.title || marked?.mark != oldValue?.mark { write() }
+    }
+  }
+
   override init(frame: CGRect) {
     super.init(frame: frame)
     isUserInteractionEnabled = false
     isAccessibilityElement = false
+    // Note that the picture is drawn for one appearance, so the title is written again as light and dark trade places.
+    registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: StackSubtitleView, _: UITraitCollection) in
+      view.write()
+    }
   }
 
   required init?(coder: NSCoder) {
@@ -247,6 +273,10 @@ private final class StackSubtitleView: UIView {
     if let item, item.subtitle == written {
       item.subtitle = nil
     }
+    if let item, let writtenTitle, item.attributedTitle == writtenTitle {
+      item.attributedTitle = nil
+    }
+    writtenTitle = nil
     if let item, let styleFound, item.style == .editor {
       item.style = styleFound
     }
@@ -263,11 +293,32 @@ private final class StackSubtitleView: UIView {
     }
     if item !== held.navigationItem { clear() }
     stand(held.navigationItem)
+    lead(held.navigationItem)
     if subtitle.isEmpty && written == nil { return }
     let shown = subtitle.isEmpty ? nil : subtitle
     held.navigationItem.subtitle = shown
     item = held.navigationItem
     written = shown
+  }
+
+  /// Leads the item's title with the picture `marked` names, as one attributed title, or takes away the one it wrote once it names none.
+  private func lead(_ held: UINavigationItem) {
+    guard let marked, let picture = UIImage(named: marked.mark, in: nil, compatibleWith: traitCollection) else {
+      if let writtenTitle, held.attributedTitle == writtenTitle { held.attributedTitle = nil }
+      writtenTitle = nil
+      return
+    }
+    let font = UIFont.preferredFont(forTextStyle: .headline)
+    let side = font.lineHeight
+    let attachment = NSTextAttachment(image: picture)
+    // Note that a bound's origin is measured up from the baseline, so the picture's middle stands on the middle of the title's capitals.
+    attachment.bounds = CGRect(x: 0, y: (font.capHeight - side) / 2, width: side, height: side)
+    let title = NSMutableAttributedString(attachment: attachment)
+    title.addAttribute(.kern, value: font.pointSize / 3, range: NSRange(location: 0, length: title.length))
+    title.append(NSAttributedString(string: marked.title))
+    held.attributedTitle = title
+    item = held
+    writtenTitle = title
   }
 
   /// Stands the item's title at the leading edge while `leading`, keeping the style it found to put back, and puts that back once it isn't.
