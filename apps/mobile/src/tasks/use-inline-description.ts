@@ -288,14 +288,19 @@ export function useInlineDescription(
         },
       },
     ).then(() => {
-      if (!standing.current) return;
-
       const settled =
         answered === undefined
           ? editorRefused(live.current, refusal ?? ACT_UNREACHED_WORDS)
           : editorAnswered(live.current, answered);
 
       update(settled);
+
+      // Note that words typed while the save was out still go once it lands, though the page went meanwhile, since the leaving save found it out and sent nothing; a refusal or a conflict is let go, as nothing stands to say it.
+      if (!standing.current) {
+        if (settled.state.kind === DOCUMENT_EDITOR_STATE.EDITING) save(leavingSave(settled));
+
+        return;
+      }
 
       if (settled.state.kind === DOCUMENT_EDITOR_STATE.CONFLICT) {
         askConflict(settled);

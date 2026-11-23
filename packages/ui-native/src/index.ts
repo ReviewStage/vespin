@@ -111,7 +111,12 @@ export {
 
 export { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
 
-export { DocumentPage, type DocumentPageMentions, MentionDock } from "./document-page.js";
+export {
+  DocumentPage,
+  type DocumentPageMentions,
+  MentionDock,
+  MentionFoot,
+} from "./document-page.js";
 
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 

@@ -35,7 +35,8 @@ env:
 # land off the screen.
 # Note that on an iPhone the words are scrolled to the screen's middle, clear
 # of the floating tab bar, which takes a press on words scrolled only into
-# sight at the screen's foot.
+# sight at the screen's foot; an iPad's split view scrolls its detail column
+# beside the list, and one more swipe draws the words up from its foot.
 - runFlow:
     when:
       true: ${FLOATING_TABS != 'true'}
@@ -45,29 +46,18 @@ env:
           centerElement: true
 - runFlow:
     when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - tapOn: "Only an admin can add.*"
-# Note that an iPad's split view edits the description in its sheet until an
-# offer for an `@` stands over the keyboard there: Edit opens it, and a tap
-# on its words, which fill the sheet, takes the keyboard.
-- runFlow:
-    when:
       true: ${FLOATING_TABS == 'true'}
     commands:
       - runFlow:
           file: subflows/scroll-in.yaml
           env:
-            ELEMENT: "Edit description"
+            ELEMENT: "Only an admin can add.*"
             BESIDE: "true"
-      - tapOn: "Edit description"
-      - extendedWaitUntil:
-          visible:
-            id: "description-words"
-          timeout: 10000
-      - tapOn:
-          id: "description-words"
-          point: "8%,50%"
+      - swipe:
+          start: "85%, 65%"
+          end: "85%, 45%"
+          duration: 1200
+- tapOn: "Only an admin can add.*"
 - extendedWaitUntil:
     visible:
       id: "description-words"
@@ -126,9 +116,9 @@ env:
 - inputText: "Ship"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-nested-out
-# Done, in the page's bar on the iPhone, saves what is typed and leaves the
-# field once the service holds it, the page reading the words again; an
-# iPad's sheet saves with Save. Note that the fixture
+# Done, in the page's bar on the iPhone and the detail column's on an iPad,
+# saves what is typed and leaves the field once the service holds it, the
+# page reading the words again. Note that the fixture
 # answers the save without changing the description it serves, so the words
 # read afterwards are the fixture's own.
 - runFlow:
@@ -140,7 +130,7 @@ env:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn: "Save"
+      - tapOn: "Done"
 - extendedWaitUntil:
     notVisible:
       id: "description-words"

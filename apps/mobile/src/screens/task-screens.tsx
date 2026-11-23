@@ -139,6 +139,7 @@ import {
   ListSection,
   type LongPressGroup,
   MentionDock,
+  MentionFoot,
   menuWithout,
   NoSelection,
   PATH_PART,
@@ -3106,6 +3107,44 @@ function InlineBar({
   );
 }
 
+/** What an `@` typed in a split view detail's description offers, at the foot of its SwiftUI column, where the pushed page's React Native dock cannot stand; read from the detail's `chrome` so only the foot draws again. */
+function InlineFoot({
+  chrome,
+  children,
+}: {
+  readonly chrome: InlineChrome;
+  readonly children: ReactNode;
+}) {
+  return <MentionFoot mentions={useInlineMentions(chrome)}>{children}</MentionFoot>;
+}
+
+/**
+ * A split view whose detail's description may be edited in place: while it
+ * is, Done stands at the detail bar's trailing edge in the place of its acts
+ * and ⋯, as the pushed page's bar stands it. Note that it reads the detail's
+ * `chrome` itself, so a press on the words draws the split view's bar again
+ * and never the list or the page, whose elements it hands on unchanged.
+ */
+function InlineSplitView({
+  chrome,
+  detailBar,
+  ...split
+}: ComponentProps<typeof SplitView> & { readonly chrome: InlineChrome }) {
+  const editing = useInlineEditing(chrome);
+
+  const bar =
+    editing && detailBar !== undefined
+      ? {
+          ...detailBar,
+          acts: undefined,
+          menu: undefined,
+          action: { label: WORDS.DONE, onPress: chrome.done },
+        }
+      : detailBar;
+
+  return <SplitView {...split} detailBar={bar} />;
+}
+
 /** What an `@` typed in the page's description offers, docked over the keyboard over the page, read from its `chrome` so only the dock draws again. */
 function InlineDock({
   chrome,
@@ -3131,7 +3170,7 @@ function OverviewPage({
   entered,
   chrome,
 }: {
-  /** What the page holds of its description edited in place, its section editing it where a press on its words or Edit starts; none edits it in the sheet, as an iPad's split view does until an `@` offer stands over the keyboard there. */
+  /** What the page holds of its description edited in place, its section editing it where a press on its words or Edit starts; none edits it in the sheet. */
   readonly chrome?: InlineChrome | undefined;
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
@@ -3336,7 +3375,11 @@ const NO_STATUS_DOORS = { setStatus: () => undefined, workingAgents: () => 0 } a
  * delete ask through `doors`, the list beside it, so it asks once for both;
  * its agents' Archive asks by their rows.
  */
-function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): TaskDetail {
+function useTaskDetail(
+  selected: string | undefined,
+  doors: TaskDetailDoors,
+  chrome: InlineChrome,
+): TaskDetail {
   const newSubTask = useNewSubTask();
   const newAgent = useNewAgent();
   const openRelation = useOpenRelation();
@@ -3346,22 +3389,35 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
   const { setStatus, askDelete } = doors;
   const overview = held === undefined ? undefined : { ...held, setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
-  const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
+  const editDoor = useEditDescriptionDoor(overview?.task.workspaceId);
   const read = useTasksRead();
   const asking = useAgentRowAsk();
   const { refreshTasks } = useInboxActs();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
 
+  // Note that the menu's Edit description edits it in place, as the pushed page's does, but for a description too long to, which it opens in the sheet.
+  const inPlace =
+    overview?.document !== undefined &&
+    overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
+
+  const editDescription =
+    editDoor === undefined
+      ? undefined
+      : (task: TaskSummary) => (inPlace ? chrome.start() : editDoor(task));
+
   const detail =
     overview !== undefined ? (
-      <OverviewPage
-        key={overview.task.id}
-        overview={overview}
-        onRefresh={refreshTasks}
-        asking={asking}
-        entered
-      />
+      <InlineFoot chrome={chrome}>
+        <OverviewPage
+          key={overview.task.id}
+          overview={overview}
+          onRefresh={refreshTasks}
+          asking={asking}
+          entered
+          chrome={chrome}
+        />
+      </InlineFoot>
     ) : selected === undefined ? (
       <NoSelection title={noSelectionWords(TERM.TASK)} />
     ) : read && !found.seeking ? (
@@ -3414,7 +3470,9 @@ function TasksSplitScreen({
 }) {
   const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
 
-  const { detail, detailBar } = useTaskDetail(selected, listing);
+  // What the detail holds of its description edited in place, so its Done stands in the detail's bar and what an `@` offers docks over the keyboard in its column.
+  const chrome = useInlineChrome();
+  const { detail, detailBar } = useTaskDetail(selected, listing, chrome);
 
   const list = {
     chosen: selected !== undefined,
@@ -3445,7 +3503,7 @@ function TasksSplitScreen({
       {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
       <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />
       <Screen key={build}>
-        <SplitView {...first} detail={detail} detailBar={firstDetailBar} />
+        <InlineSplitView {...first} detail={detail} detailBar={firstDetailBar} chrome={chrome} />
       </Screen>
     </>
   );
@@ -3521,7 +3579,9 @@ export function TaskScreen() {
   const chrome = useInlineChrome();
 
   // Note that the menu's Edit description edits it in place too, the caret at its start, but for a description too long to, which it opens in the sheet.
-  const inPlace = (overview?.document?.description.body.length ?? 0) <= INLINE_EDIT_MOST_CHARS;
+  const inPlace =
+    overview?.document !== undefined &&
+    overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
 
   const editDescription =
     editDoor === undefined

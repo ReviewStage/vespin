@@ -1,6 +1,7 @@
 // document-page.tsx -- a page a document is edited whole on, as Notion edits a page: its rich field filling the page, what went wrong over it, and the people and things an `@` offers docked over the keyboard.
 
-import { Host } from "@expo/ui/swift-ui";
+import { Host, VStack } from "@expo/ui/swift-ui";
+import { padding } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode, Ref } from "react";
 import { StyleSheet, View } from "react-native";
 import type { CaretAtWord } from "./caret-at-word.js";
@@ -10,7 +11,16 @@ import {
   MentionSuggestions,
 } from "./composer-head.js";
 import { DocumentField, type DocumentFieldHandle } from "./document-field.js";
-import { BarHead, GlassBar, GlassDock, useDockKeyboard, useDockRoom } from "./glass-bar.js";
+import {
+  BAR_EDGE,
+  BAR_GLASS,
+  BAR_MARGIN,
+  BarHead,
+  GlassBar,
+  GlassDock,
+  useDockKeyboard,
+  useDockRoom,
+} from "./glass-bar.js";
 import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -129,4 +139,46 @@ export function MentionDock({
     );
 
   return <GlassDock bar={bar}>{children}</GlassDock>;
+}
+
+/**
+ * What an `@` typed in a page's words offers, at the foot of a SwiftUI
+ * column such as a split view's detail, where no React Native dock can
+ * stand: the page's SwiftUI over it, and the offer in the system's own glass
+ * under it, which the column keeps over the keyboard, as `ComposerFoot`
+ * stands a thread's composer there. Note that the page keeps its place
+ * whether or not an offer stands, so the field in it is never drawn anew and
+ * keeps the keyboard.
+ */
+export function MentionFoot({
+  mentions,
+  children,
+}: {
+  readonly mentions: DocumentPageMentions | undefined;
+  readonly children: ReactNode;
+}) {
+  return (
+    <VStack spacing={0}>
+      {children}
+      {mentions === undefined ? null : (
+        <VStack
+          alignment="leading"
+          modifiers={[
+            padding({ all: BAR_EDGE }),
+            ...BAR_GLASS,
+            padding({ horizontal: BAR_MARGIN, bottom: SPACE.ROW }),
+          ]}
+        >
+          <BarHead>
+            <MentionSuggestions
+              groups={mentions.groups}
+              empty={mentions.empty}
+              crumb={mentions.crumb}
+              onPick={mentions.onPick}
+            />
+          </BarHead>
+        </VStack>
+      )}
+    </VStack>
+  );
 }
