@@ -7,6 +7,13 @@
 // bridge as four values whatever the diff's length, where an object per row
 // would cross as thousands.
 //
+// The code is colored by the language the file's path names, in tree-sitter
+// (`DiffHighlight/`, a plain Swift package its tests run as): the diff is
+// drawn plain at once, its two sides are colored on a queue of their own,
+// and the rows on screen are drawn again as the colors land, so coloring
+// never holds the first frame. A diff handed again before its colors land
+// drops them.
+//
 // Nothing here lays words out to measure them. The face is monospaced, so a
 // row's width is its count of characters times one advance, and with words
 // wrapped its height is the number of lines that count fills at the room the
@@ -42,6 +49,10 @@ public final class DiffViewModule: Module {
       Prop("look") { (view: DiffView, look: LookRecord) in
         view.look = DiffLook(look)
       }
+
+      Prop("path") { (view: DiffView, path: String) in
+        view.language = DiffLanguage(path: path)
+      }
     }
   }
 }
@@ -66,6 +77,7 @@ struct LookRecord: Record {
   @Field var added: UIColor? = nil
   @Field var removed: UIColor? = nil
   @Field var hunk: UIColor? = nil
+  @Field var syntax: [UIColor] = []
 }
 
 // MARK: - The diff as the view holds it
@@ -123,6 +135,8 @@ struct DiffLook {
   let added: UIColor
   let removed: UIColor
   let hunk: UIColor
+  /// Each syntax style's color, by the style's raw value; a style past the end stays in the text's ink.
+  let syntax: [UIColor]
 
   static let standard = DiffLook(LookRecord())
 
@@ -135,6 +149,23 @@ struct DiffLook {
     added = record.added ?? .systemGreen
     removed = record.removed ?? .systemRed
     hunk = record.hunk ?? .systemBlue
+    syntax = record.syntax
+  }
+
+  /// A row's words with its runs of color laid over the text's ink.
+  func colored(_ words: String, runs: [ColorRun]) -> NSAttributedString {
+    let text = NSMutableAttributedString(string: words, attributes: [.font: font, .foregroundColor: self.text])
+    let length = (words as NSString).length
+
+    for run in runs where Int(run.style.rawValue) < syntax.count && run.start + run.length <= length {
+      text.addAttribute(
+        .foregroundColor,
+        value: syntax[Int(run.style.rawValue)],
+        range: NSRange(location: run.start, length: run.length)
+      )
+    }
+
+    return text
   }
 
   /// The ground a row of `kind` stands on, an added or a removed line's tinted from its tone, as GitHub tints them.
@@ -291,7 +322,7 @@ final class DiffLineCell: UICollectionViewCell {
 
   required init?(coder: NSCoder) { nil }
 
-  func show(row: Int, rows: DiffRows, look: DiffLook, geometry: DiffGeometry) {
+  func show(row: Int, rows: DiffRows, look: DiffLook, geometry: DiffGeometry, runs: [ColorRun]) {
     let kind = rows.kinds[row]
     let old = rows.oldLines[row]
     let new = rows.newLines[row]
@@ -307,14 +338,16 @@ final class DiffLineCell: UICollectionViewCell {
     gutter.font = look.font
     gutter.textColor = look.muted
     gutter.text = numbers
+    let line = String(rows.lines[row])
     words.font = look.font
     words.textColor = kind == .hunk ? look.muted : look.text
     words.lineBreakMode = look.wrap ? .byCharWrapping : .byClipping
-    words.text = String(rows.lines[row])
+
+    if runs.isEmpty || kind == .hunk { words.text = line } else { words.attributedText = look.colored(line, runs: runs) }
     gutterWidth = geometry.gutterWidth
     // Note that a row is heard as its line numbers and its words, as a screen reader reads GitHub's.
     isAccessibilityElement = true
-    accessibilityLabel = kind == .hunk ? words.text : "\(numbers.trimmingCharacters(in: .whitespaces)) \(words.text ?? "")"
+    accessibilityLabel = kind == .hunk ? line : "\(numbers.trimmingCharacters(in: .whitespaces)) \(line)"
     setNeedsLayout()
   }
 
@@ -340,13 +373,36 @@ final class DiffView: ExpoView, UICollectionViewDataSource {
 
   private let layout = DiffLayout()
   private lazy var list = UICollectionView(frame: .zero, collectionViewLayout: layout)
+  private static let highlighter = DiffHighlighter(queryText: DiffView.queryText)
+  private static let coloring = DispatchQueue(label: "dev.vespin.ios.diff-coloring", qos: .userInitiated)
+
+  /// A query file the pod carries in its resource bundle, by its name without `.scm`.
+  private static func queryText(_ name: String) -> String? {
+    let bundle = Bundle(for: DiffView.self)
+      .url(forResource: "VespinDiffViewQueries", withExtension: "bundle")
+      .flatMap(Bundle.init(url:))
+
+    return bundle?.url(forResource: name, withExtension: "scm")
+      .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+  }
+
   private var rows = DiffRows.empty
+  /// Each row's runs of color, by row, once they land; none before, or for a file of no language the highlighter knows.
+  private var runs: [[ColorRun]] = []
+  /// How many diffs have been handed, so colors worked out for an older one are dropped.
+  private var handed = 0
   private var laidWidth: CGFloat = -1
   /// A diff handed and not yet drawn: when it was handed, and its signpost interval.
   private var pending: (at: CFTimeInterval, interval: OSSignpostIntervalState)?
 
   var look = DiffLook.standard {
     didSet { relayout() }
+  }
+
+  var language: DiffLanguage? {
+    didSet {
+      if language != oldValue { color() }
+    }
   }
 
   required init(appContext: AppContext? = nil) {
@@ -365,6 +421,42 @@ final class DiffView: ExpoView, UICollectionViewDataSource {
     pending = (CACurrentMediaTime(), interval)
     rows = next
     relayout()
+    color()
+  }
+
+  /// Colors the diff's rows on the coloring queue, drawing the rows on screen again once the colors land, where the diff is still the one handed.
+  private func color() {
+    handed += 1
+    runs = []
+    let turn = handed
+
+    guard let language, rows.count > 0 else { return }
+    let lines = (0..<rows.count).map { row in
+      DiffLine(text: String(rows.lines[row]), side: DiffView.side(of: rows.kinds[row]))
+    }
+
+    DiffView.coloring.async { [weak self] in
+      let started = CACurrentMediaTime()
+      let colored = DiffView.highlighter.runs(for: lines, in: language)
+      let took = (CACurrentMediaTime() - started) * 1000
+
+      DispatchQueue.main.async {
+        guard let self, self.handed == turn else { return }
+        self.runs = colored
+        NSLog("DiffView colored: %.1f ms, %d rows, %@", took, colored.count, language.rawValue)
+        self.list.reloadItems(at: self.list.indexPathsForVisibleItems)
+      }
+    }
+  }
+
+  /// The sides a row of `kind` stands on: a removed row the old, an added row the new, context both, and a header or a note neither.
+  private static func side(of kind: RowKind) -> DiffLine.Side {
+    switch kind {
+    case .removed: return .old
+    case .added: return .new
+    case .context: return .both
+    case .hunk, .note: return .neither
+    }
   }
 
   private func relayout() {
@@ -399,7 +491,8 @@ final class DiffView: ExpoView, UICollectionViewDataSource {
 
   func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
     let cell = collectionView.dequeueReusableCell(withReuseIdentifier: DiffLineCell.reuse, for: indexPath)
-    (cell as? DiffLineCell)?.show(row: indexPath.item, rows: rows, look: look, geometry: layout.geometry)
+    let colored = indexPath.item < runs.count ? runs[indexPath.item] : []
+    (cell as? DiffLineCell)?.show(row: indexPath.item, rows: rows, look: look, geometry: layout.geometry, runs: colored)
 
     return cell
   }
