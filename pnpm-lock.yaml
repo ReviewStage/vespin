@@ -271,6 +271,9 @@ patchedDependencies:
   '@expo/ui@58.0.27':
     hash: 399efe9d6087fbfdc4b213e42e093a00cae226c934ba793f8806d5153cbfb2ab
     path: patches/@expo__ui@58.0.27.patch
+  '@formatjs/intl-datetimeformat@8.0.3':
+    hash: ddd32fe0cc9cd77bb14c3af653413f7150d95e939ceeecb00e671b4515c5cb63
+    path: patches/@formatjs__intl-datetimeformat@8.0.3.patch
   '@sentry/browser@11.8.0':
     hash: af32b6645b074a081cae42956870b6c779240a52fac319191531b3724c5be619
     path: patches/@sentry__browser@11.8.0.patch
@@ -644,7 +647,7 @@ importers:
         version: 58.0.27(patch_hash=399efe9d6087fbfdc4b213e42e093a00cae226c934ba793f8806d5153cbfb2ab)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
       '@formatjs/intl-datetimeformat':
         specifier: 8.0.3
-        version: 8.0.3
+        version: 8.0.3(patch_hash=ddd32fe0cc9cd77bb14c3af653413f7150d95e939ceeecb00e671b4515c5cb63)
       '@formatjs/intl-getcanonicallocales':
         specifier: 3.3.1
         version: 3.3.1
@@ -12717,7 +12720,7 @@ snapshots:
 
   '@formatjs/fast-memoize@3.1.7': {}
 
-  '@formatjs/intl-datetimeformat@8.0.3':
+  '@formatjs/intl-datetimeformat@8.0.3(patch_hash=ddd32fe0cc9cd77bb14c3af653413f7150d95e939ceeecb00e671b4515c5cb63)':
     dependencies:
       '@formatjs/bigdecimal': 0.2.10
       '@formatjs/intl-localematcher': 0.10.1
