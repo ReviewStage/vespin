@@ -42,7 +42,8 @@ function countsHeard(file: AgentChangedFile): string {
  * it stands in is a muted line under its name, in the name's column, cut
  * from its start where it is long, so the folder nearest the file stays;
  * a file at the root has none. The row is heard as one element: the file's
- * path, what became of it, its counts, and whether it is viewed.
+ * name, as its title reads, then its folder, what became of it, its counts,
+ * and whether it is viewed.
  */
 export function ChangedFileRow({
   file,
@@ -127,8 +128,8 @@ export function ChangedFileRow({
       id={file.path}
       row={row}
       heard={{
-        label: file.path,
-        value: [STATUS_WORDS[file.status], countsHeard(file), viewed && "Viewed"],
+        label: name,
+        value: [folder, STATUS_WORDS[file.status], countsHeard(file), viewed && "Viewed"],
       }}
     />
   );

@@ -31,13 +31,13 @@ env:
 - tapOn: "Files changed"
 # The files stand in one list in the tree's order, each with the count of
 # lines it adds and removes at its row's end and its folder under its name.
+# Note that a row is one element heard by the file's name, its folder and
+# counts in its value, so the flow finds each row by its name.
 - extendedWaitUntil:
     visible: "resend.ts"
     timeout: 30000
-- assertVisible: "src/invites"
 - assertVisible: "expiry.ts"
 - assertVisible: "legacy-mailer.ts"
-- assertVisible: "+9"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-files
 # A search keeps the files whose path holds what is typed.
