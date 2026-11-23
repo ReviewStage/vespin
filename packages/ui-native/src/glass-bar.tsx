@@ -349,8 +349,10 @@ export function GlassBar({
           {above}
         </Host>
       )}
-      {/* Note that the bar stands in this view whether or not it takes the drag, so taking it never draws the bar, and the field in it, anew. */}
-      <View {...lowering}>{bar}</View>
+      {/* Note that the bar stands in this view whether or not it takes the drag, and the view is never flattened away, since a view flattened while it took no drag became a view of its own once it took one, which moved the bar into it and drew the field anew, letting go of the keyboard that turned the drag on. */}
+      <View collapsable={false} {...lowering}>
+        {bar}
+      </View>
     </DockedFoot>
   );
 }
