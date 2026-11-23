@@ -12,7 +12,6 @@
  */
 
 import { ASSIGNED_TO, ASSIGNED_TO_WORDS, type AssignedTo } from "@repo/features/task-list-model";
-import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   DEFAULT_TASK_TREE_VIEW,
   sameTreeView,
@@ -28,7 +27,14 @@ import {
   TASKS_ORDER_WORDS,
   TASKS_VIEW_WORDS,
 } from "@repo/features/tasks-page-model";
-import { type BarMenu, GLYPH, type MenuPhotoFile, STATUS_MARK_SYMBOL } from "@repo/ui-native";
+import {
+  type BarMenu,
+  GLYPH,
+  type Glyph,
+  type MenuPhotoFile,
+  personChoice,
+  statusChoice,
+} from "@repo/ui-native";
 import type { ListedMember } from "../member-pictures.js";
 
 /** One choice a menu checks. */
@@ -70,36 +76,31 @@ function assignedToChoices(input: TasksViewMenuInput): readonly MenuChoice[] {
   const { view, members, photoOf } = input;
   const reader = members.find((member) => member.you);
 
-  const choice = (
-    assignedTo: AssignedTo,
-    label: string,
-    more: Partial<MenuChoice>,
-  ): MenuChoice => ({
-    label,
+  const press = (assignedTo: AssignedTo) => ({
     on: sameAssignedTo(view.assignedTo, assignedTo),
     onPress: () => input.setView({ ...view, assignedTo }),
-    ...more,
   });
 
+  const glyphChoice = (
+    kind: typeof ASSIGNED_TO.FOLLOWING | typeof ASSIGNED_TO.ANYONE,
+    symbol: Glyph,
+  ): MenuChoice => ({ label: ASSIGNED_TO_WORDS[kind], symbol, ...press({ kind }) });
+
   return [
-    choice({ kind: ASSIGNED_TO.ME }, ASSIGNED_TO_WORDS[ASSIGNED_TO.ME], {
-      symbol: GLYPH.PERSON,
-      photo: reader === undefined ? undefined : photoOf(reader.userId),
-    }),
-    choice({ kind: ASSIGNED_TO.FOLLOWING }, ASSIGNED_TO_WORDS[ASSIGNED_TO.FOLLOWING], {
-      symbol: GLYPH.FOLLOW,
-    }),
-    choice({ kind: ASSIGNED_TO.ANYONE }, ASSIGNED_TO_WORDS[ASSIGNED_TO.ANYONE], {
-      symbol: GLYPH.PEOPLE,
-    }),
+    personChoice(
+      ASSIGNED_TO_WORDS[ASSIGNED_TO.ME],
+      reader === undefined ? undefined : photoOf(reader.userId),
+      press({ kind: ASSIGNED_TO.ME }),
+    ),
+    glyphChoice(ASSIGNED_TO.FOLLOWING, GLYPH.FOLLOW),
+    glyphChoice(ASSIGNED_TO.ANYONE, GLYPH.PEOPLE),
     ...members
       .filter((member) => !member.you)
       .map((member) =>
-        choice({ kind: ASSIGNED_TO.MEMBER, userId: member.userId }, member.name, {
+        personChoice(member.name, photoOf(member.userId), {
           id: member.userId,
-          symbol: GLYPH.PERSON,
-          photo: photoOf(member.userId),
           detail: member.email,
+          ...press({ kind: ASSIGNED_TO.MEMBER, userId: member.userId }),
         }),
       ),
   ];
@@ -121,13 +122,12 @@ export function tasksViewMenu(input: TasksViewMenuInput): BarMenu {
   const status: BarMenu = {
     label: STATUS,
     symbol: GLYPH.STATUS,
-    choices: STATUSES.map((each) => ({
-      label: TASK_STATUS_WORDS[each],
-      symbol: STATUS_MARK_SYMBOL[each],
-      tone: TASK_STATUS_TONE[each],
-      on: view.statuses.includes(each),
-      onPress: () => change({ statuses: toggledStatus(view.statuses, each) }),
-    })),
+    choices: STATUSES.map((each) =>
+      statusChoice(each, {
+        on: view.statuses.includes(each),
+        onPress: () => change({ statuses: toggledStatus(view.statuses, each) }),
+      }),
+    ),
     actions: [],
   };
 

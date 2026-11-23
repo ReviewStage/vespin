@@ -8,7 +8,7 @@ import {
   managerFaceName,
 } from "@repo/features/manager-face";
 import { GLYPH } from "./glyph.js";
-import type { RowSubmenu } from "./row-menu-model.js";
+import { CHOICE_MARK, type RowSubmenu } from "./row-menu-model.js";
 
 /**
  * Whether a face stands at rest or at work, the word its picture's name
@@ -62,7 +62,7 @@ export function managerFaceMenu(
 
         return {
           label: managerFaceName(each),
-          picture: managerFaceAsset(each, false),
+          mark: { kind: CHOICE_MARK.MANAGER, asset: managerFaceAsset(each, false) },
           on: face.character === character && face.color === color,
           onPress: () => onPick(each),
         };

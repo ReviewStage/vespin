@@ -6,6 +6,7 @@ import { askBesideScreenRule } from "./rules/ask-beside-screen.ts";
 import { asyncPressNeedsBusyRule } from "./rules/async-press-needs-busy.ts";
 import { enforceDeleteWithWhereRule } from "./rules/enforce-delete-with-where.ts";
 import { enforceUpdateWithWhereRule } from "./rules/enforce-update-with-where.ts";
+import { entityChoiceThroughHelperRule } from "./rules/entity-choice-through-helper.ts";
 import { githubThroughModuleRule } from "./rules/github-through-module.ts";
 import { noBrowserFormValidationRule } from "./rules/no-browser-form-validation.ts";
 import { noDirectViewStorageRule } from "./rules/no-direct-view-storage.ts";
@@ -37,7 +38,7 @@ import { writeThroughMutationRule } from "./rules/write-through-mutation.ts";
 
 /**
  * Oxlint rules that catch code or tests that silently do nothing or wipe data,
- * and the design system's guards against controls and headings built outside `@repo/ui`, and the iOS app's against controls built outside `@repo/ui-native` and an ask drawn inside a screen's host,
+ * and the design system's guards against controls and headings built outside `@repo/ui`, and the iOS app's against controls built outside `@repo/ui-native`, an ask drawn inside a screen's host, and a menu choice for an entity led by its bare glyph rather than its own mark,
  * forms the browser checks with its own bubble, loading skeletons that copy the surface they stand for, buttons that wait on a press without saying so, buttons that open a page, placeholders that end in an ellipsis,
  * popovers that close on a press through a listener of their own, view choices stored by hand rather than through `useKept`, a follow
  * opened beside the live reads' queries, a write sent outside a mutation that would draw it ahead of its answer, a vendored
@@ -52,6 +53,7 @@ const antiSlopPlugin = eslintCompatPlugin({
     "ask-beside-screen": askBesideScreenRule,
     "async-press-needs-busy": asyncPressNeedsBusyRule,
     "enforce-delete-with-where": enforceDeleteWithWhereRule,
+    "entity-choice-through-helper": entityChoiceThroughHelperRule,
     "enforce-update-with-where": enforceUpdateWithWhereRule,
     "github-through-module": githubThroughModuleRule,
     "no-browser-form-validation": noBrowserFormValidationRule,

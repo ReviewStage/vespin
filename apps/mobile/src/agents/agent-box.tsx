@@ -20,6 +20,7 @@ import type { FollowedAgent } from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import {
   type BarMenu,
+  CHOICE_MARK,
   GLYPH,
   MENU_CHIP_LOOK,
   MenuChip,
@@ -181,7 +182,7 @@ function serverMenus(servers: AgentServers, listed: boolean): readonly BarMenu[]
       symbol: GLYPH.MCP_SERVER,
       choices: servers.servers.map((server) => ({
         label: server.name,
-        mark: server.provider,
+        mark: { kind: CHOICE_MARK.INTEGRATION, provider: server.provider },
         on: server.on,
         onPress: () => servers.toggle(server.connection, !server.on),
       })),

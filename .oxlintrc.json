@@ -91,6 +91,7 @@
     "vespin/no-raw-heading-outside-ui": "error",
     "vespin/no-raw-press-outside-ui": "error",
     "vespin/no-raw-press-outside-ui-native": "error",
+    "vespin/entity-choice-through-helper": "error",
     "vespin/no-reduced-motion-query": "error",
     "vespin/no-shadcn-focus-ring": "error",
     "vespin/no-shortcut-flag": "error",

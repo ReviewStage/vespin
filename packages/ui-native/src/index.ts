@@ -329,7 +329,21 @@ export {
   RowList,
 } from "./row-list.js";
 
-export { type MenuPhotoFile, menuPhotoFile } from "./row-menu-model.js";
+export {
+  CHOICE_MARK,
+  type ChoiceLook,
+  type ChoiceMark,
+  choiceLook,
+  MENU_ICON,
+  type MenuChoice,
+  type MenuPhotoFile,
+  menuPhotoFile,
+  personChoice,
+  priorityChoice,
+  statusChoice,
+  taskChoice,
+  unassignedChoice,
+} from "./row-menu-model.js";
 
 export {
   agentPreview,

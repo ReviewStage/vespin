@@ -1,10 +1,22 @@
 // row-menu-model.ts -- a row's acts as the plain tree the app's native module builds SwiftUI's own long press menu and swipes from, as they're asked for, and the press a place in that tree names.
 
 import type { IntegrationProvider } from "@repo/features/integration-wire";
-import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
+import {
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_TONE,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
+import { TASK_STATUS, type TaskPriority, type TaskStatus } from "@repo/features/task-wire";
+import { GLYPH, type Glyph, glyphImage, type MarkLayer, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
+import {
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
+  priorityMarkUnder,
+  STATUS_MARK_SYMBOL,
+} from "./status-mark-model.js";
 import { MARK_SIZE } from "./tokens/space.js";
-import type { StatusTone } from "./tokens/status-tone.js";
+import { STATUS_TONE, type StatusTone } from "./tokens/status-tone.js";
 
 /**
  * What a row's act means, which sets the color its swipe stands on: one
@@ -61,31 +73,163 @@ export function menuPhotoFile(address: string): MenuPhotoFile | undefined {
   return address as MenuPhotoFile;
 }
 
-/** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
+/** What an entity's choice is led by, each drawn as its rows draw it: a task's status, a task's priority, a person, no one, a section's emoji, or an integration. */
+export const CHOICE_MARK = {
+  STATUS: "status",
+  PRIORITY: "priority",
+  PERSON: "person",
+  UNASSIGNED: "unassigned",
+  EMOJI: "emoji",
+  INTEGRATION: "integration",
+  MANAGER: "manager",
+} as const;
+
+/**
+ * An entity's own mark at the head of its choice, which every menu draws as
+ * the entity's rows draw it (`choiceLook`): a status's ring in its tone, a
+ * priority's bars over the bars it can light, a person's photo, read from a
+ * file on this device, or their glyph where they have none, no one's dashed
+ * ring, a section's emoji, or an integration's own mark. Note that a choice
+ * names its entity rather than a glyph and a tone, so no menu can draw it
+ * as a bare glyph.
+ */
+export type ChoiceMark =
+  | { readonly kind: typeof CHOICE_MARK.STATUS; readonly status: TaskStatus }
+  | { readonly kind: typeof CHOICE_MARK.PRIORITY; readonly priority: TaskPriority }
+  | { readonly kind: typeof CHOICE_MARK.PERSON; readonly photo: MenuPhotoFile | undefined }
+  | { readonly kind: typeof CHOICE_MARK.UNASSIGNED }
+  | { readonly kind: typeof CHOICE_MARK.EMOJI; readonly emoji: string }
+  | { readonly kind: typeof CHOICE_MARK.INTEGRATION; readonly provider: IntegrationProvider }
+  | {
+      readonly kind: typeof CHOICE_MARK.MANAGER;
+      /** Its face's picture in the asset catalog (`managerFaceAsset`), drawn in its own colors. */
+      readonly asset: string;
+    };
+
+/**
+ * A choice of a menu, checked where it stands: led by its entity's own mark
+ * (`mark`), such as a status or a person, or by a plain glyph (`symbol`),
+ * such as Group by's, never both.
+ */
 export type MenuChoice = {
   readonly label: string;
   /** What tells the choice apart where two may share a label, such as two tasks of one name; the label where none is given. */
   readonly id?: string | undefined;
-  readonly symbol?: Glyph | undefined;
-  /** The tone the glyph is drawn in, as a status's mark is in the panel's menu; the menu's own ink where none is given. */
-  readonly tone?: StatusTone | undefined;
-  /** A glyph drawn faint under its own in the same tone, as a priority's lit bars stand over every bar it can light (`MarkLayers`); none where its glyph stands alone. */
-  readonly under?: MarkLayer | undefined;
-  /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
-  readonly photo?: MenuPhotoFile | undefined;
-  /** The integration whose mark leads it in the glyph's place, as the panel's MCP server rows lead with their provider's mark. */
-  readonly mark?: IntegrationProvider | undefined;
-  /** An emoji drawn as its image in the glyph's place, as a section the member gave an emoji leads with it in the panel's Move to, so its words line up with its glyphs' choices. */
-  readonly emoji?: string | undefined;
-  /** A picture of the asset catalog drawn in its own colors in the glyph's place, such as a Manager's face (`managerFaceAsset`). */
-  readonly picture?: string | undefined;
   /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
   readonly detail?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
   /** What VoiceOver's Actions call it, such as a status heard as "Set status: Backlog"; its menu's name before its label where none is given (`menuTree`'s `heard`). */
   readonly heard?: string | undefined;
-};
+} & (
+  | { readonly mark: ChoiceMark; readonly symbol?: undefined }
+  | { readonly symbol?: Glyph | undefined; readonly mark?: undefined }
+);
+
+/**
+ * How a choice's head is drawn, as every menu draws it: a glyph, in a tone
+ * where it has one, with a faint glyph under it where it has one; a photo
+ * from a file on this device; an emoji; or an integration's mark; nothing
+ * for a choice of words alone.
+ */
+export type ChoiceLook =
+  | {
+      readonly kind: typeof MENU_ICON.GLYPH;
+      readonly glyph: Glyph;
+      readonly tone?: StatusTone | undefined;
+      readonly under?: MarkLayer | undefined;
+    }
+  | { readonly kind: typeof MENU_ICON.PHOTO; readonly photo: MenuPhotoFile }
+  | { readonly kind: typeof MENU_ICON.EMOJI; readonly emoji: string }
+  | { readonly kind: typeof MENU_ICON.MARK; readonly asset: string };
+
+/** An entity's mark as its choice's head, as its rows draw it. */
+function markLook(mark: ChoiceMark): ChoiceLook {
+  switch (mark.kind) {
+    case CHOICE_MARK.STATUS:
+      return {
+        kind: MENU_ICON.GLYPH,
+        glyph: STATUS_MARK_SYMBOL[mark.status],
+        tone: TASK_STATUS_TONE[mark.status],
+      };
+    case CHOICE_MARK.PRIORITY:
+      return {
+        kind: MENU_ICON.GLYPH,
+        glyph: PRIORITY_MARK_SYMBOL[mark.priority],
+        tone: PRIORITY_MARK_TONE[mark.priority],
+        under: priorityMarkUnder(mark.priority),
+      };
+    case CHOICE_MARK.PERSON:
+      return mark.photo === undefined
+        ? { kind: MENU_ICON.GLYPH, glyph: GLYPH.PERSON }
+        : { kind: MENU_ICON.PHOTO, photo: mark.photo };
+    // Note that no one's ring stands in the muted ink the chip draws it in, which also lays its faint seat under it.
+    case CHOICE_MARK.UNASSIGNED:
+      return {
+        kind: MENU_ICON.GLYPH,
+        glyph: GLYPH.UNASSIGNED,
+        tone: STATUS_TONE.NEUTRAL,
+        under: UNASSIGNED_UNDER,
+      };
+    case CHOICE_MARK.EMOJI:
+      return { kind: MENU_ICON.EMOJI, emoji: mark.emoji };
+    case CHOICE_MARK.INTEGRATION:
+      return { kind: MENU_ICON.MARK, asset: INTEGRATION_MARK_ASSET[mark.provider] };
+    case CHOICE_MARK.MANAGER:
+      return { kind: MENU_ICON.MARK, asset: mark.asset };
+  }
+}
+
+/** How a choice's head is drawn: its entity's mark, as its rows draw it, or its plain glyph; none for a choice of words alone. */
+export function choiceLook(choice: MenuChoice): ChoiceLook | undefined {
+  if (choice.mark !== undefined) return markLook(choice.mark);
+
+  return choice.symbol === undefined ? undefined : { kind: MENU_ICON.GLYPH, glyph: choice.symbol };
+}
+
+/** What every entity's choice takes beside its mark: whether it is on, what a press does, and, where it needs them, what tells it apart, what it says under its words, and what VoiceOver calls it. */
+type ChoicePress = Pick<MenuChoice, "on" | "onPress" | "id" | "detail" | "heard">;
+
+/** A status's choice, named and drawn as the panel's Status menu offers it: its ring in its tone. */
+export function statusChoice(status: TaskStatus, press: ChoicePress): MenuChoice {
+  return { label: TASK_STATUS_WORDS[status], mark: { kind: CHOICE_MARK.STATUS, status }, ...press };
+}
+
+/** A priority's choice, named and drawn as the panel's Priority menu offers it: its bars over every bar it can light, urgent's square in the attention ink. */
+export function priorityChoice(priority: TaskPriority, press: ChoicePress): MenuChoice {
+  return {
+    label: TASK_PRIORITY_WORDS[priority],
+    mark: { kind: CHOICE_MARK.PRIORITY, priority },
+    ...press,
+  };
+}
+
+/** A person's choice: their name beside their photo, read from a file on this device (`menuPhotoFile`), or the person glyph where they have none, as the panel's people menus lead each member with their face. */
+export function personChoice(
+  name: string,
+  photo: MenuPhotoFile | undefined,
+  press: ChoicePress,
+): MenuChoice {
+  return { label: name, mark: { kind: CHOICE_MARK.PERSON, photo }, ...press };
+}
+
+/** A task's choice: its name beside its status's ring in its tone, as the panel's task pickers lead each task; a task with no status yet stands as to do. */
+export function taskChoice(
+  name: string,
+  status: TaskStatus | undefined,
+  press: ChoicePress,
+): MenuChoice {
+  return {
+    label: name,
+    mark: { kind: CHOICE_MARK.STATUS, status: status ?? TASK_STATUS.TODO },
+    ...press,
+  };
+}
+
+/** No one's choice, as the panel's Assignee menu offers it first: its words beside no one's dashed ring. */
+export function unassignedChoice(label: string, press: ChoicePress): MenuChoice {
+  return { label, mark: { kind: CHOICE_MARK.UNASSIGNED }, ...press };
+}
 
 /** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them, and the acts under them, such as a task's Remove from section. */
 export type RowSubmenu = {
@@ -221,27 +365,34 @@ function glyphIcon(glyph: Glyph, color?: string, under?: MarkLayer): MenuIcon {
   };
 }
 
-/** A choice's icon: its integration's mark, its photo, or its glyph in its tone's ink; none for a choice of words alone. */
+/** Whether a choice says what it says under its words: not one led by an integration's mark or an emoji, as `markContent` and `emojiContent` draw it. */
+export function saysUnder(choice: MenuChoice): boolean {
+  const kind = choiceLook(choice)?.kind;
+
+  return kind !== MENU_ICON.MARK && kind !== MENU_ICON.EMOJI;
+}
+
+/** A choice's icon: its entity's mark or its plain glyph, as `choiceLook` draws it, a glyph in its tone's ink; none for a choice of words alone. */
 function choiceIcon(choice: MenuChoice, inks: MenuInks): MenuIcon | undefined {
-  if (choice.picture !== undefined) return { kind: MENU_ICON.MARK, asset: choice.picture };
+  const look = choiceLook(choice);
 
-  if (choice.mark !== undefined)
-    return { kind: MENU_ICON.MARK, asset: INTEGRATION_MARK_ASSET[choice.mark] };
-
-  if (choice.emoji !== undefined)
-    return { kind: MENU_ICON.EMOJI, emoji: choice.emoji, size: MARK_SIZE.MENU_PHOTO };
-
-  if (choice.photo !== undefined)
-    return { kind: MENU_ICON.PHOTO, photo: choice.photo, size: MARK_SIZE.MENU_PHOTO };
-
-  if (choice.symbol === undefined) return undefined;
-
-  // Note that a choice saying more under its words draws its glyph alone, as `menuActContent` drew it, with no faint glyph under it.
-  return glyphIcon(
-    choice.symbol,
-    choice.tone === undefined ? undefined : inks.tone(choice.tone),
-    choice.detail === undefined ? choice.under : undefined,
-  );
+  switch (look?.kind) {
+    case undefined:
+      return undefined;
+    case MENU_ICON.MARK:
+      return { kind: MENU_ICON.MARK, asset: look.asset };
+    case MENU_ICON.EMOJI:
+      return { kind: MENU_ICON.EMOJI, emoji: look.emoji, size: MARK_SIZE.MENU_PHOTO };
+    case MENU_ICON.PHOTO:
+      return { kind: MENU_ICON.PHOTO, photo: look.photo, size: MARK_SIZE.MENU_PHOTO };
+    // Note that a choice saying more under its words draws its glyph alone, as `menuActContent` drew it, with no faint glyph under it.
+    case MENU_ICON.GLYPH:
+      return glyphIcon(
+        look.glyph,
+        look.tone === undefined ? undefined : inks.tone(look.tone),
+        choice.detail === undefined ? look.under : undefined,
+      );
+  }
 }
 
 /** How VoiceOver's Actions name an item within the menus `path` names: its own `heard`, or its menus' names before its words, so "Backlog" in Status reads "Status: Backlog". */
@@ -293,10 +444,7 @@ function submenuNode(
           kind: MENU_NODE.CHOICE,
           label: choice.label,
           // Note that a choice led by an integration's mark or an emoji says nothing under its words, as `markContent` and `emojiContent` drew it.
-          detail:
-            choice.mark === undefined && choice.emoji === undefined && choice.picture === undefined
-              ? choice.detail
-              : undefined,
+          detail: saysUnder(choice) ? choice.detail : undefined,
           icon: choiceIcon(choice, inks),
           on: choice.on,
           heard: heard(choice, within),
