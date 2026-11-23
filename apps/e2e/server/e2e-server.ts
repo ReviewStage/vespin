@@ -8,7 +8,8 @@
  * reads the fakes as it builds. The override is honored only where the local
  * server itself would start: beside no `VERCEL*` variable and over a
  * database on this machine's loopback. The command line is the local
- * server's own (`--port`).
+ * server's own (`--port`). Before any of it, msw refuses every request and
+ * WebSocket off this machine's loopback (`./no-network.ts`).
  */
 
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -18,6 +19,7 @@ import {
   E2E_AGENT_SCRIPTS,
   scriptedAgentSessionsLayer,
 } from "@repo/service/testing/scripted-agent-sessions";
+import { refuseOutboundNetwork } from "./no-network.js";
 
 /**
  * The local server, imported by its address rather than a literal path, so
@@ -26,7 +28,8 @@ import {
  */
 const LOCAL_SERVER = new URL("../../web/scripts/local-server.ts", import.meta.url);
 
-// Note that anything that must stand before a route loads, such as the no-network guard, starts here, ahead of the override and the import.
+// Note that anything that must stand before a route loads starts here, ahead of the override and the import: first the no-network guard, so no module the server loads reaches off loopback unrefused.
+refuseOutboundNetwork();
 
 overrideLocalRuntime({
   sandbox: memorySandbox().layer,

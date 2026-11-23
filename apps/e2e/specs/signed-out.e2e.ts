@@ -1,6 +1,6 @@
 // signed-out.e2e.ts -- the web app, served by the local server over the suite's database, offers a visitor with no session a way to sign in.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../support/test.js";
 
 /**
  * How long the first load may take. Note that it is seconds rather than one,

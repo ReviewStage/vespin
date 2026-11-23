@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@repo/sandbox": "workspace:*",
-    "@repo/service": "workspace:*"
+    "@repo/service": "workspace:*",
+    "msw": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
