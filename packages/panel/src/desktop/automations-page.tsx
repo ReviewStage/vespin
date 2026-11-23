@@ -6,6 +6,7 @@ import {
   automationOwner,
   automationRunStanding,
   automationTriggerText,
+  finishedAutomations,
 } from "@repo/features/automation-list-model";
 import {
   AUTOMATION_PRESET,
@@ -51,6 +52,7 @@ import {
   ERROR_STATE_PLACEMENT,
   ErrorState,
   GAP,
+  type GroupFold,
   IconButton,
   Inline,
   ListRow,
@@ -173,6 +175,10 @@ const CREATE_WITH_AGENT = "Create with an agent";
 
 /** What the list says where it could not be read. */
 const UNREAD_LINE = "The automations could not be read.";
+
+/** The heading over the one-time automations that ran, folded at first, since nothing more of them is due. */
+const FINISHED = "Finished";
+const FINISHED_FOLD = { defaultOpen: false } as const satisfies GroupFold;
 
 /** What the Runs tab says where its runs could not be read, and while they are first read. */
 const RUNS_UNREAD_LINE = "The runs could not be read.";
@@ -510,17 +516,22 @@ function AutomationGroupRows({
 
 /**
  * The list, each owner's automations in a list, under its own heading where
- * both stand, or in a narrow room, whose rows name no owner. Note that a
- * lone owner's list is still a region named by its owner, as a headed one is
- * by its heading, so a reader moving by landmark hears whose automations
- * they are either way.
+ * more than one list stands, or in a narrow room, whose rows name no owner,
+ * and last the finished one-time automations, folded under Finished until
+ * opened, since nothing more of them is due. Note that a lone owner's list
+ * is still a region named by its owner, as a headed one is by its heading,
+ * so a reader moving by landmark hears whose automations they are either way.
  */
 function AutomationList({
   groups,
+  finished,
   ...shown
 }: AutomationRowsShown & {
   groups: readonly AutomationGroup[];
+  finished: readonly AutomationSummary[];
 }): React.JSX.Element {
+  const headed = groups.length + (finished.length === 0 ? 0 : 1) > 1 || shown.narrow;
+
   return (
     <>
       {groups.map((group) => {
@@ -536,12 +547,17 @@ function AutomationList({
             key={group.owner}
             name={name}
             nameMasked={group.owner === AUTOMATION_SCOPE.WORKSPACE}
-            headed={groups.length > 1 || shown.narrow}
+            headed={headed}
           >
             <AutomationGroupRows automations={group.automations} shown={shown} />
           </AutomationGroupList>
         );
       })}
+      {finished.length === 0 ? null : (
+        <AutomationGroupList name={FINISHED} nameMasked={false} headed fold={FINISHED_FOLD}>
+          <AutomationGroupRows automations={finished} shown={shown} />
+        </AutomationGroupList>
+      )}
     </>
   );
 }
@@ -565,16 +581,13 @@ function listState(
  * of (`onDeleted`) so it passes over the automation's page from then on.
  */
 function useRowDeletion(
-  groups: readonly AutomationGroup[],
+  listed: readonly AutomationSummary[],
   onDeleted: (automationId: string) => void,
 ) {
   const [asking, setAsking] = useState<AutomationSummary | undefined>(undefined);
 
   const asked =
-    asking !== undefined &&
-    groups.some((group) => group.automations.some((each) => each.id === asking.id))
-      ? asking
-      : undefined;
+    asking !== undefined && listed.some((each) => each.id === asking.id) ? asking : undefined;
 
   const confirm = useAutomationDeletion(asked?.id, onDeleted);
   const { ask: askConfirm } = confirm;
@@ -824,10 +837,11 @@ function ListPage({
   const { read, reload, toggle, change } = automations;
   const listed = read !== undefined && "automations" in read ? read.automations : [];
   const groups = automationGroups(listed);
+  const finished = finishedAutomations(listed);
 
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
 
-  const deletion = useRowDeletion(groups, (automationId) =>
+  const deletion = useRowDeletion(listed, (automationId) =>
     door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId }),
   );
 
@@ -862,7 +876,7 @@ function ListPage({
           )
         }
       >
-        {groups.length === 0 ? (
+        {listed.length === 0 ? (
           <div className="automations-empty flex min-h-0 flex-1 flex-col before:flex-2 before:content-[''] after:flex-3 after:content-[''] [&>.ui-empty-state]:flex-none">
             <EmptyState icon={<ZapIcon />}>No automations yet.</EmptyState>
             <SuggestedAutomations tasks={tasks} listed={listed} />
@@ -871,6 +885,7 @@ function ListPage({
           <>
             <AutomationList
               groups={groups}
+              finished={finished}
               workspace={workspace}
               now={now}
               narrow={room === SHELL_ROOM.NARROW}

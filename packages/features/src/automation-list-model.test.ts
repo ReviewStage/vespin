@@ -11,6 +11,7 @@ import {
   automationRunStanding,
   automationRunTitle,
   automationTriggerText,
+  finishedAutomations,
   parseAutomationClock,
 } from "./automation-list-model.js";
 import {
@@ -87,6 +88,25 @@ test("the workspace's automations come before the personal ones, and an owner wi
     { owner: AUTOMATION_SCOPE.PERSONAL, automations: [mine] },
   ]);
   assert.deepEqual(automationGroups([]), []);
+});
+
+test("a one-time automation that ran and stands paused is finished, in no owner's group, and one its run set going again is not", () => {
+  const once = {
+    kind: AUTOMATION_TRIGGER.SCHEDULE,
+    at: "2026-11-19T17:30",
+    timezone: "America/Los_Angeles",
+  } as const;
+
+  // Nov 19, 17:30 in Los Angeles (UTC-8) is Nov 20, 01:30 UTC.
+  const ranAt = run({ firing: { kind: "schedule", dueAt: Date.UTC(2026, 10, 20, 1, 30) } });
+  const ran = automation("a", { trigger: once, enabled: false, nextRunAt: null, lastRun: ranAt });
+  const rearmed = automation("b", { trigger: once, lastRun: ranAt });
+  const turnedOff = automation("c", { enabled: false });
+
+  assert.deepEqual(automationGroups([ran, rearmed, turnedOff]), [
+    { owner: AUTOMATION_SCOPE.PERSONAL, automations: [rearmed, turnedOff] },
+  ]);
+  assert.deepEqual(finishedAutomations([ran, rearmed, turnedOff]), [ran]);
 });
 
 test("a schedule the picker writes is said in words, naming its zone only where it is not the reader's, and any other as its cron", () => {

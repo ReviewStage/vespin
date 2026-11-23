@@ -32,7 +32,7 @@ import { SENTRY_LEVEL, TRIGGER_CATALOG } from "./trigger-catalog.js";
 import { andList, orList } from "./words.js";
 
 /**
- * automation-list-model.ts -- the Automations list as a window draws it: grouped by who owns each, with its trigger in words, where its newest run stands, and when it runs next.
+ * automation-list-model.ts -- the Automations list as a window draws it: grouped by who owns each, a finished one-time one set apart, with its trigger in words, where its newest run stands, and when it runs next.
  *
  * Who owns an automation is the one thing the list must never leave in
  * doubt, so the list falls into the workspace's automations, then the
@@ -327,15 +327,33 @@ export function automationOwner(automation: AutomationSummary): AutomationScope 
   return automation.scope ?? AUTOMATION_SCOPE.PERSONAL;
 }
 
-/** The list grouped by owner, the workspace's first, an owner with none left out. */
+/**
+ * Whether a one-time automation is finished: it ran, as its schedule asked,
+ * and stands paused for it. Note that one whose run set it going again is
+ * on, so it is never finished.
+ */
+function automationFinished(automation: AutomationSummary): boolean {
+  return automationNext(automation).kind === AUTOMATION_NEXT.RAN;
+}
+
+/** The list grouped by owner, the workspace's first, an owner with none left out, and a finished one-time automation in none (`finishedAutomations`). */
 export function automationGroups(
   automations: readonly AutomationSummary[],
 ): readonly AutomationGroup[] {
   return OWNER_ORDER.flatMap((owner) => {
-    const owned = automations.filter((automation) => automationOwner(automation) === owner);
+    const owned = automations.filter(
+      (automation) => automationOwner(automation) === owner && !automationFinished(automation),
+    );
 
     return owned.length === 0 ? [] : [{ owner, automations: owned }];
   });
+}
+
+/** The one-time automations that ran and stand paused for it, in the order the service listed them, which the list folds away under Finished. */
+export function finishedAutomations(
+  automations: readonly AutomationSummary[],
+): readonly AutomationSummary[] {
+  return automations.filter(automationFinished);
 }
 
 /**
