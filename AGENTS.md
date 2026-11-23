@@ -320,6 +320,8 @@ pnpm check:affected                      # what changed since origin/main, from 
 ### How a test is written
 
 - `[check: vespin/no-node-test]` Tests run on vitest.
+- `[review]` Journeys in `apps/e2e` run on Playwright as `*.e2e.ts`, which
+  vitest never collects.
 - `[review]` A test owns its world: one process, a temp directory it created
   (`temporaryDirectory` from `@repo/runtime/testing`), its own database
   (`getTestDB()` from `@repo/database/testing`), and `TestClock` for time. It

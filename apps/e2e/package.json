@@ -1,0 +1,17 @@
+{
+  "name": "@repo/e2e",
+  "version": "0.24.0",
+  "private": true,
+  "type": "module",
+  "description": "Vespin's end-to-end journeys on Playwright Test: the config, the specs, and the servers they start; never shipped",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

@@ -24,6 +24,9 @@ vite.config.ts.timestamp-*
 .build/
 dist-server/
 dist-functions/
+# Playwright Test's results and report (apps/e2e).
+test-results/
+playwright-report/
 
 # Generated evidence is never committed; a pull request links it from CI.
 artifacts/
