@@ -6,6 +6,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  MARK_SIZE,
   newWorkspaceAction,
   type SwitcherWorkspace,
   type WorkspaceSwitcher,
@@ -65,9 +66,9 @@ export function switcherWorkspace(
   };
 }
 
-/** What a workspace's picture is asked for at in a system menu: its photo as held, else its owner's picture at a menu photo's size; none for a workspace that draws its letter. */
+/** What a workspace's picture is kept as a file from, which its menu row and its bar's tile draw: its photo as held, else its owner's picture at the bar tile's size; none for a workspace that draws its letter. */
 function menuPictureAddress(photo: string | undefined, picture: string | undefined) {
-  return photo ?? menuAddress(picture);
+  return photo ?? menuAddress(picture, MARK_SIZE.BAR_FACE);
 }
 
 /**
