@@ -32,12 +32,14 @@ import { AttachmentViewer } from "./tasks/attachment-viewer.js";
  * again, or a version opened twice, shows its diagram at once; the appearance
  * flipping draws each shown diagram again in the new one.
  *
- * A diagram is drawn no wider than its column, which on a phone shrinks a
- * wide one's words past reading, so where the room is narrow or the window
- * is worked by a finger a tap on the picture, or its head's Full screen,
- * opens it over the window at its own pixels, to be moved about and pinched
- * (`tasks/attachment-viewer.tsx`). With a mouse in a wide room the picture
- * takes no press, and the head offers no Full screen (`tasks.css`).
+ * A diagram is drawn no wider than its column, which shrinks a wide one's
+ * words past reading, so its head's Full screen opens it over the window at
+ * its own pixels, to be moved about and pinched
+ * (`tasks/attachment-viewer.tsx`), in any room and with any pointer. Where
+ * the room is narrow or the window is worked by a finger a tap on the
+ * picture opens it too; with a mouse in a wide room the picture takes no
+ * pointer's press, so a click on a description's diagram still opens its
+ * section to be edited.
  */
 
 /** What a diagram opened over the window is named, its header's title and the file Download saves. */
@@ -155,9 +157,7 @@ function DiagramCard({
               {shown.showingCode ? DIAGRAM_WORDS.SHOW_DIAGRAM : DIAGRAM_WORDS.SHOW_CODE}
             </Button>
             {pictureShown ? (
-              <span className="hidden pointer-coarse:flex shell-narrow:flex">
-                <Button onClick={() => setFullScreen(true)}>{FULL_SCREEN_LABEL}</Button>
-              </span>
+              <Button onClick={() => setFullScreen(true)}>{FULL_SCREEN_LABEL}</Button>
             ) : null}
           </span>
         )}
@@ -169,8 +169,7 @@ function DiagramCard({
             name={alt}
             pointerOpens={pointerOpens}
             onOpen={(event) => {
-              // Note that a key's press (no pointer's click count) opens it in any room, because the
-              // head's Full screen stands only where a finger's tap would open it too.
+              // Note that a key's press (no pointer's click count) opens it in any room, as the head's Full screen does.
               const keyed = event.detail === 0;
 
               if (!keyed && !opensFullScreen(event.currentTarget)) return;
