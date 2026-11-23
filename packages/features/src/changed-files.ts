@@ -131,39 +131,13 @@ export function startsCollapsed(file: AgentChangedFile): boolean {
   );
 }
 
-/** One folder's files as a list of sections names them: the folder's path, empty for the repository's root, and each file with its name past that folder. */
-export interface FolderSection {
-  readonly folder: string;
-  readonly files: readonly { readonly file: AgentChangedFile; readonly name: string }[];
-}
-
-/** The folder a path stands in, empty for one at the repository's root. */
-function folderOf(path: string): string {
+/** A path as a flat list names its file: the folder it stands in, empty at the repository's root, and its name. */
+export function folderAndName(path: string): { readonly folder: string; readonly name: string } {
   const slash = path.lastIndexOf("/");
 
-  return slash === -1 ? "" : path.slice(0, slash);
-}
-
-/**
- * The files as sections, one per folder holding a changed file, in the
- * tree's order (`treeOrder`), so a phone's list reads as the desktop's tree
- * opened whole: a folder's files under its path, each named alone. Note
- * that a folder whose files the tree lists apart, around a deeper folder's,
- * is still one section, at the place of its first file.
- */
-export function folderSections(files: readonly AgentChangedFile[]): readonly FolderSection[] {
-  const sections = new Map<string, { file: AgentChangedFile; name: string }[]>();
-
-  for (const file of treeOrder(files)) {
-    const folder = folderOf(file.path);
-    const name = folder === "" ? file.path : file.path.slice(folder.length + 1);
-    const section = sections.get(folder);
-
-    if (section === undefined) sections.set(folder, [{ file, name }]);
-    else section.push({ file, name });
-  }
-
-  return [...sections].map(([folder, named]) => ({ folder, files: named }));
+  return slash === -1
+    ? { folder: "", name: path }
+    : { folder: path.slice(0, slash), name: path.slice(slash + 1) };
 }
 
 /** The hex of a text's SHA-256, as GitHub names a file's diff on its page. */

@@ -1,10 +1,10 @@
-// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: each folder a section in the tree's order, each file its letter, name and lines, a search by path, and a press opening the file's diff on GitHub.
+// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: one list in the tree's order, each file its letter, name, lines and folder, a search by path, and a press opening the file's diff on GitHub.
 
 import {
   CHANGES_WORDS,
   filterFiles,
-  folderSections,
   gitHubFileDiffLink,
+  treeOrder,
 } from "@repo/features/changed-files";
 import { GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import {
@@ -32,8 +32,6 @@ const FILES_WORDS = {
   TITLE: "Files changed",
   FIND: "Find a file",
   NONE_FOUND: "No files match.",
-  /** The heading of the files at the repository's root, which stand in no folder. */
-  ROOT: "Root",
 } as const;
 
 /** The minus sign a count of removed lines wears, as GitHub writes it. */
@@ -51,14 +49,14 @@ function summaryOf(files: readonly { readonly additions: number; readonly deleti
 /**
  * The files a pull request changes, by its workspace, its repository and
  * its number, read as the screen first shows (`usePullRequestChanges`) and
- * on a pull down. Each folder holding a changed file is a section, headed
- * by its path, in the order the desktop's tree lists them
- * (`folderSections`), each file a row (`ChangedFileRow`). The bar's search
+ * on a pull down. The files stand in one list, in the order the desktop's
+ * tree lists them (`treeOrder`), each a row naming the folder it stands in
+ * under its name (`ChangedFileRow`), as Dean picked. The bar's search
  * keeps the files whose path holds what is typed, as the desktop's does
  * (`filterFiles`). A press opens the file's diff on GitHub, at its anchor
  * on the Files changed tab, until the app draws diffs itself. Where GitHub
- * listed more files than one read carries, the last section's footer says
- * so, in the panel's words.
+ * listed more files than one read carries, the list's footer says so, in
+ * the panel's words.
  */
 export function PullRequestFilesScreen() {
   const {
@@ -107,8 +105,7 @@ export function PullRequestFilesScreen() {
     </>
   );
 
-  const kept = files === undefined ? [] : filterFiles(files, search);
-  const sections = folderSections(kept);
+  const kept = files === undefined ? [] : filterFiles(treeOrder(files), search);
   const byPath = new Map(kept.map((file) => [file.path, file]));
 
   const empty =
@@ -143,22 +140,11 @@ export function PullRequestFilesScreen() {
             void gitHubFileDiffLink(url, path).then(openInSafari);
           }}
         >
-          {sections.map((section, at) => (
-            <ListSection
-              key={section.folder}
-              title={section.folder === "" ? FILES_WORDS.ROOT : section.folder}
-              count={section.files.length}
-              footer={
-                changes.truncated && at === sections.length - 1
-                  ? CHANGES_WORDS.TRUNCATED
-                  : undefined
-              }
-            >
-              {section.files.map((each) => (
-                <ChangedFileRow key={each.file.path} file={each.file} name={each.name} />
-              ))}
-            </ListSection>
-          ))}
+          <ListSection footer={changes.truncated ? CHANGES_WORDS.TRUNCATED : undefined}>
+            {kept.map((file) => (
+              <ChangedFileRow key={file.path} file={file} />
+            ))}
+          </ListSection>
         </RowList>
       </Screen>
     </>

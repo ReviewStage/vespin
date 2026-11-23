@@ -3,7 +3,7 @@ import { test } from "vitest";
 import { type AgentChangedFile, CHANGED_FILE_STATUS, PATCH_OMITTED } from "./agent-wire.js";
 import {
   filterFiles,
-  folderSections,
+  folderAndName,
   gitHubFileDiffLink,
   startsCollapsed,
   treeOrder,
@@ -82,20 +82,12 @@ test("a deleted file, a lockfile, and a file of more than a thousand changed lin
   );
 });
 
-test("the files stand in a section per folder in the tree's order, each named past its folder, the root's under an empty folder", () => {
-  const files = ["README.md", "src/lib/x.ts", "src/b.ts", "src/A.ts"].map((path) => changed(path));
-
-  assert.deepEqual(
-    folderSections(files).map((section) => [
-      section.folder,
-      section.files.map((each) => each.name),
-    ]),
-    [
-      ["src/lib", ["x.ts"]],
-      ["src", ["A.ts", "b.ts"]],
-      ["", ["README.md"]],
-    ],
-  );
+test("a path names its file by the folder it stands in and its name, a file at the root by its name alone", () => {
+  assert.deepEqual(folderAndName("packages/ui/src/row.tsx"), {
+    folder: "packages/ui/src",
+    name: "row.tsx",
+  });
+  assert.deepEqual(folderAndName("README.md"), { folder: "", name: "README.md" });
 });
 
 test("a file's diff on GitHub is the Files changed tab at the anchor of its path's SHA-256", async () => {

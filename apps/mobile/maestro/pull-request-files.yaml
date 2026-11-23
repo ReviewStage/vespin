@@ -1,4 +1,4 @@
-# pull-request-files.yaml -- a pull request's Files changed: opened from its page's ⋯, each folder a section with its files, their letters and lines, a search by path narrowing them, and a pull reading them again.
+# pull-request-files.yaml -- a pull request's Files changed: opened from its page's ⋯, one list of its files in the tree's order, each with its letter, lines, and folder under its name, and a search by path narrowing them.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -29,8 +29,8 @@ env:
     timeout: 30000
 - runFlow: subflows/more.yaml
 - tapOn: "Files changed"
-# Each folder heads its files, in the tree's order, the count of lines each
-# adds and removes at its row's end.
+# The files stand in one list in the tree's order, each with the count of
+# lines it adds and removes at its row's end and its folder under its name.
 - extendedWaitUntil:
     visible: "resend.ts"
     timeout: 30000
