@@ -65,6 +65,7 @@ import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-reque
 import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
 import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
 import { markedAs } from "@repo/features/read-mark";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import { carried, GATEWAY_EVENT, GATEWAY_METHOD } from "@repo/gateway";
@@ -98,8 +99,7 @@ import {
 import { type AgentQueues, agentQueues, type OutboxSends } from "./agent-queue-writes.js";
 import {
   type AppAccountPreferences,
-  type AppHostRead,
-  type AppInboxItems,
+  type AppInboxRead,
   type AppTranscript,
   NO_KEYS_HELD,
   NO_TRANSCRIPTS,
@@ -332,6 +332,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
   openedOutside?: (agentId: string) => Effect.Effect<void>;
   /** Reads the tasks the account's Inbox holds items of into the task list where it holds them not (`TasksComposer.inboxNamed`); none reads nothing. */
   inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
+  /** The task list's summaries of the tasks named, of those it holds now, which the account's kept Inbox keeps beside its items (`account-items-follow.ts`); none keeps none. */
+  tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
 }
 
 /** The tasks an account inbox answer holds items of, once each: those with an item waiting on the reader first, as they are counted, then every other holding one. */
@@ -531,7 +533,7 @@ export function composeAgents(
       accountWide,
     });
 
-    const tellItems = (read: AppHostRead<AppInboxItems>) =>
+    const tellItems = (read: AppInboxRead) =>
       Effect.sync(() => dependencies.kernel.emit(GATEWAY_EVENT.INBOX_ITEMS_CHANGED, carried(read)));
 
     const holders = yield* holderInboxes(inboxes, {
@@ -588,6 +590,9 @@ export function composeAgents(
             ),
           pool: dependencies.pool,
           accountWide,
+          ...(dependencies.tasksListed === undefined
+            ? undefined
+            : { tasksListed: dependencies.tasksListed }),
         },
         userId,
         tellItems,

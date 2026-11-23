@@ -55,8 +55,7 @@ import { Base64 } from "effect/encoding";
 import type {
   AppAccessSlice,
   AppAccountPreferences,
-  AppHostRead,
-  AppInboxItems,
+  AppInboxRead,
   AppThisMacHosts,
   AppWorkspacePhotos,
   SessionReplayState,
@@ -130,7 +129,7 @@ export interface HostOperator {
   /** What waits across the followed account, or why there is none, each time it moves. */
   onAccountInboxChanged(listener: (answer: AgentAccountInboxAnswerView) => void): () => void;
   /** Every inbox item the account reaches, whole, each time the host's read of them for the session moves. */
-  onInboxItemsChanged(listener: (read: AppHostRead<AppInboxItems>) => void): () => void;
+  onInboxItemsChanged(listener: (read: AppInboxRead) => void): () => void;
   /** The account's preferences row, whole, each time the host's read of it for the session moves or a write is drawn over it. */
   onAccountPreferencesChanged(listener: (held: AppAccountPreferences) => void): () => void;
   onSettingsChanged(listener: (change: HostSettingsChange) => void): () => void;
@@ -337,8 +336,7 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
       on(
         GATEWAY_EVENT.INBOX_ITEMS_CHANGED,
         // Note that the read is the host's own, handed over in this process, so it is passed on as built, as the tasks are.
-        (payload) =>
-          isRecord(payload) ? answered<AppHostRead<AppInboxItems>>(payload) : undefined,
+        (payload) => (isRecord(payload) ? answered<AppInboxRead>(payload) : undefined),
         listener,
       ),
     onSettingsChanged: (listener) =>
