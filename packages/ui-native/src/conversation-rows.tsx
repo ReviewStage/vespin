@@ -18,7 +18,7 @@ import { RowFrame, RowHead } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import { Avatar, type Face, ToneGlyph } from "./marks.js";
 import { BotTag } from "./pull-request-page.js";
-import type { RowAction } from "./row-menu-model.js";
+import type { RowAction, RowSubmenu } from "./row-menu-model.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -135,6 +135,10 @@ type ConversationEntryRowProps = {
   readonly open: boolean;
   readonly repository?: string | null | undefined;
   readonly onOpenLink: (address: string) => void;
+  /** The reactions it wears as one line, such as "👍 2  ❤️ 1", under its words; none where it wears none. */
+  readonly reactions?: string | undefined;
+  /** Its long press menu's submenus, such as Add reaction; none where it offers none. */
+  readonly submenus?: readonly RowSubmenu[] | undefined;
 };
 
 /**
@@ -143,7 +147,8 @@ type ConversationEntryRowProps = {
  * and words, and when; then their words, a short plain preview of the first
  * lines while folded, so a long conversation lays out no Markdown it does
  * not show, and the whole Markdown once a press opens it. A press folds it
- * again. Heard as one element: who, where a review left them, when, and
+ * again. The reactions it wears stand under its words in one muted line,
+ * and its long press menu offers what is handed it, such as Add reaction. Heard as one element: who, where a review left them, when, and
  * the preview.
  */
 export function ConversationEntryRow({
@@ -156,6 +161,8 @@ export function ConversationEntryRow({
   open,
   repository,
   onOpenLink,
+  reactions,
+  submenus = [],
 }: ConversationEntryRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.WRITER);
@@ -187,15 +194,28 @@ export function ConversationEntryRow({
   return (
     <RowFrame
       id={id}
+      menuSubmenus={submenus}
       row={
         <VStack alignment="leading" spacing={0}>
           {head}
           <EntryWords words={words} open={open} repository={repository} onOpenLink={onOpenLink} />
+          {reactions === undefined ? null : (
+            <UnderHead>
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.TIME }),
+                  foregroundStyle(colors.TEXT_MUTED),
+                ]}
+              >
+                {reactions}
+              </Text>
+            </UnderHead>
+          )}
         </VStack>
       }
       heard={{
         label: by.name,
-        value: [by.bot === true && BOT_TAG_WORDS, standing?.words, agoText(at, now)],
+        value: [by.bot === true && BOT_TAG_WORDS, standing?.words, agoText(at, now), reactions],
       }}
     />
   );

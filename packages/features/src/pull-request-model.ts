@@ -16,6 +16,7 @@ import {
   type PullRequestState,
   REVIEW_DECISION,
   REVIEW_STATE,
+  type ReactionGroup,
   type ReviewState,
   type ReviewThread,
 } from "./agent-wire.js";
@@ -27,6 +28,8 @@ import {
   PULL_REQUEST_ACTION,
   PULL_REQUEST_WRITE_OUTCOME,
   type PullRequestAction,
+  REACTION,
+  type Reaction,
 } from "./pull-request-write-wire.js";
 
 /**
@@ -460,6 +463,33 @@ export function threadStateWords(
     ...(thread.resolved ? [THREAD_STATE_WORDS.RESOLVED] : []),
     ...(thread.outdated ? [THREAD_STATE_WORDS.OUTDATED] : []),
   ];
+}
+
+/* ----- The reactions ----- */
+
+/** Each reaction's emoji, its name as GitHub says it, and its name on Add reaction's menu. */
+export const REACTION_FACES = {
+  [REACTION.THUMBS_UP]: { emoji: "👍", name: "thumbs up", item: "Thumbs up" },
+  [REACTION.THUMBS_DOWN]: { emoji: "👎", name: "thumbs down", item: "Thumbs down" },
+  [REACTION.LAUGH]: { emoji: "😄", name: "laugh", item: "Laugh" },
+  [REACTION.HOORAY]: { emoji: "🎉", name: "hooray", item: "Hooray" },
+  [REACTION.CONFUSED]: { emoji: "😕", name: "confused", item: "Confused" },
+  [REACTION.HEART]: { emoji: "❤️", name: "heart", item: "Heart" },
+  [REACTION.ROCKET]: { emoji: "🚀", name: "rocket", item: "Rocket" },
+  [REACTION.EYES]: { emoji: "👀", name: "eyes", item: "Eyes" },
+} as const satisfies Record<
+  Reaction,
+  { readonly emoji: string; readonly name: string; readonly item: string }
+>;
+
+/** The menu's name for giving a reaction, as GitHub's own smiley names it. */
+export const ADD_REACTION_WORDS = "Add reaction";
+
+/** The reactions a comment wears as one line, each emoji by how many gave it, in GitHub's order: "👍 2  ❤️ 1"; none where it wears none. */
+export function reactionsLine(reactions: readonly ReactionGroup[]): string | undefined {
+  if (reactions.length === 0) return undefined;
+
+  return reactions.map((each) => `${REACTION_FACES[each.content].emoji} ${each.count}`).join("  ");
 }
 
 /* ----- The checks ----- */
