@@ -103,27 +103,27 @@ export {
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
-
+export {
+  ConversationEntryRow,
+  type EntryStanding,
+  type ThreadComment,
+  ThreadRow,
+} from "./conversation-rows.js";
 export { type DockChip, DockChips, DockPanel } from "./dock-chips.js";
-
 export {
   DocumentField,
   type DocumentFieldHandle,
   type DocumentFieldOpening,
   OPENS_AT_START,
 } from "./document-field.js";
-
 export { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
-
 export {
   DocumentPage,
   type DocumentPageMentions,
   MentionDock,
   MentionFoot,
 } from "./document-page.js";
-
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
-
 export {
   FailureNoticeBars,
   FailureNoticeLayer,
@@ -131,11 +131,8 @@ export {
   type FailureNotices,
   useFailureNotices,
 } from "./failure-notice.js";
-
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
-
 export { releaseFields } from "./field-focus.js";
-
 export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
@@ -152,16 +149,13 @@ export {
   sectionGlyph,
   UNASSIGNED_UNDER,
 } from "./glyph.js";
-
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
-
 export {
   HELD_ANSWER,
   type HeldAnswer,
   type HeldCall,
   HeldCallBanner,
 } from "./held-call.js";
-
 export {
   type HeldAct,
   type Keeping,
@@ -169,15 +163,10 @@ export {
   usePicturesView,
   type ViewedPicture,
 } from "./held-menu.js";
-
 export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
-
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-
 export { InlineHost } from "./inline-host.js";
-
 export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
-
 export {
   type HeldPicture,
   heldPicture,
@@ -188,7 +177,6 @@ export {
   type KeptKind,
   pictureExtension,
 } from "./keep-model.js";
-
 export {
   NO_WRITES,
   newestValue,
@@ -198,7 +186,6 @@ export {
   writeSent,
   writeSettled,
 } from "./latest-writes-model.js";
-
 export {
   ListRow,
   type LongPressGroup,
@@ -213,15 +200,10 @@ export {
   type RowSwipe,
   TaskRow,
 } from "./list-row.js";
-
 export { MachineAskSheet } from "./machine-ask-sheet.js";
-
 export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
-
 export { markdownGithubPages, markdownReplyButtons, markdownShows } from "./markdown-model.js";
-
 export { MarkdownPage } from "./markdown-page.js";
-
 export {
   AgentTile,
   Avatar,
@@ -235,11 +217,8 @@ export {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
-
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
-
 export { useMinute, useToday } from "./minute.js";
-
 export {
   type ModeChoice,
   ModelChoicePopover,
@@ -247,29 +226,19 @@ export {
   type ModelChoices,
   type ModelOption,
 } from "./model-choice-sheet.js";
-
 export { SwitchRow } from "./option-rows.js";
-
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
-
 export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
-
 export { PersonHead } from "./person-head.js";
-
 export { PictureSet, type SetPicture } from "./picture-set.js";
-
 export { PillField, type PillFieldHandle } from "./pill-field.js";
-
 export { ProblemLine } from "./problem-line.js";
-
 export {
   PROVIDER_MARK_ASSET,
   ProviderButton,
   type ProviderMarkAsset,
 } from "./provider-button.js";
-
 export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
-
 export {
   type PullRequestChipFacts,
   type PullRequestChipLook,
@@ -281,7 +250,6 @@ export {
   CHECK_SUMMARY_LOOK,
   REVIEW_LOOK,
 } from "./pull-request-look.js";
-
 export {
   BotTag,
   githubFace,
