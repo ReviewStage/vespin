@@ -1,36 +1,21 @@
 // playwright.config.ts -- the journeys Playwright Test runs, and the servers they load.
 
-import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
+import { DATABASE_URL_FILE, RUN_SECRETS } from "./support/run-secrets.js";
 
 const PORT = 4317;
 
-/**
- * Where the suite's Postgres writes its connection string, relative to this
- * folder, for a server started after it to read (`DATABASE_URL` and
- * `DATABASE_URL_UNPOOLED` alike). The folder is gitignored scratch, and the
- * file exists only while the database runs.
- */
-const DATABASE_URL_FILE = ".build/database-url";
-
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
-/** A fresh random secret for this run alone, in base64, never written anywhere. */
-function secret(): string {
-  return randomBytes(32).toString("base64");
-}
-
 /**
- * The secrets the local server is started with, made new each run, so none
- * is committed or outlives it. The encryption ring's one key is `1:` and 32
- * random bytes, the shape `PROVIDER_KEY_ENCRYPTION_KEYS` takes. Beside them,
- * the switch that serves the site from a fresh `vite build`.
+ * The local server's environment: the run's secrets (`run-secrets.ts`), made
+ * new each run so none is committed or outlives it, and shared with the
+ * workers' fixtures, which seal a member's key under the same ring. Beside
+ * them, the switch that serves the site from a fresh `vite build`.
  */
 const LOCAL_SERVER_ENV = {
   LOCAL_SERVER_BUILT_PAGES: "true",
-  BETTER_AUTH_SECRET: secret(),
-  CRON_SECRET: secret(),
-  PROVIDER_KEY_ENCRYPTION_KEYS: `1:${secret()}`,
+  ...RUN_SECRETS,
   BETTER_AUTH_URL: ORIGIN,
   APP_DEPLOYMENT_ORIGIN: ORIGIN,
 };
