@@ -240,9 +240,6 @@ const RENAME_WORDS = {
   ACT: "Rename",
 } as const;
 
-/** What the model chip says between a model and its effort, as the panel's chip joins them. */
-const MODEL_JOINED = " · ";
-
 /** The name a flow finds the composer's model chip by. */
 const MODEL_CHIP_ID = "agent-model-chip";
 
@@ -656,10 +653,11 @@ function agentAddMenu(
 
 /**
  * The model chip at the end of the composer's row, as the desktop's stands
- * at its box's foot: the model and its effort, "Opus 5.5 · High", led by its
- * harness's mark, a press opening the model sheet, where the model, its
- * effort, Fast and the permission mode are chosen; none before the agent's
- * model is known.
+ * at its box's foot: the model alone, "Opus 5.5", led by its harness's mark,
+ * since a phone's row has no room for its effort too, as Claude's and
+ * Cursor's chips name the model alone; a press opens the model sheet, where
+ * the model, its effort, Fast and the permission mode are chosen; none
+ * before the agent's model is known.
  */
 function AgentModelChip({
   pick,
@@ -673,17 +671,12 @@ function AgentModelChip({
   const model =
     pick.models.find((option) => option.id === pick.model)?.label ?? modelLabel(pick.model);
 
-  const effort =
-    pick.efforts.length > 1
-      ? pick.efforts.find((option) => option.id === pick.effort)?.label
-      : undefined;
-
   const harness = providerOf(pick.model);
 
   return (
     <MenuChip
       look={MENU_CHIP_LOOK.COMPOSER}
-      label={effort === undefined ? model : `${model}${MODEL_JOINED}${effort}`}
+      label={model}
       {...(harness === undefined ? {} : { harness })}
       onOpen={onOpen}
       testId={MODEL_CHIP_ID}
