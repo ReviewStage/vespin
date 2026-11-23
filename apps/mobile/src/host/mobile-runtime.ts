@@ -12,6 +12,7 @@ import { followStream, type OpenedStream } from "@repo/host/follow-stream";
 import { Effect, Fiber, Layer, ManagedRuntime, Scheduler } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import type * as HttpClient from "effect/http/HttpClient";
+import { Settings } from "react-native";
 import {
   composeMobile,
   type DeviceSeams,
@@ -29,21 +30,69 @@ import {
  * first render until all of it was done, about 0.9 s of a cold launch at a
  * busy account's scale on the iPhone 18 Pro simulator.
  */
+/** PROBE ONLY: how long the host's rounds run in one JS task before one yields a task to React, from the launch's `-probeSliceMs`. */
+const SLICE_MS = Number(Settings.get("probeSliceMs") ?? 50);
+/** PROBE ONLY: a pause this long between two of the host's rounds means the thread did other work or none, so the next opens a slice of its own. */
+const GAP_MS = 4;
+
 /** PROBE ONLY: each hop the host's scheduler made, counted with how long it waited, for the launch probe to write. */
-const hops = { count: 0, totalMs: 0, maxMs: 0, firstSecondCount: 0 };
+const hops = {
+  sliceMs: SLICE_MS,
+  count: 0,
+  totalMs: 0,
+  maxMs: 0,
+  rounds: 0,
+  maxRoundMs: 0,
+  maxSliceMs: 0,
+};
 (globalThis as Record<string, unknown>).__launchYields = hops;
-const hopped = (queued: number) => {
-  const waited = performance.now() - queued;
-  hops.count += 1;
-  hops.totalMs += waited;
-  hops.maxMs = Math.max(hops.maxMs, waited);
+
+let sliceStart = Number.NEGATIVE_INFINITY;
+let roundEnded = Number.NEGATIVE_INFINITY;
+let inRound = false;
+
+const round = (run: () => void, start: number) => {
+  inRound = true;
+  try {
+    run();
+  } finally {
+    inRound = false;
+    roundEnded = performance.now();
+    hops.rounds += 1;
+    hops.maxRoundMs = Math.max(hops.maxRoundMs, roundEnded - start);
+    hops.maxSliceMs = Math.max(hops.maxSliceMs, roundEnded - sliceStart);
+  }
 };
 
 const yieldingScheduler = new Scheduler.MixedScheduler("async", (run) => {
   const queued = performance.now();
+
+  // Note that a round stays in the JS task it was asked in until the slice is spent, or opens a fresh one where the thread paused.
+  if ((!inRound && queued - roundEnded > GAP_MS) || queued - sliceStart < SLICE_MS) {
+    let canceled = false;
+
+    queueMicrotask(() => {
+      if (canceled) return;
+      const start = performance.now();
+
+      if (start - roundEnded > GAP_MS) sliceStart = start;
+      round(run, start);
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }
+
   const timer = setTimeout(() => {
-    hopped(queued);
-    run();
+    const start = performance.now();
+    const waited = start - queued;
+
+    hops.count += 1;
+    hops.totalMs += waited;
+    hops.maxMs = Math.max(hops.maxMs, waited);
+    sliceStart = start;
+    round(run, start);
   }, 0);
 
   return () => clearTimeout(timer);

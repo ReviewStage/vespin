@@ -79,7 +79,15 @@ export function followAppStateInto(
     },
     {
       heard: ({ taskList: rows }) => {
-        if (rows !== undefined) probeTimed("taskList.deliver", () => taskList.deliver(rows));
+        if (rows !== undefined)
+          probeTimed(
+            "taskList.deliver",
+            () => taskList.deliver(rows),
+            () =>
+              JSON.stringify(rows, (key, value) =>
+                Array.isArray(value) && key !== "moved" ? value.length : value,
+              ).slice(0, 400),
+          );
       },
       read: (read, lists) =>
         probeTimed("taskList.write", () => taskList.write(read.version, lists)),
