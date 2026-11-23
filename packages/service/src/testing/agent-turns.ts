@@ -5,14 +5,12 @@
 import { randomUUID } from "node:crypto";
 import type { Agent } from "@repo/database/models/agent-store";
 import { storeWriter } from "@repo/database/models/writer";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   AssistantMessageBuilder,
   RUN_EVENT,
   RUN_STATUS,
   RUN_TURN_ORIGIN,
   type RunStatus,
-  TOOL_CALL_SETTLEMENT,
   TURN_FAILURE,
   TURN_TRIGGER,
   type TurnFailure,
@@ -21,16 +19,14 @@ import { sessionKey } from "@repo/runtime/vocabulary";
 import { TURN_ORIGIN } from "@repo/wire";
 import { Effect } from "effect";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
-import { ACTION_RESULT_STATUS, unparsedWire } from "../core.js";
 
-/** One turn of the agent's, begun just before `at`, answered with the words given where some are, closed by an `end_turn` taken with the summary given where one is, and ended in the run status given at `at`, a failed one for `failure`; its id. */
+/** One turn of the agent's, begun just before `at`, answered with the words given where some are and ended in the run status given at `at`, a failed one for `failure`; its id. */
 export const endedAt = (
   agent: Agent,
   status: RunStatus,
   at: number,
   said?: string,
   failure: TurnFailure = TURN_FAILURE.MODEL,
-  summary?: string,
 ) =>
   Effect.gen(function* () {
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
@@ -57,19 +53,6 @@ export const endedAt = (
       answer.text("Reading the description first.");
       answer.stepStart();
       answer.text(said);
-
-      if (summary !== undefined) {
-        const callId = randomUUID();
-        const input = { summary };
-        answer.toolCall(
-          { callId, name: AGENT_TOOL.END_TURN, argumentsJson: JSON.stringify(input) },
-          unparsedWire(input),
-        );
-        answer.toolResult(callId, {
-          state: TOOL_CALL_SETTLEMENT.OUTPUT_AVAILABLE,
-          output: unparsedWire({ status: ACTION_RESULT_STATUS.ACCEPTED }),
-        });
-      }
 
       yield* writer.consume(target, {
         ...turn,

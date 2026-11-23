@@ -1,4 +1,4 @@
-# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, turned to a draft and back from its ⋯, then closed, with Undo reopening it; and one in the merge queue, whose Close asks first, taken out of it after the question, and opened on GitHub.
+# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, its review opened whole in its conversation and reacted to from its long press, its thread replied to on its own screen and resolved and reopened from its long press, a new comment's field opened, turned to a draft and back from its state chip, then closed from its ⋯, with Undo reopening it; and one in the merge queue, its long description folded behind Show more, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -78,13 +78,13 @@ env:
 - assertVisible: "Adds Invite by email.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
-# Note that the description stands above the checks, so the reviewer's row,
-# the page's last, may stand below the fold on a phone and is scrolled to,
+# Note that the description stands above the checks, so the reviewers' rows,
+# the page's last, may stand below the fold on a phone and are scrolled to,
 # dragged at three quarters across as the card is, so a landscape iPad's
 # drag lands on the page rather than the list column beside it.
 - repeat:
     while:
-      notVisible: "grace"
+      notVisible: "relay-review"
     times: 10
     commands:
       - swipe:
@@ -92,6 +92,11 @@ env:
           end: "75%, 35%"
           duration: 400
 - assertVisible: "grace"
+# A review App's bot is named as the panel names it, its login without
+# GitHub's "[bot]", in its rounded square with the bot tag after its name.
+- assertVisible: "relay-review"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-reviewers
 # Merging is the press under the heading, in every window, and it asks
 # first, as the card's Merge does, scrolled back up to after the reviewer.
 # Note that it is dragged back to the page's top every time, rather than
@@ -221,48 +226,154 @@ env:
     visible: "Expire an invite after seven days.*"
     timeout: 30000
 - assertVisible: "Changes requested"
+# Its head says its one review thread still stands unresolved, beside
+# GitHub's sentence.
+- assertVisible: ".*1 unresolved conversation"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-failing
-# Its ⋯ offers what may change where it stands, as the panel's pill does:
-# Convert to draft, and Close pull request in red. Each lands on its
-# heading's state; Close, which can be taken back, acts at once and says so
-# in the app's notice, whose Undo reopens it.
+# Its Checks row sums them up, the failure first, and pushes their list,
+# each check where it stands and how long it ran; Back returns to the page.
+- assertVisible: "Checks.*"
 - runFlow:
-    file: subflows/more.yaml
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Checks.*"
+- extendedWaitUntil:
+    visible: "e2e.*"
+    timeout: 30000
+- assertVisible: "test.*"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-checks
+- tapOn:
+    id: "BackButton"
+- extendedWaitUntil:
+    visible: "Changes requested"
+    timeout: 10000
+# Its conversation stands inline under the rows: the review that asked for
+# changes, its words a short preview, and the thread it started on a file's
+# lines. A press opens each whole, in Markdown, and the page goes back up.
+- scrollUntilVisible:
+    element: "src/invites/expiry.ts.*"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-conversation
+- tapOn:
+    text: "grace"
+    below: "Conversation.*"
+- extendedWaitUntil:
+    visible: ".*Treat the seventh day as still open.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-conversation-open
+# A long press on the review offers Add reaction, GitHub's eight, its
+# thumbs up standing under its words.
+- longPressOn:
+    text: "grace"
+    below: "Conversation.*"
+- tapOn: "Add reaction"
+- assertVisible: "Heart"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-reactions
+- tapOn: "Heart"
+# The thread opens on a screen of its own, its comments as a thread's and
+# the reply field at its foot, whose send clears it once GitHub took it.
+- tapOn: "src/invites/expiry.ts.*"
+- extendedWaitUntil:
+    visible: ".*Good catch, it takes the request's time now.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-thread
+# A long press on one of its comments offers Add reaction beside Copy.
+- longPressOn: ".*Good catch, it takes the request's time now.*"
+- tapOn: "Add reaction"
+- assertVisible: "Rocket"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-thread-reactions
+- tapOn: "Rocket"
+- tapOn: "Reply"
+- inputText: "Thanks, that reads right now."
+- tapOn: "Send"
+- extendedWaitUntil:
+    notVisible: "Thanks, that reads right now."
+    timeout: 10000
+- tapOn:
+    id: "BackButton"
+- scrollUntilVisible:
+    element: "src/invites/expiry.ts.*"
+    direction: DOWN
+# A long press on the thread offers Resolve, which stands it resolved and
+# takes it out of the head's unresolved count; Reopen stands it open again,
+# and the head counts it once more.
+- longPressOn: "src/invites/expiry.ts.*"
+- tapOn: "Resolve"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-thread-resolved
+- scrollUntilVisible:
+    element: "Expire an invite after seven days.*"
+    direction: UP
+- extendedWaitUntil:
+    notVisible: ".*unresolved conversation.*"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "src/invites/expiry.ts.*"
+    direction: DOWN
+- longPressOn: "src/invites/expiry.ts.*"
+- tapOn: "Reopen"
+- scrollUntilVisible:
+    element: "Expire an invite after seven days.*"
+    direction: UP
+- extendedWaitUntil:
+    visible: ".*1 unresolved conversation"
+    timeout: 10000
+# The conversation ends in Comment, which opens a new comment's field.
+- scrollUntilVisible:
+    element: "Comment"
+    direction: DOWN
+- tapOn: "Comment"
+- assertVisible: "Comment"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-new-comment
+- tapOn:
+    id: "BackButton"
+- scrollUntilVisible:
+    element: "Expire an invite after seven days.*"
+    direction: UP
+# Its state chip offers what may change where it stands, as the panel's
+# pill does: Convert to draft, and Close pull request in red. Each lands on
+# the chip; Close, which can be taken back, acts at once and says so in the
+# app's notice, whose Undo reopens it. The bar's ⋯ offers the same changes.
+- tapOn: "Pull request, Open"
 - assertVisible: "Convert to draft"
 - assertVisible: "Close pull request"
 - takeScreenshot: pull-request-state-menu
 - tapOn: "Convert to draft"
 - extendedWaitUntil:
-    visible: "Draft"
+    visible: "Pull request, Draft"
     timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-drafted
-- runFlow:
-    file: subflows/more.yaml
+- tapOn: "Pull request, Draft"
+- assertVisible: "Ready for review"
+- takeScreenshot: pull-request-state-menu-draft
 - tapOn: "Ready for review"
 - extendedWaitUntil:
-    visible: "Open"
+    visible: "Pull request, Open"
     timeout: 30000
 - runFlow:
     file: subflows/more.yaml
+- assertVisible: "Convert to draft"
 - tapOn: "Close pull request"
 - extendedWaitUntil:
     visible: "Pull request closed"
     timeout: 30000
-- assertVisible: "Closed"
+- assertVisible: "Pull request, Closed"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-closed
 - tapOn:
     id: "failure-notice-undo"
 - extendedWaitUntil:
-    visible: "Open"
+    visible: "Pull request, Open"
     timeout: 30000
-- runFlow:
-    file: subflows/more.yaml
-- assertVisible: "Convert to draft"
-- runFlow:
-    file: subflows/dismiss.yaml
 # One in the merge queue: Remove from queue asks first, with what leaving
 # costs the pull requests behind it, and once out it offers Merge when ready.
 - launchApp:
@@ -276,10 +387,10 @@ env:
     timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-queued
-# Its ⋯ offers Close alone, since a queued pull request cannot turn back to
-# a draft, and Close asks first, since reopening does not queue it again.
-- runFlow:
-    file: subflows/more.yaml
+# Its state chip offers Close alone, since a queued pull request cannot
+# turn back to a draft, and Close asks first, since reopening does not queue
+# it again.
+- tapOn: "Pull request, Queued #2"
 - assertNotVisible: "Convert to draft"
 - tapOn: "Close pull request"
 - assertVisible: "Close this pull request?"
@@ -303,6 +414,20 @@ env:
 - assertVisible: "Merge when ready"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-dequeued
+# Its long description stands folded to its first lines, faded at its foot,
+# and Show more opens it whole, then Show less folds it again.
+- scrollUntilVisible:
+    element: "Show more"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-description-folded
+- tapOn: "Show more"
+- scrollUntilVisible:
+    element: "Show the sender in Settings.*"
+    direction: DOWN
+- assertVisible: "Show less"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-description-open
 - scrollUntilVisible:
     element: "Send the invite email from the workspace.*"
     direction: UP

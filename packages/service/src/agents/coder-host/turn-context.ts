@@ -100,7 +100,7 @@ export const TurnHandedSchema = Schema.Struct({
     Schema.Struct({
       descriptionsOn: Schema.Boolean,
       memoryOn: Schema.Boolean,
-      /** Absent on a session opened before Done and follow-ups was kept, which read it as off. */
+      /** True on a session opened with Done and follow-ups on, which told the agent to end every turn with the removed `end_turn`, so a message to it opens a fresh session; false or absent on any other. */
       turnEndOn: Schema.optionalKey(Schema.Boolean),
       /** Absent for a session opened before Reply buttons was kept, which opened with it off. */
       replyButtonsOn: Schema.optionalKey(Schema.Boolean),
@@ -169,17 +169,13 @@ const SPOKEN_WORDS = `## This turn is spoken
 
 The developer is speaking to you through a voice that reads your replies aloud, so this turn's message is what they said, and your final reply is what they hear. Answer short, in plain facts: no Markdown, code blocks, or tables, and no file paths or links read out. Lead with the result and any decision waiting on the developer, a sentence or two at a time, and leave the detail to what you write to the task.`;
 
-/** How the agent's reply reaches the developer on a typed turn: its last message, `end_turn`'s summary, or a Manager's `send_to_user` messages. */
+/** How the agent's reply reaches the developer on a typed turn: its last message, or a Manager's `send_to_user` messages. */
 export const TURN_REPLY = {
   LAST_MESSAGE: "last-message",
-  END_TURN: "end-turn",
   SEND_TO_USER: "send-to-user",
 } as const;
 
 export type TurnReply = (typeof TURN_REPLY)[keyof typeof TURN_REPLY];
-
-/** What a spoken turn is told beside them where the agent ends its turns with `end_turn`, whose summary the voice reads aloud. */
-const SPOKEN_END_TURN = `On a call, write \`${AGENT_TOOL.END_TURN}\`'s summary as plain sentences, not bullets or links.`;
 
 /**
  * What a Manager's spoken turn is told beside them: the voice reads its
@@ -199,14 +195,12 @@ const TYPED_AFTER_CALL_CHAT = `This turn is typed (nothing you write is heard), 
 /** What a spoken turn is told, by how the agent replies on a typed one. */
 const SPOKEN_BY_REPLY = {
   [TURN_REPLY.LAST_MESSAGE]: SPOKEN_WORDS,
-  [TURN_REPLY.END_TURN]: `${SPOKEN_WORDS} ${SPOKEN_END_TURN}`,
   [TURN_REPLY.SEND_TO_USER]: `${SPOKEN_WORDS} ${SPOKEN_CHAT}`,
 } as const satisfies Record<TurnReply, string>;
 
 /**
  * What a turn opens with of its kind: on a spoken turn the words for a reply
- * read aloud, with how to write `end_turn`'s summary where the agent ends its
- * turns with it, and for a Manager that its plain text, not `send_to_user`,
+ * read aloud, and for a Manager that its plain text, not `send_to_user`,
  * is this turn's reply; handed every time since they are short. On a typed
  * turn after a spoken one, a line saying those words in its history no
  * longer hold, and for a Manager that `send_to_user` is its reply again; and

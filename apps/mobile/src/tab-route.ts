@@ -3,7 +3,7 @@
 import { type IosTab, iosRouteOnTab, iosTabOfGroup } from "@repo/features/ios-app-links";
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useSegments } from "expo-router";
-import { createContext, useCallback, useContext } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect } from "react";
 import { standingWithoutInbox, useInboxShown } from "./inbox/inbox-shown.js";
 
 /** The tab whose stack a screen stands on, which each tab's stack layout hands its screens; none outside the tabs. */
@@ -14,6 +14,29 @@ export function useOwnTab(): IosTab | undefined {
   return useContext(OwnTabContext);
 }
 
+/** The segment of the tab group standing in front, as the tabs' layout last saw the route; none while no tab stands, as under a sheet or before the tabs mount. */
+let standingGroup: string | undefined;
+
+/**
+ * Keeps the tab standing in front for `useOnTab` to read at a press, from
+ * the tabs' layout, which hears every change of route anyway. Note that it
+ * is kept here rather than each screen reading `useSegments`, because that
+ * reads expo-router's route context, which draws every screen calling it
+ * again on every push and pop, the screen under the one pushed included, in
+ * the very render the push stands its first frame in.
+ */
+export function useKeepStandingTab(): void {
+  const segments: readonly string[] = useSegments();
+  const group = segments[1];
+  useLayoutEffect(() => {
+    standingGroup = group;
+
+    return () => {
+      standingGroup = undefined;
+    };
+  }, [group]);
+}
+
 /**
  * The route to push for a thread, a task, an agent, or a page under them, as
  * the tab that should open it names it (`iosRouteOnTab`). Note that a compact
@@ -22,16 +45,23 @@ export function useOwnTab(): IosTab | undefined {
  * its own tab, because that tab's split view selects it beside its list, as
  * it always has. Note that a route named by no tab, such as one opened from
  * a sheet over the tabs, opens on its own tab too, but for a thread while
- * the Inbox is off, which opens on Tasks' (`standingWithoutInbox`).
+ * the Inbox is off, which opens on Tasks' (`standingWithoutInbox`). The tab
+ * standing is read as the route is named (`useKeepStandingTab`), so a
+ * change of route never draws the caller again.
  */
 export function useOnTab(): (route: string) => string {
-  const segments: readonly string[] = useSegments();
   const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const shown = useInboxShown();
-  const standing = standingWithoutInbox(compact ? iosTabOfGroup(segments[1]) : undefined, shown);
 
-  // Note that the answer holds while the tab does, so an effect that opens a route on it runs again only when the tab moves.
-  return useCallback((route) => iosRouteOnTab(route, standing), [standing]);
+  // Note that the answer holds while the window's size class and the Inbox's setting do, so an effect that opens a route on it runs again only as one of them moves.
+  return useCallback(
+    (route) =>
+      iosRouteOnTab(
+        route,
+        standingWithoutInbox(compact ? iosTabOfGroup(standingGroup) : undefined, shown),
+      ),
+    [compact, shown],
+  );
 }
 
 /**

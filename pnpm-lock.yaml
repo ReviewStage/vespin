@@ -271,9 +271,15 @@ patchedDependencies:
   '@expo/ui@58.0.27':
     hash: 399efe9d6087fbfdc4b213e42e093a00cae226c934ba793f8806d5153cbfb2ab
     path: patches/@expo__ui@58.0.27.patch
+  '@formatjs/intl-datetimeformat@8.0.3':
+    hash: ddd32fe0cc9cd77bb14c3af653413f7150d95e939ceeecb00e671b4515c5cb63
+    path: patches/@formatjs__intl-datetimeformat@8.0.3.patch
   '@sentry/browser@11.8.0':
     hash: af32b6645b074a081cae42956870b6c779240a52fac319191531b3724c5be619
     path: patches/@sentry__browser@11.8.0.patch
+  '@tanstack/db@1.0.0-rc.1.5':
+    hash: aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f
+    path: patches/@tanstack__db@1.0.0-rc.1.5.patch
   '@tiptap/extension-list@3.33.1':
     hash: bb7489824f41b416b467a2ad6911a14b3c76d71068ee395dd0842a6a59b5d456
     path: patches/@tiptap__extension-list@3.33.1.patch
@@ -641,7 +647,7 @@ importers:
         version: 58.0.27(patch_hash=399efe9d6087fbfdc4b213e42e093a00cae226c934ba793f8806d5153cbfb2ab)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
       '@formatjs/intl-datetimeformat':
         specifier: 8.0.3
-        version: 8.0.3
+        version: 8.0.3(patch_hash=ddd32fe0cc9cd77bb14c3af653413f7150d95e939ceeecb00e671b4515c5cb63)
       '@formatjs/intl-getcanonicallocales':
         specifier: 3.3.1
         version: 3.3.1
@@ -1303,7 +1309,7 @@ importers:
         version: 4.6.0
       '@tanstack/db':
         specifier: 'catalog:'
-        version: 1.0.0-rc.1.5(typescript@7.0.2)
+        version: 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
       effect:
         specifier: 'catalog:'
         version: 4.0.4
@@ -1729,7 +1735,7 @@ importers:
     dependencies:
       '@tanstack/db':
         specifier: 'catalog:'
-        version: 1.0.0-rc.1.5(typescript@7.0.2)
+        version: 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
       effect:
         specifier: 'catalog:'
         version: 4.0.4
@@ -12714,7 +12720,7 @@ snapshots:
 
   '@formatjs/fast-memoize@3.1.7': {}
 
-  '@formatjs/intl-datetimeformat@8.0.3':
+  '@formatjs/intl-datetimeformat@8.0.3(patch_hash=ddd32fe0cc9cd77bb14c3af653413f7150d95e939ceeecb00e671b4515c5cb63)':
     dependencies:
       '@formatjs/bigdecimal': 0.2.10
       '@formatjs/intl-localematcher': 0.10.1
@@ -14632,7 +14638,7 @@ snapshots:
       fractional-indexing: 3.4.0
       typescript: 7.0.2
 
-  '@tanstack/db@1.0.0-rc.1.5(typescript@7.0.2)':
+  '@tanstack/db@1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@tanstack/db-ivm': 1.0.0-rc.1.3(typescript@7.0.2)
@@ -14647,14 +14653,14 @@ snapshots:
 
   '@tanstack/react-db@1.0.0-rc.1.5(react@19.2.8)(typescript@7.0.2)':
     dependencies:
-      '@tanstack/db': 1.0.0-rc.1.5(typescript@7.0.2)
+      '@tanstack/db': 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
       react: 19.2.8
     transitivePeerDependencies:
       - typescript
 
   '@tanstack/react-db@1.0.0-rc.1.5(react@19.3.0)(typescript@7.0.2)':
     dependencies:
-      '@tanstack/db': 1.0.0-rc.1.5(typescript@7.0.2)
+      '@tanstack/db': 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
       react: 19.3.0
     transitivePeerDependencies:
       - typescript

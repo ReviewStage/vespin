@@ -25,6 +25,7 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { appsInUse } from "@repo/features/apps-in-use";
 import { agentStateWords } from "@repo/features/glyph-state";
 import { UNDELIVERED_FILES_LOST } from "@repo/features/inbox-undelivered";
 import { iosAppRouteOf, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
@@ -125,6 +126,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import {
+  memo,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -133,7 +135,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { type AgentThreadsDock, useAgentDock } from "../agents/agent-dock.js";
+import {
+  type AgentThreadsDock,
+  type AppsDock,
+  appsDockMediaIds,
+  useAgentDock,
+} from "../agents/agent-dock.js";
 import {
   useAgentMedia,
   useAgentPullRequests,
@@ -417,6 +424,7 @@ function AgentComposerBar({
   threads,
   pullRequest,
   onOpenPullRequest,
+  apps,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -442,6 +450,8 @@ function AgentComposerBar({
   /** The pull request the agent opened, which the row over the field opens; none before it opened one. */
   readonly pullRequest: AgentPullRequest | undefined;
   readonly onOpenPullRequest: (url: string) => void;
+  /** The apps the agent uses on the reader's Mac this turn, which the row over the field names; none where its turn used none. */
+  readonly apps: AppsDock | undefined;
 }) {
   const { waiting } = approvals;
   // Note that the bar tells VoiceOver of a call waiting, since it stands while the call's row may lie out of the list's drawn window, and an agent held for an answer waits on the reader wherever they are.
@@ -460,6 +470,7 @@ function AgentComposerBar({
       threads,
       pullRequest,
       onOpenPullRequest,
+      apps,
     },
     picking,
   );
@@ -554,6 +565,7 @@ function AgentComposerArea({
   onOpenThread,
   pullRequest,
   onOpenPullRequest,
+  apps,
 }: {
   readonly id: string;
   readonly agent: Parameters<typeof useAgentComposer>[1];
@@ -579,6 +591,8 @@ function AgentComposerArea({
   /** The pull request the agent opened, which the row over the field opens; none before it opened one. */
   readonly pullRequest: AgentPullRequest | undefined;
   readonly onOpenPullRequest: (url: string) => void;
+  /** The apps the agent uses on the reader's Mac this turn; none where its turn used none. */
+  readonly apps: AppsDock | undefined;
 }) {
   const threadsLine = useAgentThreadsLine(id);
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
@@ -606,6 +620,7 @@ function AgentComposerArea({
         dictation={dictated.dictation}
         pullRequest={pullRequest}
         onOpenPullRequest={onOpenPullRequest}
+        apps={apps}
         threads={
           threadsLine === undefined ? undefined : { line: threadsLine, onOpen: onOpenThread }
         }
@@ -845,9 +860,13 @@ export function AgentScreen() {
 /**
  * One agent's page as `AgentScreen` describes it, by the agent's id and the
  * suggestion a box opened it on, on its tab's stack over the window. A page
- * or a pull request it opens is pushed over it on the same stack.
+ * or a pull request it opens is pushed over it on the same stack. Note that
+ * it is drawn again only as its own reads move, never as its words in the
+ * route are handed again, because the stack draws every screen's route
+ * again on each push and pop, and this page stands drawn under the one
+ * pushed over it, in the very render the push stands its first frame in.
  */
-function AgentConversation({
+const AgentConversation = memo(function AgentConversation({
   id,
   suggestedBy,
   button,
@@ -1006,8 +1025,21 @@ function AgentConversation({
   const cuts = useMemo(() => openCuts(items), [items]);
   useEffect(() => whole.ask(cuts), [whole, cuts]);
 
+  // The apps the agent uses on the reader's Mac this turn, which stand as capsules over its composer, as the panel's stack floats over its box; their icons and newest windows are read beside the rows'.
+  const inUse = useMemo(
+    () =>
+      messages === undefined
+        ? undefined
+        : appsInUse(messages, status !== undefined && agentStillWriting(status)),
+    [messages, status],
+  );
+
   // Note that only the pictures and recordings of the rows on screen are read, so a transcript of hundreds of screenshots never holds them all as it opens.
-  const mediaIds = useMemo(() => shownMediaIds(rowsShown), [rowsShown]);
+  const mediaIds = useMemo(
+    () => [...shownMediaIds(rowsShown), ...appsDockMediaIds(inUse)],
+    [rowsShown, inUse],
+  );
+
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
   const approvals = useAgentApprovals(agent, id, drawn);
@@ -1246,6 +1278,11 @@ function AgentConversation({
   ) : (
     <AgentComposerArea
       id={id}
+      apps={
+        inUse === undefined
+          ? undefined
+          : { inUse, source: (pictureId) => media.sources.get(pictureId) }
+      }
       pullRequest={pullRequests[0]}
       onOpenPullRequest={openPullRequest}
       agent={agent}
@@ -1579,7 +1616,7 @@ function AgentConversation({
       {asks}
     </>
   );
-}
+});
 
 /** A page the agent showed, opened whole, by the agent's task, read once the agent is. */
 export function AgentPageScreen() {

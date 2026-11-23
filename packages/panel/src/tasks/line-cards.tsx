@@ -1,21 +1,16 @@
-import {
-  CHECK_STATE,
-  type CheckState,
-  PULL_REQUEST_STATE,
-  REVIEW_STATE,
-  type ReviewState,
-} from "@repo/features/agent-wire";
+import { CHECK_STATE, type CheckState, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { threadLineTitle } from "@repo/features/inbox-wire";
-import { GITHUB_PAGE, gitHubPageLink, LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { SUGGESTION_LEAD } from "@repo/features/reply-button-wire";
 import {
   COMMENT_LINE_LEAD,
   CONCLUSION_WORDS,
   commentLineSubject,
-  githubChecksFailed,
-  githubChecksPassed,
-  githubLineChecks,
-  githubLineHead,
+  GITHUB_LINE_MARK,
+  type GitHubLineFold,
+  type GitHubLineMark as GitHubLineMarkRead,
+  githubCheckState,
+  githubLineFold,
   type LineLead,
   SLACK_LINE_LEAD,
   SLACK_LINE_SUBJECT,
@@ -32,16 +27,12 @@ import {
   SubjectLine,
 } from "@repo/ui";
 import { CircleCheckIcon, CircleSlashIcon, GLYPH } from "@repo/ui/icons";
-import {
-  type CommentLineMetadata,
-  GITHUB_CHECK_CONCLUSION,
-  GITHUB_LINE_EVENT,
-  type GitHubCheckConclusion,
-  type GitHubLineMetadata,
-  isFailingConclusion,
-  type SlackLineMetadata,
-  type SuggestedBy,
-  type ThreadLineMetadata,
+import type {
+  CommentLineMetadata,
+  GitHubLineMetadata,
+  SlackLineMetadata,
+  SuggestedBy,
+  ThreadLineMetadata,
 } from "@repo/wire";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
@@ -233,19 +224,6 @@ export function SlackLineHead({
   );
 }
 
-/** Where a check a GitHub line names stands in the Pull request tab's own words, which its row is drawn by: one that failed as failed, one that passed as passed, and the rest as skipped, as the tab reads them. */
-function checkStateOf(conclusion: GitHubCheckConclusion): CheckState {
-  if (isFailingConclusion(conclusion)) return CHECK_STATE.FAILED;
-
-  return conclusion === GITHUB_CHECK_CONCLUSION.SUCCESS ? CHECK_STATE.PASSED : CHECK_STATE.SKIPPED;
-}
-
-/** Where a review left its pull request, by GitHub's own word for its state, as the Pull request tab's badge says it; any other verdict reads as commented. */
-const VERDICT_STATE: ReadonlyMap<string, ReviewState> = new Map([
-  ["approved", REVIEW_STATE.APPROVED],
-  ["changes_requested", REVIEW_STATE.CHANGES_REQUESTED],
-]);
-
 /** The ink a card's own mark wears: a failed check's red, a passed one's green, a comment's quiet. */
 const MARK_INK = {
   FAILED: "text-destructive",
@@ -269,49 +247,26 @@ function CardMark({ ink, children }: { ink: MarkInk; children: ReactNode }): Rea
   );
 }
 
-/** Where a check line's checks stand as one, in the Pull request tab's words: failed where one did, skipped where none passed of those it names, else passed. */
-function checksStanding(line: GitHubLineMetadata, words: string): CheckState {
-  if (githubChecksFailed(line, words)) return CHECK_STATE.FAILED;
-  const checks = line.checks ?? [];
-
-  const nonePassed =
-    checks.length > 0 &&
-    checks.every((check) => check.conclusion !== GITHUB_CHECK_CONCLUSION.SUCCESS);
-
-  return nonePassed ? CHECK_STATE.SKIPPED : CHECK_STATE.PASSED;
-}
-
 /** What a GitHub line wears in its card's icon's seat: a review's verdict as the Pull request tab's badge, a comment's speech mark, a check event's one failed glyph, a skip's quiet slash, or a pass's check, the failed glyph for the merge queue taking the pull request out, or the Pull request tab's own glyph in GitHub's color for one merged or closed. */
-function GitHubLineMark({
-  line,
-  words,
-}: {
-  line: GitHubLineMetadata;
-  words: string;
-}): React.JSX.Element {
-  switch (line.event) {
-    case GITHUB_LINE_EVENT.REVIEW:
-      return (
-        <ReviewBadge state={VERDICT_STATE.get(line.verdict ?? "") ?? REVIEW_STATE.COMMENTED} />
-      );
-    case GITHUB_LINE_EVENT.COMMENT:
+function GitHubLineMark({ mark }: { mark: GitHubLineMarkRead }): React.JSX.Element {
+  switch (mark.kind) {
+    case GITHUB_LINE_MARK.REVIEW:
+      return <ReviewBadge state={mark.review} />;
+    case GITHUB_LINE_MARK.COMMENT:
       return (
         <CardMark ink={MARK_INK.QUIET}>
           <GLYPH.COMMENT />
         </CardMark>
       );
-    case GITHUB_LINE_EVENT.CHECK_FAILED:
-    case GITHUB_LINE_EVENT.CHECKS_COMPLETED:
-      return <ChecksMark standing={checksStanding(line, words)} />;
-    case GITHUB_LINE_EVENT.DEQUEUED:
-      return <ChecksMark standing={CHECK_STATE.FAILED} />;
-    case GITHUB_LINE_EVENT.MERGED:
+    case GITHUB_LINE_MARK.CHECKS:
+      return <ChecksMark standing={mark.checks} />;
+    case GITHUB_LINE_MARK.MERGED:
       return (
         <CardMark ink={MARK_INK.MERGED}>
           <MergedGlyph />
         </CardMark>
       );
-    case GITHUB_LINE_EVENT.CLOSED:
+    case GITHUB_LINE_MARK.CLOSED:
       return (
         <CardMark ink={MARK_INK.FAILED}>
           <ClosedGlyph />
@@ -339,25 +294,6 @@ function ChecksMark({ standing }: { standing: CheckState }): React.JSX.Element {
       <CircleCheckIcon />
     </CardMark>
   );
-}
-
-/** How many inline comments a card's head says it holds. */
-function commentsWords(count: number): string {
-  return count === 1 ? "1 comment" : `${count} comments`;
-}
-
-/** The page a card's head links its pull request's chip to: a review's or a comment's own, else the pull request by its number, else the line's checks. */
-function pullRequestPage(line: GitHubLineMetadata): string {
-  const reviewed =
-    line.event === GITHUB_LINE_EVENT.REVIEW || line.event === GITHUB_LINE_EVENT.COMMENT;
-
-  if (reviewed || line.number === undefined) return line.url;
-
-  return gitHubPageLink({
-    kind: GITHUB_PAGE.PULL_REQUEST,
-    repository: line.repository,
-    number: line.number,
-  });
 }
 
 /** A picture drawer that draws none, each picture standing as its link, where no agent's transcript is drawn to read it as. */
@@ -416,13 +352,13 @@ function commentNote(
 }
 
 /** The checks a check event names, failures first, as the Pull request tab's own rows, each saying how it ended. */
-function GitHubCheckRows({ line }: { line: GitHubLineMetadata }): React.JSX.Element {
+function GitHubCheckRows({ checks }: { checks: GitHubLineFold["checks"] }): React.JSX.Element {
   const agentId = useContext(TranscriptAgent) ?? "";
   const scope = useMemo(() => ({ agentId }), [agentId]);
 
   return (
     <CheckList>
-      {githubLineChecks(line).map((check, at) => (
+      {checks.map((check, at) => (
         // Note that two checks may share a name across Apps, so a row is keyed by its place too.
         <CheckRow
           key={`${at}`}
@@ -432,7 +368,7 @@ function GitHubCheckRows({ line }: { line: GitHubLineMetadata }): React.JSX.Elem
           check={{
             name: check.name,
             app: null,
-            state: checkStateOf(check.conclusion),
+            state: githubCheckState(check.conclusion),
             url: check.url ?? null,
             startedAt: null,
             completedAt: null,
@@ -468,29 +404,15 @@ export function GitHubLineCard({
   sender: ReactNode;
 }): React.JSX.Element {
   const doors = useMentionDoors();
-  const head = githubLineHead(line, words);
-  const said = line.words ?? "";
-  const comments = line.comments ?? [];
-  const checks = githubLineChecks(line);
-  // Note that a check event holds its rows only where a check did not pass, because every check passing is said whole by its head.
-  const rows = checks.length > 0 && !githubChecksPassed(line, words);
-  const folds = said !== "" || comments.length > 0 || rows;
-  const count = comments.length === 0 ? "" : commentsWords(comments.length);
-
-  // Note that a check event's head is its words alone, capitalized, as its copy reads, because what failed or passed is no act of whoever posted the checks: "github-actions a check failed on" reads as no sentence.
-  const checked =
-    line.event === GITHUB_LINE_EVENT.CHECK_FAILED ||
-    line.event === GITHUB_LINE_EVENT.CHECKS_COMPLETED;
-
-  const by = checked ? null : sender;
-  const does = checked ? head.event : head.does;
-  const named = checked ? `${head.event} ${head.target}` : `${line.by} ${head.does} ${head.target}`;
+  const fold = githubLineFold(line, words);
+  // Note that a check event's head names no sender, since what failed or passed is no act of whoever posted the checks (`githubLineFold`).
+  const by = fold.by === undefined ? null : sender;
 
   return (
     <Plan
       data-github-line={line.event}
       // Note that a card that is its head alone holds its fold shut, since a press would open it onto nothing.
-      open={folds ? undefined : false}
+      open={fold.folds ? undefined : false}
       fill={DISCLOSURE_FILL.ACTIONS}
       actions={
         // Note that the head clips with room for the sender's wash, whose ring stands at its edge, so its corners are not cut square.
@@ -500,29 +422,29 @@ export function GitHubLineCard({
             <span className="inline-flex min-w-0 max-w-full overflow-clip">{by}</span>
           )}
           <span className="flex min-w-0 max-w-full flex-1 basis-auto items-baseline gap-tight-gap whitespace-nowrap">
-            <OneLine className="min-w-0 text-muted-foreground">{does}</OneLine>
+            <OneLine className="min-w-0 text-muted-foreground">{fold.does}</OneLine>
             <span className="inline-flex flex-none">
-              <ChipOrLink href={pullRequestPage(line)} words={head.target} doors={doors} />
+              <ChipOrLink href={fold.page} words={fold.target} doors={doors} />
             </span>
-            {count === "" ? null : (
+            {fold.count === undefined ? null : (
               <OneLine className="ms-auto min-w-0 shrink-[1000] grow-0 basis-auto ps-tight-gap text-muted-foreground">
-                {count}
+                {fold.count}
               </OneLine>
             )}
           </span>
         </span>
       }
     >
-      <PlanHeader folds={folds} aria-label={count === "" ? named : `${named}, ${count}`}>
+      <PlanHeader folds={fold.folds} aria-label={fold.heard}>
         <PlanIcon>
-          <GitHubLineMark line={line} words={words} />
+          <GitHubLineMark mark={fold.mark} />
         </PlanIcon>
       </PlanHeader>
-      {folds ? (
+      {fold.folds ? (
         <PlanContent layout={PLAN_BODY_LAYOUT.STACK}>
-          {said === "" ? null : <GitHubLineWords words={said} html={line.words_html} />}
-          <EventNotes notes={comments.map(commentNote)} />
-          {rows ? <GitHubCheckRows line={line} /> : null}
+          {fold.said === "" ? null : <GitHubLineWords words={fold.said} html={line.words_html} />}
+          <EventNotes notes={fold.comments.map(commentNote)} />
+          {fold.checks.length > 0 ? <GitHubCheckRows checks={fold.checks} /> : null}
         </PlanContent>
       ) : null}
     </Plan>

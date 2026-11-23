@@ -223,7 +223,6 @@ import {
   MESSAGE_AGENT_TOOL,
 } from "./agent-message.js";
 import { CODER_REFUSAL } from "./bounds.js";
-import { END_TURN_TOOL } from "./end-turn-tool.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
@@ -1865,10 +1864,6 @@ test("add_suggestion shows the model the recorded input", async () => {
 
 test("message_agent shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "message-agent-input", MESSAGE_AGENT_TOOL.inputSchema);
-});
-
-test("end_turn shows the model the recorded input", async () => {
-  await settleJsonSchemaGolden(GOLDEN_ROOT, "end-turn-input", END_TURN_TOOL.inputSchema);
 });
 
 test("send_to_user shows the model the recorded input", async () => {

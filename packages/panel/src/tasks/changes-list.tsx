@@ -1,4 +1,11 @@
 import type { AgentChangedFile } from "@repo/features/agent-wire";
+import {
+  filterFiles,
+  STATUS_LETTER,
+  STATUS_WORDS,
+  startsCollapsed,
+  treeOrder,
+} from "@repo/features/changed-files";
 import { fileName } from "@repo/features/code-ref-words";
 import {
   FILES_CHANGED_KEY,
@@ -39,13 +46,6 @@ import {
 import { coarsePointerNow } from "../coarse-pointer.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { LinesChanged } from "./agent-published.js";
-import {
-  filterFiles,
-  STATUS_LETTER,
-  STATUS_WORDS,
-  startsCollapsed,
-  treeOrder,
-} from "./changes-model.js";
 import type { DiffListDoor } from "./diff-list.js";
 import { PATH_COPY_WORDS } from "./file-menu.js";
 import { FileTypeIcon } from "./file-type-icon.js";

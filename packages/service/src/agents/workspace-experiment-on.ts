@@ -1,5 +1,5 @@
 /**
- * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions and Memory an agent or a member's call is offered, handed, and told, read beside the agent's starter's choice of Done and follow-ups and whether Computer use is on for the member whose Mac an agent reaches.
+ * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions and Memory an agent or a member's call is offered, handed, and told, read beside whether Computer use is on for the member whose Mac an agent reaches.
  *
  * Every gate of a workspace experiment asks here, for the workspace the work
  * stands in: an agent's own (`agent.organizationId`), a task's
@@ -21,7 +21,7 @@ import {
   workspaceExperimentsOf,
 } from "@repo/database/models/workspace-experiment-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
-import { EXPERIMENT, experimentOn, type WorkspaceExperiment } from "@repo/settings";
+import { EXPERIMENT, type WorkspaceExperiment } from "@repo/settings";
 import { Effect, Option } from "effect";
 import { logStoreFailure } from "../http/store-failure.js";
 
@@ -62,8 +62,7 @@ export function experimentOnSinceIn(
 /**
  * The experiments an agent's tools, their words, and its instructions are
  * built by: its workspace's Task descriptions, Memory, and Reply buttons,
- * Done and follow-ups as the account that started the agent chose it, on or
- * off, and Computer use, which is no workspace's but the account's whose Mac
+ * and Computer use, which is no workspace's but the account's whose Mac
  * the agent reaches (`machineOwnerOf`), since that member alone is who it acts
  * for. An agent is told nothing of one that is off, so every word that names
  * one is chosen by this.
@@ -71,10 +70,9 @@ export function experimentOnSinceIn(
 export interface ExperimentsOn {
   readonly descriptionsOn: boolean;
   readonly memoryOn: boolean;
-  readonly turnEndOn: boolean;
   readonly replyButtonsOn: boolean;
   readonly computerUseOn: boolean;
-  /** Whether the member its threads would land with keeps an Inbox (`@repo/settings`'s `inbox`): its task's assignee, else its starter (`inboxKeeperOf`), which offers it the threads it posts there; no experiment, but read and gated as Done and follow-ups is. */
+  /** Whether the member its threads would land with keeps an Inbox (`@repo/settings`'s `inbox`): its task's assignee, else its starter (`inboxKeeperOf`), which offers it the threads it posts there; no experiment, but read and gated as the experiments are. */
   readonly inboxOn: boolean;
 }
 
@@ -82,7 +80,6 @@ export interface ExperimentsOn {
 export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: true,
   memoryOn: true,
-  turnEndOn: true,
   replyButtonsOn: true,
   computerUseOn: true,
   inboxOn: true,
@@ -92,7 +89,6 @@ export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
 export const NO_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: false,
   memoryOn: false,
-  turnEndOn: false,
   replyButtonsOn: false,
   computerUseOn: false,
   inboxOn: false,
@@ -161,7 +157,6 @@ export function experimentsReadIn(
       return Option.some({
         descriptionsOn: on(EXPERIMENT.DESCRIPTIONS),
         memoryOn: on(EXPERIMENT.MEMORY),
-        turnEndOn: starter !== undefined && experimentOn(starter.experiments, EXPERIMENT.TURN_END),
         replyButtonsOn: on(EXPERIMENT.REPLY_BUTTONS),
         computerUseOn,
         // Note that the keeper's own choice stands, an assignee who stored none reading as on, as the setting's default is, rather than as the starter's.

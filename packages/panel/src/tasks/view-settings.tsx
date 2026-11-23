@@ -1,3 +1,4 @@
+import { CHANGES_WORDS } from "@repo/features/changed-files";
 import {
   APP_SETTING_DEFAULTS,
   type AppSettingField,
@@ -47,7 +48,6 @@ import { PickerRow } from "../settings/picker-row.js";
 import { useSettingRowWrite } from "../settings/row-write.js";
 import { SelectRow } from "../settings/select-row.js";
 import { SwitchRow } from "../settings/switch-row.js";
-import { CHANGES_WORDS } from "./changes-model.js";
 import { type FileViewSettings, useFileViewSettings } from "./file-view-settings.js";
 
 /**

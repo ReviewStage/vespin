@@ -79,7 +79,6 @@ const PLACEHOLDER_STANDING: AgentStanding = {
   experiments: {
     descriptionsOn: true,
     memoryOn: false,
-    turnEndOn: false,
     replyButtonsOn: false,
     computerUseOn: false,
     inboxOn: true,
@@ -260,7 +259,11 @@ function prompts(): AdminCatalogPrompt[] {
 
   return [
     ...instructions,
-    prompt("Manager", "managerInstructions", managerInstructions(PLACEHOLDER_MANAGER)),
+    prompt(
+      "Manager",
+      "managerInstructions",
+      managerInstructions({ name: PLACEHOLDER_MANAGER, repositories: [PLACEHOLDER_REPOSITORY] }),
+    ),
     prompt("Pull request chapters", "CHAPTERS_INSTRUCTIONS", CHAPTERS_INSTRUCTIONS),
     prompt("Chapters repair", "REPAIR_INSTRUCTIONS", REPAIR_INSTRUCTIONS),
   ];

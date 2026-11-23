@@ -9,18 +9,24 @@
  * a change a screen makes is answered as made (`fixture-inbox.ts`'s act
  * door) and handed back here as a move (`pullRequestMoveOf`), which the run
  * keeps and lays over the parts: merged, out of the merge queue, into it,
- * closed, reopened, or turned to a draft and back. Every person, repository,
- * and line here is invented.
+ * closed, reopened, or turned to a draft and back. The ready one's files
+ * changed are answered too (`fixtureChanges`), a long generated file among
+ * them, so a flow opens Files changed and times its longest diff. Every
+ * person, repository, and line here is invented.
  */
 
 import {
+  type AgentChangedFile,
   type AgentOverviewPullRequest,
+  CHANGED_FILE_STATUS,
   CHECK_STATE,
   CHECK_SUMMARY,
   type CheckState,
   CONVERSATION_ENTRY,
+  DIFF_SIDE,
   type GitHubPerson,
   MERGE_STATE,
+  PATCH_OMITTED,
   PULL_REQUEST_STATE,
   type PullRequestCheck,
   REVIEW_DECISION,
@@ -28,6 +34,7 @@ import {
 } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type {
+  RepositoryChangesAnswerView,
   RepositoryOverviewChecksAnswerView,
   RepositoryOverviewConversationAnswerView,
   RepositoryOverviewPullRequestAnswerView,
@@ -36,6 +43,7 @@ import {
   MERGE_METHOD,
   PULL_REQUEST_ACTION,
   type PullRequestActionRequest,
+  REACTION,
 } from "@repo/features/pull-request-write-wire";
 import type { AppRepositoryPullRequestHeld, AppStateSnapshot } from "./app-state.js";
 import { FIXTURE_IDS } from "./fixture-stage.js";
@@ -104,6 +112,23 @@ export function pullRequestMoveOf(request: PullRequestActionRequest): PullReques
   }
 }
 
+/** The review threads a fixture run resolved, true, or opened again, false, by GitHub's id for each. */
+export type ThreadResolves = ReadonlyMap<string, boolean>;
+
+/** The thread a change resolves or opens again, and which; none for a change to anything else. */
+export function threadResolveOf(
+  request: PullRequestActionRequest,
+): { readonly threadId: string; readonly resolved: boolean } | undefined {
+  switch (request.action) {
+    case PULL_REQUEST_ACTION.RESOLVE_THREAD:
+      return { threadId: request.threadId, resolved: true };
+    case PULL_REQUEST_ACTION.UNRESOLVE_THREAD:
+      return { threadId: request.threadId, resolved: false };
+    default:
+      return undefined;
+  }
+}
+
 /** One check, begun `ago` before the fixture landed and run for `ran`; one still running has run for none. */
 function check(name: string, state: CheckState, ago: number, ran: number): PullRequestCheck {
   const startedAt = LANDED - ago;
@@ -158,6 +183,36 @@ const READY_DESCRIPTION = {
     "<p>Adds <strong>Invite by email</strong> to Settings › Members, which sends the invitation through Resend.</p>",
     "<ul><li>Checks the address before it sends</li><li>Shows the invitation as pending until it's accepted</li></ul>",
   ].join("\n"),
+} as const;
+
+/** The queued pull request's description, long enough that a phone folds it behind Show more. */
+const QUEUED_DESCRIPTION = {
+  body: [
+    "Sends the invitation from the workspace's own address rather than the app's, so a teammate sees who invited them before they open it.",
+    "",
+    "## Why",
+    "",
+    "Invitations from a no-reply address were landing in spam for two of the three pilot workspaces, and nobody could tell whose invite it was.",
+    "",
+    "## What changes",
+    "",
+    "- The sender is the workspace's verified domain, falling back to the app's address",
+    "- The subject names the workspace and the member who invited",
+    "- A reply goes to the inviting member",
+    "- The plain-text part matches the HTML one",
+    "",
+    "## How it was checked",
+    "",
+    "- Sent to Gmail, Outlook and Fastmail inboxes from a verified and an unverified domain",
+    "- Ran the invite flow end to end on staging",
+    "- Checked the fallback when the domain's verification lapses",
+    "",
+    "## Follow-ups",
+    "",
+    "- Let an owner choose the sender name",
+    "- Show the sender in Settings › Members before it sends",
+  ].join("\n"),
+  html: "<p>Sends the invitation from the workspace's own address rather than the app's, so a teammate sees who invited them before they open it.</p><h2>Why</h2><p>Invitations from a no-reply address were landing in spam for two of the three pilot workspaces, and nobody could tell whose invite it was.</p><h2>What changes</h2><ul><li>The sender is the workspace's verified domain, falling back to the app's address</li><li>The subject names the workspace and the member who invited</li><li>A reply goes to the inviting member</li><li>The plain-text part matches the HTML one</li></ul><h2>How it was checked</h2><ul><li>Sent to Gmail, Outlook and Fastmail inboxes from a verified and an unverified domain</li><li>Ran the invite flow end to end on staging</li><li>Checked the fallback when the domain's verification lapses</li></ul><h2>Follow-ups</h2><ul><li>Let an owner choose the sender name</li><li>Show the sender in Settings › Members before it sends</li></ul>",
 } as const;
 
 const READY = pullRequestOf(
@@ -225,6 +280,7 @@ const QUEUED = pullRequestOf(
       checks: CHECK_SUMMARY.PASSING,
     },
   },
+  QUEUED_DESCRIPTION,
 );
 
 /** The checks each ran, failed first and then running, as the service lists them. */
@@ -276,6 +332,38 @@ function entry(
     : { kind: CONVERSATION_ENTRY.REVIEW, by, state, html: `<p>${body}</p>`, body, at, url };
 }
 
+/** The thread the failing pull request's review started on its expiry check, answered by its author. */
+const EXPIRY_THREAD = {
+  path: "src/invites/expiry.ts",
+  line: 20,
+  startLine: 18,
+  originalLine: 20,
+  originalStartLine: 18,
+  side: DIFF_SIDE.RIGHT,
+  startSide: DIFF_SIDE.RIGHT,
+  diffHunk: "@@ -15,3 +15,6 @@ export function expired(invite: Invite): boolean {",
+  resolved: false,
+  outdated: false,
+  id: "PRRT_expiry",
+  comments: [
+    {
+      by: GRACE,
+      html: "<p>This reads <code>Date.now()</code> twice.</p>",
+      body: "This reads `Date.now()` twice.",
+      at: LANDED - 15 * MINUTE,
+      url: `${REPOSITORY_URL}/pull/127#discussion_r18`,
+    },
+    {
+      by: ADA,
+      html: "<p>Good catch, it takes the request's time now.</p>",
+      body: "Good catch, it takes the request's time now.",
+      at: LANDED - 5 * MINUTE,
+      url: `${REPOSITORY_URL}/pull/127#discussion_r19`,
+    },
+  ],
+  more: 0,
+} as const;
+
 /** Each one's conversation: where its reviewers stand, and its comments and reviews, oldest first. */
 const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerView> = new Map([
   [
@@ -313,13 +401,23 @@ const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerVie
       pullRequest: {
         reviewers: [{ by: GRACE, state: REVIEW_STATE.CHANGES_REQUESTED }],
         conversation: [
-          entry(
-            127,
-            GRACE,
-            "An invite made just under seven days ago expires mid-accept.",
-            15 * MINUTE,
-            REVIEW_STATE.CHANGES_REQUESTED,
-          ),
+          {
+            ...entry(
+              127,
+              GRACE,
+              [
+                "An invite made just under seven days ago expires mid-accept: the check reads the clock once when the page loads and again when the invite is taken.",
+                "",
+                "- Read the clock once per request",
+                "- Treat the seventh day as still open",
+              ].join("\n"),
+              15 * MINUTE,
+              REVIEW_STATE.CHANGES_REQUESTED,
+            ),
+            threads: [EXPIRY_THREAD],
+            subject: "PRR_expiry",
+            reactions: [{ content: REACTION.THUMBS_UP, count: 1 }],
+          },
         ],
         earlier: 0,
       },
@@ -378,8 +476,47 @@ function moved(
   }
 }
 
-/** One slice's reads as last laid, by the read the host held, with the moves laid over it. */
-type LaidReads = WeakMap<object, { readonly moves: PullRequestMoves; readonly staged: object }>;
+/** No thread resolved or opened again yet. */
+const NO_RESOLVES: ThreadResolves = new Map();
+
+/** Each conversation with its threads standing as `resolves` left them, those it names none of as staged. */
+function resolvedConversations(
+  resolves: ThreadResolves,
+): ReadonlyMap<number, RepositoryOverviewConversationAnswerView> {
+  if (resolves.size === 0) return CONVERSATIONS;
+
+  return new Map(
+    [...CONVERSATIONS].map(([number, answer]) => [
+      number,
+      "failure" in answer || answer.pullRequest === null
+        ? answer
+        : {
+            pullRequest: {
+              ...answer.pullRequest,
+              conversation: answer.pullRequest.conversation.map((entry) =>
+                entry.threads === undefined
+                  ? entry
+                  : {
+                      ...entry,
+                      threads: entry.threads.map((thread) => ({
+                        ...thread,
+                        resolved:
+                          (thread.id === undefined ? undefined : resolves.get(thread.id)) ??
+                          thread.resolved,
+                      })),
+                    },
+              ),
+            },
+          },
+    ]),
+  );
+}
+
+/** One slice's reads as last laid, by the read the host held, with the moves and the threads' resolves laid over it. */
+type LaidReads = WeakMap<
+  object,
+  { readonly moves: PullRequestMoves; readonly resolves: ThreadResolves; readonly staged: object }
+>;
 
 /**
  * Each slice's reads as last laid, so laying the same again hands the store
@@ -398,11 +535,12 @@ function laid<Part>(
   cache: LaidReads,
   held: AppRepositoryPullRequestHeld<Part>,
   moves: PullRequestMoves,
+  resolves: ThreadResolves,
   parts: () => ReadonlyMap<number, Part>,
 ): AppRepositoryPullRequestHeld<Part> {
   const kept = cache.get(held);
 
-  if (kept?.moves === moves) {
+  if (kept?.moves === moves && kept.resolves === resolves) {
     // SAFETY: a read's entry is only ever written below, from that same read.
     return kept.staged as AppRepositoryPullRequestHeld<Part>;
   }
@@ -421,7 +559,7 @@ function laid<Part>(
     },
   };
 
-  cache.set(held, { moves, staged });
+  cache.set(held, { moves, resolves, staged });
 
   return staged;
 }
@@ -434,6 +572,7 @@ function laid<Part>(
 export function pullRequestPartsAppState(
   state: AppStateSnapshot,
   moves: PullRequestMoves,
+  resolves: ThreadResolves = NO_RESOLVES,
 ): AppStateSnapshot {
   const pullRequests = () =>
     new Map<number, RepositoryOverviewPullRequestAnswerView>(
@@ -454,19 +593,145 @@ export function pullRequestPartsAppState(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST],
       moves,
+      resolves,
       pullRequests,
     ),
     [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: laid(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS],
       moves,
+      resolves,
       checks,
     ),
     [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: laid(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION],
       moves,
-      () => CONVERSATIONS,
+      resolves,
+      () => resolvedConversations(resolves),
     ),
+  };
+}
+
+/** How many lines the ready pull request's generated file adds, so a flow times a diff that long. */
+const GENERATED_LINES = 5_000;
+
+/** A file the ready pull request changes, a one-line change unless `fields` say otherwise. */
+function changedFile(path: string, fields: Partial<AgentChangedFile>): AgentChangedFile {
+  return {
+    path,
+    previousPath: null,
+    status: CHANGED_FILE_STATUS.MODIFIED,
+    additions: 1,
+    deletions: 1,
+    patch: "@@ -1 +1 @@\n-old\n+new",
+    omitted: null,
+    ...fields,
+  };
+}
+
+/** A patch adding `lines`, from its first line. */
+function addedPatch(lines: readonly string[]): string {
+  return [`@@ -0,0 +1,${lines.length} @@`, ...lines.map((line) => `+${line}`)].join("\n");
+}
+
+/** The generated table of invite messages the ready pull request adds, one line per key. */
+const GENERATED = [
+  "// Generated by scripts/invite-messages.ts. Do not edit.",
+  "export const INVITE_MESSAGES = {",
+  ...Array.from(
+    { length: GENERATED_LINES - 3 },
+    (_, at) => `  invite${at}: "Invitation ${at} is waiting for you",`,
+  ),
+  "} as const;",
+];
+
+/** The files the ready pull request changes, as GitHub lists them: a change in place, files added, one deleted, one moved, a picture GitHub sends no patch for, a lockfile, and a long generated table. */
+const READY_FILES: readonly AgentChangedFile[] = [
+  changedFile("src/invites/resend.ts", {
+    additions: 9,
+    deletions: 2,
+    patch: [
+      "@@ -12,8 +12,15 @@ const WEEK_DAYS = 7;",
+      " ",
+      " export async function resend(invite: Invite): Promise<void> {",
+      '-  if (invite.expired) throw new Error("expired");',
+      "-  await mailer.send(invite.to, invite.body);",
+      "+  if (invite.expired) {",
+      "+    // An expired invitation is sent again with a fresh expiry.",
+      "+    const renewed = { ...invite, expiresAt: Date.now() + WEEK };",
+      "+",
+      "+    await store.save(renewed);",
+      "+    return mailer.send(renewed.to, renewed.body);",
+      "+  }",
+      "+",
+      "+  await mailer.send(invite.to, invite.body);",
+      " }",
+    ].join("\n"),
+  }),
+  changedFile("src/invites/expiry.ts", {
+    status: CHANGED_FILE_STATUS.ADDED,
+    additions: 4,
+    deletions: 0,
+    patch: addedPatch([
+      "export const WEEK = 7 * 24 * 60 * 60 * 1000;",
+      "",
+      "/** Whether an invitation has passed its expiry. */",
+      "export const expired = (at: number) => at < Date.now();",
+    ]),
+  }),
+  changedFile("src/invites/legacy-mailer.ts", {
+    status: CHANGED_FILE_STATUS.DELETED,
+    additions: 0,
+    deletions: 2,
+    patch: "@@ -1,2 +0,0 @@\n-export const legacy = true;\n-export default legacy;",
+  }),
+  changedFile("docs/invitations.md", {
+    status: CHANGED_FILE_STATUS.RENAMED,
+    previousPath: "docs/invites.md",
+    additions: 1,
+    deletions: 1,
+    patch: "@@ -1 +1 @@\n-# Invites\n+# Invitations",
+  }),
+  changedFile("assets/invite-banner.png", {
+    status: CHANGED_FILE_STATUS.ADDED,
+    additions: 0,
+    deletions: 0,
+    patch: null,
+    omitted: PATCH_OMITTED.BINARY,
+  }),
+  changedFile("test/invites/resend.test.ts", {
+    status: CHANGED_FILE_STATUS.ADDED,
+    additions: 3,
+    deletions: 0,
+    patch: addedPatch([
+      'it("sends an expired invitation again", async () => {',
+      "  await resend(expiredInvite);",
+      "});",
+    ]),
+  }),
+  changedFile("pnpm-lock.yaml", { additions: 2, deletions: 2 }),
+  changedFile("src/generated/invite-messages.ts", {
+    status: CHANGED_FILE_STATUS.ADDED,
+    additions: GENERATED.length,
+    deletions: 0,
+    patch: addedPatch(GENERATED),
+  }),
+];
+
+/**
+ * The files a pull request of the fixture changes, as the service answers
+ * a read of them: the ready one's, and none for the others, which read as
+ * changing nothing.
+ */
+export function fixtureChanges(number: number): RepositoryChangesAnswerView {
+  if (number !== FIXTURE_PULL_REQUEST.READY) return { pullRequest: null };
+
+  return {
+    pullRequest: {
+      url: `${REPOSITORY_URL}/pull/${number}`,
+      files: READY_FILES,
+      truncated: false,
+    },
   };
 }

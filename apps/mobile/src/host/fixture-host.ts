@@ -72,6 +72,8 @@ import {
   queuedAppState,
   type SavedMemoryWords,
   savedMemoriesAppState,
+  type ThreadResolves,
+  threadResolveOf,
 } from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { SETUP_AUDIENCE, setupPlaceStored } from "@repo/settings";
@@ -142,6 +144,12 @@ const OLDER_ASKS = new WeakMap<object, number>();
 
 /** No pull request moved yet. */
 const NO_MOVES: ReadonlyMap<number, PullRequestMove> = new Map();
+
+/** The review threads each run resolved or opened again, by the store the run stages, each map replaced whole as a change lands. */
+const RESOLVES = new WeakMap<object, ThreadResolves>();
+
+/** No thread resolved or opened again yet. */
+const NO_RESOLVES: ThreadResolves = new Map();
 
 /** The reminders each run set on the fixture's items, by the store the run stages, each map replaced whole as one is set. */
 const REMINDERS = new WeakMap<object, InboxReminders>();
@@ -394,7 +402,11 @@ export function stageFixture(
 
   const parts = queuedAppState(
     olderPageAppState(
-      pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
+      pullRequestPartsAppState(
+        inbox,
+        MOVES.get(state) ?? NO_MOVES,
+        RESOLVES.get(state) ?? NO_RESOLVES,
+      ),
       OLDER_ASKS.get(state) ?? 0,
     ),
     QUEUES.get(state) ?? NO_QUEUES,
@@ -600,7 +612,7 @@ function keepQueue(
   stageFixture(state);
 }
 
-/** Keeps how a change the fixture took moved its pull request, and lays it over the document at once; nothing for any other act. */
+/** Keeps how a change the fixture took moved its pull request, or a review thread it resolved or opened again, and lays it over the document at once; nothing for any other act. */
 function keepMove(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
@@ -610,10 +622,20 @@ function keepMove(
   // SAFETY: the payload is the kind's, which the guard above names.
   const { number, request } = payload as PortActPayload<typeof ACT_KIND.PULL_REQUESTS_ACTION>;
   const move = pullRequestMoveOf(request);
+  const resolve = threadResolveOf(request);
 
-  if (move === undefined) return;
-  MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
-  stageFixture(state);
+  if (move !== undefined) {
+    MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
+  }
+
+  if (resolve !== undefined) {
+    RESOLVES.set(
+      state,
+      new Map(RESOLVES.get(state) ?? NO_RESOLVES).set(resolve.threadId, resolve.resolved),
+    );
+  }
+
+  if (move !== undefined || resolve !== undefined) stageFixture(state);
 }
 
 /** What a read of the invitations agent's older page answers, counted, its page laid over the document at once where it lands; none for any other act or transcript. */

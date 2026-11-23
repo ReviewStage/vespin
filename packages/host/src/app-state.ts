@@ -59,7 +59,7 @@ import type {
   RepositoryReviewOptionsAnswerView,
 } from "@repo/features/pull-request-view";
 import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
-import type { DescriptionRevisionsAnswer } from "@repo/features/task-wire";
+import type { DescriptionRevisionsAnswer, TaskSummary } from "@repo/features/task-wire";
 import {
   COMMENT_SUBJECT,
   type HeldTask,
@@ -390,6 +390,19 @@ export type AppInboxItems = {
   readonly [INBOX_SCOPE_KIND.TASK]: Readonly<Record<string, readonly InboxItem[]>>;
   readonly agents?: Readonly<Record<string, readonly InboxItem[]>>;
 };
+
+/**
+ * The account's Inbox as the host's read of it stands, and, where its rows
+ * were first drawn from the local database, the tasks they stand on as it
+ * kept them beside the rows (`keptHolders`), the latest changed first: what
+ * a window groups the rows under while the task list is still read or drawn,
+ * so a launch draws its kept Inbox before the whole list. They stand for the
+ * session, since the list's first draw may come after the service's first
+ * answer, and a window reads them only until the list is drawn.
+ */
+export interface AppInboxRead extends AppHostRead<AppInboxItems> {
+  keptHolders?: readonly TaskSummary[];
+}
 
 /** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
 export type AppHolderInbox = AppHostRead<readonly InboxItem[]>;
@@ -885,7 +898,7 @@ export interface AppState {
   /** The account's preferences row, by the account, held for the signed-in session: the default agent, the chapters model, and Slack notifications every surface draws. */
   [LIVE_READ.ACCOUNT_PREFERENCES]: AppAccountPreferences;
   /** Every inbox item the account reaches, held for the signed-in session: what the window's Inbox, its search, and a person's page list. */
-  [LIVE_READ.INBOX_ITEMS]: AppHostRead<AppInboxItems>;
+  [LIVE_READ.INBOX_ITEMS]: AppInboxRead;
   /** Each plan's inbox the windows chose, held while a window holds it and a while after: what a chosen item's pane and a task's Inbox tab read past the feed. */
   [LIVE_READ.HOLDER_INBOX]: AppHolderInboxes;
   /** The skills the account sees in each workspace the windows chose, by the workspace, held while Settings › Skills shows them and a while after: what that page draws. */

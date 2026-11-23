@@ -135,6 +135,8 @@ export const FAILURE_SURFACE = {
   MACHINE_REMOVE: "machine.remove",
   MACHINES_READ: "machines.read",
   MANAGER_CREATE: "manager.create",
+  /** A face picked from a Manager's menu the service did not take: the Manager wears its face as before. */
+  MANAGER_FACE: "manager.face",
   MANAGER_SETTINGS: "manager.settings",
   INBOX_CLOSE: "inbox.close",
   INBOX_CODE_READ: "inbox_code.read",

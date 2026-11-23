@@ -138,7 +138,7 @@ export const CALL_KIND = {
   SCHEDULE_WAKEUP: "schedule-wakeup",
   /** The wakeup a coding agent booked canceled (`schedule_wakeup` with `stop`). */
   CANCEL_WAKEUP: "cancel-wakeup",
-  /** A turn a coding agent ended (`end_turn`), with the summary its developer reads as the reply and the follow-ups it offers. */
+  /** A turn a coding agent ended (`end_turn`, removed with Done and follow-ups), with the summary its developer read as the reply. */
   END_TURN: "end-turn",
   /** A Manager's message to its chat (`send_to_user`), its row saying the words. */
   SEND_TO_USER: "send-to-user",

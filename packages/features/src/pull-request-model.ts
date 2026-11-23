@@ -16,7 +16,9 @@ import {
   type PullRequestState,
   REVIEW_DECISION,
   REVIEW_STATE,
+  type ReactionGroup,
   type ReviewState,
+  type ReviewThread,
 } from "./agent-wire.js";
 import { saidWords } from "./integration-health.js";
 import { MERGE_QUEUE_ENTRY_STATE, type MergeQueueEntryState } from "./merge-queue-wire.js";
@@ -26,6 +28,8 @@ import {
   PULL_REQUEST_ACTION,
   PULL_REQUEST_WRITE_OUTCOME,
   type PullRequestAction,
+  REACTION,
+  type Reaction,
 } from "./pull-request-write-wire.js";
 
 /**
@@ -409,6 +413,85 @@ export function bypassSentence(pullRequest: AgentOverviewPullRequest, method: Me
   return `${mergeSentence(pullRequest, MERGE_ACTION.BYPASS)}. This merges it into ${base} now by ${METHOD_NOUNS[method]}, as you on GitHub, bypassing the rules ${base} requires.`;
 }
 
+/* ----- The description ----- */
+
+/** How long a pull request's description runs before a phone folds it behind Show more: its lines with words on them, or its characters. */
+const DESCRIPTION_FOLD = { LINES: 12, CHARACTERS: 900 } as const;
+
+/** Whether a pull request's description runs long enough that a phone folds it, by its Markdown's lines with words and its length, so nothing is measured before it is drawn. */
+export function descriptionFolds(markdown: string): boolean {
+  const lines = markdown.split("\n").filter((line) => line.trim() !== "").length;
+
+  return lines > DESCRIPTION_FOLD.LINES || markdown.length > DESCRIPTION_FOLD.CHARACTERS;
+}
+
+/* ----- The review threads ----- */
+
+/** The states a review thread stands in, in the panel's words: resolved, and outdated by a later push. */
+export const THREAD_STATE_WORDS = {
+  RESOLVED: "Resolved",
+  OUTDATED: "Outdated",
+} as const;
+
+/** What a member does on a review thread, in the panel's words: reply to it, and resolve it or open it again, each with its words while it is out. */
+export const THREAD_ACT_WORDS = {
+  REPLY: "Reply",
+  REPLYING: "Replying",
+  RESOLVE: "Resolve",
+  RESOLVING: "Resolving",
+  REOPEN: "Reopen",
+  REOPENING: "Reopening",
+} as const;
+
+/** A review thread's lines as its head names them, "L12" or "L12–14", where it stands now, or where it was made once a later push outdated it; none for a thread on the whole file. */
+export function threadLineSpan(
+  thread: Pick<ReviewThread, "line" | "startLine" | "originalLine" | "originalStartLine">,
+): string | undefined {
+  const line = thread.line ?? thread.originalLine;
+  const start = thread.line === null ? thread.originalStartLine : thread.startLine;
+
+  if (line === null) return undefined;
+
+  return start === null || start === line ? `L${line}` : `L${start}–${line}`;
+}
+
+/** The states a review thread stands in, in their words: Resolved, then Outdated. */
+export function threadStateWords(
+  thread: Pick<ReviewThread, "resolved" | "outdated">,
+): readonly string[] {
+  return [
+    ...(thread.resolved ? [THREAD_STATE_WORDS.RESOLVED] : []),
+    ...(thread.outdated ? [THREAD_STATE_WORDS.OUTDATED] : []),
+  ];
+}
+
+/* ----- The reactions ----- */
+
+/** Each reaction's emoji, its name as GitHub says it, and its name on Add reaction's menu. */
+export const REACTION_FACES = {
+  [REACTION.THUMBS_UP]: { emoji: "👍", name: "thumbs up", item: "Thumbs up" },
+  [REACTION.THUMBS_DOWN]: { emoji: "👎", name: "thumbs down", item: "Thumbs down" },
+  [REACTION.LAUGH]: { emoji: "😄", name: "laugh", item: "Laugh" },
+  [REACTION.HOORAY]: { emoji: "🎉", name: "hooray", item: "Hooray" },
+  [REACTION.CONFUSED]: { emoji: "😕", name: "confused", item: "Confused" },
+  [REACTION.HEART]: { emoji: "❤️", name: "heart", item: "Heart" },
+  [REACTION.ROCKET]: { emoji: "🚀", name: "rocket", item: "Rocket" },
+  [REACTION.EYES]: { emoji: "👀", name: "eyes", item: "Eyes" },
+} as const satisfies Record<
+  Reaction,
+  { readonly emoji: string; readonly name: string; readonly item: string }
+>;
+
+/** The menu's name for giving a reaction, as GitHub's own smiley names it. */
+export const ADD_REACTION_WORDS = "Add reaction";
+
+/** The reactions a comment wears as one line, each emoji by how many gave it, in GitHub's order: "👍 2  ❤️ 1"; none where it wears none. */
+export function reactionsLine(reactions: readonly ReactionGroup[]): string | undefined {
+  if (reactions.length === 0) return undefined;
+
+  return reactions.map((each) => `${REACTION_FACES[each.content].emoji} ${each.count}`).join("  ");
+}
+
 /* ----- The checks ----- */
 
 /** Where a check stands, in the words its glyph says to a reader who cannot see it and the count says. */
@@ -434,6 +517,25 @@ export function checksSummaryOf(checks: readonly PullRequestCheck[]): CheckSumma
   if (checks.some((check) => check.state === CHECK_STATE.PENDING)) return CHECK_SUMMARY.PENDING;
 
   return checks.length === 0 ? CHECK_SUMMARY.NONE : CHECK_SUMMARY.PASSING;
+}
+
+/** The order a checks line names where checks stand: what needs a look first, then what passed, then what ran nothing. */
+const CHECK_LINE_ORDER = [
+  CHECK_STATE.FAILED,
+  CHECK_STATE.PENDING,
+  CHECK_STATE.PASSED,
+  CHECK_STATE.SKIPPED,
+] as const satisfies readonly CheckState[];
+
+/** The checks as one line, how many stand in each state, a failure first, such as "1 failed · 1 running · 3 passed"; none where there are no checks. */
+export function checksLineOf(checks: readonly PullRequestCheck[]): string | undefined {
+  const parts = CHECK_LINE_ORDER.flatMap((state) => {
+    const count = checks.filter((check) => check.state === state).length;
+
+    return count === 0 ? [] : [`${count} ${CHECK_WORDS[state]}`];
+  });
+
+  return parts.length === 0 ? undefined : parts.join(" · ");
 }
 
 /** How many checks the checks' count says: those that failed beside a failure, those still running beside a wait, and every one where all passed. */
@@ -490,6 +592,19 @@ export function conversationCount(conversation: AgentOverviewConversation): numb
   );
 
   return conversation.earlier + conversation.conversation.length + threads;
+}
+
+/** How many review threads of a pull request's conversation still stand unresolved, among those its read carries. */
+export function unresolvedThreadCount(conversation: AgentOverviewConversation): number {
+  return conversation.conversation.reduce(
+    (sum, entry) => sum + (entry.threads ?? []).filter((thread) => !thread.resolved).length,
+    0,
+  );
+}
+
+/** What a pull request's merge sentence says of its review threads still unresolved, which a branch's rules may hold the merge for: "2 unresolved conversations". */
+export function unresolvedWords(count: number): string {
+  return `${count} unresolved ${count === 1 ? "conversation" : "conversations"}`;
 }
 
 /* ----- A change's answer ----- */
@@ -552,4 +667,7 @@ export const PULL_REQUEST_READ_WORDS = {
   NO_CONVERSATION: "Nobody has commented yet.",
   /** How many comments a thread or a conversation holds. */
   commentCount: (count: number) => `${count} ${count === 1 ? "comment" : "comments"}`,
+  /** What the conversation says of the earlier entries a read left on GitHub, by how many. */
+  earlierCount: (count: number) =>
+    `${count} earlier ${count === 1 ? "comment" : "comments"} on GitHub`,
 } as const;

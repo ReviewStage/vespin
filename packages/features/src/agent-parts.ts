@@ -869,22 +869,16 @@ export function arrivedParts(
   return placed;
 }
 
-/** How a turn ended where it ended with `end_turn`: the summary its developer reads as its reply, and the follow-ups it offered, at most three. */
-export interface TurnEnding {
-  readonly summary: string;
-  readonly followUps: readonly string[];
-}
-
 /**
- * A turn's last `end_turn`, where that call was taken: its summary, which is
- * what its developer reads as the turn's reply, and its follow-ups; none where
- * the turn ended no other way than in its own words, or the call was refused
- * or has not answered.
+ * The summary of a turn's last `end_turn`, where that call was taken: what
+ * its developer read as the turn's reply while Done and follow-ups stood,
+ * which a transcript written then still holds; none where the turn ended
+ * in its own words, or the call was refused or has not answered.
  */
-export function endTurnOf(parts: readonly AgentPart[]): TurnEnding | undefined {
+export function endTurnSummary(parts: readonly AgentPart[]): string | undefined {
   // Note that the last call stands for the turn, so a later refused one hides an earlier one taken.
   const ended = parts.findLast(
-    (part) => part.kind === AGENT_PART.TOOL && part.tool === AGENT_TOOL.END_TURN,
+    (part) => part.kind === AGENT_PART.TOOL && part.tool === RETIRED_TOOL.END_TURN,
   );
 
   if (
@@ -898,31 +892,9 @@ export function endTurnOf(parts: readonly AgentPart[]): TurnEnding | undefined {
     return undefined;
   }
 
-  const { summary, followUps } = ended.input;
+  const { summary } = ended.input;
 
-  if (!isWireString(summary) || summary.trim() === "") return undefined;
-
-  const offered = Array.isArray(followUps)
-    ? followUps.flatMap((each) => (isWireString(each) && each.trim() !== "" ? [each.trim()] : []))
-    : [];
-
-  // Note that the tool takes a follow-up twice, and one offered twice is one to tick.
-  return { summary: summary.trim(), followUps: [...new Set(offered)] };
-}
-
-/** The summary of a turn's last `end_turn` that was taken (`endTurnOf`), its reply. */
-export function endTurnSummary(parts: readonly AgentPart[]): string | undefined {
-  return endTurnOf(parts)?.summary;
-}
-
-/** What a message carries of the follow-ups ticked to send, under the developer's own words. */
-export const FOLLOW_UPS_HEAD = "Follow-ups:";
-
-/** The follow-ups ticked, as the lines a message sends them in; none where none is ticked. */
-export function followUpsWords(chosen: readonly string[]): string | undefined {
-  return chosen.length === 0
-    ? undefined
-    : [FOLLOW_UPS_HEAD, ...chosen.map((each) => `- ${each}`)].join("\n");
+  return isWireString(summary) && summary.trim() !== "" ? summary.trim() : undefined;
 }
 
 /**
@@ -943,7 +915,7 @@ export function agentRows(
   { workers = NO_WORKERS, arrived = [], delegated = false }: AgentTurnPlace = {},
 ): readonly TurnRow<AgentPart>[] {
   const drawn = drawnParts(message, arrived);
-  // Note that a turn that ended with `end_turn` reads its summary as its reply, and the words it wrote on the way as notes, which fold away with its work.
+  // Note that a turn that ended with the retired `end_turn` reads its summary as its reply, and the words it wrote on the way as notes, which fold away with its work.
   const summary = moving ? undefined : endTurnSummary(drawn);
 
   const reply: AgentPart | undefined =

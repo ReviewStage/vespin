@@ -1,3 +1,4 @@
+import { CHANGES_WORDS } from "@repo/features/changed-files";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   Button,
@@ -49,7 +50,6 @@ import {
   sameNotes,
 } from "../diff-view/contract.js";
 import { failureShown } from "../failure-report.js";
-import { CHANGES_WORDS } from "./changes-model.js";
 
 /**
  * diff-list.tsx -- a pull request's files as Files changed draws them: one list, every file under a header of its own, drawn by Pierre's list (`../diff-view/`'s `mountList`), only the files near the view drawn at all.
