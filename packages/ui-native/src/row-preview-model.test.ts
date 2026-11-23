@@ -54,6 +54,7 @@ describe("latestStep", () => {
         callId: "call",
         callKind: CALL_KIND.READ_FILE,
         provider: undefined,
+        appIcon: undefined,
         line: { verb: "Read", subject: "list-row.tsx", code: true },
         chip: undefined,
         thread: undefined,

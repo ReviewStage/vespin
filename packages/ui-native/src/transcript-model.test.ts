@@ -100,6 +100,43 @@ describe("transcriptItems", () => {
     expect(shownMediaIds(opened)).toEqual(["picture-1"]);
   });
 
+  it("leads a computer call's row with its app's icon, lent from an earlier call on the app where it kept none, and reads it", () => {
+    const icon = { ...PICTURE, id: "mail-icon", width: 64, height: 64 };
+
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            {
+              type: "tool-computer",
+              toolCallId: "read",
+              state: "output-available",
+              input: { action: "get_app_state", app: "Mail" },
+              output: { status: "ran", app: { name: "Mail", icon: { picture: icon } } },
+            },
+            {
+              type: "tool-computer",
+              toolCallId: "click",
+              state: "input-available",
+              input: { action: "click", app: "Mail", target: { element_index: 2 } },
+            },
+          ],
+        },
+      ],
+      { writing: true, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    const calls = items.filter((item) => item.kind === TRANSCRIPT_ITEM.CALL);
+
+    expect(calls.map((call) => [call.callId, call.appIcon])).toEqual([
+      ["read", "mail-icon"],
+      ["click", "mail-icon"],
+    ]);
+    expect(shownMediaIds(items)).toContain("mail-icon");
+  });
+
   it("draws the pictures a line carried over its words, one kept apart read by its id, and its other files as chips under them", () => {
     const shot = "data:image/png;base64,iVBORw0KGgo=";
 

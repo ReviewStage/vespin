@@ -13,6 +13,7 @@ import {
   type AccessibilityActionEvent,
   AccessibilityInfo,
   ActivityIndicator,
+  Image as AppIcon,
   type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -351,12 +352,27 @@ function BodyBlock({
 function CallGlyph({
   callKind,
   provider,
+  icon,
 }: {
   readonly callKind: CallKind;
   readonly provider: IntegrationProvider | undefined;
+  /** The address its app's icon is drawn from, once read; none while it is on its way, where it could not be read, or where its app kept none, when its kind's glyph stands in. */
+  readonly icon: string | undefined;
 }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
+
+  // Note that an app's icon is its own picture, drawn at the glyph's size in its place, as the panel's row wears it; its row's words name the app, so it is hidden from VoiceOver.
+  if (icon !== undefined) {
+    return (
+      <AppIcon
+        source={{ uri: icon }}
+        style={{ width: size, height: size }}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      />
+    );
+  }
 
   return provider === undefined ? (
     <SymbolView
@@ -376,9 +392,10 @@ function CallGlyph({
 const OPEN_THREAD_ACTION = { name: "openThread", label: "Open thread" } as const;
 
 /**
- * A call's row: its kind's glyph, its verb in the full ink, what it was
- * done to in the muted one, where it ran, and where it stands; pressed, it
- * opens on its body. A call about one Inbox thread, such as a post, names
+ * A call's row: its kind's glyph, or its app's icon for a call on an app
+ * on the reader's Mac, its verb in the full ink, what it was done to in the
+ * muted one, where it ran, and where it stands; pressed, it opens on its
+ * body. A call about one Inbox thread, such as a post, names
  * it by its chip, whose press alone opens the thread, as the panel's chip
  * does, and VoiceOver offers the same as one of the row's actions.
  */
@@ -439,7 +456,15 @@ function CallRow({
         hitSlop={LINE_REACH}
         style={styles.callLine}
       >
-        <CallGlyph callKind={item.callKind} provider={item.provider} />
+        <CallGlyph
+          callKind={item.callKind}
+          provider={item.provider}
+          icon={
+            item.appIcon === undefined
+              ? undefined
+              : (drawing.mediaSource(item.appIcon) ?? undefined)
+          }
+        />
         <View style={[styles.callWords, large ? styles.wrapped : null]}>
           <Text
             numberOfLines={lines}
