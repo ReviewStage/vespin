@@ -56,6 +56,7 @@ import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js
 import type { CaretAtWord } from "./caret-at-word.js";
 import {
   BAR_EDGE,
+  BAR_FOOT_GAP,
   BAR_GLASS,
   BAR_MARGIN,
   BAR_ROW_SPACING,
@@ -153,6 +154,9 @@ const FIELD_INSET = SPACE.TIGHT * 2 - BAR_EDGE;
 
 /** How far the field stands in from the bar's leading edge where no + leads it. */
 const FIELD_LEADING = SPACE.ROW + 4 - BAR_EDGE;
+
+/** How far a field standing over its row stands from the row, as the bar's own (`BAR_FOOT_GAP`), its words otherwise held apart from the row by the row's press frames alone. */
+const FIELD_ROW_GAP = BAR_FOOT_GAP;
 
 /** How far the field's words stand from Send's frame, which stands its round in by less than the row's spacing did. */
 const FIELD_TRAILING = SPACE.TIGHT;
@@ -712,8 +716,12 @@ function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts 
           setTyped("");
         };
 
+  // Note that a field standing over its row keeps no room under its last line and no press's height, which with the bar's spacing and the row's press frames stood about thirty points of air between the words and the row; the row's own frames already hold it apart, as Messages' field sits on its toolbar.
+  const over = rowed && !oneLine;
+
   const room = padding({
-    vertical: FIELD_INSET,
+    top: FIELD_INSET,
+    bottom: over ? 0 : FIELD_INSET,
     trailing: FIELD_TRAILING,
     ...((rowed || (addMenu === undefined && onAdd === undefined)) && {
       leading: FIELD_LEADING,
@@ -723,7 +731,7 @@ function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts 
   // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so its text view is sized at that one width as its words change, rather than asking its ideal width too.
   const span = frame({
     ...(oneLine && { minWidth: ONE_LINE_FIELD_MIN }),
-    minHeight: PRESS_SIZE,
+    ...(!over && { minHeight: PRESS_SIZE }),
     maxWidth: Number.POSITIVE_INFINITY,
     alignment: "leading",
   });
@@ -1214,8 +1222,14 @@ export function ComposerFoot(props: ComposerProps) {
     ) : (
       <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
         {props.head === undefined ? null : <BarHead>{props.head}</BarHead>}
-        {pieces}
-        {rowed ? <ComposerRow props={props} parts={parts} /> : null}
+        {rowed ? (
+          <VStack alignment="leading" spacing={FIELD_ROW_GAP}>
+            {pieces}
+            <ComposerRow props={props} parts={parts} />
+          </VStack>
+        ) : (
+          pieces
+        )}
       </VStack>
     );
 
