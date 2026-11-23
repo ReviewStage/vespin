@@ -134,7 +134,7 @@ export { releaseFields } from "./field-focus.js";
 
 export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
 
-export { GlassBar, GlassDock } from "./glass-bar.js";
+export { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 
 export {
   GLYPH,

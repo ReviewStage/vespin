@@ -483,6 +483,8 @@ private enum DocumentSpace {
   static let cardPadding: CGFloat = 12
   /// How far above the keyboard the caret's line stands once the field scrolls it clear.
   static let caretClearance: CGFloat = 12
+  /// How long what stands over the field's foot takes to lay out as it comes or goes, a frame or two, before the caret's line is brought back into sight past it.
+  static let offerSettle: TimeInterval = 0.1
   /// How much room above and below the caret's line a page holding a field grown to its words leaves as it scrolls the caret into sight.
   static let caretReveal: CGFloat = 48
 }
@@ -664,6 +666,14 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   }
 
   /// Whether the field grows to its words inside the page that holds it, as a description edited in place stands in its task's list, rather than scrolling them itself; it then tells JavaScript the height its words ask for.
+  /// How far over the keyboard the caret's line keeps clear while something stands over the field's foot, such as what an `@` offers docked over the keyboard; none while nothing does. Note that the caret's line is brought back into sight as it comes and goes, once the page has laid out around it (`offerSettle`).
+  var keepClear: CGFloat? {
+    didSet {
+      guard keepClear != oldValue else { return }
+      DispatchQueue.main.asyncAfter(deadline: .now() + DocumentSpace.offerSettle) { [weak self] in self?.keepCaretClear() }
+    }
+  }
+
   var fitsWords = false {
     didSet {
       guard fitsWords != oldValue else { return }
@@ -815,8 +825,11 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     guard textView.isFirstResponder, let keyboardTop, let end = textView.selectedTextRange?.end else { return }
     textView.scrollRangeToVisible(textView.selectedRange)
     let caret = textView.convert(textView.caretRect(for: end), to: window)
-    let clear = keyboardTop - DocumentSpace.caretClearance
-    guard caret.maxY > clear, let page = holdingScrollView() else { return }
+    let page = holdingScrollView()
+    // Note that the page may end above the keyboard, as a split view's column does over what an `@` offers at its foot, so the caret clears whichever edge is higher.
+    let pageBottom = page.map { $0.convert($0.bounds, to: window).maxY - $0.adjustedContentInset.bottom } ?? keyboardTop
+    let clear = min(keyboardTop - (keepClear ?? 0), pageBottom) - DocumentSpace.caretClearance
+    guard caret.maxY > clear, let page else { return }
     let lowest = max(0, page.contentSize.height + page.adjustedContentInset.bottom - page.bounds.height)
     let offset = min(page.contentOffset.y + caret.maxY - clear, lowest)
     page.setContentOffset(CGPoint(x: page.contentOffset.x, y: offset), animated: true)

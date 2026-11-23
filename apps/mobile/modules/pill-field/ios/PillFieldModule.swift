@@ -107,6 +107,10 @@ public final class PillFieldModule: Module {
         view.fitsWords = fits ?? false
       }
 
+      Prop("keepClear") { (view: DocumentFieldView, clear: Double?) in
+        view.keepClear = clear.map { CGFloat($0) }
+      }
+
       Prop("opening") { (view: DocumentFieldView, opening: OpeningRecord?) in
         view.open(opening)
       }
