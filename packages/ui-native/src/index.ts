@@ -266,6 +266,12 @@ export {
 export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 
 export {
+  type PullRequestChipFacts,
+  type PullRequestChipLook,
+  pullRequestChipLook,
+} from "./pull-request-chip-model.js";
+
+export {
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
   REVIEW_LOOK,
