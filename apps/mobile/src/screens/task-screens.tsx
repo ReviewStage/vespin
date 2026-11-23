@@ -139,6 +139,7 @@ import {
   ListSection,
   type LongPressGroup,
   MentionDock,
+  MentionFoot,
   menuWithout,
   NoSelection,
   PATH_PART,
@@ -3106,6 +3107,17 @@ function InlineBar({
   );
 }
 
+/** What an `@` typed in a split view detail's description offers, at the foot of its SwiftUI column, where the pushed page's React Native dock cannot stand; read from the detail's `chrome` so only the foot draws again. */
+function InlineFoot({
+  chrome,
+  children,
+}: {
+  readonly chrome: InlineChrome;
+  readonly children: ReactNode;
+}) {
+  return <MentionFoot mentions={useInlineMentions(chrome)}>{children}</MentionFoot>;
+}
+
 /**
  * A split view whose detail's description may be edited in place: while it
  * is, Done stands at the detail bar's trailing edge in the place of its acts
@@ -3394,7 +3406,7 @@ function useTaskDetail(
 
   const detail =
     overview !== undefined ? (
-      <InlineDock chrome={chrome}>
+      <InlineFoot chrome={chrome}>
         <OverviewPage
           key={overview.task.id}
           overview={overview}
@@ -3403,7 +3415,7 @@ function useTaskDetail(
           entered
           chrome={chrome}
         />
-      </InlineDock>
+      </InlineFoot>
     ) : selected === undefined ? (
       <NoSelection title={noSelectionWords(TERM.TASK)} />
     ) : read && !found.seeking ? (
