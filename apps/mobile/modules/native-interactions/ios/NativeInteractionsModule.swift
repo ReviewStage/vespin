@@ -20,6 +20,7 @@ private enum ModifierName {
   static let stackSubtitle = "vespinStackSubtitle"
   static let stackScrollEdge = "vespinStackScrollEdge"
   static let sideMargins = "vespinSideMargins"
+  static let sideInsets = "vespinSideInsets"
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
   static let dropLink = "vespinDropLink"
@@ -28,7 +29,7 @@ private enum ModifierName {
   static let rowHeard = RowHeardModifier.name
   static let headerMenu = HeaderMenuModifier.name
   static let all = [
-    cellFocusRingOff, columnSubtitle, stackSubtitle, stackScrollEdge, sideMargins, dragLink, dropPictures,
+    cellFocusRingOff, columnSubtitle, stackSubtitle, stackScrollEdge, sideMargins, sideInsets, dragLink, dropPictures,
     dropLink, rowMenu, rowSwipes, rowHeard, headerMenu,
   ]
 }
@@ -56,6 +57,9 @@ public final class NativeInteractionsModule: Module {
       }
       ViewModifierRegistry.register(ModifierName.sideMargins) { params, appContext, _ in
         return try SideMarginsModifier(from: params, appContext: appContext)
+      }
+      ViewModifierRegistry.register(ModifierName.sideInsets) { params, appContext, _ in
+        return try SideInsetsModifier(from: params, appContext: appContext)
       }
       ViewModifierRegistry.register(ModifierName.dragLink) { params, appContext, _ in
         return try DragLinkModifier(from: params, appContext: appContext)
@@ -405,6 +409,21 @@ internal struct SideMarginsModifier: ViewModifier, Record {
 
   func body(content: Content) -> some View {
     content.contentMargins(.horizontal, length, for: .scrollContent)
+  }
+}
+
+/// A list row's leading and trailing insets set to `length`, its top and bottom left as the list draws them, SwiftUI's `listRowInsets(.horizontal, _:)`.
+///
+/// Note that a section's header takes it, so its words start at the rows'
+/// edge in every window: the system sets a header in by its own margin,
+/// 16 points in a compact window and 20 in a regular one, where the rows
+/// stand at a set 16, and `@expo/ui`'s `listRowInsets` sets every edge, so
+/// the header's top and bottom would be lost with it.
+internal struct SideInsetsModifier: ViewModifier, Record {
+  @Field var length: CGFloat = 0
+
+  func body(content: Content) -> some View {
+    content.listRowInsets(.horizontal, length)
   }
 }
 

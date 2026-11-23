@@ -62,7 +62,14 @@ import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { dropLink, headerMenu, rowHeard, sideMargins, stackScrollEdge } from "./interactions.js";
+import {
+  dropLink,
+  headerMenu,
+  rowHeard,
+  sideInsets,
+  sideMargins,
+  stackScrollEdge,
+} from "./interactions.js";
 import type { LongPressGroup } from "./list-row.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
@@ -838,6 +845,14 @@ export function ListSection({
       </HStack>
     );
 
+  // Note that a list's header starts where its rows do, at the list's edge, rather than at the system's own margin, which is 4 points further in on an iPad and a larger iPhone; a form's stands as the system sets it, over its cards.
+  const placed =
+    header === undefined || look === undefined ? (
+      header
+    ) : (
+      <HStack modifiers={[sideInsets(SPACE.EDGE)]}>{header}</HStack>
+    );
+
   // Note that a page's grouped list fills each row with the system's card gray, so its sections clear it, standing their rows on the brand's ground as a plain list does.
   const modifiers = [
     ...(look === LIST_LOOK.DETAIL ? [listRowBackground("clear")] : []),
@@ -847,7 +862,7 @@ export function ListSection({
   return (
     <Section
       modifiers={modifiers}
-      {...(header === undefined ? {} : { header })}
+      {...(placed === undefined ? {} : { header: placed })}
       {...(footer === undefined
         ? {}
         : { footer: <SectionFooter words={footer} tone={footerTone} /> })}

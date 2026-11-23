@@ -14,6 +14,7 @@ const MODIFIER = {
   STACK_SUBTITLE: "vespinStackSubtitle",
   STACK_SCROLL_EDGE: "vespinStackScrollEdge",
   SIDE_MARGINS: "vespinSideMargins",
+  SIDE_INSETS: "vespinSideInsets",
   DRAG_LINK: "vespinDragLink",
   DROP_PICTURES: "vespinDropPictures",
   DROP_LINK: "vespinDropLink",
@@ -65,6 +66,11 @@ export function stackScrollEdge(): ModifierConfig {
 /** A scroll view's content set in from its sides by `length` points, SwiftUI's `contentMargins` for its scroll content, while the scroll view keeps its whole width, so the ground beside the content still scrolls it. */
 export function sideMargins(length: number): ModifierConfig {
   return createModifier(MODIFIER.SIDE_MARGINS, { length });
+}
+
+/** A list row's leading and trailing insets set to `length` points, its top and bottom left as the list draws them, such as a section header's, so its words start where the rows' do. */
+export function sideInsets(length: number): ModifierConfig {
+  return createModifier(MODIFIER.SIDE_INSETS, { length });
 }
 
 /** A view dragged out as its link: another app takes it as a URL, and a place here that takes a link reads it back. */
