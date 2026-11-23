@@ -2,6 +2,7 @@
 
 import { hide, preventAutoHideAsync, setOptions } from "expo-splash-screen";
 import { useSyncExternalStore } from "react";
+import { probeOnce } from "./launch-probe.js";
 
 /** The longest the splash stands, so a host that never answers can't hold it forever. */
 const SPLASH_DEADLINE_MS = 10_000;
@@ -39,6 +40,7 @@ export function holdSplash(): void {
 export function releaseSplash(): void {
   if (released) return;
   released = true;
+  probeOnce("splash-hide");
   clearTimeout(deadline);
   hide();
 

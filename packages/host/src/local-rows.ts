@@ -27,6 +27,10 @@ import type { KeptAnswer, KeptLoad, KeptName, RowsStore } from "@repo/sync";
 import { Effect, Schema } from "effect";
 import type { LocalDatabaseConnection } from "./local-database.js";
 
+/** PROBE ONLY: a launch mark, where the app's probe stands. */
+const launchProbe = (n: string, d?: unknown): void =>
+  (globalThis as { __launchProbe?: (n: string, d?: unknown) => void }).__launchProbe?.(n, d);
+
 /** The workspace a read that names none is kept under. */
 const NO_WORKSPACE = "";
 
@@ -174,13 +178,21 @@ function loadedFrom(connection: LocalDatabaseConnection, name: KeptName): KeptLo
 
   if (stored === undefined) return undefined;
 
-  const rows = decodeLoadedRows(
-    connection
-      .prepare(
-        "SELECT row.row AS row FROM held JOIN row ON row.kind = held.kind AND row.key = held.key WHERE held.read = ? AND held.workspace = ? ORDER BY held.position",
-      )
-      .all(name.read, workspace),
-  ).map(({ row }) => row);
+  const sqlStart = performance.now();
+  const raw = connection
+    .prepare(
+      "SELECT row.row AS row FROM held JOIN row ON row.kind = held.kind AND row.key = held.key WHERE held.read = ? AND held.workspace = ? ORDER BY held.position",
+    )
+    .all(name.read, workspace);
+  const decodeStart = performance.now();
+  const rows = decodeLoadedRows(raw).map(({ row }) => row);
+  const decodeEnd = performance.now();
+  launchProbe(`kept-load:${name.read}`, {
+    rows: rows.length,
+    chars: raw.reduce((sum, { row }) => sum + (typeof row === "string" ? row.length : 0), 0),
+    sqlMs: Math.round(decodeStart - sqlStart),
+    decodeMs: Math.round(decodeEnd - decodeStart),
+  });
 
   return { rows, cursor: stored.cursor ?? undefined };
 }

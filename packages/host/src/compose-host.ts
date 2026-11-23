@@ -259,6 +259,14 @@ const RETIRED_ENTITY_FILE = "entities.sealed";
  * and a temporary file a cut-off write left beside it, unread: a release
  * before this one imported its queues into the local database.
  */
+/** PROBE ONLY: a launch mark, where the app's probe stands. */
+const launchProbe = (n: string, d?: unknown): void =>
+  (globalThis as { __launchProbe?: (n: string, d?: unknown) => void }).__launchProbe?.(n, d);
+
+/** PROBE ONLY: a mark once `effect` has run. */
+const probed = <A, E, R>(n: string, effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+  Effect.tap(effect, () => Effect.sync(() => launchProbe(n)));
+
 const forgetRetiredEntityFile = Effect.fn("host/forgetRetiredEntityFile")(function* (
   directory: string,
 ) {
@@ -289,6 +297,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
   const platform = new Set<HostPlatformConcern>(chosen);
 
   const build = Effect.gen(function* () {
+    launchProbe("host:build-start");
     const kernel = yield* HostKernelTag;
     const identity = yield* AppIdentity;
     const hostService = yield* HostService;
@@ -298,8 +307,8 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
     yield* Effect.provideContext(forgetRetiredEntityFile(kernel.stateRoot), fileSystemContext);
 
-    const settings = yield* composeSettings();
-    const account = yield* composeAccount({ settings });
+    const settings = yield* probed("host:settings", composeSettings());
+    const account = yield* probed("host:account", composeAccount({ settings }));
 
     // Note that the socket a live read goes over is opened as a terminal's
     // is, so it stands where the assembly has the terminals concern's seam.
@@ -414,6 +423,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     );
 
     // Note that the integrations stand before the tasks, which ask GitHub's standing of them again once a GitHub connect or disconnect answers.
+    launchProbe("host:pool");
     const integrations = yield* served(
       composeIntegrations({
         kernel,
@@ -785,16 +795,17 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
      */
     const openCapabilities = Effect.gen(function* () {
       if (account.signedIn()) {
-        yield* settings.reconcileAccountPreferences();
+        launchProbe("open:start");
+        yield* probed("open:preferences", settings.reconcileAccountPreferences());
         yield* account.refreshAccess;
-        yield* openLocal;
-        yield* tasks.open;
-        yield* workspaces.open;
-        yield* agents.open;
-        yield* accountAsks.open;
-        yield* automations.open;
-        yield* integrations.open;
-        yield* installedSkills.open;
+        yield* probed("open:local", openLocal);
+        yield* probed("open:tasks", tasks.open);
+        yield* probed("open:workspaces", workspaces.open);
+        yield* probed("open:agents", agents.open);
+        yield* probed("open:accountAsks", accountAsks.open);
+        yield* probed("open:automations", automations.open);
+        yield* probed("open:integrations", integrations.open);
+        yield* probed("open:installedSkills", installedSkills.open);
       }
 
       yield* settings.emitSettings();
@@ -936,6 +947,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
        * service, named to it from now on (`time-zone-keeper.ts`).
        */
       armed: Effect.gen(function* () {
+        launchProbe("host:armed-start");
         if (account.capabilitiesActive()) yield* openCapabilities;
         yield* Effect.forkScoped(account.session.refreshOnce());
 
@@ -956,6 +968,8 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       taskListMoves: tasks.taskListMoves,
       agentsListed: tasks.agentsListed,
     };
+
+    launchProbe("host:build-end");
 
     return assembly;
   });
