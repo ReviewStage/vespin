@@ -1,4 +1,4 @@
-// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and in the bar's ⋯ the changes to where it stands (Ready for review, Convert to draft, Close, Reopen) and Open on GitHub.
+// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and on its state chip and in the bar's ⋯ the changes to where it stands (Ready for review, Convert to draft, Close, Reopen), and Open on GitHub.
 
 import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
@@ -54,6 +54,7 @@ import {
   ConfirmAsk,
   EmptyState,
   FACE_KIND,
+  type FieldMenu,
   GLYPH,
   type Glyph,
   githubFace,
@@ -96,6 +97,8 @@ import { useOnOwnTab } from "../tab-route.js";
 /** What the bar's ⋯ menu offers beside the merge, in the panel's words. */
 const MENU_WORDS = {
   MORE: "More",
+  /** What the state chip's menu is heard as before where it stands, as the panel's pill is named "Pull request Open". */
+  STATE: "Pull request",
   FILES_CHANGED: "Files changed",
   COPY_GITHUB_LINK: "Copy GitHub link",
   OPEN_ON_GITHUB: "Open on GitHub",
@@ -551,6 +554,22 @@ function PullRequestPage({
     },
   }));
 
+  // Note that the state chip offers the same changes as the bar's ⋯, as the panel's pill opens them where it says where the pull request stands; none once merged, where nothing changes.
+  const stateMenu: FieldMenu | undefined =
+    changes.length === 0
+      ? undefined
+      : {
+          label: MENU_WORDS.STATE,
+          choices: [],
+          actions: changes.map((change) => ({
+            label: PULL_REQUEST_STATE_ACTION_WORDS[change.action],
+            symbol: STATE_ACTION_GLYPHS[change.action],
+            destructive: change.action === PULL_REQUEST_ACTION.CLOSE,
+            disabled: change.disabled,
+            onPress: change.onPress,
+          })),
+        };
+
   useScreenActivity((workspaces) =>
     agent === undefined || agent.taskId === null || title === undefined
       ? undefined
@@ -655,6 +674,7 @@ function PullRequestPage({
                 ? queuedLabel(queued.position)
                 : PULL_REQUEST_STATE_LABEL[state]
           }
+          stateMenu={stateMenu}
           branches={
             pullRequest === undefined
               ? undefined

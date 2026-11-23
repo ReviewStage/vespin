@@ -25,7 +25,7 @@ import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { agoText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { FieldChip, LabelChip } from "./button.js";
+import { FieldChip, type FieldMenu, LabelChip } from "./button.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
@@ -94,6 +94,8 @@ type PullRequestHeadProps = {
   readonly queued: boolean;
   /** Where it stands in a word, as the panel's pill says it: "Open", "Queued #2", "Merged". */
   readonly stateLabel: string;
+  /** What a press on where it stands offers, as the panel's pill opens its menu: Convert to draft, Ready for review, Close, Reopen; none where nothing may change, as once merged. */
+  readonly stateMenu?: FieldMenu | undefined;
   /** The branch it merges into and the one it merges from; none until its read lands. */
   readonly branches?: { readonly base: string; readonly head: string } | undefined;
   /** Whether it would merge as it stands, in GitHub's sentence: "Ready to merge". */
@@ -182,7 +184,9 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
 /**
  * A pull request's heading, as a list's first row: its title in 20 pt
  * semibold with its number muted after it, then where it stands as a chip,
- * its state's glyph in GitHub's color and its word, then who opened it and
+ * its state's glyph in GitHub's color and its word, which opens the system's
+ * menu of what may change there where it is handed one, as the panel's pill
+ * does, then who opened it and
  * when, by their face, then its labels filled with their colors, scrolling
  * sideways where they run past the row, then its branches on a line of
  * their own, the one it merges into first, then GitHub's sentence of
@@ -196,6 +200,7 @@ export function PullRequestHead({
   state,
   queued,
   stateLabel,
+  stateMenu,
   branches,
   sentence,
   opened,
@@ -233,7 +238,11 @@ export function PullRequestHead({
         </Text>
       </Text>
       <HStack spacing={SPACE.TIGHT + 2}>
-        <FieldChip label={stateLabel} mark={{ glyph: look.symbol, tone: look.tone }} />
+        <FieldChip
+          label={stateLabel}
+          mark={{ glyph: look.symbol, tone: look.tone }}
+          menu={stateMenu}
+        />
       </HStack>
       {opened === undefined ? null : <OpenedLine opened={opened} wraps={large} />}
       {labels.length === 0 ? null : (
