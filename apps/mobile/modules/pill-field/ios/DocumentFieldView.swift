@@ -417,8 +417,9 @@ func drawItemMark(_ mark: ItemMark, textStart: CGFloat, baseline: CGFloat, font:
 /// A paragraph's layout as TextKit lays it, drawing a list item's mark in its gutter before its first line, since the system's own list markers stand in the words' full ink at their own size.
 final class ItemMarkFragment: NSTextLayoutFragment {
   override var renderingSurfaceBounds: CGRect {
-    // Note that the mark stands left of the words, where the glyphs' own bounds never reach.
-    super.renderingSurfaceBounds.union(CGRect(origin: .zero, size: layoutFragmentFrame.size))
+    // Note that the mark stands in the gutter left of the words, which the fragment's own frame starts past where its paragraph is set in, so the surface reaches back to the container's edge, or the mark is cut at the frame's.
+    let gutter = CGRect(x: -layoutFragmentFrame.minX, y: 0, width: layoutFragmentFrame.maxX, height: layoutFragmentFrame.height)
+    return super.renderingSurfaceBounds.union(gutter)
   }
 
   override func draw(at point: CGPoint, in context: CGContext) {
