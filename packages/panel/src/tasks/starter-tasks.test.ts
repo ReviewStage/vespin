@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STARTER, startersFor } from "./starter-tasks.js";
+import { STARTER, STARTER_TASKS, draftWithStarter, startersFor } from "./starter-tasks.js";
 
 describe("startersFor", () => {
   it.each([
@@ -33,5 +33,26 @@ describe("startersFor", () => {
     },
   ])("offers what $has can run or connect for, in order", ({ has, offered }) => {
     expect(startersFor(has).map(({ task, runnable }) => [task.starter, runnable])).toEqual(offered);
+  });
+});
+
+describe("draftWithStarter", () => {
+  const starter = (name: string) => {
+    const task = STARTER_TASKS.find((each) => each.starter === name);
+
+    if (task === undefined) throw new Error(`no starter ${name}`);
+
+    return task;
+  };
+
+  const first = starter(STARTER.SITE_WALKTHROUGH);
+  const second = starter(STARTER.LIVE_APP);
+
+  it.each([
+    { typed: "  ", task: first, draft: first.prompt },
+    { typed: first.prompt, task: second, draft: second.prompt },
+    { typed: "Add a health check endpoint\n", task: second, draft: `Add a health check endpoint\n\n${second.prompt}` },
+  ])("keeps what was typed and swaps a starter's own words", ({ typed, task, draft }) => {
+    expect(draftWithStarter(typed, task)).toBe(draft);
   });
 });
