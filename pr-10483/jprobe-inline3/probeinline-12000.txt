@@ -1,0 +1,56 @@
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-22 22:16:02.493 Df log[3533:0] [com.apple.log:] log run noninteractively, parent: 1012 (launchd_sim), args: 'log' 'stream' '--level' 'debug' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "PROBEINLINE"'
+2026-11-22 22:17:04.503 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE open nonce=1 start=false line=1 window=false
+2026-11-22 22:17:04.663 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE focusAt asked window=true chars=10232
+2026-11-22 22:17:05.149 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE focusAt=486ms first=true
+2026-11-22 22:17:05.797 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.00ms whole=true height=44 told=nil chars=10232
+2026-11-22 22:17:11.248 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10233
+2026-11-22 22:17:11.252 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10233
+2026-11-22 22:17:12.914 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10234
+2026-11-22 22:17:12.916 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10234
+2026-11-22 22:17:13.631 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.01ms chars=10235
+2026-11-22 22:17:13.634 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10235
+2026-11-22 22:17:15.114 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10236
+2026-11-22 22:17:15.116 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10236
+2026-11-22 22:17:15.151 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE open nonce=1 start=false line=2 window=true
+2026-11-22 22:17:15.314 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.02ms whole=true height=44 told=Optional(44.0) chars=10236
+2026-11-22 22:17:17.580 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10237
+2026-11-22 22:17:17.582 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10237
+2026-11-22 22:17:18.314 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.01ms chars=10238
+2026-11-22 22:17:18.316 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10238
+2026-11-22 22:17:18.347 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.01ms chars=10239
+2026-11-22 22:17:18.349 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10239
+2026-11-22 22:17:18.386 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10240
+2026-11-22 22:17:18.389 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10240
+2026-11-22 22:17:18.424 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10241
+2026-11-22 22:17:18.426 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10241
+2026-11-22 22:17:18.447 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.01ms chars=10242
+2026-11-22 22:17:18.449 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10242
+2026-11-22 22:17:18.497 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10243
+2026-11-22 22:17:18.499 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10243
+2026-11-22 22:17:18.532 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10244
+2026-11-22 22:17:18.534 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10244
+2026-11-22 22:17:18.547 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10245
+2026-11-22 22:17:18.549 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10245
+2026-11-22 22:17:18.627 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10246
+2026-11-22 22:17:18.629 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10246
+2026-11-22 22:17:18.630 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10247
+2026-11-22 22:17:18.633 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10247
+2026-11-22 22:17:18.647 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10248
+2026-11-22 22:17:18.649 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10248
+2026-11-22 22:17:18.697 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.01ms chars=10249
+2026-11-22 22:17:18.699 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10249
+2026-11-22 22:17:18.733 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10250
+2026-11-22 22:17:18.735 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10250
+2026-11-22 22:17:18.747 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10251
+2026-11-22 22:17:18.749 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10251
+2026-11-22 22:17:18.826 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.01ms chars=10252
+2026-11-22 22:17:18.828 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10252
+2026-11-22 22:17:18.829 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.00ms chars=10253
+2026-11-22 22:17:18.831 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10253
+2026-11-22 22:17:18.847 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.01ms chars=10254
+2026-11-22 22:17:18.849 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10254
+2026-11-22 22:17:18.897 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE refreshMarks=0.01ms chars=10255
+2026-11-22 22:17:18.900 Df Vespin[4026:b2f93b2] (Foundation) PROBEINLINE wordsHeight=0.01ms whole=false height=44 told=Optional(44.0) chars=10255
+2026-11-22 22:17:31.113 Df log[4286:0] [com.apple.log:] log run noninteractively, parent: 1012 (launchd_sim), args: 'log' 'show' '--start' '2026-11-22 22:16:02' '--style' 'compact' '--info' '--debug' '--predicate' 'eventMessage CONTAINS "PROBEINLINE"'
