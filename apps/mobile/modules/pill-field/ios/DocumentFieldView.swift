@@ -826,8 +826,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     textView.scrollRangeToVisible(textView.selectedRange)
     let caret = textView.convert(textView.caretRect(for: end), to: window)
     let page = holdingScrollView()
-    // Note that the page may end above the keyboard, as a split view's column does over what an `@` offers at its foot, so the caret clears whichever edge is higher.
-    let pageBottom = page.map { $0.convert($0.bounds, to: window).maxY - $0.adjustedContentInset.bottom } ?? keyboardTop
+    // Note that the page may end above the keyboard, as a split view's column does over what an `@` offers at its foot, so the caret clears whichever edge is higher. Note too that the page's own frame is read, never less its insets, because a SwiftUI list the keyboard has shortened still insets itself by the keyboard's height, which counted the keyboard twice and scrolled the page to its end on the first key.
+    let pageBottom = page.map { $0.convert($0.bounds, to: window).maxY } ?? keyboardTop
     let clear = min(keyboardTop - (keepClear ?? 0), pageBottom) - DocumentSpace.caretClearance
     guard caret.maxY > clear, let page else { return }
     let lowest = max(0, page.contentSize.height + page.adjustedContentInset.bottom - page.bounds.height)
