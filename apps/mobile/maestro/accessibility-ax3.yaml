@@ -58,8 +58,11 @@ appId: dev.vespin.ios
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
+# At AX3 the dock's chips scroll sideways and "2 queued" stands off-screen,
+# so the page is known by its composer.
 - extendedWaitUntil:
-    visible: "2 queued"
+    visible:
+      id: "composer-field"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
