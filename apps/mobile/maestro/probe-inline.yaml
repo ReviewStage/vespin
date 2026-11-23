@@ -1,0 +1,40 @@
+# probe-inline.yaml -- PROBE, never merged; types in the first of 300 numbered items (SIZE 12000, 25000 and 179000, every size inline in the probe): times entering the description's inline editing from a press on its first section, on the synthetic description `-probeDescription <chars>` names.
+appId: dev.vespin.ios
+env:
+  SIZE: ${SIZE || '12000'}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      probeDescription: ${SIZE}
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- scrollUntilVisible:
+    element: "Teammate invitations"
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- scrollUntilVisible:
+    element: "Numbered item 1"
+    centerElement: true
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: probe-read
+- tapOn: "Numbered item 1"
+- extendedWaitUntil:
+    visible:
+      id: "description-words"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: probe-editing
+- inputText: "x"
+- inputText: "yz"
+- pressKey: Enter
+- inputText: "a new line of words"
+- waitForAnimationToEnd
+- takeScreenshot: probe-typed

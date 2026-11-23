@@ -70,7 +70,7 @@ const SAVE_PAUSE_MS = 1_000;
  * lag a frame or more, and a longer description opens in the sheet, which
  * lays out only the words in sight.
  */
-export const INLINE_EDIT_MOST_CHARS = 30_000;
+export const INLINE_EDIT_MOST_CHARS = Number.POSITIVE_INFINITY; // PROBE: every size inline
 
 /** Where a press on the words as read landed: where its block starts in the Markdown, and how far in from the block's start. */
 export interface PressedAt {
@@ -354,6 +354,7 @@ export function useInlineDescription(
     if (editing) return;
     // Note that the field takes the keyboard itself once it stands, where the press landed, so nothing here waits on it.
     setOpening(at ?? OPENS_AT_START);
+    (globalThis as { __probePressedAt?: number }).__probePressedAt = Date.now();
     // Note that the field opens on the words as the page last read them, the base its saves are laid against.
     update(editorOpened(body));
     setEditing(true);

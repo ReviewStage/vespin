@@ -449,7 +449,9 @@ export function DocumentField({
     const found = handed.value.lines.findIndex((each) => each.from === block);
     const line = Math.max(0, found);
 
-    return { nonce: 1, start: false, line, x: opensAt.x, y: opensAt.y };
+    const pressedAt = (globalThis as { __probePressedAt?: number }).__probePressedAt ?? 0;
+
+    return { nonce: 1, start: false, line, x: opensAt.x, y: opensAt.y, pressedAt };
   }, [opensAt, read, base, handed]);
 
   const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {

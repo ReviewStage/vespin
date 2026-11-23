@@ -38,6 +38,13 @@ export const LAUNCH_SENTRY_TEST = {
 
 export type LaunchSentryTest = (typeof LAUNCH_SENTRY_TEST)[keyof typeof LAUNCH_SENTRY_TEST];
 
+// PROBE: the synthetic description's size a launch argument names, read before any fixture answer; never merged.
+if (Platform.OS === "ios") {
+  const named: unknown = Settings.get("probeDescription");
+  const size = Number(named);
+  if (size > 0) (globalThis as { __probeDescription?: number }).__probeDescription = size;
+}
+
 /** The one account service a launch argument may name in place of the real one. */
 const STUB_AUTH_SERVER = "stub";
 

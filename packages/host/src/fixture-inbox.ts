@@ -1775,6 +1775,24 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
  * table wider than a phone, code, a mention chip of each kind, and a
  * picture, so a capture of it shows every piece the description draws.
  */
+/** PROBE: a synthetic description of about the size a launch argument names, for timing; never merged. */
+function probeDescription(): string | undefined {
+  const size = (globalThis as { __probeDescription?: number }).__probeDescription;
+  if (size === undefined || !(size > 0)) return undefined;
+  // A long numbered list leads, so a key in its first item renumbers every item after it.
+  const numbered = Array.from({ length: 300 }, (_, at) => `${at + 1}. Numbered item ${at + 1}`).join("\n");
+  const parts: string[] = [`## Numbered\n\n${numbered}\n\n`];
+  let length = parts[0]?.length ?? 0;
+  let index = 1;
+  while (length < size) {
+    const part = `## Section ${index}\n\nA paragraph of plain words that runs long enough to wrap across a few lines on a phone, with **bold** words, *italic* words and \`code\` in it, as a description reads.\n\n- First item of section ${index}\n- Second item, with a little more to say\n  - A nested item under it\n- Third item\n\n1. One\n2. Two\n\n`;
+    parts.push(part);
+    length += part.length;
+    index += 1;
+  }
+  return parts.join("").trimEnd() + "\n";
+}
+
 const INVITES_DESCRIPTION = [
   "## Context",
   "",
@@ -1827,7 +1845,7 @@ function invitesDocument(listed: TaskSummary): Task {
 
   return {
     ...task,
-    description: { body: INVITES_DESCRIPTION, assumptions: [] },
+    description: { body: probeDescription() ?? INVITES_DESCRIPTION, assumptions: [] },
     blockedBy: [LISTED.ALERTS, LISTED.LANDING],
     blocks: [],
   };
