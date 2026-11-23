@@ -3025,8 +3025,8 @@ function OverviewPage({
   entered,
   inline,
 }: {
-  /** The description edited in place, which a press on its words or Edit starts. */
-  readonly inline: InlineDescription;
+  /** The description edited in place, which a press on its words or Edit starts; none edits it in the sheet, as an iPad's split view does until an `@` offer stands over the keyboard there. */
+  readonly inline?: InlineDescription | undefined;
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
   /** Archive and Permanently delete on its agents' rows, each asked first by the row pressed (`useAgentRowAsk`). */
@@ -3043,7 +3043,7 @@ function OverviewPage({
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
-  const { field: descriptionField } = inline;
+  const descriptionField = inline?.field;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
   useNoteOpened({ kind: SEARCH_FOUND_KIND.TASKS, id: task.id, workspaceId: task.workspaceId });
   const described = useDescriptionShown(task.id) && entered;
@@ -3057,7 +3057,8 @@ function OverviewPage({
   const editDoor = useEditDescriptionDoor(task.workspaceId);
 
   // Note that Edit, and a press on the words, edit the description in place, as the desktop's and Notion's are edited, but for a description too long to lay out whole on each key, which Edit opens in the sheet; the door says whether it may be edited at all.
-  const inPlace = (document?.description.body.length ?? 0) <= INLINE_EDIT_MOST_CHARS;
+  const inPlace =
+    inline !== undefined && (document?.description.body.length ?? 0) <= INLINE_EDIT_MOST_CHARS;
 
   const edit: SectionEdit | undefined =
     editDoor === undefined
@@ -3065,7 +3066,7 @@ function OverviewPage({
       : {
           label: WORDS.EDIT,
           heard: WORDS.EDIT_DESCRIPTION,
-          onPress: () => (inPlace ? inline.start() : editDoor(task)),
+          onPress: () => (inPlace ? inline?.start() : editDoor(task)),
         };
 
   const related = new Set(overview.tasks.map((each) => each.id));
@@ -3091,7 +3092,7 @@ function OverviewPage({
       <OverviewAgents overview={overview} asking={asking} />
       <OverviewArchived overview={overview} asking={asking} />
       <OverviewPages overview={overview} />
-      {!described || !descriptions ? null : inline.editing ? (
+      {!described || !descriptions ? null : inline?.editing ? (
         <ListSection
           title={WORDS.DESCRIPTION}
           act={{ label: WORDS.DONE, heard: WORDS.DONE_EDITING, onPress: inline.done }}
@@ -3130,30 +3131,13 @@ function OverviewPage({
           body={document.description.body}
           edit={edit}
           onPressBlock={
-            edit === undefined || !inPlace ? undefined : (at, x, y) => inline.start({ at, x, y })
+            edit === undefined || !inPlace ? undefined : (at, x, y) => inline?.start({ at, x, y })
           }
         />
       )}
       {described && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
     </RowList>
   );
-}
-
-/**
- * A task's Overview in a split view's detail, its description edited in
- * place, each task's words its own; Done stands at the Description's
- * header, since the column's bar is the split view's.
- */
-function DetailOverview(props: Omit<Parameters<typeof OverviewPage>[0], "inline">) {
-  const { overview } = props;
-
-  const inline = useInlineDescription(
-    overview.task.id,
-    overview.workspace?.id,
-    overview.document?.description.body ?? "",
-  );
-
-  return <OverviewPage {...props} inline={inline} />;
 }
 
 /** The tree's search words and how to change them, held by the tab's root screen above its two layouts. */
@@ -3292,7 +3276,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
 
   const detail =
     overview !== undefined ? (
-      <DetailOverview
+      <OverviewPage
         key={overview.task.id}
         overview={overview}
         onRefresh={refreshTasks}
