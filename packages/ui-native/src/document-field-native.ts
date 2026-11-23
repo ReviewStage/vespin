@@ -130,6 +130,8 @@ interface NativeDocumentFieldProps {
   readonly formats?: NativeFormats | undefined;
   /** Whether the field grows to its words inside the page that holds it, rather than scrolling them itself, telling the height they ask for. */
   readonly fitsWords?: boolean | undefined;
+  /** How far over the keyboard the caret's line keeps clear while something stands over the field's foot; none while nothing does. */
+  readonly keepClear?: number | undefined;
   /** Where the field takes the keyboard as it comes to stand, laid once for each `nonce` once it stands in a window; none leaves the keyboard alone. */
   readonly opening?: NativeOpening | undefined;
   readonly testID?: string | undefined;
