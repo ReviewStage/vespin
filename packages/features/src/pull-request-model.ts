@@ -29,7 +29,9 @@ import {
   PULL_REQUEST_WRITE_OUTCOME,
   type PullRequestAction,
   REACTION,
+  REVIEW_EVENT,
   type Reaction,
+  type ReviewEvent,
 } from "./pull-request-write-wire.js";
 
 /**
@@ -616,6 +618,31 @@ export function unresolvedWords(count: number): string {
 }
 
 /* ----- A change's answer ----- */
+
+/** What a review may say, in the words GitHub's own review box offers it, in its order. */
+export const REVIEW_EVENT_WORDS = {
+  [REVIEW_EVENT.COMMENT]: "Comment",
+  [REVIEW_EVENT.APPROVE]: "Approve",
+  [REVIEW_EVENT.REQUEST_CHANGES]: "Request changes",
+} as const satisfies Record<ReviewEvent, string>;
+
+/** A review's summary field's prompt, by what the review says: changes asked for want their summary. */
+export function reviewPlaceholderOf(event: ReviewEvent): string {
+  return event === REVIEW_EVENT.REQUEST_CHANGES
+    ? "Summarize the requested changes"
+    : "Leave a summary comment (optional)";
+}
+
+/** What finishing a review says, on the desktop's panel and the phone's screen alike. */
+export const REVIEW_PANEL_WORDS = {
+  TITLE: "Finish your review",
+  CLOSE: "Close",
+  CANCEL: "Cancel",
+  DISCARD: "Discard",
+  BODY: "Review comment",
+  /** How many comments a review holds, as its lead says it. */
+  pending: (count: number) => `${count} pending ${count === 1 ? "comment" : "comments"}`,
+} as const;
 
 /** What a surface says of a change GitHub did not make. */
 export const PULL_REQUEST_WRITE_WORDS = {
