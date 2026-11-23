@@ -10,7 +10,9 @@
  * cookie as Better Auth's sign-in would, and sends the browser back to
  * authorize, which now sees a session and goes on to the desktop's loopback
  * as it does once a provider returns. A request with no authorization to
- * resume is a browser's own, which lands on the web app signed in.
+ * resume is a browser's own, which lands on the web app signed in, as the
+ * seeded member or as the member its one `member` parameter names, as the
+ * end-to-end suite signs in a member it seeded for a test.
  *
  * A session for anyone, unasked, is what no deployment may ever answer, so
  * two guards hold this to one machine. It mounts among the local server's own
@@ -50,6 +52,14 @@ const AUTHORIZE_PATH = "/api/auth/oauth2/authorize";
 const SIGNING_PARAMETERS = ["sig", "exp", "ba_iat", "ba_pl", "ba_param"] as const;
 
 const PROMPT = { PARAMETER: "prompt", LOGIN: "login" } as const;
+
+/**
+ * The parameter a bare sign-in names the member it signs in as by their id,
+ * in the seeded member's place: how the end-to-end suite signs in the member
+ * it seeded for one test. It is read only where it is the query's one
+ * parameter, so it never rides on an authorization the provider signed.
+ */
+export const MEMBER_PARAMETER = "member";
 
 /** The authorization's parameter the desktop names the provider its card chose in, ahead of the entropy. */
 const STATE_PARAMETER = "state";
@@ -134,16 +144,32 @@ async function sessionCookie(context: SignInContext, token: string): Promise<str
   ].join("; ");
 }
 
-async function signIn(auth: LocalSignInAuth, userId: string, request: Request): Promise<Response> {
+/** The member a bare sign-in names (`MEMBER_PARAMETER`), where the query is that parameter alone. */
+function namedMember(query: URLSearchParams): string | undefined {
+  const [only, ...rest] = [...query.keys()];
+
+  return only === MEMBER_PARAMETER && rest.length === 0
+    ? (query.get(MEMBER_PARAMETER) ?? undefined)
+    : undefined;
+}
+
+async function signIn(
+  auth: LocalSignInAuth,
+  seededId: string,
+  request: Request,
+): Promise<Response> {
   // Note that the environment is read on every request rather than trusted from the start, so this path holds the guard however it came to be mounted.
   const refusal = localServerRefusal(process.env);
 
   if (refusal !== undefined) return refused(STATUS.FORBIDDEN, refusal);
   const context = await auth.$context;
   const query = new URL(request.url).searchParams;
-  const resumed = query.size === 0 ? undefined : await resumedAuthorization(query, context.secret);
+  const named = namedMember(query);
+  const bare = query.size === 0 || named !== undefined;
+  const resumed = bare ? undefined : await resumedAuthorization(query, context.secret);
+  const userId = named ?? seededId;
 
-  if (query.size > 0 && resumed === undefined) {
+  if (!bare && resumed === undefined) {
     return refused(
       STATUS.BAD_REQUEST,
       "This sign-in link is not one the service issued, or it expired: start the sign-in again.",
@@ -153,7 +179,9 @@ async function signIn(auth: LocalSignInAuth, userId: string, request: Request): 
   if ((await context.internalAdapter.findUserById(userId)) === null) {
     return refused(
       STATUS.CONFLICT,
-      "The demo's member is not in this database: run the demo seed first.",
+      named === undefined
+        ? "The demo's member is not in this database: run the demo seed first."
+        : "No member with that id is in this database.",
     );
   }
 
@@ -170,7 +198,7 @@ async function signIn(auth: LocalSignInAuth, userId: string, request: Request): 
   });
 }
 
-/** The sign-in, answering every request as the member whose id it is handed, under the auth instance's own secret and adapter. */
+/** The sign-in, answering every request as the member whose id it is handed, or the one a bare request names, under the auth instance's own secret and adapter. */
 export function localSignIn(auth: LocalSignInAuth, userId: string): Route {
   return { fetch: (request) => signIn(auth, userId, request) };
 }
