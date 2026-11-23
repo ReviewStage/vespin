@@ -64,13 +64,14 @@ const SAVE_PAUSE_MS = 1_000;
 
 /**
  * The longest description edited in place, in characters. Note that a field
- * grown to its words in the page's list lays all of them out, measured on the
- * iPhone 18 Pro simulator at about a millisecond for every thousand
- * characters on each key (195 ms at 179,002), so past this a key would
- * lag a frame or more, and a longer description opens in the sheet, which
- * lays out only the words in sight.
+ * grown to its words lays all of them out once as it opens, so the press
+ * that opens it grows with the description: measured on the iPhone 18 Pro
+ * simulator at 88 ms for 12,000 characters, 94 ms for 25,000 and 766 ms for
+ * 179,000, while each key stays under 2 ms at every size. Past this the
+ * press would lag past 100 ms, and a longer description opens in the sheet,
+ * which lays out only the words in sight.
  */
-export const INLINE_EDIT_MOST_CHARS = 30_000;
+export const INLINE_EDIT_MOST_CHARS = 25_000;
 
 /** Where a press on the words as read landed: where its block starts in the Markdown, and how far in from the block's start. */
 export interface PressedAt {
