@@ -49,6 +49,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useWindowDimensions } from "react-native";
 import { useAccessibilitySize, useScaledSize, useTextScale } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import type { CaretAtWord } from "./caret-at-word.js";
@@ -59,6 +60,7 @@ import {
   BAR_ROW_SPACING,
   BarHead,
   GlassBar,
+  useKeyboardHeight,
 } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
@@ -68,6 +70,7 @@ import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+import { heightClass, WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
 /** The send button's round, in points. */
 const SEND_SIZE = 32;
@@ -1048,11 +1051,79 @@ function ComposerRow({
 }
 
 /**
+ * Whether a composer that stands its row under its field stands it all on one
+ * line beside the field instead: in a window of compact height, an iPhone on
+ * its side, while the keyboard stands, where the bar and the keyboard leave
+ * about a hundred points between them, too few for the field over its row at
+ * an accessibility size, as Messages stands its field in one line there. A
+ * dictation under way keeps its strip under the field.
+ */
+function useOneLine(props: ComposerProps): boolean {
+  const { height } = useWindowDimensions();
+  const keyboard = useKeyboardHeight(false) > 0;
+  const recording = props.dictation !== undefined && props.dictation.phase !== DICTATION_PHASE.IDLE;
+
+  return (
+    stacked(props) && keyboard && !recording && heightClass(height) === WINDOW_SIZE_CLASS.COMPACT
+  );
+}
+
+/**
+ * The line a composer's field stands in where its row stands under it: the
+ * field alone, or, on one line (`useOneLine`), the + and the capsules before
+ * it and what is picked, Dictate, a call's presses, and Send after it, each
+ * at its whole width, the field taking the rest. Note that the field keeps
+ * its one place in this line either way, so turning one line or two never
+ * draws it anew, which would let go of the keyboard that turned it.
+ */
+function FieldLine({
+  props,
+  parts,
+  oneLine,
+}: {
+  readonly props: ComposerProps;
+  readonly parts: ComposerParts;
+  readonly oneLine: boolean;
+}) {
+  const { addMenu, onAdd, tools, trailing, testIds, dictation } = props;
+  const beside = [fixedSize(), frame({ minHeight: PRESS_SIZE })];
+
+  return (
+    <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
+      {oneLine ? <AddPress menu={addMenu} onAdd={onAdd} testId={testIds?.add} /> : null}
+      {oneLine && tools !== undefined ? (
+        <HStack spacing={TOOL_SPACING} modifiers={beside}>
+          {tools}
+        </HStack>
+      ) : null}
+      {parts.field}
+      {oneLine ? (
+        <HStack spacing={TOOL_SPACING} modifiers={beside}>
+          {trailing}
+          {dictation === undefined ? null : (
+            <DictationPress
+              glyph={GLYPH.DICTATE}
+              label={DICTATION_WORDS.DICTATE}
+              onPress={dictation.onStart}
+            />
+          )}
+          {parts.call}
+          {parts.send}
+        </HStack>
+      ) : null}
+    </HStack>
+  );
+}
+
+/**
  * A composer in the system's Liquid Glass at the screen's foot, above the tab
  * bar: the + for what a message carries, the field, which grows with its
  * words, and Send filled with the ink, or Stop while the field is empty and
  * a turn runs, and, where it starts work, the + and the start's capsules in
- * a row under the field. Where its holder keeps the words, the field
+ * a row under the field, or on the field's own line in a short window while
+ * the keyboard stands (`useOneLine`), where what stands over the bar, such as
+ * an agent's dock, steps aside until the keyboard goes, as the transcript
+ * does. Where its holder keeps the words, the field
  * follows them, so words a refused send hands back stand in it again; else
  * it empties on Send. Pictures dropped on it, on an iPad, go to its
  * holder's `onDropPictures`. It stands in a React Native bar (`GlassBar`),
@@ -1062,6 +1133,10 @@ export function Composer(props: ComposerProps) {
   const { onDropPictures } = props;
   const parts = useComposerParts(props);
   const rowed = stacked(props);
+  const oneLine = useOneLine(props);
+
+  // Note that the foot stays given, empty on one line, so the bar keeps the column its field stands in and never draws the field anew.
+  const foot = oneLine ? null : <ComposerRow props={props} parts={parts} />;
 
   return (
     <GlassBar
@@ -1069,11 +1144,15 @@ export function Composer(props: ComposerProps) {
       field={!rowed}
       head={props.head}
       heads={props.pills !== undefined}
-      foot={rowed ? <ComposerRow props={props} parts={parts} /> : undefined}
-      above={props.above}
+      foot={rowed ? foot : undefined}
+      above={oneLine ? undefined : props.above}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >
-      {rowed ? parts.field : <RowPieces parts={parts} />}
+      {rowed ? (
+        <FieldLine props={props} parts={parts} oneLine={oneLine} />
+      ) : (
+        <RowPieces parts={parts} />
+      )}
     </GlassBar>
   );
 }

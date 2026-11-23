@@ -25,3 +25,13 @@ export function windowSizeClass(width: number, height: number): WindowSizeClass 
     ? WINDOW_SIZE_CLASS.REGULAR
     : WINDOW_SIZE_CLASS.COMPACT;
 }
+
+/**
+ * The size class of a window's height alone, as iOS's vertical size class: an
+ * iPhone on its side, about 400 to 440 points tall, is compact, where its bar
+ * and the keyboard leave about a hundred points between them; every iPad
+ * window and an iPhone upright are regular.
+ */
+export function heightClass(height: number): WindowSizeClass {
+  return height >= REGULAR_MIN_POINTS ? WINDOW_SIZE_CLASS.REGULAR : WINDOW_SIZE_CLASS.COMPACT;
+}
