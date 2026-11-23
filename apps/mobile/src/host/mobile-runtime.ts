@@ -39,8 +39,31 @@ const hopped = (queued: number) => {
   hops.maxMs = Math.max(hops.maxMs, waited);
 };
 
+/** React Native's own task queue on the JS thread, which React's scheduler runs its work on; none outside the new architecture. */
+interface RuntimeScheduler {
+  readonly unstable_NormalPriority: number;
+  readonly unstable_scheduleCallback: (priority: number, callback: () => void) => unknown;
+  readonly unstable_cancelCallback: (task: unknown) => void;
+}
+
+const runtimeScheduler = (globalThis as { nativeRuntimeScheduler?: RuntimeScheduler })
+  .nativeRuntimeScheduler;
+
 const yieldingScheduler = new Scheduler.MixedScheduler("async", (run) => {
   const queued = performance.now();
+
+  if (runtimeScheduler !== undefined) {
+    const task = runtimeScheduler.unstable_scheduleCallback(
+      runtimeScheduler.unstable_NormalPriority,
+      () => {
+        hopped(queued);
+        run();
+      },
+    );
+
+    return () => runtimeScheduler.unstable_cancelCallback(task);
+  }
+
   const timer = setTimeout(() => {
     hopped(queued);
     run();
