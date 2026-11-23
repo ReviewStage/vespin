@@ -170,8 +170,10 @@ export function listedAgentsNow(
   return carried ? collections.agents.toArray : undefined;
 }
 
-/** Whose agents a page lists: those a member started, or those a coding agent, a Manager say, started. */
-export type AgentsStartedBy = { readonly userId: string } | { readonly agentId: string };
+/** Whose agents a page lists: those a member started. */
+export interface AgentsStartedBy {
+  readonly userId: string;
+}
 
 /**
  * The agents the task list carries that `by` started, the archived among
@@ -189,19 +191,14 @@ export function useAgentsStartedBy(
   by: AgentsStartedBy,
 ): readonly ListedAgent[] | undefined {
   const { agents } = useTaskListCollections();
-  const userId = "userId" in by ? by.userId : undefined;
-  const agentId = "agentId" in by ? by.agentId : undefined;
+  const { userId } = by;
 
   const { data } = useLiveQuery((q) => {
     if (!carried) return undefined;
-    const all = q.from({ agent: agents });
 
-    const theirs =
-      userId === undefined
-        ? all.where(({ agent }) => eq(agent.startedByAgentId, agentId))
-        : all.where(({ agent }) => eq(agent.startedBy?.userId, userId));
-
-    return theirs
+    return q
+      .from({ agent: agents })
+      .where(({ agent }) => eq(agent.startedBy?.userId, userId))
       .orderBy(({ agent }) => agent.createdAt)
       .orderBy(({ agent }) => agent.id, { stringSort: "lexical" })
       .select(({ agent }) => ({

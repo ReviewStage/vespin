@@ -1170,7 +1170,7 @@ function AgentConversation({
       ? undefined
       : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
-  // Note that a Manager's overview stands beside its chat on the desktop; here it is pushed from the bar, where the workspace lists its Managers.
+  // Note that a Manager's overview is pushed from the bar, where the workspace lists its Managers.
   const overviewShown = useManagersListed(shown?.workspaceId) && chat;
 
   const openSettings = () => router.push({ pathname: "/manager-settings", params: { agent: id } });

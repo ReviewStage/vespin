@@ -17,12 +17,7 @@
  * page reads through the agent's own workspace and repository
  * (`own-agent-place.tsx`), and its copy and delete keys act on the agent,
  * as a task's column's do on its chosen tab. ⌘F finds in its conversation,
- * as in a task's column, and a phone's ⋯ offers Find in its place. A
- * Manager's page, while its workspace has Managers on, stands its chat in a
- * column at its right instead, and in the room it leaves what the Manager is
- * doing (`manager-overview.tsx`); a phone's keeps the chat alone. The chat's
- * left edge resizes it as a task's side panel's does, one width for every
- * Manager, kept across launches (`folded-groups.ts`). The agent is read from the task list where it carries it,
+ * as in a task's column, and a phone's ⋯ offers Find in its place. The agent is read from the task list where it carries it,
  * and else once by its id.
  * Until then the page stands in an agent tab's own shape saying Reading; an
  * agent the service does not hold for the reader, deleted or of a workspace
@@ -33,12 +28,7 @@
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import {
-  AGENT_BOUNDS,
-  AGENT_KIND,
-  type ListedAgent,
-  listedAgentOfPage,
-} from "@repo/features/agent-wire";
+import { AGENT_BOUNDS, type ListedAgent, listedAgentOfPage } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
@@ -47,21 +37,16 @@ import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
-  cssCustomProperties,
   ERROR_STATE_PLACEMENT,
   ErrorState,
   FILL_ELEMENT,
-  FILL_FLOW,
   Fill,
   moreLabel,
   NOT_FOUND_THING,
   NotFound,
-  RESIZE_EDGE_SIDE,
-  ResizeEdge,
   Toolbar,
   type ToolbarTitleEdit,
   useMenu,
-  useResizeEdge,
 } from "@repo/ui";
 import { agentTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
@@ -84,12 +69,9 @@ import { type AgentsControl, placeAgents } from "../tasks/use-agents.js";
 import { useHeldTaskInbox, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
-import { MANAGER_CHAT_WIDTH, useManagerChatWidth } from "./folded-groups.js";
 import { AgentPane } from "./main-tabs.js";
-import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
@@ -111,17 +93,6 @@ const OWN_AGENT_KEYS: readonly KeyedCommand[] = [
 
 /** What the agent's menu is named, as its head's ⋯ names it. */
 const AGENT_THING = "Agent";
-
-/** What a Manager's chat's edge is named, which a drag or the keyboard resizes it by. */
-const CHAT_RESIZE_LABEL = "Resize chat";
-
-/** The share of the page's row a Manager's chat may take, as the stylesheet holds it (`.manager-page-chat`'s 50%), so the overview keeps the rest. */
-const CHAT_SHARE = 0.5;
-
-/** What a drag of a Manager's chat leaves the overview beside it in their row, in CSS pixels: the rest of the row past the chat's share. */
-function overviewReserve(row: HTMLElement): number {
-  return row.getBoundingClientRect().width * (1 - CHAT_SHARE);
-}
 
 /** Where the agent of the page's address stands: on a task, on none, nowhere the reader may open, not read yet, or not read at all. */
 type AgentFound =
@@ -367,12 +338,10 @@ function OwnAgentPage({
   tasks,
   agent,
   away,
-  staged,
 }: {
   tasks: TasksControl;
   agent: ListedAgent;
   away: TaskHeadBack | undefined;
-  staged: boolean;
 }): React.JSX.Element {
   const place = useOwnAgentPlace(tasks, agent, tasks.agents.models);
   const agents = useOwnAgents(tasks, agent, place);
@@ -382,24 +351,6 @@ function OwnAgentPage({
   const cards = taskCards({ agents, held: views.held, chosen: () => false, pages: undefined });
   const findSubject = useMemo(() => ({ agent: agent.id }), [agent.id]);
 
-  // Note that a phone's page, which has a way back, keeps the chat alone, since its room holds no column beside it.
-  const overview =
-    useWorkspaceExperiment(agent.workspaceId, EXPERIMENT.MANAGERS) &&
-    agent.kind === AGENT_KIND.MANAGER &&
-    away === undefined;
-
-  const chatWidth = useManagerChatWidth();
-
-  // Note that the edge is the page's, as a task's side panel's is, so a drag outlives what it resizes.
-  const chatEdge = useResizeEdge({
-    side: RESIZE_EDGE_SIDE.LEFT,
-    width: chatWidth.width,
-    bounds: MANAGER_CHAT_WIDTH,
-    reserve: overviewReserve,
-    label: CHAT_RESIZE_LABEL,
-    onResize: chatWidth.onResize,
-  });
-
   const openTarget = (target: ToolTarget) => {
     if (target.kind !== TOOL_TARGET.TASK) return;
 
@@ -407,55 +358,33 @@ function OwnAgentPage({
     else tasks.onShowAgent(target.task, target.agent);
   };
 
-  const pane = (
-    <AgentPane
-      label={label}
-      tabbed={false}
-      tab={agentTab(agent.id)}
-      agents={agents}
-      shown={tasks.shown}
-      views={views}
-      // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
-      onOpenDelegation={(_agent, callId, _task, status) => views.onWorkerStatus(callId, status)}
-      onOpenTarget={openTarget}
-      cards={cards}
-      threads={threads}
-    />
-  );
-
   return (
     <OwnAgentPlaceProvider place={place} readerId={tasks.me}>
       <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">
         <Fill as={FILL_ELEMENT.SECTION} className="agent-page" aria-label={label}>
           <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
-          {overview ? (
-            <Fill flow={FILL_FLOW.ROW} className="manager-page">
-              <ManagerOverview tasks={tasks} manager={agent} threads={threads} staged={staged} />
-              <div
-                className="manager-page-chat"
-                style={cssCustomProperties({ "--manager-chat-width": `${chatWidth.width}px` })}
-              >
-                <ResizeEdge edge={chatEdge} />
-                {/* Note that the chat's column is the find scope, so ⌘F finds in its conversation alone. */}
-                <FindScope
-                  className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
-                  active={tasks.shown}
-                  subject={findSubject}
-                >
-                  {pane}
-                </FindScope>
-              </div>
-            </Fill>
-          ) : (
-            // Note that the scope stands as the column's own box, as its fill did.
-            <FindScope
-              className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
-              active={tasks.shown}
-              subject={findSubject}
-            >
-              {pane}
-            </FindScope>
-          )}
+          {/* Note that the scope stands as the column's own box, as its fill did. */}
+          <FindScope
+            className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+            active={tasks.shown}
+            subject={findSubject}
+          >
+            <AgentPane
+              label={label}
+              tabbed={false}
+              tab={agentTab(agent.id)}
+              agents={agents}
+              shown={tasks.shown}
+              views={views}
+              // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
+              onOpenDelegation={(_agent, callId, _task, status) =>
+                views.onWorkerStatus(callId, status)
+              }
+              onOpenTarget={openTarget}
+              cards={cards}
+              threads={threads}
+            />
+          </FindScope>
         </Fill>
       </div>
     </OwnAgentPlaceProvider>
@@ -466,13 +395,10 @@ function OwnAgentPage({
 export function AgentRoutePage({
   tasks,
   away,
-  staged = false,
 }: {
   tasks: TasksControl;
   /** A phone's way back out of the page, the window's Back; none elsewhere. */
   away?: TaskHeadBack | undefined;
-  /** Whether a fixture stages the window, whose tasks' looks are its own rather than kept (`useUnreadTasks`). */
-  staged?: boolean | undefined;
 }): React.JSX.Element {
   const { agentId } = useParams({ from: "/places/$workspace/agent/$agentId" });
   const found = useAgentFound(tasks, agentId);
@@ -493,9 +419,7 @@ export function AgentRoutePage({
   }
 
   if ("agent" in found)
-    return (
-      <OwnAgentPage key={agentId} tasks={tasks} agent={found.agent} away={away} staged={staged} />
-    );
+    return <OwnAgentPage key={agentId} tasks={tasks} agent={found.agent} away={away} />;
 
   // In the page's own frame, so its row and sheet stand where the task's agent tab will.
   return (

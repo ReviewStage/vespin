@@ -1488,43 +1488,6 @@ body,
   padding-inline: calc(var(--column-inset) + var(--ui-list-inset));
 }
 
-/* A Manager's chat stands in a column at its page's right
-   (`desktop-agent-page.tsx`), as wide as it was last dragged, never past
-   half the row so the overview keeps its two columns, a hairline between
-   it and the overview in the room it leaves, on which its edge stands. */
-.manager-page > .manager-page-chat {
-  position: relative;
-  display: flex;
-  flex: none;
-  width: min(var(--manager-chat-width), 50%);
-  min-height: 0;
-  border-left: 1px solid var(--ui-color-border);
-}
-
-/* A Manager's overview stands its lists in two columns side by side
-   (`manager-overview.tsx`), each its cards one under another, a block's gap
-   apart as the cards over them are, and in one column where its room holds
-   no two. */
-.manager-overview-columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: var(--ui-block-gap);
-}
-
-@container (width < 640px) {
-  .manager-overview-columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.manager-overview-column {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--ui-block-gap);
-}
-
 /* The panel's ground, named once (`--side-panel-ground`): the panel paints
    it, or its sheet does where the shell stands it on one (shell.css), and
    whatever in a tab must paint a ground of its own paints this one (a Pull

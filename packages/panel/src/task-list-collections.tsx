@@ -226,13 +226,13 @@ export function useNamedTasks(
 /**
  * Whom a page reads tasks about: a member, whose tasks are those assigned to
  * or created by them, the creator read as `creatorIdOf` reads it, the owner
- * where the service names none, or a coding agent, a Manager say, whose tasks are
- * those it made; either way also the tasks `taskIds` names, those the
- * agents it lists work on.
+ * where the service names none, and also the tasks `taskIds` names, those
+ * the agents it lists work on.
  */
-export type TasksAbout =
-  | { readonly userId: string; readonly taskIds: readonly string[] }
-  | { readonly agentId: string; readonly taskIds: readonly string[] };
+export interface TasksAbout {
+  readonly userId: string;
+  readonly taskIds: readonly string[];
+}
 
 /**
  * The tasks of the workspace `workspaceId` names, every workspace's where
@@ -241,7 +241,7 @@ export type TasksAbout =
  * query holds those tasks alone, and of their agents' counts only the
  * activity a task is ordered by (`taskTime`), so a change to any other task,
  * or a turn of their agents that moves no order, draws no reader; for a page
- * about someone, as a person's page and a Manager's overview are. The rows
+ * about someone, as a person's page is. The rows
  * are the collection's own as the query last moved, so their `agents` may be
  * a turn behind: a row that draws them reads its own task (`useNamedTask`).
  */
@@ -251,9 +251,7 @@ export function useTasksAbout(
   about: TasksAbout,
 ): readonly TaskSummary[] {
   const collections = useTaskListCollections();
-  const userId = "userId" in about ? about.userId : undefined;
-  const agentId = "agentId" in about ? about.agentId : undefined;
-  const { taskIds } = about;
+  const { userId, taskIds } = about;
 
   const { data } = useLiveQuery((q) => {
     const all = q
@@ -264,18 +262,13 @@ export function useTasksAbout(
     const held =
       workspaceId === undefined ? all : all.where(({ task }) => eq(task.workspaceId, workspaceId));
 
-    const about =
-      userId === undefined
-        ? held.where(({ task }) =>
-            or(inArray(task.id, [...taskIds]), eq(task.origin?.agentId, agentId)),
-          )
-        : held.where(({ task }) =>
-            or(
-              inArray(task.id, [...taskIds]),
-              eq(task.assignee?.userId, userId),
-              eq(coalesce(task.createdBy?.userId, task.ownerId), userId),
-            ),
-          );
+    const about = held.where(({ task }) =>
+      or(
+        inArray(task.id, [...taskIds]),
+        eq(task.assignee?.userId, userId),
+        eq(coalesce(task.createdBy?.userId, task.ownerId), userId),
+      ),
+    );
 
     // Note that the agents' counts are left out but for the activity a task is ordered by (`taskTime`), so a turn that moves no order moves no row.
     return about.select(({ task }) => {
