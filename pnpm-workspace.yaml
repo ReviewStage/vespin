@@ -35,7 +35,7 @@ catalog:
   "@vercel/sandbox": 3.9.1
   "@vercel/oidc": 4.0.9
   "@tanstack/react-router": 1.170.46
-  "@tanstack/react-store": 0.11.2
+  "@tanstack/react-store": 0.11.4
   "@better-auth/oauth-provider": 1.7.7
   "@electric-sql/pglite": 0.5.17
   "@expo/ui": 58.0.27
