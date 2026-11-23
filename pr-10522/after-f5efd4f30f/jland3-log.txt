@@ -1,0 +1,16 @@
+pinned to f5efd4f30f
+== bundle PJjland3 base f5efd4f30f
+  built f5efd4f30f base app Vmain10.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-large-land-up: fails 0 shots 2 
+iphone-light-large-land-down: fails 0 shots 1 
+iphone-light-large-port-down: fails 0 shots 1 
+iphone-light-large-port-up: fails 0 shots 1 
+iphone-light-ax3: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-land-up: fails 0 shots 2 
+iphone-light-ax3-land-down: fails 0 shots 1 
+iphone-light-ax3-port-down: fails 0 shots 1 
+iphone-light-ax3-port-up: fails 1 shots 1 Tap on id: composer-field... FAILED
