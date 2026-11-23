@@ -1,5 +1,6 @@
 // playwright.config.ts -- the journeys Playwright Test runs, and the servers they load.
 
+import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
 
 const PORT = 4317;
@@ -11,6 +12,26 @@ const PORT = 4317;
  * file exists only while the database runs.
  */
 const DATABASE_URL_FILE = ".build/database-url";
+
+const ORIGIN = `http://127.0.0.1:${PORT}`;
+
+/** A fresh random secret for this run alone, in base64, never written anywhere. */
+function secret(): string {
+  return randomBytes(32).toString("base64");
+}
+
+/**
+ * The secrets the local server is started with, made new each run, so none
+ * is committed or outlives it. The encryption ring's one key is `1:` and 32
+ * random bytes, the shape `PROVIDER_KEY_ENCRYPTION_KEYS` takes.
+ */
+const LOCAL_SERVER_ENV = {
+  BETTER_AUTH_SECRET: secret(),
+  CRON_SECRET: secret(),
+  PROVIDER_KEY_ENCRYPTION_KEYS: `1:${secret()}`,
+  BETTER_AUTH_URL: ORIGIN,
+  APP_DEPLOYMENT_ORIGIN: ORIGIN,
+};
 
 /**
  * Specs are `*.e2e.ts`, a name no vitest config collects, so `vitest run`
@@ -25,9 +46,14 @@ const DATABASE_URL_FILE = ".build/database-url";
  * file is written, and it is stopped by SIGTERM, on which it stops Postgres
  * and deletes its folder; Playwright's default kill would leave both behind.
  *
- * The second server is the web app's `public/` folder as Vite's preview
- * serves a built site: plain files, no build and no service. Locally a
- * server already on its port is reused; under CI one is always started.
+ * The second server is the web app's local server (`apps/web/server/README.md`,
+ * "The local server"): the hosted routes and the site's pages on one
+ * loopback port, over the suite's database. Note that its command reads the
+ * URL file in the shell, because the URL is only known once the database is
+ * up, which is after this config is read. It sets no `VERCEL*` variable,
+ * since the local server refuses to start beside one. It counts as up once
+ * it answers the signed-out app page, and is never reused, since a server
+ * already on the port would stand over another run's database.
  */
 export default defineConfig({
   testDir: "specs",
@@ -35,7 +61,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: `http://127.0.0.1:${PORT}`,
+    baseURL: ORIGIN,
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
@@ -48,9 +74,12 @@ export default defineConfig({
       timeout: 180_000,
     },
     {
-      command: `vite preview --outDir ../web/public --host 127.0.0.1 --port ${PORT} --strictPort`,
-      url: `http://127.0.0.1:${PORT}/page-in-mac-app.html`,
-      reuseExistingServer: !process.env.CI,
+      name: "local-server",
+      command: `DATABASE_URL="$(cat ${DATABASE_URL_FILE})" DATABASE_URL_UNPOOLED="$(cat ${DATABASE_URL_FILE})" pnpm --filter @repo/web local-server --port ${PORT}`,
+      env: LOCAL_SERVER_ENV,
+      url: `${ORIGIN}/app`,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
+      timeout: 120_000,
     },
   ],
 });
