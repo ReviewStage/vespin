@@ -3397,7 +3397,9 @@ function useTaskDetail(
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
 
   // Note that the menu's Edit description edits it in place, as the pushed page's does, but for a description too long to, which it opens in the sheet.
-  const inPlace = (overview?.document?.description.body.length ?? 0) <= INLINE_EDIT_MOST_CHARS;
+  const inPlace =
+    overview?.document !== undefined &&
+    overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
 
   const editDescription =
     editDoor === undefined
@@ -3577,7 +3579,9 @@ export function TaskScreen() {
   const chrome = useInlineChrome();
 
   // Note that the menu's Edit description edits it in place too, the caret at its start, but for a description too long to, which it opens in the sheet.
-  const inPlace = (overview?.document?.description.body.length ?? 0) <= INLINE_EDIT_MOST_CHARS;
+  const inPlace =
+    overview?.document !== undefined &&
+    overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
 
   const editDescription =
     editDoor === undefined
