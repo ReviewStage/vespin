@@ -463,7 +463,7 @@ test("Close acts at once on an open pull request and a draft, a toast offering R
 
   assert.equal(question(), false, "closing is not asked about");
   assert.deepEqual(world.changes, [[PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.CLOSE }]]);
-  assert.equal(newestToastSays(), "Pull request closedReopen");
+  assert.equal(newestToastSays(), "Pull request closedpull request #42Reopen");
 
   act(() => newestToastAction()?.click());
   await settle();
@@ -490,7 +490,7 @@ test("Close acts at once on an open pull request and a draft, a toast offering R
 
   await pressAction(draft, "Close pull request");
   assert.equal(question(), false, "a draft's Close is not asked about either");
-  assert.equal(newestToastSays(), "Pull request closedReopen");
+  assert.equal(newestToastSays(), "Pull request closedpull request #42Reopen");
 });
 
 test("a Close GitHub would not take offers no Reopen", async () => {
