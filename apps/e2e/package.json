@@ -6,7 +6,8 @@
   "description": "Vespin's end-to-end journeys on Playwright Test: the config, the specs, and the servers they start; never shipped",
   "scripts": {
     "e2e-server": "tsx server/e2e-server.ts",
-    "test:e2e": "NODE_OPTIONS='--import tsx' playwright test",
+    "test:e2e": "NODE_OPTIONS='--import tsx' playwright test --grep-invert @quarantine",
+    "test:e2e:quarantine": "NODE_OPTIONS='--import tsx' playwright test --grep @quarantine --pass-with-no-tests",
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
