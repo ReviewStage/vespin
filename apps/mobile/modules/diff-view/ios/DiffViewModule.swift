@@ -406,7 +406,7 @@ final class DiffLineCell: UICollectionViewCell {
     card.layer.borderColor = look.cardEdge.cgColor
     title.font = UIFont(descriptor: font.fontDescriptor.withSymbolicTraits(.traitBold) ?? font.fontDescriptor, size: font.pointSize)
     title.textColor = look.text
-    title.text = parts.first.map(String.init)
+    title.text = parts.first.map { String($0) }
     detail.font = font
     detail.textColor = look.muted
     detail.text = parts.count > 1 ? String(parts[1]) : nil
