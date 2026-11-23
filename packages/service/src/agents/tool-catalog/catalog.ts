@@ -160,7 +160,7 @@ import {
   EDIT_DESCRIPTION_TOOL,
   requestedNotes,
 } from "../coder-host/description-edit.js";
-import { INBOX_TOOLS } from "../coder-host/inbox.js";
+import { INBOX_TOOLS, postThreadToolOf } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
@@ -281,8 +281,8 @@ export interface CatalogTool<Name extends string = string> {
   readonly watched?: (result: WorkspaceMcpToolResult) => UnparsedWireValue | undefined;
   /** How a call its gate shuts is answered, given the gate's words, where its door's refusal is no `rejected` with them (`gateRefusal`). */
   readonly refused?: (words: string) => WorkspaceMcpToolResult;
-  /** The tool's words and input in the words of the agent's workspace's experiments, where they name one (`listedTool`); none for a tool whose words name none. */
-  readonly variant?: (experiments: ExperimentsOn) => ToolSpec<string>;
+  /** The tool's words and input in the words of the agent's workspace's experiments and the gates open to it, where they name one (`listedTool`); none for a tool whose words name none. */
+  readonly variant?: (experiments: ExperimentsOn, open: ReadonlySet<ToolGate>) => ToolSpec<string>;
 }
 
 /** A tool as its tool file declares it: its name, its words, and its input schema. */
@@ -552,6 +552,9 @@ const INBOX_LOADED: Served = { ...LOADED, gates: [TOOL_GATE.INBOX] };
 /** Loaded from the first turn, behind the starter's Inbox, and closed to an agent a Manager started, which reaches people through it. */
 const OWN_THREADS_LOADED: Served = { ...LOADED, gates: [TOOL_GATE.INBOX, TOOL_GATE.UNMANAGED] };
 
+/** Behind the workspace's Slack bot, which every Slack tool acts as. */
+const SLACK_BOT: Served = { gates: [TOOL_GATE.SLACK] };
+
 /** Every tool served, in the order `tools/list` names them. */
 const CATALOG = [
   // The threads, posted to the inbox, where the agent's starter keeps one; a thread is read by its id even where not, since a teammate's agent may still post one.
@@ -559,7 +562,10 @@ const CATALOG = [
     INBOX_TOOLS.POST,
     (admitted, input, { sandbox }) =>
       runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox }),
-    OWN_THREADS_LOADED,
+    {
+      ...OWN_THREADS_LOADED,
+      variant: (_experiments, open) => postThreadToolOf(open.has(TOOL_GATE.SLACK)),
+    },
   ),
   served(
     INBOX_TOOLS.LIST,
@@ -676,11 +682,11 @@ const CATALOG = [
   // The ports of the agent's sandbox, and the one it shares by link.
   portTool(LIST_PORTS_TOOL, runListPorts),
   portTool(SHARE_PORT_TOOL, runSharePort),
-  // Slack as the bot: where the agent may act, a message, a read, and a reaction.
-  agentTool(LIST_SLACK_CHANNELS_TOOL, runListSlackChannels),
-  agentTool(SEND_SLACK_MESSAGE_TOOL, runSendSlackMessage),
-  agentTool(READ_SLACK_TOOL, runReadSlack),
-  agentTool(REACT_SLACK_TOOL, runReactSlack),
+  // Slack as the bot, where the workspace connected it: where the agent may act, a message, a read, and a reaction.
+  agentTool(LIST_SLACK_CHANNELS_TOOL, runListSlackChannels, SLACK_BOT),
+  agentTool(SEND_SLACK_MESSAGE_TOOL, runSendSlackMessage, SLACK_BOT),
+  agentTool(READ_SLACK_TOOL, runReadSlack, SLACK_BOT),
+  agentTool(REACT_SLACK_TOOL, runReactSlack, SLACK_BOT),
   // A wakeup booked for later.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A Manager's message to its chat, the one way its words reach people.
@@ -716,16 +722,16 @@ export function offers(standing: AgentStanding, tool: ServedTool): boolean {
 
 /**
  * The words and input schema a tool is listed with to an agent: its
- * variant's, in the words of the agent's workspace's experiments, where it
- * has one, so an agent is told nothing of an experiment that is off; its
- * own otherwise.
+ * variant's, in the words of the agent's workspace's experiments and the
+ * gates open to it, where it has one, so an agent is told nothing of an
+ * experiment that is off or a tool it is not offered; its own otherwise.
  */
 export function listedTool(
   tool: CatalogTool,
   standing: AgentStanding,
 ): Pick<CatalogTool, "description" | "inputSchema"> {
   if (tool.variant === undefined) return tool;
-  const spec = tool.variant(standing.experiments);
+  const spec = tool.variant(standing.experiments, standing.open);
 
   return { description: spec.description, inputSchema: emitJsonSchema(spec.inputSchema) };
 }

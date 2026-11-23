@@ -891,6 +891,11 @@ export function saveSlackBotToken(ring: KeyRing, bot: SlackBotToSave): TaskStore
   });
 }
 
+/** Whether the workspace holds its bot's token, read without opening it: what offers its agents the Slack tools. */
+export function slackBotHeld(organizationId: string): TaskStoreEffect<boolean> {
+  return Effect.map(findBot(organizationId), Option.isSome);
+}
+
 /**
  * The workspace's bot with its token opened with the ring, for one call;
  * nothing where no token is held or the ring cannot open it, which is

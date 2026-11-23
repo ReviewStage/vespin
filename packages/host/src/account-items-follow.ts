@@ -8,9 +8,10 @@ import {
 } from "@repo/features/inbox-live";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
+import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
 import { Clock, Effect, Option, Schema } from "effect";
-import type { AppHostRead, AppInboxItems } from "./app-state.js";
+import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import { type AccountWideReads, INBOX_ITEM, type InboxChange } from "./inbox-collections.js";
 import { KEPT_LIST } from "./kept-lists.js";
 import {
@@ -62,6 +63,16 @@ import {
  * kept every item, since a read past an id answers every item that moved
  * since it; where it kept only the first, the first read is whole, since
  * an item left out that never moved would never be answered again.
+ *
+ * Beside them it keeps the tasks the items stand on as the task list summed
+ * them up when the items were kept (`keptHolders`), the latest changed
+ * first, up to `KEPT_HOLDERS`, each the task list's summary where it holds
+ * one now and the one kept before where it does not yet, as at a launch
+ * whose list is still being drawn. They are told beside the Inbox drawn from
+ * the database, for as long as the follow stands, so a window groups the
+ * kept rows under them while the task list is still read or drawn rather
+ * than waiting on the whole list, which on a phone with thousands of tasks
+ * is most of a launch.
  */
 
 /**
@@ -80,6 +91,14 @@ const KEPT_INBOX_BOUND = {
   size: (item: InboxItem) => JSON.stringify(item).length,
   within: KEPT_CHARACTERS,
 };
+
+/**
+ * The most tasks kept beside the items, the latest changed first: every task
+ * of a busy account's Inbox, so its groups and counts stand whole before the
+ * task list is drawn rather than growing as it is, and few enough that a
+ * launch decodes them in a few milliseconds.
+ */
+const KEPT_HOLDERS = 250;
 
 /** A read the service did not answer, `gone` where it never will again. */
 
@@ -103,6 +122,8 @@ export interface AccountItemsDependencies {
   readonly pool: EntityPool;
   /** The account's own reads, among which the feed's wait stands while it is followed. */
   readonly accountWide: AccountWideReads;
+  /** The task list's summaries of the tasks `taskIds` names, of those it holds now; none where it holds none, as before it is drawn. */
+  readonly tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
 }
 
 type HeldAfterResult = {
@@ -173,17 +194,62 @@ function withinWindow(held: Map<string, HeldItem>, now: number): void {
 const keptInboxSchema = Schema.Struct({
   at: Schema.optionalKey(Schema.String),
   plans: Schema.Record(Schema.String, Schema.NullOr(Schema.String)),
+  // Note that each holder is decoded alone (`keptHoldersOf`), so one a build no longer reads leaves out that task rather than the kept Inbox.
+  holders: Schema.optionalKey(Schema.Array(Schema.Unknown)),
 });
 
 type KeptInbox = typeof keptInboxSchema.Type;
 
 const decodeKept = Schema.decodeUnknownOption(keptInboxSchema);
 
-/** What the local database keeps beside `held`, read at the sync id `standing` names where it names one. */
-function keptOf(held: Held, standing: SyncStanding | undefined): KeptInbox {
-  const plans = Object.fromEntries([...held].map(([id, { taskId }]) => [id, taskId]));
+const decodeHolder = Schema.decodeUnknownOption(taskSummarySchema);
 
-  return standing === undefined ? { plans } : { at: standing.next, plans };
+/** The tasks `kept` holds beside its items that this build reads, in the order it kept them. */
+function keptHoldersOf(kept: KeptInbox | undefined): readonly TaskSummary[] {
+  return (kept?.holders ?? []).flatMap((holder) => Option.toArray(decodeHolder(holder)));
+}
+
+/** No task summed up: what a follow handed no task list keeps beside its items. */
+const noneListed = (): readonly TaskSummary[] => [];
+
+/** The tasks `held`'s items stand on, the one whose item changed latest first, up to `KEPT_HOLDERS`. */
+function holderIdsOf(held: Held): readonly string[] {
+  const latest = new Map<string, number>();
+
+  for (const { item, taskId } of held.values()) {
+    if (taskId === null) continue;
+    latest.set(taskId, Math.max(latest.get(taskId) ?? 0, item.updatedAt));
+  }
+
+  return [...latest]
+    .sort(([, one], [, other]) => other - one)
+    .slice(0, KEPT_HOLDERS)
+    .map(([taskId]) => taskId);
+}
+
+/**
+ * What the local database keeps beside `held`, read at the sync id `standing`
+ * names where it names one: each item's plan, and the tasks they stand on
+ * (`holderIdsOf`), each as the task list sums it up now (`listed`) or as
+ * `before` kept it where the list holds none of it yet.
+ */
+function keptOf(
+  held: Held,
+  standing: SyncStanding | undefined,
+  listed: (taskIds: readonly string[]) => readonly TaskSummary[],
+  before: readonly TaskSummary[],
+): KeptInbox {
+  const plans = Object.fromEntries([...held].map(([id, { taskId }]) => [id, taskId]));
+  const holderIds = holderIdsOf(held);
+  const summaries = new Map([...before, ...listed(holderIds)].map((task) => [task.id, task]));
+
+  const holders = holderIds.flatMap((taskId) => {
+    const summary = summaries.get(taskId);
+
+    return summary === undefined ? [] : [summary];
+  });
+
+  return standing === undefined ? { plans, holders } : { at: standing.next, plans, holders };
 }
 
 /** The items `kept` holds a plan for among `items`, as the local database held them, each on its plan. */
@@ -305,12 +371,14 @@ function inboxItemsPatched(
 export function followAccountItems(
   dependencies: AccountItemsDependencies,
   userId: string,
-  tell: (read: AppHostRead<AppInboxItems>) => Effect.Effect<void>,
+  tell: (read: AppInboxRead) => Effect.Effect<void>,
 ): Effect.Effect<void> {
   /** Whether any read answered, so a later refusal keeps what was told. */
   let answered = false;
   /** Whether no attempt has read yet, so the first alone reads past the sync id the local database kept. */
   let firstAttempt = true;
+  /** The tasks the local database kept beside the items it held as the follow stood, told beside every reading for as long as it stands; none where it kept none. */
+  let keptHolders: readonly TaskSummary[] = [];
 
   const attempt = Effect.scoped(
     Effect.gen(function* () {
@@ -329,7 +397,11 @@ export function followAccountItems(
         if (held === undefined) return Effect.void;
         answered = true;
 
-        return tell(drawnFromStore ? { rows: told, kept: true } : { rows: told });
+        return tell({
+          rows: told,
+          ...(drawnFromStore ? { kept: true } : undefined),
+          ...(keptHolders.length === 0 ? undefined : { keptHolders }),
+        });
       });
 
       /** Draws the items `ids` names again, a write standing over them, on the plans the read answered them on. */
@@ -370,7 +442,7 @@ export function followAccountItems(
           const moved = yield* items.answer(sent, {
             held: inboxInOrder([...after.values()].map((each) => each.item)).map((item) => item.id),
             ...(at === undefined ? undefined : { at }),
-            cursor: keptOf(after, standing),
+            cursor: keptOf(after, standing, dependencies.tasksListed ?? noneListed, keptHolders),
           });
 
           told = inboxItemsPatched(told, [...moved, ...placed], was, after, items.row);
@@ -382,6 +454,7 @@ export function followAccountItems(
       const stored = items.synced();
 
       if (kept !== undefined) {
+        keptHolders = keptHoldersOf(kept);
         const fromStore = heldOfKept(stored, kept);
         withinWindow(fromStore, yield* Clock.currentTimeMillis);
         held = fromStore;

@@ -1,22 +1,26 @@
-// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and in the bar's ⋯ the changes to where it stands (Ready for review, Convert to draft, Close, Reopen) and Open on GitHub.
+// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks, reviews and conversation held live, a row each pushing its checks and the files it changes, its conversation inline under them, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and on its state chip and in the bar's ⋯ the changes to where it stands (Ready for review, Convert to draft, Close, Reopen), and Open on GitHub.
 
-import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
   type AgentOverviewPullRequest,
-  CHECK_STATE,
+  CHECK_SUMMARY,
   PULL_REQUEST_STATE,
-  type PullRequestCheck,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { iosAgentPullRequestOf } from "@repo/features/ios-app-links";
+import { changesLine } from "@repo/features/changed-files";
+import {
+  iosAgentPullRequestOf,
+  iosPullRequestChecksRoute,
+  iosPullRequestFilesRoute,
+} from "@repo/features/ios-app-links";
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import {
-  CHECK_WORDS,
+  CHECK_SUMMARY_WORDS,
   CLOSE_WORDS,
-  checksCountOf,
+  checksLineOf,
   checksSummaryOf,
   conversationCount,
+  descriptionFolds,
   isLivePullRequest,
   isMergeWrite,
   isStateAction,
@@ -37,28 +41,33 @@ import {
   queuedLabel,
   REVIEW_WORDS,
   reviewersOf,
+  threadLineSpan,
+  threadStateWords,
+  unresolvedThreadCount,
+  unresolvedWords,
 } from "@repo/features/pull-request-model";
 import {
   type MergeMethod,
   PULL_REQUEST_ACTION,
   type PullRequestActionRequest,
 } from "@repo/features/pull-request-write-wire";
-import { workingTime } from "@repo/features/time-format";
-import type { AppHostRead } from "@repo/host/app-state";
+import { SHOW_LESS_WORDS, SHOW_MORE_WORDS } from "@repo/features/words";
+import { answerFailed, landedAnswer } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   BUZZ,
   buzz,
-  CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
   ConfirmAsk,
+  ConversationEntryRow,
   EmptyState,
-  FACE_KIND,
+  type FieldMenu,
   GLYPH,
   type Glyph,
   githubFace,
   glyphSymbol,
   LIST_LOOK,
+  LinkRow,
   ListSection,
   LoadingRow,
   MARK_FACE,
@@ -72,13 +81,15 @@ import {
   RowList,
   Screen,
   STATUS_TONE,
+  ThreadRow,
   useColors,
   useFailureNotices,
+  useMinute,
   WordsRow,
   WriteNoteRow,
 } from "@repo/ui-native";
 import { setStringAsync } from "expo-clipboard";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent, useShownAgent } from "../agents/use-agent.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -91,19 +102,37 @@ import {
 } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useOnOwnTab } from "../tab-route.js";
 
 /** What the bar's ⋯ menu offers beside the merge, in the panel's words. */
 const MENU_WORDS = {
   MORE: "More",
+  /** What the state chip's menu is heard as before where it stands, as the panel's pill is named "Pull request Open". */
+  STATE: "Pull request",
   COPY_GITHUB_LINK: "Copy GitHub link",
   OPEN_ON_GITHUB: "Open on GitHub",
 } as const;
 
-/** The id the comments row stands under, beside the checks' and the reviewers'. */
-const COMMENTS_ROW = "comments";
+/** The id of the row that opens the conversation on GitHub, where its read failed or left earlier entries there. */
+const OPENS_ROW = { ON_GITHUB: "on-github" } as const;
 
-/** The least a check must have run to say how long, as the panel's checks say it. */
-const RAN_AT_LEAST_MS = 1_000;
+/** What joins the parts of the head's merge sentence. */
+const SENTENCE_PART = " · ";
+
+/** The heading of a pull request's conversation, as the panel's tab heads it. */
+const CONVERSATION_WORDS = "Conversation";
+
+/** The ids of the rows that push a screen of their own: the checks, and the files changed. */
+const PAGE_ROW = {
+  CHECKS: "checks",
+  FILES: "files",
+} as const;
+
+/** What those rows say, as the screens they push are titled. */
+const PAGE_ROW_WORDS = {
+  CHECKS: "Checks",
+  FILES_CHANGED: "Files changed",
+} as const;
 
 function gitHubPullRequestUrl(key: PullRequestKey): string {
   return gitHubPageLink({
@@ -111,50 +140,6 @@ function gitHubPullRequestUrl(key: PullRequestKey): string {
     repository: key.repository,
     number: key.number,
   });
-}
-
-/** What a read holds once it landed; none while it is on its way or failed. */
-function landedOf<Answer extends object>(
-  read: AppHostRead<Answer> | undefined,
-): Exclude<Answer, { failure: unknown }> | undefined {
-  const rows = read?.rows;
-
-  if (rows === undefined || "failure" in rows) return undefined;
-
-  // SAFETY: an answer view is its answer or a failure, and the failure was ruled out above.
-  return rows as Exclude<Answer, { failure: unknown }>;
-}
-
-/** Whether a read failed before any answer landed, which its place says rather than reading on for good. */
-function failedOf(read: AppHostRead<object> | undefined): boolean {
-  return read?.failed === true || (read?.rows !== undefined && "failure" in read.rows);
-}
-
-/** What ends a check's row: how long it ran, or where it stands where it ran for no time or runs still. */
-function checkDetail(check: PullRequestCheck): string {
-  if (
-    check.state !== CHECK_STATE.PENDING &&
-    check.startedAt !== null &&
-    check.completedAt !== null
-  ) {
-    const ran = check.completedAt - check.startedAt;
-
-    if (ran >= RAN_AT_LEAST_MS) return workingTime(ran);
-  }
-
-  return CHECK_WORDS[check.state];
-}
-
-/** The App that runs a check, by the logo GitHub's avatar host serves for it, beside the check's mark, as the panel's check rows draw it; none where it has no such avatar. */
-function checkFace(check: PullRequestCheck) {
-  const picture = githubAvatarUrl(check.avatarUrl);
-
-  if (picture === undefined) return undefined;
-
-  return {
-    of: { name: check.app ?? check.name, picture, kind: FACE_KIND.APP },
-    stands: MARK_FACE.BESIDE,
-  };
 }
 
 /** Copies the pull request's GitHub address, with the system's tap of success, or says on the console why it could not. */
@@ -254,6 +239,15 @@ interface AskedPress {
   readonly request: PullRequestActionRequest;
   readonly words: string;
   readonly ask: MergeAsk;
+}
+
+/** A set with `id` added where it was missing, and taken away where it stood. */
+function toggled(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  const next = new Set(set);
+
+  if (!next.delete(id)) next.add(id);
+
+  return next;
 }
 
 /** Whether two keys name the same pull request. */
@@ -383,10 +377,17 @@ function PullRequestToolbar({
  * own: its path in the bar, the repository and its number, small and muted;
  * its heading, where it stands as the panel's pill says it and its
  * branches, with GitHub's sentence of whether it merges; its description
- * as its author wrote it, in Markdown, where it has one; its checks, how
- * they went counted beside their heading, each with how long it ran and
- * opening its run on GitHub; and its reviewers, where each stands, with
- * how many comments its conversation holds, which opens it on GitHub. Its
+ * as its author wrote it, in Markdown, where it has one; a row for its
+ * checks, how many stand where, a failure first, and a row for the files
+ * it changes, how many and their lines where its agent's listing counts
+ * them, each pushing its own screen, as GitHub's app pushes its Checks and
+ * Files changed; its reviewers, where each stands; and its conversation
+ * inline, as GitHub's app runs its timeline under the page: each comment
+ * and review by who wrote it, where a review left them and when, a short
+ * plain preview of its words that a press opens whole in Markdown, and each
+ * review thread under the review that started it, by its file and lines,
+ * opened to its comments; the earlier entries a read left on GitHub
+ * counted first, opening there. Its
  * parts are held live while the screen is in focus, and a pull down reads
  * them again. The merge's one press merges, or arms auto-merge where the
  * repository merges through a queue, once its question is answered, as a
@@ -465,6 +466,8 @@ function PullRequestPage({
 }) {
   const id = agentId;
   useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(key.number));
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const colors = useColors();
   const openLink = useOpenLink(key.workspaceId);
   const agent = useFollowedAgent(id);
@@ -477,11 +480,15 @@ function PullRequestPage({
   const retry = usePullRequestRetry(key);
   const writes = usePullRequestWrites(key);
   const [chosen, setChosen] = useState<MergeMethod | undefined>(undefined);
+  const [unfolded, setUnfolded] = useState(false);
+  // The conversation's entries and threads opened whole, by their row's id.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  const now = useMinute();
   // The merge whose question stands, by what the pull request offered when it was pressed.
   const [asked, setAsked] = useState<AskedPress | undefined>(undefined);
-  const pullRequest = landedOf(parts.pullRequest)?.pullRequest ?? undefined;
-  const checks = landedOf(parts.checks)?.pullRequest?.checks;
-  const conversation = landedOf(parts.conversation)?.pullRequest ?? undefined;
+  const pullRequest = landedAnswer(parts.pullRequest)?.pullRequest ?? undefined;
+  const checks = landedAnswer(parts.checks)?.pullRequest?.checks;
+  const conversation = landedAnswer(parts.conversation)?.pullRequest ?? undefined;
   const methods = pullRequest?.merging?.methods ?? [];
   // Note that the method chosen stands while the repository still allows it, else the first it allows, as the panel's does.
   const method = chosen !== undefined && methods.includes(chosen) ? chosen : methods[0];
@@ -538,6 +545,22 @@ function PullRequestPage({
     },
   }));
 
+  // Note that the state chip offers the same changes as the bar's ⋯, as the panel's pill opens them where it says where the pull request stands; none once merged, where nothing changes.
+  const stateMenu: FieldMenu | undefined =
+    changes.length === 0
+      ? undefined
+      : {
+          label: MENU_WORDS.STATE,
+          choices: [],
+          actions: changes.map((change) => ({
+            label: PULL_REQUEST_STATE_ACTION_WORDS[change.action],
+            symbol: STATE_ACTION_GLYPHS[change.action],
+            destructive: change.action === PULL_REQUEST_ACTION.CLOSE,
+            disabled: change.disabled,
+            onPress: change.onPress,
+          })),
+        };
+
   useScreenActivity((workspaces) =>
     agent === undefined || agent.taskId === null || title === undefined
       ? undefined
@@ -575,7 +598,7 @@ function PullRequestPage({
   );
 
   if (title === undefined || state === undefined) {
-    const failed = failedOf(parts.pullRequest);
+    const failed = answerFailed(parts.pullRequest);
 
     return page(
       failed ? (
@@ -594,7 +617,13 @@ function PullRequestPage({
   const summary = checks === undefined ? undefined : checksSummaryOf(checks);
   // Note that a pull request with no description, one read from a service before it, or one that holds only HTML GitHub's page hides (a template's comments, a bot's badges), shows no Description section, rather than the panel's "No description provided.", since the phone draws no empty section.
   const description = pullRequest?.body ?? "";
+  // Note that the review threads still unresolved are said beside GitHub's sentence, as a branch that requires them resolved holds the merge for them, so the reader sees why before scrolling to them.
+  const unresolvedCount = conversation === undefined ? 0 : unresolvedThreadCount(conversation);
+  const unresolved = unresolvedCount === 0 ? undefined : unresolvedWords(unresolvedCount);
   const described = markdownShows(description, { hidesHtml: true });
+  // Note that a long description stands folded to its first lines, faded at its foot, until Show more, so the rows and the conversation under it stay a short scroll away, as GitHub's app folds a long body.
+  const folds = descriptionFolds(description);
+  const folded = folds && !unfolded;
 
   const reviewers =
     pullRequest === undefined
@@ -605,22 +634,26 @@ function PullRequestPage({
           pullRequest.author?.login,
         );
 
-  // Each row a press opens, by its id: a check's run, and the conversation, on GitHub.
-  const opens = new Map<string, string>();
-
-  for (const check of checks ?? []) {
-    if (check.url !== null) opens.set(check.url, check.url);
-  }
-
-  if (url !== undefined) opens.set(COMMENTS_ROW, url);
+  // Each row a press pushes a screen of its own for, by its id: the checks, and the files changed.
+  const pushes = new Map<string, string>([
+    [PAGE_ROW.CHECKS, iosPullRequestChecksRoute(key)],
+    [PAGE_ROW.FILES, iosPullRequestFilesRoute(key)],
+  ]);
 
   return page(
     <RowList
       look={LIST_LOOK.PLAIN}
       onSelect={(row) => {
-        const address = opens.get(row);
+        const route = pushes.get(row);
 
-        if (address !== undefined) openInSafari(address);
+        if (route !== undefined) {
+          router.push(onOwnTab(route));
+        } else if (row === OPENS_ROW.ON_GITHUB) {
+          openInSafari(url);
+        } else {
+          // Note that any other row is a conversation's entry or thread, which a press opens whole or folds again.
+          setOpened((was) => toggled(was, row));
+        }
       }}
       onRefresh={retry}
     >
@@ -638,6 +671,7 @@ function PullRequestPage({
                 ? queuedLabel(queued.position)
                 : PULL_REQUEST_STATE_LABEL[state]
           }
+          stateMenu={stateMenu}
           branches={
             pullRequest === undefined
               ? undefined
@@ -645,7 +679,9 @@ function PullRequestPage({
           }
           sentence={
             pullRequest !== undefined && isLivePullRequest(pullRequest)
-              ? mergeSentence(pullRequest, action, { queueShown: true })
+              ? [mergeSentence(pullRequest, action, { queueShown: true }), unresolved]
+                  .filter((part) => part !== undefined)
+                  .join(SENTENCE_PART)
               : undefined
           }
           opened={
@@ -695,69 +731,144 @@ function PullRequestPage({
             repository={agent?.repository}
             onOpenLink={openLink}
             hidesHtml
+            folded={folded}
+            last={!folds}
           />
+          {folds ? (
+            <LinkRow
+              symbol={folded ? GLYPH.FOLDED : GLYPH.UNFOLDED}
+              label={folded ? SHOW_MORE_WORDS : SHOW_LESS_WORDS}
+              onPress={() => setUnfolded(folded)}
+            />
+          ) : null}
         </ListSection>
       ) : null}
-      <ListSection
-        title="Checks"
-        count={
-          checks === undefined || summary === undefined ? undefined : checksCountOf(checks, summary)
-        }
-        mark={summary === undefined ? undefined : CHECK_SUMMARY_LOOK[summary]}
-      >
-        {checks === undefined && !failedOf(parts.checks) ? (
-          <LoadingRow words={PULL_REQUEST_READ_WORDS.READING_CHECKS} />
-        ) : checks === undefined ? (
-          <MarkRow
-            id="checks-reading"
-            mark={CHECK_LOOK[CHECK_STATE.PENDING]}
-            title={PULL_REQUEST_READ_WORDS.CHECKS_FAILED}
-          />
-        ) : checks.length === 0 ? (
-          <MarkRow
-            id="checks-none"
-            mark={CHECK_LOOK[CHECK_STATE.SKIPPED]}
-            title={PULL_REQUEST_READ_WORDS.NO_CHECKS}
-          />
-        ) : (
-          checks.map((check) => (
-            <MarkRow
-              key={check.url ?? check.name}
-              id={check.url ?? check.name}
-              mark={CHECK_LOOK[check.state]}
-              title={check.name}
-              detail={checkDetail(check)}
-              standing={CHECK_WORDS[check.state]}
-              face={checkFace(check)}
-              opens={check.url ?? undefined}
-            />
-          ))
-        )}
+      <ListSection>
+        <MarkRow
+          id={PAGE_ROW.CHECKS}
+          mark={
+            (summary === undefined ? undefined : CHECK_SUMMARY_LOOK[summary]) ?? {
+              symbol: GLYPH.CHECK,
+              tone: STATUS_TONE.NEUTRAL,
+            }
+          }
+          title={PAGE_ROW_WORDS.CHECKS}
+          detail={
+            checks === undefined
+              ? undefined
+              : (checksLineOf(checks) ?? CHECK_SUMMARY_WORDS[CHECK_SUMMARY.NONE])
+          }
+          pushes
+        />
+        <MarkRow
+          id={PAGE_ROW.FILES}
+          mark={{ symbol: GLYPH.CHANGES, tone: STATUS_TONE.NEUTRAL }}
+          title={PAGE_ROW_WORDS.FILES_CHANGED}
+          detail={
+            listed === undefined
+              ? undefined
+              : changesLine({
+                  files: listed.changedFiles,
+                  additions: listed.additions,
+                  deletions: listed.deletions,
+                })
+          }
+          pushes
+        />
       </ListSection>
       <ListSection title="Reviews" count={reviewers.length}>
-        {reviewers.map((reviewer) => (
+        {reviewers.map((reviewer) => {
+          const face = githubFace(reviewer.by);
+
+          return (
+            <MarkRow
+              key={reviewer.by.login}
+              id={reviewer.by.login}
+              mark={REVIEW_LOOK[reviewer.state]}
+              title={face.name}
+              detail={REVIEW_WORDS[reviewer.state]}
+              face={{ of: face, stands: MARK_FACE.LEAD }}
+            />
+          );
+        })}
+      </ListSection>
+      <ListSection
+        title={CONVERSATION_WORDS}
+        count={conversation === undefined ? undefined : conversationCount(conversation)}
+      >
+        {conversation === undefined ? (
+          answerFailed(parts.conversation) ? (
+            <MarkRow
+              id={OPENS_ROW.ON_GITHUB}
+              mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}
+              title={PULL_REQUEST_READ_WORDS.CONVERSATION_FAILED}
+              opens={url}
+            />
+          ) : (
+            <LoadingRow words={PULL_REQUEST_READ_WORDS.READING_CONVERSATION} />
+          )
+        ) : conversation.conversation.length === 0 && conversation.earlier === 0 ? (
           <MarkRow
-            key={reviewer.by.login}
-            id={reviewer.by.login}
-            mark={REVIEW_LOOK[reviewer.state]}
-            title={reviewer.by.login}
-            detail={REVIEW_WORDS[reviewer.state]}
-            face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
-          />
-        ))}
-        {conversation === undefined && !failedOf(parts.conversation) ? (
-          <LoadingRow words={PULL_REQUEST_READ_WORDS.READING_CONVERSATION} />
-        ) : (
-          <MarkRow
-            id={COMMENTS_ROW}
+            id={OPENS_ROW.ON_GITHUB}
             mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}
-            title={
-              conversation === undefined
-                ? PULL_REQUEST_READ_WORDS.CONVERSATION_FAILED
-                : PULL_REQUEST_READ_WORDS.commentCount(conversationCount(conversation))
-            }
-            opens={url}
+            title={PULL_REQUEST_READ_WORDS.NO_CONVERSATION}
           />
+        ) : (
+          <>
+            {conversation.earlier === 0 ? null : (
+              <MarkRow
+                id={OPENS_ROW.ON_GITHUB}
+                mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}
+                title={PULL_REQUEST_READ_WORDS.earlierCount(conversation.earlier)}
+                opens={url}
+              />
+            )}
+            {conversation.conversation.flatMap((entry) => [
+              <ConversationEntryRow
+                key={entry.url}
+                id={entry.url}
+                by={githubFace(entry.by)}
+                standing={
+                  entry.state === undefined
+                    ? undefined
+                    : { mark: REVIEW_LOOK[entry.state], words: REVIEW_WORDS[entry.state] }
+                }
+                at={entry.at}
+                now={now}
+                words={entry.markdown ?? entry.body}
+                open={opened.has(entry.url)}
+                repository={agent?.repository}
+                onOpenLink={openLink}
+              />,
+              // Note that a thread is named by its first comment's page, which no other row shares.
+              ...(entry.threads ?? []).flatMap((thread) => {
+                const first = thread.comments[0];
+
+                if (first === undefined) return [];
+
+                return [
+                  <ThreadRow
+                    key={first.url}
+                    id={first.url}
+                    path={thread.path}
+                    lines={threadLineSpan(thread)}
+                    states={threadStateWords(thread)}
+                    comments={thread.comments.map((comment) => ({
+                      id: comment.url,
+                      by: githubFace(comment.by),
+                      at: comment.at,
+                      words: comment.markdown ?? comment.body,
+                    }))}
+                    count={thread.comments.length + thread.more}
+                    now={now}
+                    open={opened.has(first.url)}
+                    repository={agent?.repository}
+                    onOpenLink={openLink}
+                  />,
+                ];
+              }),
+            ])}
+          </>
         )}
       </ListSection>
     </RowList>,

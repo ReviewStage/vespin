@@ -23,7 +23,15 @@ import {
 import { Option, Schema } from "effect";
 import { AGENT_PART, type AgentPart, agentParts, messageWords } from "./agent-parts.js";
 import { AGENT_TOOL, CLAUDE_CODE_TOOL } from "./agent-tools.js";
-import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
+import {
+  AGENT_SENDER,
+  type AgentTranscriptMessage,
+  CHECK_STATE,
+  type CheckState,
+  REVIEW_STATE,
+  type ReviewState,
+} from "./agent-wire.js";
+import { GITHUB_PAGE, gitHubPageLink } from "./link-grammar.js";
 import { MESSAGE_BLOCK, messageText } from "./reply-quote.js";
 
 /**
@@ -385,6 +393,151 @@ export function githubLineWords(line: GitHubLineMetadata, words: string): string
   return [`${head.event} ${head.target}`, line.words ?? "", ...comments, checks]
     .filter((part) => part !== "")
     .join("\n\n");
+}
+
+/** Where a check a GitHub line names stands in the Pull request tab's own words: one that failed as failed, one that passed as passed, and the rest as skipped, as the tab reads them. */
+export function githubCheckState(conclusion: GitHubCheckConclusion): CheckState {
+  if (isFailingConclusion(conclusion)) return CHECK_STATE.FAILED;
+
+  return conclusion === GITHUB_CHECK_CONCLUSION.SUCCESS ? CHECK_STATE.PASSED : CHECK_STATE.SKIPPED;
+}
+
+/** Where a review left its pull request, by GitHub's own word for its state, as the Pull request tab's badge says it; any other verdict reads as commented. */
+const VERDICT_STATE: ReadonlyMap<string, ReviewState> = new Map([
+  ["approved", REVIEW_STATE.APPROVED],
+  ["changes_requested", REVIEW_STATE.CHANGES_REQUESTED],
+]);
+
+/** What a GitHub line's card wears in its icon's seat. */
+export const GITHUB_LINE_MARK = {
+  /** A review's verdict, as the Pull request tab's badge. */
+  REVIEW: "review",
+  /** A comment's speech mark. */
+  COMMENT: "comment",
+  /** How a check event's checks stood, or the merge queue taking the pull request out, as failed. */
+  CHECKS: "checks",
+  MERGED: "merged",
+  CLOSED: "closed",
+} as const;
+
+export type GitHubLineMark =
+  | { readonly kind: typeof GITHUB_LINE_MARK.REVIEW; readonly review: ReviewState }
+  | { readonly kind: typeof GITHUB_LINE_MARK.COMMENT }
+  | { readonly kind: typeof GITHUB_LINE_MARK.CHECKS; readonly checks: CheckState }
+  | { readonly kind: typeof GITHUB_LINE_MARK.MERGED }
+  | { readonly kind: typeof GITHUB_LINE_MARK.CLOSED };
+
+/** Where a check line's checks stand as one, in the Pull request tab's words: failed where one did, skipped where none passed of those it names, else passed. */
+function checksStanding(line: GitHubLineMetadata, words: string): CheckState {
+  if (githubChecksFailed(line, words)) return CHECK_STATE.FAILED;
+  const checks = line.checks ?? [];
+
+  const nonePassed =
+    checks.length > 0 &&
+    checks.every((check) => check.conclusion !== GITHUB_CHECK_CONCLUSION.SUCCESS);
+
+  return nonePassed ? CHECK_STATE.SKIPPED : CHECK_STATE.PASSED;
+}
+
+/** A GitHub line's mark, by what GitHub did. */
+function githubLineMark(line: GitHubLineMetadata, words: string): GitHubLineMark {
+  switch (line.event) {
+    case GITHUB_LINE_EVENT.REVIEW:
+      return {
+        kind: GITHUB_LINE_MARK.REVIEW,
+        review: VERDICT_STATE.get(line.verdict ?? "") ?? REVIEW_STATE.COMMENTED,
+      };
+    case GITHUB_LINE_EVENT.COMMENT:
+      return { kind: GITHUB_LINE_MARK.COMMENT };
+    case GITHUB_LINE_EVENT.CHECK_FAILED:
+    case GITHUB_LINE_EVENT.CHECKS_COMPLETED:
+      return { kind: GITHUB_LINE_MARK.CHECKS, checks: checksStanding(line, words) };
+    case GITHUB_LINE_EVENT.DEQUEUED:
+      return { kind: GITHUB_LINE_MARK.CHECKS, checks: CHECK_STATE.FAILED };
+    case GITHUB_LINE_EVENT.MERGED:
+      return { kind: GITHUB_LINE_MARK.MERGED };
+    case GITHUB_LINE_EVENT.CLOSED:
+      return { kind: GITHUB_LINE_MARK.CLOSED };
+  }
+}
+
+/** The page a card's head links its pull request to: a review's or a comment's own, else the pull request by its number, else the line's checks. */
+function githubLinePage(line: GitHubLineMetadata): string {
+  const reviewed =
+    line.event === GITHUB_LINE_EVENT.REVIEW || line.event === GITHUB_LINE_EVENT.COMMENT;
+
+  if (reviewed || line.number === undefined) return line.url;
+
+  return gitHubPageLink({
+    kind: GITHUB_PAGE.PULL_REQUEST,
+    repository: line.repository,
+    number: line.number,
+  });
+}
+
+/** How many inline comments a card's head says it holds. */
+function commentsWords(count: number): string {
+  return count === 1 ? "1 comment" : `${count} comments`;
+}
+
+/**
+ * A GitHub line as its folding card draws it, in every window: its mark; its
+ * head, who did it, what they did, and the pull request it links, with how
+ * many inline comments it holds; and what folds under it, their words, each
+ * comment, and the checks it names where one did not pass. A check event's
+ * head is its words alone, capitalized, since what failed or passed is no
+ * act of whoever posted the checks. A card with nothing under its head, an
+ * approval with no words or every check passing, does not fold.
+ */
+export interface GitHubLineFold {
+  readonly mark: GitHubLineMark;
+  /** Who did it, by their login, where the head names them; none for a check event. */
+  readonly by: string | undefined;
+  /** What they did, after their name: "requested changes on"; a check event's words whole: "2 of 3 checks failed on". */
+  readonly does: string;
+  /** What it was done to, which links `page`: "#42", or "its checks". */
+  readonly target: string;
+  readonly page: string;
+  /** How many inline comments it holds, in words; none where it holds none. */
+  readonly count: string | undefined;
+  /** The head whole as one line, as an assistive reader hears it: "grace requested changes on #42, 2 comments". */
+  readonly heard: string;
+  /** What GitHub's author wrote, as Markdown; empty where they wrote nothing. */
+  readonly said: string;
+  readonly comments: NonNullable<GitHubLineMetadata["comments"]>;
+  /** The checks it names, failures first, where one did not pass; none where every check passed, which the head says whole. */
+  readonly checks: readonly GitHubLineCheck[];
+  /** Whether anything stands under the head to fold. */
+  readonly folds: boolean;
+}
+
+/** A GitHub line's folding card, read from the line and the words that told the agent, which say whether a check failed on a line kept before its metadata did. */
+export function githubLineFold(line: GitHubLineMetadata, words: string): GitHubLineFold {
+  const head = githubLineHead(line, words);
+  const said = line.words ?? "";
+  const comments = line.comments ?? [];
+  const checks = githubChecksPassed(line, words) ? [] : githubLineChecks(line);
+  const count = comments.length === 0 ? undefined : commentsWords(comments.length);
+
+  const checked =
+    line.event === GITHUB_LINE_EVENT.CHECK_FAILED ||
+    line.event === GITHUB_LINE_EVENT.CHECKS_COMPLETED;
+
+  const named = checked ? `${head.event} ${head.target}` : `${line.by} ${head.does} ${head.target}`;
+
+  return {
+    mark: githubLineMark(line, words),
+    by: checked ? undefined : line.by,
+    does: checked ? head.event : head.does,
+    target: head.target,
+    page: githubLinePage(line),
+    count,
+    heard: count === undefined ? named : `${named}, ${count}`,
+    said,
+    comments,
+    checks,
+    folds: said !== "" || comments.length > 0 || checks.length > 0,
+  };
 }
 
 /** A user row's metadata where it names the channel that carried it; nothing for an assistant's row, an observation, or a row this build cannot read. */

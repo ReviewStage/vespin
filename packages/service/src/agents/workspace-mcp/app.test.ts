@@ -12,7 +12,12 @@ import {
   DESCRIPTION_ATTACHMENT_KEEP,
   keepDescriptionAttachment,
 } from "@repo/database/models/description-attachments";
+import { parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import {
+  linkSlackInstallation,
+  saveSlackBotToken,
+} from "@repo/database/models/slack-installation-store";
 import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { member, organization, user } from "@repo/database/schemas/auth";
@@ -44,7 +49,7 @@ import {
 } from "@repo/wire";
 import { webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { Clock, Effect, Layer, Option, Redacted } from "effect";
+import { Clock, Effect, Layer, Option, Redacted, Result } from "effect";
 import { Base64 } from "effect/encoding";
 import { type HttpClient, HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -460,9 +465,39 @@ function post(
   });
 }
 
+/** Connects the Slack bot to the agent's workspace, its token sealed with a fresh ring, whose agents are offered the Slack tools only then. */
+const slackBotConnected = (agent: { readonly userId: string; readonly organizationId: string }) =>
+  Effect.gen(function* () {
+    const ring = Result.getOrThrow(
+      parseKeyRing(Redacted.make(`1:${randomBytes(32).toString("base64")}`)),
+    );
+
+    const { organizationId, userId } = agent;
+    yield* linkSlackInstallation({ organizationId, teamId: "T0001", teamName: "Team", userId });
+    yield* saveSlackBotToken(ring, {
+      organizationId,
+      teamId: "T0001",
+      token: Redacted.make("xoxb-test"),
+      botUserId: "U0BOT",
+      botId: "B0BOT",
+      appId: "A0APP",
+      scopes: ["chat:write"],
+      enterpriseId: null,
+      isEnterpriseInstall: false,
+    });
+  });
+
 /** Turns Task descriptions on for the workspace an agent's starter starts its tasks in, whose agents are offered the description's tools only then. */
 const descriptionsOn = (userId: string) =>
   experimentInTestWorkspace(userId, EXPERIMENT.DESCRIPTIONS);
+
+/** The Slack tools, offered only where the agent's workspace connected the Slack bot. */
+const SLACK_TOOLS = [
+  "list_slack_channels",
+  "send_slack_message",
+  "read_slack",
+  "react_slack",
+] as const;
 
 /** The agent tools about the workspace's agents, tasks, automations, and memory, each of whose catalog entries names its own run (`tool-catalog/catalog.ts`'s `agentTool`). */
 const AGENT_TOOLS = [
@@ -495,10 +530,7 @@ const AGENT_TOOLS = [
   "search_memory",
   "list_memories",
   "forget_memory",
-  "list_slack_channels",
-  "send_slack_message",
-  "read_slack",
-  "react_slack",
+  ...SLACK_TOOLS,
   "schedule_wakeup",
 ] as const;
 
@@ -771,6 +803,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         });
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.REPLY_BUTTONS);
         yield* descriptionsOn(agent.userId);
+        yield* slackBotConnected(agent);
         const client = yield* connected(fetch, agent.bearer);
 
         const listed = yield* Effect.promise(() => client.listTools());
@@ -783,7 +816,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         const standingOn = {
           agent: Option.none(),
-          open: new Set<ToolGate>(),
+          open: new Set<ToolGate>([TOOL_GATE.SLACK]),
           experiments: {
             descriptionsOn: true,
             memoryOn: true,
@@ -894,7 +927,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       withheld: ["show_page", "browser"],
     },
   ])(
-    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Reply buttons, and Computer use off",
+    "tools/list leaves out what the catalog's gates offer no agent $why, the memory, the description's, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Reply buttons, and Computer use off, and the Slack tools, named in no tool's words, where its workspace has not connected the Slack bot",
     ({ agent: made, withheld }) =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -913,11 +946,18 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "edit_description",
           "add_suggestion",
           "computer",
+          ...SLACK_TOOLS,
         ];
 
         assert.deepEqual(
           listed.tools.map((tool) => tool.name).sort(),
           SERVED_TOOLS.filter((name) => !left.includes(name)).sort(),
+        );
+        assert.deepEqual(
+          listed.tools.filter((tool) =>
+            SLACK_TOOLS.some((slack) => tool.description?.includes(slack)),
+          ),
+          [],
         );
       }),
   );

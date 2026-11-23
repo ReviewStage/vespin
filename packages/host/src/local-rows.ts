@@ -36,8 +36,8 @@ const heldRowSchema = Schema.Struct({ key: Schema.String, position: Schema.Numbe
 /** The last place a read holds a key at, none where it holds none. */
 const lastPositionSchema = Schema.Struct({ last: Schema.NullOr(Schema.Number) });
 
-/** A `row` row's JSON, as a load reads it in held order. */
-const loadedRowSchema = Schema.Struct({ row: Schema.fromJsonString(Schema.Unknown) });
+/** A `row` row's JSON, as a load reads it in held order, before it is parsed. */
+const loadedRowSchema = Schema.Struct({ row: Schema.String });
 
 /** A `cursor` row's JSON, none where the read answered none. */
 const cursorRowSchema = Schema.Struct({
@@ -174,13 +174,14 @@ function loadedFrom(connection: LocalDatabaseConnection, name: KeptName): KeptLo
 
   if (stored === undefined) return undefined;
 
+  // Note that each row's JSON is parsed by `JSON.parse` itself rather than through a schema's, because a launch loads every kept row, thousands of them, and the schema's walk cost as much as the parse; a row that is no JSON throws as the schema's did.
   const rows = decodeLoadedRows(
     connection
       .prepare(
         "SELECT row.row AS row FROM held JOIN row ON row.kind = held.kind AND row.key = held.key WHERE held.read = ? AND held.workspace = ? ORDER BY held.position",
       )
       .all(name.read, workspace),
-  ).map(({ row }) => row);
+  ).map(({ row }) => JSON.parse(row));
 
   return { rows, cursor: stored.cursor ?? undefined };
 }

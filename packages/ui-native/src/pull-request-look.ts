@@ -5,11 +5,14 @@ import {
   CHECK_SUMMARY,
   type CheckState,
   type CheckSummary,
+  PULL_REQUEST_STATE,
   REVIEW_STATE,
   type ReviewState,
 } from "@repo/features/agent-wire";
+import { GITHUB_LINE_MARK, type GitHubLineMark } from "@repo/features/transcript-lines";
 import { GLYPH, type MarkLook } from "./glyph.js";
-import { STATUS_TONE } from "./tokens/colors.js";
+import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { STATUS_TONE } from "./tokens/status-tone.js";
 
 /**
  * Each check's glyph, the panel's own: passed a green
@@ -43,3 +46,24 @@ export const REVIEW_LOOK = {
   [REVIEW_STATE.COMMENTED]: { symbol: GLYPH.COMMENT, tone: STATUS_TONE.NEUTRAL },
   [REVIEW_STATE.REQUESTED]: { symbol: GLYPH.STATUS, tone: STATUS_TONE.ATTENTION },
 } as const satisfies Record<ReviewState, MarkLook>;
+
+/**
+ * What a GitHub line's card wears in its icon's seat, as the panel's card
+ * does: a review's verdict as its reviewer's glyph, a comment's speech mark,
+ * a check event's checks as one check's glyph, and a pull request merged or
+ * closed as its state's.
+ */
+export function githubLineLook(mark: GitHubLineMark): MarkLook {
+  switch (mark.kind) {
+    case GITHUB_LINE_MARK.REVIEW:
+      return REVIEW_LOOK[mark.review];
+    case GITHUB_LINE_MARK.COMMENT:
+      return REVIEW_LOOK[REVIEW_STATE.COMMENTED];
+    case GITHUB_LINE_MARK.CHECKS:
+      return CHECK_LOOK[mark.checks];
+    case GITHUB_LINE_MARK.MERGED:
+      return PULL_REQUEST_LOOK[PULL_REQUEST_STATE.MERGED];
+    case GITHUB_LINE_MARK.CLOSED:
+      return PULL_REQUEST_LOOK[PULL_REQUEST_STATE.CLOSED];
+  }
+}
