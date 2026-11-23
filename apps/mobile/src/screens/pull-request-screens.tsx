@@ -43,6 +43,8 @@ import {
   reviewersOf,
   threadLineSpan,
   threadStateWords,
+  unresolvedThreadCount,
+  unresolvedWords,
 } from "@repo/features/pull-request-model";
 import {
   type MergeMethod,
@@ -113,6 +115,9 @@ const MENU_WORDS = {
 
 /** The id of the row that opens the conversation on GitHub, where its read failed or left earlier entries there. */
 const OPENS_ROW = { ON_GITHUB: "on-github" } as const;
+
+/** What joins the parts of the head's merge sentence. */
+const SENTENCE_PART = " · ";
 
 /** The heading of a pull request's conversation, as the panel's tab heads it. */
 const CONVERSATION_WORDS = "Conversation";
@@ -612,6 +617,9 @@ function PullRequestPage({
   const summary = checks === undefined ? undefined : checksSummaryOf(checks);
   // Note that a pull request with no description, one read from a service before it, or one that holds only HTML GitHub's page hides (a template's comments, a bot's badges), shows no Description section, rather than the panel's "No description provided.", since the phone draws no empty section.
   const description = pullRequest?.body ?? "";
+  // Note that the review threads still unresolved are said beside GitHub's sentence, as a branch that requires them resolved holds the merge for them, so the reader sees why before scrolling to them.
+  const unresolvedCount = conversation === undefined ? 0 : unresolvedThreadCount(conversation);
+  const unresolved = unresolvedCount === 0 ? undefined : unresolvedWords(unresolvedCount);
   const described = markdownShows(description, { hidesHtml: true });
   // Note that a long description stands folded to its first lines, faded at its foot, until Show more, so the rows and the conversation under it stay a short scroll away, as GitHub's app folds a long body.
   const folds = descriptionFolds(description);
@@ -671,7 +679,9 @@ function PullRequestPage({
           }
           sentence={
             pullRequest !== undefined && isLivePullRequest(pullRequest)
-              ? mergeSentence(pullRequest, action, { queueShown: true })
+              ? [mergeSentence(pullRequest, action, { queueShown: true }), unresolved]
+                  .filter((part) => part !== undefined)
+                  .join(SENTENCE_PART)
               : undefined
           }
           opened={
