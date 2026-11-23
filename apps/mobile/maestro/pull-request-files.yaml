@@ -1,4 +1,4 @@
-# pull-request-files.yaml -- a pull request's Files changed: opened from its page's ⋯, one list of its files in the tree's order, each with its letter, lines, and folder under its name, and a search by path narrowing them.
+# pull-request-files.yaml -- a pull request's Files changed: opened from its page's Files changed row, one list of its files in the tree's order, each with its letter, lines, and folder under its name, and a search by path narrowing them.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -27,8 +27,11 @@ env:
 - extendedWaitUntil:
     visible: "Ready to merge"
     timeout: 30000
-- runFlow: subflows/more.yaml
-- tapOn: "Files changed"
+# Its Files changed row, beside Checks under the description, pushes them.
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Files changed.*"
 # The files stand in one list in the tree's order, each with the count of
 # lines it adds and removes at its row's end and its folder under its name.
 # Note that a row is one element heard by the file's name, its folder and

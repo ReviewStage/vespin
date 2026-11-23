@@ -59,6 +59,20 @@ export const STATUS_WORDS = {
   [CHANGED_FILE_STATUS.RENAMED]: "Renamed",
 } as const satisfies Record<ChangedFileStatus, string>;
 
+/** The minus sign a count of removed lines wears, as GitHub writes it. */
+const MINUS = "−";
+
+/** How many files a pull request changes and the lines they add and remove together, as GitHub's Files changed tab counts them: "6 files · +212 −38". */
+export function changesLine(changed: {
+  readonly files: number;
+  readonly additions: number;
+  readonly deletions: number;
+}): string {
+  const noun = changed.files === 1 ? "file" : "files";
+
+  return `${changed.files} ${noun} · +${changed.additions} ${MINUS}${changed.deletions}`;
+}
+
 /**
  * What a file's pane says in its patch's place, or nothing where it draws
  * its hunks: why it carries no patch, that a file only moved kept its

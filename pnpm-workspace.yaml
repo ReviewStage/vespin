@@ -201,6 +201,19 @@ patchedDependencies:
 # release checks it in development alone.
   "@tanstack/db@1.0.0-rc.1.5": patches/@tanstack__db@1.0.0-rc.1.5.patch
 #
+# `@formatjs/intl-datetimeformat` 8.0.3 unpacks every IANA zone the moment its
+# data is added (`__addTZData`), each zone's every transition into arrays,
+# though a reader reads its own zone and few others: the iOS app adds all of
+# them as Hermes starts (`apps/mobile/src/host/polyfills.ts`), since the
+# reader's zone is known only on the device, and the unpacking was about
+# 80 ms of every launch with V8's JIT off, on the path to the first frame.
+# The patch unpacks each zone as it is first read, the data an object of
+# enumerable getters, so a lookup by name and `Object.keys` read it as
+# before. It patches the three builds that carry `unpack` (`index.js`,
+# `polyfill.js`, `polyfill-force.js`). Delete it when a release unpacks
+# zones lazily.
+  "@formatjs/intl-datetimeformat@8.0.3": patches/@formatjs__intl-datetimeformat@8.0.3.patch
+#
 # `expo-notifications` 58.1.8's `getPermissionsAsync` runs on Expo's one shared
 # async queue (`expo.modules.AsyncFunctionQueue`, which every module's
 # synchronous `AsyncFunction` runs on) and blocks it on a semaphore until

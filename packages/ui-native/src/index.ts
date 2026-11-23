@@ -166,6 +166,7 @@ export {
   type HeldAct,
   type Keeping,
   KeepingProvider,
+  usePicturesView,
   type ViewedPicture,
 } from "./held-menu.js";
 

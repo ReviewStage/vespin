@@ -75,18 +75,22 @@ function partIn<Part>(
 }
 
 /**
- * The pull request's parts as the host holds them, each held followed while
- * the screen is in focus and let go as it leaves, as the panel's tab holds
+ * The pull request's parts as the host holds them, each of those `shown`
+ * (every part where none are named) held followed while the screen is in
+ * focus and let go as it leaves, as the panel's tab holds
  * them while it shows. Note that the document keeps a part's identity while
  * it does not move, so the screen is drawn again only as one does.
  */
-export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
+export function usePullRequestParts(
+  key: PullRequestKey,
+  shown: readonly PullRequestPart[] = SHOWN_PARTS,
+): PullRequestParts {
   const acts = useHostActs();
   const follow = useHostFollow();
   const { workspaceId, repository, number } = key;
   useFocusEffect(
     useCallback(() => {
-      const stops = SHOWN_PARTS.map((part) =>
+      const stops = shown.map((part) =>
         follow(
           () => acts[ACT_KIND.PULL_REQUESTS_PART_FOLLOW]({ part, workspaceId, repository, number }),
           () => undefined,
@@ -96,7 +100,7 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
       return () => {
         for (const stop of stops) stop();
       };
-    }, [acts, follow, workspaceId, repository, number]),
+    }, [acts, follow, workspaceId, repository, number, shown]),
   );
 
   const pullRequest = useQuery({

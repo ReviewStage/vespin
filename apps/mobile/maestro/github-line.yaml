@@ -1,0 +1,56 @@
+# github-line.yaml -- what GitHub said on an agent's pull request stands in its transcript as the desktop's card does: closed under its head, who requested changes on which pull request and how many comments it holds, opening on the review's words and each inline comment under its file when its head is tapped, and closing again.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that an iPad stands in landscape, where its transcript stands in the
+# detail column beside the list, scrolled well inside it (`BESIDE`), and is
+# turned back upright however the flow ends, because a run left in landscape
+# fails every flow after it.
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose invitations agent holds a
+# teammate's review of its pull request
+# (`@repo/host/fixture-agent-transcript`), and opened on its page by
+# `-agent <id>`; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 30000
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "gracehopper requested changes on #128, 2 comments"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+# Closed as it lands: its head alone, none of the prompt the agent read.
+- assertNotVisible: "Close, but an invite to an address.*"
+- assertNotVisible: "Act on it as you judge best."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: github-line-closed
+- tapOn: "gracehopper requested changes on #128, 2 comments"
+- extendedWaitUntil:
+    visible: "Close, but an invite to an address.*"
+    timeout: 5000
+- assertVisible: "src/members/invite.ts.*"
+- assertVisible: "src/pages/invite.tsx.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: github-line-open
+- tapOn: "gracehopper requested changes on #128, 2 comments"
+- extendedWaitUntil:
+    notVisible: "Close, but an invite to an address.*"
+    timeout: 5000

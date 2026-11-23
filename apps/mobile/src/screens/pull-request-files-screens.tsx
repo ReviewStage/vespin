@@ -2,6 +2,7 @@
 
 import {
   CHANGES_WORDS,
+  changesLine,
   filterFiles,
   gitHubFileDiffLink,
   treeOrder,
@@ -35,16 +36,13 @@ const FILES_WORDS = {
   NONE_FOUND: "No files match.",
 } as const;
 
-/** The minus sign a count of removed lines wears, as GitHub writes it. */
-const MINUS = "−";
-
 /** What the bar says under the title: how many files, and the lines they add and remove together, as GitHub's tab counts them. */
 function summaryOf(files: readonly { readonly additions: number; readonly deletions: number }[]) {
-  const added = files.reduce((sum, file) => sum + file.additions, 0);
-  const removed = files.reduce((sum, file) => sum + file.deletions, 0);
-  const noun = files.length === 1 ? "file" : "files";
-
-  return `${files.length} ${noun} · +${added} ${MINUS}${removed}`;
+  return changesLine({
+    files: files.length,
+    additions: files.reduce((sum, file) => sum + file.additions, 0),
+    deletions: files.reduce((sum, file) => sum + file.deletions, 0),
+  });
 }
 
 /**
