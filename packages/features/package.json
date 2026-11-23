@@ -277,6 +277,7 @@
     "./pull-request-chapters-live": "./src/pull-request-chapters-live.js",
     "./pull-request-moved-live": "./src/pull-request-moved-live.js",
     "./changed-files": "./src/changed-files.js",
+    "./viewed-marks": "./src/viewed-marks.js",
     "./diff-hunks": "./src/diff-hunks.js",
     "./provider-key-wire": "./src/provider-key-wire.js",
     "./inbox-push-wire": "./src/inbox-push-wire.js",

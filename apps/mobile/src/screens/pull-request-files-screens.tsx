@@ -35,6 +35,7 @@ import { useState } from "react";
 import { openInSafari } from "../open-link.js";
 import type { PullRequestKey } from "../pull-requests/use-pull-request.js";
 import { usePullRequestChanges } from "../pull-requests/use-pull-request-changes.js";
+import { usePullRequestViewed } from "../pull-requests/use-pull-request-viewed.js";
 import { useOnOwnTab } from "../tab-route.js";
 
 /** What the screen says in the panel's words, beyond the changes' own (`CHANGES_WORDS`). */
@@ -42,11 +43,15 @@ const FILES_WORDS = {
   TITLE: "Files changed",
   FIND: "Find a file",
   NONE_FOUND: "No files match.",
+  MORE: "More",
+  HIDE_VIEWED: "Hide viewed",
+  ALL_VIEWED: "Every file is viewed.",
 } as const;
 
 /** What a file's screen says and offers, in the panel's words where it has them. */
 const FILE_WORDS = {
   MORE: "More",
+  VIEWED: "Viewed",
   PREVIOUS: "Previous file",
   NEXT: "Next file",
   WRAP: "Wrap lines",
@@ -82,12 +87,17 @@ function gitHubAddressOf(key: PullRequestKey, read: string | undefined): string 
 }
 
 /** What the bar says under the title: how many files, and the lines they add and remove together, as GitHub's tab counts them. */
-function summaryOf(files: readonly { readonly additions: number; readonly deletions: number }[]) {
-  return changesLine({
+function summaryOf(
+  files: readonly { readonly additions: number; readonly deletions: number }[],
+  viewed: number,
+) {
+  const counted = changesLine({
     files: files.length,
     additions: files.reduce((sum, file) => sum + file.additions, 0),
     deletions: files.reduce((sum, file) => sum + file.deletions, 0),
   });
+
+  return viewed === 0 ? counted : `${counted} · ${viewed} viewed`;
 }
 
 /**
@@ -97,7 +107,10 @@ function summaryOf(files: readonly { readonly additions: number; readonly deleti
  * tree lists them (`treeOrder`), each a row naming the folder it stands in
  * under its name (`ChangedFileRow`), as Dean picked. The bar's search
  * keeps the files whose path holds what is typed, as the desktop's does
- * (`filterFiles`). A press opens the file's diff on a screen of its own
+ * (`filterFiles`), and Hide viewed in its ⋯ leaves out the files the
+ * member marked viewed (`usePullRequestViewed`), each standing faded and
+ * ticked otherwise, their count in the bar's summary; a mark GitHub would
+ * not take says so in the list's footer. A press opens the file's diff on a screen of its own
  * (`PullRequestFileScreen`). Where GitHub
  * listed more files than one read carries, the list's footer says so, in
  * the panel's words, as it says a read that failed after files were drawn,
@@ -110,8 +123,14 @@ export function PullRequestFilesScreen() {
   const colors = useColors();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const changes = usePullRequestChanges(key);
+  const viewed = usePullRequestViewed(key);
   const [search, setSearch] = useState("");
+  const [hideViewed, setHideViewed] = useState(false);
   const files = changes.files;
+
+  // Note that the files marked viewed are counted as they stand drawn, a press not yet settled among them.
+  const viewedCount =
+    files === undefined ? 0 : files.filter((file) => viewed.viewed(file.path)).length;
 
   const bar = (
     <>
@@ -127,14 +146,29 @@ export function PullRequestFilesScreen() {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
-      <StackSubtitle words={files === undefined ? "" : summaryOf(files)} leading={regular} />
+      <StackSubtitle
+        words={files === undefined ? "" : summaryOf(files, viewedCount)}
+        leading={regular}
+      />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={FILES_WORDS.MORE}>
+          <Stack.Toolbar.MenuAction isOn={hideViewed} onPress={() => setHideViewed(!hideViewed)}>
+            {FILES_WORDS.HIDE_VIEWED}
+          </Stack.Toolbar.MenuAction>
+        </Stack.Toolbar.Menu>
+      </Stack.Toolbar>
     </>
   );
 
-  const kept = files === undefined ? [] : filterFiles(treeOrder(files), search);
-  // Note that a read failing after files were drawn keeps them, and says so under them, as a pull reads them again.
-  const refreshFailed = files !== undefined && changes.failed ? CHANGES_WORDS.FAILED : undefined;
-  const footer = refreshFailed ?? (changes.truncated ? CHANGES_WORDS.TRUNCATED : undefined);
+  const searched = files === undefined ? [] : filterFiles(treeOrder(files), search);
+  const kept = hideViewed ? searched.filter((file) => !viewed.viewed(file.path)) : searched;
+
+  // Note that a read failing after files were drawn keeps them, and says so under them, as a pull reads them again; a mark GitHub would not take says so there first.
+  const refused =
+    viewed.note ?? (files !== undefined && changes.failed ? CHANGES_WORDS.FAILED : undefined);
+
+  const footer = refused ?? (changes.truncated ? CHANGES_WORDS.TRUNCATED : undefined);
+
   const byPath = new Map(kept.map((file) => [file.path, file]));
 
   const empty =
@@ -150,6 +184,8 @@ export function PullRequestFilesScreen() {
       )
     ) : files.length === 0 ? (
       <EmptyState title={CHANGES_WORDS.EMPTY} symbol={GLYPH.CHANGES} />
+    ) : kept.length === 0 && searched.length > 0 ? (
+      <EmptyState title={FILES_WORDS.ALL_VIEWED} symbol={GLYPH.CHECK} />
     ) : kept.length === 0 ? (
       <EmptyState title={FILES_WORDS.NONE_FOUND} symbol={GLYPH.SEARCH} />
     ) : undefined;
@@ -167,9 +203,9 @@ export function PullRequestFilesScreen() {
             if (byPath.has(path)) router.push(onOwnTab(iosPullRequestFileRoute(key, path)));
           }}
         >
-          <ListSection footer={footer} footerTone={footerToneOf(refreshFailed)}>
+          <ListSection footer={footer} footerTone={footerToneOf(refused)}>
             {kept.map((file) => (
-              <ChangedFileRow key={file.path} file={file} />
+              <ChangedFileRow key={file.path} file={file} viewed={viewed.viewed(file.path)} />
             ))}
           </ListSection>
         </RowList>
@@ -183,7 +219,8 @@ export function PullRequestFilesScreen() {
  * file named by its path in the route's query: its name in the bar, in the
  * ink, its folder under it, and the diff filling the screen
  * (`DiffView`), drawn natively and wrapped unless Wrap lines in the ⋯ says
- * not. The arrows beside the ⋯ step to the file before or after it in the
+ * not. Viewed in the ⋯ marks the file viewed on GitHub, or unmarks it, as
+ * the desktop's box does (`usePullRequestViewed`). The arrows beside the ⋯ step to the file before or after it in the
  * list's order, in place, as Mail steps between messages, an arrow at the
  * list's end standing dimmed; the ⋯ also opens the file's diff on GitHub.
  * A file with no diff to draw says why, in the panel's words
@@ -200,6 +237,7 @@ export function PullRequestFileScreen() {
   const colors = useColors();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const changes = usePullRequestChanges(key);
+  const viewed = usePullRequestViewed(key);
   const [wrap, setWrap] = useState(true);
   // The files whose folded diff was asked for by Show diff, by path, held while the screen stands.
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
@@ -241,6 +279,13 @@ export function PullRequestFileScreen() {
         </Stack.Toolbar.Button>
         <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={FILE_WORDS.MORE}>
           <Stack.Toolbar.Label>{FILE_WORDS.MORE}</Stack.Toolbar.Label>
+          <Stack.Toolbar.MenuAction
+            isOn={viewed.viewed(path)}
+            disabled={viewed.toggle === undefined || file === undefined}
+            onPress={() => viewed.toggle?.(path)}
+          >
+            {FILE_WORDS.VIEWED}
+          </Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction isOn={wrap} onPress={() => setWrap(!wrap)}>
             {FILE_WORDS.WRAP}
           </Stack.Toolbar.MenuAction>

@@ -56,12 +56,30 @@ env:
 # heard as its line numbers and its words.
 - eraseText
 - tapOn: "Cancel"
+# Hide viewed in the ⋯ leaves out the file the member marked viewed on
+# GitHub (`docs/invitations.md`), and shows it again once unchecked.
+- runFlow: subflows/more.yaml
+- tapOn: "Hide viewed"
+- extendedWaitUntil:
+    notVisible: "invitations.md"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-files-hide-viewed
+- runFlow: subflows/more.yaml
+- tapOn: "Hide viewed"
+- extendedWaitUntil:
+    visible: "invitations.md"
+    timeout: 10000
 - tapOn: "resend.ts"
 - extendedWaitUntil:
     visible: ".*fresh expiry.*"
     timeout: 15000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-diff
+# Viewed in the ⋯ marks the file viewed on GitHub.
+- runFlow: subflows/more.yaml
+- tapOn: "Viewed"
+- waitForAnimationToEnd
 # The arrows step to the next file in the list's order, in place.
 - tapOn: "Next file"
 - extendedWaitUntil:
