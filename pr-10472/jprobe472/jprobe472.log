@@ -1,0 +1,87 @@
+built main 7067272d01 + #10472 d53baa1f8a as 002759bffa
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 16:54:56 26482 MB
+curve 16:55:26 26434 MB
+curve 16:55:56 24576 MB
+curve 16:56:26 24253 MB
+curve 16:56:56 23856 MB
+curve 16:57:26 23579 MB
+curve 16:57:57 23551 MB
+curve 16:58:27 23536 MB
+curve 16:58:57 23459 MB
+curve 16:59:27 23400 MB
+curve 16:59:57 23196 MB
+curve 17:00:28 22909 MB
+curve 17:00:58 22740 MB
+curve 17:01:28 22725 MB
+curve 17:01:58 22643 MB
+curve 17:02:28 22597 MB
+curve 17:02:59 22551 MB
+curve 17:03:29 22465 MB
+curve 17:03:59 22394 MB
+curve 17:04:29 22273 MB
+curve 17:04:59 22083 MB
+curve 17:05:30 22064 MB
+curve 17:06:00 21920 MB
+curve 17:06:30 21851 MB
+curve 17:07:00 21675 MB
+curve 17:07:30 21602 MB
+curve 17:08:00 21590 MB
+curve 17:08:31 21482 MB
+curve 17:09:01 21463 MB
+curve 17:09:31 21440 MB
+curve 17:10:01 21531 MB
+curve 17:10:31 21200 MB
+curve 17:11:02 21176 MB
+curve 17:11:32 21167 MB
+curve 17:12:02 21042 MB
+curve 17:12:32 21066 MB
+curve 17:13:03 20998 MB
+curve 17:13:33 20987 MB
+curve 17:14:03 20964 MB
+curve 17:14:33 20957 MB
+curve 17:15:04 20935 MB
+curve 17:15:34 20920 MB
+curve 17:16:04 20865 MB
+curve 17:16:34 20891 MB
+curve 17:17:04 20877 MB
+curve 17:17:35 20852 MB
+curve 17:18:05 20842 MB
+curve 17:18:35 20813 MB
+curve 17:19:05 20801 MB
+curve 17:19:36 20766 MB
+curve 17:20:06 20737 MB
+curve 17:20:36 20705 MB
+curve 17:21:06 20668 MB
+curve 17:21:36 20418 MB
+curve 17:22:07 20404 MB
+curve 17:22:37 19892 MB
+curve 17:23:07 19707 MB
+curve 17:23:37 19617 MB
+curve 17:24:08 19548 MB
+curve 17:24:38 19436 MB
+curve 17:25:08 19288 MB
+curve 17:25:38 19177 MB
+curve 17:26:08 19093 MB
+curve 17:26:39 18986 MB
+curve 17:27:09 18871 MB
+curve 17:27:39 18791 MB
+curve 17:28:09 18769 MB
+curve 17:28:39 18769 MB
+curve 17:29:09 18582 MB
+curve 17:29:39 18708 MB
+curve 17:30:10 18452 MB
+curve 17:30:40 18525 MB
+curve 17:31:10 18567 MB
+curve 17:31:40 18532 MB
+BUILD EXIT 0 17:32:10
+sizes: Assets.car 23863128 bytes (main Vp10456.app 23863128), .app 119984 KB (main 119980 KB), zipped .app 45258481 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjprobe472.app: replacing existing signature
+p10472-iphone-light-description-edit: fails 1 shots 6 Tap on "Indent"... FAILED
+probe lines: show 47, stream 46
