@@ -43,7 +43,6 @@ import { CONFIRM_DIALOGS_EXAMPLE } from "./examples/confirm-dialogs";
 import { COPY_BUTTONS_EXAMPLE } from "./examples/copy-buttons";
 import { CORNER_COUNTS_EXAMPLE } from "./examples/corner-counts";
 import { COUNT_FIGURES_EXAMPLE } from "./examples/count-figures";
-import { COUNT_LINES_EXAMPLE } from "./examples/count-lines";
 import { COUNT_PARTS_EXAMPLE } from "./examples/count-parts";
 import { DAILY_BARS_EXAMPLE } from "./examples/daily-bars";
 import { DATA_TABLE_EXAMPLE } from "./examples/data-table";
@@ -240,7 +239,6 @@ export const EXAMPLES: readonly Example[] = [
   DIALOG_ACTIONS_EXAMPLE,
   DISCLOSURES_EXAMPLE,
   DRAFT_CARDS_EXAMPLE,
-  COUNT_LINES_EXAMPLE,
   DRAWER_SWIPES_EXAMPLE,
   DROP_SLOTS_EXAMPLE,
   EDGE_CLIPS_EXAMPLE,

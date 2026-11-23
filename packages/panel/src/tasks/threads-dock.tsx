@@ -96,16 +96,9 @@ const NEEDS_YOU_ROWS = 3;
  * One ask that waits on the developer, as the bar lists it: its title, and
  * a decide of two short options answered from its row's buttons, as the
  * Inbox answers it; any other ask says what it wants under its title and
- * opens its thread. A Manager's overview lists its waiting threads in the
- * same rows (`manager-overview.tsx`).
+ * opens its thread.
  */
-export function NeedsYouRow({
-  item,
-  threads,
-}: {
-  item: InboxItem;
-  threads: AgentThreads;
-}): ReactNode {
+function NeedsYouRow({ item, threads }: { item: InboxItem; threads: AgentThreads }): ReactNode {
   const directory = useMemberDirectory();
 
   const nameOf = (member: Parameters<typeof personActor>[0]) =>
