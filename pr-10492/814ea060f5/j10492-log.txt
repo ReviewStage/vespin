@@ -1,0 +1,11 @@
+== bundle PJj10492 base 814ea060f5
+  built 814ea060f5 base app Vmain10.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-accessibility-ax3: content_size accessibility-extra-large
+iphone-light-accessibility-ax3: fails 0 shots 6 
+ipad27-light-accessibility-ax3: content_size accessibility-extra-large
+ipad27-light-accessibility-ax3: fails 0 shots 6 
+ipad27-light-large-inbox: fails 0 shots 1 
