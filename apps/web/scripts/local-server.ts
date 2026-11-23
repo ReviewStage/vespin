@@ -20,7 +20,9 @@
  * `LOCAL_SERVER_BUILT_PAGES=true`) it runs `vite build` first and serves the
  * pages it wrote instead, through the same page table, while the routes are
  * still imported from source, as close to the deployment as this machine
- * can come: a function's bundle does not run here. It listens on 127.0.0.1
+ * can come: a function's bundle does not run here. An upgrade at the live
+ * reads' socket goes to the server that function exports, so a page's live
+ * reads run over one WebSocket as they do deployed. It listens on 127.0.0.1
  * alone, on `--port`, `PORT`, or Vite's own port, and calls the scheduled
  * sweep on the cron's cadence under `CRON_SECRET`, as Vercel's cron does.
  *
@@ -33,7 +35,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { createServer } from "node:http";
+import { createServer, IncomingMessage, type Server } from "node:http";
 import { createRequire, registerHooks } from "node:module";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -105,8 +107,9 @@ const SHUTDOWN_GRACE = Duration.seconds(1);
 /**
  * The site as `pnpm dev` serves it, in middleware mode under this server.
  * Note that Vite's HMR socket is left off, because the Effect server answers
- * every upgrade on this server itself and a socket of Vite's own would be a
- * second port: an edit shows on the page's next load.
+ * every upgrade on this server but the deployment's own sockets itself, and
+ * a socket of Vite's own would be a second port: an edit shows on the page's
+ * next load.
  */
 const VITE: InlineConfig = { root: WEB, server: { middlewareMode: true, ws: false } };
 
@@ -333,6 +336,35 @@ function answer(origin: string, site: LocalSite) {
   });
 }
 
+/**
+ * The server the routes listen on, whose upgrades at a path the deployment
+ * serves a WebSocket function at go to that function's own server, as Vercel
+ * upgrades into it, and every other upgrade to the Effect server's handler.
+ * Note that the upgrade is taken where the server emits it, because the
+ * Effect server (`NodeHttpServer`) answers every upgrade it hears, so a
+ * listener beside its own would see the socket answered twice.
+ */
+function routingUpgrades(upgrades: ReadonlyMap<string, Server>): Server {
+  const server = createServer();
+  const emit = server.emit.bind(server);
+
+  // SAFETY: the replacement takes every event `emit` does and hands each on with the arguments it came with, so its overloads still hold.
+  server.emit = ((event: string | symbol, ...args: Array<unknown>) => {
+    const [request] = args;
+
+    const pathname =
+      event === "upgrade" && request instanceof IncomingMessage
+        ? new URL(request.url ?? "/", `http://${LOOPBACK}`).pathname
+        : undefined;
+
+    const target = pathname === undefined ? undefined : upgrades.get(pathname);
+
+    return target === undefined ? emit(event, ...args) : target.emit(event, ...args);
+  }) as Server["emit"];
+
+  return server;
+}
+
 /** The scheduled sweep as Vercel's cron calls it, under the cron secret, on the cadence the root `vercel.json` gives it, answered in process. */
 function sweepOnSchedule(deployment: LocalDeployment, origin: string, secret: Redacted.Redacted) {
   const sweep = Effect.tryPromise(async () => {
@@ -385,7 +417,7 @@ const program = Effect.gen(function* () {
     yield* Effect.logWarning(`${ENV.CRON_SECRET} is not set, so the scheduled sweep does not run`);
   }
 
-  const listening = NodeHttpServer.layer(createServer, {
+  const listening = NodeHttpServer.layer(() => routingUpgrades(deployment.upgrades), {
     port,
     host: LOOPBACK,
     gracefulShutdownTimeout: SHUTDOWN_GRACE,
