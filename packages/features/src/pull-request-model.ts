@@ -415,6 +415,18 @@ export function bypassSentence(pullRequest: AgentOverviewPullRequest, method: Me
   return `${mergeSentence(pullRequest, MERGE_ACTION.BYPASS)}. This merges it into ${base} now by ${METHOD_NOUNS[method]}, as you on GitHub, bypassing the rules ${base} requires.`;
 }
 
+/* ----- The description ----- */
+
+/** How long a pull request's description runs before a phone folds it behind Show more: its lines with words on them, or its characters. */
+const DESCRIPTION_FOLD = { LINES: 12, CHARACTERS: 900 } as const;
+
+/** Whether a pull request's description runs long enough that a phone folds it, by its Markdown's lines with words and its length, so nothing is measured before it is drawn. */
+export function descriptionFolds(markdown: string): boolean {
+  const lines = markdown.split("\n").filter((line) => line.trim() !== "").length;
+
+  return lines > DESCRIPTION_FOLD.LINES || markdown.length > DESCRIPTION_FOLD.CHARACTERS;
+}
+
 /* ----- The checks ----- */
 
 /** Where a check stands, in the words its glyph says to a reader who cannot see it and the count says. */
