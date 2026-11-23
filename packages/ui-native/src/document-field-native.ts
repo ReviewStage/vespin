@@ -94,7 +94,7 @@ export interface NativeFormats {
   readonly blocksTitle: string;
   readonly blocksGlyph: string;
   readonly blocks: readonly NativeFormatAct[];
-  /** The moves of a list's items a step back out and deeper, leading Turn into's menu, which Shift-Tab and Tab make too. */
+  /** The moves of a list's items a step back out and deeper, which Shift-Tab and Tab make too: on the bar while the caret is in a list item, in the place of as many of the last marks, which step into Turn into's menu. */
   readonly indent?: NativeFormatAct | undefined;
   readonly outdent?: NativeFormatAct | undefined;
 }

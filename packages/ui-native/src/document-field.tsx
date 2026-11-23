@@ -95,9 +95,10 @@ function formatAct(action: WritingAction, act: FormatAct): NativeFormatAct {
  * What the field offers on its selection, in its edit menu and the bar over
  * the keyboard: the desktop toolbar's marks and link, then the blocks its
  * Turn into offers that a line of words can be, each in the panel's words
- * and glyph (`@repo/settings`' `WRITING_SHORTCUTS`), led on the bar's Turn
- * into by Outdent and Indent, which move a list's items as Shift-Tab and Tab
- * do. A code block and a divider are made on the desktop.
+ * and glyph (`@repo/settings`' `WRITING_SHORTCUTS`). While the caret is in
+ * a list item, the bar stands Outdent and Indent, which move its items as
+ * Shift-Tab and Tab do, in the last marks' place, and those marks lead its
+ * Turn into. A code block and a divider are made on the desktop.
  */
 const FORMATS: NativeFormats = {
   title: FORMAT_WORDS.MENU,
