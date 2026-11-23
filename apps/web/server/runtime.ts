@@ -53,9 +53,10 @@ function webLayer(): Layer.Layer<WebServices, WebServicesError> {
   );
 
   // Note that the catalog is provided over the services, because what a layer provides on top wins over what it is merged with.
+  // Note that it is built fresh, because Effect memoizes a layer by reference: an override built over the deployment's own `modelCatalogLayer` would otherwise be handed the instance `webServices` built over the real fetch.
   return override.modelCatalog === undefined
     ? services
-    : Layer.provideMerge(override.modelCatalog, services);
+    : Layer.provideMerge(Layer.fresh(override.modelCatalog), services);
 }
 
 /**
