@@ -24,7 +24,10 @@
  * Where both move in one reading, the arrival is the developer's own and
  * wins over the binding it found. The window's first reading is the host's
  * word over the place it opened on, as a launch on Home with a task bound
- * stands that task, and arrives nowhere.
+ * stands that task, and arrives nowhere, but where the host binds none: a
+ * window opening on a task's own place with no task bound asks for that
+ * task, as a reload of a task's page on the web, whose host starts in the
+ * tab with none bound, opens on the step it saved.
  *
  * The arrivals are counted for the window's router (`usePlaceArrivals`),
  * every move of the developer's to another page, but for the binding's own
@@ -119,6 +122,15 @@ function bindingMove(before: BindingReading, now: BindingReading): BindingMove {
   return BINDING_MOVE.STAY;
 }
 
+/** The move the window's first reading asks for: the task its own place opened on, where the host binds none, else as the binding was just made. */
+function firstMove(now: BindingReading): BindingMove {
+  if (now.bound === undefined && holdsTask(now.place) && now.task !== undefined) {
+    return BINDING_MOVE.SELECT;
+  }
+
+  return bindingMove({ ...now, bound: undefined }, now);
+}
+
 /** The arrivals counted on a router's history, and where the binding's own move is on its way to, which is no arrival of the developer's. */
 interface Arrivals {
   count: number;
@@ -199,13 +211,14 @@ export function usePlaceBinding(input: PlaceBindingInput): void {
     }
 
     const now = { place, task, page, bound };
-    // Note that the first reading takes the place it opened on as already there, the binding as just made.
-    const before = read.current ?? { place, task, page, bound: undefined };
+    // Note that the first reading takes the place it opened on as already there, so it counts no arrival (`firstMove`).
+    const before = read.current;
     read.current = now;
     const counted = arrivalsOf(history);
-    countArrival(counted, before, now);
 
-    switch (bindingMove(before, now)) {
+    if (before !== undefined) countArrival(counted, before, now);
+
+    switch (before === undefined ? firstMove(now) : bindingMove(before, now)) {
       case BINDING_MOVE.UNBIND:
         doors.current.onUnbind();
 

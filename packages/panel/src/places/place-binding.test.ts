@@ -103,7 +103,7 @@ test("arriving on Home with a task bound lets go of the task, and leaves Home no
 });
 
 test("arriving on Home as the host binds a task in the same breath lets go of it rather than leaving, and a task bound later leaves Home", () => {
-  const window = mount(`/acme/task/${TASK_ID}`, undefined);
+  const window = mount("/acme/inbox", undefined);
   window.arriveBinding("/acme", OTHER_TASK_ID);
   window.bind(undefined);
   window.bind(TASK_ID);
@@ -113,6 +113,11 @@ test("arriving on Home as the host binds a task in the same breath lets go of it
 test("a window opening on Home with a task already bound stands that task, the host's word over the place it opened on", () => {
   const window = mount("/app", TASK_ID);
   assert.deepEqual(window.moves, ["to the task"]);
+});
+
+test("a window opening on a task's own place with no task bound asks for that task, as a reload of its page on the web does", () => {
+  const window = mount(`/acme/task/${TASK_ID}`, undefined);
+  assert.deepEqual(window.moves, [`select ${TASK_ID}`]);
 });
 
 test("the host binding no task under the task standing goes Home, and does nothing under a place standing over it", () => {
