@@ -1,0 +1,45 @@
+settings.yaml centred 6 orient added
+settings-mcp.yaml centred 1 orient added
+settings-cloud-environment.yaml centred 2 orient added
+fset9970.yaml centred 2 orient added
+fset9967a.yaml centred 1 orient added
+fcloud9977.yaml centred 0 orient kept
+#10040 on main
+#10044 on main
+#10045 on main
+#10047 on main
+#10049 on main
+== bundle PSET4 base 590dab3977
+  built 590dab3977 base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+p10040-iphone-light: fails 0 shots 3 
+p10040-iphone-light-machines: fails 0 shots 4 
+p10040-iphone-light-cloud: fails 0 shots 4 
+p10044-iphone-light: fails 1 shots 1 Scrolling DOWN until "Vespin MCP & CLI" is visible with speed 40, visibility percentage 100%, timeout 20000 ms
+p10045-iphone-light: fails 1 shots 1 Assert that "Ada Lovelace" is visible... FAILED
+p10047-iphone-light: fails 0 shots 2 
+p10049-iphone-light: fails 1 shots 1 Scrolling DOWN until "Integrations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, wi
+p10040-iphone-dark: fails 1 shots 1 Scrolling DOWN until "Memory" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with cen
+p10040-iphone-dark-machines: fails 1 shots 1 Scrolling DOWN until "Machines" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with c
+p10040-iphone-dark-cloud: fails 0 shots 4 
+p10044-iphone-dark: fails 1 shots 1 Scrolling DOWN until "Vespin MCP & CLI" is visible with speed 40, visibility percentage 100%, timeout 20000 ms
+p10045-iphone-dark: fails 1 shots 1 Assert that "Ada Lovelace" is visible... FAILED
+p10047-iphone-dark: fails 0 shots 2 
+p10049-iphone-dark: fails 1 shots 1 Scrolling DOWN until "Integrations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, wi
+p10040-ipad27-light: fails 0 shots 3 
+p10040-ipad27-light-machines: fails 0 shots 4 
+p10040-ipad27-light-cloud: fails 0 shots 4 
+p10044-ipad27-light: fails 0 shots 4 
+p10045-ipad27-light: fails 1 shots 2 Assert that "Notifications, On" is visible... FAILED
+p10047-ipad27-light: fails 0 shots 2 
+p10049-ipad27-light: fails 1 shots 1 Assert that "Connected" is visible... FAILED
+p10040-ipad27-dark: fails 0 shots 3 
+p10040-ipad27-dark-machines: fails 0 shots 4 
+p10040-ipad27-dark-cloud: fails 0 shots 4 
+p10044-ipad27-dark: fails 0 shots 4 
+p10045-ipad27-dark: fails 1 shots 2 Assert that "Notifications, On" is visible... FAILED
+p10047-ipad27-dark: fails 0 shots 2 
+p10049-ipad27-dark: fails 1 shots 1 Assert that "Connected" is visible... FAILED
