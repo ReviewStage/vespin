@@ -26,8 +26,9 @@ import { MANAGER_FACE_SIZE, ManagerFace } from "./manager-face.js";
  * New Manager before a pick, where the service picks one, the first face is.
  *
  * It stands where a section's picker does, hung from a well wearing the face
- * (`ManagerFaceWell`), as a Manager's card offers it; a pick hands the face
- * on and puts the picker away.
+ * (`ManagerFaceWell`), as a Manager's card offers it, or beside a menu's
+ * item on the menu's surface (`ManagerFaceMenuPanel`), as a Manager's Change
+ * face › opens it; a pick hands the face on and puts the picker away.
  *
  * It sits on a subpath of its own (`@repo/ui/manager-face-picker`), out of
  * the barrel, as the face does, so Kawaii reaches only the bundles that
@@ -68,6 +69,10 @@ const NO_FACE_MATCHES = "No faces match.";
 
 /** What the picker's popover is called. */
 const MANAGER_FACE = "Manager face";
+
+/** The picker as a menu's panel: on the menu's surface, which the panel beside a menu's item leaves to what it holds. */
+const MENU_PANEL =
+  "ui-manager-face-menu-panel rounded-menu border border-border-strong bg-popover text-popover-foreground shadow-menu animate-menu-in";
 
 /** What a face is called: its color, then its character, "Purple cat". */
 function faceName(face: ManagerFaceValue): string {
@@ -200,5 +205,21 @@ export function ManagerFaceWell({
         }}
       />
     </PopoverIconButton>
+  );
+}
+
+/** The picker as a menu's panel beside its item (`MenuPanel`'s `panel`), on the menu's surface, as a Manager's Change face › opens it: a pick hands the face on, and its owner closes the menu. */
+export function ManagerFaceMenuPanel({
+  face,
+  onChange,
+}: {
+  /** The face standing, pressed. */
+  face: ManagerFaceValue | undefined;
+  onChange: (next: ManagerFaceValue) => void;
+}): React.JSX.Element {
+  return (
+    <div className={MENU_PANEL}>
+      <ManagerFacePicker face={face} onChange={onChange} />
+    </div>
   );
 }
