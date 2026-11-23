@@ -471,6 +471,7 @@ const slackBotConnected = (agent: { readonly userId: string; readonly organizati
     const ring = Result.getOrThrow(
       parseKeyRing(Redacted.make(`1:${randomBytes(32).toString("base64")}`)),
     );
+
     const { organizationId, userId } = agent;
     yield* linkSlackInstallation({ organizationId, teamId: "T0001", teamName: "Team", userId });
     yield* saveSlackBotToken(ring, {
