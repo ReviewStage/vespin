@@ -48,7 +48,9 @@ const LOCAL_SERVER_ENV = {
  *
  * The second server is the web app's local server (`apps/web/server/README.md`,
  * "The local server"): the hosted routes and the site's pages on one
- * loopback port, over the suite's database. Note that its command reads the
+ * loopback port, over the suite's database, started through
+ * `server/e2e-server.ts` so its sandboxes, agents' sessions, and model
+ * catalog are the suite's fakes. Note that its command reads the
  * URL file in the shell, because the URL is only known once the database is
  * up, which is after this config is read. It sets no `VERCEL*` variable,
  * since the local server refuses to start beside one. It counts as up once
@@ -75,7 +77,7 @@ export default defineConfig({
     },
     {
       name: "local-server",
-      command: `DATABASE_URL="$(cat ${DATABASE_URL_FILE})" DATABASE_URL_UNPOOLED="$(cat ${DATABASE_URL_FILE})" pnpm --filter @repo/web local-server --port ${PORT}`,
+      command: `DATABASE_URL="$(cat ${DATABASE_URL_FILE})" DATABASE_URL_UNPOOLED="$(cat ${DATABASE_URL_FILE})" pnpm e2e-server --port ${PORT}`,
       env: LOCAL_SERVER_ENV,
       url: `${ORIGIN}/app`,
       gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },

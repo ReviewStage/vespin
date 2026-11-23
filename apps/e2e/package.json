@@ -5,8 +5,13 @@
   "type": "module",
   "description": "Vespin's end-to-end journeys on Playwright Test: the config, the specs, and the servers they start; never shipped",
   "scripts": {
+    "e2e-server": "tsx server/e2e-server.ts",
     "test:e2e": "playwright test",
     "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@repo/sandbox": "workspace:*",
+    "@repo/service": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
