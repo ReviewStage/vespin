@@ -824,6 +824,7 @@ export function fixtureChanges(number: number): RepositoryChangesAnswerView {
   return {
     pullRequest: {
       url: `${REPOSITORY_URL}/pull/${number}`,
+      headSha: "4f2a9c1e7b3d5a8f0c6e2b9d1a4f7c3e5b8d0a2f",
       files: READY_FILES,
       truncated: false,
     },

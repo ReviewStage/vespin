@@ -1,6 +1,6 @@
 // diff-view-model.ts -- a changed file's patch as the app's native diff view takes it: one row per line of the diff, a hunk's header included, and a row for each review thread under the line it is on, handed as columns rather than an object per row, so a diff of thousands of lines crosses to the view as a handful of values.
 
-import { DIFF_SIDE, type ReviewThread } from "@repo/features/agent-wire";
+import { DIFF_SIDE, type DiffSide, type ReviewThread } from "@repo/features/agent-wire";
 import { DIFF_ROW, type DiffRowKind, patchHunks } from "@repo/features/diff-hunks";
 
 /** What a row of the drawn diff is, one letter each, as the view reads them: a hunk's header, a line of context, one added, one removed, or git's note on the line above it. */
@@ -160,4 +160,22 @@ export function drawnDiff(
     columns: { kinds: kinds.join(""), oldLines, newLines, text: lines.join("\n") },
     threads: placedThreads,
   };
+}
+
+/** The words of one line of a patch, on the side it counts on, as a comment on it quotes them; none where the patch shows no such line. */
+export function diffLineText(patch: string, line: number, side: DiffSide): string | undefined {
+  for (const hunk of patchHunks(patch) ?? []) {
+    for (const row of hunk.rows) {
+      const at = side === DIFF_SIDE.LEFT ? row.oldLine : row.newLine;
+
+      if (
+        at === line &&
+        (side === DIFF_SIDE.LEFT ? row.kind !== DIFF_ROW.ADDED : row.kind !== DIFF_ROW.REMOVED)
+      ) {
+        return row.text;
+      }
+    }
+  }
+
+  return undefined;
 }

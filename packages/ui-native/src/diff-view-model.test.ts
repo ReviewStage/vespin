@@ -1,6 +1,6 @@
 import { DIFF_SIDE, type DiffSide, type ReviewThread } from "@repo/features/agent-wire";
 import { expect, it } from "vitest";
-import { DRAWN_ROW, drawnDiff, NO_LINE } from "./diff-view-model.js";
+import { DRAWN_ROW, diffLineText, drawnDiff, NO_LINE } from "./diff-view-model.js";
 
 /**
  * diff-view-model.test.ts -- a patch reaches the native diff view as columns: each hunk's header a row of its own, every row numbered on the sides it stands on, and a tab drawn as spaces.
@@ -78,4 +78,13 @@ it("stands each thread under the line it is on, on its side, and one on no line 
     [4, "Why drop this?"],
     [6, "Nice."],
   ]);
+});
+
+// Note that the regression this catches is a comment quoting the added line for an old-side number it shares with a removed one.
+it("quotes a line of the patch by its number on the side it counts on", () => {
+  const patch = ["@@ -4,1 +4,1 @@", "-old words", "+new words"].join("\n");
+
+  expect(diffLineText(patch, 4, DIFF_SIDE.LEFT)).toBe("old words");
+  expect(diffLineText(patch, 4, DIFF_SIDE.RIGHT)).toBe("new words");
+  expect(diffLineText(patch, 9, DIFF_SIDE.RIGHT)).toBeUndefined();
 });

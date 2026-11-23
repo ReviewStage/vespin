@@ -1,5 +1,6 @@
-// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: one list in the tree's order, each file its letter, name, lines and folder, and a search by path; each file's diff on a screen of its own, drawn natively, stepping to the file before or after it, its review threads standing under their lines, each opening on its own screen.
+// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: one list in the tree's order, each file its letter, name, lines and folder, and a search by path; each file's diff on a screen of its own, drawn natively, stepping to the file before or after it, its review threads standing under their lines, each opening on its own screen, and a comment asked on any line from its long press; and a new comment on one line, added to the member's review or sent at once.
 
+import { DIFF_SIDE, type DiffSide } from "@repo/features/agent-wire";
 import {
   CHANGES_WORDS,
   changesLine,
@@ -10,30 +11,47 @@ import {
   startsCollapsed,
   treeOrder,
 } from "@repo/features/changed-files";
-import { iosPullRequestFileRoute, iosPullRequestThreadRoute } from "@repo/features/ios-app-links";
+import {
+  iosPullRequestFileRoute,
+  iosPullRequestLineCommentRoute,
+  iosPullRequestThreadRoute,
+} from "@repo/features/ios-app-links";
 import { GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
+import {
+  PULL_REQUEST_ACTION,
+  REVIEW_COMMENT_MODE,
+  REVIEW_COMMENT_SIDE,
+  type ReviewCommentMode,
+} from "@repo/features/pull-request-write-wire";
 import {
   BAR_TITLE,
   BUTTON_LOOK,
   ChangedFileRow,
+  Composer,
   DiffView,
+  diffLineText,
   EmptyState,
   footerToneOf,
   GLYPH,
+  GlassDock,
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  MENU_CHIP_LOOK,
+  MenuChip,
   RowList,
   Screen,
+  ScriptRow,
   StackSubtitle,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
+  WriteNoteRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { openInSafari } from "../open-link.js";
-import type { PullRequestKey } from "../pull-requests/use-pull-request.js";
+import { type PullRequestKey, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 import { usePullRequestChanges } from "../pull-requests/use-pull-request-changes.js";
 import { usePullRequestThreads } from "../pull-requests/use-pull-request-threads.js";
 import { useFileViewed, usePullRequestViewed } from "../pull-requests/use-pull-request-viewed.js";
@@ -231,7 +249,8 @@ export function PullRequestFilesScreen() {
  * (`startsCollapsed`), says so with Show diff. Each review thread on the
  * file stands as a card under the line it is on (`usePullRequestThreads`),
  * and a press on it opens the thread whole on its own screen
- * (`pull-request-thread-screens.tsx`). The files are the list's own
+ * (`pull-request-thread-screens.tsx`); a long press on a line offers
+ * Comment on line (`PullRequestLineCommentScreen`). The files are the list's own
  * read (`usePullRequestChanges`), so the screen reads nothing of its own
  * where the list read them.
  */
@@ -328,6 +347,11 @@ export function PullRequestFileScreen() {
               router.push(onOwnTab(iosPullRequestThreadRoute(key, thread.id)));
             else if (first !== undefined) openInSafari(first);
           }}
+          onLineComment={(target) =>
+            router.push(
+              onOwnTab(iosPullRequestLineCommentRoute(key, { path: file.path, ...target })),
+            )
+          }
           testID="pull-request-diff"
         />
       </>
@@ -374,6 +398,145 @@ export function PullRequestFileScreen() {
     <>
       {bar}
       <Screen>{state}</Screen>
+    </>
+  );
+}
+
+/** What a new comment's screen says, in the panel's words where it has them. */
+const COMMENT_WORDS = {
+  PLACEHOLDER: "Leave a comment",
+  line: (line: number) => `Comment on line ${line}`,
+  where: (name: string, line: number) => `${name} · line ${line}`,
+  SENDS_AS: "Sends as",
+  NO_LINE: "This line isn't in the file's diff anymore.",
+} as const;
+
+/** What each way of sending a comment is called, as its capsule says it: added to the member's pending review, as GitHub's Start a review, or sent at once. */
+const MODE_WORDS = {
+  [REVIEW_COMMENT_MODE.REVIEW]: "Add to review",
+  [REVIEW_COMMENT_MODE.SINGLE]: "Comment now",
+} as const satisfies Record<ReviewCommentMode, string>;
+
+/** The side a comment is written on, as GitHub takes it, for the side a diff's line counts on. */
+const COMMENT_SIDE_OF = {
+  [DIFF_SIDE.LEFT]: REVIEW_COMMENT_SIDE.LEFT,
+  [DIFF_SIDE.RIGHT]: REVIEW_COMMENT_SIDE.RIGHT,
+} as const satisfies Record<DiffSide, string>;
+
+/**
+ * A new review comment on one line of a pull request's file, named by the
+ * file's path, the line, and the side it counts on in the route's query,
+ * opened from the line's long press in its diff: the line quoted in the
+ * monospaced face under the file's name, and the comment field docked under
+ * it, taking the keyboard as it opens. Its capsule says how Send sends it,
+ * Add to review by default, as Dean picked, which adds it to the member's
+ * pending review on GitHub, or Comment now, which posts it alone. A comment
+ * GitHub took closes the screen, the conversation read again behind it; one
+ * it would not take says why above the line and keeps the words.
+ */
+export function PullRequestLineCommentScreen() {
+  const key = usePullRequestKey();
+
+  const {
+    path = "",
+    line = "",
+    side = "",
+  } = useLocalSearchParams<{ path: string; line: string; side: string }>();
+
+  const router = useRouter();
+  const colors = useColors();
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const changes = usePullRequestChanges(key);
+  const writes = usePullRequestWrites(key);
+  const [words, setWords] = useState("");
+  const [mode, setMode] = useState<ReviewCommentMode>(REVIEW_COMMENT_MODE.REVIEW);
+  const lineNumber = Number(line);
+  const diffSide = side === DIFF_SIDE.LEFT ? DIFF_SIDE.LEFT : DIFF_SIDE.RIGHT;
+  const file = changes.files?.find((each) => each.path === path);
+  const patch = file?.patch ?? null;
+  const quoted = patch === null ? undefined : diffLineText(patch, lineNumber, diffSide);
+  const { name } = folderAndName(path);
+  const headSha = changes.headSha;
+
+  const send = () => {
+    if (headSha === undefined || words.trim() === "") return;
+
+    void writes
+      .write({
+        action: PULL_REQUEST_ACTION.ADD_REVIEW_COMMENT,
+        mode,
+        path,
+        line: lineNumber,
+        side: COMMENT_SIDE_OF[diffSide],
+        body: words,
+        headSha,
+      })
+      .then((went) => {
+        if (went) router.back();
+      });
+  };
+
+  const modeChip = (
+    <MenuChip
+      look={MENU_CHIP_LOOK.COMPOSER}
+      label={MODE_WORDS[mode]}
+      menu={{
+        groups: [
+          {
+            title: COMMENT_WORDS.SENDS_AS,
+            choices: [REVIEW_COMMENT_MODE.REVIEW, REVIEW_COMMENT_MODE.SINGLE].map((each) => ({
+              label: MODE_WORDS[each],
+              on: each === mode,
+              onPress: () => setMode(each),
+            })),
+          },
+        ],
+      }}
+    />
+  );
+
+  const quote =
+    quoted !== undefined ? (
+      <ScriptRow name={COMMENT_WORDS.where(name, lineNumber)} script={quoted} />
+    ) : changes.files === undefined ? (
+      <EmptyState title={CHANGES_WORDS.READING} symbol={GLYPH.CHANGES} loading />
+    ) : (
+      <EmptyState title={COMMENT_WORDS.NO_LINE} symbol={GLYPH.CHANGES} />
+    );
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          title: COMMENT_WORDS.line(lineNumber),
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+        }}
+      />
+      <StackSubtitle words={name} leading={regular} />
+      <GlassDock
+        bar={
+          <Composer
+            placeholder={COMMENT_WORDS.PLACEHOLDER}
+            autoFocus
+            words={words}
+            onWords={setWords}
+            sendable={words.trim() !== "" && headSha !== undefined && writes.pending === undefined}
+            onSend={send}
+            tools={modeChip}
+          />
+        }
+      >
+        <Screen>
+          <RowList look={LIST_LOOK.PLAIN}>
+            <ListSection>
+              {writes.note === undefined ? null : (
+                <WriteNoteRow words={writes.note.words} said={writes.note.said} />
+              )}
+              {quote}
+            </ListSection>
+          </RowList>
+        </Screen>
+      </GlassDock>
     </>
   );
 }

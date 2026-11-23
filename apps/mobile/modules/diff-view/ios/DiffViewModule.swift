@@ -42,7 +42,7 @@ public final class DiffViewModule: Module {
     Name("DiffView")
 
     View(DiffView.self) {
-      Events("onThreadPress")
+      Events("onThreadPress", "onLineComment")
 
       Prop("rows") { (view: DiffView, rows: RowsRecord) in
         view.take(DiffRows(rows))
@@ -54,6 +54,10 @@ public final class DiffViewModule: Module {
 
       Prop("path") { (view: DiffView, path: String) in
         view.language = DiffLanguage(path: path)
+      }
+
+      Prop("words") { (view: DiffView, words: WordsRecord) in
+        view.words = words
       }
     }
   }
@@ -82,6 +86,12 @@ struct LookRecord: Record {
   @Field var syntax: [UIColor] = []
   @Field var card: UIColor? = nil
   @Field var cardEdge: UIColor? = nil
+}
+
+/// What a code row's long press menu says, in the panel's words, which JavaScript hands: commenting on its line, which the line's number follows, and copying it.
+struct WordsRecord: Record {
+  @Field var comment: String = ""
+  @Field var copy: String = ""
 }
 
 // MARK: - The diff as the view holds it
@@ -451,6 +461,8 @@ final class DiffLineCell: UICollectionViewCell {
 /// The diff: a collection view of its rows over the layout, laid out again as its rows, its look, or its width change.
 final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDelegate {
   let onThreadPress = EventDispatcher()
+  let onLineComment = EventDispatcher()
+  var words = WordsRecord()
   private static let signposter = OSSignposter(subsystem: "dev.vespin.ios", category: "DiffView")
 
   private let layout = DiffLayout()
@@ -545,6 +557,33 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
   /// A press on a thread's card tells JavaScript its row, which knows the thread; any other row takes no press.
   func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
     indexPath.item < rows.count && rows.kinds[indexPath.item] == .thread
+  }
+
+  /// A long press on a line of code opens the system's menu over it: Comment on its line, which tells JavaScript the row to comment on, and Copy, as GitHub's mobile diff offers a line's acts; a header, a note, or a thread's card opens none.
+  func collectionView(
+    _ collectionView: UICollectionView,
+    contextMenuConfigurationForItemsAt indexPaths: [IndexPath],
+    point: CGPoint
+  ) -> UIContextMenuConfiguration? {
+    guard let row = indexPaths.first?.item, row < rows.count else { return nil }
+    let kind = rows.kinds[row]
+
+    guard kind == .added || kind == .removed || kind == .context else { return nil }
+    let line = kind == .removed ? rows.oldLines[row] : rows.newLines[row]
+    let text = String(rows.lines[row])
+    let comment = words.comment
+    let copy = words.copy
+
+    return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+      UIMenu(children: [
+        UIAction(title: "\(comment) \(line)", image: UIImage(named: "MessageSquare")) { _ in
+          self?.onLineComment(["row": row])
+        },
+        UIAction(title: copy, image: UIImage(named: "Copy")) { _ in
+          UIPasteboard.general.string = text
+        },
+      ])
+    }
   }
 
   func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {

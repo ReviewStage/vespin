@@ -33,6 +33,8 @@ export interface PullRequestChanges {
   readonly truncated: boolean;
   /** The pull request's address on GitHub, where a read gave it. */
   readonly url: string | undefined;
+  /** The commit the files were read at, which a comment on one of their lines names; none where the read gave none. */
+  readonly headSha: string | undefined;
   /** Whether the last read did not answer with the files. */
   readonly failed: boolean;
   /** Reads the files again. */
@@ -49,8 +51,13 @@ function landedOf(answer: RepositoryChangesAnswerView) {
   const { pullRequest } = answer;
 
   return pullRequest === null
-    ? { files: [], truncated: false, url: undefined }
-    : { files: pullRequest.files, truncated: pullRequest.truncated, url: pullRequest.url };
+    ? { files: [], truncated: false, url: undefined, headSha: undefined }
+    : {
+        files: pullRequest.files,
+        truncated: pullRequest.truncated,
+        url: pullRequest.url,
+        headSha: pullRequest.headSha,
+      };
 }
 
 /** The changed files of the pull request `key` names, read as the screen first shows. */
@@ -75,6 +82,7 @@ export function usePullRequestChanges(key: PullRequestKey): PullRequestChanges {
     files: read.data?.files,
     truncated: read.data?.truncated ?? false,
     url: read.data?.url,
+    headSha: read.data?.headSha,
     failed: read.isError,
     refresh: async () => {
       await read.refetch();
