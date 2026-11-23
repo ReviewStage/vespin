@@ -212,6 +212,7 @@
     "./testing/task-contents": "./src/testing/task-contents.js",
     "./testing/descriptions": "./src/testing/descriptions.js",
     "./testing/repository-sandbox": "./src/testing/repository-sandbox.js",
+    "./testing/scripted-agent-sessions": "./src/testing/scripted-agent-sessions.js",
     "./testing/sentry-transport": "./src/testing/sentry-transport.js",
     "./testing/session-sandboxes-fake": "./src/testing/session-sandboxes-fake.js",
     "./testing/workspace-plugin": "./src/testing/workspace-plugin.js"
