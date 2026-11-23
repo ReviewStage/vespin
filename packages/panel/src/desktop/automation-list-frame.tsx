@@ -1,5 +1,6 @@
 import {
   GROUP_HEADING,
+  type GroupFold,
   GroupHeader,
   List,
   ListMotion,
@@ -82,12 +83,15 @@ export function AutomationGroupList({
   name,
   nameMasked = true,
   headed,
+  fold,
   children,
 }: {
   name: string;
   /** Whether the name is a person's words, a workspace's name, kept masked in a screen recording. */
   nameMasked?: boolean;
   headed: boolean;
+  /** How a headed group folds under its heading; left out, its rows always stand. */
+  fold?: GroupFold | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   const root = useRef<HTMLElement | null>(null);
@@ -109,6 +113,7 @@ export function AutomationGroupList({
         <GroupHeader
           heading={GROUP_HEADING.H2}
           label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
+          fold={fold}
         >
           {rows}
         </GroupHeader>
