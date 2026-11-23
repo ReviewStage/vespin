@@ -9,7 +9,7 @@
 
 import type { RunProfile } from "@repo/host/app-state";
 import { followStream, type OpenedStream } from "@repo/host/follow-stream";
-import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
+import { Effect, Fiber, Layer, ManagedRuntime, Scheduler } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
@@ -18,6 +18,22 @@ import {
   type MobileHost,
   MobileHostTag,
 } from "./compose-mobile.js";
+
+/**
+ * The scheduler every fiber of the host yields through: each yield a task of
+ * its own (`setTimeout`), so React's render and the app's timers run between
+ * the host's steps. Note that Effect's default scheduler yields through
+ * `setImmediate`, which React Native's new architecture runs as a microtask,
+ * so no yield ever left the JS task it began in: the host's work after it
+ * stood, its task list drawn a chunk at a time among it, held the screens'
+ * first render until all of it was done, about 0.9 s of a cold launch at a
+ * busy account's scale on the iPhone 18 Pro simulator.
+ */
+const yieldingScheduler = new Scheduler.MixedScheduler("async", (run) => {
+  const timer = setTimeout(run, 0);
+
+  return () => clearTimeout(timer);
+});
 
 /** What the app's root hands the start: the device as the host reads it, and what this launch is. */
 export interface MobileHostStartOptions {
@@ -71,7 +87,7 @@ export async function startMobileHost(
     runtime.runFork(Effect.withErrorReporting(effect, { defectsOnly: true }));
   };
 
-  // The reporters stand beneath the host, so every fiber it forks and every act reports through them.
+  // The reporters and the scheduler stand beneath the host, so every fiber it forks and every act reports and yields through them.
   runtime = ManagedRuntime.make(
     Layer.provideMerge(
       composeMobile({
@@ -87,7 +103,10 @@ export async function startMobileHost(
         stateRoot: options.stateRoot,
         device: options.device,
       }),
-      options.errorReporting ?? Layer.empty,
+      Layer.merge(
+        options.errorReporting ?? Layer.empty,
+        Layer.succeed(Scheduler.Scheduler, yieldingScheduler),
+      ),
     ),
   );
 
