@@ -23,6 +23,7 @@ import {
   launchStood,
   sinceLaunch,
 } from "./launch-phases.js";
+import { probe, probeFlush } from "./launch-probe.js";
 import { launchFrontAt, launchLeftFront } from "./launch-state.js";
 
 /** Whether this launch has counted, or let go of, its first Inbox, which it does once. */
@@ -143,6 +144,8 @@ export function useAppReadyCount(shown: boolean): void {
         : performance.now() - signedInAt;
 
     if (elapsed === undefined) return;
+    probe("app-ready", { elapsed: Math.round(elapsed), after, kept: firstShownKept });
+    setTimeout(() => probeFlush("ready"), 3000);
 
     // Note that the host's start and each phase are said for a launch alone, since a sign-in's wait begins long after them, and one reached before the front is the first rung.
     const sinceFront = (ms: number | undefined) =>
