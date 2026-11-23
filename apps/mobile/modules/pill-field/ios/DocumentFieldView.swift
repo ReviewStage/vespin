@@ -835,6 +835,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   func textViewDidChange(_ textView: UITextView) {
     guard !quiet else { return }
+    let edit = landed ?? typed
     // Note that the words the text itself saw laid in are the ones carried on to, the range asked about being the field's guess before the keyboard lays them.
     if let piece = landed ?? typed {
       carryOn(to: piece)
@@ -845,6 +846,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     takePendingLine()
     keepPendingLine()
     keepItemDrawn()
+    refreshMarks(around: edit ?? textView.selectedRange)
     linkRange = nil
     linkWords = nil
     changes += 1
@@ -1077,7 +1079,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     return base.fontDescriptor.withSymbolicTraits(traits).map { UIFont(descriptor: $0, size: 0) } ?? base
   }
 
-  /// The mark a list's item draws in its gutter, each depth's run of items counting on: the item's own run goes on where the item before it at its depth stood in the same kind of list, and starts anew otherwise; a task, whose box marks it, draws none. Note that a run's count goes on past a task standing between its items, as the Markdown it prints numbers them.
+  /// The mark a list's item draws in its gutter, each depth's run of items counting on: the item's own run goes on where the item before it at its depth stood in the same kind of list, and starts anew otherwise, as the Markdown it prints numbers it, a task standing between two numbered items at their depth starting the second's count again; a task, whose box marks it, draws none.
   private func itemMark(_ facts: LineFacts, in nesting: inout ListNesting?) -> ItemMark? {
     guard facts.isListItem else {
       nesting = nil
@@ -1170,9 +1172,6 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       let line = NSRange(location: piece.location, length: storage.length - piece.location)
       storage.addAttribute(lineKey, value: pendingLine.facts, range: line)
       storage.addAttribute(.paragraphStyle, value: paragraphStyle(pendingLine.facts), range: line)
-      if let mark = lastLineMark(pendingLine.facts) {
-        storage.addAttribute(itemMarkKey, value: ItemMarkValue(mark, color: look.placeholder), range: line)
-      }
       self.pendingLine = nil
       restyleWords(in: line)
     }
@@ -1586,6 +1585,51 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     return attributes
   }
 
+  /// Draws again the marks of the list an edit stands in, each item numbered among its run, since a key, a paste, a Return or a pill laid over an item's words changes the run while the words around keep the marks they were drawn with: every paragraph of the edit's block, from the block's first, its mark laid where it differs and taken off a line that is no item.
+  private func refreshMarks(around edit: NSRange) {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    guard string.length > 0 else { return }
+    let end = min(NSMaxRange(edit), string.length)
+    var paragraph = string.paragraphRange(for: NSRange(location: min(edit.location, string.length - 1), length: 0))
+    let before = paragraph.location > 0 ? heldFacts(string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0))) : nil
+    guard let block = (heldFacts(paragraph) ?? before)?.block else { return }
+
+    // Note that the run is counted from its block's first line, which the walk back finds.
+    while paragraph.location > 0 {
+      let previous = string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0))
+      guard heldFacts(previous)?.block == block else { break }
+      paragraph = previous
+    }
+
+    var nesting: ListNesting?
+    var carried: LineFacts?
+    quiet = true
+    storage.beginEditing()
+
+    while paragraph.length > 0 {
+      guard let facts = heldFacts(paragraph) ?? carried, facts.block == block || paragraph.location < end else { break }
+      carried = facts
+      let mark = itemMark(facts, in: &nesting)
+      var held = NSRange()
+      let drawn = storage.attribute(itemMarkKey, at: paragraph.location, longestEffectiveRange: &held, in: paragraph) as? ItemMarkValue
+
+      if let mark {
+        if drawn?.mark != mark || held != paragraph {
+          storage.addAttribute(itemMarkKey, value: ItemMarkValue(mark, color: look.placeholder), range: paragraph)
+        }
+      } else if drawn != nil {
+        storage.removeAttribute(itemMarkKey, range: paragraph)
+      }
+
+      guard NSMaxRange(paragraph) < string.length else { break }
+      paragraph = string.paragraphRange(for: NSRange(location: NSMaxRange(paragraph), length: 0))
+    }
+
+    storage.endEditing()
+    quiet = false
+  }
+
   /// The mark the last line draws with `facts`, the lines above it counted first, so an item at the words' end takes the number after the item before it.
   private func lastLineMark(_ facts: LineFacts) -> ItemMark? {
     var nesting: ListNesting?
@@ -1826,6 +1870,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// What a format act's change does, as a change typed does: counts it and tells JavaScript, and marks the bar again.
   private func edited() {
+    refreshMarks(around: textView.selectedRange)
     changes += 1
     tell()
     tellCaret()
