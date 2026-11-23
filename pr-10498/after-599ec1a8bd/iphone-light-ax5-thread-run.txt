@@ -1,0 +1,16 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fthreadreply
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run flow when ".*Would Like to Send You Notifications.*" is visible...
+Run flow when ".*Would Like to Send You Notifications.*" is visible... SKIPPED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Repeat while "Verify the digest's sender domain" is not visible (up to 8 times)...
+  Swipe from (15%, 80%) to (15%, 40%) in 400 ms... COMPLETED
+Repeat while "Verify the digest's sender domain" is not visible (up to 8 times)... COMPLETED
+Tap on "Verify the digest's sender domain"... COMPLETED
+Scrolling DOWN until "Mark done" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot threadreply... COMPLETED
