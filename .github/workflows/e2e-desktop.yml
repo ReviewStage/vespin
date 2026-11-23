@@ -1,0 +1,81 @@
+name: E2E desktop
+
+# The desktop app on a Mac, which no PR check runs: the nightly packages an
+# end-to-end build (`APP_E2E_BUILD=1`, ad hoc, never a release:
+# `apps/desktop/scripts/package-config.mjs`'s `isE2eBuild`), launches it with
+# Playwright on a fresh profile against the suite's local server, signs in, and
+# checks the task list stands (`apps/e2e/specs/desktop/`). It is not a PR gate;
+# a failed run opens an issue, or adds to the one already open.
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Launch, sign in, and show the task list
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: "16.2"
+      - uses: ./.github/actions/setup
+
+      # No signing identity, Sentry DSN, or analytics key is set, so the build
+      # is ad hoc and reports and records nothing.
+      - name: Package the end-to-end build
+        env:
+          APP_E2E_BUILD: "1"
+        run: pnpm --filter @repo/desktop package:dir
+
+      - name: Install the journey's browser
+        run: pnpm --filter @repo/e2e exec playwright install chromium
+
+      - name: Run the desktop journey
+        env:
+          CI: "true"
+        run: |
+          APP_E2E_DESKTOP_EXECUTABLE="$(find "$PWD/artifacts/release-builder/mac-arm64" -maxdepth 1 -name '*.app' -print -quit)/Contents/MacOS/Vespin"
+          export APP_E2E_DESKTOP_EXECUTABLE
+          test -x "$APP_E2E_DESKTOP_EXECUTABLE"
+          pnpm --filter @repo/e2e test:e2e --project desktop --workers 1
+
+      - name: Keep the journey's traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-desktop-traces
+          path: apps/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  report:
+    name: Open an issue for a failed run
+    needs: smoke
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="E2E desktop: the nightly smoke failed"
+          open="$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')"
+          if [[ -n "$open" ]]; then
+            gh issue comment "$open" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --title "$title" --body "The packaged desktop app's launch and sign-in smoke failed on a Mac: $RUN_URL"
+          fi
