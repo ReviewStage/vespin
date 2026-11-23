@@ -433,13 +433,11 @@ final class DiffLineCell: UICollectionViewCell {
 
   /// Draws one display row: a split row's halves, or a row across the whole width.
   func show(display: DisplayRow, rows: DiffRows, look: DiffLook, geometry: DiffGeometry, runs: [[ColorRun]]) {
-    let runsOf = { (row: Int) in row < runs.count ? runs[row] : [] }
-
     switch display {
     case .single(let row):
-      show(row: row, rows: rows, look: look, geometry: geometry, runs: runsOf(row))
+      show(row: row, rows: rows, look: look, geometry: geometry, runs: row < runs.count ? runs[row] : [])
     case .pair(let old, let new):
-      showPair(old: old, new: new, rows: rows, look: look, geometry: geometry, runsOf: runsOf)
+      showPair(old: old, new: new, rows: rows, look: look, geometry: geometry, runs: runs)
     }
   }
 
@@ -450,7 +448,7 @@ final class DiffLineCell: UICollectionViewCell {
     rows: DiffRows,
     look: DiffLook,
     geometry: DiffGeometry,
-    runsOf: (Int) -> [ColorRun]
+    runs: [[ColorRun]]
   ) {
     isPair = true
     isThread = false
@@ -477,7 +475,7 @@ final class DiffLineCell: UICollectionViewCell {
       text.font = look.font
       text.textColor = look.text
       text.lineBreakMode = look.wrap ? .byCharWrapping : .byClipping
-      let colored = runsOf(row)
+      let colored = row < runs.count ? runs[row] : []
 
       if colored.isEmpty { text.text = line } else { text.attributedText = look.colored(line, runs: colored) }
     }
@@ -720,7 +718,7 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
   }
 
   /// The row of the diff a press at `point` stands on: a whole-width row's own, or the half of a split row it fell on, where that half holds a line.
-  private func row(at indexPath: IndexPath, point: CGPoint) -> Int? {
+  private func lineRow(at indexPath: IndexPath, point: CGPoint) -> Int? {
     guard indexPath.item < display.count else { return nil }
 
     switch display[indexPath.item] {
@@ -739,7 +737,7 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
     contextMenuConfigurationForItemsAt indexPaths: [IndexPath],
     point: CGPoint
   ) -> UIContextMenuConfiguration? {
-    guard let indexPath = indexPaths.first, let row = row(at: indexPath, point: point), row < rows.count else {
+    guard let indexPath = indexPaths.first, let row = lineRow(at: indexPath, point: point), row < rows.count else {
       return nil
     }
     let kind = rows.kinds[row]
