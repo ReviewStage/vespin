@@ -208,6 +208,7 @@
     "./testing/content-policy": "./src/testing/content-policy.js",
     "./testing/github-app-fake": "./src/testing/github-app-fake.js",
     "./testing/integration-connect": "./src/testing/integration-connect.js",
+    "./testing/model-catalog-fake": "./src/testing/model-catalog-fake.js",
     "./testing/native-harness-fake": "./src/testing/native-harness-fake.js",
     "./testing/task-contents": "./src/testing/task-contents.js",
     "./testing/descriptions": "./src/testing/descriptions.js",
