@@ -1,0 +1,5 @@
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-22 19:58:35.838 Df log[16012:0] [com.apple.log:] log run noninteractively, parent: 13890 (launchd_sim), args: 'log' 'stream' '--level' 'debug' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "PROBEINLINE"'
+2026-11-22 19:59:15.911 Df Vespin[16468:b290875] (Foundation) PROBEINLINE wordsHeight=0.01ms height=44 told=nil chars=10981
+2026-11-22 19:59:39.517 Df log[16739:0] [com.apple.log:] log run noninteractively, parent: 13890 (launchd_sim), args: 'log' 'show' '--start' '2026-11-22 19:58:35' '--style' 'compact' '--info' '--debug' '--predicate' 'eventMessage CONTAINS "PROBEINLINE"'

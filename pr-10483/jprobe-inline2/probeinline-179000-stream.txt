@@ -1,0 +1,5 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "composedMessage CONTAINS "PROBEINLINE""
+Timestamp               Ty Process[PID:TID]
+2026-11-22 20:01:33.066 Df Vespin[17968:b292dd2] (Foundation) PROBEINLINE wordsHeight=0.01ms height=44 told=nil chars=160997
+Child process terminated with signal 15: Terminated
