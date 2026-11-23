@@ -1,4 +1,4 @@
-// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: one list in the tree's order, each file its letter, name, lines and folder, and a search by path; and each file's diff on a screen of its own, drawn natively, stepping to the file before or after it.
+// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: one list in the tree's order, each file its letter, name, lines and folder, and a search by path; each file's diff on a screen of its own, drawn natively, stepping to the file before or after it, its review threads standing under their lines, each opening on its own screen.
 
 import {
   CHANGES_WORDS,
@@ -10,7 +10,7 @@ import {
   startsCollapsed,
   treeOrder,
 } from "@repo/features/changed-files";
-import { iosPullRequestFileRoute } from "@repo/features/ios-app-links";
+import { iosPullRequestFileRoute, iosPullRequestThreadRoute } from "@repo/features/ios-app-links";
 import { GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import {
   BAR_TITLE,
@@ -35,6 +35,7 @@ import { useState } from "react";
 import { openInSafari } from "../open-link.js";
 import type { PullRequestKey } from "../pull-requests/use-pull-request.js";
 import { usePullRequestChanges } from "../pull-requests/use-pull-request-changes.js";
+import { usePullRequestThreads } from "../pull-requests/use-pull-request-threads.js";
 import { useFileViewed, usePullRequestViewed } from "../pull-requests/use-pull-request-viewed.js";
 import { useOnOwnTab } from "../tab-route.js";
 
@@ -227,7 +228,10 @@ export function PullRequestFilesScreen() {
  * A file with no diff to draw says why, in the panel's words
  * (`fileNotice`), with Open on GitHub; one that starts folded, as the
  * desktop folds a deleted, generated, or very large file
- * (`startsCollapsed`), says so with Show diff. The files are the list's own
+ * (`startsCollapsed`), says so with Show diff. Each review thread on the
+ * file stands as a card under the line it is on (`usePullRequestThreads`),
+ * and a press on it opens the thread whole on its own screen
+ * (`pull-request-thread-screens.tsx`). The files are the list's own
  * read (`usePullRequestChanges`), so the screen reads nothing of its own
  * where the list read them.
  */
@@ -239,6 +243,8 @@ export function PullRequestFileScreen() {
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const changes = usePullRequestChanges(key);
   const viewed = useFileViewed(key, path);
+  const threads = usePullRequestThreads(key);
+  const onOwnTab = useOnOwnTab();
   const [wrap, setWrap] = useState(true);
   // The files whose folded diff was asked for by Show diff, by path, held while the screen stands.
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
@@ -309,7 +315,21 @@ export function PullRequestFileScreen() {
     return (
       <>
         {bar}
-        <DiffView patch={file.patch} path={file.path} wrap={wrap} testID="pull-request-diff" />
+        <DiffView
+          patch={file.patch}
+          path={file.path}
+          wrap={wrap}
+          threads={threads}
+          onThreadPress={(thread) => {
+            const first = thread.comments[0]?.url;
+
+            // Note that a thread read from a service before GitHub's own ids rode with it opens on GitHub, since the thread's screen names it by that id.
+            if (thread.id !== undefined)
+              router.push(onOwnTab(iosPullRequestThreadRoute(key, thread.id)));
+            else if (first !== undefined) openInSafari(first);
+          }}
+          testID="pull-request-diff"
+        />
       </>
     );
   }

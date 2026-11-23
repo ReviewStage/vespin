@@ -42,6 +42,8 @@ public final class DiffViewModule: Module {
     Name("DiffView")
 
     View(DiffView.self) {
+      Events("onThreadPress")
+
       Prop("rows") { (view: DiffView, rows: RowsRecord) in
         view.take(DiffRows(rows))
       }
@@ -78,6 +80,8 @@ struct LookRecord: Record {
   @Field var removed: UIColor? = nil
   @Field var hunk: UIColor? = nil
   @Field var syntax: [UIColor] = []
+  @Field var card: UIColor? = nil
+  @Field var cardEdge: UIColor? = nil
 }
 
 // MARK: - The diff as the view holds it
@@ -89,7 +93,11 @@ enum RowKind: UInt8 {
   case added = 97  // "a"
   case removed = 114  // "r"
   case note = 110  // "n"
+  case thread = 116  // "t"
 }
+
+/// What stands between a thread row's title and its detail (`diff-view-model.ts`'s `THREAD_PARTS`).
+let threadParts: Character = "\u{1F}"
 
 /// The diff's rows: each one's kind, its line numbers (0 for none), its words, and their count of columns.
 struct DiffRows {
@@ -137,6 +145,9 @@ struct DiffLook {
   let hunk: UIColor
   /// Each syntax style's color, by the style's raw value; a style past the end stays in the text's ink.
   let syntax: [UIColor]
+  /// A review thread's card and its edge.
+  let card: UIColor
+  let cardEdge: UIColor
 
   static let standard = DiffLook(LookRecord())
 
@@ -150,6 +161,8 @@ struct DiffLook {
     removed = record.removed ?? .systemRed
     hunk = record.hunk ?? .systemBlue
     syntax = record.syntax
+    card = record.card ?? .secondarySystemBackground
+    cardEdge = record.cardEdge ?? .separator
   }
 
   /// A row's words with its runs of color laid over the text's ink.
@@ -174,7 +187,7 @@ struct DiffLook {
     case .added: return added.withAlphaComponent(0.14)
     case .removed: return removed.withAlphaComponent(0.14)
     case .hunk: return hunk.withAlphaComponent(0.10)
-    case .context, .note: return ground
+    case .context, .note, .thread: return ground
     }
   }
 
@@ -184,7 +197,7 @@ struct DiffLook {
     case .added: return added.withAlphaComponent(0.24)
     case .removed: return removed.withAlphaComponent(0.24)
     case .hunk: return hunk.withAlphaComponent(0.10)
-    case .context, .note: return ground
+    case .context, .note, .thread: return ground
     }
   }
 }
@@ -195,6 +208,8 @@ struct DiffLook {
 struct DiffGeometry {
   static let inset: CGFloat = 8
   static let gutterGap: CGFloat = 6
+  static let cardPadding: CGFloat = 6
+  static let cardGap: CGFloat = 4
 
   let advance: CGFloat
   let lineHeight: CGFloat
@@ -226,6 +241,13 @@ struct DiffGeometry {
 
     for row in 0..<rows.count {
       tops.append(top)
+
+      // Note that a thread's card stands two lines tall, its title and its detail each cut to one, with room around it.
+      if rows.kinds[row] == .thread {
+        top += lineHeight * 2 + DiffGeometry.cardPadding * 2 + DiffGeometry.cardGap * 2
+        continue
+      }
+
       let wrapped = look.wrap && rows.kinds[row] != .hunk ? (rows.columns[row] + perLine - 1) / perLine : 1
       top += CGFloat(max(wrapped, 1)) * lineHeight
     }
@@ -307,7 +329,11 @@ final class DiffLineCell: UICollectionViewCell {
 
   private let gutter = UILabel()
   private let words = UILabel()
+  private let card = UIView()
+  private let title = UILabel()
+  private let detail = UILabel()
   private var gutterWidth: CGFloat = 0
+  private var isThread = false
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -316,14 +342,33 @@ final class DiffLineCell: UICollectionViewCell {
     words.numberOfLines = 0
     words.lineBreakMode = .byCharWrapping
     contentView.clipsToBounds = true
+    card.layer.cornerRadius = 8
+    card.layer.borderWidth = 1 / UIScreen.main.scale
+    title.numberOfLines = 1
+    detail.numberOfLines = 1
     contentView.addSubview(gutter)
     contentView.addSubview(words)
+    contentView.addSubview(card)
+    card.addSubview(title)
+    card.addSubview(detail)
   }
 
   required init?(coder: NSCoder) { nil }
 
   func show(row: Int, rows: DiffRows, look: DiffLook, geometry: DiffGeometry, runs: [ColorRun]) {
     let kind = rows.kinds[row]
+    isThread = kind == .thread
+    gutterWidth = geometry.gutterWidth
+    gutter.isHidden = isThread
+    words.isHidden = isThread
+    card.isHidden = !isThread
+
+    if isThread {
+      showThread(String(rows.lines[row]), look: look)
+      return
+    }
+
+    accessibilityTraits = .staticText
     let old = rows.oldLines[row]
     let new = rows.newLines[row]
     // Each side's number right-aligned in a column as wide as the diff's longest, a side the row stands on none of left blank.
@@ -351,9 +396,45 @@ final class DiffLineCell: UICollectionViewCell {
     setNeedsLayout()
   }
 
+  /// A review thread's card: who started it and their first line, then its replies and marks, muted, each cut to one line; heard as both, and as a button that opens the thread.
+  private func showThread(_ line: String, look: DiffLook) {
+    let parts = line.split(separator: threadParts, maxSplits: 1, omittingEmptySubsequences: false)
+    let font = UIFont.preferredFont(forTextStyle: .footnote)
+
+    contentView.backgroundColor = look.ground
+    card.backgroundColor = look.card
+    card.layer.borderColor = look.cardEdge.cgColor
+    title.font = UIFont(descriptor: font.fontDescriptor.withSymbolicTraits(.traitBold) ?? font.fontDescriptor, size: font.pointSize)
+    title.textColor = look.text
+    title.text = parts.first.map(String.init)
+    detail.font = font
+    detail.textColor = look.muted
+    detail.text = parts.count > 1 ? String(parts[1]) : nil
+    isAccessibilityElement = true
+    accessibilityLabel = [title.text, detail.text].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+    accessibilityTraits = .button
+    setNeedsLayout()
+  }
+
   override func layoutSubviews() {
     super.layoutSubviews()
     let bounds = contentView.bounds
+
+    if isThread {
+      let x = gutterWidth + DiffGeometry.inset
+      card.frame = CGRect(
+        x: x,
+        y: DiffGeometry.cardGap,
+        width: max(bounds.width - x - DiffGeometry.inset, 0),
+        height: bounds.height - DiffGeometry.cardGap * 2
+      )
+      let inner = card.bounds.insetBy(dx: DiffGeometry.cardPadding + 2, dy: DiffGeometry.cardPadding)
+      let half = inner.height / 2
+      title.frame = CGRect(x: inner.minX, y: inner.minY, width: inner.width, height: half)
+      detail.frame = CGRect(x: inner.minX, y: inner.minY + half, width: inner.width, height: half)
+      return
+    }
+
     gutter.frame = CGRect(x: 0, y: 1, width: gutterWidth - DiffGeometry.gutterGap, height: bounds.height - 2)
     gutter.frame.size.height = min(gutter.frame.height, gutter.font.lineHeight + 2)
     words.frame = CGRect(
@@ -368,7 +449,8 @@ final class DiffLineCell: UICollectionViewCell {
 // MARK: - The view
 
 /// The diff: a collection view of its rows over the layout, laid out again as its rows, its look, or its width change.
-final class DiffView: ExpoView, UICollectionViewDataSource {
+final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDelegate {
+  let onThreadPress = EventDispatcher()
   private static let signposter = OSSignposter(subsystem: "dev.vespin.ios", category: "DiffView")
 
   private let layout = DiffLayout()
@@ -408,6 +490,7 @@ final class DiffView: ExpoView, UICollectionViewDataSource {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     list.dataSource = self
+    list.delegate = self
     list.register(DiffLineCell.self, forCellWithReuseIdentifier: DiffLineCell.reuse)
     list.isDirectionalLockEnabled = true
     list.alwaysBounceVertical = true
@@ -455,8 +538,18 @@ final class DiffView: ExpoView, UICollectionViewDataSource {
     case .removed: return .old
     case .added: return .new
     case .context: return .both
-    case .hunk, .note: return .neither
+    case .hunk, .note, .thread: return .neither
     }
+  }
+
+  /// A press on a thread's card tells JavaScript its row, which knows the thread; any other row takes no press.
+  func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+    indexPath.item < rows.count && rows.kinds[indexPath.item] == .thread
+  }
+
+  func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+    collectionView.deselectItem(at: indexPath, animated: true)
+    onThreadPress(["row": indexPath.item])
   }
 
   private func relayout() {
