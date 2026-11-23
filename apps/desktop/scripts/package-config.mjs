@@ -144,14 +144,15 @@ export function signingModeDefine(env) {
 }
 
 /**
- * The esbuild define telling the bundle whether it was built for the
- * desktop's end-to-end smoke (`apps/e2e`), asked for with `APP_E2E_BUILD=1`.
- * Such a build lets `APP_ACCOUNT_BASE_URL` name a loopback service and
- * `APP_STATE_ROOT` its state (`src/main/bootstrap.ts`). Note that a Developer
- * ID build asking for it is refused rather than built, because every release
- * is one, so no release can carry the flag whatever its environment holds.
+ * Whether this build is the desktop's end-to-end smoke's (`apps/e2e`), asked
+ * for with `APP_E2E_BUILD=1`. Such a build lets `APP_ACCOUNT_BASE_URL` name a
+ * loopback service and `APP_STATE_ROOT` its state (`src/main/bootstrap.ts`),
+ * and keeps the inspector switch Playwright drives the app through
+ * (`electron-builder-config.mjs`). Note that a Developer ID build asking for
+ * it is refused rather than built, because every release is one, so no
+ * release can carry it whatever its environment holds.
  */
-export function e2eBuildDefine(env) {
+export function isE2eBuild(env) {
   const asked = env.APP_E2E_BUILD === "1";
 
   if (asked && resolveSigningMode(env).mode === SIGNING_MODE.DEVELOPER_ID) {
@@ -160,7 +161,12 @@ export function e2eBuildDefine(env) {
     );
   }
 
-  return { PACKAGED_FOR_E2E: JSON.stringify(asked) };
+  return asked;
+}
+
+/** The esbuild define telling the bundle whether it is the end-to-end build (`isE2eBuild`). */
+export function e2eBuildDefine(env) {
+  return { PACKAGED_FOR_E2E: JSON.stringify(isE2eBuild(env)) };
 }
 
 /**
