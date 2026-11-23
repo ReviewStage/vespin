@@ -11,7 +11,9 @@ import { changesLine } from "@repo/features/changed-files";
 import {
   iosAgentPullRequestOf,
   iosPullRequestChecksRoute,
+  iosPullRequestCommentRoute,
   iosPullRequestFilesRoute,
+  iosPullRequestThreadRoute,
 } from "@repo/features/ios-app-links";
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
@@ -130,12 +132,14 @@ const CONVERSATION_WORDS = "Conversation";
 const PAGE_ROW = {
   CHECKS: "checks",
   FILES: "files",
+  COMMENT: "comment",
 } as const;
 
 /** What those rows say, as the screens they push are titled. */
 const PAGE_ROW_WORDS = {
   CHECKS: "Checks",
   FILES_CHANGED: "Files changed",
+  COMMENT: "Comment",
 } as const;
 
 function gitHubPullRequestUrl(key: PullRequestKey): string {
@@ -665,11 +669,25 @@ function PullRequestPage({
           pullRequest.author?.login,
         );
 
-  // Each row a press pushes a screen of its own for, by its id: the checks, and the files changed.
+  // Each row a press pushes a screen of its own for, by its id: the checks, the files changed, and a new comment.
   const pushes = new Map<string, string>([
     [PAGE_ROW.CHECKS, iosPullRequestChecksRoute(key)],
     [PAGE_ROW.FILES, iosPullRequestFilesRoute(key)],
+    [PAGE_ROW.COMMENT, iosPullRequestCommentRoute(key)],
   ]);
+
+  // Note that a review thread GitHub names an id for opens on a screen of its own, where it is replied to, by its row's id, its first comment's page; one it names none for opens in place.
+  const threadRoutes = new Map(
+    (conversation?.conversation ?? []).flatMap((entry) =>
+      (entry.threads ?? []).flatMap((thread) => {
+        const first = thread.comments[0];
+
+        return first === undefined || thread.id === undefined
+          ? []
+          : [[first.url, iosPullRequestThreadRoute(key, thread.id)] as const];
+      }),
+    ),
+  );
 
   return page(
     <RowList
@@ -677,8 +695,12 @@ function PullRequestPage({
       onSelect={(row) => {
         const route = pushes.get(row);
 
+        const thread = threadRoutes.get(row);
+
         if (route !== undefined) {
           router.push(onOwnTab(route));
+        } else if (thread !== undefined) {
+          router.push(onOwnTab(thread));
         } else if (row === OPENS_ROW.ON_GITHUB) {
           openInSafari(url);
         } else {
@@ -901,6 +923,14 @@ function PullRequestPage({
               }),
             ])}
           </>
+        )}
+        {conversation === undefined ? null : (
+          <MarkRow
+            id={PAGE_ROW.COMMENT}
+            mark={{ symbol: GLYPH.COMMENT, tone: STATUS_TONE.NEUTRAL }}
+            title={PAGE_ROW_WORDS.COMMENT}
+            pushes
+          />
         )}
       </ListSection>
     </RowList>,
