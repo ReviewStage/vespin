@@ -95,7 +95,17 @@ appId: dev.vespin.ios
     timeout: 15000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings(, .*)?"
+# Note that at AX3 the menu ends at the account's name, and the rest of the
+# account's row stands under the menu's own scroll, where a tap by its words
+# lands on the Inbox behind the menu. So the row is pressed by the name it
+# shows, the "Ada Lovelace" under New workspace, and Settings is known by
+# its account row.
+- tapOn:
+    text: "Ada Lovelace"
+    below: "New workspace"
+- extendedWaitUntil:
+    visible: ".*Signed in with GitHub.*"
+    timeout: 10000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: ax3-settings
