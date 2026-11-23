@@ -9,6 +9,7 @@ import {
   BUTTON_SIZE,
   CHAT_RUN,
   CHAT_SIDE,
+  ChatAside,
   ChatBubble,
   CopyIcon,
   chatRunOf,
@@ -26,6 +27,8 @@ import {
   RetryIcon,
   SUBJECT_FIT,
   SubjectLine,
+  TEXT_TONE,
+  TEXT_VARIANT,
   Text,
 } from "@repo/ui";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
@@ -167,7 +170,7 @@ function Messages(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection
         id="chat-bubbles"
-        title="A chat's bubbles: the reader's at the right, the other side's at the left under its name and beside its face, one sender's run close, its corners tightened, one time under its last, and a reply opening on the words it answers"
+        title="A chat's bubbles: the reader's at the right, the other side's at the left under its name and beside its face, what stands with a message outside its bubble at the bubble's inset, one sender's run close, its corners tightened, one time under its last, and a reply opening on the words it answers"
       >
         <div className="catalog-frame">
           <div className="flex flex-col gap-ui-4">
@@ -185,6 +188,13 @@ function Messages(): React.JSX.Element {
               >
                 {index === 0 ? (
                   <MessageHead inset={MESSAGE_LINE_INSET.AVATAR} sender="Iris" />
+                ) : null}
+                {index === 0 ? (
+                  <ChatAside inset={MESSAGE_LINE_INSET.AVATAR}>
+                    <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+                      Read the invitations task, then checked its pull request.
+                    </Text>
+                  </ChatAside>
                 ) : null}
                 <ChatBubble
                   side={CHAT_SIDE.RECEIVED}

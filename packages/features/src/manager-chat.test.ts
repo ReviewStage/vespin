@@ -3,7 +3,12 @@ import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { test } from "vitest";
 import { AGENT_PART, agentParts } from "./agent-parts.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
-import { chatReplyText, managerChatLines, managerChatRuns } from "./manager-chat.js";
+import {
+  chatReplyText,
+  managerChatLines,
+  managerChatRuns,
+  managerChatWork,
+} from "./manager-chat.js";
 
 /**
  * manager-chat.test.ts -- a Manager's transcript as its chat: people's lines
@@ -111,6 +116,55 @@ test("a line that reached a turn while it ran stands between the messages it arr
     [undefined, undefined, 9_000],
   );
   assert.equal(chat[1]?.arrivedIn, undefined);
+});
+
+test("a Manager's message keeps the work that led to it, a turn's last the work after it too, and the turn under way its work since its last message, while a finished turn that sent nothing keeps none", () => {
+  const call = (id: string): WireRecord => ({
+    type: "tool-list_tasks",
+    toolCallId: id,
+    state: "output-available",
+    input: {},
+    output: {},
+  });
+
+  const messages = [
+    turn("turn-1", [
+      { type: "step-start" },
+      { type: "reasoning", text: "Ada wants the billing bug fixed." },
+      call("list"),
+      sent("first", "On it.", "accepted"),
+      { type: "text", text: "Starting an agent." },
+      sent("second", "An agent is working on it.", "accepted"),
+      { type: "reasoning", text: "I'll wait for it." },
+    ]),
+    line("ada", { sentBy: { name: "Ada", userId: "u-ada" } }),
+    turn("turn-2", [{ type: "step-start" }, call("check")]),
+  ];
+
+  /** Each piece of work as its kind and its words or call. */
+  const named = (parts: readonly ReturnType<typeof agentParts>[number][] | undefined) =>
+    (parts ?? []).map((part) =>
+      part.kind === AGENT_PART.TOOL
+        ? `call ${part.callId}`
+        : `${part.kind} ${"text" in part ? part.text : ""}`,
+    );
+
+  const running = managerChatWork(messages, true);
+
+  assert.deepEqual(named(running.work.get("turn-1")), [
+    "reasoning Ada wants the billing bug fixed.",
+    "call list",
+  ]);
+  assert.deepEqual(named(running.work.get("second")), [
+    "text Starting an agent.",
+    "reasoning I'll wait for it.",
+  ]);
+  assert.deepEqual(named(running.live), ["call check"]);
+
+  const ended = managerChatWork(messages, false);
+
+  assert.deepEqual(named(ended.live), []);
+  assert.equal(ended.work.has("turn-2"), false);
 });
 
 test("a Manager's chat runs one sender's messages together until another sender writes or ten minutes pass", () => {

@@ -164,6 +164,14 @@ const PROMPT_CACHE_TTL = {
   FORCE_SHORT: "FORCE_PROMPT_CACHING_5M",
 } as const;
 
+/** The CLI's flag for how the API answers its thinking, which the Agent SDK passes for `thinking.display` (CLI 2.1.330, as its SDK spells it). */
+const THINKING_DISPLAY_FLAG = "thinking-display";
+
+/** The thinking display the CLI is launched with: each thought's words summarized, rather than left out. */
+const THINKING_DISPLAY = {
+  SUMMARIZED: "summarized",
+} as const;
+
 /** The variable the CLI reads its API's base URL from, where a gateway stands in for the API. */
 const ANTHROPIC_BASE_URL = "ANTHROPIC_BASE_URL";
 
@@ -439,6 +447,11 @@ function queryOptions(
   };
 
   if (config.effort !== undefined) options.effort = config.effort;
+
+  // Note that the CLI asks for its thinking summarized, because a headless CLI otherwise has the API omit
+  // the words of most thoughts (`display: "omitted"`) and the transcript draws a thought with no words as
+  // none; the display alone is named, so each model keeps the thinking the CLI chooses for it.
+  options.extraArgs = { [THINKING_DISPLAY_FLAG]: THINKING_DISPLAY.SUMMARIZED };
 
   // Note that the CLI's own file memory is off, because the workspace's memory keeps what an agent
   // learns, and a cloud sandbox made again from the image keeps nothing of its home folder; and that

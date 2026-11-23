@@ -15,6 +15,14 @@
  * it) is left out, and a turn that sent nothing stands nowhere. The greeting
  * it opens on is drawn above (`manager-greeting.ts`).
  *
+ * What was left out stays a press away (`managerChatWork`): each of the
+ * Manager's messages keeps the work that led to it, its thoughts, calls, and
+ * own words since the message before, and a turn's last message the work
+ * after it too, which the page opens under the message on Show work; and
+ * the turn under way keeps its work since its last message, which the page
+ * opens under its working line. A turn that ended having sent nothing keeps
+ * its work nowhere, so a finished chat draws no more than its messages.
+ *
  * The chat's messages stand in runs, as a chat app groups them: consecutive
  * messages from one sender, none further from the one before than
  * `CHAT_RUN_GAP_MS`, are one run, which the page draws close together with
@@ -39,7 +47,13 @@ import {
   MESSAGE_ROLE,
   type WireValue,
 } from "@repo/wire";
-import { AGENT_PART, type AgentPart, arrivedParts, messageWords } from "./agent-parts.js";
+import {
+  AGENT_PART,
+  type AgentPart,
+  agentParts,
+  arrivedParts,
+  messageWords,
+} from "./agent-parts.js";
 import { AGENT_TOOL } from "./agent-tools.js";
 import { AGENT_BOUNDS, type AgentTranscriptMessage } from "./agent-wire.js";
 import { plainWords } from "./plain-words.js";
@@ -90,6 +104,11 @@ function standingLine(line: AgentTranscriptMessage): AgentTranscriptMessage {
   return kept;
 }
 
+/** The id the chat stands a turn's sent message under: the turn's own for its first, its call's for each after it. */
+function sentId(message: AgentTranscriptMessage, sends: number, callId: string): string {
+  return sends === 0 ? message.id : callId;
+}
+
 /**
  * A turn as its chat messages: one to each `send_to_user` call it made, in
  * the order sent, the first under the turn's own id and each after it under
@@ -117,7 +136,7 @@ function turnChat(
     const text = sentWords(part);
 
     if (text === undefined || part.kind !== AGENT_PART.TOOL) continue;
-    const id = sends === 0 ? message.id : part.callId;
+    const id = sentId(message, sends, part.callId);
     const parts: readonly WireValue[] = [{ type: AGENT_PART.TEXT, text }];
 
     lastAt = chat.push({ ...kept, id, parts }) - 1;
@@ -180,6 +199,65 @@ export function managerChatLines(
     // A line a held turn took in stands among that turn's messages instead.
     return journal !== undefined && turns.has(journal) ? [] : [message];
   });
+}
+
+/** The work a Manager's chat holds a press away: each message's, by its chat id, and the turn under way's since its last message. */
+export interface ManagerChatWork {
+  readonly work: ReadonlyMap<string, readonly AgentPart[]>;
+  /** The turn under way's work since its last message, or since it began where it sent none; none where no turn is under way. */
+  readonly live: readonly AgentPart[];
+}
+
+/** Whether a part of a turn is work its chat leaves out: anything but a step boundary, a line that reached the turn, and a message the turn sent. */
+function isWork(part: AgentPart): boolean {
+  return (
+    part.kind !== AGENT_PART.STEP_START &&
+    part.kind !== AGENT_PART.ARRIVED &&
+    sentWords(part) === undefined
+  );
+}
+
+/**
+ * A Manager's transcript's work as its chat holds it (`ManagerChatWork`):
+ * each message's work since the message before it, the work after a turn's
+ * last message with that message, and, while the newest turn is under way
+ * (`running`), that turn's work since its last message as its live work
+ * instead. Each part keeps the cut it was read with.
+ */
+export function managerChatWork(
+  messages: readonly AgentTranscriptMessage[],
+  running: boolean,
+): ManagerChatWork {
+  const work = new Map<string, readonly AgentPart[]>();
+  const newest = messages.findLast(isAgentTurn);
+  let live: readonly AgentPart[] = [];
+
+  for (const message of messages) {
+    if (message.role !== MESSAGE_ROLE.ASSISTANT || isVoiceLine(message)) continue;
+    let pending: AgentPart[] = [];
+    let last: string | undefined;
+    let sends = 0;
+
+    for (const part of agentParts(message)) {
+      if (part.kind === AGENT_PART.TOOL && sentWords(part) !== undefined) {
+        last = sentId(message, sends, part.callId);
+        work.set(last, pending);
+        pending = [];
+        sends += 1;
+      } else if (isWork(part)) {
+        pending.push(part);
+      }
+    }
+
+    // Note that the turn under way's work since its last message is still going, so it stands under the working line rather than with a message it may not lead to.
+    if (running && message === newest) {
+      live = pending;
+    } else if (last !== undefined) {
+      work.set(last, [...(work.get(last) ?? []), ...pending]);
+    }
+  }
+
+  return { work, live };
 }
 
 /** A Manager's message as a reply quotes it: its words as one line of plain words, links by their names. */
