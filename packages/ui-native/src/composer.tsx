@@ -49,7 +49,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize, useTextScale } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import type { CaretAtWord } from "./caret-at-word.js";
 import {
@@ -97,14 +97,32 @@ function roundMark(round: number) {
 /** How much of Send's look stands while there is nothing to send, as Messages' gray arrow stands before a word is typed. */
 const IDLE_OPACITY = 0.2;
 
-/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
-function roundModifiers(colors: ReturnType<typeof useColors>) {
+/** How far the press frame stands past the round on each side at the default text size, which it keeps as the reader's text grows the round. */
+const ROUND_MARGIN = (PRESS_SIZE - SEND_SIZE) / 2;
+
+/**
+ * The round button's press frame: Apple's least target at the default text
+ * size, and past it the round with the same margin around it. Note that a
+ * frame of the least target alone let a round grown by the reader's text
+ * fill it, so at AX3 Send met the glass's edge while the + kept its room.
+ */
+function roundFrame(round: number) {
+  const side = round + ROUND_MARGIN * 2;
+
+  return [
+    frame({ minWidth: side, minHeight: side }),
+    SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+  ];
+}
+
+/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside its press frame. */
+function roundModifiers(colors: ReturnType<typeof useColors>, round: number) {
   return [
     buttonStyle("borderedProminent"),
     SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
     foregroundStyle(colors.GROUND),
-    ...PRESS_FRAME,
+    ...roundFrame(round),
   ];
 }
 
@@ -122,7 +140,7 @@ function idleRoundModifiers(colors: ReturnType<typeof useColors>, round: number)
     frame({ width: round, height: round }),
     background(colors.TEXT, SwiftModifiers.shapes.circle()),
     opacity(IDLE_OPACITY),
-    ...PRESS_FRAME,
+    ...roundFrame(round),
   ];
 }
 
@@ -386,7 +404,7 @@ function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
     return (
       <Button
         onPress={saving.onSave}
-        modifiers={[...roundModifiers(colors), accessibilityLabel(SAVING_WORDS.SAVE)]}
+        modifiers={[...roundModifiers(colors, round), accessibilityLabel(SAVING_WORDS.SAVE)]}
       >
         {mark}
       </Button>
@@ -397,7 +415,7 @@ function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
     <Menu
       label={mark}
       onPrimaryAction={saving.onSave}
-      modifiers={[...roundModifiers(colors), accessibilityLabel(SAVING_WORDS.SAVE)]}
+      modifiers={[...roundModifiers(colors, round), accessibilityLabel(SAVING_WORDS.SAVE)]}
     >
       <Button {...actContent(SAVING_WORDS.STEER, GLYPH.STEER)} onPress={saving.onSteer} />
     </Menu>
@@ -444,7 +462,7 @@ function SendButton({
       <ProgressView
         modifiers={[
           frame({ width: round, height: round }),
-          ...PRESS_FRAME,
+          ...roundFrame(round),
           tint(colors.TEXT_MUTED),
           accessibilityLabel("Stopping"),
         ]}
@@ -454,7 +472,10 @@ function SendButton({
 
   if (empty && onStop !== undefined) {
     return (
-      <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
+      <Button
+        onPress={onStop}
+        modifiers={[...roundModifiers(colors, round), accessibilityLabel("Stop")]}
+      >
         <Image {...glyphImage(GLYPH.STOP_TURN)} size={stopSize} modifiers={roundMark(round)} />
       </Button>
     );
@@ -464,7 +485,7 @@ function SendButton({
     return (
       <Button
         onPress={onTalk}
-        modifiers={[...roundModifiers(colors), accessibilityLabel(TALK_LABEL.TALK)]}
+        modifiers={[...roundModifiers(colors, round), accessibilityLabel(TALK_LABEL.TALK)]}
       >
         <Image {...glyphImage(GLYPH.TALK)} size={sendSize} modifiers={roundMark(round)} />
       </Button>
@@ -478,7 +499,7 @@ function SendButton({
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        ...(sendable ? roundModifiers(colors) : idleRoundModifiers(colors, round)),
+        ...(sendable ? roundModifiers(colors, round) : idleRoundModifiers(colors, round)),
         disabled(!sendable),
         accessibilityLabel(act?.label ?? "Send"),
       ]}
@@ -854,13 +875,18 @@ function CapsuleScroll({
   );
 }
 
-/** The widths the row under the field is laid out by, in points: its own, the + at its start, what stands at its end, and the capsules' whole. */
+/** The widths the row under the field is laid out by, in points: its own, the + at its start, what stands at its end, the capsules' whole, and, each at its whole width, what is picked (the model chip) and the presses after it. */
 type RowWidths = {
   readonly row: number;
   readonly add: number;
   readonly end: number;
   readonly capsules: number;
+  readonly picked: number;
+  readonly presses: number;
 };
+
+/** A row not yet measured. */
+const UNMEASURED: RowWidths = { row: 0, add: 0, end: 0, capsules: 0, picked: 0, presses: 0 };
 
 /** Whether the capsules stand on a line of their own: where they would not stand whole between the + and what stands at the row's end; a row not yet measured keeps one line. */
 function capsulesOwnLine(widths: RowWidths): boolean {
@@ -869,9 +895,16 @@ function capsulesOwnLine(widths: RowWidths): boolean {
   return widths.row > 0 && widths.capsules > room;
 }
 
-/** Whether what stands at the row's end may hold its whole width: where it fits the row, its widest kept (`measuredEnd`) so the choice never turns back as it gives way; a row not yet measured holds it. */
+/** Whether what is picked and the presses fit the row whole on one line, each at its whole width; a row not yet measured keeps one line. */
 function endFits(widths: RowWidths): boolean {
-  return widths.row === 0 || widths.end <= widths.row;
+  const gap = widths.picked > 0 && widths.presses > 0 ? TOOL_SPACING : 0;
+
+  return widths.row === 0 || widths.picked + gap + widths.presses <= widths.row;
+}
+
+/** Whether what is picked holds its whole width: where it fits the row even on a line of its own; a chip not yet measured holds it, so it is measured whole. */
+function pickedWhole(widths: RowWidths): boolean {
+  return widths.row === 0 || widths.picked <= widths.row;
 }
 
 /**
@@ -895,7 +928,8 @@ function ComposerRow({
   readonly parts: ComposerParts;
 }) {
   const { addMenu, onAdd, tools, trailing, testIds, dictation } = props;
-  const [widths, setWidths] = useState<RowWidths>({ row: 0, add: 0, end: 0, capsules: 0 });
+  const [widths, setWidths] = useState<RowWidths>(UNMEASURED);
+  const scale = useTextScale();
 
   // Note that each width is set only as it changes, and none of them moves with the layout chosen, so choosing one line or two never turns the choice again.
   const measured = (key: keyof RowWidths) => (width: number) =>
@@ -904,6 +938,11 @@ function ComposerRow({
   // Note that the end keeps the widest it has stood, so the capsules don't jump back up beside it as Talk gives way to Send under the first word typed.
   const measuredEnd = (width: number) =>
     setWidths((was) => (width <= was.end ? was : { ...was, end: width }));
+
+  // Note that a change of the reader's text size measures the end again, since a chip too wide for even a line of its own is cut and so no longer measured whole, and the end's widest kept would hold the old size's.
+  useEffect(() => {
+    setWidths((was) => (was.picked === 0 && was.end === 0 ? was : { ...was, picked: 0, end: 0 }));
+  }, [scale]);
 
   // Note that a dictation under way stands its strip in the row's place, as the desktop's strip stands in its box's foot.
   if (dictation !== undefined && dictation.phase !== DICTATION_PHASE.IDLE) {
@@ -919,17 +958,25 @@ function ComposerRow({
     </HStack>
   );
 
-  // Note that what is picked for the message, such as the model, is offered the row first and holds its whole words (`fixedSize`) while they fit the row, so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room; a priority alone still left the agent page's chip "Op…" beside the capsules' scroll. Past the row's width, as at an accessibility size on a narrow screen, it gives way and cuts the name instead, so Send never stands past the row's edge.
-  const end = (
+  // Note that what is picked and the presses are each measured at their whole width (`fixedSize`) whichever layout stands, so the layout never feeds what chooses it; a model of a longer or shorter name is measured as it is drawn.
+  const picked =
+    trailing === undefined ? null : (
+      <HStack
+        modifiers={
+          pickedWhole(widths)
+            ? [fixedSize(), onGeometryChange(({ width }) => measured("picked")(width))]
+            : []
+        }
+      >
+        {trailing}
+      </HStack>
+    );
+
+  const presses = (
     <HStack
       spacing={TOOL_SPACING}
-      modifiers={[
-        layoutPriority(1),
-        ...(endFits(widths) ? [fixedSize()] : []),
-        onGeometryChange(({ width }) => measuredEnd(width)),
-      ]}
+      modifiers={[fixedSize(), onGeometryChange(({ width }) => measured("presses")(width))]}
     >
-      {trailing}
       {dictation === undefined ? null : (
         <DictationPress
           glyph={GLYPH.DICTATE}
@@ -942,19 +989,53 @@ function ComposerRow({
     </HStack>
   );
 
+  // Note that what is picked for the message, such as the model, is offered the row first and holds its whole words, so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room; a priority alone still left the agent page's chip "Op…" beside the capsules' scroll.
+  const end = (
+    <HStack
+      spacing={TOOL_SPACING}
+      modifiers={[layoutPriority(1), onGeometryChange(({ width }) => measuredEnd(width))]}
+    >
+      {picked}
+      {presses}
+    </HStack>
+  );
+
+  // Note that an end wider than the row, as at an accessibility size on a phone, stands what is picked on a line of its own over the presses, as iOS stacks a row's parts at those sizes, so the model's name stays whole and Send stays inside the glass; past even that line's width the name is cut.
+  const ends = endFits(widths) ? (
+    <HStack spacing={TOOL_SPACING}>
+      <Spacer />
+      {end}
+    </HStack>
+  ) : (
+    <>
+      {picked === null ? null : (
+        <HStack spacing={TOOL_SPACING}>
+          <Spacer />
+          {picked}
+        </HStack>
+      )}
+      <HStack spacing={TOOL_SPACING}>
+        <Spacer />
+        {presses}
+      </HStack>
+    </>
+  );
+
   return (
     <VStack
       alignment="leading"
       spacing={TOOL_SPACING}
-      modifiers={[onGeometryChange(({ width }) => measured("row")(width)), ROW_SIDES]}
+      modifiers={[
+        // Note that the row is measured as the room the glass gives it, never its own content's width, since an end holding its whole width past that room had grown the row, and the glass with it, to fit, so the end always seemed to fit (`endFits`).
+        frame({ minWidth: 0, maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        onGeometryChange(({ width }) => measured("row")(width)),
+        ROW_SIDES,
+      ]}
     >
-      {capsulesOwnLine(widths) ? (
+      {capsulesOwnLine(widths) || !endFits(widths) ? (
         <>
           {start}
-          <HStack spacing={TOOL_SPACING}>
-            <Spacer />
-            {end}
-          </HStack>
+          {ends}
         </>
       ) : (
         <HStack spacing={TOOL_SPACING}>
