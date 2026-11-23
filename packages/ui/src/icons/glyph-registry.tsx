@@ -5,6 +5,7 @@ import {
   BookBookmark,
   BookOpen,
   BrainCircuit,
+  BriefcaseBusiness,
   Broom,
   Building2,
   Calendar,
@@ -132,6 +133,8 @@ export const GLYPH = {
   // A task under another, its parent, wherever sub-tasks are named, counted, or added.
   SUB_TASK: lucideGlyph(ListTree),
   AGENT: lucideGlyph(HardHat),
+  // A Manager, the agent on no task that a workspace shares, which directs the agents it starts.
+  MANAGER: lucideGlyph(BriefcaseBusiness),
   PULL_REQUEST: lucideGlyph(GitPullRequest),
   BRANCH: lucideGlyph(GitBranch),
   PULL_REQUEST_STACK: lucideGlyph(Layers),

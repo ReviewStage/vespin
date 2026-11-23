@@ -40,7 +40,7 @@ import {
  * sidebar-managers.test.ts -- the sidebar's Managers: the workspace's
  * Managers of the live task list's agents, listed under their head where
  * the workspace has the experiment on, each opening its page, and no head
- * at all where it is off; a Manager's row's Settings…, which names it; and
+ * at all where it is off; its View options' sort; a Manager's row's Settings…, which names it; and
  * New Manager, whose edited retry is a request of its own. Synthetic
  * throughout.
  */
@@ -70,14 +70,16 @@ const MANAGER: ListedAgent = {
   createdAt: 1,
   status: AGENT_STATUS.COMPLETED,
   turnId: null,
+  settledAt: 10,
 };
 
-/** A second Manager, started later, which no page stands open on. */
+/** A second Manager, started later but settled earlier, which no page stands open on. */
 const BILLING: ListedAgent = {
   ...MANAGER,
   id: "0a1b2c3d-0000-4000-8000-00000000000b",
   title: "Billing Manager",
   createdAt: 2,
+  settledAt: 4,
 };
 
 const { kind: _kind, ...CODER } = MANAGER;
@@ -218,6 +220,33 @@ test("Managers lists the workspace's unarchived Managers of the live list alone,
   assert.ok(row, "the Manager's row is drawn");
   act(() => row.click());
   assert.deepEqual(opened, [FRONTEND]);
+});
+
+test("View options' Sort by › Recent activity lists the Manager that moved last first", async () => {
+  const sidebar = await mountSidebar(true, []);
+  const list = sidebar.querySelector('nav[aria-label="Managers"]') ?? assert.fail("Managers");
+  const order = () => list.textContent?.indexOf("Frontend Manager") ?? -1;
+
+  assert.ok(order() > (list.textContent?.indexOf("Billing Manager") ?? -1), "newest first");
+
+  const options =
+    list.querySelector<HTMLButtonElement>('button[aria-label="View options"]') ??
+    assert.fail("the head offers View options");
+
+  act(() => options.click());
+
+  const item = (name: string) =>
+    [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find((each) =>
+      each.textContent?.startsWith(name),
+    ) ?? assert.fail(`${name} is offered`);
+
+  act(() => item("Sort by").click());
+  act(() => item("Recent activity").click());
+
+  assert.ok(
+    order() < (list.textContent?.indexOf("Billing Manager") ?? -1),
+    "the Manager that settled last stands first",
+  );
 });
 
 test("a Manager the reader pinned stands under Pinned as well as under Managers, and opens its page from there", async () => {

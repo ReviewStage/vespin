@@ -2,15 +2,18 @@
  * sidebar-managers.tsx -- the workspace's Managers in the sidebar, above Pinned and Tasks: one flat list of agent rows, each opening the Manager's own page.
  *
  * A Manager is an agent on no task that its workspace shares, so every
- * member's stands here, newest started first, as the live task list carries them
+ * member's stands here, as the live task list carries them
  * (`workspace-managers.ts`), its archived ones left out. Each is an agent's
  * row as every list of agents draws it (`AgentListRow`), its menu the
  * agent's own, its press opening its page (`/<workspace>/agent/<id>`), saying
  * nothing of where it runs (`runsOn`), chosen with no other (`choosable`),
  * and the row of the page standing open marked as the sidebar marks its open
- * task. Its head folds it as Pinned's does, kept across launches, the open
- * Manager's row still standing under the fold, and its +
- * opens New Manager (`new-manager-dialog.tsx`). A Manager the reader pinned,
+ * task. Its head wears the Manager's glyph (`GLYPH.MANAGER`) as Pinned's
+ * wears the pin, and folds it as Pinned's does, kept across launches, the
+ * open Manager's row still standing under the fold; its + opens New Manager
+ * (`new-manager-dialog.tsx`), and its View options' Sort by lists the
+ * Managers by recent activity, name, or date created, kept per workspace on
+ * this machine (`manager-sort.ts`), newest started first until one is chosen. A Manager the reader pinned,
  * from its row's menu, stands here still and under Pinned too, drawn as the
  * same row (`ManagerRows`, `usePinnedManagers`). It stands
  * only where the workspace has the Managers experiment on, and says so
@@ -21,9 +24,16 @@
 import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
 import { agentLastMovedAt } from "@repo/features/task-agents-model";
 import type { TaskAgentPin } from "@repo/features/task-wire";
+import {
+  MANAGER_SORT,
+  type ManagerSort,
+  sortedManagers,
+} from "@repo/features/workspace-managers-model";
 import { EXPERIMENT } from "@repo/settings";
 import {
   BUTTON_SIZE,
+  GROUP_ACTION_STATE,
+  GroupAction,
   GroupHeader,
   IconButton,
   LIST_DENSITY,
@@ -33,17 +43,23 @@ import {
   NoteLine,
   PlusIcon,
   Tooltip,
+  useMenu,
 } from "@repo/ui";
+import { ArrowUpDownIcon, GLYPH, SlidersHorizontalIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
+import { type ManagerSortControl, useManagerSort } from "../tasks/manager-sort.js";
 import {
   pinnedManagersOf,
   useManagerAgents,
   useWorkspaceManagers,
 } from "../tasks/workspace-managers.js";
+import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
+import { ActionMenu, type MenuSubmenu } from "./action-menu.js";
 import { AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
 import type { FoldedGroups } from "./folded-groups.js";
 import { NEW_MANAGER, useNewManagerDialog } from "./new-manager-dialog.js";
@@ -58,6 +74,19 @@ const MANAGER_NOUN: CountNoun = { one: "manager", many: "managers" };
 
 /** Its key, by which the groups under it glide as it comes and goes. */
 const MANAGERS_KEY = "managers";
+
+/** What View options is called, on its button and its menu alike, as the Tasks head's is. */
+const VIEW_OPTIONS = "View options";
+
+/** The submenu that chooses how the Managers are sorted. */
+const SORT_BY = "Sort by";
+
+/** What each sort is called among Sort by's choices, in the order they are offered. */
+const SORT_WORDS = {
+  [MANAGER_SORT.RECENT_ACTIVITY]: "Recent activity",
+  [MANAGER_SORT.NAME]: "Name",
+  [MANAGER_SORT.CREATED]: "Date created",
+} as const satisfies Record<ManagerSort, string>;
 
 /** No Manager pinned, the same array every render. */
 const NO_MANAGERS: readonly ListedAgent[] = [];
@@ -158,6 +187,51 @@ export function ManagerRows({
   );
 }
 
+/** The Managers head's View options: a button dropping the window's menu, whose Sort by chooses how the Managers are sorted. */
+function ManagerViewOptions({
+  shown,
+  control,
+}: {
+  /** Whether the sidebar is on screen, for the menu not to outlive it. */
+  shown: boolean;
+  control: ManagerSortControl;
+}): React.JSX.Element {
+  const menu = useMenu(shown);
+
+  const sortBy: MenuSubmenu = {
+    label: SORT_BY,
+    icon: <ArrowUpDownIcon />,
+    items: Object.values(MANAGER_SORT).map((choice) => ({
+      label: SORT_WORDS[choice],
+      checked: control.sort === choice,
+      stays: true,
+      onSelect: () => control.onSort(choice),
+    })),
+  };
+
+  return (
+    <GroupAction state={GROUP_ACTION_STATE.IDLE}>
+      <Tooltip label={VIEW_OPTIONS}>
+        <IconButton
+          icon={<SlidersHorizontalIcon />}
+          label={VIEW_OPTIONS}
+          size={BUTTON_SIZE.COMPACT}
+          {...menu.trigger()}
+        />
+      </Tooltip>
+      {menu.drawn === undefined ? null : (
+        <ActionMenu
+          label={VIEW_OPTIONS}
+          menu={menu.drawn}
+          replayUnmasked
+          groups={[[sortBy]]}
+          onClose={menu.close}
+        />
+      )}
+    </GroupAction>
+  );
+}
+
 /** The Managers section; see the module's head. Nothing while the workspace listed has the Managers experiment off. */
 export function SidebarManagers({
   tasks,
@@ -174,13 +248,20 @@ export function SidebarManagers({
 }): React.JSX.Element | null {
   const { listed, managers } = useListedManagers(tasks);
   const newManager = useNewManagerDialog({ tasks, onOpen });
+  const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+  const sorting = useManagerSort(tasks.workspace?.id, staged);
+
+  const sorted = useMemo(
+    () => (managers === undefined ? undefined : sortedManagers(managers, sorting.sort)),
+    [managers, sorting.sort],
+  );
 
   if (!listed) return null;
 
   const folded = folds.managersFolded;
   const shown = tasks.shown && inSight;
   const openId = tasks.agentView.agentId;
-  const listedManagers = managers ?? [];
+  const listedManagers = sorted ?? [];
   // The open Manager's row stands under the head while the section is folded, as Pinned's and Following's open rows do.
   const standing = listedManagers.filter((agent) => agent.id === openId);
 
@@ -197,17 +278,21 @@ export function SidebarManagers({
           count: managers?.length ?? 0,
           noun: MANAGER_NOUN,
         })}
+        glyph={<GLYPH.MANAGER />}
         label={MANAGERS_HEAD}
         standing={standing.length === 0 ? undefined : rows(standing)}
         actions={
-          <Tooltip label={NEW_MANAGER}>
-            <IconButton
-              icon={<PlusIcon />}
-              label={NEW_MANAGER}
-              size={BUTTON_SIZE.COMPACT}
-              onClick={newManager.ask}
-            />
-          </Tooltip>
+          <>
+            <Tooltip label={NEW_MANAGER}>
+              <IconButton
+                icon={<PlusIcon />}
+                label={NEW_MANAGER}
+                size={BUTTON_SIZE.COMPACT}
+                onClick={newManager.ask}
+              />
+            </Tooltip>
+            <ManagerViewOptions shown={shown} control={sorting} />
+          </>
         }
       >
         {managers?.length === 0 ? (
