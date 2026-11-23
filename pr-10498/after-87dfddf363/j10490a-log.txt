@@ -1,0 +1,7 @@
+pinned to 87dfddf363
+== bundle PJj10490a base 87dfddf363
+  built 87dfddf363 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 1
