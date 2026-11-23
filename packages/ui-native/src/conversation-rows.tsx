@@ -18,6 +18,7 @@ import { RowFrame, RowHead } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import { Avatar, type Face, ToneGlyph } from "./marks.js";
 import { BotTag } from "./pull-request-page.js";
+import type { RowAction } from "./row-menu-model.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -226,6 +227,8 @@ type ThreadRowProps = {
   readonly open: boolean;
   readonly repository?: string | null | undefined;
   readonly onOpenLink: (address: string) => void;
+  /** What a member does on it, such as Resolve or Reopen, behind a swipe from its trailing edge and in its long press menu; none where it can be changed no further. */
+  readonly acts?: readonly RowAction[] | undefined;
 };
 
 /**
@@ -233,7 +236,9 @@ type ThreadRowProps = {
  * lines in the code face, the states it stands in and how many comments it
  * holds; then, folded, a plain preview of its first comment by who wrote
  * it, and opened, each comment by who wrote it and when, in Markdown. A
- * resolved or outdated thread stands muted, as the panel folds one.
+ * resolved or outdated thread stands muted, as the panel folds one. Its
+ * acts, such as Resolve, stand behind a swipe from its trailing edge and in
+ * its long press menu, as a row's own acts do.
  */
 export function ThreadRow({
   id,
@@ -246,6 +251,7 @@ export function ThreadRow({
   open,
   repository,
   onOpenLink,
+  acts = [],
 }: ThreadRowProps) {
   const colors = useColors();
   const first = comments[0];
@@ -284,6 +290,7 @@ export function ThreadRow({
   return (
     <RowFrame
       id={id}
+      trailingActions={acts}
       row={
         <VStack alignment="leading" spacing={SPACE.TIGHT}>
           {head}

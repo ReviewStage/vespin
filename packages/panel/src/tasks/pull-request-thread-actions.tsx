@@ -1,4 +1,5 @@
 import type { ReviewThread } from "@repo/features/agent-wire";
+import { THREAD_ACT_WORDS } from "@repo/features/pull-request-model";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { BUTTON_SIZE, IconButton, Tooltip } from "@repo/ui";
 import { CheckIcon, RotateCcwIcon } from "lucide-react";
@@ -38,15 +39,8 @@ import {
  * offers none.
  */
 
-/** The controls' own words. */
-const THREAD_WORDS = {
-  REPLY: "Reply",
-  REPLYING: "Replying",
-  RESOLVE: "Resolve",
-  RESOLVING: "Resolving",
-  REOPEN: "Reopen",
-  REOPENING: "Reopening",
-} as const;
+/** The controls' own words, the iOS page's too. */
+const THREAD_WORDS = THREAD_ACT_WORDS;
 
 /** What to read again once one of a tab's threads changes. */
 interface ThreadWrites {
