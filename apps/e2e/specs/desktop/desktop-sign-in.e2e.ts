@@ -1,4 +1,4 @@
-// desktop-sign-in.e2e.ts -- the packaged desktop app, launched on a fresh profile against the suite's local server, signs in and shows the task list.
+// desktop-sign-in.e2e.ts -- the packaged desktop app, launched on a fresh profile against the suite's local server, signs a fresh member in and shows their task.
 
 import { mkdtemp } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -6,7 +6,12 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { _electron, type ElectronApplication } from "@playwright/test";
-import { expect, test } from "../../support/test.js";
+import { expect, test } from "../../support/signed-in.js";
+
+/** The task seeded for the member, which the window's task list shows once the app is signed in. */
+const TASK_NAME = "Check the desktop signs in";
+
+test.use({ memberAsk: { setupFinished: true, taskName: TASK_NAME } });
 
 /** A proxy on loopback that refuses every request handed to it, and the addresses it refused. */
 interface RefusingProxy {
@@ -71,6 +76,23 @@ async function holdOpens(app: ElectronApplication): Promise<void> {
   });
 }
 
+/**
+ * The app's authorize address as a browser already signed in follows it: the
+ * same authorization with its `prompt=login` left out. Note that the app
+ * always asks the login page again, and the local server's login page signs
+ * in the demo's own member whatever session stands, so a journey that left
+ * it in would hand the app that member's session rather than its own
+ * member's; the member's session is already the context's (`signedIn`),
+ * so authorize goes straight on to the app's loopback as it would for anyone
+ * signed in on the web.
+ */
+function withoutLoginPrompt(authorize: string): string {
+  const url = new URL(authorize);
+  url.searchParams.delete("prompt");
+
+  return url.toString();
+}
+
 /** The first address the app asked to open, once it has asked. */
 async function firstOpened(app: ElectronApplication): Promise<string> {
   let first: string | undefined;
@@ -89,19 +111,18 @@ async function firstOpened(app: ElectronApplication): Promise<string> {
 }
 
 /**
- * The desktop's sign-in end to end, over the suite's server: the app's
- * authorize goes to the local server's login page (`apps/web/server/local-sign-in.ts`),
- * which signs the journey's browser in as the demo seed's member and goes
- * back through authorize to the app's loopback, then on through the hand-off
- * that gives the app its session. The browser half runs in the journey's
- * page, held to loopback like every other, and the app itself stands behind
- * `refusingProxy`, so neither reaches past this machine. Note that it signs in as the
- * demo's Dean, the one member `/sign-in` answers for today; it takes the
- * per-test `member` once the sign-in can be handed one.
+ * The desktop's sign-in end to end, over the suite's server, as the test's
+ * own fresh member past setup with one task: the journey's browser is signed
+ * in as them (`signedIn`), the app's authorize goes on to its loopback
+ * (`withoutLoginPrompt`), then on through the hand-off that gives the app its
+ * session, and the window lists the member's task. The browser half runs in
+ * the journey's page, held to loopback like every other, and the app itself
+ * stands behind `refusingProxy`, so neither reaches past this machine.
  */
 test("the packaged app signs in on a fresh profile and shows the task list", async ({
   page,
   baseURL,
+  signedIn,
 }) => {
   // Note that the first page load waits on the app's own launch and the local server's first answers, which run well past the default on a CI Mac.
   test.setTimeout(180_000);
@@ -129,10 +150,11 @@ test("the packaged app signs in on a fresh profile and shows the task list", asy
     const window = await app.firstWindow();
     const signIn = window.getByRole("region", { name: /^Sign in to / });
     await signIn.getByRole("button", { name: "Continue with GitHub" }).click();
-    await page.goto(await firstOpened(app));
+    await page.goto(withoutLoginPrompt(await firstOpened(app)));
 
     await expect(signIn).toBeHidden({ timeout: 60_000 });
-    await expect(window.getByRole("navigation", { name: /tasks/i })).toBeVisible();
+    expect(signedIn.taskId).toBeDefined();
+    await expect(window.getByText(TASK_NAME).first()).toBeVisible();
   } finally {
     await app.close();
     await proxy.close();
