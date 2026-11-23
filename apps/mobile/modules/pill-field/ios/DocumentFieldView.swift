@@ -321,24 +321,163 @@ private let linkKey = NSAttributedString.Key("VespinLink")
 /// A run of a list's items at one depth as the field draws them: their kind, the list they stand in, the number its first item took, and how many items it holds so far.
 private struct ListRun {
   let kind: DocumentKind
-  var list: NSTextList?
   let start: Int
   var items: Int
 }
 
-/// The runs of a block's items standing open as its lines are drawn, outermost first, and whether a task drawn since broke their lists' paragraphs.
+/// The runs of a block's items standing open as its lines are drawn, outermost first.
 private struct ListNesting {
   let block: Int
   let runs: [ListRun]
-  let broken: Bool
+}
+
+/// What stands in a list item's gutter, as the desktop's list marks it: a bullet that changes with the item's depth (a disc, a ring, a square, as a browser marks nested lists), or its number.
+enum ItemMark: Equatable {
+  case bullet(depth: Int)
+  case number(Int)
+
+  /// The mark of the item after this one in its run.
+  var next: ItemMark {
+    switch self {
+    case .bullet: self
+    case .number(let number): .number(number + 1)
+    }
+  }
+}
+
+/// An item's mark as its paragraph's words hold it, with the ink it is drawn in, which the item's layout fragment reads to draw it.
+final class ItemMarkValue: NSObject {
+  let mark: ItemMark
+  let color: UIColor
+
+  init(_ mark: ItemMark, color: UIColor) {
+    self.mark = mark
+    self.color = color
+  }
+
+  override func isEqual(_ object: Any?) -> Bool {
+    guard let other = object as? ItemMarkValue else { return false }
+    return other.mark == mark && other.color == color
+  }
+
+  override var hash: Int {
+    switch mark {
+    case .bullet(let depth): return depth
+    case .number(let number): return 1_000 + number
+    }
+  }
+}
+
+/// Where an item's mark is held on its paragraph's words.
+let itemMarkKey = NSAttributedString.Key("dev.vespin.document.itemMark")
+
+/// A list's gutter and its mark, as the read view's `Markdown` sets them after the desktop's prose: the gutter's width in body sizes and the points between it and the words, and a bullet's width and how far in from the gutter's end it stands, in body sizes; a number ends at the gutter's end.
+private enum MarkSize {
+  static let gutter: CGFloat = 1.4
+  static let gutterGap: CGFloat = 4
+  static let bullet: CGFloat = 0.34
+  static let bulletInset: CGFloat = 0.2
+}
+
+/// How wide a list's gutter stands, and so how far each depth stands in, at the body's size the reader chose.
+func listIndent() -> CGFloat {
+  bodyFont().pointSize * MarkSize.gutter + MarkSize.gutterGap
+}
+
+/// Draws an item's mark in the gutter before `textStart`, on the line whose baseline is `baseline`, in the current context: a bullet on the middle of the line's lowercase letters, a number on its baseline, each in `color`.
+func drawItemMark(_ mark: ItemMark, textStart: CGFloat, baseline: CGFloat, font: UIFont, color: UIColor) {
+  let size = font.pointSize
+
+  switch mark {
+  case .bullet(let depth):
+    let dot = size * MarkSize.bullet
+    let middle = baseline - font.xHeight / 2
+    let rect = CGRect(x: textStart - size * MarkSize.bulletInset - MarkSize.gutterGap - dot, y: middle - dot / 2, width: dot, height: dot)
+    color.set()
+
+    switch depth % 3 {
+    case 0:
+      UIBezierPath(ovalIn: rect).fill()
+    case 1:
+      let line = max(1, dot * 0.16)
+      let ring = UIBezierPath(ovalIn: rect.insetBy(dx: line / 2, dy: line / 2))
+      ring.lineWidth = line
+      ring.stroke()
+    default:
+      UIBezierPath(rect: rect.insetBy(dx: dot * 0.08, dy: dot * 0.08)).fill()
+    }
+  case .number(let number):
+    let face = UIFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)
+    let words = NSAttributedString(string: "\(number).", attributes: [.font: face, .foregroundColor: color])
+    let width = words.size().width
+    words.draw(at: CGPoint(x: textStart - MarkSize.gutterGap - width, y: baseline - face.ascender))
+  }
+}
+
+/// A paragraph's layout as TextKit lays it, drawing a list item's mark in its gutter before its first line, since the system's own list markers stand in the words' full ink at their own size.
+final class ItemMarkFragment: NSTextLayoutFragment {
+  override var renderingSurfaceBounds: CGRect {
+    // Note that the mark stands in the gutter left of the words, which the fragment's own frame starts past where its paragraph is set in, so the surface reaches back to the container's edge, or the mark is cut at the frame's.
+    let gutter = CGRect(x: -layoutFragmentFrame.minX, y: 0, width: layoutFragmentFrame.maxX, height: layoutFragmentFrame.height)
+    return super.renderingSurfaceBounds.union(gutter)
+  }
+
+  override func draw(at point: CGPoint, in context: CGContext) {
+    super.draw(at: point, in: context)
+    guard let paragraph = textElement as? NSTextParagraph, let line = textLineFragments.first else { return }
+    let text = paragraph.attributedString
+    guard text.length > 0 else { return }
+    var held: ItemMarkValue?
+
+    // Note that the mark is read from any of the paragraph's words, since words typed at the item's start hold none until it is drawn again.
+    text.enumerateAttribute(itemMarkKey, in: NSRange(location: 0, length: text.length)) { value, _, stop in
+      guard let value = value as? ItemMarkValue else { return }
+      held = value
+      stop.pointee = true
+    }
+
+    guard let held else { return }
+    let font = text.attribute(.font, at: 0, effectiveRange: nil) as? UIFont ?? bodyFont()
+    let style = text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+    let textStart = (style?.firstLineHeadIndent ?? 0) - layoutFragmentFrame.minX
+    let baseline = line.typographicBounds.minY + line.glyphOrigin.y
+    UIGraphicsPushContext(context)
+    defer { UIGraphicsPopContext() }
+    drawItemMark(held.mark, textStart: point.x + textStart, baseline: point.y + baseline, font: font, color: held.color)
+  }
+}
+
+/// The mark of an empty last list item, which holds no words for a layout fragment to draw it beside, drawn over the field where its line stands.
+final class EndMarkView: UIView {
+  var mark: ItemMark?
+  var font: UIFont = bodyFont()
+  var color: UIColor = .secondaryLabel
+  var baseline: CGFloat = 0
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isOpaque = false
+    backgroundColor = .clear
+    isUserInteractionEnabled = false
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("An item's mark is never decoded.")
+  }
+
+  override func draw(_ rect: CGRect) {
+    guard let mark else { return }
+    drawItemMark(mark, textStart: bounds.width, baseline: baseline, font: font, color: color)
+  }
 }
 
 /// How far a list's, a task's and a quote's lines stand in from the edge.
 private enum DocumentSpace {
-  static let indent: CGFloat = 24
   static let quoteIndent: CGFloat = 14
   static let blockGap: CGFloat = 10
-  static let itemGap: CGFloat = 4
+  /// The room between a list's items, a share of the body's size, as the read view's.
+  static let itemGapShare: CGFloat = 0.25
   static let cardHeight: CGFloat = 52
   static let cardRadius: CGFloat = 10
   static let cardPadding: CGFloat = 12
@@ -486,6 +625,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   private let textView = UITextView(usingTextLayoutManager: true)
   private let placeholderLabel = UILabel()
+  /// The mark of an empty last list item, which no layout fragment draws.
+  private let endMark = EndMarkView()
 
   /// How many changes have been typed, which a handing must have heard to be taken.
   private var changes = 0
@@ -547,6 +688,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     textView.delegate = self
+    // Note that each paragraph is laid out by a fragment that draws its item's mark, since the system's list markers draw in the words' full ink at their own size.
+    textView.textLayoutManager?.delegate = self
+    textView.addSubview(endMark)
+    endMark.isHidden = true
     textView.backgroundColor = .clear
     // Note that the words are inset for the whole safe area, the bar over them included, wherever the field stands: under automatic, iPadOS 26 counts no form sheet's bar, so a sheet's first line stood under it.
     textView.contentInsetAdjustmentBehavior = .always
@@ -690,6 +835,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   func textViewDidChange(_ textView: UITextView) {
     guard !quiet else { return }
+    let edit = landed ?? typed
     // Note that the words the text itself saw laid in are the ones carried on to, the range asked about being the field's guess before the keyboard lays them.
     if let piece = landed ?? typed {
       carryOn(to: piece)
@@ -700,6 +846,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     takePendingLine()
     keepPendingLine()
     keepItemDrawn()
+    refreshMarks(around: edit ?? textView.selectedRange)
     linkRange = nil
     linkWords = nil
     changes += 1
@@ -874,10 +1021,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       let whole = NSRange(location: 0, length: piece.length)
       if whole.length == 0 { continue }
       piece.addAttribute(lineKey, value: line.facts, range: whole)
-      let lists = itemLists(line.facts, in: &nesting)
-      let underMark = line.facts.itemKind == .taskList && line.facts.nesting > 0
-        && nesting.map { $0.runs.count >= 2 && $0.runs[$0.runs.count - 2].list != nil } == true
-      piece.addAttribute(.paragraphStyle, value: paragraphStyle(line.facts, lists: lists, underMark: underMark), range: whole)
+      piece.addAttribute(.paragraphStyle, value: paragraphStyle(line.facts), range: whole)
+      if let mark = itemMark(line.facts, in: &nesting) {
+        piece.addAttribute(itemMarkKey, value: ItemMarkValue(mark, color: look.placeholder), range: whole)
+      }
       piece.enumerateAttribute(.font, in: whole) { value, range, _ in
         if value == nil { piece.addAttributes(wordAttributes(kind, line.facts.level, [], nil), range: range) }
       }
@@ -932,16 +1079,15 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     return base.fontDescriptor.withSymbolicTraits(traits).map { UIFont(descriptor: $0, size: 0) } ?? base
   }
 
-  /// The lists a list's item stands in, outermost first, each depth's run of items sharing one: the item's own list goes on where the item before it at its depth stood in the same kind of list, and starts anew otherwise. A task stands in none, its box marking it, so where one stood between, the next item's lists are made anew counting on from where each stood, since a list's numbers count only its unbroken run of paragraphs.
-  private func itemLists(_ facts: LineFacts, in nesting: inout ListNesting?) -> [NSTextList] {
+  /// The mark a list's item draws in its gutter, each depth's run of items counting on: the item's own run goes on where the item before it at its depth stood in the same kind of list, and starts anew otherwise, as the Markdown it prints numbers it, a task standing between two numbered items at their depth starting the second's count again; a task, whose box marks it, draws none.
+  private func itemMark(_ facts: LineFacts, in nesting: inout ListNesting?) -> ItemMark? {
     guard facts.isListItem else {
       nesting = nil
-      return []
+      return nil
     }
 
     let same = nesting?.block == facts.block
     var runs = same ? nesting?.runs ?? [] : []
-    var broken = same && nesting?.broken == true
     let depth = min(facts.nesting, runs.count)
     let kind = facts.itemKind
 
@@ -949,62 +1095,36 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       runs.removeSubrange((depth + 1)...)
     } else {
       runs.removeSubrange(depth...)
-      let start = depth == 0 ? facts.start ?? 1 : 1
-      runs.append(ListRun(kind: kind, list: madeList(kind, depth: depth, start: start), start: start, items: 0))
+      runs.append(ListRun(kind: kind, start: depth == 0 ? facts.start ?? 1 : 1, items: 0))
     }
 
     runs[depth].items += 1
+    nesting = ListNesting(block: facts.block, runs: runs)
 
-    if kind == .taskList {
-      nesting = ListNesting(block: facts.block, runs: runs, broken: true)
-      return []
-    }
-
-    if broken {
-      for index in runs.indices where runs[index].list != nil {
-        // Note that the item counted just now is this one, so its list starts at its own number.
-        let before = runs[index].items - (index == depth ? 1 : 0)
-        runs[index].list = madeList(runs[index].kind, depth: index, start: runs[index].start + before)
-      }
-      broken = false
-    }
-
-    nesting = ListNesting(block: facts.block, runs: runs, broken: broken)
-    return runs.compactMap(\.list)
-  }
-
-  /// A list of `kind`'s items at `depth`: bullets that change their mark with each depth, as Notes' do, or numbers from `start`; none for a task, whose box marks it.
-  private func madeList(_ kind: DocumentKind, depth: Int, start: Int?) -> NSTextList? {
     switch kind {
-    case .bulletList:
-      let marks: [NSTextList.MarkerFormat] = [.disc, .circle, .square]
-      return NSTextList(markerFormat: marks[depth % marks.count], options: 0)
-    case .orderedList:
-      let list = NSTextList(markerFormat: NSTextList.MarkerFormat(rawValue: "{decimal}."), options: 0)
-      list.startingItemNumber = start ?? 1
-      return list
-    default:
-      return nil
+    case .bulletList: return .bullet(depth: depth)
+    case .orderedList: return .number(runs[depth].start + runs[depth].items - 1)
+    default: return nil
     }
   }
 
-  /// A line's paragraph: its lists' markers and its indent, a step further in for each depth it is nested, a quote's indent, and the room between blocks. A task nested under a bulleted or numbered item stands a step further in still, since the system sets a listed item's words in past its indent by its mark, and the box goes under the parent's words rather than its mark.
-  private func paragraphStyle(_ facts: LineFacts, lists: [NSTextList], underMark: Bool = false) -> NSParagraphStyle {
+  /// A line's paragraph: its indent, a gutter further in for each depth it is nested and the gutter its mark stands in, its words hanging there however many lines they wrap to, a quote's indent, and the room between blocks, as the read view and the desktop set a list. A task nested under an item stands its box under the item's words.
+  private func paragraphStyle(_ facts: LineFacts) -> NSParagraphStyle {
     let style = NSMutableParagraphStyle()
     style.paragraphSpacing = DocumentSpace.blockGap
-    if !lists.isEmpty { style.textLists = lists }
-    let nested = DocumentSpace.indent * CGFloat(facts.nesting)
+    let gutter = listIndent()
+    let nested = gutter * CGFloat(facts.nesting)
+    let itemGap = bodyFont().pointSize * DocumentSpace.itemGapShare
 
     switch facts.itemKind {
     case .bulletList, .orderedList:
-      style.headIndent = nested + DocumentSpace.indent
-      style.firstLineHeadIndent = nested + DocumentSpace.indent
-      style.paragraphSpacing = DocumentSpace.itemGap
+      style.headIndent = nested + gutter
+      style.firstLineHeadIndent = nested + gutter
+      style.paragraphSpacing = itemGap
     case .taskList:
-      let under = underMark ? DocumentSpace.indent : 0
-      style.headIndent = nested + under
-      style.firstLineHeadIndent = nested + under
-      style.paragraphSpacing = DocumentSpace.itemGap
+      style.headIndent = nested
+      style.firstLineHeadIndent = nested
+      style.paragraphSpacing = itemGap
     case .quote:
       style.headIndent = DocumentSpace.quoteIndent
       style.firstLineHeadIndent = DocumentSpace.quoteIndent
@@ -1051,7 +1171,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     if let pendingLine, pendingLine.at == piece.location {
       let line = NSRange(location: piece.location, length: storage.length - piece.location)
       storage.addAttribute(lineKey, value: pendingLine.facts, range: line)
-      storage.addAttribute(.paragraphStyle, value: paragraphStyle(pendingLine.facts, lists: lastLineLists(pendingLine.facts)), range: line)
+      storage.addAttribute(.paragraphStyle, value: paragraphStyle(pendingLine.facts), range: line)
       self.pendingLine = nil
       restyleWords(in: line)
     }
@@ -1098,19 +1218,21 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     guard let facts = heldFacts(before),
       facts.isListItem, facts.itemKind != .taskList,
       let style = storage.attribute(.paragraphStyle, at: before.location, effectiveRange: nil) as? NSParagraphStyle,
-      !style.textLists.isEmpty
+      let mark = storage.attribute(itemMarkKey, at: before.location, effectiveRange: nil) as? ItemMarkValue
     else { return }
     let ends = NSMaxRange(paragraph) > paragraph.location && string.character(at: NSMaxRange(paragraph) - 1) == 0x0A
     let words = paragraph.length - (ends ? 1 : 0)
 
     if words == 0 {
       textView.typingAttributes[.paragraphStyle] = style
+      // Note that the words typed next carry the next item's mark until the line is drawn again, which numbers it among its list.
+      textView.typingAttributes[itemMarkKey] = ItemMarkValue(mark.mark.next, color: mark.color)
       return
     }
 
     let own = heldFacts(paragraph)
-    let drawn = storage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
-    guard own == nil || own?.block == facts.block, drawn?.textLists.isEmpty ?? true else { return }
+    let drawn = storage.attribute(itemMarkKey, at: paragraph.location, effectiveRange: nil)
+    guard own == nil || own?.block == facts.block, drawn == nil else { return }
     let selected = textView.selectedRange
     redraw(heldLines(), keepUndo: true)
     textView.selectedRange = selected
@@ -1231,8 +1353,29 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     updateBar()
   }
 
-  /// Marks each of the bar's buttons on where the selection already stands that way, as Notes marks Bold.
+  /// Stands the mark of an empty last list item where its line stands, while the caret is on it, since the line holds no words a layout fragment could draw it beside; hidden elsewhere.
+  private func placeEndMark() {
+    guard let facts = emptyLastLineFacts(), facts.isListItem, let mark = lastLineMark(facts) else {
+      endMark.isHidden = true
+      return
+    }
+
+    let font = bodyFont()
+    let caret = textView.caretRect(for: textView.endOfDocument)
+    let textStart = textView.textContainerInset.left + paragraphStyle(facts).firstLineHeadIndent
+    endMark.mark = mark
+    endMark.font = font
+    endMark.color = look.placeholder
+    // Note that the caret stands as tall as its line, the words' baseline the face's ascent below its top.
+    endMark.frame = CGRect(x: 0, y: caret.minY, width: textStart, height: max(caret.height, font.lineHeight))
+    endMark.baseline = font.ascender
+    endMark.isHidden = false
+    endMark.setNeedsDisplay()
+  }
+
+  /// Marks each of the bar's buttons on where the selection already stands that way, as Notes marks Bold, and stands an empty last list item's mark.
   private func updateBar() {
+    placeEndMark()
     for (act, item) in barItems {
       item.isSelected = isOn(act)
     }
@@ -1437,15 +1580,61 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   private func pendingAttributes(_ facts: LineFacts) -> [NSAttributedString.Key: Any] {
     var attributes = wordAttributes(facts.itemKind, facts.level, [], nil)
     attributes[lineKey] = facts
-    attributes[.paragraphStyle] = paragraphStyle(facts, lists: lastLineLists(facts))
+    attributes[.paragraphStyle] = paragraphStyle(facts)
+    if let mark = lastLineMark(facts) { attributes[itemMarkKey] = ItemMarkValue(mark, color: look.placeholder) }
     return attributes
   }
 
-  /// The lists the last line stands in with `facts`, the lines above it laid first, so a nested item at the words' end stands in its parents' lists.
-  private func lastLineLists(_ facts: LineFacts) -> [NSTextList] {
+  /// Draws again the marks of the list an edit stands in, each item numbered among its run, since a key, a paste, a Return or a pill laid over an item's words changes the run while the words around keep the marks they were drawn with: every paragraph of the edit's block, from the block's first, its mark laid where it differs and taken off a line that is no item.
+  private func refreshMarks(around edit: NSRange) {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    guard string.length > 0 else { return }
+    let end = min(NSMaxRange(edit), string.length)
+    var paragraph = string.paragraphRange(for: NSRange(location: min(edit.location, string.length - 1), length: 0))
+    let before = paragraph.location > 0 ? heldFacts(string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0))) : nil
+    guard let block = (heldFacts(paragraph) ?? before)?.block else { return }
+
+    // Note that the run is counted from its block's first line, which the walk back finds.
+    while paragraph.location > 0 {
+      let previous = string.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0))
+      guard heldFacts(previous)?.block == block else { break }
+      paragraph = previous
+    }
+
     var nesting: ListNesting?
-    for line in heldLines().dropLast() { _ = itemLists(line.facts, in: &nesting) }
-    return itemLists(facts, in: &nesting)
+    var carried: LineFacts?
+    quiet = true
+    storage.beginEditing()
+
+    while paragraph.length > 0 {
+      guard let facts = heldFacts(paragraph) ?? carried, facts.block == block || paragraph.location < end else { break }
+      carried = facts
+      let mark = itemMark(facts, in: &nesting)
+      var held = NSRange()
+      let drawn = storage.attribute(itemMarkKey, at: paragraph.location, longestEffectiveRange: &held, in: paragraph) as? ItemMarkValue
+
+      if let mark {
+        if drawn?.mark != mark || held != paragraph {
+          storage.addAttribute(itemMarkKey, value: ItemMarkValue(mark, color: look.placeholder), range: paragraph)
+        }
+      } else if drawn != nil {
+        storage.removeAttribute(itemMarkKey, range: paragraph)
+      }
+
+      guard NSMaxRange(paragraph) < string.length else { break }
+      paragraph = string.paragraphRange(for: NSRange(location: NSMaxRange(paragraph), length: 0))
+    }
+
+    storage.endEditing()
+    quiet = false
+  }
+
+  /// The mark the last line draws with `facts`, the lines above it counted first, so an item at the words' end takes the number after the item before it.
+  private func lastLineMark(_ facts: LineFacts) -> ItemMark? {
+    var nesting: ListNesting?
+    for line in heldLines().dropLast() { _ = itemMark(line.facts, in: &nesting) }
+    return itemMark(facts, in: &nesting)
   }
 
   /// Keeps the block chosen for the empty last line on that line as edits elsewhere move it, and lets it go once an edit takes the line away.
@@ -1681,6 +1870,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// What a format act's change does, as a change typed does: counts it and tells JavaScript, and marks the bar again.
   private func edited() {
+    refreshMarks(around: textView.selectedRange)
     changes += 1
     tell()
     tellCaret()
@@ -1938,5 +2128,17 @@ extension LineFacts {
       depth: next == 0 ? nil : next,
       marker: marker
     )
+  }
+}
+
+// MARK: - Laying out each paragraph
+
+extension DocumentFieldView: NSTextLayoutManagerDelegate {
+  func textLayoutManager(
+    _ textLayoutManager: NSTextLayoutManager,
+    textLayoutFragmentFor location: NSTextLocation,
+    in textElement: NSTextElement
+  ) -> NSTextLayoutFragment {
+    ItemMarkFragment(textElement: textElement, range: textElement.elementRange)
   }
 }

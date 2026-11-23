@@ -210,6 +210,8 @@ interface Drawing {
   readonly markOf: ChipMarkOf;
   /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
   readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
+  /** How many lists stand around the words, which a bullet's mark follows as a browser's does: a disc, then a ring, then a square; none outside a list. */
+  readonly listDepth?: number | undefined;
 }
 
 /** A chip of a GitHub page as its standing draws it: its mark, its name, and its state's words after it. */
@@ -693,6 +695,23 @@ function Line({
 /** What a task box in a list is heard as, ticked or not. */
 const TASK_BOX_HEARD = { DONE: "Done", OPEN: "Not done" } as const;
 
+/** A bullet's mark at each depth, as the desktop's browser marks nested lists: a disc, a ring, a square, then round again. */
+const BULLET_MARK = { DISC: "disc", RING: "ring", SQUARE: "square" } as const;
+
+type BulletMark = (typeof BULLET_MARK)[keyof typeof BULLET_MARK];
+
+const BULLET_MARKS: readonly BulletMark[] = [
+  BULLET_MARK.DISC,
+  BULLET_MARK.RING,
+  BULLET_MARK.SQUARE,
+];
+
+/** The ring's line, a share of the bullet's width, as the field draws it. */
+const RING_LINE = 0.16;
+
+/** A square's side, a share of the bullet's width, so it reads no heavier than the disc, as the field draws it. */
+const SQUARE_SHARE = 0.84;
+
 /** A list item's marker: its task box, its number, or its bullet. */
 function Marker({
   checked,
@@ -738,6 +757,8 @@ function Marker({
   // Note that a bullet is a dot drawn at the panel's disc's size on the first line's lowercase letters, since the bullet character stands small and high in the system face; it is never heard, while an ordered list's number is, since its order is part of what it says.
   if (number === undefined) {
     const dot = size * BULLET.SIZE;
+    const mark = BULLET_MARKS[(drawing.listDepth ?? 0) % BULLET_MARKS.length] ?? BULLET_MARK.DISC;
+    const ring = Math.max(1, dot * RING_LINE);
 
     return (
       <View
@@ -755,12 +776,29 @@ function Marker({
         importantForAccessibility="no-hide-descendants"
       >
         <View
-          style={{
-            width: dot,
-            height: dot,
-            borderRadius: dot / 2,
-            backgroundColor: colors.TEXT_MUTED,
-          }}
+          style={
+            mark === BULLET_MARK.RING
+              ? {
+                  width: dot,
+                  height: dot,
+                  borderRadius: dot / 2,
+                  borderWidth: ring,
+                  borderColor: colors.TEXT_MUTED,
+                }
+              : mark === BULLET_MARK.SQUARE
+                ? {
+                    width: dot * SQUARE_SHARE,
+                    height: dot * SQUARE_SHARE,
+                    margin: (dot * (1 - SQUARE_SHARE)) / 2,
+                    backgroundColor: colors.TEXT_MUTED,
+                  }
+                : {
+                    width: dot,
+                    height: dot,
+                    borderRadius: dot / 2,
+                    backgroundColor: colors.TEXT_MUTED,
+                  }
+          }
         />
       </View>
     );
@@ -872,7 +910,11 @@ function ListItem({
       {/* Note that the item's chips are held to the width left beside its marker, so one in a list never runs past the column. */}
       <Blocks
         blocks={item.blocks}
-        drawing={{ ...drawing, lineWidth: drawing.lineWidth - indent }}
+        drawing={{
+          ...drawing,
+          lineWidth: drawing.lineWidth - indent,
+          listDepth: (drawing.listDepth ?? 0) + 1,
+        }}
         gap={NESTED_GAP}
         onFirstLine={onFirstLine}
       />
