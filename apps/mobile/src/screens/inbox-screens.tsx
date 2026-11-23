@@ -64,6 +64,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
+  agentLead,
   BAR_TITLE,
   type BarAction,
   type BarFootItem,
@@ -92,10 +93,12 @@ import {
   type Scope,
   Screen,
   SplitView,
+  StackBarMenu,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
   ThreadPage,
+  taskLead,
   threadPreview,
   type UndeliveredLine,
   useChipMarkOf,
@@ -138,7 +141,6 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-
 import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -905,20 +907,20 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread on the stack it stands on, in any window, as the panel's crumbs open them, where the window stands a split view, the path heading the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path. A thread on no task opens its agent alone.
+  // Note that the path opens its task and its agent as pages pushed over the thread on the stack it stands on, in any window, as the panel's crumbs open them, where the window stands a split view, the path heading the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path. A thread on no task opens its agent alone. Each leads with its own mark: the task's status ring and the agent's harness.
   const openAgent = {
     label: PATH_OPENS.AGENT,
-    symbol: GLYPH.AGENT,
+    ...agentLead(harness),
     onPress: () => router.push(onOwnTab(iosAgentRoute(item.agentId))),
-  } as const;
+  };
 
-  const pathActions =
+  const pathActions: BarMenu["actions"] =
     task === undefined
       ? [openAgent]
       : [
           {
             label: PATH_OPENS.TASK,
-            symbol: GLYPH.TASK,
+            ...taskLead(task.status),
             onPress: () =>
               router.push(
                 onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: task.id })),
@@ -926,6 +928,20 @@ function ThreadDetail({
           },
           openAgent,
         ];
+
+  const path = task === undefined ? [holderName(holder)] : [task.name, agentName];
+
+  // Note that a compact window's ⋯ is SwiftUI's own menu, as a split view's bar stands it, headed by the thread's path over its task and agent, then the thread's acts and menus.
+  const compactMenu: BarMenu = {
+    label: menu.label,
+    symbol: menu.symbol,
+    choices: [],
+    actions: [],
+    groups: [
+      { title: path.join(PATH_PART), actions: pathActions },
+      { choices: menu.choices, actions: menu.actions, submenus: menu.submenus },
+    ],
+  };
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
@@ -1023,8 +1039,6 @@ function ThreadDetail({
     };
   };
 
-  const path = task === undefined ? [holderName(holder)] : [task.name, agentName];
-
   // A chip's pull request in the thread is read through its task's own workspace, as the panel's Inbox reads it.
   const linkStanding = useLinkStandings(
     messageWords,
@@ -1116,29 +1130,9 @@ function ThreadDetail({
           icon={glyphSymbol(GLYPH.NEXT_ITEM)}
           onPress={() => stepTo(place.steps.next)}
         />
-        <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-          <Stack.Toolbar.Menu inline title={path.join(PATH_PART)}>
-            {pathActions.map((action) => (
-              <Stack.Toolbar.MenuAction
-                key={action.label}
-                icon={glyphSymbol(action.symbol)}
-                onPress={action.onPress}
-              >
-                {action.label}
-              </Stack.Toolbar.MenuAction>
-            ))}
-          </Stack.Toolbar.Menu>
-          {toolbarMenuActions(menu)}
-          {(menu.submenus ?? []).map((submenu) => (
-            <Stack.Toolbar.Menu
-              key={submenu.label}
-              title={submenu.label}
-              icon={glyphSymbol(submenu.symbol)}
-            >
-              {toolbarMenuActions(submenu)}
-            </Stack.Toolbar.Menu>
-          ))}
-        </Stack.Toolbar.Menu>
+        <Stack.Toolbar.View>
+          <StackBarMenu menu={compactMenu} />
+        </Stack.Toolbar.View>
       </Stack.Toolbar>
       <GlassDock
         bar={

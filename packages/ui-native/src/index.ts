@@ -330,12 +330,14 @@ export {
 } from "./row-list.js";
 
 export {
+  agentLead,
   CHOICE_MARK,
   type ChoiceLook,
   type ChoiceMark,
   choiceLook,
   MENU_ICON,
   type MenuChoice,
+  type MenuLead,
   type MenuPhotoFile,
   markLook,
   menuPhotoFile,
@@ -344,6 +346,7 @@ export {
   repositoryChoice,
   statusChoice,
   taskChoice,
+  taskLead,
   unassignedChoice,
 } from "./row-menu-model.js";
 

@@ -118,6 +118,26 @@ export type ChoiceMark =
       readonly picture: MenuPhotoFile | undefined;
     };
 
+/** What leads a menu's item, a choice or an act: its entity's own mark (`mark`), such as a status or a person, or a plain glyph (`symbol`), such as Group by's, never both. */
+export type MenuLead =
+  | { readonly mark: ChoiceMark; readonly symbol?: undefined }
+  | { readonly symbol?: Glyph | undefined; readonly mark?: undefined };
+
+/** What leads an item that opens a task, such as Open task: its status's ring in its tone, as the task's rows lead it; a task with no status yet stands as to do. */
+export function taskLead(status: TaskStatus | undefined): MenuLead {
+  return { mark: { kind: CHOICE_MARK.STATUS, status: status ?? TASK_STATUS.TODO } };
+}
+
+/** What leads an item that opens an agent, such as Open agent: its harness's mark, as its tile wears it, or the agent glyph before its harness is known. */
+export function agentLead(harness: ModelProvider | undefined): MenuLead {
+  return harness === undefined
+    ? { symbol: GLYPH.AGENT }
+    : { mark: { kind: CHOICE_MARK.HARNESS, provider: harness } };
+}
+
+/** A menu's item as its head is drawn: what leads it, and what it says under its words, where it says anything. */
+type LedItem = MenuLead & { readonly detail?: string | undefined };
+
 /**
  * A choice of a menu, checked where it stands: led by its entity's own mark
  * (`mark`), such as a status or a person, or by a plain glyph (`symbol`),
@@ -133,10 +153,7 @@ export type MenuChoice = {
   readonly onPress: () => void;
   /** What VoiceOver's Actions call it, such as a status heard as "Set status: Backlog"; its menu's name before its label where none is given (`menuTree`'s `heard`). */
   readonly heard?: string | undefined;
-} & (
-  | { readonly mark: ChoiceMark; readonly symbol?: undefined }
-  | { readonly symbol?: Glyph | undefined; readonly mark?: undefined }
-);
+} & MenuLead;
 
 /**
  * How a choice's head is drawn, as every menu draws it: a glyph, in a tone
@@ -216,7 +233,7 @@ export function markLook(mark: ChoiceMark): ChoiceLook {
 }
 
 /** How a choice's head is drawn: its entity's mark, as its rows draw it, or its plain glyph; none for a choice of words alone. */
-export function choiceLook(choice: MenuChoice): ChoiceLook | undefined {
+export function choiceLook(choice: MenuLead): ChoiceLook | undefined {
   if (choice.mark !== undefined) return markLook(choice.mark);
 
   return choice.symbol === undefined ? undefined : { kind: MENU_ICON.GLYPH, glyph: choice.symbol };
@@ -423,14 +440,14 @@ function glyphIcon(glyph: Glyph, color?: string, under?: MarkLayer): MenuIcon {
 }
 
 /** Whether a choice says what it says under its words: not one led by an integration's mark or an emoji, as `markContent` and `emojiContent` draw it. */
-export function saysUnder(choice: MenuChoice): boolean {
+export function saysUnder(choice: MenuLead): boolean {
   const kind = choiceLook(choice)?.kind;
 
   return kind !== MENU_ICON.MARK && kind !== MENU_ICON.EMOJI;
 }
 
 /** A choice's icon: its entity's mark or its plain glyph, as `choiceLook` draws it, a glyph in its tone's ink; none for a choice of words alone. */
-function choiceIcon(choice: MenuChoice, inks: MenuInks): MenuIcon | undefined {
+function choiceIcon(choice: LedItem, inks: MenuInks): MenuIcon | undefined {
   const look = choiceLook(choice);
 
   switch (look?.kind) {

@@ -87,6 +87,7 @@ import {
   MENU_ICON,
   type MenuChoice,
   type MenuInks,
+  type MenuLead,
   menuPressAt,
   menuTree,
   pressAt,
@@ -346,7 +347,10 @@ export function actionButton(
  * under it, but for one led by an integration's mark or an emoji, which says
  * nothing under its words.
  */
-export function choiceContent(choice: MenuChoice, colors: BrandColors) {
+export function choiceContent(
+  choice: MenuLead & { readonly label: string; readonly detail?: string | undefined },
+  colors: BrandColors,
+) {
   const look = choiceLook(choice);
   const toneInk = (tone: StatusTone) => toneColor(colors, tone);
 
