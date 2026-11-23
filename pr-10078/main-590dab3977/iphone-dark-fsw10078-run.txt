@@ -27,5 +27,32 @@ Take screenshot task-list... COMPLETED
 WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
 WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
 WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
-
-Parsing Failed at /Users/deanstratakos/vespin-ipad-agent/out/sj10078c/m/apps/mobile/maestro/fswB10078.yaml:4:3
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fswB-iphone-dark-fsw10078
+Swipe from (32,545) to (152,545) in 900 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot task-leading... COMPLETED
+Swipe from (152,545) to (32,545) in 900 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Swipe from (321,545) to (180,545) in 900 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot task-trailing... COMPLETED
+Swipe from (180,545) to (321,545) in 900 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot task-closed... COMPLETED
+Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Scrolling DOWN until "Build teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
+Wait for animation to end... COMPLETED
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fswC-iphone-dark-fsw10078
+Swipe from (321,609) to (180,609) in 900 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot agent-trailing... COMPLETED
+Swipe from (180,609) to (321,609) in 900 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot agent-closed... COMPLETED

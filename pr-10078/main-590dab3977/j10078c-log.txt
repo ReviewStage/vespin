@@ -5,8 +5,8 @@
   export 0
   signed 0
 iphone-light-fsw10078: task row middle y=545 width=402 (leading 32>152, trailing 321>180); part A: fails 0 shots 1
-iphone-light-fsw10078: part B: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB; agent row middle y=0
-iphone-light-fsw10078: no agent row in the hierarchy
+iphone-light-fsw10078: part B: fails 0 shots 3; agent row middle y=609
+iphone-light-fsw10078: part C: fails 0 shots 2
 iphone-dark-fsw10078: task row middle y=545 width=402 (leading 32>152, trailing 321>180); part A: fails 0 shots 1
-iphone-dark-fsw10078: part B: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB; agent row middle y=0
-iphone-dark-fsw10078: no agent row in the hierarchy
+iphone-dark-fsw10078: part B: fails 0 shots 3; agent row middle y=609
+iphone-dark-fsw10078: part C: fails 0 shots 2
