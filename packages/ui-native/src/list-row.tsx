@@ -692,6 +692,7 @@ export function RowHead({
   lead,
   beside,
   title,
+  after,
   ink,
   end,
   trail,
@@ -709,6 +710,8 @@ export function RowHead({
   /** What stands between the lead and the title, such as the avatar of the App that runs a check; nothing where none is given. */
   readonly beside?: ReactNode;
   readonly title: string;
+  /** What stands right after the title, such as a bot's tag; nothing where none is given. */
+  readonly after?: ReactNode;
   readonly ink: string;
   readonly end: ReactNode;
   readonly trail?: ReactNode;
@@ -719,7 +722,7 @@ export function RowHead({
   const stacked = useAccessibilitySize();
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
 
-  const words = (
+  const titled = (
     <TitleWords
       title={title}
       modifiers={[
@@ -729,6 +732,16 @@ export function RowHead({
       ]}
     />
   );
+
+  const words =
+    after === undefined ? (
+      titled
+    ) : (
+      <HStack spacing={SPACE.TIGHT}>
+        {titled}
+        {after}
+      </HStack>
+    );
 
   // Note that a row fitted to its title measures the title's room as the title and the gap after it, and its whole width from an unseen copy that never cuts, which takes no room on the line; at an accessibility size its end stands under it, so nothing needs fitting.
   const fitted =

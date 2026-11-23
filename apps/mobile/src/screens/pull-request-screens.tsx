@@ -735,16 +735,20 @@ function PullRequestPage({
         )}
       </ListSection>
       <ListSection title="Reviews" count={reviewers.length}>
-        {reviewers.map((reviewer) => (
-          <MarkRow
-            key={reviewer.by.login}
-            id={reviewer.by.login}
-            mark={REVIEW_LOOK[reviewer.state]}
-            title={reviewer.by.login}
-            detail={REVIEW_WORDS[reviewer.state]}
-            face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
-          />
-        ))}
+        {reviewers.map((reviewer) => {
+          const face = githubFace(reviewer.by);
+
+          return (
+            <MarkRow
+              key={reviewer.by.login}
+              id={reviewer.by.login}
+              mark={REVIEW_LOOK[reviewer.state]}
+              title={face.name}
+              detail={REVIEW_WORDS[reviewer.state]}
+              face={{ of: face, stands: MARK_FACE.LEAD }}
+            />
+          );
+        })}
         {conversation === undefined && !failedOf(parts.conversation) ? (
           <LoadingRow words={PULL_REQUEST_READ_WORDS.READING_CONVERSATION} />
         ) : (

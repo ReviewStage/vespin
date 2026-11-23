@@ -278,6 +278,8 @@ export type Face = {
   readonly picture?: string | undefined;
   /** What it is of, a person where none is given. */
   readonly kind?: FaceKind | undefined;
+  /** Whether it is an App's bot on GitHub, whose name wears the bot tag after it (`BotTag`), as the panel's does; an App that runs a check wears none. */
+  readonly bot?: boolean | undefined;
 };
 
 type AvatarProps = {

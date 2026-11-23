@@ -272,6 +272,7 @@ export {
 } from "./pull-request-look.js";
 
 export {
+  BotTag,
   githubFace,
   MARK_FACE,
   type MarkFace,
