@@ -1,5 +1,5 @@
 /**
- * demo-member.ts -- a fresh member of their own for one end-to-end journey: an account with its empty personal workspace, a task in it where asked, and a model credential where handed in, written through the store's own models.
+ * demo-member.ts -- a fresh member of their own for one end-to-end journey: an account with its empty personal workspace, a task in it where asked, a model credential where handed in, and setup finished where asked, written through the store's own models.
  *
  * Every id is new (`randomUUID`), so journeys seeded into one database
  * never meet: the account's, and the workspace's and member's that the
@@ -12,6 +12,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { createTaskOnce, type TaskAssigneeNotMember } from "@repo/database/models/task-store";
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { TASK_STATUS } from "@repo/features/task-wire";
@@ -34,6 +35,8 @@ export interface DemoMemberAsk {
   readonly taskName?: string;
   /** A credential saved as the member's, for their agents; none where absent. */
   readonly credential?: DemoCredential;
+  /** Whether the account finished setup, so the window lets it in at once (`setupGate`); not where absent. */
+  readonly setupFinished?: boolean;
 }
 
 /** The ids of what was written. */
@@ -86,6 +89,8 @@ export function seedDemoMember(
     );
 
     if (Option.isSome(sealed)) yield* seedCredential(sealed.value);
+
+    if (ask.setupFinished === true) yield* writeAccountPreferences(userId, { setupFinished: true });
 
     if (ask.taskName === undefined) return { userId, email, workspaceId, taskId: undefined };
 

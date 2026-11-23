@@ -1,4 +1,4 @@
-// member.ts -- the suite's `test`, whose `member` fixture gives each test a fresh account of its own in the suite's database, with its personal workspace and, where the test asks, a task and a model credential.
+// member.ts -- the suite's `test`, whose `member` fixture gives each test a fresh account of its own in the suite's database, with its personal workspace and, where the test asks, a task, a model credential, and setup finished.
 
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -19,6 +19,8 @@ interface MemberAsk {
   readonly taskName?: string;
   /** Whether to save a placeholder API key as the member's, so a Start of an agent is not refused for want of one. */
   readonly credential?: boolean;
+  /** Whether the member finished setup, so the app lets them in without onboarding. */
+  readonly setupFinished?: boolean;
 }
 
 /**
@@ -63,6 +65,7 @@ function seedMember(ask: MemberAsk): Promise<DemoMemberSeeded> {
     return yield* seedDemoMember(auth, {
       ...(ask.taskName === undefined ? undefined : { taskName: ask.taskName }),
       ...(ask.credential === true ? { credential: placeholderCredential() } : undefined),
+      ...(ask.setupFinished === undefined ? undefined : { setupFinished: ask.setupFinished }),
     }).pipe(Effect.provide(sqlClientOverUrl(url)));
   });
 
