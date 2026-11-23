@@ -1,0 +1,84 @@
+built main e67dcca9e8 + #10483 0f4759da1a as f6e5087438
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 18:01:25 19217 MB
+curve 18:01:55 19104 MB
+curve 18:02:25 17272 MB
+curve 18:02:55 16941 MB
+curve 18:03:25 16802 MB
+curve 18:03:56 16373 MB
+curve 18:04:26 16332 MB
+curve 18:04:56 16331 MB
+curve 18:05:26 16295 MB
+curve 18:05:56 16242 MB
+curve 18:06:26 16181 MB
+curve 18:06:57 15879 MB
+curve 18:07:27 15688 MB
+curve 18:07:57 16226 MB
+curve 18:08:27 16133 MB
+curve 18:08:57 16093 MB
+curve 18:09:27 16092 MB
+curve 18:09:58 15921 MB
+curve 18:10:28 15768 MB
+curve 18:10:58 15645 MB
+curve 18:11:28 15613 MB
+curve 18:11:59 15582 MB
+curve 18:12:29 15496 MB
+curve 18:12:59 15473 MB
+curve 18:13:29 15459 MB
+curve 18:13:59 15423 MB
+curve 18:14:30 15412 MB
+curve 18:15:00 15392 MB
+curve 18:15:30 15370 MB
+curve 18:16:00 15349 MB
+curve 18:16:30 15268 MB
+curve 18:17:01 15227 MB
+curve 18:17:31 15197 MB
+curve 18:18:01 15148 MB
+curve 18:18:31 15095 MB
+curve 18:19:01 15060 MB
+curve 18:19:32 15051 MB
+curve 18:20:02 15017 MB
+curve 18:20:32 14967 MB
+curve 18:21:02 14851 MB
+curve 18:21:33 14725 MB
+curve 18:22:03 14210 MB
+curve 18:22:33 14132 MB
+curve 18:23:03 14015 MB
+curve 18:23:34 13862 MB
+curve 18:24:04 13751 MB
+curve 18:24:34 13675 MB
+curve 18:25:04 13593 MB
+curve 18:25:35 13498 MB
+curve 18:26:05 13499 MB
+curve 18:26:35 13464 MB
+curve 18:27:05 13399 MB
+curve 18:27:35 13373 MB
+curve 18:28:05 13266 MB
+curve 18:28:36 13227 MB
+curve 18:29:06 13201 MB
+curve 18:29:36 13180 MB
+curve 18:30:06 13214 MB
+curve 18:30:36 13185 MB
+curve 18:31:07 13152 MB
+curve 18:31:37 13042 MB
+curve 18:32:07 13038 MB
+curve 18:32:37 13038 MB
+curve 18:33:07 13034 MB
+curve 18:33:37 13001 MB
+curve 18:34:08 12989 MB
+BUILD EXIT 0 18:34:38
+sizes: Assets.car 23863128 bytes (main Vp10456.app 23863128), .app 121020 KB (main 119980 KB), zipped .app 45276241 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjprobe-inline.app: replacing existing signature
+p10483-iphone-light-pill-field: fails 0 shots 11 
+p10483-iphone-light-description-edit: fails 1 shots 2 Tap on "Select"... FAILED
+p10483-iphone-light-probe-inline-12000: fails 1 shots 2 Assert that id: description-words is visible... FAILED
+PROBEINLINE 12000: show 2, stream 1
+p10483-iphone-light-probe-inline-199000: fails 0 shots 3 
+PROBEINLINE 199000: show 4, stream 3
+p10483-ipad27-light-description-edit: fails 1 shots 2 Tap on "Select"... FAILED
