@@ -516,7 +516,7 @@ const READY_FILES: readonly AgentChangedFile[] = [
     additions: 9,
     deletions: 2,
     patch: [
-      '@@ -12,8 +12,15 @@ import { mailer } from "../mail";',
+      "@@ -12,8 +12,15 @@ const WEEK_DAYS = 7;",
       " ",
       " export async function resend(invite: Invite): Promise<void> {",
       '-  if (invite.expired) throw new Error("expired");',
