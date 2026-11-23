@@ -5,6 +5,7 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
+import { agentGlyphState, GLYPH_STATE } from "@repo/features/glyph-state";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   INBOX_LINE,
@@ -31,10 +32,12 @@ import {
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import {
+  agentLastMovedAt,
   agentRunsOnWords,
   agentStillWriting,
   agentTree,
   type StartedAgentsStanding,
+  TASK_AGENTS_STATUS,
 } from "@repo/features/task-agents-model";
 import { FOLLOWING_WORDS } from "@repo/features/task-followers-model";
 import {
@@ -1451,9 +1454,9 @@ const NEW_MANAGER_ROUTE = "/new-manager";
 
 /**
  * The workspace's Managers as the Tasks list's first section, above Pinned,
- * as the desktop's sidebar stands them (`sidebar-managers.tsx`): each an
- * agent's row, newest started first, its unread dot standing while its chat
- * said something the reader has not read, and its press opening its chat
+ * as the desktop's sidebar stands them (`sidebar-managers.tsx`): each a
+ * task's row with its face in the ring's place (`ManagerTaskRow`), newest
+ * started first, and its press opening its chat
  * (`TasksTree`), its long press and swipes an agent's own. Its header's +
  * opens New Manager, and it says so where it holds none yet. It folds under
  * its header and count as the other groups do, and stands nowhere while the
@@ -1494,11 +1497,7 @@ function ManagersSection({
       }}
     >
       {managers.map((agent) => (
-        <TaskAgentRow
-          key={agent.id}
-          line={{ agent, waiting: 0, pullRequest: undefined }}
-          asking={asking}
-        />
+        <ManagerTaskRow key={agent.id} agent={agent} asking={asking} />
       ))}
     </ListSection>
   );
@@ -2392,6 +2391,112 @@ export function useAgentRowAsk(): AgentAsking {
 }
 
 /**
+ * What an agent's row does, whatever row draws it: its vespin.dev link, which
+ * its menu copies and a row that drags carries, and its acts: its swipes,
+ * which stop it while it works or ask to archive it once it rests, the
+ * question they ask by it, and its long press menu, the panel's agent menu,
+ * so a task's agent and a Manager on the Tasks list offer the same acts.
+ */
+function useAgentRowParts(agent: ListedAgent, name: string, asking: AgentAsking | undefined) {
+  const agentActs = useAgentRowActs();
+  const asker = useRowAsker();
+  const keeping = useKeeping();
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const linkStep = linkWorkspaceStep(agent.workspaceId, workspaces);
+
+  const link =
+    linkStep === undefined
+      ? undefined
+      : linkOf(
+          {
+            kind: LINK_DESTINATION.AGENT,
+            ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
+            agentId: agent.id,
+          },
+          linkStep,
+        );
+
+  return {
+    link,
+    acts: {
+      trailingActions: agentSwipes(
+        agent,
+        agentActs,
+        asking === undefined ? undefined : (agentId) => asking.archive(agentId, asker),
+      ),
+      question: asking?.question(agent.id, asker),
+      menu: agentMenu({
+        agent,
+        name,
+        link,
+        acts: agentActs,
+        asking:
+          asking === undefined
+            ? undefined
+            : {
+                archive: () => asking.archive(agent.id, asker),
+                remove: () =>
+                  asking.remove(
+                    { agentId: agent.id, name, archived: agent.archivedAt !== undefined },
+                    asker,
+                  ),
+              },
+        onCopyLink: keeping.copyWords,
+      }),
+    },
+  };
+}
+
+/**
+ * A Manager on the Tasks list, drawn by the task row the tasks under it
+ * stand in (`TaskRow`), as the desktop's sidebar draws its Managers in a
+ * task row's anatomy: its face in the status ring's place, livelier while it
+ * works; its name, semibold while its chat said something the reader has
+ * not read, with no dot, as a task's news stands; and at its end the failed
+ * mark once its turn failed, then when it last moved (`agentLastMovedAt`).
+ * Its press opens its chat, and its swipes, long press menu, and preview are
+ * an agent's own (`useAgentRowParts`). A Manager the service picked no face
+ * for, from before faces, stands as its agent's row instead.
+ */
+function ManagerTaskRow({
+  agent,
+  asking,
+}: {
+  readonly agent: ListedAgent;
+  readonly asking: AgentAsking;
+}) {
+  const name = agentName(agent);
+  const state = agentGlyphState(agent.status);
+  const { link, acts } = useAgentRowParts(agent, name, asking);
+  const { face } = agent;
+
+  if (face === undefined)
+    return <TaskAgentRow line={{ agent, waiting: 0, pullRequest: undefined }} asking={asking} />;
+
+  return (
+    <TaskRow
+      id={agent.id}
+      name={name}
+      manager={{ face, working: state === GLYPH_STATE.WORKING }}
+      unread={managerChatUnread(agent)}
+      agents={state === GLYPH_STATE.FAILED ? { kind: TASK_AGENTS_STATUS.FAILED } : undefined}
+      at={agentLastMovedAt(agent)}
+      link={link}
+      {...acts}
+      preview={agentPreview({
+        name,
+        harness: providerOf(agent.model),
+        face,
+        status: agent.status,
+        model: modelLabel(agent.model),
+        runsOn: agentRunsOnWords(agent),
+        waiting: 0,
+      })}
+    />
+  );
+}
+
+/**
  * One agent's row, as a task's Agents lists it: its mark, its name, where it
  * runs, its threads that need you, and its pull request's number, which
  * opens its own screen; a swipe stops it while it works or asks to archive
@@ -2417,28 +2522,12 @@ export function TaskAgentRow({
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
-  const acts = useAgentRowActs();
-  const asker = useRowAsker();
   const { agent, waiting, pullRequest } = line;
   const step = useHeldAgentStep(agent.id, agent.status);
   const name = agentName(agent);
   const harness = providerOf(agent.model);
   const runsOn = agentRunsOnWords(agent);
-  const keeping = useKeeping();
-  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const linkStep = linkWorkspaceStep(agent.workspaceId, workspaces);
-
-  const link =
-    linkStep === undefined
-      ? undefined
-      : linkOf(
-          {
-            kind: LINK_DESTINATION.AGENT,
-            ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
-            agentId: agent.id,
-          },
-          linkStep,
-        );
+  const { acts } = useAgentRowParts(agent, name, asking);
 
   // Note that a machine's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac, whether it is the member's device or the workspace's.
   const placeGlyph = useAgentPlaceGlyph(agent);
@@ -2480,30 +2569,7 @@ export function TaskAgentRow({
               },
             }
       }
-      trailingActions={agentSwipes(
-        agent,
-        acts,
-        asking === undefined ? undefined : (agentId) => asking.archive(agentId, asker),
-      )}
-      question={asking?.question(agent.id, asker)}
-      menu={agentMenu({
-        agent,
-        name,
-        link,
-        acts,
-        asking:
-          asking === undefined
-            ? undefined
-            : {
-                archive: () => asking.archive(agent.id, asker),
-                remove: () =>
-                  asking.remove(
-                    { agentId: agent.id, name, archived: agent.archivedAt !== undefined },
-                    asker,
-                  ),
-              },
-        onCopyLink: keeping.copyWords,
-      })}
+      {...acts}
       preview={agentPreview({
         name,
         harness,
