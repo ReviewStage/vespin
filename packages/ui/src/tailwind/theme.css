@@ -1139,6 +1139,11 @@
      button floats on there; and the line of an address that opens nothing. */
   --spacing-content-inset: var(--content-inset);
   --spacing-bubble: 85%; /* off-scale: a share of the column */
+  /* A chat's bubble on either side at one width, a share of the column as
+     a chat app sets both sides' (a Manager's chat, desktop.css), narrower
+     in a phone's room, where its face and its actions take more of it. */
+  --spacing-chat-bubble: 75%; /* off-scale: a share of the column */
+  --spacing-chat-bubble-narrow: 66%; /* off-scale: a share of the column */
   --spacing-transcript-gutter: var(--transcript-gutter);
   --spacing-tool-chip: var(--ui-tool-chip-width);
   --spacing-conversation-empty: 280px; /* off-scale: a short line's measure */

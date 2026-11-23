@@ -19,8 +19,8 @@
  * as a task's column's do on its chosen tab. ⌘F finds in its conversation,
  * as in a task's column, and a phone's ⋯ offers Find in its place. A
  * Manager's page, whose conversation is a chat of bubbles, marks itself one
- * (`data-chat`), so in a phone's room its bubbles take the column, as
- * desktop.css says. The agent is read from the task list where
+ * (`data-chat`), so both sides' bubbles stand at one width, and take the
+ * column in a phone's room, as desktop.css says. The agent is read from the task list where
  * it carries it, and else once by its id.
  * Until then the page stands in an agent tab's own shape saying Reading; an
  * agent the service does not hold for the reader, deleted or of a workspace

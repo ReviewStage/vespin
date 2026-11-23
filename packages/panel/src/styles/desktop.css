@@ -925,15 +925,23 @@ body,
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
 
-/* In a phone's room the face and the actions beside a Manager's bubble
-   (`desktop-agent-page.tsx`'s `data-chat`) already keep it off the
-   column's far edge, so a turn it sent takes the whole column rather than
-   a bubble's share of it as well, or its words stand in half the screen.
-   What people sent keeps the bubble's share, as a chat app keeps its own
-   side narrow. */
+/* A Manager's chat (`desktop-agent-page.tsx`'s `data-chat`) stands both
+   sides' bubbles at one width, as a chat app does: each turn of a bubble
+   spans the column, and its bubble keeps to one share of it, whatever
+   stands beside it (the Manager's face, and the actions, which differ by
+   side). A phone's room keeps a narrower share, as its face and actions
+   take more of the column there. */
+.agent-page[data-chat] .transcript-message:has(> .ui-chat-bubble-row) {
+  max-width: 100%;
+}
+
+.agent-page[data-chat] .ui-chat-bubble {
+  max-width: var(--spacing-chat-bubble);
+}
+
 @container find-scope (width < 480px) {
-  .agent-page[data-chat] .transcript-message.is-received {
-    max-width: 100%;
+  .agent-page[data-chat] .ui-chat-bubble {
+    max-width: var(--spacing-chat-bubble-narrow);
   }
 }
 
