@@ -958,7 +958,7 @@ function AgentConversation({
     ],
   );
 
-  // Note that a Manager's page is its chat, never its transcript, as the panel draws it (`managerChatLines`): people's lines and its `send_to_user` words alone.
+  // Note that a Manager's page is its chat, never its transcript, as the panel draws it (`managerChatLines`): people's lines, its `send_to_user` words, and its `show_media` sets alone.
   const chat = shown?.kind === AGENT_KIND.MANAGER;
   useManagerChatLooks(shown);
 

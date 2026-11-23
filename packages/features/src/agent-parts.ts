@@ -714,7 +714,7 @@ function runConnectionCalls(parts: readonly AgentPart[]): ReadonlySet<string> {
 type ToolPart = Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>;
 
 /** Whether a part is a `show_media` call, or a `show_image` one, that showed its pictures, which a reader reads as their own and never folds away. */
-function isShownSet(part: AgentPart): part is ToolPart {
+export function isShownSet(part: AgentPart): part is ToolPart {
   return (
     part.kind === AGENT_PART.TOOL &&
     isShowMediaTool(part.tool) &&
