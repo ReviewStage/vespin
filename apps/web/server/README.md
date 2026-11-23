@@ -420,9 +420,13 @@ workspace's links land on `app.html`, without those routes' headers. With
 into `.build/local-pages/` and serves those files through the same page table
 instead, a folder's path as its `index.html` and a path no file answers as
 `404.html`, while the routes are still imported from source: the E2E suite
-(`apps/e2e`) runs on it. The three
-WebSocket functions and the feedback courier are not served, and the scheduled
-sweep is called in process on the cron's cadence under `CRON_SECRET`.
+(`apps/e2e`) runs on it. Of the WebSocket functions it serves the live reads'
+socket alone: an upgrade at `/api/live/socket` is handed to the server that
+function exports, before the Effect server's own upgrade handler hears it, so a
+page's live reads run over one socket as deployed rather than as long polls
+that hold the browser's six HTTP/1.1 sockets. The terminal, tunnel, and Browser
+tab relays and the feedback courier are not served, and the scheduled sweep is
+called in process on the cron's cadence under `CRON_SECRET`.
 
 It refuses to start beside any `VERCEL*` variable or over a database host off
 the loopback (`@repo/service/local/local-server-guard`), and imports no route

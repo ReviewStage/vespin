@@ -21,7 +21,7 @@
  *
  * - an open refused, reaching nothing, or not done within `OPEN_WITHIN`
  *   sends every ask over HTTP for `HTTP_AFTER_FAILED_OPEN`, as a deployment
- *   serving no socket, such as the local server, does always;
+ *   serving no socket does always;
  * - every ask a socket held when it ended early is asked again over HTTP,
  *   so a socket's end is never a poll's failure, nor the service's silence
  *   where the client keeps its reach (`ServiceReach`);

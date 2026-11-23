@@ -6,14 +6,17 @@
  * builds the same dispatchers over the same modules, imported where they
  * stand, and lands each request on one by the same table
  * (`platform-landing.ts`), so a path answers here as it does on the
- * deployment. The WebSocket functions are not served: they export the
- * `http.Server` Vercel upgrades into, which no fetch dispatcher fronts. Two
- * relay a cloud sandbox's terminal and Browser tab, which a local run has
- * none of, and the third is the live reads' socket, whose upgrade answered
- * 404 here sends a host's live polls over HTTP instead
- * (`@repo/host`'s `live-socket.ts`). Nor is the feedback courier, which is
- * no route's. A path the table lands on a function not served here answers
- * 404. A page's path is served from the built page the web service's own
+ * deployment. A WebSocket function exports the `http.Server` Vercel
+ * upgrades into, which no fetch dispatcher fronts, so the one served here,
+ * the live reads' socket, is handed over as its server by the path it
+ * upgrades at, for the local server to hand its upgrades to: the same server
+ * the function exports (`terminal/function.ts`). Without it every host's
+ * live reads fall back to HTTP long polls (`@repo/host`'s `live-socket.ts`),
+ * which hold a browser's six sockets to one HTTP/1.1 origin and queue every
+ * other request behind them. The other three relay a cloud sandbox's
+ * terminal, tunnel, and Browser tab, which a local run has none of, and are
+ * not served. Nor is the feedback courier, which is no route's. A path the
+ * table lands on a function not served here answers 404. A page's path is served from the built page the web service's own
  * page rewrites land it on (`vercel.json`), as an app link lands on
  * `app.html`.
  *
@@ -21,8 +24,10 @@
  * caller does once the environment the routes read as they load is settled.
  */
 
+import type { Server } from "node:http";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { LIVE_SOCKET } from "@repo/features/live-wire";
 import type { Route } from "@repo/service/route";
 import { dispatchRoutes, ORPC_ROUTE_KEY } from "./function-dispatch.js";
 import type { FunctionDefinition } from "./function-durations.js";
@@ -41,6 +46,8 @@ const NOT_FOUND = 404;
 export interface LocalDeployment extends Route {
   /** Whether a path is the deployment's: whether a rewrite takes it, as every path no rewrite takes is the site's on Vercel. */
   readonly answers: (pathname: string) => boolean;
+  /** The WebSocket functions served here, each the server its function exports, by the path it upgrades at. */
+  readonly upgrades: ReadonlyMap<string, Server>;
 }
 
 function moduleUrl(web: string, source: string): string {
@@ -92,13 +99,15 @@ async function servedFunctions(web: string): Promise<ReadonlyMap<string, Route>>
 
 /** The deployment of the web app at `web`, every route module of it imported. */
 export async function localDeployment(web: string): Promise<LocalDeployment> {
-  const [rewrites, functions] = await Promise.all([
+  const [rewrites, functions, { liveSocketFunctionServer }] = await Promise.all([
     readApiRewritesTable(web),
     servedFunctions(web),
+    import("./terminal/function.js"),
   ]);
 
   return {
     answers: (pathname) => landingRule(pathname, rewrites) !== undefined,
+    upgrades: new Map([[LIVE_SOCKET.PATH, liveSocketFunctionServer()]]),
     fetch: (request) => {
       const rule = landingRule(new URL(request.url).pathname, rewrites);
 
