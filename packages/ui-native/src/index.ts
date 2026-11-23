@@ -102,7 +102,12 @@ export {
 
 export { type DockChip, DockChips, DockPanel } from "./dock-chips.js";
 
-export { DocumentField, type DocumentFieldHandle } from "./document-field.js";
+export {
+  DocumentField,
+  type DocumentFieldHandle,
+  type DocumentFieldOpening,
+  OPENS_AT_START,
+} from "./document-field.js";
 
 export { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
 
