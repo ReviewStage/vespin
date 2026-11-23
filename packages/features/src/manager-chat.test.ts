@@ -113,6 +113,43 @@ test("a line that reached a turn while it ran stands between the messages it arr
   assert.equal(chat[1]?.arrivedIn, undefined);
 });
 
+test("a Manager's thoughts stand with the message they led to, those after its last message at that message's end, and a turn that only thought as its thoughts alone", () => {
+  const messages = [
+    turn("turn-1", [
+      { type: "step-start" },
+      { type: "reasoning", text: "Ada wants the billing bug fixed." },
+      sent("first", "On it.", "accepted"),
+      { type: "reasoning", text: "An agent should take it." },
+      sent("second", "An agent is working on it.", "accepted"),
+      { type: "reasoning", text: "I'll wait for it." },
+    ]),
+    turn("turn-2", [{ type: "reasoning", text: "Nothing new yet." }]),
+  ];
+
+  assert.deepEqual(
+    managerChatLines(messages).map((message) => [
+      message.id,
+      agentParts(message).map((part) =>
+        part.kind === AGENT_PART.TEXT || part.kind === AGENT_PART.REASONING
+          ? `${part.kind}: ${part.text}`
+          : part.kind,
+      ),
+    ]),
+    [
+      ["turn-1", ["reasoning: Ada wants the billing bug fixed.", "text: On it."]],
+      [
+        "second",
+        [
+          "reasoning: An agent should take it.",
+          "text: An agent is working on it.",
+          "reasoning: I'll wait for it.",
+        ],
+      ],
+      ["turn-2", ["reasoning: Nothing new yet."]],
+    ],
+  );
+});
+
 test("a Manager's chat runs one sender's messages together until another sender writes or ten minutes pass", () => {
   const minute = 60_000;
 

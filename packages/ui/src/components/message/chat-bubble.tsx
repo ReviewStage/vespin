@@ -24,12 +24,17 @@
  * iMessage's and Slack's do. A bubble may carry a menu a right-click or a
  * long press opens (`contextMenu`), as a chat app's message does.
  *
+ * What stands with a message but outside its bubble, such as the thoughts
+ * a Manager's message came of, stands beside the run at the bubble's own
+ * inset, past the sender's picture (`ChatAside`), as the line under it does.
+ *
  * It is drawn in the Tailwind theme's utilities.
  */
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import type { ReactNode } from "react";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
+import { type MessageLineInset, OPENING_INSET } from "./message-line.js";
 
 /** Which side of the chat sent the message: people, at the column's right, or the other side, at its left. */
 export const CHAT_SIDE = {
@@ -155,5 +160,18 @@ export function ChatBubble({
       </div>
       {beside}
     </div>
+  );
+}
+
+/** What stands with a message outside its bubble, such as the thoughts it came of, at the bubble's inset (`inset`), past the sender's picture where the chat draws one, as the line under the run starts. */
+export function ChatAside({
+  inset,
+  children,
+}: {
+  inset: MessageLineInset;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className={`ui-chat-aside min-w-0 max-w-full ${OPENING_INSET[inset]}`}>{children}</div>
   );
 }

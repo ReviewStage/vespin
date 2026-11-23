@@ -77,6 +77,7 @@ import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
 import {
   type ChatReply,
   type ChatRunPlace,
+  chatThoughts,
   type ManagerChatRuns,
   managerChatLines,
   managerChatRuns,
@@ -162,6 +163,7 @@ import {
   Button,
   CHAT_RUN,
   CHAT_SIDE,
+  ChatAside,
   ChatBubble,
   CodeCard,
   CompactedLine,
@@ -2295,6 +2297,8 @@ export function AgentMessage({
 
   return stretches.map((stretch, index) => {
     if (stretch.line === undefined && chatRuns !== undefined) {
+      const { before, said, after } = chatThoughts(stretch.rows);
+
       return (
         <ChatSent
           key={index === 0 ? message.id : (stretch.rows[0]?.key ?? message.id)}
@@ -2302,8 +2306,14 @@ export function AgentMessage({
           place={chatRuns.places.get(message.id) ?? LONE_RUN}
           words={words}
           moving={moving}
+          before={
+            before.length === 0 ? null : <TranscriptRows rows={before}>{drawPart}</TranscriptRows>
+          }
+          after={
+            after.length === 0 ? null : <TranscriptRows rows={after}>{drawPart}</TranscriptRows>
+          }
         >
-          <TranscriptRows rows={stretch.rows}>{drawPart}</TranscriptRows>
+          {said.length === 0 ? null : <TranscriptRows rows={said}>{drawPart}</TranscriptRows>}
         </ChatSent>
       );
     }
@@ -2474,18 +2484,26 @@ function ChatSent({
   place,
   words,
   moving,
+  before,
+  after,
   children,
 }: {
   message: AgentTranscriptMessage;
   place: ChatRunPlace;
   words: string;
   moving: boolean;
+  /** The thoughts the message came of, over its bubble; none where it came of none. */
+  before: ReactNode | null;
+  /** The thoughts its turn had after it, under its bubble; none where it had none. */
+  after: ReactNode | null;
+  /** What its bubble holds; none for a message of thoughts alone, which draws no bubble. */
   children: ReactNode;
 }): React.JSX.Element {
   const manager = useContext(ChatManager);
   const face = manager?.face;
   const target = { id: message.id, words: moving ? "" : words };
   const menu = useChatMessageMenu(target);
+  const inset = chatInset(face);
 
   return (
     <Message
@@ -2494,23 +2512,27 @@ function ChatSent({
       data-message-id={message.id}
     >
       {place.opens && manager !== undefined ? <ManagerChatHead manager={manager} /> : null}
-      <ChatBubble
-        side={CHAT_SIDE.RECEIVED}
-        run={chatRunOf(place.opens, place.closes)}
-        avatar={chatAvatar(face)}
-        contextMenu={menu.contextMenu}
-        beside={
-          moving || words === "" ? null : (
-            <CopyMessageAction words={words} lead={<ReplyMessageAction target={target} />} />
-          )
-        }
-      >
-        {children}
-      </ChatBubble>
+      {before === null ? null : <ChatAside inset={inset}>{before}</ChatAside>}
+      {children === null ? null : (
+        <ChatBubble
+          side={CHAT_SIDE.RECEIVED}
+          run={chatRunOf(place.opens, place.closes)}
+          avatar={chatAvatar(face)}
+          contextMenu={menu.contextMenu}
+          beside={
+            moving || words === "" ? null : (
+              <CopyMessageAction words={words} lead={<ReplyMessageAction target={target} />} />
+            )
+          }
+        >
+          {children}
+        </ChatBubble>
+      )}
+      {after === null ? null : <ChatAside inset={inset}>{after}</ChatAside>}
       {menu.menu}
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
-        inset={chatInset(face)}
+        inset={inset}
         at={place.closes && !moving ? message.finishedAt : undefined}
       />
     </Message>

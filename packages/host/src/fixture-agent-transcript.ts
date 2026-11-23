@@ -434,9 +434,9 @@ export function fixtureDigestTranscript(
 
 /**
  * The release Manager's transcript, its instants counted from `startedAt`:
- * the account's ask, then a turn that worked through other calls and its
- * own words and sent the account two messages (`send_to_user`), which its
- * page draws as its chat, leaving the rest out
+ * the account's ask, then a turn that thought, worked through its own words,
+ * and sent the account two messages (`send_to_user`), which its page draws
+ * as its chat with the thoughts that led to them, leaving the rest out
  * (`@repo/features/manager-chat`).
  */
 export function fixtureManagerTranscript(
@@ -456,6 +456,10 @@ export function fixtureManagerTranscript(
       role: MESSAGE_ROLE.ASSISTANT,
       parts: [
         { type: "step-start" },
+        {
+          type: "reasoning",
+          text: "Ada wants to know what stands between the invitations work and a release this week. The invitations agent opened its pull request an hour ago, so I'll check its checks and what the task still lists before I answer.",
+        },
         { type: "text", text: "Reading the invitations task before I answer." },
         toolPart(
           AGENT_TOOL.SEND_TO_USER,
@@ -471,6 +475,10 @@ export function fixtureManagerTranscript(
           },
           { status: "accepted" },
         ),
+        {
+          type: "reasoning",
+          text: "Both items are small. I'll ask the invitations agent to take them on its branch and wake when its checks finish.",
+        },
       ],
       startedAt: startedAt + MINUTE,
       finishedAt: startedAt + 4 * MINUTE,

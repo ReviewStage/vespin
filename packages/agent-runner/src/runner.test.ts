@@ -1714,6 +1714,8 @@ it.effect(
       assert.deepEqual(options.settingSources, ["project"]);
       assert.equal(options.permissionMode, "bypassPermissions");
       assert.equal(options.includePartialMessages, true);
+      // A thought's words reach the transcript only where the CLI asks for them summarized.
+      assert.deepEqual(options.extraArgs, { "thinking-display": "summarized" });
 
       // The tools the prompt names that CLI 2.1.304 leaves out of its default set, and the built-ins beside our own.
       for (const tool of ["Glob", "Grep", "TaskCreate", "TaskUpdate"]) {
