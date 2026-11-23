@@ -20,6 +20,16 @@
  * again only after a query's change (`listedOf`). So one row that moves builds again its own agent and its own
  * plan, whatever the account's size, and every other is the object drawn
  * before.
+ *
+ * A plan none of whose agents stands in the queries, most of an account's
+ * once its agents are archived (`task-list-archived.ts`), would be carried
+ * through the plans' query only to be tallied from nothing, so it is held
+ * apart from it (`apartPlans`): summed up straight from its row and what its
+ * archived agents add, once, the very object until either moves, as the
+ * query would sum it, and merged into the query's plans in the query's own
+ * order (`mergedNewestFirst`). A plan moves into the query as an agent of
+ * it comes to stand there, and back out as its last one leaves, which
+ * `task-list-collections.ts` draws.
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
@@ -52,9 +62,19 @@ import type { Continued } from "./task-list-continuations.js";
 import type { PlanAgents, PlanPullRequests } from "./task-list-pull-requests.js";
 import type { AgentRow, PastGrace, PlanRow } from "./task-list-rows.js";
 
+/** The plans held apart from the list's live queries: those none of whose agents stands in them. */
+export interface ApartPlans {
+  /** Takes each of `keys` as `rowOf` draws it now: held where it names a row, let go where it names none. */
+  readonly drawn: (keys: readonly string[], rowOf: (key: string) => PlanRow | undefined) => void;
+  /** Every plan held apart, in the plans' query's order (`newestFirst`), the very array until one moves. */
+  readonly rows: () => readonly PlanRow[];
+}
+
 /** What the list's plans and agents are derived from: the rows as it draws them, and what it derives beside them. */
 export interface TaskListSources {
+  /** The plans one of whose agents stands in the queries; every other is held apart (`apart`). */
   readonly plans: RowCollection<PlanRow, string>;
+  readonly apart: ApartPlans;
   readonly agents: RowCollection<AgentRow, string>;
   /** The agents whose starting grace has ended, by id. */
   readonly pastGrace: Collection<PastGrace, string>;
@@ -103,6 +123,74 @@ function mainOf<Row>(row: Row | undefined): Row {
   return row;
 }
 
+/**
+ * Whether `one` stands before `other` as the plans' query orders them:
+ * the newest started first, and the greater id first among those started at
+ * one instant, by its characters' codes, as the query's lexical sort reads it.
+ */
+function newestFirst(
+  one: { readonly createdAt: number; readonly id: string },
+  other: { readonly createdAt: number; readonly id: string },
+): number {
+  if (one.createdAt !== other.createdAt) return other.createdAt - one.createdAt;
+
+  return one.id > other.id ? -1 : one.id < other.id ? 1 : 0;
+}
+
+/** The plans held apart from the list's live queries, by id, listed in the plans' query's order as one moves. */
+export function apartPlans(): ApartPlans {
+  const held = new Map<string, PlanRow>();
+  let listed: readonly PlanRow[] | undefined = [];
+
+  return {
+    drawn: (keys, rowOf) => {
+      for (const key of keys) {
+        const row = rowOf(key);
+
+        if (row === undefined) {
+          if (held.delete(key)) listed = undefined;
+        } else if (held.get(key) !== row) {
+          held.set(key, row);
+          listed = undefined;
+        }
+      }
+    },
+    rows: () => {
+      listed ??= [...held.values()].sort(newestFirst);
+
+      return listed;
+    },
+  };
+}
+
+/** The plans' summaries `live` and `apart`, each in the plans' query's order, as one list in that order; `live` itself where none is held apart. */
+function mergedNewestFirst(
+  live: readonly TaskSummary[],
+  apart: readonly TaskSummary[],
+): readonly TaskSummary[] {
+  if (apart.length === 0) return live;
+
+  if (live.length === 0) return apart;
+
+  const merged: TaskSummary[] = [];
+  let right = 0;
+
+  for (const summary of live) {
+    // Note that no plan stands in both lists, so none ties.
+    for (let next = apart[right]; next !== undefined && newestFirst(next, summary) < 0; ) {
+      merged.push(next);
+      right += 1;
+      next = apart[right];
+    }
+
+    merged.push(summary);
+  }
+
+  merged.push(...apart.slice(right));
+
+  return merged;
+}
+
 /** A plan's agents, each with whether its grace has ended, `pastGrace` naming those whose has. */
 function gracedOf(
   agents: readonly AgentRow[],
@@ -118,7 +206,7 @@ export function taskListTasks(
   sources: TaskListSources,
 ): Effect.Effect<TaskListTasks, never, Scope.Scope> {
   return Effect.gen(function* () {
-    const { plans, agents, pastGrace, pullRequests, agentsByTask, continuations, archived } =
+    const { plans, apart, agents, pastGrace, pullRequests, agentsByTask, continuations, archived } =
       sources;
 
     // Each agent as the tabs draw it, first started first, and by id among those started at one instant, derived again only as its row, its grace, or those started from it move.
@@ -225,9 +313,16 @@ export function taskListTasks(
       { readonly apart: ArchivedActivity | undefined; readonly summary: TaskSummary }
     >();
 
+    /** Each plan held apart's summary as last drawn, by its row, with what its archived agents added then. */
+    const apartDrawnOf = new WeakMap<
+      PlanRow,
+      { readonly apart: ArchivedActivity | undefined; readonly summary: TaskSummary }
+    >();
+
     let summarized:
       | {
           readonly from: readonly TalliedPlan[];
+          readonly held: readonly PlanRow[];
           readonly at: number;
           readonly list: readonly TaskSummary[];
         }
@@ -245,12 +340,30 @@ export function taskListTasks(
       return summary;
     };
 
+    /** A plan held apart's summary, tallied from no agent, as the query sums up a plan none of whose agents stands in it; the very object while its row and what its archived agents add stand. */
+    const apartSummaryOf = (plan: PlanRow): TaskSummary => {
+      const activity = archived.activityOf(plan.id);
+      const drawn = apartDrawnOf.get(plan);
+
+      if (drawn?.apart === activity && drawn !== undefined) return drawn.summary;
+      const summary = taskSummaryOf(plan, summaryOfTally(undefined, activity));
+      apartDrawnOf.set(plan, { apart: activity, summary });
+
+      return summary;
+    };
+
     const summariesNow = (): readonly TaskSummary[] => {
       const from = tallied();
+      const held = apart.rows();
       const at = archived.moved();
 
-      if (summarized?.from !== from || summarized.at !== at) {
-        summarized = { from, at, list: logged(from.map(summaryOf)) };
+      if (summarized?.from !== from || summarized.held !== held || summarized.at !== at) {
+        summarized = {
+          from,
+          held,
+          at,
+          list: logged(mergedNewestFirst(from.map(summaryOf), held.map(apartSummaryOf))),
+        };
       }
 
       return summarized.list;
