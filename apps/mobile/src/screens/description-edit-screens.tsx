@@ -50,7 +50,7 @@ import { useMentionOffer } from "../use-mention-offer.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** What the sheet says, in the panel's words where it has them. */
-const WORDS = {
+export const DESCRIPTION_EDIT_WORDS = {
   TITLE: "Edit description",
   CANCEL: "Cancel",
   SAVE: "Save",
@@ -62,6 +62,8 @@ const WORDS = {
   TRY_AGAIN: "Try again",
 } as const;
 
+const WORDS = DESCRIPTION_EDIT_WORDS;
+
 /** The sheet's route, which a task's ⋯ and its Description header open with the task's id. */
 export const EDIT_DESCRIPTION_ROUTE = "/edit-description";
 
@@ -69,7 +71,10 @@ export const EDIT_DESCRIPTION_ROUTE = "/edit-description";
 const WORDS_TEST_ID = "description-words";
 
 /** What the editor's state says over the words: a conflict's note, or that the words are past what a description may hold, which Save holds back; none otherwise, a refused save being said in the failure notice. */
-function problemOf(editor: DocumentEditor, conflict: string | undefined): string | undefined {
+export function problemOf(
+  editor: DocumentEditor,
+  conflict: string | undefined,
+): string | undefined {
   if (conflict !== undefined) return conflict;
 
   const past = editor.draft.length > TASK_BOUNDS.MAX_BODY_CHARS;
@@ -78,7 +83,7 @@ function problemOf(editor: DocumentEditor, conflict: string | undefined): string
 }
 
 /** What a save's answer says where it did not go: a failure's note, as the panel's editor says it, or a conflict's; none where it saved. */
-function refusalOf(
+export function refusalOf(
   editor: DocumentEditor,
   answer: TasksEditAnswer,
   readerId: string | undefined,
@@ -141,7 +146,7 @@ function EditorBar({
 }
 
 /** Copies the developer's own words to the pasteboard, with the system's tap of success, or says on the console why they could not be. */
-function copyMine(words: string): void {
+export function copyMine(words: string): void {
   setStringAsync(words)
     .then(() => buzz(BUZZ.SUCCESS))
     .catch((cause: unknown) => {

@@ -109,6 +109,8 @@ export interface NativeDocumentFieldDoors {
   insertPills(pills: readonly NativePill[], word: NativeWord | undefined): Promise<void>;
   /** Writes plain words in place of the `@` word a pick names. */
   rewriteWord(text: string, word: NativeWord | undefined): Promise<void>;
+  /** Takes the keyboard with the caret on the line at `line`, `x` and `y` points in from its first line's start, where a press on the words as read landed. */
+  focusAt(line: number, x: number, y: number): Promise<void>;
 }
 
 interface NativeDocumentFieldProps {
@@ -119,7 +121,13 @@ interface NativeDocumentFieldProps {
   readonly placeholder?: string | undefined;
   readonly editable?: boolean | undefined;
   readonly formats?: NativeFormats | undefined;
+  /** Whether the field grows to its words inside the page that holds it, rather than scrolling them itself, telling the height they ask for. */
+  readonly fitsWords?: boolean | undefined;
   readonly testID?: string | undefined;
+  /** The height the words ask for, while the field grows to them. */
+  readonly onHeight?:
+    | ((event: NativeSyntheticEvent<{ readonly height: number }>) => void)
+    | undefined;
   /** A link asked for on the selected words, with the address they hold, empty where none. */
   readonly onLinkAsk: (event: NativeSyntheticEvent<{ readonly address: string }>) => void;
   /** The caret's line around it, after each edit and each move of the caret. */

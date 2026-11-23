@@ -123,9 +123,11 @@ import {
   buzz,
   type ColumnBar,
   ConfirmAsk,
+  DocumentField,
   EmptyState,
   type Face,
   FailedReadRow,
+  FieldRow,
   GLYPH,
   type Glyph,
   glyphSymbol,
@@ -136,11 +138,13 @@ import {
   ListRow,
   ListSection,
   type LongPressGroup,
+  MentionDock,
   menuWithout,
   NoSelection,
   PATH_PART,
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
+  ProblemLine,
   priorityMarkUnder,
   QUIET_ROW_QUESTION,
   RelationRow,
@@ -219,6 +223,7 @@ import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { useDescriptionRead } from "../tasks/use-description-read.js";
 import { useFollowWrite } from "../tasks/use-following.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
+import { type InlineDescription, useInlineDescription } from "../tasks/use-inline-description.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
@@ -252,7 +257,7 @@ import {
   useListColumn,
   useSplitBuild,
 } from "./app-sidebar.js";
-import { EDIT_DESCRIPTION_ROUTE } from "./description-edit-screens.js";
+import { DESCRIPTION_EDIT_WORDS, EDIT_DESCRIPTION_ROUTE } from "./description-edit-screens.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -292,6 +297,8 @@ const WORDS = {
   /** The press at the Description header's end that opens it to edit, as Notes' and Reminders' sections end. */
   EDIT: "Edit",
   EDIT_DESCRIPTION: "Edit description",
+  DONE: "Done",
+  DONE_EDITING: "Done editing description",
   /** What a task's page says under Description where the task has none, rather than leaving the page blank under its headers. */
   NO_DESCRIPTION: "No description yet",
   CREATED_BY: "Created by",
@@ -2707,6 +2714,9 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
+/** The name a flow finds the description's field by, edited in place, as the sheet's was. */
+const DESCRIPTION_FIELD_ID = "description-words";
+
 /** Edit at the Description header's end: its word, what it is heard as, and the sheet it opens. */
 interface SectionEdit {
   readonly label: string;
@@ -2732,11 +2742,14 @@ function OverviewDescription({
   overview,
   body,
   edit,
+  onPressBlock,
 }: {
   readonly overview: TaskOverview;
   readonly body: string;
   /** Edit at the header's end; none where the description can't be edited here. */
   readonly edit: SectionEdit | undefined;
+  /** Edits the words in place, the caret where a press on a block landed, by where the block starts in the Markdown; none where they can't be edited here. */
+  readonly onPressBlock?: ((at: number, x: number, y: number) => void) | undefined;
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -2777,6 +2790,7 @@ function OverviewDescription({
           videoAt={videoAt}
           fileAt={fileAt}
           linkStanding={linkStanding}
+          onPressAt={onPressBlock === undefined ? undefined : (x, y) => onPressBlock(0, x, y)}
         />
       </ListSection>
     );
@@ -2800,6 +2814,9 @@ function OverviewDescription({
               fileAt={fileAt}
               linkStanding={linkStanding}
               last={block.from === blocks.at(-1)?.from}
+              onPressAt={
+                onPressBlock === undefined ? undefined : (x, y) => onPressBlock(block.from, x, y)
+              }
               menuActions={
                 block.quote === undefined
                   ? undefined
@@ -3002,7 +3019,10 @@ function OverviewPage({
   onRefresh,
   asking,
   entered,
+  inline,
 }: {
+  /** The description edited in place, which a press on its words or Edit starts. */
+  readonly inline: InlineDescription;
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
   /** Archive and Permanently delete on its agents' rows, each asked first by the row pressed (`useAgentRowAsk`). */
@@ -3019,6 +3039,7 @@ function OverviewPage({
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
+  const { field: descriptionField } = inline;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
   useNoteOpened({ kind: SEARCH_FOUND_KIND.TASKS, id: task.id, workspaceId: task.workspaceId });
   const described = useDescriptionShown(task.id) && entered;
@@ -3031,10 +3052,11 @@ function OverviewPage({
   const threads = useTaskComments(descriptions ? task.id : undefined);
   const editDoor = useEditDescriptionDoor(task.workspaceId);
 
+  // Note that Edit, and a press on the words, edit the description in place, as the desktop's and Notion's are edited; the door only says whether it may be.
   const edit: SectionEdit | undefined =
     editDoor === undefined
       ? undefined
-      : { label: WORDS.EDIT, heard: WORDS.EDIT_DESCRIPTION, onPress: () => editDoor(task) };
+      : { label: WORDS.EDIT, heard: WORDS.EDIT_DESCRIPTION, onPress: () => inline.start() };
 
   const related = new Set(overview.tasks.map((each) => each.id));
   // Note that an archived agent's row opens its page too, where its transcript is read and it is brought back.
@@ -3059,7 +3081,27 @@ function OverviewPage({
       <OverviewAgents overview={overview} asking={asking} />
       <OverviewArchived overview={overview} asking={asking} />
       <OverviewPages overview={overview} />
-      {!described || !descriptions ? null : overview.documentRetry !== undefined ? (
+      {!described || !descriptions ? null : inline.editing ? (
+        <ListSection
+          title={WORDS.DESCRIPTION}
+          act={{ label: WORDS.DONE, heard: WORDS.DONE_EDITING, onPress: inline.done }}
+        >
+          {inline.problem === undefined ? null : <ProblemLine text={inline.problem} />}
+          <FieldRow>
+            <DocumentField
+              ref={descriptionField}
+              value={inline.draft}
+              onChange={inline.onChange}
+              repository={task.repository}
+              placeholder={DESCRIPTION_EDIT_WORDS.PLACEHOLDER}
+              editable={inline.editable}
+              onAtWord={inline.onAtWord}
+              fitsWords
+              testID={DESCRIPTION_FIELD_ID}
+            />
+          </FieldRow>
+        </ListSection>
+      ) : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
@@ -3072,11 +3114,33 @@ function OverviewPage({
           {null}
         </ListSection>
       ) : (
-        <OverviewDescription overview={overview} body={document.description.body} edit={edit} />
+        <OverviewDescription
+          overview={overview}
+          body={document.description.body}
+          edit={edit}
+          onPressBlock={edit === undefined ? undefined : (at, x, y) => inline.start({ at, x, y })}
+        />
       )}
       {described && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
     </RowList>
   );
+}
+
+/**
+ * A task's Overview in a split view's detail, its description edited in
+ * place, each task's words its own; Done stands at the Description's
+ * header, since the column's bar is the split view's.
+ */
+function DetailOverview(props: Omit<Parameters<typeof OverviewPage>[0], "inline">) {
+  const { overview } = props;
+
+  const inline = useInlineDescription(
+    overview.task.id,
+    overview.workspace?.id,
+    overview.document?.description.body ?? "",
+  );
+
+  return <OverviewPage {...props} inline={inline} />;
 }
 
 /** The tree's search words and how to change them, held by the tab's root screen above its two layouts. */
@@ -3215,7 +3279,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
 
   const detail =
     overview !== undefined ? (
-      <OverviewPage
+      <DetailOverview
         key={overview.task.id}
         overview={overview}
         onRefresh={refreshTasks}
@@ -3375,7 +3439,17 @@ export function TaskScreen() {
   const asking = useAgentRowAsk();
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
-  const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
+  const editDoor = useEditDescriptionDoor(overview?.task.workspaceId);
+
+  // The description edited in place, held here so its Done stands in the bar and what an `@` offers docks over the keyboard.
+  const inline = useInlineDescription(
+    overview?.task.id,
+    overview?.workspace?.id,
+    overview?.document?.description.body ?? "",
+  );
+
+  // Note that the menu's Edit description edits it in place too, the caret at its start.
+  const editDescription = editDoor === undefined ? undefined : () => inline.start();
 
   const menu =
     overview === undefined
@@ -3411,7 +3485,14 @@ export function TaskScreen() {
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      {menu === undefined || overview === undefined ? null : (
+      {/* Note that while the description is edited in place, Done stands in the bar in ⋯'s place, as Notes and Notion stand it. */}
+      {inline.editing ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button accessibilityLabel={WORDS.DONE_EDITING} onPress={inline.done}>
+            {WORDS.DONE}
+          </Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      ) : menu === undefined || overview === undefined ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
             {stackMenuItems(menu)}
@@ -3424,20 +3505,23 @@ export function TaskScreen() {
           />
         </Stack.Toolbar>
       )}
-      <Screen>
-        {overview !== undefined ? (
-          <OverviewPage
-            overview={overview}
-            onRefresh={refreshTasks}
-            asking={asking}
-            entered={stood}
-          />
-        ) : read && !found.seeking ? (
-          <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
-        ) : (
-          <TaskReading />
-        )}
-      </Screen>
+      <MentionDock mentions={inline.mentions}>
+        <Screen>
+          {overview !== undefined ? (
+            <OverviewPage
+              overview={overview}
+              onRefresh={refreshTasks}
+              asking={asking}
+              entered={stood}
+              inline={inline}
+            />
+          ) : read && !found.seeking ? (
+            <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+          ) : (
+            <TaskReading />
+          )}
+        </Screen>
+      </MentionDock>
       <StatusQuestionAsk question={question} />
       <StatusQuestionAsk question={deletion.question} />
     </>
