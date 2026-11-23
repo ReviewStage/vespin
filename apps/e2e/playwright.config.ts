@@ -8,6 +8,17 @@ const PORT = 4317;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
 /**
+ * The packaged desktop app's executable the `desktop` project launches, an
+ * end-to-end build (`APP_E2E_BUILD=1 pnpm package:dir`), set only on a Mac
+ * that built one (`.github/workflows/e2e-desktop.yml`). Without it the project
+ * is not declared at all, so the suite on Linux runs no desktop journey.
+ */
+const DESKTOP_EXECUTABLE = process.env.APP_E2E_DESKTOP_EXECUTABLE;
+
+/** The journeys under `specs/desktop/`, which drive the packaged app rather than a browser alone. */
+const DESKTOP_SPECS = "desktop/**";
+
+/**
  * The local server's environment: the run's secrets (`run-secrets.ts`), made
  * new each run so none is committed or outlives it, and shared with the
  * workers' fixtures, which seal a member's key under the same ring. Beside
@@ -57,7 +68,20 @@ export default defineConfig({
     baseURL: ORIGIN,
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", testIgnore: DESKTOP_SPECS, use: { ...devices["Desktop Chrome"] } },
+    ...(DESKTOP_EXECUTABLE === undefined
+      ? []
+      : [
+          {
+            name: "desktop",
+            testMatch: `${DESKTOP_SPECS}/*.e2e.ts`,
+            // Note that the app holds a single-instance lock and one Keychain entry, so its journeys run one at a time.
+            fullyParallel: false,
+            use: { ...devices["Desktop Chrome"] },
+          },
+        ]),
+  ],
   webServer: [
     {
       name: "postgres",
