@@ -233,7 +233,7 @@ interface CursorLaunch {
   /** Whether a run ended while steers were unanswered, so the last answer decides what comes next. */
   settling: boolean;
   model: CursorModelSelection;
-  /** Whether the next message sent leads with our instructions: the agent's first, and the first after a summary. */
+  /** Whether the next message sent leads with our instructions: the agent's first, a fork's first, and the first after a summary. */
   instruct: { value: boolean };
   /** The service's lines this launch has said it took, each said once. */
   readonly accepted: Set<string>;
@@ -915,7 +915,8 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
     steering: 0,
     settling: false,
     model: config.model,
-    instruct: { value: opened.success.made },
+    // Note that a fork resumes its source's conversation, which holds the source's instructions, never its own.
+    instruct: { value: opened.success.made || config.fork === true },
     accepted: new Set(),
     open: false,
     snapshot: (lineId) =>
