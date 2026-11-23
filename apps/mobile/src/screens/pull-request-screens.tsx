@@ -8,7 +8,7 @@ import {
   type PullRequestCheck,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { iosAgentPullRequestOf } from "@repo/features/ios-app-links";
+import { iosAgentPullRequestOf, iosPullRequestFilesRoute } from "@repo/features/ios-app-links";
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import {
@@ -78,7 +78,7 @@ import {
   WriteNoteRow,
 } from "@repo/ui-native";
 import { setStringAsync } from "expo-clipboard";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent, useShownAgent } from "../agents/use-agent.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -91,10 +91,12 @@ import {
 } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useOnOwnTab } from "../tab-route.js";
 
 /** What the bar's ⋯ menu offers beside the merge, in the panel's words. */
 const MENU_WORDS = {
   MORE: "More",
+  FILES_CHANGED: "Files changed",
   COPY_GITHUB_LINK: "Copy GitHub link",
   OPEN_ON_GITHUB: "Open on GitHub",
 } as const;
@@ -327,7 +329,8 @@ const DESCRIPTION_WORDS = "Description";
 
 /**
  * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
- * the changes to where the pull request stands, as the panel's state pill
+ * Files changed, which opens the files it changes on a screen of their
+ * own, then the changes to where the pull request stands, as the panel's state pill
  * offers them, Close in red, then Copy GitHub link and Open on GitHub.
  * It offers no Refresh, since a pull down on the page reads it again in
  * every window, as Mail's menu offers none, and a read that failed says so
@@ -338,13 +341,21 @@ const DESCRIPTION_WORDS = "Description";
 function PullRequestToolbar({
   url,
   changes,
+  onFiles,
 }: {
   readonly url: string | undefined;
   readonly changes: readonly StateChange[];
+  /** Opens the files the pull request changes on a screen of their own. */
+  readonly onFiles: () => void;
 }) {
   return (
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+        <Stack.Toolbar.Menu inline>
+          <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.CHANGES)} onPress={onFiles}>
+            {MENU_WORDS.FILES_CHANGED}
+          </Stack.Toolbar.MenuAction>
+        </Stack.Toolbar.Menu>
         {changes.length === 0 ? null : (
           <Stack.Toolbar.Menu inline>
             {changes.map((change) => (
@@ -465,6 +476,8 @@ function PullRequestPage({
 }) {
   const id = agentId;
   useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(key.number));
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const colors = useColors();
   const openLink = useOpenLink(key.workspaceId);
   const agent = useFollowedAgent(id);
@@ -570,7 +583,11 @@ function PullRequestPage({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar url={url} changes={changes} />
+      <PullRequestToolbar
+        url={url}
+        changes={changes}
+        onFiles={() => router.push(onOwnTab(iosPullRequestFilesRoute(key)))}
+      />
     </>
   );
 

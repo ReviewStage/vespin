@@ -62,6 +62,8 @@ export {
 
 export type { CaretAtWord } from "./caret-at-word.js";
 
+export { ChangedFileRow } from "./changed-file-row.js";
+
 export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
 export {
