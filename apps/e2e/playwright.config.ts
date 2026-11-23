@@ -35,7 +35,10 @@ const LOCAL_SERVER_ENV = {
 
 /**
  * Specs are `*.e2e.ts`, a name no vitest config collects, so `vitest run`
- * never picks a journey up.
+ * never picks a journey up. A failed test is never retried, so a flaky one
+ * fails the run rather than passing on a second try. On CI the run reports
+ * to the job's log and annotations (`github`) and writes the HTML report,
+ * which carries each failed test's trace and video for the job to upload.
  *
  * The suite's database is the first server: `tools/demo-postgres`, a new
  * empty Postgres for the run, migrated and seeded, then stopped and deleted
@@ -59,10 +62,12 @@ export default defineConfig({
   testDir: "specs",
   testMatch: "**/*.e2e.ts",
   forbidOnly: Boolean(process.env.CI),
-  reporter: process.env.CI ? "github" : "list",
+  retries: 0,
+  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: ORIGIN,
     trace: "retain-on-failure",
+    video: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
