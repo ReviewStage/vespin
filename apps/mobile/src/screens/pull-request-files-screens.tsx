@@ -11,6 +11,7 @@ import {
   BAR_TITLE,
   ChangedFileRow,
   EmptyState,
+  footerToneOf,
   GLYPH,
   LIST_LOOK,
   ListSection,
@@ -56,7 +57,8 @@ function summaryOf(files: readonly { readonly additions: number; readonly deleti
  * (`filterFiles`). A press opens the file's diff on GitHub, at its anchor
  * on the Files changed tab, until the app draws diffs itself. Where GitHub
  * listed more files than one read carries, the list's footer says so, in
- * the panel's words.
+ * the panel's words, as it says a read that failed after files were drawn,
+ * which leaves them drawn.
  */
 export function PullRequestFilesScreen() {
   const {
@@ -106,6 +108,9 @@ export function PullRequestFilesScreen() {
   );
 
   const kept = files === undefined ? [] : filterFiles(treeOrder(files), search);
+  // Note that a read failing after files were drawn keeps them, and says so under them, as a pull reads them again.
+  const refreshFailed = files !== undefined && changes.failed ? CHANGES_WORDS.FAILED : undefined;
+  const footer = refreshFailed ?? (changes.truncated ? CHANGES_WORDS.TRUNCATED : undefined);
   const byPath = new Map(kept.map((file) => [file.path, file]));
 
   const empty =
@@ -140,7 +145,7 @@ export function PullRequestFilesScreen() {
             void gitHubFileDiffLink(url, path).then(openInSafari);
           }}
         >
-          <ListSection footer={changes.truncated ? CHANGES_WORDS.TRUNCATED : undefined}>
+          <ListSection footer={footer} footerTone={footerToneOf(refreshFailed)}>
             {kept.map((file) => (
               <ChangedFileRow key={file.path} file={file} />
             ))}
