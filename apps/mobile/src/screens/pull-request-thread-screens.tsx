@@ -4,6 +4,7 @@ import { PULL_REQUEST_PART } from "@repo/features/agent-view";
 import type { ReviewThread } from "@repo/features/agent-wire";
 import {
   PULL_REQUEST_READ_WORDS,
+  reactionsLine,
   THREAD_ACT_WORDS,
   THREAD_STATE_WORDS,
   threadLineSpan,
@@ -28,8 +29,10 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { useOpenLink } from "../open-link.js";
+import { reactionMenu } from "../pull-requests/reaction-menu.js";
 import {
   type PullRequestKey,
+  type PullRequestWrites,
   usePullRequestParts,
   usePullRequestRetry,
   usePullRequestWrites,
@@ -70,8 +73,11 @@ function threadById(
   return undefined;
 }
 
-/** A thread's comments as a thread's messages, oldest first: who wrote each by their GitHub face, when, and their words as written. */
-function threadMessagesOf(thread: ReviewThread): readonly ThreadMessage[] {
+/** A thread's comments as a thread's messages, oldest first: who wrote each by their GitHub face, when, their words as written, and the reactions each wears, with Add reaction in its long press menu. */
+function threadMessagesOf(
+  thread: ReviewThread,
+  writes: PullRequestWrites,
+): readonly ThreadMessage[] {
   return thread.comments.map((comment) => ({
     id: comment.url,
     writer: { ...githubFace(comment.by), agent: false },
@@ -79,6 +85,8 @@ function threadMessagesOf(thread: ReviewThread): readonly ThreadMessage[] {
     words: comment.markdown ?? comment.body,
     typed: false,
     media: [],
+    reactions: reactionsLine(comment.reactions ?? []),
+    menu: [reactionMenu(comment.subject, comment.reactions, writes)],
   }));
 }
 
@@ -198,7 +206,7 @@ export function PullRequestThreadScreen() {
             <ThreadPage
               path={path}
               title={lines === undefined ? thread.path : `${thread.path} ${lines}`}
-              messages={threadMessagesOf(thread)}
+              messages={threadMessagesOf(thread, writes)}
               repository={key.repository}
               onOpenLink={openLink}
               standing={thread.resolved ? THREAD_STATE_WORDS.RESOLVED : undefined}
