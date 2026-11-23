@@ -14,7 +14,7 @@ import {
 } from "@repo/panel/build-table";
 import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
 import { build } from "esbuild";
-import { replayProjectKeyDefine, signingModeDefine } from "./package-config.mjs";
+import { e2eBuildDefine, replayProjectKeyDefine, signingModeDefine } from "./package-config.mjs";
 import { tailwindPlugin } from "./tailwind.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -308,6 +308,8 @@ await Promise.all([
       // decides the name — and so the state directory and Keychain entry —
       // the run answers to; see `@repo/host`'s app-identity.ts.
       ...signingModeDefine(process.env),
+      // Whether this bundle is the nightly smoke's, which takes a loopback service and its own state root.
+      ...e2eBuildDefine(process.env),
     },
     sourcemap: "external",
     logLevel: "info",

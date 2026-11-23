@@ -38,6 +38,7 @@ test("the account override is read in a development run and never in a packaged 
     showMenuBar: () => undefined,
     initializeCrashReporting: () => undefined,
     appLinks: appLinkInbox(),
+    endToEndBuild: false,
   });
 
   assert.equal(development.hostedServiceBaseUrl, "https://example.invalid");
@@ -45,7 +46,10 @@ test("the account override is read in a development run and never in a packaged 
   const packaged = bootstrapDesktop({
     app: recordingApp(steps, true),
     argv: [],
-    environment: { APP_ACCOUNT_BASE_URL: "https://example.invalid/api/auth" },
+    environment: {
+      APP_ACCOUNT_BASE_URL: "http://127.0.0.1:4317/api/auth",
+      APP_STATE_ROOT: "/tmp/e2e-profile",
+    },
     resourceDirectory: "/tmp/resources",
     report: () => undefined,
     openExternal: async () => undefined,
@@ -53,10 +57,39 @@ test("the account override is read in a development run and never in a packaged 
     showMenuBar: () => undefined,
     initializeCrashReporting: () => undefined,
     appLinks: appLinkInbox(),
+    endToEndBuild: false,
   });
 
   assert.equal(packaged.hostedServiceBaseUrl, "https://vespin.dev");
+  assert.equal(packaged.stateRoot, "/tmp/appData/Vespin Test");
   assert.equal(packaged.runMode.sendsNetwork, true);
+});
+
+test("a packaged end-to-end build takes a loopback service and a state root of its own, and no service on the web", () => {
+  const launch = (environment: NodeJS.ProcessEnv) =>
+    bootstrapDesktop({
+      app: recordingApp([], true),
+      argv: [],
+      environment,
+      resourceDirectory: "/tmp/resources",
+      report: () => undefined,
+      openExternal: async () => undefined,
+      quit: () => undefined,
+      showMenuBar: () => undefined,
+      initializeCrashReporting: () => undefined,
+      appLinks: appLinkInbox(),
+      endToEndBuild: true,
+    });
+
+  const local = launch({
+    APP_ACCOUNT_BASE_URL: "http://127.0.0.1:4317/api/auth",
+    APP_STATE_ROOT: "/tmp/e2e-profile",
+  });
+
+  assert.equal(local.hostedServiceBaseUrl, "http://127.0.0.1:4317");
+  assert.equal(local.stateRoot, "/tmp/e2e-profile");
+  const web = launch({ APP_ACCOUNT_BASE_URL: "https://example.invalid/api/auth" });
+  assert.equal(web.hostedServiceBaseUrl, "https://vespin.dev");
 });
 
 test("a named development instance keeps its state apart, and a packaged build has none", () => {
@@ -72,6 +105,7 @@ test("a named development instance keeps its state apart, and a packaged build h
       showMenuBar: () => undefined,
       initializeCrashReporting: () => undefined,
       appLinks: appLinkInbox(),
+      endToEndBuild: false,
     });
 
   const plain = launch(false, {});
