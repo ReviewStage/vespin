@@ -24,8 +24,8 @@
  * iMessage's and Slack's do. A bubble may carry a menu a right-click or a
  * long press opens (`contextMenu`), as a chat app's message does.
  *
- * What stands with a message but outside its bubble, such as the thoughts
- * a Manager's message came of, stands beside the run at the bubble's own
+ * What stands with a message but outside its bubble, such as the work a
+ * Manager's message came of, opened under it, stands at the bubble's own
  * inset, past the sender's picture (`ChatAside`), as the line under it does.
  *
  * It is drawn in the Tailwind theme's utilities.
@@ -163,7 +163,7 @@ export function ChatBubble({
   );
 }
 
-/** What stands with a message outside its bubble, such as the thoughts it came of, at the bubble's inset (`inset`), past the sender's picture where the chat draws one, as the line under the run starts. */
+/** What stands with a message outside its bubble, such as the work it came of, at the bubble's inset (`inset`), past the sender's picture where the chat draws one, as the line under the run starts. */
 export function ChatAside({
   inset,
   children,

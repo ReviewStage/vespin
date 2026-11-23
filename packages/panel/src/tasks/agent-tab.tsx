@@ -34,6 +34,7 @@ import {
   type TurnStretch,
   turnStretches,
   wholeCallOf,
+  workRows,
 } from "@repo/features/agent-parts";
 import { editsInPlace, REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
 import { usageLimitAgentOf } from "@repo/features/agent-runtime-models";
@@ -77,10 +78,11 @@ import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
 import {
   type ChatReply,
   type ChatRunPlace,
-  chatThoughts,
   type ManagerChatRuns,
+  type ManagerChatWork,
   managerChatLines,
   managerChatRuns,
+  managerChatWork,
 } from "@repo/features/manager-chat";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
@@ -351,6 +353,7 @@ import {
   useChatMessageMenu,
   useChatReplyQuote,
 } from "./chat-reply.js";
+import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { ComputerDock } from "./computer-dock.js";
 import { ComputerPermissionNote } from "./computer-permission-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
@@ -680,6 +683,9 @@ const LiveDoors = createContext<Pick<DelegationDoors, "cards"> | undefined>(unde
 /** A Manager's chat in runs (`managerChatRuns`), where the transcript is one (`managerChatLines`), whose messages are drawn as bubbles in their runs; none for every other agent. */
 const ChatRuns = createContext<ManagerChatRuns | undefined>(undefined);
 
+/** The work a Manager's chat keeps a press away (`managerChatWork`); none for every other agent. */
+const ChatWork = createContext<ManagerChatWork | undefined>(undefined);
+
 /** A Manager as its chat draws it: its name over each run of its messages, and its face beside the run (`ChatBubble`'s `avatar`), none where a service older than faces answers. */
 interface ChatManagerLook {
   readonly name: string;
@@ -689,19 +695,24 @@ interface ChatManagerLook {
 /** The Manager whose chat a transcript is; none for every other agent. */
 const ChatManager = createContext<ChatManagerLook | undefined>(undefined);
 
-/** A Manager's chat's doors: the Manager whose chat it is, and the press that brings one of its messages into view, as a reply's quote asks (`chat-reply.tsx`). */
+/** A Manager's chat's doors: the Manager whose chat it is, the work it keeps a press away, and the press that brings one of its messages into view, as a reply's quote asks (`chat-reply.tsx`). */
 function ChatDoors({
   manager,
+  work,
   show,
   children,
 }: {
   manager: ChatManagerLook | undefined;
+  /** The work the chat keeps a press away (`ChatWork`); none for every other agent. */
+  work: ManagerChatWork | undefined;
   show: (messageId: string) => void;
   children: ReactNode;
 }): React.JSX.Element {
   return (
     <ChatManager value={manager}>
-      <ChatShowProvider show={show}>{children}</ChatShowProvider>
+      <ChatWork value={work}>
+        <ChatShowProvider show={show}>{children}</ChatShowProvider>
+      </ChatWork>
     </ChatManager>
   );
 }
@@ -2061,6 +2072,7 @@ export function AgentMessage({
   const words = messageWords(message);
   const forkOffered = useForkOffered();
   const chatRuns = useContext(ChatRuns);
+  const chatWork = useContext(ChatWork);
   const sending = useLineSending(message.id);
   const marked = useLineMarked(message.id);
   const status = useLineStatus(message.id);
@@ -2297,7 +2309,7 @@ export function AgentMessage({
 
   return stretches.map((stretch, index) => {
     if (stretch.line === undefined && chatRuns !== undefined) {
-      const { before, said, after } = chatThoughts(stretch.rows);
+      const work = chatWork?.work.get(message.id);
 
       return (
         <ChatSent
@@ -2306,14 +2318,13 @@ export function AgentMessage({
           place={chatRuns.places.get(message.id) ?? LONE_RUN}
           words={words}
           moving={moving}
-          before={
-            before.length === 0 ? null : <TranscriptRows rows={before}>{drawPart}</TranscriptRows>
-          }
-          after={
-            after.length === 0 ? null : <TranscriptRows rows={after}>{drawPart}</TranscriptRows>
+          work={
+            work === undefined || work.length === 0 ? null : (
+              <ChatWorkRows parts={work} moving={false} delegation={doors} />
+            )
           }
         >
-          {said.length === 0 ? null : <TranscriptRows rows={said}>{drawPart}</TranscriptRows>}
+          <TranscriptRows rows={stretch.rows}>{drawPart}</TranscriptRows>
         </ChatSent>
       );
     }
@@ -2484,26 +2495,22 @@ function ChatSent({
   place,
   words,
   moving,
-  before,
-  after,
+  work,
   children,
 }: {
   message: AgentTranscriptMessage;
   place: ChatRunPlace;
   words: string;
   moving: boolean;
-  /** The thoughts the message came of, over its bubble; none where it came of none. */
-  before: ReactNode | null;
-  /** The thoughts its turn had after it, under its bubble; none where it had none. */
-  after: ReactNode | null;
-  /** What its bubble holds; none for a message of thoughts alone, which draws no bubble. */
+  /** The work the message came of, drawn under it once Show work opens it; none where it came of none. */
+  work: ReactNode | null;
   children: ReactNode;
 }): React.JSX.Element {
   const manager = useContext(ChatManager);
   const face = manager?.face;
   const target = { id: message.id, words: moving ? "" : words };
-  const menu = useChatMessageMenu(target);
-  const inset = chatInset(face);
+  const toggle = useWorkToggle();
+  const menu = useChatMessageMenu(target, work === null ? undefined : toggle);
 
   return (
     <Message
@@ -2512,27 +2519,32 @@ function ChatSent({
       data-message-id={message.id}
     >
       {place.opens && manager !== undefined ? <ManagerChatHead manager={manager} /> : null}
-      {before === null ? null : <ChatAside inset={inset}>{before}</ChatAside>}
-      {children === null ? null : (
-        <ChatBubble
-          side={CHAT_SIDE.RECEIVED}
-          run={chatRunOf(place.opens, place.closes)}
-          avatar={chatAvatar(face)}
-          contextMenu={menu.contextMenu}
-          beside={
-            moving || words === "" ? null : (
-              <CopyMessageAction words={words} lead={<ReplyMessageAction target={target} />} />
-            )
-          }
-        >
-          {children}
-        </ChatBubble>
-      )}
-      {after === null ? null : <ChatAside inset={inset}>{after}</ChatAside>}
+      <ChatBubble
+        side={CHAT_SIDE.RECEIVED}
+        run={chatRunOf(place.opens, place.closes)}
+        avatar={chatAvatar(face)}
+        contextMenu={menu.contextMenu}
+        beside={
+          moving || words === "" ? null : (
+            <CopyMessageAction
+              words={words}
+              lead={
+                <>
+                  <ReplyMessageAction target={target} />
+                  {work === null ? null : <WorkMessageAction toggle={toggle} />}
+                </>
+              }
+            />
+          )
+        }
+      >
+        {children}
+      </ChatBubble>
+      {toggle.shown && work !== null ? <ChatAside inset={chatInset(face)}>{work}</ChatAside> : null}
       {menu.menu}
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
-        inset={inset}
+        inset={chatInset(face)}
         at={place.closes && !moving ? message.finishedAt : undefined}
       />
     </Message>
@@ -2543,16 +2555,61 @@ function ChatSent({
 function ChatWorking({
   words,
   face,
+  work = null,
 }: {
   words: string;
   face: ManagerFaceValue | undefined;
+  /** The turn under way's work since its last message, drawn under the line once Show work opens it; none where it has done none yet. */
+  work?: ReactNode | null;
 }): React.JSX.Element {
+  const toggle = useWorkToggle();
+
   return (
     <Message from={MESSAGE_ROLE.ASSISTANT} className={RECEIVED_MESSAGE_CLASS}>
-      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE} avatar={chatAvatar(face)}>
+      <ChatBubble
+        side={CHAT_SIDE.RECEIVED}
+        run={CHAT_RUN.ALONE}
+        avatar={chatAvatar(face)}
+        beside={work === null ? null : <WorkingWorkAction toggle={toggle} />}
+      >
         <WorkingLine startedAt={undefined} words={words} />
       </ChatBubble>
+      {toggle.shown && work !== null ? <ChatAside inset={chatInset(face)}>{work}</ChatAside> : null}
     </Message>
+  );
+}
+
+/** Whether a Manager's message's work stands open under it, closed until Show work opens it. */
+function useWorkToggle(): ChatWorkToggle {
+  const [shown, setShown] = useState(false);
+
+  return { shown, onToggle: () => setShown((was) => !was) };
+}
+
+/** A stretch of a Manager's work (`managerChatWork`) as the rows a turn's transcript draws, each part drawn as the turn's own is. */
+function ChatWorkRows({
+  parts,
+  moving,
+  delegation,
+}: {
+  parts: readonly AgentPart[];
+  /** Whether the turn is still writing it, which keeps its latest work open. */
+  moving: boolean;
+  delegation: DelegationDoors | undefined;
+}): React.JSX.Element {
+  const rows = useMemo(() => workRows(parts, moving), [parts, moving]);
+
+  const drawPart = useCallback(
+    (part: AgentPart) => (
+      <SteadyAgentPart part={part} delegation={delegation} todos={NO_TODOS} moving={moving} />
+    ),
+    [delegation, moving],
+  );
+
+  return (
+    <MessageContent>
+      <TranscriptRows rows={rows}>{drawPart}</TranscriptRows>
+    </MessageContent>
   );
 }
 
@@ -3205,6 +3262,7 @@ function AgentTranscriptView({
   greeting,
   manager,
   chat = false,
+  chatWork,
   overComposer = false,
   overEnd,
   earlierOmitted = false,
@@ -3281,6 +3339,8 @@ function AgentTranscriptView({
   manager?: ChatManagerLook | undefined;
   /** Whether the messages are a Manager's chat (`managerChatLines`), drawn as bubbles in their runs. */
   chat?: boolean;
+  /** The work a Manager's chat keeps a press away (`managerChatWork`); none for every other agent. */
+  chatWork?: ManagerChatWork | undefined;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
   overComposer?: boolean;
   /** The room, in pixels, what floats over the log's end takes, as the apps' windows the agent is using do (`ComputerDock`). */
@@ -3561,7 +3621,15 @@ function AgentTranscriptView({
             </div>
           )}
           {!working || waitingNotice ? null : chat ? (
-            <ChatWorking words={workingWords} face={manager?.face} />
+            <ChatWorking
+              words={workingWords}
+              face={manager?.face}
+              work={
+                chatWork === undefined || chatWork.live.length === 0 ? null : (
+                  <ChatWorkRows parts={chatWork.live} moving delegation={delegation} />
+                )
+              }
+            />
           ) : (
             <WorkingLine startedAt={startedAt} words={workingWords} />
           )}
@@ -3616,7 +3684,7 @@ function AgentTranscriptView({
       <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
           <ChatRuns value={chatRuns}>
-            <ChatDoors manager={manager} show={showMessage}>
+            <ChatDoors manager={manager} work={chatWork} show={showMessage}>
               <ConnectionNames needed={callsServer}>
                 <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
                   {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
@@ -4064,6 +4132,13 @@ function AgentTabView({
 
   // Whether the agent works and how its turn ended are read from its newest turn's record alone (`tabTurnOf`).
   const standing = tabTurnOf(agent, composer);
+
+  // Note that a Manager's work stays a press away from its chat, the turn under way's under its working line.
+  const chatWork = useMemo(
+    () => (chat ? managerChatWork(lines, standing.working) : undefined),
+    [chat, lines, standing.working],
+  );
+
   // Note that a first launch still booting says so in the empty transcript's own line (`AgentBootLine`), so no working line or end line stands under it.
   // Note that an agent just made, before its first turn and before its first page lands, is booting by its summary, counted from when it was made as its boot's first attempt is, so Starting… stands at once rather than after a placeholder.
   const unread = transcript.pageStatus === undefined && !transcript.failed;
@@ -4344,6 +4419,7 @@ function AgentTabView({
                                 greeting={chat ? managerGreeting(agent.title) : undefined}
                                 manager={chat ? { name, face: agent.face } : undefined}
                                 chat={chat}
+                                chatWork={chatWork}
                                 overComposer
                                 overEnd={appsRoom}
                                 bringIn={bringIn}

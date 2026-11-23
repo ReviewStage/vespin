@@ -192,7 +192,7 @@ function Messages(): React.JSX.Element {
                 {index === 0 ? (
                   <ChatAside inset={MESSAGE_LINE_INSET.AVATAR}>
                     <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-                      Thought: Ada asked whether it is out.
+                      Read the invitations task, then checked its pull request.
                     </Text>
                   </ChatAside>
                 ) : null}

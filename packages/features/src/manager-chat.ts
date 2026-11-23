@@ -1,5 +1,5 @@
 /**
- * manager-chat.ts -- a Manager's transcript as the chat its page draws: people's lines, and the Manager's `send_to_user` messages, one message to each call, with the thoughts that led to them, in runs by sender.
+ * manager-chat.ts -- a Manager's transcript as the chat its page draws: people's lines, and the Manager's `send_to_user` messages alone, one message to each call, in runs by sender.
  *
  * A Manager's page is a direct-message chat between the people who can open
  * it and the Manager, never its transcript: a person's line stands as they
@@ -10,12 +10,18 @@
  * transcript draws it as the agent's reply (`isVoiceLine`), since it is what
  * the caller heard the Manager say. A person's line that reached a
  * turn while it ran stands between the messages it arrived between.
- * The Manager's thoughts stand too, each with the message it led to, as a
- * coding agent's transcript stands each before the words it led to.
- * Everything else the transcript holds (the Manager's own text, its other
- * calls, and the lines its agents, wakes, threads, and GitHub sent it) is
- * left out, and a turn that sent nothing and thought nothing stands
- * nowhere. The greeting it opens on is drawn above (`manager-greeting.ts`).
+ * Everything else the transcript holds (the Manager's own text, its thoughts
+ * and other calls, and the lines its agents, wakes, threads, and GitHub sent
+ * it) is left out, and a turn that sent nothing stands nowhere. The greeting
+ * it opens on is drawn above (`manager-greeting.ts`).
+ *
+ * What was left out stays a press away (`managerChatWork`): each of the
+ * Manager's messages keeps the work that led to it, its thoughts, calls, and
+ * own words since the message before, and a turn's last message the work
+ * after it too, which the page opens under the message on Show work; and
+ * the turn under way keeps its work since its last message, which the page
+ * opens under its working line. A turn that ended having sent nothing keeps
+ * its work nowhere, so a finished chat draws no more than its messages.
  *
  * The chat's messages stand in runs, as a chat app groups them: consecutive
  * messages from one sender, none further from the one before than
@@ -44,8 +50,8 @@ import {
 import {
   AGENT_PART,
   type AgentPart,
+  agentParts,
   arrivedParts,
-  cutPartText,
   messageWords,
 } from "./agent-parts.js";
 import { AGENT_TOOL } from "./agent-tools.js";
@@ -54,7 +60,6 @@ import { plainWords } from "./plain-words.js";
 import { cutReply, MESSAGE_BLOCK, messageBlocks, messageText, QUOTE_GAP } from "./reply-quote.js";
 import { TOOL_STATE } from "./tool-call-block.js";
 import { isPersonLine } from "./transcript-lines.js";
-import { TURN_ROW, type TurnRow } from "./turn-rows.js";
 import { isAgentTurn, isVoiceLine } from "./voice-call-lines.js";
 
 /** The longest pause, in milliseconds, between two messages of one sender that still stand in one run. */
@@ -92,19 +97,6 @@ function sentWords(part: AgentPart): string | undefined {
   return isWireString(text) && text.trim() !== "" ? text.trim() : undefined;
 }
 
-/**
- * A thought of a turn as its chat stands it: its words, or, for one its page
- * carried cut, its two ends with the size of what lies between, since its
- * message in the chat is no message of the transcript to read it whole
- * from; none for any other part.
- */
-function thoughtPart(part: AgentPart): WireValue | undefined {
-  if (part.kind !== AGENT_PART.REASONING) return undefined;
-  const text = part.cut === undefined ? part.text : cutPartText(part.cut);
-
-  return text.trim() === "" ? undefined : { type: AGENT_PART.REASONING, text };
-}
-
 /** A person's line as the chat stands it where it arrived, out of the turn that took it in, so no later read moves it back into the turn's first message. */
 function standingLine(line: AgentTranscriptMessage): AgentTranscriptMessage {
   const { arrivedIn: _arrived, ...kept } = line;
@@ -112,16 +104,18 @@ function standingLine(line: AgentTranscriptMessage): AgentTranscriptMessage {
   return kept;
 }
 
+/** The id the chat stands a turn's sent message under: the turn's own for its first, its call's for each after it. */
+function sentId(message: AgentTranscriptMessage, sends: number, callId: string): string {
+  return sends === 0 ? message.id : callId;
+}
+
 /**
  * A turn as its chat messages: one to each `send_to_user` call it made, in
  * the order sent, the first under the turn's own id and each after it under
  * its call's, with the people's lines that reached the turn while it ran
- * (`arrived`) between the messages they arrived between. Each message opens
- * on the thoughts the turn had since the message before it, and the
- * thoughts after its last stand at the end of that last, or, in a turn
- * that sent nothing, as a message of thoughts alone under the turn's id.
- * Each keeps the turn's start, and only the last the turn's end, since that
- * is when the last was sent and the others' times are not kept.
+ * (`arrived`) between the messages they arrived between. Each keeps the
+ * turn's start, and only the last the turn's end, since that is when the
+ * last was sent and the others' times are not kept.
  */
 function turnChat(
   message: AgentTranscriptMessage,
@@ -130,7 +124,6 @@ function turnChat(
   // Note that the parts are new, so the cuts that named the old ones by index go with them, as does the turn's end, which only its last message takes.
   const { cutParts: _cut, finishedAt, ...kept } = message;
   const chat: AgentTranscriptMessage[] = [];
-  let thoughts: WireValue[] = [];
   let sends = 0;
   let lastAt = -1;
 
@@ -140,29 +133,14 @@ function turnChat(
       continue;
     }
 
-    const thought = thoughtPart(part);
-
-    if (thought !== undefined) thoughts.push(thought);
     const text = sentWords(part);
 
     if (text === undefined || part.kind !== AGENT_PART.TOOL) continue;
-    const id = sends === 0 ? message.id : part.callId;
-    const parts: readonly WireValue[] = [...thoughts, { type: AGENT_PART.TEXT, text }];
+    const id = sentId(message, sends, part.callId);
+    const parts: readonly WireValue[] = [{ type: AGENT_PART.TEXT, text }];
 
     lastAt = chat.push({ ...kept, id, parts }) - 1;
-    thoughts = [];
     sends += 1;
-  }
-
-  // Note that a thought after the last message has no call of its own to stand under, so it stands with the message before it, or alone under the turn's id where none was sent.
-  const before = chat[lastAt];
-
-  if (thoughts.length > 0) {
-    if (before === undefined) {
-      lastAt = chat.push({ ...kept, parts: thoughts }) - 1;
-    } else {
-      chat[lastAt] = { ...before, parts: [...before.parts, ...thoughts] };
-    }
   }
 
   const last = chat[lastAt];
@@ -187,35 +165,6 @@ function voiceChat(line: AgentTranscriptMessage): readonly AgentTranscriptMessag
   const at = sentAt === undefined ? undefined : { sentAt, startedAt: sentAt, finishedAt: sentAt };
 
   return [{ ...kept, parts, ...at }];
-}
-
-/** Whether a row of a chat message is one of its thoughts. */
-function isThoughtRow(row: TurnRow<AgentPart>): boolean {
-  return row.kind === TURN_ROW.BLOCK && row.block.kind === AGENT_PART.REASONING;
-}
-
-/** A chat message's rows as its page stands them: the thoughts it came of, what its bubble says, and the thoughts its turn had after it. */
-export interface ChatThoughts<R> {
-  /** Over its bubble. */
-  readonly before: readonly R[];
-  /** In its bubble; none for a message of thoughts alone, which draws no bubble. */
-  readonly said: readonly R[];
-  /** Under its bubble. */
-  readonly after: readonly R[];
-}
-
-/** A chat message's rows (`managerChatLines`) split as its page stands them (`ChatThoughts`), a message of thoughts alone all over where its bubble would stand. */
-export function chatThoughts<R extends TurnRow<AgentPart>>(rows: readonly R[]): ChatThoughts<R> {
-  const opens = rows.findIndex((row) => !isThoughtRow(row));
-
-  if (opens === -1) return { before: rows, said: [], after: [] };
-  const closes = rows.findLastIndex((row) => !isThoughtRow(row)) + 1;
-
-  return {
-    before: rows.slice(0, opens),
-    said: rows.slice(opens, closes),
-    after: rows.slice(closes),
-  };
 }
 
 /** A Manager's transcript as its chat: people's lines, each `send_to_user` call as a message of its own, the lines that reached a turn standing between its messages where they arrived, and the voice's lines on a call. */
@@ -250,6 +199,65 @@ export function managerChatLines(
     // A line a held turn took in stands among that turn's messages instead.
     return journal !== undefined && turns.has(journal) ? [] : [message];
   });
+}
+
+/** The work a Manager's chat holds a press away: each message's, by its chat id, and the turn under way's since its last message. */
+export interface ManagerChatWork {
+  readonly work: ReadonlyMap<string, readonly AgentPart[]>;
+  /** The turn under way's work since its last message, or since it began where it sent none; none where no turn is under way. */
+  readonly live: readonly AgentPart[];
+}
+
+/** Whether a part of a turn is work its chat leaves out: anything but a step boundary, a line that reached the turn, and a message the turn sent. */
+function isWork(part: AgentPart): boolean {
+  return (
+    part.kind !== AGENT_PART.STEP_START &&
+    part.kind !== AGENT_PART.ARRIVED &&
+    sentWords(part) === undefined
+  );
+}
+
+/**
+ * A Manager's transcript's work as its chat holds it (`ManagerChatWork`):
+ * each message's work since the message before it, the work after a turn's
+ * last message with that message, and, while the newest turn is under way
+ * (`running`), that turn's work since its last message as its live work
+ * instead. Each part keeps the cut it was read with.
+ */
+export function managerChatWork(
+  messages: readonly AgentTranscriptMessage[],
+  running: boolean,
+): ManagerChatWork {
+  const work = new Map<string, readonly AgentPart[]>();
+  const newest = messages.findLast(isAgentTurn);
+  let live: readonly AgentPart[] = [];
+
+  for (const message of messages) {
+    if (message.role !== MESSAGE_ROLE.ASSISTANT || isVoiceLine(message)) continue;
+    let pending: AgentPart[] = [];
+    let last: string | undefined;
+    let sends = 0;
+
+    for (const part of agentParts(message)) {
+      if (part.kind === AGENT_PART.TOOL && sentWords(part) !== undefined) {
+        last = sentId(message, sends, part.callId);
+        work.set(last, pending);
+        pending = [];
+        sends += 1;
+      } else if (isWork(part)) {
+        pending.push(part);
+      }
+    }
+
+    // Note that the turn under way's work since its last message is still going, so it stands under the working line rather than with a message it may not lead to.
+    if (running && message === newest) {
+      live = pending;
+    } else if (last !== undefined) {
+      work.set(last, [...(work.get(last) ?? []), ...pending]);
+    }
+  }
+
+  return { work, live };
 }
 
 /** A Manager's message as a reply quotes it: its words as one line of plain words, links by their names. */

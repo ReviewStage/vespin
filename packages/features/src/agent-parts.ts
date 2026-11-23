@@ -792,7 +792,11 @@ function drawnParts(
   message: AgentTranscriptMessage,
   arrived: readonly AgentTranscriptMessage[] = [],
 ): readonly AgentPart[] {
-  const parts = arrivedParts(message, arrived);
+  return drawnOf(arrivedParts(message, arrived));
+}
+
+/** Parts as a row is drawn from them (`drawnParts`). */
+function drawnOf(parts: readonly AgentPart[]): readonly AgentPart[] {
   const ran = runConnectionCalls(parts);
   const drawn: AgentPart[] = [];
 
@@ -959,6 +963,19 @@ export function agentRows(
   };
 
   return turnRows(parts, reading, { moving, delegated });
+}
+
+/**
+ * A stretch of a turn's parts, such as the work that led to one of a
+ * Manager's chat messages (`managerChatWork`), as the rows every transcript
+ * draws, folded as the turn's own would be. Each part keeps the cut it was
+ * read with, so a cut answer still reads its whole from the turn it is of.
+ */
+export function workRows(
+  parts: readonly AgentPart[],
+  moving: boolean,
+): readonly TurnRow<AgentPart>[] {
+  return turnRows(drawnOf(parts), AGENT_READING, { moving });
 }
 
 /** One of a transcript's rows as the tab draws it, with the developer's lines that reached it while its turn ran. */

@@ -2,11 +2,12 @@ import type { ChatReply } from "@repo/features/manager-chat";
 import { plainWords } from "@repo/features/plain-words";
 import type { ChatBubbleQuote, ContextMenuProps } from "@repo/ui";
 import { CopyIcon, ONE_LINE_END, OneLine, useMenu } from "@repo/ui";
-import { ReplyIcon } from "@repo/ui/icons";
+import { ListTreeIcon, ReplyIcon } from "@repo/ui/icons";
 import { createContext, type ReactNode, useContext } from "react";
 import { MessageAction } from "../ai-elements/message.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
+import { type ChatWorkToggle, chatWorkWords } from "./chat-work.js";
 import { DraftStarterCard } from "./fork-action.js";
 import type { ChatReplyTarget } from "./use-agent-composer.js";
 
@@ -95,8 +96,11 @@ interface ChatMessageMenu {
   readonly menu: ReactNode;
 }
 
-/** A Manager's message's right-click menu, Reply and Copy. */
-export function useChatMessageMenu(target: ChatReplyTarget): ChatMessageMenu {
+/** A Manager's message's right-click menu, Reply and Copy, and Show work where the message keeps work of its own (`work`). */
+export function useChatMessageMenu(
+  target: ChatReplyTarget,
+  work?: ChatWorkToggle | undefined,
+): ChatMessageMenu {
   const replyTo = useContext(ChatReplyContext)?.replyTo;
   const copy = useCopyToast();
   const menu = useMenu(true);
@@ -117,6 +121,15 @@ export function useChatMessageMenu(target: ChatReplyTarget): ChatMessageMenu {
       icon: <CopyIcon aria-hidden="true" />,
       onSelect: () => copy(target.words, REPLY_WORDS.COPIED),
     },
+    ...(work === undefined
+      ? []
+      : [
+          {
+            label: chatWorkWords(work.shown),
+            icon: <ListTreeIcon aria-hidden="true" />,
+            onSelect: work.onToggle,
+          },
+        ]),
   ];
 
   return {
