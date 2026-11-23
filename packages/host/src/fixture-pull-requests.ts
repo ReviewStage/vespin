@@ -166,6 +166,36 @@ const READY_DESCRIPTION = {
   ].join("\n"),
 } as const;
 
+/** The queued pull request's description, long enough that a phone folds it behind Show more. */
+const QUEUED_DESCRIPTION = {
+  body: [
+    "Sends the invitation from the workspace's own address rather than the app's, so a teammate sees who invited them before they open it.",
+    "",
+    "## Why",
+    "",
+    "Invitations from a no-reply address were landing in spam for two of the three pilot workspaces, and nobody could tell whose invite it was.",
+    "",
+    "## What changes",
+    "",
+    "- The sender is the workspace's verified domain, falling back to the app's address",
+    "- The subject names the workspace and the member who invited",
+    "- A reply goes to the inviting member",
+    "- The plain-text part matches the HTML one",
+    "",
+    "## How it was checked",
+    "",
+    "- Sent to Gmail, Outlook and Fastmail inboxes from a verified and an unverified domain",
+    "- Ran the invite flow end to end on staging",
+    "- Checked the fallback when the domain's verification lapses",
+    "",
+    "## Follow-ups",
+    "",
+    "- Let an owner choose the sender name",
+    "- Show the sender in Settings › Members before it sends",
+  ].join("\n"),
+  html: "<p>Sends the invitation from the workspace's own address rather than the app's, so a teammate sees who invited them before they open it.</p><h2>Why</h2><p>Invitations from a no-reply address were landing in spam for two of the three pilot workspaces, and nobody could tell whose invite it was.</p><h2>What changes</h2><ul><li>The sender is the workspace's verified domain, falling back to the app's address</li><li>The subject names the workspace and the member who invited</li><li>A reply goes to the inviting member</li><li>The plain-text part matches the HTML one</li></ul><h2>How it was checked</h2><ul><li>Sent to Gmail, Outlook and Fastmail inboxes from a verified and an unverified domain</li><li>Ran the invite flow end to end on staging</li><li>Checked the fallback when the domain's verification lapses</li></ul><h2>Follow-ups</h2><ul><li>Let an owner choose the sender name</li><li>Show the sender in Settings › Members before it sends</li></ul>",
+} as const;
+
 const READY = pullRequestOf(
   FIXTURE_PULL_REQUEST.READY,
   "Invite a teammate by email",
@@ -231,6 +261,7 @@ const QUEUED = pullRequestOf(
       checks: CHECK_SUMMARY.PASSING,
     },
   },
+  QUEUED_DESCRIPTION,
 );
 
 /** The checks each ran, failed first and then running, as the service lists them. */

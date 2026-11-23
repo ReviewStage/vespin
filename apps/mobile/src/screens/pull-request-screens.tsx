@@ -20,6 +20,7 @@ import {
   checksLineOf,
   checksSummaryOf,
   conversationCount,
+  descriptionFolds,
   isLivePullRequest,
   isMergeWrite,
   isStateAction,
@@ -46,6 +47,7 @@ import {
   PULL_REQUEST_ACTION,
   type PullRequestActionRequest,
 } from "@repo/features/pull-request-write-wire";
+import { SHOW_LESS_WORDS, SHOW_MORE_WORDS } from "@repo/features/words";
 import { answerFailed, landedAnswer } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
@@ -60,6 +62,7 @@ import {
   githubFace,
   glyphSymbol,
   LIST_LOOK,
+  LinkRow,
   ListSection,
   LoadingRow,
   MARK_FACE,
@@ -450,6 +453,7 @@ function PullRequestPage({
   const retry = usePullRequestRetry(key);
   const writes = usePullRequestWrites(key);
   const [chosen, setChosen] = useState<MergeMethod | undefined>(undefined);
+  const [unfolded, setUnfolded] = useState(false);
   // The merge whose question stands, by what the pull request offered when it was pressed.
   const [asked, setAsked] = useState<AskedPress | undefined>(undefined);
   const pullRequest = landedAnswer(parts.pullRequest)?.pullRequest ?? undefined;
@@ -584,6 +588,9 @@ function PullRequestPage({
   // Note that a pull request with no description, one read from a service before it, or one that holds only HTML GitHub's page hides (a template's comments, a bot's badges), shows no Description section, rather than the panel's "No description provided.", since the phone draws no empty section.
   const description = pullRequest?.body ?? "";
   const described = markdownShows(description, { hidesHtml: true });
+  // Note that a long description stands folded to its first lines, faded at its foot, until Show more, so the rows and the conversation under it stay a short scroll away, as GitHub's app folds a long body.
+  const folds = descriptionFolds(description);
+  const folded = folds && !unfolded;
 
   const reviewers =
     pullRequest === undefined
@@ -683,7 +690,16 @@ function PullRequestPage({
             repository={agent?.repository}
             onOpenLink={openLink}
             hidesHtml
+            folded={folded}
+            last={!folds}
           />
+          {folds ? (
+            <LinkRow
+              symbol={folded ? GLYPH.FOLDED : GLYPH.UNFOLDED}
+              label={folded ? SHOW_MORE_WORDS : SHOW_LESS_WORDS}
+              onPress={() => setUnfolded(folded)}
+            />
+          ) : null}
         </ListSection>
       ) : null}
       <ListSection>
