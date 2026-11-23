@@ -111,6 +111,23 @@ export function pullRequestMoveOf(request: PullRequestActionRequest): PullReques
   }
 }
 
+/** The review threads a fixture run resolved, true, or opened again, false, by GitHub's id for each. */
+export type ThreadResolves = ReadonlyMap<string, boolean>;
+
+/** The thread a change resolves or opens again, and which; none for a change to anything else. */
+export function threadResolveOf(
+  request: PullRequestActionRequest,
+): { readonly threadId: string; readonly resolved: boolean } | undefined {
+  switch (request.action) {
+    case PULL_REQUEST_ACTION.RESOLVE_THREAD:
+      return { threadId: request.threadId, resolved: true };
+    case PULL_REQUEST_ACTION.UNRESOLVE_THREAD:
+      return { threadId: request.threadId, resolved: false };
+    default:
+      return undefined;
+  }
+}
+
 /** One check, begun `ago` before the fixture landed and run for `ran`; one still running has run for none. */
 function check(name: string, state: CheckState, ago: number, ran: number): PullRequestCheck {
   const startedAt = LANDED - ago;
@@ -326,6 +343,7 @@ const EXPIRY_THREAD = {
   diffHunk: "@@ -15,3 +15,6 @@ export function expired(invite: Invite): boolean {",
   resolved: false,
   outdated: false,
+  id: "PRRT_expiry",
   comments: [
     {
       by: GRACE,
@@ -455,8 +473,47 @@ function moved(
   }
 }
 
-/** One slice's reads as last laid, by the read the host held, with the moves laid over it. */
-type LaidReads = WeakMap<object, { readonly moves: PullRequestMoves; readonly staged: object }>;
+/** No thread resolved or opened again yet. */
+const NO_RESOLVES: ThreadResolves = new Map();
+
+/** Each conversation with its threads standing as `resolves` left them, those it names none of as staged. */
+function resolvedConversations(
+  resolves: ThreadResolves,
+): ReadonlyMap<number, RepositoryOverviewConversationAnswerView> {
+  if (resolves.size === 0) return CONVERSATIONS;
+
+  return new Map(
+    [...CONVERSATIONS].map(([number, answer]) => [
+      number,
+      "failure" in answer || answer.pullRequest === null
+        ? answer
+        : {
+            pullRequest: {
+              ...answer.pullRequest,
+              conversation: answer.pullRequest.conversation.map((entry) =>
+                entry.threads === undefined
+                  ? entry
+                  : {
+                      ...entry,
+                      threads: entry.threads.map((thread) => ({
+                        ...thread,
+                        resolved:
+                          (thread.id === undefined ? undefined : resolves.get(thread.id)) ??
+                          thread.resolved,
+                      })),
+                    },
+              ),
+            },
+          },
+    ]),
+  );
+}
+
+/** One slice's reads as last laid, by the read the host held, with the moves and the threads' resolves laid over it. */
+type LaidReads = WeakMap<
+  object,
+  { readonly moves: PullRequestMoves; readonly resolves: ThreadResolves; readonly staged: object }
+>;
 
 /**
  * Each slice's reads as last laid, so laying the same again hands the store
@@ -475,11 +532,12 @@ function laid<Part>(
   cache: LaidReads,
   held: AppRepositoryPullRequestHeld<Part>,
   moves: PullRequestMoves,
+  resolves: ThreadResolves,
   parts: () => ReadonlyMap<number, Part>,
 ): AppRepositoryPullRequestHeld<Part> {
   const kept = cache.get(held);
 
-  if (kept?.moves === moves) {
+  if (kept?.moves === moves && kept.resolves === resolves) {
     // SAFETY: a read's entry is only ever written below, from that same read.
     return kept.staged as AppRepositoryPullRequestHeld<Part>;
   }
@@ -498,7 +556,7 @@ function laid<Part>(
     },
   };
 
-  cache.set(held, { moves, staged });
+  cache.set(held, { moves, resolves, staged });
 
   return staged;
 }
@@ -511,6 +569,7 @@ function laid<Part>(
 export function pullRequestPartsAppState(
   state: AppStateSnapshot,
   moves: PullRequestMoves,
+  resolves: ThreadResolves = NO_RESOLVES,
 ): AppStateSnapshot {
   const pullRequests = () =>
     new Map<number, RepositoryOverviewPullRequestAnswerView>(
@@ -531,19 +590,22 @@ export function pullRequestPartsAppState(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST],
       moves,
+      resolves,
       pullRequests,
     ),
     [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: laid(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS],
       moves,
+      resolves,
       checks,
     ),
     [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: laid(
       LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION],
       state[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION],
       moves,
-      () => CONVERSATIONS,
+      resolves,
+      () => resolvedConversations(resolves),
     ),
   };
 }

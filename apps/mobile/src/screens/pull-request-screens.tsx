@@ -4,6 +4,7 @@ import {
   type AgentOverviewPullRequest,
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
+  type ReviewThread,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { changesLine } from "@repo/features/changed-files";
@@ -41,6 +42,7 @@ import {
   queuedLabel,
   REVIEW_WORDS,
   reviewersOf,
+  THREAD_ACT_WORDS,
   threadLineSpan,
   threadStateWords,
   unresolvedThreadCount,
@@ -78,6 +80,8 @@ import {
   PATH_PART,
   PullRequestHead,
   REVIEW_LOOK,
+  ROW_ACTION_TONE,
+  type RowAction,
   RowList,
   Screen,
   STATUS_TONE,
@@ -529,6 +533,33 @@ function PullRequestPage({
       });
     });
 
+  // Note that a thread is resolved or opened again as the panel's thread does, by GitHub's id for it, on the member's own sign-in; one the read names no id for offers neither, and every act stands dimmed while a change is out, as the merge's does.
+  const threadActs = (thread: ReviewThread): readonly RowAction[] => {
+    const threadId = thread.id;
+
+    if (threadId === undefined) return [];
+
+    return [
+      thread.resolved
+        ? {
+            label: THREAD_ACT_WORDS.REOPEN,
+            symbol: GLYPH.RESTORE,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            disabled: writes.pending !== undefined,
+            onPress: () =>
+              void writes.write({ action: PULL_REQUEST_ACTION.UNRESOLVE_THREAD, threadId }),
+          }
+        : {
+            label: THREAD_ACT_WORDS.RESOLVE,
+            symbol: GLYPH.RESOLVED,
+            tone: ROW_ACTION_TONE.DONE,
+            disabled: writes.pending !== undefined,
+            onPress: () =>
+              void writes.write({ action: PULL_REQUEST_ACTION.RESOLVE_THREAD, threadId }),
+          },
+    ];
+  };
+
   const changes: readonly StateChange[] = (
     pullRequest === undefined ? [] : pullRequestStateActions(pullRequest.state, inQueue)
   ).map((action) => ({
@@ -864,6 +895,7 @@ function PullRequestPage({
                     open={opened.has(first.url)}
                     repository={agent?.repository}
                     onOpenLink={openLink}
+                    acts={threadActs(thread)}
                   />,
                 ];
               }),

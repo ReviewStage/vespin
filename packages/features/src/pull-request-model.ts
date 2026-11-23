@@ -430,6 +430,16 @@ export const THREAD_STATE_WORDS = {
   OUTDATED: "Outdated",
 } as const;
 
+/** What a member does on a review thread, in the panel's words: reply to it, and resolve it or open it again, each with its words while it is out. */
+export const THREAD_ACT_WORDS = {
+  REPLY: "Reply",
+  REPLYING: "Replying",
+  RESOLVE: "Resolve",
+  RESOLVING: "Resolving",
+  REOPEN: "Reopen",
+  REOPENING: "Reopening",
+} as const;
+
 /** A review thread's lines as its head names them, "L12" or "L12–14", where it stands now, or where it was made once a later push outdated it; none for a thread on the whole file. */
 export function threadLineSpan(
   thread: Pick<ReviewThread, "line" | "startLine" | "originalLine" | "originalStartLine">,

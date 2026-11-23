@@ -206,6 +206,8 @@ export {
   type PullRequestMoves,
   pullRequestMoveOf,
   pullRequestPartsAppState,
+  type ThreadResolves,
+  threadResolveOf,
 } from "./fixture-pull-requests.js";
 
 /**
