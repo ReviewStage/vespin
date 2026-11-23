@@ -16,6 +16,7 @@ import { managerGreeting } from "@repo/features/manager-greeting";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { GITHUB_WAKE, type GitHubWake } from "@repo/settings";
+import { agentRunsOnOf } from "../agent-tools.js";
 import { offers } from "../tool-catalog/catalog.js";
 import type { AgentStanding } from "../tool-catalog/gates.js";
 import { writtenMention } from "../written-mentions.js";
@@ -412,12 +413,10 @@ export function coderInstructions(
   return lines.join("\n");
 }
 
-/** Where a Manager runs, which the agents it starts run on too: the cloud, or the Mac it is pinned to. */
+/** What a Manager is told of itself: its name, and the repositories its tasks work in. */
 export interface ManagerPlace {
   /** The Manager's name as its tab shows it; none before it is named. */
   readonly name: string | null;
-  /** The Mac it runs on, by id; none for one in the cloud. */
-  readonly deviceId: string | null;
   /** The repositories it was made with, its checkout's first, which the tasks it makes work in. */
   readonly repositories: readonly string[];
 }
@@ -427,13 +426,6 @@ function managerRepositoryOf(repositories: readonly string[]): string {
   if (repositories.length === 0) return "in the right repository";
 
   return `with \`repository\` set to whichever of your repositories it works in: ${repositories.map((each) => `\`${each}\``).join(", ")}`;
-}
-
-/** The `runsOn` a Manager passes `start_agent`, its own machine's, written as the tool takes it. */
-function managerRunsOnOf(place: ManagerPlace): string {
-  return place.deviceId === null
-    ? JSON.stringify({ machine: AGENT_MACHINE.VERCEL })
-    : JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: place.deviceId });
 }
 
 /**
@@ -451,7 +443,7 @@ export function managerInstructions(place: ManagerPlace): string {
   return [
     `You are a Manager in this workspace. You manage its work as a real manager would, by delegating, triaging, and organizing; you do work yourself only when it is too small to be worth starting an agent for.`,
     `Your chat opens with this greeting, shown to people as your first message: "${managerGreeting(place.name)}" So don't introduce yourself again; answer what they ask, and from then on work on your own.`,
-    `To start work, first make a task with \`${AGENT_TOOL.CREATE_TASK}\`: named, assigned to whoever asked, ${managerRepositoryOf(place.repositories)}. Then start an agent on it with \`${AGENT_TOOL.START_AGENT}\`, with \`runsOn\` ${managerRunsOnOf(place)}, choosing its model and effort for the work (\`${AGENT_TOOL.LIST_MODELS}\`).`,
+    `To start work, first make a task with \`${AGENT_TOOL.CREATE_TASK}\`: named, assigned to whoever asked, ${managerRepositoryOf(place.repositories)}. Then start an agent on it with \`${AGENT_TOOL.START_AGENT}\`, choosing its model and effort for the work (\`${AGENT_TOOL.LIST_MODELS}\`); it runs where you run unless you name \`runsOn\`.`,
     `Lay work out as a good engineering manager would, with Linear's hygiene: split it into tasks, group related ones under a parent task (\`parentTaskId\`, \`subTaskIds\`), and name what must land first with \`blockedBy\`. Split work that can run in parallel across several agents rather than leaving it to one big agent doing everything. One task is one logical change, ideally one pull request; two changes never share a task, even related ones. Give each task a clear name, the right assignee, and a description of what is decided and what is not.`,
     `Open each brief with "You're an agent started by ${manager}, for <the person who asked>.", then a line of project context, what is known and what to read first, what is decided and what is not, and the agent's job and what to hand back to you with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
     `Relay what people tell you, in your chat or on a thread, to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
@@ -477,15 +469,6 @@ export interface OwnAgent {
   readonly id: string;
   readonly runsOn: AgentRunsOnRequest | null;
   readonly developer: OwnDeveloper;
-}
-
-/** Where the agent its row names runs, as `start_agent`'s `runsOn` names it. */
-function runsOnOf(agent: Agent): AgentRunsOnRequest | null {
-  if (agent.machine !== AGENT_MACHINE.DEVICE) return { machine: AGENT_MACHINE.VERCEL };
-
-  return agent.deviceId === null || agent.deviceId === undefined
-    ? null
-    : { machine: AGENT_MACHINE.DEVICE, deviceId: agent.deviceId };
 }
 
 /** What an agent's instructions are composed on beyond its row. */
@@ -543,7 +526,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
     ownTask,
     {
       id: agent.id,
-      runsOn: runsOnOf(agent),
+      runsOn: agentRunsOnOf(agent),
       developer: { userId: agent.userId, name: context.developerName },
     },
     context.standing,
@@ -566,5 +549,5 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
   const repositories =
     context.repositories ?? (agent.repository === null ? [] : [agent.repository]);
 
-  return `${coder}\n${managerInstructions({ name: agent.title, deviceId: agent.machine === AGENT_MACHINE.DEVICE ? (agent.deviceId ?? null) : null, repositories })}`;
+  return `${coder}\n${managerInstructions({ name: agent.title, repositories })}`;
 }

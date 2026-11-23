@@ -400,6 +400,12 @@ const START_FROM_MODE = {
   FORK: "fork",
 } as const;
 
+/** What a start naming neither taskId nor branch is told of the branch, beside the task, so one retry names both. */
+const START_BRANCH_MISSING_WORDS =
+  "And name the branch of its repository to clone the agent's checkout at as branch, such as " +
+  "the repository's default branch, which `gh api repos/<owner>/<name> --jq .default_branch` " +
+  "answers; every start on a task with a repository names it but one with from.";
+
 /** Why a start made nothing, in words the model can act on; a choice the catalog refused is said with the choices (`choiceRefusal`). */
 export const START_AGENT_REFUSAL = {
   UNREADABLE:
@@ -407,7 +413,7 @@ export const START_AGENT_REFUSAL = {
     `${AGENT_BOUNDS.MAX_START_WORDS_CHARS} characters, or none to start on the description, a note ` +
     `bounded the same or none, a title of at most ${AGENT_BOUNDS.MAX_TITLE_CHARS} ` +
     "characters or none, a branch as one git branch name, a model with its effort, " +
-    `both or, with from, neither, a taskId, a permissionMode of ${Object.values(AGENT_PERMISSION_MODE).join(", ")}, runsOn as ` +
+    `both or neither, a taskId, a permissionMode of ${Object.values(AGENT_PERMISSION_MODE).join(", ")}, runsOn as ` +
     `${IN_THE_CLOUD_WORDS} or a device of the member's by its name or its id, and images as ` +
     `at most ${AGENT_BOUNDS.MAX_ATTACHMENTS} attachment ids or none.`,
   NO_RUNS_ON:
@@ -433,6 +439,10 @@ export const START_AGENT_REFUSAL = {
     "Not started: name the task to start the agent on as taskId: your own is the taskId in your " +
     `instructions' own values, another the id ${AGENT_TOOL.LIST_TASKS} answered, and with from the ` +
     "task of the agent it starts from.",
+  NO_TASK_NOR_BRANCH:
+    "Not started: name the task to start the agent on as taskId: your own is the taskId in your " +
+    `instructions' own values, another the id ${AGENT_TOOL.LIST_TASKS} answered, and with from the ` +
+    `task of the agent it starts from. ${START_BRANCH_MISSING_WORDS}`,
   PROMPT_NEEDED:
     "Not started: give the agent a prompt carrying everything it needs to start on its work; " +
     "every start takes one but a start from another agent.",
@@ -442,6 +452,14 @@ export const START_AGENT_REFUSAL = {
   NO_OWN_TASK:
     "Not started: you work on no task, so name the task to start the agent on by its taskId; " +
     `${AGENT_TOOL.CREATE_TASK} makes one, and ${AGENT_TOOL.LIST_TASKS} names those that stand.`,
+  NO_OWN_TASK_NOR_BRANCH:
+    "Not started: you work on no task, so name the task to start the agent on by its taskId; " +
+    `${AGENT_TOOL.CREATE_TASK} makes one, and ${AGENT_TOOL.LIST_TASKS} names those that stand. ` +
+    START_BRANCH_MISSING_WORDS,
+  CALLER_PLACE_GONE:
+    "Not started: the device or machine you run on is gone, so there is no place of yours to " +
+    `run it; name runsOn: ${IN_THE_CLOUD_WORDS} for the cloud, or a device or machine as ` +
+    `${AGENT_TOOL.LIST_MACHINES} lists it, with the runsOn to pass.`,
   NEW_TASK:
     `Not started: start_agent takes no newTask; make the task with ${AGENT_TOOL.CREATE_TASK}, then ` +
     "start the agent on it by its taskId.",
@@ -859,6 +877,102 @@ function wordsOf(on: Pick<ExperimentsOn, "descriptionsOn">): "on" | "off" {
   return on.descriptionsOn ? "on" : "off";
 }
 
+/** Where a start runs, as `start_agent`'s runsOn says it, before what leaving it out means. */
+const START_RUNS_ON_WORDS =
+  `Where the agent runs: ${IN_THE_CLOUD_WORDS} for the cloud, ` +
+  `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, device: "<name>" })} for one of the ` +
+  "member's own devices (a Mac or a host) by its name, or " +
+  `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id, or ` +
+  `${JSON.stringify({ machine: AGENT_MACHINE.WORKSPACE, name: "<name>" })} for one of the ` +
+  "workspace's own machines, which run every member's agents, each in its own VM, by its " +
+  `name, or ${JSON.stringify({ machine: AGENT_MACHINE.WORKSPACE, deviceId: "<id>" })} by ` +
+  "its id; it must be online, and a name matching none of those machines, or several, is " +
+  "refused with them listed. " +
+  `${AGENT_TOOL.LIST_MACHINES} lists each place with the runsOn to pass. `;
+
+/** How a start's permissionMode answers its tool calls, before what leaving it out means. */
+const START_MODE_WORDS =
+  `How the agent's tool calls are answered: ${AGENT_PERMISSION_MODE.FULL_ACCESS} runs every ` +
+  `one unasked, ${AGENT_PERMISSION_MODE.ASK} asks a member before a file edit or a shell ` +
+  `command, and ${AGENT_PERMISSION_MODE.AUTO} leaves each to the harness's own review, ` +
+  "which asks where it cannot decide. A Cursor model takes " +
+  `${AGENT_PERMISSION_MODE.AUTO} or ${AGENT_PERMISSION_MODE.FULL_ACCESS}, and another mode ` +
+  "on it is refused. ";
+
+const START_MODEL_WORDS =
+  "The model to run on, by its catalog id (such as anthropic/claude-opus-5.5), as " +
+  `${AGENT_TOOL.LIST_MODELS} lists it. `;
+
+/**
+ * A start's model, effort, permissionMode, and runsOn, in two forms: as a
+ * coding agent names them, where leaving one out means the calling agent's
+ * own, which its instructions name; and as a member names them through the
+ * member MCP, who is no agent and so names each.
+ */
+const START_CHOICE_FIELDS = {
+  inherited: {
+    model: Schema.optionalKey(
+      describeWire(
+        modelChoiceSchema.fields.model,
+        START_MODEL_WORDS +
+          "Leave it and effort out to run on your own model and effort, or with from on the " +
+          "model of the agent it starts from.",
+      ),
+    ),
+    effort: Schema.optionalKey(
+      describeWire(
+        modelChoiceSchema.fields.effort,
+        "The reasoning effort, as the model lists it (such as high); given with the model or not at all.",
+      ),
+    ),
+    permissionMode: Schema.optionalKey(
+      describeWire(
+        agentPermissionModeSchema,
+        START_MODE_WORDS + "Leave it out to run on your own permission mode, with from too.",
+      ),
+    ),
+    runsOn: Schema.optionalKey(
+      describeWire(
+        START_RUNS_ON,
+        START_RUNS_ON_WORDS +
+          "Leave it out to run where you run, the runsOn your instructions' own values name, " +
+          "or with from where the agent it starts from runs; naming another place moves it there.",
+      ),
+    ),
+  },
+  named: {
+    model: Schema.optionalKey(
+      describeWire(
+        modelChoiceSchema.fields.model,
+        START_MODEL_WORDS +
+          "Every start names it but one with from, which runs on the model of the agent it " +
+          "starts from unless it names another.",
+      ),
+    ),
+    effort: Schema.optionalKey(
+      describeWire(
+        modelChoiceSchema.fields.effort,
+        "The reasoning effort, as the model lists it (such as high); given with the model or not at all.",
+      ),
+    ),
+    permissionMode: describeWire(
+      agentPermissionModeSchema,
+      START_MODE_WORDS + "Every start names it, one with from included.",
+    ),
+    runsOn: Schema.optionalKey(
+      describeWire(
+        START_RUNS_ON,
+        START_RUNS_ON_WORDS +
+          "Every start names it but one with from, which runs where the agent it starts from " +
+          "runs unless it names another place, which moves it there.",
+      ),
+    ),
+  },
+} as const;
+
+/** The model, effort, permissionMode, and runsOn of a member's start, who is no agent and names each. */
+export const MEMBER_START_CHOICE_FIELDS = START_CHOICE_FIELDS.named;
+
 /** `start_agent`'s input in the words of the workspace's experiments. */
 function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return Schema.Struct({
@@ -896,46 +1010,7 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
           "from another agent.",
       ),
     ),
-    model: Schema.optionalKey(
-      describeWire(
-        modelChoiceSchema.fields.model,
-        "The model to run on, by its catalog id (such as anthropic/claude-opus-5.5), as " +
-          `${AGENT_TOOL.LIST_MODELS} lists it. Every start names it but one with from, which runs on ` +
-          "the model of the agent it starts from unless it names another.",
-      ),
-    ),
-    effort: Schema.optionalKey(
-      describeWire(
-        modelChoiceSchema.fields.effort,
-        "The reasoning effort, as the model lists it (such as high); given with the model or not at all.",
-      ),
-    ),
-    permissionMode: describeWire(
-      agentPermissionModeSchema,
-      `How the agent's tool calls are answered: ${AGENT_PERMISSION_MODE.FULL_ACCESS} runs every ` +
-        `one unasked, ${AGENT_PERMISSION_MODE.ASK} asks a member before a file edit or a shell ` +
-        `command, and ${AGENT_PERMISSION_MODE.AUTO} leaves each to the harness's own review, ` +
-        "which asks where it cannot decide. A Cursor model takes " +
-        `${AGENT_PERMISSION_MODE.AUTO} or ${AGENT_PERMISSION_MODE.FULL_ACCESS}, and another mode ` +
-        "on it is refused. Every start names it, one with from included.",
-    ),
-    runsOn: Schema.optionalKey(
-      describeWire(
-        START_RUNS_ON,
-        `Where the agent runs: ${IN_THE_CLOUD_WORDS} for the cloud, ` +
-          `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, device: "<name>" })} for one of the ` +
-          "member's own devices (a Mac or a host) by its name, or " +
-          `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id, or ` +
-          `${JSON.stringify({ machine: AGENT_MACHINE.WORKSPACE, name: "<name>" })} for one of the ` +
-          "workspace's own machines, which run every member's agents, each in its own VM, by its " +
-          `name, or ${JSON.stringify({ machine: AGENT_MACHINE.WORKSPACE, deviceId: "<id>" })} by ` +
-          "its id; it must be online, and a name matching none of those machines, or several, is " +
-          "refused with them listed. " +
-          `${AGENT_TOOL.LIST_MACHINES} lists each place with the runsOn to pass. Every start names it ` +
-          "but one with from, which runs where the agent it starts from runs unless it names another " +
-          "place, which moves it there.",
-      ),
-    ),
+    ...START_CHOICE_FIELDS.inherited,
     from: Schema.optionalKey(
       describeWire(
         START_FROM,
@@ -1033,14 +1108,13 @@ const UPDATE_TASK_CALL = Schema.Struct({
 const readTaskUpdate = Schema.decodeUnknownResult(UPDATE_TASK_CALL);
 
 /**
- * A start as a call carries it: the coding agent's input, its taskId and
- * permissionMode read even where they are missing, so a session still offered the tool's earlier
+ * A start as a call carries it: the coding agent's input, its taskId read
+ * even where it is missing, so a session still offered the tool's earlier
  * words, which let it out, is refused with what to name.
  */
 const START_AGENT_CALL = Schema.Struct({
   ...START_AGENT_INPUT.fields,
   taskId: Schema.optionalKey(START_AGENT_INPUT.fields.taskId),
-  permissionMode: Schema.optionalKey(START_AGENT_INPUT.fields.permissionMode),
 });
 
 /** The keys earlier words of the tool taught, each refused with the one it meant: the prompt once named `task`, and the `newTask` a start named before `create_task` made tasks. */
@@ -1145,6 +1219,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     `work that should stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. ` +
     "This one call carries everything the agent is told as it starts, and it sets to work at once, " +
     "so never follow it with a message to the agent unless there is something new to say. " +
+    "It answers the agent's model, effort, permissionMode, and runsOn, whether named or your own. " +
     "The agent messages you when it finishes or needs you. " +
     `A rejected model or effort lists the choices, which ${AGENT_TOOL.LIST_MODELS} lists beforehand. ` +
     "With from, it starts from another agent instead: it continues an agent (or worker) that failed, " +
@@ -1168,7 +1243,7 @@ export const LIST_MODELS_TOOL = {
     "api_key, both, or none where nothing does), which a start never picks between, since each " +
     "turn of a cloud agent takes the first with room; " +
     "and the member's default, with the window it runs on, which the app's own Starts run on; " +
-    `a ${AGENT_TOOL.START_AGENT} call names its own model and effort. ` +
+    `a ${AGENT_TOOL.START_AGENT} call that leaves model and effort out runs on your own, never on it. ` +
     "Call it before you name a model, an effort, or a context window, such as one the developer " +
     `named in their own words. Name an agentId to list instead what that agent may move to with ` +
     `${AGENT_TOOL.UPDATE_AGENT}: an agent on Claude Code runs Claude models alone, and one on ` +
@@ -1780,9 +1855,23 @@ export function choiceRefusal(
       ? "the model of the agent it starts from is no longer offered, so name model and effort"
       : `no offered model is ${choice.model} at effort ${choice.effort}`;
 
+  return `${lead}: ${refused}. ${offeredChoicesWords(offered)}`;
+}
+
+/** Why a start that left model and effort out was refused the caller's own: no longer offered to its starter, so it names one. */
+function ownChoiceRefusal(choice: ModelChoice, offered: readonly OfferedModel[]): string {
+  return (
+    `Not started: your own model, ${choice.model} at effort ${choice.effort}, which a start ` +
+    "leaving model and effort out runs on, is not offered for this start, so name model and " +
+    `effort. ${offeredChoicesWords(offered)}`
+  );
+}
+
+/** The models and efforts a choice may name, as a refusal lists them. */
+function offeredChoicesWords(offered: readonly OfferedModel[]): string {
   const choices = offered.map((model) => `${model.id} (${model.efforts.join(", ")})`).join("; ");
 
-  return `${lead}: ${refused}. The choices are: ${choices}.`;
+  return `The choices are: ${choices}.`;
 }
 
 /** How a coding agent names itself to another: its title, its id to answer it by, and its repository where it has one. */
@@ -1842,6 +1931,8 @@ const startedReading = (agent: Agent, offered: readonly OfferedModel[], ownTask:
       model: agent.model,
       modelName: modelLabel(agent.model, offered),
       effort: agent.effort,
+      permissionMode: agent.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS,
+      runsOn: agentRunsOnOf(agent),
       status: standing(agent).status,
       onYourTask: agent.taskId === ownTask,
     };
@@ -2413,6 +2504,7 @@ function forwarderOf(caller: AgentCaller): ImageForwarder {
 function startModeRefusal(
   model: string | undefined,
   mode: AgentPermissionMode,
+  own: boolean,
 ): string | undefined {
   const provider = model === undefined ? undefined : providerOf(model);
 
@@ -2420,11 +2512,29 @@ function startModeRefusal(
   const runtime = runtimeOfProvider(provider);
 
   if (runtimeTakesMode(runtime, mode)) return undefined;
+  const named = own ? `${mode}, your own, which a start leaving permissionMode out runs on` : mode;
 
   return (
     `Not started: ${model} runs on ${harnessNameOf(provider)}, which takes the permissionMode ` +
-    `${modesOf(runtime).join(" or ")}, not ${mode}. Name one of those, or start it on another model.`
+    `${modesOf(runtime).join(" or ")}, not ${named}. Name one of those, or start it on another model.`
   );
+}
+
+/**
+ * Where the agent its row names runs, as `start_agent`'s runsOn names it: the
+ * cloud, its starter's device, or its workspace's machine, each by its id;
+ * none for one on a device or machine whose row is gone.
+ */
+export function agentRunsOnOf(
+  agent: Pick<Agent, "machine" | "deviceId">,
+): AgentRunsOnRequest | null {
+  const machine = agent.machine ?? AGENT_MACHINE.VERCEL;
+
+  if (machine === AGENT_MACHINE.VERCEL) return { machine };
+
+  return agent.deviceId === null || agent.deviceId === undefined
+    ? null
+    : { machine, deviceId: agent.deviceId };
 }
 
 /** The task a start names by its id or key, read in the caller's workspace; or why it names none there. */
@@ -2460,6 +2570,64 @@ function startInputRefusal(
   return self && from.mode === START_FROM_MODE.CONTINUE
     ? START_AGENT_REFUSAL.SELF_CONTINUE
     : undefined;
+}
+
+/** What a start runs on: the model, mode, and place it names, or, left out, what it runs on instead. */
+interface StartValues {
+  readonly choice: ModelChoice | undefined;
+  readonly permissionMode: AgentPermissionMode;
+  readonly runsOn: typeof START_RUNS_ON.Type | undefined;
+}
+
+/**
+ * The model and effort, permissionMode, and runsOn a start runs on, or why
+ * it is refused. A coding agent's start that leaves one out runs on the
+ * caller's own, which its instructions name, so the call never guesses:
+ * its model and effort (left out together), its permission mode, and where
+ * it runs; but a start from another agent runs on that agent's model and
+ * where it runs, as the start reads them later, and takes only the mode.
+ * The caller's place is refused where its device or machine is gone. A
+ * member, who is no agent and has nothing of their own to run on, names
+ * each one but what a start from another agent takes from it.
+ */
+function startValuesOf(
+  calling: Agent | undefined,
+  asked: typeof START_AGENT_CALL.Type,
+  fromAgent: boolean,
+): Result.Result<StartValues, string> {
+  const named =
+    asked.model !== undefined && asked.effort !== undefined
+      ? { model: asked.model, effort: asked.effort }
+      : undefined;
+
+  if (calling === undefined) {
+    if (!fromAgent && named === undefined) return Result.fail(START_AGENT_REFUSAL.NO_MODEL);
+
+    if (asked.permissionMode === undefined) {
+      return Result.fail(START_AGENT_REFUSAL.NO_PERMISSION_MODE);
+    }
+
+    if (!fromAgent && asked.runsOn === undefined) {
+      return Result.fail(START_AGENT_REFUSAL.NO_RUNS_ON);
+    }
+
+    return Result.succeed({
+      choice: named,
+      permissionMode: asked.permissionMode,
+      runsOn: asked.runsOn,
+    });
+  }
+
+  const ownPlace = asked.runsOn !== undefined || fromAgent ? undefined : agentRunsOnOf(calling);
+
+  if (ownPlace === null) return Result.fail(START_AGENT_REFUSAL.CALLER_PLACE_GONE);
+
+  return Result.succeed({
+    choice: named ?? (fromAgent ? undefined : { model: calling.model, effort: calling.effort }),
+    permissionMode:
+      asked.permissionMode ?? calling.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS,
+    runsOn: asked.runsOn ?? ownPlace,
+  });
 }
 
 /**
@@ -2521,14 +2689,13 @@ const runsOnOfStart = Effect.fnUntraced(function* (
  * why nothing was started. A call naming no taskId, as the tool's earlier
  * words let it, is refused with what to name rather than started on the
  * caller's own task, and one naming a key the tool's earlier words taught
- * is refused with the key it meant (`RETIRED_START_KEYS`). A call naming no
- * runsOn is refused with the places to name, rather than run where the
- * member's newest agent or last pick runs, unless it starts from another
- * agent, which runs where that agent runs. Likewise a call naming no model
- * and effort is refused rather than run on the member's default, unless it
- * starts from another agent, which runs on that agent's model; and every
- * call names its permission mode, which is refused for a model whose
- * harness does not take it rather than run on full access. Note that a
+ * is refused with the key it meant (`RETIRED_START_KEYS`); one naming
+ * neither taskId nor branch is refused naming both, so one retry names
+ * them. A model and effort, a permission mode, or a runsOn the call leaves
+ * out is the calling agent's own (`startValuesOf`), never the member's
+ * default, newest agent, or last pick, and is checked as one named is: a
+ * model no longer offered, or a mode the model's harness does not take, is
+ * refused naming the field to pass, never run on full access. Note that a
  * start from another agent can take tens of seconds, a copy of its work and
  * a summary of its transcript among them, which the call is let run: our
  * MCP server's function runs a tool to the function's own bound, and the
@@ -2559,36 +2726,37 @@ export function runStartAgent(
     return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.UNREADABLE));
   }
 
-  const { model, effort, taskId: taskRef, permissionMode } = asked.success;
+  const { taskId: taskRef } = asked.success;
   const from = startFromOf(asked.success.from);
+  const calling = callerAgent(call.caller);
 
-  // Note that a coding agent on no task has no taskId of its own to name, so it is told to make one.
+  // Note that a coding agent on no task has no taskId of its own to name, so it is told to make one; a branch it left out as well is named in the same refusal.
   if (taskRef === undefined) {
-    const taskless = callerAgent(call.caller) !== undefined && callerTask(call.caller) === null;
+    const taskless = calling !== undefined && callerTask(call.caller) === null;
+    const branchless = from === undefined && asked.success.branch === undefined;
 
     return Effect.succeed(
-      agentToolRejected(taskless ? START_AGENT_REFUSAL.NO_OWN_TASK : START_AGENT_REFUSAL.NO_TASK),
+      agentToolRejected(
+        taskless
+          ? branchless
+            ? START_AGENT_REFUSAL.NO_OWN_TASK_NOR_BRANCH
+            : START_AGENT_REFUSAL.NO_OWN_TASK
+          : branchless
+            ? START_AGENT_REFUSAL.NO_TASK_NOR_BRANCH
+            : START_AGENT_REFUSAL.NO_TASK,
+      ),
     );
   }
 
-  if (from === undefined && model === undefined) {
-    return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_MODEL));
-  }
+  const values = startValuesOf(calling, asked.success, from !== undefined);
 
-  if (permissionMode === undefined) {
-    return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_PERMISSION_MODE));
-  }
-
-  if (from === undefined && asked.success.runsOn === undefined) {
-    return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_RUNS_ON));
-  }
-
+  if (Result.isFailure(values)) return Effect.succeed(agentToolRejected(values.failure));
+  const { choice, permissionMode, runsOn: runsOnAsked } = values.success;
   const { caller, agentSessions } = call;
   const refused = startInputRefusal(caller, asked.success);
 
   if (refused !== undefined) return Effect.succeed(agentToolRejected(refused));
   const { prompt } = asked.success;
-  const choice = model !== undefined && effort !== undefined ? { model, effort } : undefined;
   const ownTask = callerTask(caller);
   const userId = callerUserId(caller);
 
@@ -2640,7 +2808,11 @@ export function runStartAgent(
       }
 
       // A mode the model's harness does not take is refused, never run on full access in its place.
-      const modeRefused = startModeRefusal(model ?? landing?.success.model, permissionMode);
+      const modeRefused = startModeRefusal(
+        choice?.model ?? landing?.success.model,
+        permissionMode,
+        asked.success.permissionMode === undefined,
+      );
 
       if (modeRefused !== undefined) return agentToolRejected(modeRefused);
 
@@ -2663,12 +2835,11 @@ export function runStartAgent(
         return agentToolRejected(`Not started: ${forwardedImageRefusalWords(images.failure)}`);
       }
 
-      const runsOn = yield* runsOnOfStart(userId, callerWorkspaceId(caller), asked.success.runsOn);
+      const runsOn = yield* runsOnOfStart(userId, callerWorkspaceId(caller), runsOnAsked);
 
       if (Result.isFailure(runsOn)) return agentToolRejected(runsOn.failure);
       const place: StartWhere = landing?.success.place ?? { taskId };
       // An agent a coding agent starts hears who started it, and that it reports back to it by message; one a member starts hears their note as the developer's.
-      const calling = callerAgent(caller);
 
       const note =
         calling === undefined ? asked.success.note : startedByNote(calling, asked.success.note);
@@ -2705,7 +2876,11 @@ export function runStartAgent(
 
         if (refusal instanceof ModelChoiceRefused) {
           // The choices are the models the start was checked against, so no second read can lose them.
-          return agentToolRejected(choiceRefusal(choice, refusal.offered));
+          return agentToolRejected(
+            asked.success.model === undefined && choice !== undefined
+              ? ownChoiceRefusal(choice, refusal.offered)
+              : choiceRefusal(choice, refusal.offered),
+          );
         }
 
         return agentToolRejected(startFromRefusalWords(refusal, from));
