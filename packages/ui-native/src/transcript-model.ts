@@ -27,7 +27,9 @@ import {
   type AgentPart,
   type AgentPartCut,
   agentRows,
+  type ComputerApps,
   CUT_PART_WORDS,
+  computerAppsOf,
   cutPartText,
   messageWords,
   placedMessages,
@@ -244,6 +246,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly callKind: CallKind;
       /** For a call of an integration's tool, the integration, whose mark leads its row in its kind's glyph's place. */
       readonly provider: IntegrationProvider | undefined;
+      /** For a call on an app on the reader's Mac, the picture its app's icon was kept as, which leads its row in its kind's glyph's place once read; none where no call on its app kept one. */
+      readonly appIcon: string | undefined;
       readonly line: CallLine;
       /** What the call made or is about, named after the line's verb as the panel's chip names it. */
       readonly chip: string | undefined;
@@ -328,6 +332,9 @@ export interface TranscriptReading {
   /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
   readonly waitingCalls?: ReadonlySet<string> | undefined;
 }
+
+/** What the items are read with: the page's reading, and the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`). */
+type ItemsReading = TranscriptReading & { readonly computerApps: ComputerApps };
 
 /** What an automation is called where it can't be named: by the panel's words (`namedAutomationActor`). */
 const ORIGIN_WORDS = {
@@ -779,7 +786,7 @@ function wholeRead(
 function callItems(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
   base: ItemBase,
-  reading: TranscriptReading,
+  reading: ItemsReading,
 ): readonly TranscriptItem[] {
   const { toggles } = reading;
   const shownSet = showedPictures(part);
@@ -859,6 +866,8 @@ function callItems(
     callId: part.callId,
     callKind: view.kind,
     provider: view.provider,
+    // Note that a computer call that kept no icon wears the one an earlier call on its app kept, as the panel's row does (`useComputerIcon`).
+    appIcon: view.appIcon ?? reading.computerApps.byCall.get(part.callId)?.icon,
     ...callNaming(view),
     thread: calledThread(part),
     // Note that the row leads with the integration's mark, so it names only what the mark does not: the account among several, or a server of no integration's.
@@ -907,7 +916,7 @@ function callItems(
 function partItems(
   part: AgentPart,
   base: ItemBase,
-  reading: TranscriptReading,
+  reading: ItemsReading,
 ): readonly TranscriptItem[] {
   switch (part.kind) {
     case AGENT_PART.TEXT:
@@ -928,7 +937,7 @@ function rowItems(
   rows: readonly TurnRow<AgentPart>[],
   message: string,
   depth: number,
-  reading: TranscriptReading,
+  reading: ItemsReading,
 ): readonly TranscriptItem[] {
   return rows.flatMap((row): readonly TranscriptItem[] => {
     const base = {
@@ -1051,6 +1060,7 @@ export function transcriptItems(
   // A turn a call's delegation opened folds its written words with its work, as the panel's does.
   const delegated = delegatedTurnsOf(placed);
   const { origin } = reading;
+  const read: ItemsReading = { ...reading, computerApps: computerAppsOf(messages) };
 
   // Note that an automation's prompt is the first line anyone sent, which the run's card stands in place of.
   const head =
@@ -1081,7 +1091,7 @@ export function transcriptItems(
 
     const turn = turnStretches(rows).flatMap((stretch) =>
       stretch.line === undefined
-        ? rowItems(stretch.rows, message.id, 0, reading)
+        ? rowItems(stretch.rows, message.id, 0, read)
         : [
             saidItem(
               stretch.line,
@@ -1203,8 +1213,13 @@ export function shownMediaIds(items: readonly TranscriptItem[]): readonly string
   return items.flatMap((item) => {
     if (item.kind === TRANSCRIPT_ITEM.MEDIA) return item.media.map(({ id }) => id);
 
-    // Note that what an open call's body holds is read as it opens, so a turn of many windows reads only the ones opened.
-    if (item.kind === TRANSCRIPT_ITEM.CALL) return item.answered.map(({ id }) => id);
+    // Note that an app's icon is read wherever its call's row stands, and what an open call's body holds as it opens, so a turn of many windows reads only the ones opened.
+    if (item.kind === TRANSCRIPT_ITEM.CALL) {
+      return [
+        ...(item.appIcon === undefined ? [] : [item.appIcon]),
+        ...item.answered.map(({ id }) => id),
+      ];
+    }
 
     // Note that a picture a sent line kept by its id is read as the agent's shown ones are, through the same door.
     if (item.kind === TRANSCRIPT_ITEM.SAID) {
