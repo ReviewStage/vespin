@@ -39,8 +39,10 @@ import {
   askToChoose,
   type CaretAtWord,
   type DocumentFieldHandle,
+  type DocumentFieldOpening,
   type DocumentPageMentions,
   NOTICE_KIND,
+  OPENS_AT_START,
   useFailureNotices,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -60,6 +62,16 @@ import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 /** How long typing rests before the words save, as the panel's editor waits (`SAVE_PAUSE`). */
 const SAVE_PAUSE_MS = 1_000;
 
+/**
+ * The longest description edited in place, in characters. Note that a field
+ * grown to its words in the page's list lays all of them out, measured on the
+ * iPhone 18 Pro simulator at about a millisecond for every thousand
+ * characters on each key (195 ms at 179,002), so past this a key would
+ * lag a frame or more, and a longer description opens in the sheet, which
+ * lays out only the words in sight.
+ */
+export const INLINE_EDIT_MOST_CHARS = 30_000;
+
 /** Where a press on the words as read landed: where its block starts in the Markdown, and how far in from the block's start. */
 export interface PressedAt {
   readonly at: number;
@@ -76,6 +88,8 @@ export interface InlineDescription {
   /** Saves what is typed and leaves the field once the service holds it. */
   readonly done: () => void;
   readonly field: RefObject<DocumentFieldHandle | null>;
+  /** Where the field takes the keyboard as it comes to stand: where the press landed, or the words' start. */
+  readonly opensAt: DocumentFieldOpening | undefined;
   readonly draft: string;
   readonly onChange: (words: string) => void;
   /** Whether the field takes keys: not while a save it waits on is out. */
@@ -101,7 +115,7 @@ export function useInlineDescription(
   // The editor as it stands now, read by a save's answer, a choice's press and a pause's timer, which land after the render that set them.
   const live = useRef(editor);
   const field = useRef<DocumentFieldHandle | null>(null);
-  const pressed = useRef<PressedAt | undefined>(undefined);
+  const [opening, setOpening] = useState<DocumentFieldOpening | undefined>(undefined);
   const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
   // Whether the page still stands, so a Try again after it went sends nothing it no longer holds.
   const standing = useRef(true);
@@ -254,19 +268,10 @@ export function useInlineDescription(
     };
   }, []);
 
-  // Note that a press kept as the field came to stand is laid once it has, the caret where the press landed.
-  useEffect(() => {
-    if (!editing) return;
-    const at = pressed.current;
-    pressed.current = undefined;
-
-    if (at === undefined) field.current?.focus();
-    else field.current?.focusAt(at.at, at.x, at.y);
-  }, [editing]);
-
   const start = (at?: PressedAt) => {
     if (editing) return;
-    pressed.current = at;
+    // Note that the field takes the keyboard itself once it stands, where the press landed, so nothing here waits on it.
+    setOpening(at ?? OPENS_AT_START);
     // Note that the field opens on the words as the page last read them, the base its saves are laid against.
     update(editorOpened(body));
     setEditing(true);
@@ -286,6 +291,7 @@ export function useInlineDescription(
     start,
     done,
     field,
+    opensAt: opening,
     draft: editor.draft,
     onChange: (words) => update(editorTyped(live.current, words)),
     editable: editor.sending === undefined || !editor.closing,

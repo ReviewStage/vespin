@@ -223,7 +223,11 @@ import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { useDescriptionRead } from "../tasks/use-description-read.js";
 import { useFollowWrite } from "../tasks/use-following.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
-import { type InlineDescription, useInlineDescription } from "../tasks/use-inline-description.js";
+import {
+  INLINE_EDIT_MOST_CHARS,
+  type InlineDescription,
+  useInlineDescription,
+} from "../tasks/use-inline-description.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
@@ -3052,11 +3056,17 @@ function OverviewPage({
   const threads = useTaskComments(descriptions ? task.id : undefined);
   const editDoor = useEditDescriptionDoor(task.workspaceId);
 
-  // Note that Edit, and a press on the words, edit the description in place, as the desktop's and Notion's are edited; the door only says whether it may be.
+  // Note that Edit, and a press on the words, edit the description in place, as the desktop's and Notion's are edited, but for a description too long to lay out whole on each key, which Edit opens in the sheet; the door says whether it may be edited at all.
+  const inPlace = (document?.description.body.length ?? 0) <= INLINE_EDIT_MOST_CHARS;
+
   const edit: SectionEdit | undefined =
     editDoor === undefined
       ? undefined
-      : { label: WORDS.EDIT, heard: WORDS.EDIT_DESCRIPTION, onPress: () => inline.start() };
+      : {
+          label: WORDS.EDIT,
+          heard: WORDS.EDIT_DESCRIPTION,
+          onPress: () => (inPlace ? inline.start() : editDoor(task)),
+        };
 
   const related = new Set(overview.tasks.map((each) => each.id));
   // Note that an archived agent's row opens its page too, where its transcript is read and it is brought back.
@@ -3097,6 +3107,7 @@ function OverviewPage({
               editable={inline.editable}
               onAtWord={inline.onAtWord}
               fitsWords
+              opensAt={inline.opensAt}
               testID={DESCRIPTION_FIELD_ID}
             />
           </FieldRow>
@@ -3118,7 +3129,9 @@ function OverviewPage({
           overview={overview}
           body={document.description.body}
           edit={edit}
-          onPressBlock={edit === undefined ? undefined : (at, x, y) => inline.start({ at, x, y })}
+          onPressBlock={
+            edit === undefined || !inPlace ? undefined : (at, x, y) => inline.start({ at, x, y })
+          }
         />
       )}
       {described && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
@@ -3448,8 +3461,13 @@ export function TaskScreen() {
     overview?.document?.description.body ?? "",
   );
 
-  // Note that the menu's Edit description edits it in place too, the caret at its start.
-  const editDescription = editDoor === undefined ? undefined : () => inline.start();
+  // Note that the menu's Edit description edits it in place too, the caret at its start, but for a description too long to, which it opens in the sheet.
+  const inPlace = (overview?.document?.description.body.length ?? 0) <= INLINE_EDIT_MOST_CHARS;
+
+  const editDescription =
+    editDoor === undefined
+      ? undefined
+      : (task: TaskSummary) => (inPlace ? inline.start() : editDoor(task));
 
   const menu =
     overview === undefined

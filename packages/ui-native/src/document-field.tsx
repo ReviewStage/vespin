@@ -140,9 +140,15 @@ export interface DocumentFieldHandle {
   readonly focus: () => void;
   readonly blur: () => void;
   readonly flush: () => void;
-  /** Takes the keyboard with the caret where a press on the words as read landed: in the block that starts at `at` in the Markdown, `x` and `y` points in from its start. */
-  readonly focusAt: (at: number, x: number, y: number) => void;
 }
+
+/** Where a field opens its caret as it comes to stand: where a press on the words as read landed, in the block that starts at `at` in the Markdown, `x` and `y` points in from its start; or at the words' start. */
+export type DocumentFieldOpening =
+  | { readonly at: number; readonly x: number; readonly y: number }
+  | typeof OPENS_AT_START;
+
+/** A field that opens with its caret at the words' start. */
+export const OPENS_AT_START = "start";
 
 interface DocumentFieldProps {
   readonly ref?: Ref<DocumentFieldHandle> | undefined;
@@ -161,6 +167,8 @@ interface DocumentFieldProps {
   readonly testID?: string | undefined;
   /** Whether the field grows to its words inside the page that holds it, as a description edited in place stands in its task's list, rather than scrolling them itself. */
   readonly fitsWords?: boolean | undefined;
+  /** Where the field takes the keyboard with its caret once it stands, read as it mounts; none leaves the keyboard alone. */
+  readonly opensAt?: DocumentFieldOpening | undefined;
 }
 
 /** What the field last told: the Markdown it wrote, the Markdown that was written against, and its lines as the blocks it wrote read them. */
@@ -308,16 +316,15 @@ export function DocumentField({
   style,
   testID,
   fitsWords = false,
+  opensAt,
 }: DocumentFieldProps) {
   const colors = useColors();
   const native = useRef<NativeDocumentFieldDoors>(null);
   // The height the words ask for while the field grows to them, none until the field first tells it.
   const [height, setHeight] = useState<number | undefined>(undefined);
 
-  // Where a press on the words as read landed, kept until the field stands to lay the caret there.
-  const pressedAt = useRef<
-    { readonly at: number; readonly x: number; readonly y: number } | undefined
-  >(undefined);
+  // Whether the field has taken the keyboard where it opens, which it does once.
+  const opened = useRef(false);
 
   // How many changes the field has told, which the lines handed it say were heard, so it never sets back words typed since.
   const [seen, setSeen] = useState(0);
@@ -430,28 +437,27 @@ export function DocumentField({
   // Note that the frame's write reads the newest render's Markdown and blocks, which a render between the key and the frame may have handed.
   const latest = useRef(write);
 
-  // Lays the caret where a press landed, on the first line the pressed block of the document as read became, once the field stands.
-  const place = () => {
-    const pressed = pressedAt.current;
-
-    if (pressed === undefined || !ready || native.current === null) return;
-    pressedAt.current = undefined;
-    const block = blockAt(read, base, pressed.at);
-    const line = handed.value.lines.findIndex((each) => each.from === block);
-    void native.current.focusAt(Math.max(0, line), pressed.x, pressed.y);
-  };
-
-  const placeCaret = useRef(place);
-
   useEffect(() => {
     latest.current = write;
-    placeCaret.current = place;
   });
 
-  // Note that a press kept while the read-only head stood is laid once the field has taken its words.
+  // Note that the field takes the keyboard where it opens once it stands with its words, on the first line the pressed block of the document as read became; the view lays it once it stands in a window, as a list builds a row in sight.
   useEffect(() => {
-    if (ready) placeCaret.current();
-  }, [ready]);
+    const doors = native.current;
+
+    if (!ready || doors === null || opened.current || opensAt === undefined) return;
+    opened.current = true;
+
+    if (opensAt === OPENS_AT_START) {
+      void doors.focus();
+
+      return;
+    }
+
+    const block = blockAt(read, base, opensAt.at);
+    const line = handed.value.lines.findIndex((each) => each.from === block);
+    void doors.focusAt(Math.max(0, line), opensAt.x, opensAt.y);
+  });
 
   const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {
     pending.current = { told: nativeEvent, base: handed.markdown };
@@ -473,11 +479,6 @@ export function DocumentField({
       },
       rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
       focus: () => void native.current?.focus(),
-      focusAt: (at, x, y) => {
-        // Note that a press that lands before the field stands is kept, and laid once it does.
-        pressedAt.current = { at, x, y };
-        placeCaret.current();
-      },
       blur: () => void native.current?.blur(),
       flush: () => {
         if (frame.current !== undefined) cancelAnimationFrame(frame.current);

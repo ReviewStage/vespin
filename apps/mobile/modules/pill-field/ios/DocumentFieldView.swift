@@ -483,6 +483,8 @@ private enum DocumentSpace {
   static let cardPadding: CGFloat = 12
   /// How far above the keyboard the caret's line stands once the field scrolls it clear.
   static let caretClearance: CGFloat = 12
+  /// How much room above and below the caret's line a page holding a field grown to its words leaves as it scrolls the caret into sight.
+  static let caretReveal: CGFloat = 48
 }
 
 // MARK: - What a line draws besides its words
@@ -675,6 +677,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   /// The height last told while the field grows to its words.
   private var toldHeight: CGFloat?
 
+  /// A focus asked for before the field stood in a window, as a page's list builds its rows only once they come in sight, laid once it does.
+  private var focusWhenShown: (() -> Void)?
+
   /// The acts the field offers on its selection, in the edit menu and the bar over the keyboard; none for a field that offers none.
   var formats: FormatsRecord? {
     didSet { buildBar() }
@@ -838,11 +843,44 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   }
 
   func focus() {
+    guard window != nil else {
+      focusWhenShown = { [weak self] in self?.focus() }
+      return
+    }
+
     textView.becomeFirstResponder()
+    revealCaret()
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    guard window != nil else { return }
+    // Note that a height told before the field stood in a window may not have reached the page, so it is told again.
+    toldHeight = nil
+    setNeedsLayout()
+    guard let focus = focusWhenShown else { return }
+    focusWhenShown = nil
+    DispatchQueue.main.async(execute: focus)
+  }
+
+  /// Scrolls the page that holds a field grown to its words until the caret's line stands in sight, as a field that scrolls itself keeps its caret in sight.
+  private func revealCaret() {
+    guard fitsWords else { return }
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self, let page = self.holdingScrollView(), let end = self.textView.selectedTextRange?.end else { return }
+      let caret = self.textView.convert(self.textView.caretRect(for: end), to: page)
+      page.scrollRectToVisible(caret.insetBy(dx: 0, dy: -DocumentSpace.caretReveal), animated: true)
+    }
   }
 
   /// Takes the keyboard with the caret where a press on the words as read landed: on the line at `index`, `x` and `y` points in from its first line's start, as near as the words drawn here allow, else at the line's start.
   func focus(atLine index: Int, x: CGFloat, y: CGFloat) {
+    guard window != nil else {
+      focusWhenShown = { [weak self] in self?.focus(atLine: index, x: x, y: y) }
+      return
+    }
+
     layoutIfNeeded()
     let string = textView.textStorage.string as NSString
     var location = 0
@@ -861,6 +899,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let landed = textView.closestPosition(to: point) ?? start
     textView.becomeFirstResponder()
     textView.selectedRange = NSRange(location: textView.offset(from: textView.beginningOfDocument, to: landed), length: 0)
+    revealCaret()
   }
 
   func blur() {
