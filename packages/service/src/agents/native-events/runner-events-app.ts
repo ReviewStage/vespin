@@ -1,4 +1,9 @@
-import { RUNNER_END, RUNNER_EVENT, type RunnerEnd } from "@repo/agent-runner/protocol";
+import {
+  RUNNER_END,
+  RUNNER_EVENT,
+  RUNNER_EVENTS_MAX_BYTES,
+  type RunnerEnd,
+} from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { RUNNER_LOST_DETAIL, settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import {
@@ -183,8 +188,8 @@ import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
 /** The path a runner posts its events to. */
 export const RUNNER_EVENTS_PATH = "/api/agents/runner-events";
 
-/** The most a batch may hold: the runner's 256 events, a tool's whole answer among them, under the platform's own bound. */
-const MAX_BODY_BYTES = 4 * 1024 * 1024;
+/** The most a batch may hold, which the runner splits its batches to stay within. */
+const MAX_BODY_BYTES = RUNNER_EVENTS_MAX_BYTES;
 
 /** The bytes a token stands for in a step's estimate. */
 const BYTES_PER_TOKEN = 4;
