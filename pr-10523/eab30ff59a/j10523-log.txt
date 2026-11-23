@@ -1,0 +1,10 @@
+== bundle PJj10523 base eab30ff59a
+  built eab30ff59a base app Vmain10.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-accessibility-ax3: content_size accessibility-extra-large
+iphone-light-accessibility-ax3: fails 1 shots 6 Assert that ".*Signed in with GitHub.*" is visible... FAILED
+ipad27-light-accessibility-ax3: content_size accessibility-extra-large
+ipad27-light-accessibility-ax3: fails 1 shots 6 Assert that ".*Signed in with GitHub.*" is visible... FAILED
