@@ -107,6 +107,10 @@ public final class PillFieldModule: Module {
         view.fitsWords = fits ?? false
       }
 
+      Prop("opening") { (view: DocumentFieldView, opening: OpeningRecord?) in
+        view.open(opening)
+      }
+
       AsyncFunction("setLink") { (view: DocumentFieldView, address: String) in
         view.setLink(address)
       }
@@ -121,10 +125,6 @@ public final class PillFieldModule: Module {
 
       AsyncFunction("focus") { (view: DocumentFieldView) in
         view.focus()
-      }
-
-      AsyncFunction("focusAt") { (view: DocumentFieldView, line: Int, x: Double, y: Double) in
-        view.focus(atLine: line, x: CGFloat(x), y: CGFloat(y))
       }
 
       AsyncFunction("blur") { (view: DocumentFieldView) in
@@ -191,6 +191,15 @@ struct ValueRecord: Record {
   @Field var runs: [RunRecord] = []
   /// How many changes JavaScript had heard as it handed these runs.
   @Field var seen: Int = 0
+}
+
+/// Where a field takes the keyboard as it comes to stand: at its words' start, or on the line at `line`, `x` and `y` points in from its first line's start, where a press on the words as read landed; told once for each `nonce`.
+struct OpeningRecord: Record {
+  @Field var nonce: Int = 0
+  @Field var start: Bool = false
+  @Field var line: Int = 0
+  @Field var x: Double = 0
+  @Field var y: Double = 0
 }
 
 struct LookRecord: Record {

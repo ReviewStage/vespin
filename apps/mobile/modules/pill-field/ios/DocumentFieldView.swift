@@ -680,6 +680,12 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   /// A focus asked for before the field stood in a window, as a page's list builds its rows only once they come in sight, laid once it does.
   private var focusWhenShown: (() -> Void)?
 
+  /// The opening last taken, so each is laid once.
+  private var openedNonce = 0
+
+  /// Whether the words have been laid out whole since they were last laid in, which a field grown to its words does once, then lays out again only the paragraph a key changes.
+  private var laidWhole = false
+
   /// The acts the field offers on its selection, in the edit menu and the bar over the keyboard; none for a field that offers none.
   var formats: FormatsRecord? {
     didSet { buildBar() }
@@ -694,6 +700,17 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// The looks the next words typed at a caret take, where a mark was toggled with nothing selected, as Notes' Bold does.
   private var typingMarks: (at: Int, marks: [String])?
+
+  /// Takes the keyboard where the field opens, once for each opening told: at the words' start, or where a press on the words as read landed. Note that it is laid after the props told with it, the words among them, have been taken, and once the field stands in a window.
+  func open(_ opening: OpeningRecord?) {
+    guard let opening, opening.nonce != openedNonce else { return }
+    openedNonce = opening.nonce
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      if opening.start { self.focus() } else { self.focus(atLine: opening.line, x: CGFloat(opening.x), y: CGFloat(opening.y)) }
+    }
+  }
 
   /// The words a link is asked for, kept while JavaScript asks for its address.
   private var linkRange: NSRange?
@@ -752,6 +769,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    // Note that words laid out at another width wrap anew, so they are laid out whole again.
+    if textView.frame.width != bounds.width { laidWhole = false }
     textView.frame = bounds
     tellHeight()
     let line = ceil(bodyFont().lineHeight)
@@ -814,6 +833,13 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let insets = textView.textContainerInset.top + textView.textContainerInset.bottom
     guard let layout = textView.textLayoutManager, let content = layout.textContentManager else {
       return ceil(textView.sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude)).height)
+    }
+
+    // Note that the words are laid out whole once, since the usage bounds count only what is laid out, and after that only the caret's paragraph, which a key changes.
+    guard laidWhole else {
+      layout.ensureLayout(for: layout.documentRange)
+      laidWhole = true
+      return ceil(layout.usageBoundsForTextContainer.height + insets)
     }
 
     let string = textView.textStorage.string as NSString
@@ -1031,6 +1057,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       if let layout = textView.textLayoutManager { layout.invalidateLayout(for: layout.documentRange) }
     } else {
       textView.attributedText = next
+      laidWhole = false
     }
 
     if !keepUndo { textView.undoManager?.removeAllActions() }

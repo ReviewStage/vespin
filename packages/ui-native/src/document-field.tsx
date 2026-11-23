@@ -51,6 +51,7 @@ import {
   type NativeDocumentRun,
   type NativeFormatAct,
   type NativeFormats,
+  type NativeOpening,
   type NativeToldLine,
   type NativeToldRun,
 } from "./document-field-native.js";
@@ -323,9 +324,6 @@ export function DocumentField({
   // The height the words ask for while the field grows to them, none until the field first tells it.
   const [height, setHeight] = useState<number | undefined>(undefined);
 
-  // Whether the field has taken the keyboard where it opens, which it does once.
-  const opened = useRef(false);
-
   // How many changes the field has told, which the lines handed it say were heard, so it never sets back words typed since.
   const [seen, setSeen] = useState(0);
   const [told, setTold] = useState<Told | undefined>(undefined);
@@ -441,23 +439,18 @@ export function DocumentField({
     latest.current = write;
   });
 
-  // Note that the field takes the keyboard where it opens once it stands with its words, on the first line the pressed block of the document as read became; the view lays it once it stands in a window, as a list builds a row in sight.
-  useEffect(() => {
-    const doors = native.current;
+  // Where the field takes the keyboard as it comes to stand, on the first line the pressed block of the document as read became, handed to the view, which lays it once it stands in a window, as a list builds a row only in sight.
+  const opening = useMemo((): NativeOpening | undefined => {
+    if (opensAt === undefined) return undefined;
 
-    if (!ready || doors === null || opened.current || opensAt === undefined) return;
-    opened.current = true;
-
-    if (opensAt === OPENS_AT_START) {
-      void doors.focus();
-
-      return;
-    }
+    if (opensAt === OPENS_AT_START) return { nonce: 1, start: true, line: 0, x: 0, y: 0 };
 
     const block = blockAt(read, base, opensAt.at);
-    const line = handed.value.lines.findIndex((each) => each.from === block);
-    void doors.focusAt(Math.max(0, line), opensAt.x, opensAt.y);
-  });
+    const found = handed.value.lines.findIndex((each) => each.from === block);
+    const line = Math.max(0, found);
+
+    return { nonce: 1, start: false, line, x: opensAt.x, y: opensAt.y };
+  }, [opensAt, read, base, handed]);
 
   const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {
     pending.current = { told: nativeEvent, base: handed.markdown };
@@ -518,6 +511,7 @@ export function DocumentField({
       ref={native}
       style={fitsWords ? [style, { height: height ?? FIT_LEAST }] : style}
       fitsWords={fitsWords}
+      opening={opening}
       onHeight={fitsWords ? ({ nativeEvent }) => setHeight(nativeEvent.height) : undefined}
       value={handed.value}
       look={look}
