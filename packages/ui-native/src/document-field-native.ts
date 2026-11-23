@@ -111,6 +111,15 @@ export interface NativeDocumentFieldDoors {
   rewriteWord(text: string, word: NativeWord | undefined): Promise<void>;
 }
 
+/** Where a field takes the keyboard as it comes to stand: at its words' start, or on the line at `line`, `x` and `y` points in from its first line's start. */
+export interface NativeOpening {
+  readonly nonce: number;
+  readonly start: boolean;
+  readonly line: number;
+  readonly x: number;
+  readonly y: number;
+}
+
 interface NativeDocumentFieldProps {
   readonly ref?: Ref<NativeDocumentFieldDoors> | undefined;
   readonly style?: StyleProp<ViewStyle>;
@@ -119,7 +128,15 @@ interface NativeDocumentFieldProps {
   readonly placeholder?: string | undefined;
   readonly editable?: boolean | undefined;
   readonly formats?: NativeFormats | undefined;
+  /** Whether the field grows to its words inside the page that holds it, rather than scrolling them itself, telling the height they ask for. */
+  readonly fitsWords?: boolean | undefined;
+  /** Where the field takes the keyboard as it comes to stand, laid once for each `nonce` once it stands in a window; none leaves the keyboard alone. */
+  readonly opening?: NativeOpening | undefined;
   readonly testID?: string | undefined;
+  /** The height the words ask for, while the field grows to them. */
+  readonly onHeight?:
+    | ((event: NativeSyntheticEvent<{ readonly height: number }>) => void)
+    | undefined;
   /** A link asked for on the selected words, with the address they hold, empty where none. */
   readonly onLinkAsk: (event: NativeSyntheticEvent<{ readonly address: string }>) => void;
   /** The caret's line around it, after each edit and each move of the caret. */

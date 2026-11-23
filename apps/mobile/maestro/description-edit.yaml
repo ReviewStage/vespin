@@ -1,4 +1,4 @@
-# description-edit.yaml -- a task's description edited whole, as Notion edits a page: its blocks drawn with no syntax, a table as a card, the selection formatted from the edit menu's Format and the bar over the keyboard, a person mentioned from an `@`, and a list's item moved in and back out.
+# description-edit.yaml -- a task's description edited in place on its page, as the desktop and Notion edit one: a press on its words putting the caret there, its blocks drawn with no syntax, a table as a card, the bar over the keyboard, a person mentioned from an `@`, a list's item moved in and back out, and Done.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -24,74 +24,80 @@ env:
     element: "Teammate invitations"
 - tapOn: "Teammate invitations"
 - assertVisible: "Created by .*"
-# The Description's Edit, heard as Edit description, opens the sheet on the
-# description as the page read it: headings, bold and italic words, the
-# lists' marks and the quote drawn as the page draws them, with no Markdown
-# syntax, and the table as a card the phone does not edit.
+# A press on the description's words puts them in its field where the page
+# read them, the caret where the press landed, the sections around it
+# standing as they stood: headings, bold and italic words, the lists' marks
+# and the quote drawn as the page draws them, with no Markdown syntax, and
+# the table as a card the phone does not edit. The press lands in the middle
+# of the Context's paragraph, read as its words before the field stands.
+# Note that no step selects words for the edit menu's Format here: the field
+# stands as tall as the description, so a tap at a share of its height can
+# land off the screen.
+# Note that on an iPhone the words are scrolled to the screen's middle, clear
+# of the floating tab bar, which takes a press on words scrolled only into
+# sight at the screen's foot.
 - runFlow:
-    file: subflows/scroll-in.yaml
-    env:
-      ELEMENT: "Edit description"
-      BESIDE: ${FLOATING_TABS}
-- tapOn: "Edit description"
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: "Only an admin can add.*"
+          centerElement: true
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Only an admin can add.*"
+# Note that an iPad's split view edits the description in its sheet until an
+# offer for an `@` stands over the keyboard there: Edit opens it, and a tap
+# on its words, which fill the sheet, takes the keyboard.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-in.yaml
+          env:
+            ELEMENT: "Edit description"
+            BESIDE: "true"
+      - tapOn: "Edit description"
+      - extendedWaitUntil:
+          visible:
+            id: "description-words"
+          timeout: 10000
+      - tapOn:
+          id: "description-words"
+          point: "8%,50%"
 - extendedWaitUntil:
     visible:
       id: "description-words"
     timeout: 10000
 - waitForAnimationToEnd
-- takeScreenshot: description-edit-sheet
-# A word selected opens the system's edit menu, its Format after the
-# system's own acts, a page on: Bold, Italic, Strikethrough, Code and Link,
-# then Turn into, in the panel's words. Note that the menu's next page is
-# the system's own chevron, which VoiceOver hears as Next Page; a wide
-# window stands Format on the first page already. The field is one element,
-# its whole document its words, as Notes' page is, so the taps land at its
-# leading edge halfway down, where a line's first word stands rather than
-# the blank past a short line's end. The word is selected as a person
-# selects without a double tap: a tap takes the keyboard and stands the
-# caret at the word's end, a tap on the caret opens the edit menu, and its
-# Select takes the word, so no step waits on a double tap's timing.
-- tapOn:
-    id: "description-words"
-    point: "8%,50%"
-- waitForAnimationToEnd
-- tapOn:
-    id: "description-words"
-    point: "8%,50%"
-- tapOn: "Select"
-- waitForAnimationToEnd
-- runFlow:
-    when:
-      notVisible: "Format"
-    commands:
-      - tapOn: "Next Page"
-- tapOn: "Format"
-- assertVisible: "Turn into"
-- waitForAnimationToEnd
-- takeScreenshot: description-edit-format
-- tapOn: "Italic"
-# The bar over the keyboard holds the same marks, Link, Mention, and Turn
-# into, each heard by its words.
+- takeScreenshot: description-edit-inline
+# The bar over the keyboard holds the marks, Link, Mention, and Turn into,
+# each heard by its words.
 - assertVisible: "Bold"
 - assertVisible: "Mention"
 - takeScreenshot: description-edit-bar
 # Mention types an `@`, which offers what the task can mention over the
 # keyboard, as a composer's `@` offers it; a pick stands as the person's
-# pill in the word's place. The caret goes to the end of the selected
-# word's line first, so the person is mentioned after the word rather than
-# in its place.
-- tapOn:
-    id: "description-words"
-    point: "95%,50%"
+# pill in the word's place, here in the middle of the paragraph pressed.
+# Note that the offer's row is found under its People heading, since the
+# page's Assignee chip names Ada Lovelace too; the heading goes with the
+# offer once the pick closes it.
 - inputText: " "
 - tapOn: "Mention"
 - inputText: "Ad"
-- assertVisible: "Ada Lovelace"
+- assertVisible:
+    text: "Ada Lovelace"
+    below: "People"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-mention
-- tapOn: "Ada Lovelace"
+- tapOn:
+    text: "Ada Lovelace"
+    below: "People"
 - waitForAnimationToEnd
-- assertNotVisible: "Ada Lovelace.*You"
+- assertNotVisible: "People"
 - takeScreenshot: description-edit-mentioned
 # A list made on a new line stands Indent and Outdent on the bar while the
 # caret is in its items, as Notion's bar does. Text first makes the new line
@@ -120,3 +126,24 @@ env:
 - inputText: "Ship"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-nested-out
+# Done, in the page's bar on the iPhone, saves what is typed and leaves the
+# field once the service holds it, the page reading the words again; an
+# iPad's sheet saves with Save. Note that the fixture
+# answers the save without changing the description it serves, so the words
+# read afterwards are the fixture's own.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Done editing description"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "Save"
+- extendedWaitUntil:
+    notVisible:
+      id: "description-words"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-done

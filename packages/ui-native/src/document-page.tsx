@@ -1,7 +1,7 @@
 // document-page.tsx -- a page a document is edited whole on, as Notion edits a page: its rich field filling the page, what went wrong over it, and the people and things an `@` offers docked over the keyboard.
 
 import { Host } from "@expo/ui/swift-ui";
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import { StyleSheet, View } from "react-native";
 import type { CaretAtWord } from "./caret-at-word.js";
 import {
@@ -93,12 +93,30 @@ function PageWords({
  * place. The screen's own bar holds Cancel and Save.
  */
 export function DocumentPage({ ref, ...props }: DocumentPageProps) {
-  const { mentions } = props;
+  return (
+    <MentionDock mentions={props.mentions}>
+      <PageWords field={ref} {...props} />
+    </MentionDock>
+  );
+}
 
+/**
+ * What an `@` typed in a document's words offers, docked over the keyboard
+ * over the page that holds the words, as a composer's head offers it: in
+ * the head a composer's offer stands in, which scrolls past its share of the
+ * room over the keyboard, so a long list never runs up under the page's bar;
+ * nothing while no `@` word stands.
+ */
+export function MentionDock({
+  mentions,
+  children,
+}: {
+  readonly mentions: DocumentPageMentions | undefined;
+  readonly children: ReactNode;
+}) {
   const bar =
     mentions === undefined ? null : (
       <GlassBar>
-        {/* Note that the offer stands in the head a composer's does, which scrolls past its share of the room over the keyboard, so a long list never runs up under the sheet's bar. */}
         <BarHead>
           <MentionSuggestions
             groups={mentions.groups}
@@ -110,9 +128,5 @@ export function DocumentPage({ ref, ...props }: DocumentPageProps) {
       </GlassBar>
     );
 
-  return (
-    <GlassDock bar={bar}>
-      <PageWords field={ref} {...props} />
-    </GlassDock>
-  );
+  return <GlassDock bar={bar}>{children}</GlassDock>;
 }

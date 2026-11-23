@@ -29,6 +29,7 @@ import {
   type NativeSyntheticEvent,
   ScrollView,
   type StyleProp,
+  View,
   type ViewStyle,
 } from "react-native";
 import {
@@ -50,6 +51,7 @@ import {
   type NativeDocumentRun,
   type NativeFormatAct,
   type NativeFormats,
+  type NativeOpening,
   type NativeToldLine,
   type NativeToldRun,
 } from "./document-field-native.js";
@@ -141,6 +143,14 @@ export interface DocumentFieldHandle {
   readonly flush: () => void;
 }
 
+/** Where a field opens its caret as it comes to stand: where a press on the words as read landed, in the block that starts at `at` in the Markdown, `x` and `y` points in from its start; or at the words' start. */
+export type DocumentFieldOpening =
+  | { readonly at: number; readonly x: number; readonly y: number }
+  | typeof OPENS_AT_START;
+
+/** A field that opens with its caret at the words' start. */
+export const OPENS_AT_START = "start";
+
 interface DocumentFieldProps {
   readonly ref?: Ref<DocumentFieldHandle> | undefined;
   /** The document, as the Markdown it is saved as. */
@@ -156,6 +166,10 @@ interface DocumentFieldProps {
   readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string | undefined;
+  /** Whether the field grows to its words inside the page that holds it, as a description edited in place stands in its task's list, rather than scrolling them itself. */
+  readonly fitsWords?: boolean | undefined;
+  /** Where the field takes the keyboard with its caret once it stands, read as it mounts; none leaves the keyboard alone. */
+  readonly opensAt?: DocumentFieldOpening | undefined;
 }
 
 /** What the field last told: the Markdown it wrote, the Markdown that was written against, and its lines as the blocks it wrote read them. */
@@ -179,6 +193,26 @@ interface PendingLines {
 
 /** No blocks, which the field holds while its words stand read only. */
 const NO_BLOCKS: readonly DocumentBlock[] = [];
+
+/** Which of the document's blocks as read holds the Markdown at `at`: the last that starts at or before it, each found in turn in the Markdown it was read from. */
+function blockAt(blocks: readonly DocumentBlock[], markdown: string, at: number): number {
+  let held = 0;
+  let from = 0;
+
+  blocks.forEach((block, index) => {
+    const start = markdown.indexOf(block.source, from);
+
+    if (start === -1) return;
+
+    if (start <= at) held = index;
+    from = start + block.source.length;
+  });
+
+  return held;
+}
+
+/** The least a field grown to its words stands before it first tells its height: one body line and its insets. */
+const FIT_LEAST = 44;
 
 /** No files held. */
 const NO_FILES: ReadonlySet<string> = new Set();
@@ -282,9 +316,14 @@ export function DocumentField({
   onAtWord,
   style,
   testID,
+  fitsWords = false,
+  opensAt,
 }: DocumentFieldProps) {
   const colors = useColors();
   const native = useRef<NativeDocumentFieldDoors>(null);
+  // The height the words ask for while the field grows to them, none until the field first tells it.
+  const [height, setHeight] = useState<number | undefined>(undefined);
+
   // How many changes the field has told, which the lines handed it say were heard, so it never sets back words typed since.
   const [seen, setSeen] = useState(0);
   const [told, setTold] = useState<Told | undefined>(undefined);
@@ -400,6 +439,19 @@ export function DocumentField({
     latest.current = write;
   });
 
+  // Where the field takes the keyboard as it comes to stand, on the first line the pressed block of the document as read became, handed to the view, which lays it once it stands in a window, as a list builds a row only in sight.
+  const opening = useMemo((): NativeOpening | undefined => {
+    if (opensAt === undefined) return undefined;
+
+    if (opensAt === OPENS_AT_START) return { nonce: 1, start: true, line: 0, x: 0, y: 0 };
+
+    const block = blockAt(read, base, opensAt.at);
+    const found = handed.value.lines.findIndex((each) => each.from === block);
+    const line = Math.max(0, found);
+
+    return { nonce: 1, start: false, line, x: opensAt.x, y: opensAt.y };
+  }, [opensAt, read, base, handed]);
+
   const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {
     pending.current = { told: nativeEvent, base: handed.markdown };
     frame.current ??= requestAnimationFrame(() => latest.current());
@@ -429,7 +481,19 @@ export function DocumentField({
     [repository],
   );
 
-  // Note that the read-only head is no field, so nothing waits on it as the field it stands in for; it stands clear of the bar as the field's text view does.
+  // Note that the read-only head is no field, so nothing waits on it as the field it stands in for; it stands clear of the bar as the field's text view does, and in a page's list it stands at its own height, as the words read there.
+  if (!ready && fitsWords)
+    return (
+      <View style={style}>
+        <Markdown
+          words={descriptionHead(value)}
+          repository={repository}
+          onOpenLink={openNoLink}
+          headings
+        />
+      </View>
+    );
+
   if (!ready)
     return (
       <ScrollView style={style} contentInsetAdjustmentBehavior="automatic" scrollEnabled={false}>
@@ -445,7 +509,10 @@ export function DocumentField({
   return (
     <NativeDocumentField
       ref={native}
-      style={style}
+      style={fitsWords ? [style, { height: height ?? FIT_LEAST }] : style}
+      fitsWords={fitsWords}
+      opening={opening}
+      onHeight={fitsWords ? ({ nativeEvent }) => setHeight(nativeEvent.height) : undefined}
       value={handed.value}
       look={look}
       placeholder={placeholder}

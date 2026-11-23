@@ -46,7 +46,7 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard } from "@repo/features/time-format";
 import type { ReactElement, ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import type { RowQuestion } from "./asks.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
@@ -839,7 +839,37 @@ type WordsRowProps = {
   readonly hidesHtml?: boolean | undefined;
   /** How the words stand against the version before them, where they are a version's section, which a bar at their leading edge marks; none where they are read alone. */
   readonly change?: VersionUnit["change"] | undefined;
+  /** Takes a press on the words, by how far in from their start it landed, as a description edited in place puts the caret there; none where the words are read alone. A link or a chip pressed still opens. */
+  readonly onPressAt?: ((x: number, y: number) => void) | undefined;
 };
+
+/**
+ * A document's field as a row of a list, as a task's description edited in
+ * place stands where its words were read: the field, grown to its words,
+ * hosted in the row as the read words are, with the same insets, so the
+ * words stand where they stood.
+ */
+export function FieldRow({ children }: { readonly children: ReactNode }) {
+  return (
+    <VStack
+      modifiers={[
+        listRowBackground("clear"),
+        listRowSeparator("hidden"),
+        listRowInsets({
+          leading: SPACE.EDGE,
+          trailing: SPACE.EDGE,
+          top: SPACE.TIGHT,
+          bottom: SPACE.PAGE,
+        }),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+      ]}
+    >
+      <RNHostView matchContents={{ vertical: true }}>
+        <View>{children}</View>
+      </RNHostView>
+    </VStack>
+  );
+}
 
 /** The bar a version's section wears by how it changed, as the panel's version page edges one: green for words written, red for words struck, which also stand dimmed. */
 const CHANGE_BAR = {
@@ -972,10 +1002,16 @@ export function WordsRow({
   linkStanding,
   hidesHtml,
   change = VERSION_CHANGE.SAME,
+  onPressAt,
 }: WordsRowProps) {
+  // Note that the press is the words' own, not VoiceOver's: the words stay read as words, and the section's Edit edits them.
   const host = (
     <RNHostView matchContents={{ vertical: true }}>
-      <View>
+      <Pressable
+        accessible={false}
+        disabled={onPressAt === undefined}
+        onPress={({ nativeEvent }) => onPressAt?.(nativeEvent.locationX, nativeEvent.locationY)}
+      >
         <ChangedWords change={change}>
           <Markdown
             words={words}
@@ -990,7 +1026,7 @@ export function WordsRow({
             diagrams
           />
         </ChangedWords>
-      </View>
+      </Pressable>
     </RNHostView>
   );
 
