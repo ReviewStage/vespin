@@ -822,14 +822,16 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let covered = fitsWords ? 0 : keyboardTop.map { max(0, min(mine.height, mine.maxY - $0)) } ?? 0
     textView.contentInset.bottom = covered
     textView.verticalScrollIndicatorInsets.bottom = covered
-    guard textView.isFirstResponder, let keyboardTop, let end = textView.selectedTextRange?.end else { return }
+    guard textView.isFirstResponder, let end = textView.selectedTextRange?.end else { return }
     textView.scrollRangeToVisible(textView.selectedRange)
     let caret = textView.convert(textView.caretRect(for: end), to: window)
     guard let page = holdingScrollView() else { return }
     // Note that the page's place is read from its frame, which a scroll under way leaves still, never from its bounds, which move with the scroll.
     let frame = (page.superview ?? page).convert(page.frame, to: window)
     // Note that the page may end above the keyboard, as a split view's column does over what an `@` offers at its foot, so the caret clears whichever edge is higher.
-    let higher = min(keyboardTop - (keepClear ?? 0), frame.maxY) - DocumentSpace.caretClearance
+    // Note that a keyboard floating or undocked covers no foot, so the page's edge alone is cleared then.
+    let keyboardEdge = keyboardTop.map { $0 - (keepClear ?? 0) } ?? .greatestFiniteMagnitude
+    let higher = min(keyboardEdge, frame.maxY) - DocumentSpace.caretClearance
     // Note that the caret's line never goes past the page's top, however little room what stands over the keyboard leaves.
     let clear = max(higher, frame.minY + caret.height + DocumentSpace.caretClearance)
     guard caret.maxY > clear else { return }
