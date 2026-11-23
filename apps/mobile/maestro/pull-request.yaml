@@ -226,6 +226,9 @@ env:
     visible: "Expire an invite after seven days.*"
     timeout: 30000
 - assertVisible: "Changes requested"
+# Its head says its one review thread still stands unresolved, beside
+# GitHub's sentence.
+- assertVisible: ".*1 unresolved conversation"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-failing
 # Its Checks row sums them up, the failure first, and pushes their list,

@@ -554,6 +554,19 @@ export function conversationCount(conversation: AgentOverviewConversation): numb
   return conversation.earlier + conversation.conversation.length + threads;
 }
 
+/** How many review threads of a pull request's conversation still stand unresolved, among those its read carries. */
+export function unresolvedThreadCount(conversation: AgentOverviewConversation): number {
+  return conversation.conversation.reduce(
+    (sum, entry) => sum + (entry.threads ?? []).filter((thread) => !thread.resolved).length,
+    0,
+  );
+}
+
+/** What a pull request's merge sentence says of its review threads still unresolved, which a branch's rules may hold the merge for: "2 unresolved conversations". */
+export function unresolvedWords(count: number): string {
+  return `${count} unresolved ${count === 1 ? "conversation" : "conversations"}`;
+}
+
 /* ----- A change's answer ----- */
 
 /** What a surface says of a change GitHub did not make. */
