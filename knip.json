@@ -45,8 +45,8 @@
       "ignoreDependencies": ["effect", "@expo/ui", "expo-haptics", "expo-video"]
     },
     "apps/e2e": {
-      "entry": ["playwright.config.ts", "specs/**/*.e2e.ts"],
-      "project": ["*.ts", "specs/**"]
+      "entry": ["playwright.config.ts", "specs/**/*.e2e.ts", "server/e2e-server.ts"],
+      "project": ["*.ts", "specs/**", "server/**"]
     },
     "apps/catalog": {
       "project": ["src/**"],
@@ -82,8 +82,7 @@
         "src/testing/index.ts",
         "src/effect/index.ts",
         "src/analytics/index.ts",
-        "src/member-mcp/coverage.ts",
-        "src/testing/model-catalog-fake.ts"
+        "src/member-mcp/coverage.ts"
       ],
       "project": ["src/**"]
     },
