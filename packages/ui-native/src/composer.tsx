@@ -890,7 +890,7 @@ function capsulesOwnLine(widths: RowWidths): boolean {
   return widths.row > 0 && widths.capsules > room;
 }
 
-/** Whether what stands at the row's end may hold its whole width: where it fits the row, its widest kept (`measuredEnd`) so the choice never turns back as it gives way; a row not yet measured holds it. */
+/** Whether what stands at the row's end fits the row whole, on one line: its widest kept (`measuredEnd`), so the choice never turns back once it stacks; a row not yet measured keeps one line. */
 function endFits(widths: RowWidths): boolean {
   return widths.row === 0 || widths.end <= widths.row;
 }
@@ -940,17 +940,8 @@ function ComposerRow({
     </HStack>
   );
 
-  // Note that what is picked for the message, such as the model, is offered the row first and holds its whole words (`fixedSize`) while they fit the row, so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room; a priority alone still left the agent page's chip "Op…" beside the capsules' scroll. Past the row's width, as at an accessibility size on a narrow screen, it gives way and cuts the name instead, so Send never stands past the row's edge.
-  const end = (
-    <HStack
-      spacing={TOOL_SPACING}
-      modifiers={[
-        layoutPriority(1),
-        ...(endFits(widths) ? [fixedSize()] : []),
-        onGeometryChange(({ width }) => measuredEnd(width)),
-      ]}
-    >
-      {trailing}
+  const presses = (
+    <>
       {dictation === undefined ? null : (
         <DictationPress
           glyph={GLYPH.DICTATE}
@@ -960,7 +951,43 @@ function ComposerRow({
       )}
       {parts.call}
       {parts.send}
+    </>
+  );
+
+  // Note that what is picked for the message, such as the model, is offered the row first and holds its whole words (`fixedSize`), so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room; a priority alone still left the agent page's chip "Op…" beside the capsules' scroll.
+  const end = (
+    <HStack
+      spacing={TOOL_SPACING}
+      modifiers={[
+        layoutPriority(1),
+        fixedSize(),
+        onGeometryChange(({ width }) => measuredEnd(width)),
+      ]}
+    >
+      {trailing}
+      {presses}
     </HStack>
+  );
+
+  // Note that an end wider than the row, as at an accessibility size on a phone, stands what is picked on a line of its own over the presses, as iOS stacks a row's parts at those sizes, so the model's name stays whole and Send stays inside the glass; past even that line's width the name is cut.
+  const ends = endFits(widths) ? (
+    <HStack spacing={TOOL_SPACING}>
+      <Spacer />
+      {end}
+    </HStack>
+  ) : (
+    <>
+      {trailing === undefined ? null : (
+        <HStack spacing={TOOL_SPACING}>
+          <Spacer />
+          {trailing}
+        </HStack>
+      )}
+      <HStack spacing={TOOL_SPACING}>
+        <Spacer />
+        {presses}
+      </HStack>
+    </>
   );
 
   return (
@@ -974,13 +1001,10 @@ function ComposerRow({
         ROW_SIDES,
       ]}
     >
-      {capsulesOwnLine(widths) ? (
+      {capsulesOwnLine(widths) || !endFits(widths) ? (
         <>
           {start}
-          <HStack spacing={TOOL_SPACING}>
-            <Spacer />
-            {end}
-          </HStack>
+          {ends}
         </>
       ) : (
         <HStack spacing={TOOL_SPACING}>
