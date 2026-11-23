@@ -8,6 +8,7 @@ import {
   monospacedDigit,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
+import { BOT_TAG_WORDS } from "@repo/features/github-login";
 import { markdownPlainText } from "@repo/features/markdown-plain-text";
 import { agoText } from "@repo/features/time-format";
 import { type ReactElement, useMemo } from "react";
@@ -16,6 +17,7 @@ import { GLYPH, type MarkLook } from "./glyph.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import { Avatar, type Face, ToneGlyph } from "./marks.js";
+import { BotTag } from "./pull-request-page.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -163,6 +165,7 @@ export function ConversationEntryRow({
       faded={false}
       lead={<Avatar name={by.name} picture={by.picture} kind={by.kind} size={faceSize} />}
       title={by.name}
+      after={by.bot === true ? <BotTag /> : undefined}
       ink={colors.TEXT}
       end={
         <HStack spacing={SPACE.TIGHT}>
@@ -189,7 +192,10 @@ export function ConversationEntryRow({
           <EntryWords words={words} open={open} repository={repository} onOpenLink={onOpenLink} />
         </VStack>
       }
-      heard={{ label: by.name, value: [standing?.words, agoText(at, now)] }}
+      heard={{
+        label: by.name,
+        value: [by.bot === true && BOT_TAG_WORDS, standing?.words, agoText(at, now)],
+      }}
     />
   );
 }
@@ -284,15 +290,27 @@ export function ThreadRow({
           {shown.map((comment) => (
             <VStack key={comment.id} alignment="leading" spacing={0}>
               <UnderHead>
-                <Text
-                  modifiers={[
-                    font({ textStyle: TYPE_ROLE.TIME, weight: "medium" }),
-                    foregroundStyle(colors.TEXT_MUTED),
-                    lineLimit(1),
-                  ]}
-                >
-                  {`${comment.by.name} · ${agoText(comment.at, now)}`}
-                </Text>
+                <HStack spacing={SPACE.TIGHT}>
+                  <Text
+                    modifiers={[
+                      font({ textStyle: TYPE_ROLE.TIME, weight: "medium" }),
+                      foregroundStyle(colors.TEXT_MUTED),
+                      lineLimit(1),
+                    ]}
+                  >
+                    {comment.by.name}
+                  </Text>
+                  {comment.by.bot === true ? <BotTag /> : null}
+                  <Text
+                    modifiers={[
+                      font({ textStyle: TYPE_ROLE.TIME }),
+                      foregroundStyle(colors.TEXT_MUTED),
+                      lineLimit(1),
+                    ]}
+                  >
+                    {agoText(comment.at, now)}
+                  </Text>
+                </HStack>
               </UnderHead>
               <EntryWords
                 words={comment.words}
