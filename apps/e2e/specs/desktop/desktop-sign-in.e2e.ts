@@ -1,6 +1,6 @@
 // desktop-sign-in.e2e.ts -- the packaged desktop app, launched on a fresh profile against the suite's local server, signs a fresh member in and shows their task.
 
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -133,19 +133,23 @@ test("the packaged app signs in on a fresh profile and shows the task list", asy
   }
 
   const stateRoot = await mkdtemp(path.join(tmpdir(), "vespin-e2e-desktop-"));
-  const proxy = await refusingProxy();
+  let proxy: RefusingProxy | undefined;
+  let app: ElectronApplication | undefined;
 
-  const app = await _electron.launch({
-    executablePath,
-    args: [`--proxy-server=${proxy.address}`],
-    env: {
-      ...process.env,
-      APP_ACCOUNT_BASE_URL: `${baseURL}/api/auth`,
-      APP_STATE_ROOT: stateRoot,
-    },
-  });
-
+  // Note that everything the journey opens is given back in `finally`, a launch that throws included, so no proxy keeps the worker alive and no profile outlives the run.
   try {
+    proxy = await refusingProxy();
+
+    app = await _electron.launch({
+      executablePath,
+      args: [`--proxy-server=${proxy.address}`],
+      env: {
+        ...process.env,
+        APP_ACCOUNT_BASE_URL: `${baseURL}/api/auth`,
+        APP_STATE_ROOT: stateRoot,
+      },
+    });
+
     await holdOpens(app);
     const window = await app.firstWindow();
     const signIn = window.getByRole("region", { name: /^Sign in to / });
@@ -156,8 +160,9 @@ test("the packaged app signs in on a fresh profile and shows the task list", asy
     expect(signedIn.taskId).toBeDefined();
     await expect(window.getByText(TASK_NAME).first()).toBeVisible();
   } finally {
-    await app.close();
-    await proxy.close();
+    await app?.close();
+    await proxy?.close();
+    await rm(stateRoot, { recursive: true, force: true });
   }
 
   expect(proxy.refused, "The app reached off this machine's loopback").toEqual([]);
