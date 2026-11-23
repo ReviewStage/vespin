@@ -1,0 +1,9 @@
+pinned to 16785bde5f
+== bundle PJj10484bx base 16785bde5f
+  built 16785bde5f base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-accessibility-ax3: fails 0 shots 6 
