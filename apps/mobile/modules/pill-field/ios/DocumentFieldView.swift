@@ -669,6 +669,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       guard fitsWords != oldValue else { return }
       textView.isScrollEnabled = !fitsWords
       textView.alwaysBounceVertical = !fitsWords
+      // Note that a text view that scrolls none keeps its container as tall as itself, which lays out only the lines that fit, so a field grown to its words lifts it: its words are laid out whole however tall the field stands yet.
+      textView.textContainer.heightTracksTextView = !fitsWords
+      if fitsWords { textView.textContainer.size.height = .greatestFiniteMagnitude }
+      laidWhole = false
       toldHeight = nil
       setNeedsLayout()
     }
@@ -839,7 +843,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     guard laidWhole else {
       layout.ensureLayout(for: layout.documentRange)
       laidWhole = true
-      return ceil(layout.usageBoundsForTextContainer.height + insets)
+      return ceil(wordsBottom(layout) + insets)
     }
 
     let string = textView.textStorage.string as NSString
@@ -852,7 +856,19 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       layout.ensureLayout(for: range)
     }
 
-    return ceil(layout.usageBoundsForTextContainer.height + insets)
+    return ceil(wordsBottom(layout) + insets)
+  }
+
+  /// Where the words end as laid out: the last fragment's foot, the empty line a Return leaves included, or the usage bounds' where they reach further.
+  private func wordsBottom(_ layout: NSTextLayoutManager) -> CGFloat {
+    var last: CGFloat = 0
+
+    layout.enumerateTextLayoutFragments(from: layout.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { fragment in
+      last = fragment.layoutFragmentFrame.maxY
+      return false
+    }
+
+    return max(last, layout.usageBoundsForTextContainer.maxY)
   }
 
   /// The nearest scroll view the field stands in, the page it scrolls with.
