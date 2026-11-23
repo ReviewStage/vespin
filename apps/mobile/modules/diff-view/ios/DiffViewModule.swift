@@ -384,12 +384,12 @@ final class DiffView: ExpoView, UICollectionViewDataSource {
       list.reloadData()
     }
 
-    guard let (at, interval) = pending, bounds.width > 0 else { return }
+    guard let held = pending, bounds.width > 0 else { return }
     pending = nil
     // Note that the frame is counted as drawn once the run loop has laid the rows out and handed them to the screen.
     DispatchQueue.main.async { [rows] in
-      DiffView.signposter.endInterval("FirstFrame", interval)
-      NSLog("DiffView first frame: %.1f ms, %d rows", (CACurrentMediaTime() - at) * 1000, rows.count)
+      DiffView.signposter.endInterval("FirstFrame", held.interval)
+      NSLog("DiffView first frame: %.1f ms, %ld rows", (CACurrentMediaTime() - held.at) * 1000, rows.count)
     }
   }
 
