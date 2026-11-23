@@ -1398,7 +1398,7 @@ test("start_agent leaves an unassigned backlog task's assignee and status as the
   assert.deepEqual([stored.task.status, stored.task.assignee], [TASK_STATUS.BACKLOG, undefined]);
 });
 
-test("start_agent naming no runsOn, or another member's device, is refused in words that name where to run it, starting nothing, and runs in the cloud once runsOn names it, kept as no pick of the member's", async () => {
+test("start_agent naming another member's device is refused in words that name where to run it, starting nothing, and runs in the cloud once runsOn names it, kept as no pick of the member's", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -1418,12 +1418,6 @@ test("start_agent naming no runsOn, or another member's device, is refused in wo
         repository: RELAY_FULL_NAME,
       });
     }),
-  );
-
-  // Note that the member's newest agent and last pick are no place to run it: the call names one.
-  assert.deepEqual(
-    await call(AGENT_TOOL.START_AGENT, { ...CHOSEN, taskId: billing.id, prompt: "Bill by seat." }),
-    { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_RUNS_ON },
   );
 
   assert.deepEqual(
@@ -1467,45 +1461,72 @@ test("start_agent naming no runsOn, or another member's device, is refused in wo
   assert.ok(Option.isNone(await database.run(readRunsOnPick(agents.caller.userId))));
 });
 
-test("start_agent naming no model, or no permissionMode, is refused in words naming the field, as is a mode the model's harness does not take, starting nothing; the mode it names is the agent's", async () => {
+test("start_agent leaving out model, effort, permissionMode, and runsOn runs on the calling agent's own, never the member's defaults, and refuses a mode the model's harness does not take; one naming neither taskId nor branch is refused naming both, starting nothing", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
-
-  const start = {
-    runsOn: IN_THE_CLOUD,
-    taskId: agents.caller.taskId,
-    branch: DEFAULT_BRANCH,
-    prompt: PROMPT,
-  };
-
+  const studio = randomUUID();
   const { ASK } = AGENT_PERMISSION_MODE;
 
-  // Note that the member's Settings defaults are no model or mode to run on: the call names them.
-  for (const [input, reason] of [
-    [{ ...start, ...MODE }, START_AGENT_REFUSAL.NO_MODEL],
-    [{ ...start, model: OPUS, effort: "low" }, START_AGENT_REFUSAL.NO_PERMISSION_MODE],
-    [
-      { ...start, model: "cursor/grok-4.7", effort: "high", permissionMode: ASK },
-      "Not started: cursor/grok-4.7 runs on Cursor, which takes the permissionMode auto or full_access, not ask. Name one of those, or start it on another model.",
-    ],
-  ] as const) {
-    assert.deepEqual(await call(AGENT_TOOL.START_AGENT, input), {
-      status: ACTION_RESULT_STATUS.REJECTED,
-      reason,
-    });
-  }
+  // The caller runs on Opus at high effort, asking before edits, on its starter's own Mac.
+  const billing = await database.run(
+    Effect.gen(function* () {
+      yield* registerDevice(agents.caller.userId, {
+        id: studio,
+        name: "Studio",
+        ...DEVICE_LAYOUT,
+        capabilities: [DEVICE_CAPABILITY.GITHUB_SIGN_IN],
+      });
+      const db = yield* Database;
+      yield* db
+        .update(agentTable)
+        .set({ machine: AGENT_MACHINE.DEVICE, deviceId: studio, permissionMode: ASK })
+        .where(eq(agentTable.id, agents.caller.id));
 
-  assert.equal(agentSessions.sent.length, 0, "no refusal opens a session");
-
-  const asking = await call(
-    AGENT_TOOL.START_AGENT,
-    { ...start, model: OPUS, effort: "low", permissionMode: ASK },
-    "call-asking",
+      return yield* createTask(agents.caller.userId, {
+        organizationId: workspaceId,
+        name: "Metered billing",
+        repository: RELAY_FULL_NAME,
+      });
+    }),
   );
 
-  const stored = await storedStart(agents.caller.userId, asking);
-  assert.equal(stored.permissionMode, ASK);
+  const unnamed = await call(AGENT_TOOL.START_AGENT, { prompt: PROMPT }, "call-unnamed");
+  assert.equal(unnamed.status, ACTION_RESULT_STATUS.REJECTED);
+  const reason = String(unnamed.reason);
+  assert.ok(reason.includes("as taskId") && reason.includes("as branch"), reason);
+
+  assert.deepEqual(
+    await call(
+      AGENT_TOOL.START_AGENT,
+      {
+        taskId: billing.id,
+        branch: DEFAULT_BRANCH,
+        prompt: PROMPT,
+        model: "cursor/grok-4.7",
+        effort: "high",
+      },
+      "call-cursor",
+    ),
+    {
+      status: ACTION_RESULT_STATUS.REJECTED,
+      reason:
+        "Not started: cursor/grok-4.7 runs on Cursor, which takes the permissionMode auto or full_access, not ask, your own, which a start leaving permissionMode out runs on. Name one of those, or start it on another model.",
+    },
+  );
+  assert.equal(agentSessions.sent.length, 0, "no refusal opens a session");
+
+  const own = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: billing.id, branch: DEFAULT_BRANCH, prompt: PROMPT },
+    "call-own",
+  );
+
+  const stored = await storedStart(agents.caller.userId, own);
+  assert.deepEqual(
+    [stored.model, stored.effort, stored.permissionMode, stored.machine, stored.deviceId],
+    [OPUS, "high", ASK, AGENT_MACHINE.DEVICE, studio],
+  );
 });
 
 test("start_agent naming a device by its name runs on the caller's member's own device of that name, any case, and refuses a name that matches more than one of theirs, or only a teammate's, listing only their own devices", async () => {
@@ -2166,7 +2187,7 @@ test("start_agent with a branch starts an agent whose checkout is cloned at that
   assert.equal(agentSessions.sent.length, 1, "the call run again starts nothing");
 });
 
-test("list_models answers exactly the choices start_agent takes, as the caller's starter is offered them: every model and effort it lists starts an agent, a fast version the starter's key may not run is neither listed nor started on, and a start naming neither is refused rather than run on the default it lists", async () => {
+test("list_models answers exactly the choices start_agent takes, as the caller's starter is offered them: every model and effort it lists starts an agent, a fast version the starter's key may not run is neither listed nor started on", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
 
@@ -2275,22 +2296,6 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
       "The choices are: anthropic/claude-opus-5.5 (low, medium, high, max); openai/gpt-6.1-sol (low, high).",
     ),
     String(fast.reason),
-  );
-
-  // Note that the default it lists is no choice a start falls back to: a start names its own.
-  assert.deepEqual(
-    await call(
-      AGENT_TOOL.START_AGENT,
-      {
-        ...MODE,
-        runsOn: IN_THE_CLOUD,
-        taskId: agents.caller.taskId,
-        branch: DEFAULT_BRANCH,
-        prompt: PROMPT,
-      },
-      "call-default",
-    ),
-    { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_MODEL },
   );
 
   // A Claude subscription the starter adds beside its key is a second payer of Claude's models alone, named by kind.
@@ -2562,7 +2567,7 @@ test("start_agent from another agent refuses, in words the model acts on and sta
   await saidTurnOn(teammates, "Stopped for the day.");
   // A start names its task, from another agent as on its own, rather than landing on the caller's.
   await refused({ from: { agentId: teammates.id, mode: "continue" } }, R.NO_TASK);
-  await refused({ prompt: "Do it again." }, R.NO_TASK);
+  await refused({ prompt: "Do it again.", branch: DEFAULT_BRANCH }, R.NO_TASK);
   await refused(
     { from: { agentId: teammates.id, mode: "continue" }, taskId: tasks.invitations },
     R.SOURCE_OTHER_TASK,
@@ -3211,7 +3216,7 @@ test("create_task makes a task in the caller's workspace for the member the agen
   );
   assert.deepEqual(
     await call(AGENT_TOOL.START_AGENT, { prompt: "Sweep the invites." }, "call-taskless"),
-    { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_OWN_TASK },
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_OWN_TASK_NOR_BRANCH },
   );
   assert.equal(
     agentSessions.sent.length,

@@ -46,7 +46,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "The model to run on, by its catalog id (such as anthropic/claude-opus-5.5), as list_models lists it. Every start names it but one with from, which runs on the model of the agent it starts from unless it names another."
+      "description": "The model to run on, by its catalog id (such as anthropic/claude-opus-5.5), as list_models lists it. Leave it and effort out to run on your own model and effort, or with from on the model of the agent it starts from."
     },
     "effort": {
       "type": "string",
@@ -61,7 +61,7 @@
         "ask",
         "auto"
       ],
-      "description": "How the agent's tool calls are answered: full_access runs every one unasked, ask asks a member before a file edit or a shell command, and auto leaves each to the harness's own review, which asks where it cannot decide. A Cursor model takes auto or full_access, and another mode on it is refused. Every start names it, one with from included."
+      "description": "How the agent's tool calls are answered: full_access runs every one unasked, ask asks a member before a file edit or a shell command, and auto leaves each to the harness's own review, which asks where it cannot decide. A Cursor model takes auto or full_access, and another mode on it is refused. Leave it out to run on your own permission mode, with from too."
     },
     "runsOn": {
       "anyOf": [
@@ -165,7 +165,7 @@
           "additionalProperties": false
         }
       ],
-      "description": "Where the agent runs: {\"machine\":\"vercel\"} for the cloud, {\"machine\":\"device\",\"device\":\"<name>\"} for one of the member's own devices (a Mac or a host) by its name, or {\"machine\":\"device\",\"deviceId\":\"<id>\"} by its id, or {\"machine\":\"workspace\",\"name\":\"<name>\"} for one of the workspace's own machines, which run every member's agents, each in its own VM, by its name, or {\"machine\":\"workspace\",\"deviceId\":\"<id>\"} by its id; it must be online, and a name matching none of those machines, or several, is refused with them listed. list_machines lists each place with the runsOn to pass. Every start names it but one with from, which runs where the agent it starts from runs unless it names another place, which moves it there."
+      "description": "Where the agent runs: {\"machine\":\"vercel\"} for the cloud, {\"machine\":\"device\",\"device\":\"<name>\"} for one of the member's own devices (a Mac or a host) by its name, or {\"machine\":\"device\",\"deviceId\":\"<id>\"} by its id, or {\"machine\":\"workspace\",\"name\":\"<name>\"} for one of the workspace's own machines, which run every member's agents, each in its own VM, by its name, or {\"machine\":\"workspace\",\"deviceId\":\"<id>\"} by its id; it must be online, and a name matching none of those machines, or several, is refused with them listed. list_machines lists each place with the runsOn to pass. Leave it out to run where you run, the runsOn your instructions' own values name, or with from where the agent it starts from runs; naming another place moves it there."
     },
     "from": {
       "anyOf": [
@@ -227,8 +227,7 @@
     }
   },
   "required": [
-    "taskId",
-    "permissionMode"
+    "taskId"
   ],
   "additionalProperties": false
 }

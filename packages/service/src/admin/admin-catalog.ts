@@ -260,11 +260,7 @@ function prompts(): AdminCatalogPrompt[] {
 
   return [
     ...instructions,
-    prompt(
-      "Manager",
-      "managerInstructions",
-      managerInstructions({ name: PLACEHOLDER_MANAGER, deviceId: null }),
-    ),
+    prompt("Manager", "managerInstructions", managerInstructions(PLACEHOLDER_MANAGER)),
     prompt("Pull request chapters", "CHAPTERS_INSTRUCTIONS", CHAPTERS_INSTRUCTIONS),
     prompt("Chapters repair", "REPAIR_INSTRUCTIONS", REPAIR_INSTRUCTIONS),
   ];
