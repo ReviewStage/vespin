@@ -1,2 +1,11 @@
 pinned to 1280cd0e8c
-  STALE BUNDLE, not built
+== bundle PJj10482a base 1280cd0e8c
+  built 1280cd0e8c base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-compose: fails 0 shots 11 
+iphone-light-new-task: fails 0 shots 9 
+ipad27-light-compose: fails 1 shots 7 Scrolling UP until "Done" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centeri
+ipad27-light-new-task: fails 0 shots 8 
