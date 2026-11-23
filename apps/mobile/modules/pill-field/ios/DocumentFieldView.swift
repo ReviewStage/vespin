@@ -802,12 +802,31 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// Tells JavaScript the height the words ask for at the field's width, while the field grows to them, once it moves by a point or more.
   private func tellHeight() {
-    let width = bounds.width
-    guard fitsWords, width > 0 else { return }
-    let height = ceil(textView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+    guard fitsWords, bounds.width > 0 else { return }
+    let height = wordsHeight()
     if let toldHeight, abs(toldHeight - height) < 1 { return }
     toldHeight = height
     onHeight(["height": height])
+  }
+
+  /// The height the words ask for, read from the layout the text view already holds rather than laid out whole again: only the caret's paragraph, which a key changes, is laid out anew, and the rest stands as laid, so a key that wraps no line costs no measure of the words around it. Note that `sizeThatFits` laid out every word on each key, about a millisecond for every thousand characters.
+  private func wordsHeight() -> CGFloat {
+    let insets = textView.textContainerInset.top + textView.textContainerInset.bottom
+    guard let layout = textView.textLayoutManager, let content = layout.textContentManager else {
+      return ceil(textView.sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude)).height)
+    }
+
+    let string = textView.textStorage.string as NSString
+    let caret = min(textView.selectedRange.location, string.length)
+    let paragraph = string.paragraphRange(for: NSRange(location: caret, length: 0))
+
+    if let start = content.location(content.documentRange.location, offsetBy: paragraph.location),
+      let end = content.location(start, offsetBy: paragraph.length),
+      let range = NSTextRange(location: start, end: end) {
+      layout.ensureLayout(for: range)
+    }
+
+    return ceil(layout.usageBoundsForTextContainer.height + insets)
   }
 
   /// The nearest scroll view the field stands in, the page it scrolls with.
