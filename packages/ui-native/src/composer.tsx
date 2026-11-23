@@ -45,6 +45,7 @@ import {
   type ReactElement,
   type ReactNode,
   type RefObject,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -620,6 +621,8 @@ interface ComposerParts {
   readonly field: ReactElement;
   readonly call: ReactElement | null;
   readonly send: ReactElement;
+  /** Lets go of the keyboard the field holds. */
+  readonly lower: () => void;
 }
 
 /** Whether the composer stands its controls in a row under its field, as the desktop composer does: one that starts work or speaks to an agent, holding capsules (`tools`, `trailing`). */
@@ -741,8 +744,15 @@ function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts 
       </VStack>
     );
 
+  // Note that the act keeps one identity across renders, so the bar's drag that runs it is made once rather than on each key.
+  const lower = useCallback(() => {
+    if (pillDoor !== undefined) return pillDoor.current?.blur();
+    void field.current?.blur().catch(() => undefined);
+  }, [pillDoor]);
+
   return {
     add: rowed ? null : <AddPress menu={addMenu} onAdd={onAdd} />,
+    lower,
     field: pillsField ?? (
       <TextField
         ref={field}
@@ -1145,6 +1155,8 @@ export function Composer(props: ComposerProps) {
       heads={props.pills !== undefined}
       foot={rowed ? foot : undefined}
       above={oneLine ? undefined : props.above}
+      // Note that on one line no transcript stands over the bar to drag the keyboard down by, so the bar takes the drag itself.
+      onLower={oneLine ? parts.lower : undefined}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >
       {rowed ? (
