@@ -133,7 +133,20 @@ const MAX_VIDEO_MB = (INBOX_BOUNDS.MAX_VIDEO_BYTES / 1_000_000).toFixed(1);
 /** A PDF's bound in megabytes, as the words the model reads say it. */
 const MAX_PDF_MB = (AGENT_BOUNDS.MAX_PDF_BYTES / 1_000_000).toFixed(1);
 
-const POST_THREAD_WORDS =
+/** Where a thread reaches the member, and, where the workspace connected the Slack bot, how to ping them there. */
+function threadReachWords(slackOn: boolean): string {
+  const reach = "A thread reaches the member in the app alone, never in Slack";
+
+  if (!slackOn) return `${reach}. `;
+
+  return (
+    `${reach}: where a Slack ping is worth it, such as an ask that blocks your work, ` +
+    `DM them yourself with ${AGENT_TOOL.SEND_SLACK_MESSAGE}, in your own words. `
+  );
+}
+
+/** `post_thread`'s words, naming `send_slack_message` only where the agent is offered it. */
+const postThreadWords = (slackOn: boolean) =>
   "Post a message to the developer's inbox, which is where they look for anything that needs them. " +
   "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. " +
   "key is your own short lowercase slug, such as branch-protection: the first post under a key opens its thread and must name its title, " +
@@ -168,17 +181,21 @@ const POST_THREAD_WORDS =
   "A post without ask asks nothing: a note, or your reply on the thread. " +
   "A post on a settled thread opens it again, as a note waiting on them where it asks nothing. " +
   "A thread holds one open ask, and a newer ask replaces it; every answer reaches you as a message. " +
-  "A thread reaches the member in the app alone, never in Slack: where a Slack ping is worth it, such as an ask that blocks your work, " +
-  `DM them yourself with ${AGENT_TOOL.SEND_SLACK_MESSAGE}, in your own words. ` +
+  threadReachWords(slackOn) +
   "The call answers with the thread and one line for each other thread of yours still open.";
 
-/** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input. */
-export const INBOX_TOOLS = {
-  POST: {
+/** `post_thread` as an agent is shown it, its Slack sentence where its workspace connected the Slack bot. */
+export function postThreadToolOf(slackOn: boolean) {
+  return {
     name: INBOX_TOOL.POST,
-    description: POST_THREAD_WORDS,
+    description: postThreadWords(slackOn),
     inputSchema: inboxThreadPostInputSchema,
-  },
+  };
+}
+
+/** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input, `post_thread`'s in its words where nothing narrows it. */
+export const INBOX_TOOLS = {
+  POST: postThreadToolOf(true),
   WITHDRAW: {
     name: INBOX_TOOL.WITHDRAW,
     description:

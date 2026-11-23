@@ -3,8 +3,9 @@
  *
  * A tool of the catalog (`catalog.ts`) is offered every agent, or stands
  * behind its gates, each of which must open: the agent's task, its
- * repository, the sandbox of ours it runs in, or one of its workspace's
- * experiments, such as Memory or Task descriptions. Each gate is
+ * repository, the sandbox of ours it runs in, its workspace's Slack bot,
+ * or one of its workspace's experiments, such as Memory or Task
+ * descriptions. Each gate is
  * declared here once, with how it is read off the agent and the words a
  * call it shuts would be refused with, so the list an agent is offered and
  * a refusal of a call it makes anyway read the same rule. An agent's
@@ -22,9 +23,11 @@ import {
   readAgent,
   readAgentOfConversation,
 } from "@repo/database/models/agent-store";
+import { slackBotHeld } from "@repo/database/models/slack-installation-store";
 import { AGENT_KIND, AGENT_MACHINE } from "@repo/features/agent-wire";
 import { Effect, Option } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
+import { SLACK_REACH_REFUSAL } from "../../slack/slack-reach.js";
 import { CODER_REFUSAL } from "../coder-host/bounds.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
@@ -58,14 +61,17 @@ export const TOOL_GATE = {
   MANAGER: "manager",
   /** No Manager started the agent: one a Manager started reaches people through that Manager alone, so it posts no threads of its own. */
   UNMANAGED: "unmanaged",
+  /** The agent's workspace has connected the Slack bot, which every Slack tool acts as. */
+  SLACK: "slack",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
 
-/** What a gate reads beside the agent's row: its experiments, and whether a Manager started it, read once with them. */
+/** What a gate reads beside the agent's row: its experiments, whether a Manager started it, and whether its workspace holds the Slack bot's token, read once with them. */
 interface GateFacts {
   readonly experiments: ExperimentsOn;
   readonly startedByManager: boolean;
+  readonly slackBotHeld: boolean;
 }
 
 /** One gate: whether it opens to an agent, given what it reads beside the row (`GateFacts`), and the words a call it shuts is refused with. */
@@ -131,6 +137,11 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
     refusal:
       "Not run: a Manager started you, and you post no threads; send questions and reports to it with message_agent.",
   },
+  // Note that a bot disconnected mid-run shuts this at the next call, and one whose token this deployment cannot open still opens it, its tools' doors refusing in the same words (`reachSlack`).
+  [TOOL_GATE.SLACK]: {
+    opens: (_agent, { slackBotHeld }) => slackBotHeld,
+    refusal: SLACK_REACH_REFUSAL.NOT_CONNECTED,
+  },
 };
 
 /**
@@ -143,6 +154,14 @@ function startedByManager(agent: Agent): Effect.Effect<boolean, never, DatabaseS
 
   return readAgent(agent.userId, agent.startedByAgentId).pipe(
     Effect.map(Option.exists((starter) => starter.kind === AGENT_KIND.MANAGER)),
+    Effect.tapError(logStoreFailure),
+    Effect.orElseSucceed(() => false),
+  );
+}
+
+/** Whether the agent's workspace holds its Slack bot's token; one that cannot be read is taken as none, logged for the operator. */
+function workspaceSlackBotHeld(agent: Agent): Effect.Effect<boolean, never, DatabaseServices> {
+  return slackBotHeld(agent.organizationId).pipe(
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed(() => false),
   );
@@ -164,12 +183,23 @@ export function standingOfAgent(
   }
 
   return Effect.map(
-    Effect.all([experimentsOnIn(agent.value), startedByManager(agent.value)]),
-    ([experiments, managed]) => ({
+    Effect.all(
+      [
+        experimentsOnIn(agent.value),
+        startedByManager(agent.value),
+        workspaceSlackBotHeld(agent.value),
+      ],
+      { concurrency: "unbounded" },
+    ),
+    ([experiments, managed, slack]) => ({
       agent,
       open: new Set(
         Object.values(TOOL_GATE).filter((gate) =>
-          GATES[gate].opens(agent.value, { experiments, startedByManager: managed }),
+          GATES[gate].opens(agent.value, {
+            experiments,
+            startedByManager: managed,
+            slackBotHeld: slack,
+          }),
         ),
       ),
       experiments,
