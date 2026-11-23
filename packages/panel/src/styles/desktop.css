@@ -925,6 +925,26 @@ body,
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
 
+/* A Manager's chat (`desktop-agent-page.tsx`'s `data-chat`) stands both
+   sides' bubbles at one width, as a chat app does: each turn of a bubble
+   spans the column, and its bubble keeps to one share of it, whatever
+   stands beside it (the Manager's face, and the actions, which differ by
+   side). A phone's room keeps a narrower share, as its face and actions
+   take more of the column there. */
+.agent-page[data-chat] .transcript-message:has(> .ui-chat-bubble-row) {
+  max-width: 100%;
+}
+
+.agent-page[data-chat] .ui-chat-bubble {
+  max-width: var(--spacing-chat-bubble);
+}
+
+@container find-scope (width < 480px) {
+  .agent-page[data-chat] .ui-chat-bubble {
+    max-width: var(--spacing-chat-bubble-narrow);
+  }
+}
+
 /* A line written again where it stands (`edit-composer.tsx`) is already in the
    transcript's measure, so its box takes no inset of its own, and opens out of
    the bubble's corner as a card the window opens in place does. */

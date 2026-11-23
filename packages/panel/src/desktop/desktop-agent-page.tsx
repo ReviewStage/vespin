@@ -17,8 +17,11 @@
  * page reads through the agent's own workspace and repository
  * (`own-agent-place.tsx`), and its copy and delete keys act on the agent,
  * as a task's column's do on its chosen tab. ⌘F finds in its conversation,
- * as in a task's column, and a phone's ⋯ offers Find in its place. The agent is read from the task list where it carries it,
- * and else once by its id.
+ * as in a task's column, and a phone's ⋯ offers Find in its place. A
+ * Manager's page, whose conversation is a chat of bubbles, marks itself one
+ * (`data-chat`), so both sides' bubbles stand at one width, and take the
+ * column in a phone's room, as desktop.css says. The agent is read from the task list where
+ * it carries it, and else once by its id.
  * Until then the page stands in an agent tab's own shape saying Reading; an
  * agent the service does not hold for the reader, deleted or of a workspace
  * they are not in, is not found; and a read that did not land says so with
@@ -28,7 +31,12 @@
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { AGENT_BOUNDS, type ListedAgent, listedAgentOfPage } from "@repo/features/agent-wire";
+import {
+  AGENT_BOUNDS,
+  AGENT_KIND,
+  type ListedAgent,
+  listedAgentOfPage,
+} from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
@@ -361,7 +369,12 @@ function OwnAgentPage({
   return (
     <OwnAgentPlaceProvider place={place} readerId={tasks.me}>
       <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">
-        <Fill as={FILL_ELEMENT.SECTION} className="agent-page" aria-label={label}>
+        <Fill
+          as={FILL_ELEMENT.SECTION}
+          className="agent-page"
+          aria-label={label}
+          data-chat={agent.kind === AGENT_KIND.MANAGER ? "" : undefined}
+        >
           <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
           {/* Note that the scope stands as the column's own box, as its fill did. */}
           <FindScope
