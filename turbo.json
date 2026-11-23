@@ -76,6 +76,16 @@
       ],
       "outputs": []
     },
+    // The end-to-end journeys (`apps/e2e`), on Playwright Test. A journey's
+    // result rests on more than its workspace's graph (the pages and servers
+    // it drives), so it is never replayed from the cache. Playwright finds its
+    // browsers where `PLAYWRIGHT_BROWSERS_PATH` says, which strict mode would
+    // otherwise drop. No check and no CI job runs it yet.
+    "test:e2e": {
+      "dependsOn": ["^transit"],
+      "passThroughEnv": ["PLAYWRIGHT_BROWSERS_PATH"],
+      "cache": false
+    },
     // The whole-repository check reads every file in one program, so it is
     // one root task whose inputs are every file the repository tracks.
     "//#lint": {
