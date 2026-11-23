@@ -22,6 +22,7 @@ import { TestClock } from "effect/testing";
 import { taskListDelivery } from "./app-state.js";
 import { KEPT_LIST } from "./kept-lists.js";
 import { DRAW_TICK, rowWriteOn } from "./live-collection.js";
+import { heldApart } from "./task-list-archived.js";
 import { AGENT, type LiveTaskList, PLAN, taskListCollections } from "./task-list-collections.js";
 import { taskListMoved } from "./task-list-moved.js";
 import { agentListRow, planListRow } from "./testing/task-list-rows.js";
@@ -291,7 +292,7 @@ it.effect(
 );
 
 it.effect(
-  "an account of thousands whose agents are mostly archived draws every agent, every task's agents in brief, and every agent's pull request as the held read does, before and after agents move into and out of their archive",
+  "an account of thousands whose agents are mostly archived draws every agent, every task's agents in brief, and every agent's pull request as the held read does, in its order, before and after agents move into and out of their archive and tasks none of whose agents stands live move, gain one, lose their last, or go",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -351,9 +352,22 @@ it.effect(
         drawsAsHeld({ tasks: plans, agents });
         const before = drawings.at(-1);
 
-        // One agent is brought back, one archived, one renamed in its archive, and one started from an archived agent.
+        // One agent is brought back, the only one of task-7 standing live then; one archived; one renamed in its archive; and one started from an archived agent.
         const [restored, archived, renamed] = [agents[1], agents[45], agents[2]];
         assert.ok(restored !== undefined && archived !== undefined && renamed !== undefined);
+
+        // The one agent standing live of a task whose every other agent is archived, so archiving it leaves the task none.
+        const liveOf = new Map<string | null, (typeof agents)[number][]>();
+
+        for (const row of agents) {
+          if (!heldApart(row)) liveOf.set(row.taskId, [...(liveOf.get(row.taskId) ?? []), row]);
+        }
+
+        const lastLive = [...liveOf.values()].find(
+          (live) => live.length === 1 && live[0]?.taskId !== "task-7",
+        )?.[0];
+
+        assert.ok(lastLive !== undefined);
 
         const moved = [
           { ...restored, archivedAt: null },
@@ -364,11 +378,28 @@ it.effect(
             id: "agent-continued",
             startedFrom: { agentId: "agent-3", steps: 1, totalSteps: 1 },
           },
+          { ...lastLive, archivedAt: 9_000 },
+          // A task with no agent gains one, which a new agent on an old task is.
+          { ...agentListRow("task-3100", 9_001), id: "agent-new" },
         ];
 
+        // A task with no agent standing live is renamed, finished, pinned, and read, and another is deleted.
+        const changedPlan = plans[3150];
+        assert.ok(changedPlan !== undefined);
+
+        const changed = {
+          ...changedPlan,
+          name: "Renamed with no agent",
+          status: TASK_STATUS.DONE,
+          pinnedAt: 9_000,
+          pinPosition: "a0",
+          readThrough: 9_000,
+          updatedAt: 9_000,
+        };
+
         yield* collections.answer(
-          { tasks: [], agents: moved },
-          { past: "1", next: "2", gone: [] },
+          { tasks: [changed], agents: moved },
+          { past: "1", next: "2", gone: ["task-3199"] },
           undefined,
         );
         yield* TestClock.adjust(DRAW_TICK);
@@ -377,10 +408,12 @@ it.effect(
         const movedRows = new Map(moved.map((row) => [row.id, row]));
 
         drawsAsHeld({
-          tasks: plans,
+          tasks: plans
+            .filter((row) => row.id !== "task-3199")
+            .map((row) => (row.id === changed.id ? changed : row)),
           agents: [
             ...agents.map((row) => movedRows.get(row.id) ?? row),
-            ...moved.filter((row) => row.id === "agent-continued"),
+            ...moved.filter((row) => row.id === "agent-continued" || row.id === "agent-new"),
           ],
         });
 
@@ -398,7 +431,15 @@ it.effect(
           [
             ...new Set(told.whole ? [] : told.agents.map((move) => (move.now ?? move.was)?.id)),
           ].toSorted(),
-          ["agent-1", "agent-2", "agent-3", "agent-45", "agent-continued"],
+          [
+            "agent-1",
+            "agent-2",
+            "agent-3",
+            "agent-45",
+            "agent-continued",
+            lastLive.id,
+            "agent-new",
+          ].toSorted(),
         );
       }),
     ),
