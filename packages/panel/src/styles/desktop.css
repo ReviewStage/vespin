@@ -903,7 +903,9 @@ body,
    over the one a side panel gives a transcript's log. */
 .desktop-agent,
 .desktop-inbox {
-  --reading-room: calc((100% - var(--ui-page-measure)) / 2);
+  /* The measure its column keeps to: the document's, or a chat's below. */
+  --conversation-measure: var(--ui-page-measure);
+  --reading-room: calc((100% - var(--conversation-measure)) / 2);
   /* The column's inset, which the way back to the newest line keeps to (`--spacing-conversation-scroll-end`). */
   --conversation-column-inset: max(var(--content-inset), var(--reading-room));
   position: relative;
@@ -923,6 +925,24 @@ body,
 .desktop-inbox .conversation-log.inbox-board,
 .desktop-inbox > .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
+}
+
+/* A Manager's chat (`desktop-agent-page.tsx`'s `data-chat`) is bubbles
+   rather than a document: each already stops short of the column, past its
+   sender's face and the actions beside it, so the column keeps to the wide
+   measure, as a wide page does, rather than to the document's. */
+.agent-page[data-chat] .desktop-agent {
+  --conversation-measure: var(--ui-wide-measure);
+}
+
+/* In a phone's room the face and the actions beside a chat's bubble already
+   keep it off the column's far edge, so its turn takes the whole column
+   rather than a bubble's share of it as well, or its words stand in half
+   the screen. */
+@container find-scope (width < 480px) {
+  .agent-page[data-chat] .transcript-message {
+    max-width: 100%;
+  }
 }
 
 /* A line written again where it stands (`edit-composer.tsx`) is already in the
