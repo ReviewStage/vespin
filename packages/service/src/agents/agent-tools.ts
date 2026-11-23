@@ -1219,6 +1219,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     `work that should stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. ` +
     "This one call carries everything the agent is told as it starts, and it sets to work at once, " +
     "so never follow it with a message to the agent unless there is something new to say. " +
+    "It answers the agent's model, effort, permissionMode, and runsOn, whether named or your own. " +
     "The agent messages you when it finishes or needs you. " +
     `A rejected model or effort lists the choices, which ${AGENT_TOOL.LIST_MODELS} lists beforehand. ` +
     "With from, it starts from another agent instead: it continues an agent (or worker) that failed, " +
@@ -1930,6 +1931,8 @@ const startedReading = (agent: Agent, offered: readonly OfferedModel[], ownTask:
       model: agent.model,
       modelName: modelLabel(agent.model, offered),
       effort: agent.effort,
+      permissionMode: agent.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS,
+      runsOn: agentRunsOnOf(agent),
       status: standing(agent).status,
       onYourTask: agent.taskId === ownTask,
     };

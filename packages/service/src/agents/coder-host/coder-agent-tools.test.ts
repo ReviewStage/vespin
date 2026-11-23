@@ -1527,6 +1527,12 @@ test("start_agent leaving out model, effort, permissionMode, and runsOn runs on 
     [stored.model, stored.effort, stored.permissionMode, stored.machine, stored.deviceId],
     [OPUS, "high", ASK, AGENT_MACHINE.DEVICE, studio],
   );
+  // The answer names every value it took from the caller, so none is chosen unseen.
+  assert.ok(isRecord(own.agent), JSON.stringify(own));
+  assert.deepEqual(
+    [own.agent.model, own.agent.effort, own.agent.permissionMode, own.agent.runsOn],
+    [OPUS, "high", ASK, { machine: AGENT_MACHINE.DEVICE, deviceId: studio }],
+  );
 });
 
 test("start_agent naming a device by its name runs on the caller's member's own device of that name, any case, and refuses a name that matches more than one of theirs, or only a teammate's, listing only their own devices", async () => {
