@@ -78,7 +78,6 @@ import {
   ListIcon,
   RotateCcwIcon,
   SignalHighIcon,
-  SlidersHorizontalIcon,
   UserCheckIcon,
   UserIcon,
   UserPenIcon,
@@ -97,6 +96,7 @@ import { actionSearchPanel } from "./action-search-menu.js";
 import { type MenuAsk, useAskedMenu } from "./phone-head.js";
 import type { ChosenTasksStore } from "./tasks-selection.js";
 import type { SettledPages } from "./use-settled-pages.js";
+import { resetViewAction, ViewOptions } from "./view-options.js";
 
 /**
  * tasks-page-options.tsx -- the Tasks page's Filter and View options, the two buttons at its toolbar's end, and the chips under it saying what the filter keeps.
@@ -144,9 +144,8 @@ export interface TasksViewFrame {
   readonly column?: Store<string | undefined> | undefined;
 }
 
-/** What the buttons are called, on their tooltips and their menus alike. */
+/** What the Filter is called, on its tooltip and its menu alike. */
 export const FILTER = "Filter";
-export const VIEW_OPTIONS = "View options";
 
 /** What each field is called, on its submenu and its chip. */
 const FIELD_WORDS = {
@@ -830,17 +829,12 @@ function displayEntries({
             }),
         })),
       },
-      {
-        label: TASKS_VIEW_WORDS.RESET_VIEW,
-        icon: <RotateCcwIcon />,
-        disabled: sameDisplay(display, initial),
-        onSelect: () => onDisplay(initial),
-      },
+      resetViewAction(sameDisplay(display, initial), () => onDisplay(initial)),
     ],
   ];
 }
 
-/** The toolbar's View options: its button and the menu it drops, for the view shown. */
+/** The toolbar's View options for the view shown (`ViewOptions`). */
 export function TasksViewOptions({
   shown,
   board,
@@ -862,28 +856,12 @@ export function TasksViewOptions({
   /** Where a phone's ⋯ stands for the button, as the Filter's (`TasksFilterButton`); none elsewhere. */
   asked?: { readonly ask: MenuAsk | undefined } | undefined;
 }): React.JSX.Element {
-  const menu = useMenu(shown);
-  useAskedMenu(menu.show, asked?.ask);
-
   return (
-    <>
-      {asked === undefined ? (
-        <span className="tasks-page-option relative inline-flex">
-          <Tooltip label={VIEW_OPTIONS}>
-            <IconButton icon={<SlidersHorizontalIcon />} label={VIEW_OPTIONS} {...menu.trigger()} />
-          </Tooltip>
-        </span>
-      ) : null}
-      {menu.drawn === undefined ? null : (
-        <ActionMenu
-          label={VIEW_OPTIONS}
-          menu={menu.drawn}
-          replayUnmasked
-          groups={displayEntries({ board, display, initial, onDisplay, shared })}
-          onClose={menu.close}
-        />
-      )}
-    </>
+    <ViewOptions
+      shown={shown}
+      asked={asked}
+      groups={() => displayEntries({ board, display, initial, onDisplay, shared })}
+    />
   );
 }
 
