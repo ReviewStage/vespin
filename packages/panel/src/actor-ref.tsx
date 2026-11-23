@@ -10,6 +10,7 @@ import {
 import type { AutomationRunSummary, AutomationSummary } from "@repo/features/automation-wire";
 import { automationNextText, automationOwnerFor } from "@repo/features/automation-words";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { BOT_TAG_WORDS } from "@repo/features/github-login";
 import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
   AVATAR_OUTLINE,
@@ -646,7 +647,9 @@ function githubBot(actor: Actor): boolean {
 
 /** The quiet badge an App's bot on GitHub wears after its name, as GitHub's own pages mark one; nothing for anyone else. */
 export function BotBadge({ actor }: { actor: Actor }): React.JSX.Element | null {
-  return githubBot(actor) ? <span className={`actor-bot ${QUIET_BADGE}`}>bot</span> : null;
+  return githubBot(actor) ? (
+    <span className={`actor-bot ${QUIET_BADGE}`}>{BOT_TAG_WORDS}</span>
+  ) : null;
 }
 
 /** An actor's card head: its mark at a card's size, its name, which `onOpen` makes the press that opens its page, and the line under it. */

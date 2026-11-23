@@ -1,10 +1,13 @@
 // pull-request-page.tsx -- a pull request's page: its heading with where it stands, who opened it and its branches, the rows of its checks and reviews, each with its face, the line a change GitHub refused leaves, and the question an act asks first.
 
 import { HStack, Menu, ScrollView, Text, Toggle, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  background,
   buttonStyle,
   controlSize,
   disabled,
+  fixedSize,
   font,
   foregroundStyle,
   lineLimit,
@@ -13,9 +16,11 @@ import {
   listRowSeparator,
   menuIndicator,
   monospacedDigit,
+  padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { GitHubPerson, PullRequestLabel, PullRequestState } from "@repo/features/agent-wire";
+import { BOT_TAG_WORDS, githubLoginName } from "@repo/features/github-login";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { agoText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
@@ -27,19 +32,50 @@ import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What joins a pull request's branches, the one it merges from after the one it merges into, as GitHub writes it. */
 const BRANCH_ARROW = "←";
 
-/** Someone a pull request names on GitHub, as a face: their login, their avatar, and an App's bot in its rounded square, as the panel draws them. */
+/**
+ * Someone a pull request names on GitHub, as a face, as the panel draws
+ * them (`@repo/ui`'s `githubActor`): a person by their login and avatar in
+ * a circle, and an App's bot by its login without GitHub's `[bot]`, in its
+ * rounded square, wearing the bot tag after its name (`BotTag`). Every
+ * place that names a GitHub author, a review's, a comment's, or the
+ * opener's, draws them through this.
+ */
 export function githubFace(person: GitHubPerson): Face {
   return {
-    name: person.login,
+    name: githubLoginName(person),
     picture: person.avatarUrl,
     kind: person.bot ? FACE_KIND.APP : FACE_KIND.PERSON,
+    bot: person.bot,
   };
+}
+
+/** The quiet tag after an App's bot's name, as the panel's `BotBadge` and GitHub's own pages mark one: "bot", muted on a soft fill, on one line at every size, and heard as its word. */
+export function BotTag() {
+  const colors = useColors();
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.TIME, weight: "medium" }),
+        foregroundStyle(colors.TEXT_MUTED),
+        lineLimit(1),
+        fixedSize(),
+        padding({ horizontal: 5, vertical: 1 }),
+        background(
+          colors.FILL_STRONG,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.TAG }),
+        ),
+      ]}
+    >
+      {BOT_TAG_WORDS}
+    </Text>
+  );
 }
 
 /** Who opened a pull request and when, and when it merged where it has. */
@@ -98,12 +134,16 @@ function Branch({ name, wraps }: { readonly name: string; readonly wraps: boolea
  * phrase: their face and name, then "opened 3h ago", or, once it merged,
  * "opened · merged 1h ago", the moment that matters once it has; without
  * anyone to name, the phrase alone; on one line, or wrapped where `wraps`.
+ * An App's bot's name wears its tag after it, as the panel's does.
  */
 function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps: boolean }) {
   const colors = useColors();
   const face = useScaledSize(MARK_SIZE.FACE);
-  const verb = opened.by === undefined ? "Opened" : "opened";
+  const by = opened.by;
+  const verb = by === undefined ? "Opened" : "opened";
   const now = Date.now();
+  // Note that a bot's name stands as words of its own, since SwiftUI holds no tag inside a run of words, so the tag can follow it.
+  const tagged = by?.bot === true;
 
   const when =
     opened.mergedAt === null
@@ -112,17 +152,26 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
 
   return (
     <HStack spacing={SPACE.TIGHT + 2}>
-      {opened.by === undefined ? null : (
-        <Avatar
-          name={opened.by.name}
-          picture={opened.by.picture}
-          kind={opened.by.kind}
-          size={face}
-        />
+      {by === undefined ? null : (
+        <Avatar name={by.name} picture={by.picture} kind={by.kind} size={face} />
+      )}
+      {by === undefined || !tagged ? null : (
+        <HStack spacing={SPACE.TIGHT}>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(colors.TEXT_BODY),
+              lineLimit(1),
+            ]}
+          >
+            {by.name}
+          </Text>
+          <BotTag />
+        </HStack>
       )}
       <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), ...(wraps ? [] : [lineLimit(1)])]}>
-        {opened.by === undefined ? null : (
-          <Text modifiers={[foregroundStyle(colors.TEXT_BODY)]}>{`${opened.by.name} `}</Text>
+        {by === undefined || tagged ? null : (
+          <Text modifiers={[foregroundStyle(colors.TEXT_BODY)]}>{`${by.name} `}</Text>
         )}
         <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{when}</Text>
       </Text>
@@ -306,6 +355,7 @@ export function MarkRow({ id, mark, title, detail, standing, face, opens }: Mark
       lead={leads ? avatar : glyph}
       beside={leads ? undefined : avatar}
       title={title}
+      after={face?.of.bot === true ? <BotTag /> : undefined}
       ink={colors.TEXT_BODY}
       end={
         leads ? (
@@ -327,7 +377,12 @@ export function MarkRow({ id, mark, title, detail, standing, face, opens }: Mark
       row={row}
       heard={{
         label: title,
-        value: [standing !== detail && standing, detail, opens !== undefined && opensHeard(opens)],
+        value: [
+          face?.of.bot === true && BOT_TAG_WORDS,
+          standing !== detail && standing,
+          detail,
+          opens !== undefined && opensHeard(opens),
+        ],
       }}
     />
   );

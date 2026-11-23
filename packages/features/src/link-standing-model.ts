@@ -7,6 +7,7 @@
  */
 
 import { type GitHubPerson, PULL_REQUEST_STATE, type PullRequestState } from "./agent-wire.js";
+import { isBotLogin } from "./github-login.js";
 import type {
   GitHubPullRequestSummary,
   GitHubRepositoryIssueAnswer,
@@ -28,9 +29,6 @@ export interface LinkStanding {
   readonly opener: GitHubPerson | undefined;
 }
 
-/** The suffix GitHub gives an App's bot's login, which names a bot where an older service answered no more than the login. */
-const BOT_LOGIN_SUFFIX = "[bot]";
-
 /** Who opened a pull request or a GitHub issue, as GitHub named them on it: their login, their avatar where the service answered one, and whether they are an App's bot. */
 export function openerOf(summary: {
   readonly author?: string;
@@ -40,7 +38,7 @@ export function openerOf(summary: {
   const { author, authorAvatarUrl, authorBot } = summary;
 
   if (author === undefined) return undefined;
-  const person = { login: author, bot: authorBot ?? author.endsWith(BOT_LOGIN_SUFFIX) };
+  const person = { login: author, bot: authorBot ?? isBotLogin(author) };
 
   return authorAvatarUrl === undefined ? person : { ...person, avatarUrl: authorAvatarUrl };
 }

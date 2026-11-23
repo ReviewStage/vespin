@@ -78,13 +78,13 @@ env:
 - assertVisible: "Adds Invite by email.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
-# Note that the description stands above the checks, so the reviewer's row,
-# the page's last, may stand below the fold on a phone and is scrolled to,
+# Note that the description stands above the checks, so the reviewers' rows,
+# the page's last, may stand below the fold on a phone and are scrolled to,
 # dragged at three quarters across as the card is, so a landscape iPad's
 # drag lands on the page rather than the list column beside it.
 - repeat:
     while:
-      notVisible: "grace"
+      notVisible: "relay-review"
     times: 10
     commands:
       - swipe:
@@ -92,6 +92,11 @@ env:
           end: "75%, 35%"
           duration: 400
 - assertVisible: "grace"
+# A review App's bot is named as the panel names it, its login without
+# GitHub's "[bot]", in its rounded square with the bot tag after its name.
+- assertVisible: "relay-review"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-reviewers
 # Merging is the press under the heading, in every window, and it asks
 # first, as the card's Merge does, scrolled back up to after the reviewer.
 # Note that it is dragged back to the page's top every time, rather than
