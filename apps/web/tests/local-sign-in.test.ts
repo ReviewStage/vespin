@@ -12,7 +12,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { jwt, lastLoginMethod } from "better-auth/plugins";
 import { Schema } from "effect";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { localSignIn } from "../server/local-sign-in";
+import { localSignIn, MEMBER_PARAMETER } from "../server/local-sign-in";
 
 /**
  * The demo's sign-in on one Better Auth configured as `auth.ts` configures
@@ -212,6 +212,16 @@ test("an authorization the provider did not sign mints no session", async () => 
 
   const answered = await localSignIn(auth, SEEDED.id).fetch(new Request(forged));
   assert.equal(answered.status, 400);
+  assert.deepEqual(answered.headers.getSetCookie(), []);
+});
+
+test("a sign-in naming a member the database does not hold mints no session", async () => {
+  const auth = serviceAuth();
+  const named = new URL(LOGIN_PAGE, SERVICE_URL);
+  named.searchParams.set(MEMBER_PARAMETER, "de300001-0000-4000-8000-00000000dead");
+
+  const answered = await localSignIn(auth, SEEDED.id).fetch(new Request(named));
+  assert.equal(answered.status, 409);
   assert.deepEqual(answered.headers.getSetCookie(), []);
 });
 
