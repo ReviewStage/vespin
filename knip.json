@@ -104,6 +104,10 @@
       "entry": ["demo-postgres.ts"],
       "project": ["*.ts"]
     },
+    "tools/model-catalog-drift": {
+      "entry": ["check-model-catalog-fake.ts"],
+      "project": ["*.ts"]
+    },
     "tools/oxlint/vespin": {
       "entry": ["index.ts", "repository-guard.ts"],
       "project": ["**/*.ts"]
