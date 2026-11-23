@@ -56,39 +56,46 @@ export type PageFollowing = {
 
 /**
  * A page's heading in the page heading's style, semibold, heard as a heading, the bar above it
- * holding its path; under it a task's status, priority, and assignee as
- * small chips, one to a line at an accessibility size, each opening the
- * menu of its field's values where it carries one, and a line in the
- * body's ink. A task's followers stand under its fields as a chip that
- * opens them, on a line of its own, since a fourth chip runs off a phone's
- * screen, and who made it stands last in the muted footnote, as Notes and
- * Reminders say an item's provenance.
+ * holding its path; under it a task's status and priority as small chips
+ * on one line, then its people on the next: the assignee and the chip of
+ * who follows it, which opens them, since at the body's 17 pt three chips
+ * cut a short name on a phone (the developer, Nov 22, 2026). Each field's
+ * chip opens the menu of its values where it carries one; at an
+ * accessibility size every chip stands on a line of its own. A line in the
+ * body's ink follows, and who made it stands last in the muted footnote,
+ * as Notes and Reminders say an item's provenance.
  */
 export function PageHeader(props: PageHeaderProps) {
   const { title, summary, byline, status, priority, assignee, following, menus } = props;
   const colors = useColors();
 
-  const chips = status !== undefined || priority !== undefined || assignee !== undefined;
+  const fields = status !== undefined || priority !== undefined;
 
-  // Note that at an accessibility size the chips stand one to a line, since three in a row run off a phone's screen.
+  // Note that at an accessibility size the chips stand one to a line, since chips side by side run off a phone's screen there.
   const stacked = useAccessibilitySize();
 
-  const chipRow = (
+  const fieldChips = (
     <>
       {status === undefined ? null : <StatusChip status={status} menu={menus?.status} />}
       {priority === undefined ? null : <PriorityChip priority={priority} menu={menus?.priority} />}
-      {/* Note that the assignee's chip gives way first, its name cut short, so the status and the priority always read whole where a long name runs the row past a phone's width. */}
-      {assignee === undefined ? null : (
-        <HStack modifiers={[layoutPriority(-1)]}>
-          {assignee.nobody ? (
-            <FieldChip label={assignee.name} nobody menu={menus?.assignee} />
-          ) : (
-            <FieldChip label={assignee.name} face={assignee} menu={menus?.assignee} />
-          )}
-        </HStack>
-      )}
     </>
   );
+
+  // Note that the assignee's chip gives way first, its name cut short, so Following always reads whole where a long name runs the line past a phone's width.
+  const assigneeChip =
+    assignee === undefined ? null : (
+      <HStack modifiers={[layoutPriority(-1)]}>
+        {assignee.nobody ? (
+          <FieldChip label={assignee.name} nobody menu={menus?.assignee} />
+        ) : (
+          <FieldChip label={assignee.name} face={assignee} menu={menus?.assignee} />
+        )}
+      </HStack>
+    );
+
+  const followingChip = following === undefined ? null : <FollowingChip {...following} />;
+
+  const people = assignee !== undefined || following !== undefined;
 
   return (
     <VStack
@@ -105,14 +112,23 @@ export function PageHeader(props: PageHeaderProps) {
       >
         {title}
       </Text>
-      {!chips ? null : stacked ? (
+      {stacked ? (
         <VStack alignment="leading" spacing={CHIP_GAP}>
-          {chipRow}
+          {fieldChips}
+          {assigneeChip}
+          {followingChip}
         </VStack>
       ) : (
-        <HStack spacing={CHIP_GAP}>{chipRow}</HStack>
+        <>
+          {fields ? <HStack spacing={CHIP_GAP}>{fieldChips}</HStack> : null}
+          {people ? (
+            <HStack spacing={CHIP_GAP}>
+              {assigneeChip}
+              {followingChip}
+            </HStack>
+          ) : null}
+        </>
       )}
-      {following === undefined ? null : <FollowingChip {...following} />}
       {summary === undefined ? null : (
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT_BODY)]}
