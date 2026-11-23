@@ -630,6 +630,8 @@ interface ComposerParts {
   readonly send: ReactElement;
   /** Lets go of the keyboard the field holds. */
   readonly lower: () => void;
+  /** Hands the field the keyboard, its caret where it stood. */
+  readonly raise: () => void;
 }
 
 /** Whether the composer stands its controls in a row under its field, as the desktop composer does: one that starts work or speaks to an agent, holding capsules (`tools`, `trailing`). */
@@ -762,9 +764,15 @@ function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts 
     void field.current?.blur().catch(() => undefined);
   }, [pillDoor]);
 
+  const raise = useCallback(() => {
+    if (pillDoor !== undefined) return pillDoor.current?.focus();
+    void field.current?.focus().catch(() => undefined);
+  }, [pillDoor]);
+
   return {
     add: rowed ? null : <AddPress menu={addMenu} onAdd={onAdd} />,
     lower,
+    raise,
     field: pillsField ?? (
       <TextField
         ref={field}
@@ -1092,6 +1100,19 @@ function useOneLine(props: ComposerProps): boolean {
 }
 
 /**
+ * What makes a press anywhere on the field's line, its room around the words
+ * included, hand the field the keyboard: over its row the field stands no
+ * taller than its words, and the system's field answers only on them. The
+ * field's own presses, on its words, and the line's buttons still come first.
+ */
+function fieldLinePress(parts: ComposerParts) {
+  return [
+    SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+    SwiftModifiers.onTapGesture(parts.raise),
+  ];
+}
+
+/**
  * The line a composer's field stands in where its row stands under it: the
  * field alone, or, on one line (`useOneLine`), the + before it and what is
  * picked, Dictate, a call's presses, and Send after it, the presses at their
@@ -1116,7 +1137,7 @@ function FieldLine({
   const beside = [fixedSize(), frame({ minHeight: PRESS_SIZE })];
 
   return (
-    <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
+    <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={fieldLinePress(parts)}>
       {oneLine ? <AddPress menu={addMenu} onAdd={onAdd} testId={testIds?.add} /> : null}
       {parts.field}
       {/* Note that what is picked stands at no fixed width here, so at the largest sizes its name is cut rather than the field squeezed past its least width; the presses keep theirs. */}
@@ -1206,7 +1227,9 @@ export function ComposerFoot(props: ComposerProps) {
 
   // Note that a field over a row of controls stands alone in the glass's column, at its width, with no row of its own around it to size it again.
   const pieces = rowed ? (
-    parts.field
+    <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={fieldLinePress(parts)}>
+      {parts.field}
+    </HStack>
   ) : (
     <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
       <RowPieces parts={parts} />
