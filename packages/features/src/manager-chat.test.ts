@@ -13,7 +13,7 @@ import {
 /**
  * manager-chat.test.ts -- a Manager's transcript as its chat: people's lines
  * stand, the lines its agents and wakes sent it go, each `send_to_user` call
- * stands as a message of its own, and the messages stand in runs by sender.
+ * and each set `show_media` showed stands as a message of its own, and the messages stand in runs by sender.
  * Synthetic words.
  */
 
@@ -39,15 +39,29 @@ function sent(callId: string, text: string, status: string): WireRecord {
   };
 }
 
-/** Each chat line as its id and the words it draws. */
+function shown(callId: string, status: string): WireRecord {
+  return {
+    type: "tool-show_media",
+    toolCallId: callId,
+    state: "output-available",
+    input: { images: [{ path: "/tmp/shared/home.png", caption: "Home" }] },
+    output: status === "accepted" ? { status, pictures: [{ id: "picture" }] } : { status },
+  };
+}
+
+/** Each chat line as its id and what it draws: its words, and each call it draws as the call shown. */
 function drawn(messages: readonly AgentTranscriptMessage[]): [string, string[]][] {
   return managerChatLines(messages).map((message) => [
     message.id,
-    agentParts(message).flatMap((part) => (part.kind === AGENT_PART.TEXT ? [part.text] : [])),
+    agentParts(message).flatMap((part) => {
+      if (part.kind === AGENT_PART.TOOL) return [`${part.tool} ${part.callId}`];
+
+      return part.kind === AGENT_PART.TEXT ? [part.text] : [];
+    }),
   ]);
 }
 
-test("a Manager's chat keeps people's lines, each sent message as one of its own, and the voice's lines on a call, and leaves out its other words and calls, its agents' and wakes' lines, and a turn that sent nothing", () => {
+test("a Manager's chat keeps people's lines, each sent message and each set shown as one of its own, and the voice's lines on a call, and leaves out its other words and calls, a set refused, its agents' and wakes' lines, and a turn that sent nothing", () => {
   const messages = [
     line("ada", { metadata: { channel: "typed" }, sentBy: { name: "Ada", userId: "u-ada" } }),
     turn("turn-1", [
@@ -63,6 +77,8 @@ test("a Manager's chat keeps people's lines, each sent message as one of its own
       sent("refused", "Too soon.", "rejected"),
       { type: "step-start" },
       sent("first", "On it: I made the task.", "accepted"),
+      shown("unshown", "rejected"),
+      shown("screenshot", "accepted"),
       sent("second", "An agent is working on it.", "accepted"),
     ]),
     line("worker", { sentBy: { name: "Billing fix", agent: true } }),
@@ -81,6 +97,7 @@ test("a Manager's chat keeps people's lines, each sent message as one of its own
   assert.deepEqual(drawn(messages), [
     ["ada", ["ada"]],
     ["turn-1", ["On it: I made the task."]],
+    ["screenshot", ["show_media screenshot"]],
     ["second", ["An agent is working on it."]],
     ["grace", ["grace"]],
     ["asked", ["asked"]],

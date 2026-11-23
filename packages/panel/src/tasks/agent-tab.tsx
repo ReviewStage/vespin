@@ -4017,7 +4017,7 @@ function AgentTabView({
   );
 
   const conditions = useMemo(() => goalConditions(kept), [kept]);
-  // Note that a Manager's page is its chat, never its transcript: people's lines and its `send_to_user` words alone, its work shown only as the working line.
+  // Note that a Manager's page is its chat, never its transcript: people's lines, its `send_to_user` words, and its `show_media` sets alone, its work shown only as the working line.
   const chat = agent.kind === AGENT_KIND.MANAGER;
   const drawnLines = useMemo(() => (chat ? managerChatLines(lines) : lines), [chat, lines]);
   useManagerChatLooks(chat ? agent.id : undefined, agent.saidAt);
