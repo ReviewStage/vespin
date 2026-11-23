@@ -156,8 +156,8 @@ const FIELD_LEADING = SPACE.ROW + 4 - BAR_EDGE;
 /** How far the field's words stand from Send's frame, which stands its round in by less than the row's spacing did. */
 const FIELD_TRAILING = SPACE.TIGHT;
 
-/** The most lines the field grows to before it scrolls its words; fewer at an accessibility size, where six of its lines with the keyboard up left the transcript over it no room. */
-const FIELD_LINES = { REGULAR: 6, LARGE: 3 } as const;
+/** The most lines the field grows to before it scrolls its words; fewer at an accessibility size, where six of its lines with the keyboard up left the transcript over it no room, and one on the composer's one line (`useOneLine`), where a line more stood its row behind the keyboard. */
+const FIELD_LINES = { REGULAR: 6, LARGE: 3, ONE_LINE: 1 } as const;
 
 /** What the + is named by, whether it opens one act or a menu. */
 export const ADD_LABEL = "Add";
@@ -628,7 +628,7 @@ function stacked(props: ComposerProps): boolean {
 }
 
 /** The composer's pieces, the field holding its words and Send sending them. */
-function useComposerParts(props: ComposerProps): ComposerParts {
+function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts {
   const {
     placeholder,
     words: held,
@@ -688,7 +688,8 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   };
 
   const empty = words.trim() === "" && !sendable;
-  const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
+  const large = useAccessibilitySize();
+  const lines = oneLine ? FIELD_LINES.ONE_LINE : large ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
   const rowed = stacked(props);
   // Note that the field stands one line until its words wrap, then grows to its most. The limit is a range, because `@expo/ui` draws a range and a bare limit down two branches, and a switch between them made the field anew, dropping the keyboard.
   const height = lineLimit({ min: 1, max: lines });
@@ -1070,9 +1071,12 @@ function useOneLine(props: ComposerProps): boolean {
 
 /**
  * The line a composer's field stands in where its row stands under it: the
- * field alone, or, on one line (`useOneLine`), the + and the capsules before
- * it and what is picked, Dictate, a call's presses, and Send after it, each
- * at its whole width, the field taking the rest. Note that the field keeps
+ * field alone, or, on one line (`useOneLine`), the + before it and what is
+ * picked, Dictate, a call's presses, and Send after it, each at its whole
+ * width, the field taking the rest at one line's height. The capsules step
+ * aside there with the dock, since beside the model at an accessibility size
+ * they left the field a few words' width, and they stand again once the
+ * keyboard goes. Note that the field keeps
  * its one place in this line either way, so turning one line or two never
  * draws it anew, which would let go of the keyboard that turned it.
  */
@@ -1085,17 +1089,12 @@ function FieldLine({
   readonly parts: ComposerParts;
   readonly oneLine: boolean;
 }) {
-  const { addMenu, onAdd, tools, trailing, testIds, dictation } = props;
+  const { addMenu, onAdd, trailing, testIds, dictation } = props;
   const beside = [fixedSize(), frame({ minHeight: PRESS_SIZE })];
 
   return (
     <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
       {oneLine ? <AddPress menu={addMenu} onAdd={onAdd} testId={testIds?.add} /> : null}
-      {oneLine && tools !== undefined ? (
-        <HStack spacing={TOOL_SPACING} modifiers={beside}>
-          {tools}
-        </HStack>
-      ) : null}
       {parts.field}
       {oneLine ? (
         <HStack spacing={TOOL_SPACING} modifiers={beside}>
@@ -1120,10 +1119,10 @@ function FieldLine({
  * bar: the + for what a message carries, the field, which grows with its
  * words, and Send filled with the ink, or Stop while the field is empty and
  * a turn runs, and, where it starts work, the + and the start's capsules in
- * a row under the field, or on the field's own line in a short window while
- * the keyboard stands (`useOneLine`), where what stands over the bar, such as
- * an agent's dock, steps aside until the keyboard goes, as the transcript
- * does. Where its holder keeps the words, the field
+ * a row under the field, or, in a short window while the keyboard stands,
+ * its + and its row's presses on the field's own line (`useOneLine`), where
+ * the capsules and what stands over the bar, such as an agent's dock, step
+ * aside until the keyboard goes, as the transcript does. Where its holder keeps the words, the field
  * follows them, so words a refused send hands back stand in it again; else
  * it empties on Send. Pictures dropped on it, on an iPad, go to its
  * holder's `onDropPictures`. It stands in a React Native bar (`GlassBar`),
@@ -1131,9 +1130,9 @@ function FieldLine({
  */
 export function Composer(props: ComposerProps) {
   const { onDropPictures } = props;
-  const parts = useComposerParts(props);
-  const rowed = stacked(props);
   const oneLine = useOneLine(props);
+  const parts = useComposerParts(props, oneLine);
+  const rowed = stacked(props);
 
   // Note that the foot stays given, empty on one line, so the bar keeps the column its field stands in and never draws the field anew.
   const foot = oneLine ? null : <ComposerRow props={props} parts={parts} />;
