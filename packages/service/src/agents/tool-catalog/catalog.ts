@@ -591,6 +591,7 @@ const CATALOG = [
     (admitted, input, { standing, sandbox }) =>
       runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS), sandbox),
     {
+      alwaysLoad: true,
       variant: lookAtPictureToolOf,
       content: lookedPictureContent,
       // Note that a look answers in its own shape, with the gate's words.
@@ -607,7 +608,7 @@ const CATALOG = [
     (admitted, input, { sandbox }) => runAgentShowPage(admitted, input, sandbox),
     { ...LOADED, gates: [TOOL_GATE.TASK] },
   ),
-  agentTool(READ_PAGE_TOOL, runReadPage),
+  agentTool(READ_PAGE_TOOL, runReadPage, LOADED),
   // The workspace's agents.
   agentTool(START_AGENT_TOOL, runStartAgent, { ...LOADED, variant: startAgentToolOf }),
   agentTool(STOP_AGENT_TOOL, runStopAgent),
