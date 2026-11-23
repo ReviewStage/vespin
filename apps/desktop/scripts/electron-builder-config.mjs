@@ -13,6 +13,7 @@ import {
   APP_UPDATE_CACHE_DIR_NAME,
   APP_UPDATE_FEED_URL,
   APPLE_EVENTS_USAGE_DESCRIPTION,
+  isE2eBuild,
   MAC_SIGNING_TEAM_ID,
   MACOS_DEPLOYMENT_TARGET,
   MICROPHONE_USAGE_DESCRIPTION,
@@ -56,6 +57,7 @@ function macBinaryPath(helper) {
 export function createElectronBuilderConfig(env = process.env) {
   const signing = resolveSigningMode(env);
   const developerIdSigned = signing.mode === SIGNING_MODE.DEVELOPER_ID;
+  const e2eBuild = isE2eBuild(env);
 
   return {
     appId: APP_ID,
@@ -81,11 +83,13 @@ export function createElectronBuilderConfig(env = process.env) {
     // permissions. The app loads only from its asar, checked against the hash
     // in Info.plist, and its cookies are encrypted with the same Keychain key
     // `safeStorage` already uses. A development run (`electron .`) keeps
-    // Electron's defaults.
+    // Electron's defaults, and the end-to-end build (`isE2eBuild`, never a
+    // release) keeps `--inspect` alone, which Playwright drives the main
+    // process through.
     electronFuses: {
       runAsNode: false,
       enableNodeOptionsEnvironmentVariable: false,
-      enableNodeCliInspectArguments: false,
+      enableNodeCliInspectArguments: e2eBuild,
       enableEmbeddedAsarIntegrityValidation: true,
       onlyLoadAppFromAsar: true,
       enableCookieEncryption: true,
