@@ -109,8 +109,15 @@ export interface NativeDocumentFieldDoors {
   insertPills(pills: readonly NativePill[], word: NativeWord | undefined): Promise<void>;
   /** Writes plain words in place of the `@` word a pick names. */
   rewriteWord(text: string, word: NativeWord | undefined): Promise<void>;
-  /** Takes the keyboard with the caret on the line at `line`, `x` and `y` points in from its first line's start, where a press on the words as read landed. */
-  focusAt(line: number, x: number, y: number): Promise<void>;
+}
+
+/** Where a field takes the keyboard as it comes to stand: at its words' start, or on the line at `line`, `x` and `y` points in from its first line's start. */
+export interface NativeOpening {
+  readonly nonce: number;
+  readonly start: boolean;
+  readonly line: number;
+  readonly x: number;
+  readonly y: number;
 }
 
 interface NativeDocumentFieldProps {
@@ -123,6 +130,8 @@ interface NativeDocumentFieldProps {
   readonly formats?: NativeFormats | undefined;
   /** Whether the field grows to its words inside the page that holds it, rather than scrolling them itself, telling the height they ask for. */
   readonly fitsWords?: boolean | undefined;
+  /** Where the field takes the keyboard as it comes to stand, laid once for each `nonce` once it stands in a window; none leaves the keyboard alone. */
+  readonly opening?: NativeOpening | undefined;
   readonly testID?: string | undefined;
   /** The height the words ask for, while the field grows to them. */
   readonly onHeight?:
