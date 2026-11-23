@@ -85,7 +85,15 @@ import {
   toolCallView,
   toolTarget,
 } from "@repo/features/tool-call-model";
-import { agentMessageOf, suggestedByOf, suggestionStartOf } from "@repo/features/transcript-lines";
+import {
+  agentMessageOf,
+  type GitHubLineFold,
+  githubLineFold,
+  githubLineOf,
+  githubLineWords,
+  suggestedByOf,
+  suggestionStartOf,
+} from "@repo/features/transcript-lines";
 import {
   CALL_KIND,
   CALL_MARK,
@@ -120,6 +128,8 @@ export const TRANSCRIPT_ITEM = {
   PAGE: "page",
   /** A pull request a call opened, as its card. */
   PULL_REQUEST: "pull-request",
+  /** What GitHub said on the agent's pull request, as the panel's folding card: its head, opening on what it holds. */
+  GITHUB: "github",
   /** The quiet line a finished turn ends on: how long it worked and when it ended. */
   FOOT: "foot",
   /** The line the transcript ends on while its agent works. */
@@ -284,6 +294,15 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly title: string;
       readonly page: string;
       readonly version: number;
+    }
+  | {
+      readonly kind: typeof TRANSCRIPT_ITEM.GITHUB;
+      /** The card as the panel draws it (`githubLineFold`). */
+      readonly fold: GitHubLineFold;
+      /** Whether it stands open on what it holds; never for a card that folds nothing. */
+      readonly open: boolean;
+      /** The line as words, as the panel's copy reads it (`githubLineWords`), which its long press copies. */
+      readonly copy: string;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST;
@@ -541,12 +560,27 @@ function saidFiles(line: AgentTranscriptMessage): readonly SaidFile[] {
   });
 }
 
-/** A line someone sent, as its item: one sent from a suggestion headed by who suggested it, its words without the lead that names that agent to the agent reading them. */
+/** A line someone sent, as its item: one sent from a suggestion headed by who suggested it, its words without the lead that names that agent to the agent reading them; one GitHub sent as the panel's folding card. */
 function saidItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
   reading: TranscriptReading,
 ): TranscriptItem {
+  const github = githubLineOf(line);
+
+  // Note that what GitHub said is drawn as the panel's card, closed as it lands since its head says what happened, never as the prompt the agent read.
+  if (github !== undefined) {
+    const fold = githubLineFold(github, messageWords(line));
+
+    return {
+      ...base,
+      kind: TRANSCRIPT_ITEM.GITHUB,
+      fold,
+      open: fold.folds && foldTurned(reading.toggles, base.place),
+      copy: githubLineWords(github, messageWords(line)),
+    };
+  }
+
   // Note that a line is the reader's own only by a user id that matches theirs, so an app's line, which has none, keeps its name while the reader is unknown.
   const own =
     line.sentBy === undefined ||

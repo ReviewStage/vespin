@@ -27,6 +27,7 @@ import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
+import { GitHubLineCard } from "./github-line-card.js";
 import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
@@ -1046,6 +1047,21 @@ function TranscriptRow({
               accessibilityElementsHidden
             />
           </Press>
+        </View>
+      );
+    case TRANSCRIPT_ITEM.GITHUB:
+      // Note that GitHub's card stands across the column at its leading edge, as the panel stands a received line, between the sent lines' bubbles.
+      return (
+        <View style={[styles.row, { paddingVertical: SPACE.ROW }]}>
+          <GitHubLineCard
+            fold={item.fold}
+            open={item.open}
+            copy={item.copy}
+            width={rowWidth(drawing.column)}
+            repository={drawing.repository}
+            onToggle={() => drawing.onToggle(item)}
+            onOpenLink={drawing.onOpenLink}
+          />
         </View>
       );
     case TRANSCRIPT_ITEM.PULL_REQUEST:
