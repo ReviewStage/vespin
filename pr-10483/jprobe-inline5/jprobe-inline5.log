@@ -1,0 +1,85 @@
+chore/probe-inline-timing pinned to 455c2d2928 (wanted 455c2d2928)
+built main 4b4fd73efe + #10483 455c2d2928 as 8b9188cc3e
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 00:01:48 29398 MB
+curve 00:02:18 29261 MB
+curve 00:02:48 27242 MB
+curve 00:03:18 27069 MB
+curve 00:03:49 26756 MB
+curve 00:04:19 26748 MB
+curve 00:04:49 26710 MB
+curve 00:05:19 26644 MB
+curve 00:05:49 26594 MB
+curve 00:06:19 26425 MB
+curve 00:06:49 26187 MB
+curve 00:07:20 25977 MB
+curve 00:07:50 26587 MB
+curve 00:08:20 26549 MB
+curve 00:08:50 26512 MB
+curve 00:09:20 26398 MB
+curve 00:09:50 26212 MB
+curve 00:10:21 26087 MB
+curve 00:10:51 26019 MB
+curve 00:11:21 25979 MB
+curve 00:11:51 25912 MB
+curve 00:12:21 25851 MB
+curve 00:12:52 25812 MB
+curve 00:13:22 25759 MB
+curve 00:13:52 25749 MB
+curve 00:14:22 25725 MB
+curve 00:14:52 25707 MB
+curve 00:15:22 25698 MB
+curve 00:15:53 25657 MB
+curve 00:16:23 25642 MB
+curve 00:16:53 25485 MB
+curve 00:17:23 25447 MB
+curve 00:17:53 25436 MB
+curve 00:18:24 25387 MB
+curve 00:18:54 25331 MB
+curve 00:19:24 25309 MB
+curve 00:19:54 25285 MB
+curve 00:20:24 25227 MB
+curve 00:20:55 25073 MB
+curve 00:21:25 24689 MB
+curve 00:21:55 24557 MB
+curve 00:22:25 24444 MB
+curve 00:22:55 24342 MB
+curve 00:23:25 24163 MB
+curve 00:23:55 24095 MB
+curve 00:24:26 23967 MB
+curve 00:24:56 23900 MB
+curve 00:25:26 23881 MB
+curve 00:25:56 23797 MB
+curve 00:26:26 23771 MB
+curve 00:26:56 23659 MB
+curve 00:27:26 23618 MB
+curve 00:27:56 23597 MB
+curve 00:28:27 23578 MB
+curve 00:28:57 23594 MB
+curve 00:29:27 23570 MB
+curve 00:29:57 23544 MB
+curve 00:30:27 23437 MB
+curve 00:30:58 23435 MB
+curve 00:31:28 23432 MB
+curve 00:31:58 23400 MB
+curve 00:32:28 23387 MB
+BUILD EXIT 0 00:32:58
+sizes: Assets.car 23863128 bytes (main Vmain10.app 23863128), .app 121052 KB (main 119968 KB), zipped .app 45280475 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjprobe-inline5.app: replacing existing signature
+p10483-iphone-light-pill-field: fails 0 shots 11 
+p10483-iphone-light-description-edit: fails 1 shots 3 Assert that "Ada Lovelace.*You" is visible... FAILED
+p10483-iphone-light-probe-inline-12000: fails 0 shots 3 
+PROBEINLINE 12000: show 57, stream 56
+p10483-iphone-light-probe-inline-25000: fails 0 shots 3 
+PROBEINLINE 25000: show 57, stream 56
+p10483-iphone-light-probe-inline-179000: fails 0 shots 3 
+PROBEINLINE 179000: show 57, stream 56
+p10483-iphone-light-probe-inline-12000b: fails 0 shots 3 
+PROBEINLINE 12000b: show 57, stream 56
+p10483-ipad27-light-description-edit: fails 1 shots 3 Assert that "Ada Lovelace.*You" is visible... FAILED
