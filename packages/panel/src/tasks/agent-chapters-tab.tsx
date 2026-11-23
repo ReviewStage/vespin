@@ -1,4 +1,5 @@
 import type { AgentChangedFile } from "@repo/features/agent-wire";
+import { CHANGES_WORDS } from "@repo/features/changed-files";
 import { chaptersProviderOf } from "@repo/features/chapters-model-choice";
 import { fileName } from "@repo/features/code-ref-words";
 import { formatCount } from "@repo/features/number-format";
@@ -106,7 +107,6 @@ import {
 import { API_KEY_WORDS } from "./agent-model.js";
 import { Section } from "./agent-pull-request-tab.js";
 import { typingInto } from "./changes-list.js";
-import { CHANGES_WORDS } from "./changes-model.js";
 import {
   CHAPTERS_SHOWN,
   type ChaptersShown,

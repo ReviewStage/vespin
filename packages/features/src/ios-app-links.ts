@@ -80,6 +80,8 @@ const IOS_ROUTE = {
   PULL_REQUEST: "pull",
   /** A pull request by its workspace, its repository, and its number, under Tasks. */
   REPOSITORY_PULL_REQUEST: "/tasks/pull",
+  /** The files a pull request changes, under its own route. */
+  PULL_REQUEST_FILES: "files",
   /** A person's page in the workspace the phone works in. */
   PERSON: "/tasks/person",
 } as const;
@@ -248,6 +250,15 @@ export function iosRepositoryPullRequestRoute(
   return agentId === undefined
     ? route
     : `${route}?${new URLSearchParams({ [IOS_PULL_REQUEST_AGENT_PARAM]: agentId })}`;
+}
+
+/** The app's route for the files a pull request changes, by its workspace, its repository, and its number: its own route's Files. */
+export function iosPullRequestFilesRoute(pullRequest: {
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly number: number;
+}): string {
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_FILES}`;
 }
 
 /**
