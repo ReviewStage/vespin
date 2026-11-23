@@ -385,18 +385,26 @@ it.effect(
 );
 
 it.effect(
-  "resumes a fork's source agent as one of its own, under an id it mints, every entry mirrored under that id",
+  "resumes a fork's source agent as one of its own, under an id it mints, every entry mirrored under that id, its first message led by the fork's own instructions",
   () =>
     Effect.gen(function* () {
       const appended = fakeTranscripts(TWO_TURNS_HELD);
       const { cursor, write, run } = yield* launch([{ messages: RECORDED_TURN }], fakeService());
-      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL, fork: true });
+      const instructions = "You are the forked Vespin coding agent.";
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL, fork: true, instructions });
       yield* write(message("Carry on from here.", LINE_AFTER_REWIND));
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
       vi.restoreAllMocks();
       const [resumed] = cursor.resumed.map(({ agentId }) => agentId);
       assert.ok(resumed !== undefined && resumed !== SESSION);
+      // Note that the source's conversation holds the source's instructions, so the fork's lead its first message.
+      assert.deepEqual(
+        cursor.sent.map(({ message: sent }) => sent.text),
+        [
+          "<coder_instructions>\nYou are the forked Vespin coding agent.\n</coder_instructions>\n\nCarry on from here.",
+        ],
+      );
       assert.deepEqual(
         [...new Set(appended.map(({ key }) => JSON.stringify(key)))],
         [JSON.stringify({ projectKey: RUNNER_TRANSCRIPTS.CURSOR_PROJECT, sessionId: resumed })],
