@@ -39,13 +39,16 @@ const styles = StyleSheet.create({
  * review thread on the file stands as a card under the line it is on, as
  * GitHub's diff stands it, saying who started it, their first line, and
  * how many replies follow; a press on it opens the thread. A long press on
- * a line of code offers Comment on line and Copy line, the system's own menu. A patch that does not read as a unified
+ * a line of code offers Comment on line and Copy line, the system's own menu.
+ * Where `split` asks and the view is wide enough, the old side stands beside
+ * the new, each run of removed lines beside the added lines after it. A patch that does not read as a unified
  * diff draws nothing, which its screen says in words (`fileNotice`).
  */
 export function DiffView({
   patch,
   path,
   wrap = true,
+  split = false,
   threads = NO_THREADS,
   onThreadPress,
   onLineComment,
@@ -55,6 +58,8 @@ export function DiffView({
   /** The file's path, whose extension names the language its code is colored in. */
   readonly path: string;
   readonly wrap?: boolean | undefined;
+  /** Whether the old side stands beside the new, as a regular window offers it; the view draws unified where it is too narrow for two halves of code, whatever this says. */
+  readonly split?: boolean | undefined;
   /** The pull request's review threads, those on `path` drawn as cards under the lines they are on. */
   readonly threads?: readonly ReviewThread[] | undefined;
   /** Opens a review thread whose card was pressed. */
@@ -71,6 +76,7 @@ export function DiffView({
   const look: NativeDiffLook = {
     fontSize,
     wrap,
+    split,
     text: colors.TEXT_BODY,
     muted: colors.TEXT_MUTED,
     ground: colors.GROUND,

@@ -87,6 +87,7 @@ const FILES_WORDS = {
 const FILE_WORDS = {
   MORE: "More",
   VIEWED: "Viewed",
+  SPLIT: "Split view",
   PREVIOUS: "Previous file",
   NEXT: "Next file",
   WRAP: "Wrap lines",
@@ -266,7 +267,9 @@ export function PullRequestFilesScreen() {
  * file named by its path in the route's query: its name in the bar, in the
  * ink, its folder under it, and the diff filling the screen
  * (`DiffView`), drawn natively and wrapped unless Wrap lines in the ⋯ says
- * not. Viewed in the ⋯ marks the file viewed on GitHub, or unmarks it, as
+ * not. A regular window, an iPad's or an unfolded Duo's, stands the old side
+ * beside the new where it has room, as Dean picked, Split view in the ⋯
+ * turning it off. Viewed in the ⋯ marks the file viewed on GitHub, or unmarks it, as
  * the desktop's box does (`useFileViewed`). The arrows beside the ⋯ step to the file before or after it in the
  * list's order, in place, as Mail steps between messages, an arrow at the
  * list's end standing dimmed; the ⋯ also opens the file's diff on GitHub.
@@ -292,6 +295,8 @@ export function PullRequestFileScreen() {
   const threads = usePullRequestThreads(key);
   const onOwnTab = useOnOwnTab();
   const [wrap, setWrap] = useState(true);
+  // Note that a regular window splits a diff by default, as Dean picked, and a compact one never offers it.
+  const [split, setSplit] = useState(true);
   // The files whose folded diff was asked for by Show diff, by path, held while the screen stands.
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
   const ordered = changes.files === undefined ? [] : treeOrder(changes.files);
@@ -339,6 +344,11 @@ export function PullRequestFileScreen() {
           >
             {FILE_WORDS.VIEWED}
           </Stack.Toolbar.MenuAction>
+          {regular ? (
+            <Stack.Toolbar.MenuAction isOn={split} onPress={() => setSplit(!split)}>
+              {FILE_WORDS.SPLIT}
+            </Stack.Toolbar.MenuAction>
+          ) : null}
           <Stack.Toolbar.MenuAction isOn={wrap} onPress={() => setWrap(!wrap)}>
             {FILE_WORDS.WRAP}
           </Stack.Toolbar.MenuAction>
@@ -365,6 +375,7 @@ export function PullRequestFileScreen() {
           patch={file.patch}
           path={file.path}
           wrap={wrap}
+          split={regular && split}
           threads={threads}
           onThreadPress={(thread) => {
             const first = thread.comments[0]?.url;

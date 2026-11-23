@@ -9,6 +9,8 @@ import type { DiffColumns } from "./diff-view-model.js";
 export interface NativeDiffLook {
   readonly fontSize: number;
   readonly wrap: boolean;
+  /** Whether the old side stands beside the new, where the view is wide enough for two halves of code. */
+  readonly split: boolean;
   readonly text: ColorValue;
   readonly muted: ColorValue;
   readonly ground: ColorValue;
