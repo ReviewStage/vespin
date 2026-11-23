@@ -1,0 +1,12 @@
+== bundle PJj10078c base 590dab3977
+  built 590dab3977 base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-fsw10078: task row middle y=545 width=402 (leading 32>152, trailing 321>180); part A: fails 0 shots 1
+iphone-light-fsw10078: part B: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB; agent row middle y=0
+iphone-light-fsw10078: no agent row in the hierarchy
+iphone-dark-fsw10078: task row middle y=545 width=402 (leading 32>152, trailing 321>180); part A: fails 0 shots 1
+iphone-dark-fsw10078: part B: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB; agent row middle y=0
+iphone-dark-fsw10078: no agent row in the hierarchy
