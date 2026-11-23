@@ -18,7 +18,7 @@ import {
   type InboxMessage,
   inboxItemSchema,
 } from "@repo/features/inbox-wire";
-import { TASK_LIST_READ } from "@repo/features/task-list-live";
+import { TASK_LIST_READ, taskSummaryOf } from "@repo/features/task-list-live";
 import { TASK_PRIORITY, TASK_STATUS } from "@repo/features/task-wire";
 import { workspaceSchema } from "@repo/features/workspace-wire";
 import { Effect, Layer, Schema } from "effect";
@@ -338,7 +338,18 @@ it.effect("writes the probe's synthetic local database", () =>
         yield* write(
           KEPT_LIST.INBOX,
           inbox.map(({ item }) => ({ key: item.id, row: item })),
-          { plans: Object.fromEntries(inbox.map(({ item, taskId }) => [item.id, taskId])) },
+          {
+            plans: Object.fromEntries(inbox.map(({ item, taskId }) => [item.id, taskId])),
+            ...(process.env.PROBE_SEED_HOLDERS === "1"
+              ? {
+                  holders: [...new Set(inbox.map(({ taskId }) => taskId))]
+                    .slice(0, 250)
+                    .map((taskId) =>
+                      taskSummaryOf(plans.find((plan) => plan.id === taskId) as PlanRow, undefined),
+                    ),
+                }
+              : undefined),
+          },
         );
       }),
     );
