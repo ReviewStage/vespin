@@ -415,7 +415,12 @@ and lands each request by `api-rewrites.json` through the same replay the tests
 use (`server/local-deployment.ts`, `server/platform-landing.ts`). Every path no
 rewrite takes is the site's, which Vite serves in middleware mode from the page
 the web service's page routes in `vercel.json` land it on, as `/app` and a
-workspace's links land on `app.html`, without those routes' headers. The three
+workspace's links land on `app.html`, without those routes' headers. With
+`--built-pages` (or `LOCAL_SERVER_BUILT_PAGES=true`) it first runs `vite build`
+into `.build/local-pages/` and serves those files through the same page table
+instead, a folder's path as its `index.html` and a path no file answers as
+`404.html`, while the routes are still imported from source: the E2E suite
+(`apps/e2e`) runs on it. The three
 WebSocket functions and the feedback courier are not served, and the scheduled
 sweep is called in process on the cron's cadence under `CRON_SECRET`.
 

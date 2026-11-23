@@ -16,7 +16,11 @@
  * Every path a rewrite of the committed table takes is the deployment's,
  * answered by the function the rewrite lands it on
  * (`server/local-deployment.ts`); every other path is the site's, which Vite
- * serves in middleware mode as `pnpm dev` would. It listens on 127.0.0.1
+ * serves in middleware mode as `pnpm dev` would. With `--built-pages` (or
+ * `LOCAL_SERVER_BUILT_PAGES=true`) it runs `vite build` first and serves the
+ * pages it wrote instead, through the same page table, while the routes are
+ * still imported from source, as close to the deployment as this machine
+ * can come: a function's bundle does not run here. It listens on 127.0.0.1
  * alone, on `--port`, `PORT`, or Vite's own port, and calls the scheduled
  * sweep on the cron's cadence under `CRON_SECRET`, as Vercel's cron does.
  *
@@ -30,10 +34,15 @@
 
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { registerHooks } from "node:module";
-import { join } from "node:path";
+import { createRequire, registerHooks } from "node:module";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { NodeHttpServer, NodeHttpServerRequest, NodeRuntime } from "@effect/platform-node";
+import {
+  NodeHttpServer,
+  NodeHttpServerRequest,
+  NodeRuntime,
+  NodeServices,
+} from "@effect/platform-node";
 import { AUTH_DEPLOYMENT_ENVIRONMENT } from "@repo/service/auth/auth-deployment";
 import { localServerRefusal } from "@repo/service/local/local-server-guard";
 import {
@@ -47,13 +56,22 @@ import {
   ConfigProvider,
   Duration,
   Effect,
+  FileSystem,
   Layer,
   Option,
+  type PlatformError,
   Redacted,
   Schedule,
   Schema,
 } from "effect";
-import { HttpEffect, HttpServer, HttpServerRequest, HttpServerResponse } from "effect/http";
+import {
+  HttpEffect,
+  type HttpPlatform,
+  HttpServer,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/http";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { createServer as createViteServer, type InlineConfig, type ViteDevServer } from "vite";
 import type { LocalDeployment } from "../server/local-deployment.js";
 
@@ -67,8 +85,11 @@ const DEFAULT_PORT = 5173;
 
 const PORT_FLAG = "--port";
 
+const BUILT_PAGES_FLAG = "--built-pages";
+
 const ENV = {
   PORT: "PORT",
+  BUILT_PAGES: "LOCAL_SERVER_BUILT_PAGES",
   AUTH_URL: AUTH_DEPLOYMENT_ENVIRONMENT.PRODUCTION_URL,
   CRON_SECRET: CRON_ENVIRONMENT.CRON_SECRET,
 } as const;
@@ -89,6 +110,25 @@ const SHUTDOWN_GRACE = Duration.seconds(1);
  */
 const VITE: InlineConfig = { root: WEB, server: { middlewareMode: true, ws: false } };
 
+/**
+ * Where the built pages are written: the repository's scratch, so a
+ * `pnpm build`'s own `dist`, prerendered pages and all, is never overwritten.
+ */
+const BUILT_PAGES = join(WEB, ".build", "local-pages");
+
+/** Vite's command line, run by this Node rather than through a package manager. */
+const VITE_BIN = join(
+  dirname(createRequire(import.meta.url).resolve("vite/package.json")),
+  "bin",
+  "vite.js",
+);
+
+/** The heap the build runs in: Vite's build of the app runs out of Node's default on a small machine. */
+const BUILD_HEAP = "--max-old-space-size=4096";
+
+/** The page a directory is served as, and the one a path no file answers is, as Vercel serves the build. */
+const PAGE = { INDEX: "index.html", NOT_FOUND: "404.html" } as const;
+
 class LocalServerRefused extends Schema.TaggedError<LocalServerRefused>()("LocalServerRefused", {
   reason: Schema.String,
 }) {
@@ -102,7 +142,13 @@ function flagsProvider(argv: readonly string[]): ConfigProvider.ConfigProvider {
   const flag = argv.indexOf(PORT_FLAG);
   const port = flag === -1 ? undefined : argv[flag + 1];
 
-  return ConfigProvider.fromEnvRecord(port === undefined ? {} : { [ENV.PORT]: port });
+  const flags: Record<string, string> = {};
+
+  if (port !== undefined) flags[ENV.PORT] = port;
+
+  if (argv.includes(BUILT_PAGES_FLAG)) flags[ENV.BUILT_PAGES] = "true";
+
+  return ConfigProvider.fromEnvRecord(flags);
 }
 
 /**
@@ -167,12 +213,103 @@ function page(
   });
 }
 
+/**
+ * The file of the build a page's path names, under the build's folder alone:
+ * the file itself, or a folder's index page, or none.
+ */
+const builtFile = Effect.fnUntraced(function* (directory: string, pathname: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const decoded = Option.liftThrowable(decodeURIComponent)(pathname);
+
+  const named = Option.filter(
+    Option.map(decoded, (path) => resolve(directory, `.${path}`)),
+    (path) => path === directory || path.startsWith(`${directory}${sep}`),
+  );
+
+  if (Option.isNone(named)) return Option.none<string>();
+
+  const info = yield* Effect.option(fs.stat(named.value));
+
+  const file =
+    Option.isSome(info) && info.value.type === "Directory"
+      ? join(named.value, PAGE.INDEX)
+      : named.value;
+
+  const found = yield* Effect.option(fs.stat(file));
+
+  return Option.isSome(found) && found.value.type === "File" ? Option.some(file) : Option.none();
+});
+
+/** A page's request answered from the build at `directory`, or its 404 page where no file answers the path. */
+function builtPage(directory: string, served: URL) {
+  return Effect.flatMap(builtFile(directory, served.pathname), (file) =>
+    Option.isSome(file)
+      ? HttpServerResponse.file(file.value)
+      : HttpServerResponse.file(join(directory, PAGE.NOT_FOUND), { status: STATUS.NOT_FOUND }),
+  );
+}
+
+/** The site's pages written afresh by `vite build`, in its own process for the heap it takes, which the server answers from. */
+const buildPages = Effect.fnUntraced(function* (directory: string) {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
+  const exitCode = yield* spawner.exitCode(
+    ChildProcess.make(
+      process.execPath,
+      [
+        BUILD_HEAP,
+        VITE_BIN,
+        "build",
+        "--outDir",
+        directory,
+        "--emptyOutDir",
+        "--logLevel",
+        "error",
+      ],
+      { cwd: WEB, stdin: "ignore", stdout: "inherit", stderr: "inherit" },
+    ),
+  );
+
+  if (exitCode !== 0) {
+    return yield* new LocalServerRefused({ reason: `The pages' build exited ${exitCode}` });
+  }
+});
+
+/** How a page's request, addressed to the page it is served from, is answered: by Vite, or from the build. */
+type Pages = (
+  request: HttpServerRequest.HttpServerRequest,
+  served: URL,
+) => Effect.Effect<
+  HttpServerResponse.HttpServerResponse,
+  PlatformError.PlatformError,
+  FileSystem.FileSystem | HttpPlatform.HttpPlatform
+>;
+
+/** The site's pages as the server was asked to serve them: built by `vite build` before it listens, or by Vite in middleware mode as they are asked for. */
+function sitePages(built: boolean) {
+  if (built) {
+    const fromBuild: Pages = (_request, served) => builtPage(BUILT_PAGES, served);
+
+    return Effect.as(buildPages(BUILT_PAGES), fromBuild);
+  }
+
+  return Effect.map(
+    Effect.acquireRelease(
+      Effect.promise(() => createViteServer(VITE)),
+      (server) => Effect.promise(() => server.close()),
+    ),
+    (vite): Pages =>
+      (request, served) =>
+        page(vite, request, served),
+  );
+}
+
 /** What a request is answered by: a local-only route, the deployment's routes, or the page a path of the site is served from. */
 interface LocalSite {
   readonly local: ReadonlyMap<string, Route>;
   readonly deployment: LocalDeployment;
   readonly pageOf: (pathname: string) => string;
-  readonly vite: ViteDevServer;
+  readonly pages: Pages;
 }
 
 /** Every request as this server answers it: a local-only route's, the deployment's, or a page's, in that order. */
@@ -191,7 +328,7 @@ function answer(origin: string, site: LocalSite) {
     const served = new URL(asked);
     served.pathname = site.pageOf(asked.pathname);
 
-    return yield* page(site.vite, request, served);
+    return yield* site.pages(request, served);
   });
 }
 
@@ -222,6 +359,7 @@ const program = Effect.gen(function* () {
 
   if (refusal !== undefined) return yield* new LocalServerRefused({ reason: refusal });
   const port = yield* Config.Port(ENV.PORT).pipe(Config.withDefault(DEFAULT_PORT));
+  const built = yield* Config.Boolean(ENV.BUILT_PAGES).pipe(Config.withDefault(false));
   const cronSecret = yield* Config.option(Config.Redacted(ENV.CRON_SECRET));
   const origin = `http://${LOOPBACK}:${port}`;
   // Note that the address is settled before any route is imported, because the services read the environment as they are built.
@@ -238,10 +376,7 @@ const program = Effect.gen(function* () {
   const pageOf = yield* Effect.promise(() => localPages(WEB));
   const local = yield* Effect.promise(localRoutes);
 
-  const vite = yield* Effect.acquireRelease(
-    Effect.promise(() => createViteServer(VITE)),
-    (server) => Effect.promise(() => server.close()),
-  );
+  const pages = yield* sitePages(built);
 
   if (Option.isSome(cronSecret)) {
     yield* Effect.forkScoped(sweepOnSchedule(deployment, origin, cronSecret.value));
@@ -256,13 +391,14 @@ const program = Effect.gen(function* () {
   });
 
   return yield* Layer.launch(
-    HttpServer.serve(answer(origin, { local, deployment, pageOf, vite })).pipe(
+    HttpServer.serve(answer(origin, { local, deployment, pageOf, pages })).pipe(
       HttpServer.withLogAddress,
       Layer.provide(listening),
     ),
   );
 }).pipe(
   Effect.scoped,
+  Effect.provide(NodeServices.layer),
   Effect.provide(
     ConfigProvider.layer(
       ConfigProvider.orElse(flagsProvider(process.argv.slice(2)), ConfigProvider.fromEnv()),
