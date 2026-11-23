@@ -149,6 +149,12 @@ export const PULL_REQUEST_STATE_ACTION_WORDS = {
   [PULL_REQUEST_ACTION.REOPEN]: "Reopen pull request",
 } as const satisfies Record<PullRequestStateAction, string>;
 
+/** What editing a pull request's title says: the act, as a menu offers it and a question is titled, and the press that keeps the words. */
+export const PULL_REQUEST_TITLE_WORDS = {
+  EDIT: "Edit title",
+  SAVE: "Save",
+} as const;
+
 /** Whether a change out is one of the changes to where a pull request stands. */
 export function isStateAction(
   action: PullRequestAction | undefined,

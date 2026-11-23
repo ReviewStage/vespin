@@ -65,8 +65,8 @@ import {
   NEW_MEMORY_ID,
   olderPageAnswer,
   olderPageAppState,
-  type PullRequestMove,
-  pullRequestMoveOf,
+  type PullRequestMoves,
+  pullRequestMovedBy,
   pullRequestPartsAppState,
   queueAfter,
   queuedAppState,
@@ -137,13 +137,13 @@ function stagedTasks(
 }
 
 /** The moves each run's changes made to the fixture's pull requests, by the store the run stages, each map replaced whole as a change lands so a staging reads it anew. */
-const MOVES = new WeakMap<object, ReadonlyMap<number, PullRequestMove>>();
+const MOVES = new WeakMap<object, PullRequestMoves>();
 
 /** How many reads of the invitations agent's older page each run's screens asked, by the store the run stages. */
 const OLDER_ASKS = new WeakMap<object, number>();
 
 /** No pull request moved yet. */
-const NO_MOVES: ReadonlyMap<number, PullRequestMove> = new Map();
+const NO_MOVES: PullRequestMoves = new Map();
 
 /** The review threads each run resolved or opened again, by the store the run stages, each map replaced whole as a change lands. */
 const RESOLVES = new WeakMap<object, ThreadResolves>();
@@ -621,12 +621,11 @@ function keepMove(
   if (kind !== ACT_KIND.PULL_REQUESTS_ACTION) return;
   // SAFETY: the payload is the kind's, which the guard above names.
   const { number, request } = payload as PortActPayload<typeof ACT_KIND.PULL_REQUESTS_ACTION>;
-  const move = pullRequestMoveOf(request);
+  const moves = MOVES.get(state) ?? NO_MOVES;
+  const moved = pullRequestMovedBy(moves.get(number), request);
   const resolve = threadResolveOf(request);
 
-  if (move !== undefined) {
-    MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
-  }
+  if (moved !== undefined) MOVES.set(state, new Map(moves).set(number, moved));
 
   if (resolve !== undefined) {
     RESOLVES.set(
@@ -635,7 +634,7 @@ function keepMove(
     );
   }
 
-  if (move !== undefined || resolve !== undefined) stageFixture(state);
+  if (moved !== undefined || resolve !== undefined) stageFixture(state);
 }
 
 /** What a read of the invitations agent's older page answers, counted, its page laid over the document at once where it lands; none for any other act or transcript. */
