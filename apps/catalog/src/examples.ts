@@ -72,6 +72,7 @@ import { FORMAT_TOOLBAR_EXAMPLE } from "./examples/format-toolbar";
 import { GLYPH_SLOTS_EXAMPLE } from "./examples/glyph-slots";
 import { GROUP_HEADERS_EXAMPLE } from "./examples/group-headers";
 import { HOVER_CARDS_EXAMPLE } from "./examples/hover-cards";
+import { ICON_PICKER_EXAMPLE } from "./examples/icon-picker";
 import { ICONS_EXAMPLE } from "./examples/icons";
 import { INLINE_EDITS_EXAMPLE } from "./examples/inline-edits";
 import { INLINE_REFS_EXAMPLE } from "./examples/inline-refs";
@@ -281,6 +282,7 @@ export const EXAMPLES: readonly Example[] = [
   SIDEBAR_PARTS_EXAMPLE,
   ROW_MARKS_EXAMPLE,
   MANAGER_FACES_EXAMPLE,
+  ICON_PICKER_EXAMPLE,
   MANAGER_FACE_PICKER_EXAMPLE,
   SELECTION_EXAMPLE,
   LIST_MOTION_EXAMPLE,
