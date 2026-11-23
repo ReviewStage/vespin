@@ -1,0 +1,33 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow fhdrpinland
+Set orientation LANDSCAPE_LEFT... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run flow when ".*Would Like to Send You Notifications.*" is visible...
+Run flow when ".*Would Like to Send You Notifications.*" is visible... SKIPPED
+Run subflows/tab.yaml...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+    Assert that "${TAB}" is visible... COMPLETED
+    Tap on "${TAB}", Index: -1... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Tap on (Optional) "Show sub-tasks"... WARNED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot land-unfolded... COMPLETED
+Swipe from (36%, 70%) to (36%, 58%) in 400 ms... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot land-a... COMPLETED
+Swipe from (36%, 70%) to (36%, 58%) in 400 ms... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot land-b... COMPLETED
+Set orientation PORTRAIT... COMPLETED
