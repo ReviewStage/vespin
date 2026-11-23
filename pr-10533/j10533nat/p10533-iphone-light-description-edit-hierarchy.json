@@ -5770,13 +5770,13 @@
           },
           "children" : [ {
             "attributes" : {
-              "accessibilityText" : "8:14 AM",
+              "accessibilityText" : "10:34 AM",
               "title" : "",
               "value" : "",
               "text" : "",
               "hintText" : "",
               "resource-id" : "",
-              "bounds" : "[63,21][100,43]",
+              "bounds" : "[57,21][106,43]",
               "enabled" : "true",
               "focused" : "false",
               "selected" : "false",
