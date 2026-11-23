@@ -884,3 +884,20 @@ export function selectRepositoryList(
 ): (state: AppStateSnapshot) => AppHostRead<GitHubRepositoriesAnswer> | undefined {
   return (state) => state[LIVE_READ.REPOSITORY_LISTS][scope];
 }
+
+/** What a read of an answer view holds once it landed; none while it is on its way or failed. */
+export function landedAnswer<Answer extends object>(
+  read: AppHostRead<Answer> | undefined,
+): Exclude<Answer, { failure: unknown }> | undefined {
+  const rows = read?.rows;
+
+  if (rows === undefined || "failure" in rows) return undefined;
+
+  // SAFETY: an answer view is its answer or a failure, and the failure was ruled out above.
+  return rows as Exclude<Answer, { failure: unknown }>;
+}
+
+/** Whether a read of an answer view failed before any answer landed, which its place says rather than reading on for good. */
+export function answerFailed(read: AppHostRead<object> | undefined): boolean {
+  return read?.failed === true || (read?.rows !== undefined && "failure" in read.rows);
+}

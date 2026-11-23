@@ -1,4 +1,4 @@
-# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, turned to a draft and back from its state chip, then closed from its ⋯, with Undo reopening it; and one in the merge queue, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
+# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, turned to a draft and back from its state chip, then closed from its ⋯, with Undo reopening it; and one in the merge queue, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -228,6 +228,24 @@ env:
 - assertVisible: "Changes requested"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-failing
+# Its Checks row sums them up, the failure first, and pushes their list,
+# each check where it stands and how long it ran; Back returns to the page.
+- assertVisible: "Checks.*"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Checks.*"
+- extendedWaitUntil:
+    visible: "e2e.*"
+    timeout: 30000
+- assertVisible: "test.*"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-checks
+- tapOn:
+    id: "BackButton"
+- extendedWaitUntil:
+    visible: "Changes requested"
+    timeout: 10000
 # Its state chip offers what may change where it stands, as the panel's
 # pill does: Convert to draft, and Close pull request in red. Each lands on
 # the chip; Close, which can be taken back, acts at once and says so in the

@@ -436,6 +436,25 @@ export function checksSummaryOf(checks: readonly PullRequestCheck[]): CheckSumma
   return checks.length === 0 ? CHECK_SUMMARY.NONE : CHECK_SUMMARY.PASSING;
 }
 
+/** The order a checks line names where checks stand: what needs a look first, then what passed, then what ran nothing. */
+const CHECK_LINE_ORDER = [
+  CHECK_STATE.FAILED,
+  CHECK_STATE.PENDING,
+  CHECK_STATE.PASSED,
+  CHECK_STATE.SKIPPED,
+] as const satisfies readonly CheckState[];
+
+/** The checks as one line, how many stand in each state, a failure first, such as "1 failed · 1 running · 3 passed"; none where there are no checks. */
+export function checksLineOf(checks: readonly PullRequestCheck[]): string | undefined {
+  const parts = CHECK_LINE_ORDER.flatMap((state) => {
+    const count = checks.filter((check) => check.state === state).length;
+
+    return count === 0 ? [] : [`${count} ${CHECK_WORDS[state]}`];
+  });
+
+  return parts.length === 0 ? undefined : parts.join(" · ");
+}
+
 /** How many checks the checks' count says: those that failed beside a failure, those still running beside a wait, and every one where all passed. */
 export function checksCountOf(checks: readonly PullRequestCheck[], summary: CheckSummary): number {
   if (summary === CHECK_SUMMARY.FAILING) {
