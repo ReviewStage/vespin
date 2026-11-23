@@ -20,7 +20,7 @@ import {
   type TestTask,
 } from "@repo/database/testing";
 import { noDatabase } from "@repo/database/testing/no-database";
-import type { DescriptionNote } from "@repo/features/description-notes";
+import { type DescriptionNote, NOTE_KIND } from "@repo/features/description-notes";
 import { descriptionSections } from "@repo/features/description-sections";
 import { DESCRIPTION_ACTOR, type Description, TASK_STATUS } from "@repo/features/task-wire";
 import { Effect, Option } from "effect";
@@ -397,6 +397,42 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
         [taskId],
       );
     }),
+  );
+
+  it.effect(
+    "notes that would carry the text past the bound save nothing, and the refusal names the size, the bound, and the largest sections to trim",
+    () =>
+      Effect.gen(function* () {
+        const userId = yield* openUser;
+        const { id: taskId } = yield* startTask(userId, RELAY_TASK);
+
+        // Sections of 17, 27, 150,012, and 49,017 characters, 199,080 with the blank lines between them.
+        const text = [
+          "## Context\n\nTiny.",
+          "## Goal\n\n- Invite by email.",
+          `## History\n\n${"x".repeat(150_000)}`,
+          `## Plan\n\nShip it.${"y".repeat(49_000)}\n`,
+        ].join("\n\n");
+
+        yield* makeDescriptionTask(taskId, text);
+        const before = yield* resumedDocument(userId, taskId);
+
+        const grown = {
+          kind: NOTE_KIND.REPLACE,
+          find: "Ship it.",
+          text: `Ship it.${"z".repeat(2_000)}`,
+        };
+
+        const result = yield* saveNotes(bound(userId, taskId), [grown], DEVELOPER);
+
+        assert.deepEqual(result, {
+          status: DESCRIPTION_SAVE_STATUS.NOT_SAVED,
+          reason: DESCRIPTION_SAVE_REFUSAL.TOO_LONG,
+          detail:
+            'Not saved: the description would be 201,080 characters, over the 200,000 a description may hold. Its largest sections now: "History" (150,012), "Plan" (49,017), "Goal" (27). Free at least 1,080 characters: delete or condense text in those sections with replace notes in this same call, then send it again.',
+        });
+        assert.deepEqual(yield* resumedDocument(userId, taskId), before);
+      }),
   );
 
   it.effect("a save the store refuses is reported as not saved and the prior document stands", () =>
