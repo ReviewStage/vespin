@@ -93,6 +93,8 @@ const IOS_ROUTE = {
   PULL_REQUEST_THREAD: "thread",
   /** A new comment on a pull request, under its own route. */
   PULL_REQUEST_COMMENT: "comment",
+  /** One file a pull request changes, its diff, under its own route, the file named by its path in the query. */
+  PULL_REQUEST_FILE: "file",
   /** A person's page in the workspace the phone works in. */
   PERSON: "/tasks/person",
   /** One thread of a Manager's chat, by the message it hangs on, under its agent's route. */
@@ -331,6 +333,23 @@ export function iosPullRequestCommentRoute(pullRequest: {
   readonly number: number;
 }): string {
   return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_COMMENT}`;
+}
+
+/** The query a pull request's file's route names the file by. */
+export const IOS_PULL_REQUEST_FILE_PARAM = "path";
+
+/** The app's route for one file a pull request changes, its diff, by the pull request's workspace, repository, and number, and the file's path. */
+export function iosPullRequestFileRoute(
+  pullRequest: {
+    readonly workspaceId: string;
+    readonly repository: string;
+    readonly number: number;
+  },
+  path: string,
+): string {
+  const query = new URLSearchParams({ [IOS_PULL_REQUEST_FILE_PARAM]: path });
+
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_FILE}?${query}`;
 }
 
 /**
