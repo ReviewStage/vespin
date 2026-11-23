@@ -94,8 +94,8 @@ const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 /** The least a section's + answers a press across, in points: Apple's least target, wider than it draws so a finger finds it beside the header's small words. */
 const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
 
-/** A plain list's header's own space above and below its words, as the system's header stands them, now the header draws its cell's ground itself. */
-const HEADER_VERTICAL = SPACE.TIGHT + 2;
+/** A plain list's header's own space above and below its words, as the system's header stood them (10 pt, measured against main on the iPhone and the iPad), now the header draws its cell's ground itself. */
+const HEADER_VERTICAL = SPACE.ROW;
 
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists
