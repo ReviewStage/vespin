@@ -1,7 +1,7 @@
 // document-page.tsx -- a page a document is edited whole on, as Notion edits a page: its rich field filling the page, what went wrong over it, and the people and things an `@` offers docked over the keyboard.
 
 import { Host, VStack } from "@expo/ui/swift-ui";
-import { padding } from "@expo/ui/swift-ui/modifiers";
+import { layoutPriority, padding } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode, Ref } from "react";
 import { StyleSheet, View } from "react-native";
 import type { CaretAtWord } from "./caret-at-word.js";
@@ -167,6 +167,8 @@ export function MentionFoot({
             padding({ all: BAR_EDGE }),
             ...BAR_GLASS,
             padding({ horizontal: BAR_MARGIN, bottom: SPACE.ROW }),
+            // Note that the offer takes its own height before the page takes the rest, since a short column, such as a landscape iPad's over the keyboard, otherwise cut its last row; it caps itself and scrolls inside past that (`BarHead`).
+            layoutPriority(1),
           ]}
         >
           <BarHead>

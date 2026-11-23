@@ -12,7 +12,8 @@
  * the transcript on Working… while its agent works. The pictures and the
  * recordings it showed, and those a call answered and the service kept (a
  * browser's screenshots, an integration's pictures), stand under the call
- * that showed them, a page it
+ * that showed them, but a computer call's window, which stands in its body
+ * once it is opened, as the panel's does; a page it
  * showed as a card under its line, which opens it whole, and a pull request
  * it opened as the pull request's card, as it stands now where the task list
  * holds it. A call whose answer its page carried cut is read whole as it
@@ -26,7 +27,9 @@ import {
   type AgentPart,
   type AgentPartCut,
   agentRows,
+  type ComputerApps,
   CUT_PART_WORDS,
+  computerAppsOf,
   cutPartText,
   messageWords,
   placedMessages,
@@ -243,6 +246,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly callKind: CallKind;
       /** For a call of an integration's tool, the integration, whose mark leads its row in its kind's glyph's place. */
       readonly provider: IntegrationProvider | undefined;
+      /** For a call on an app on the reader's Mac, the picture its app's icon was kept as, which leads its row in its kind's glyph's place once read; none where no call on its app kept one. */
+      readonly appIcon: string | undefined;
       readonly line: CallLine;
       /** What the call made or is about, named after the line's verb as the panel's chip names it. */
       readonly chip: string | undefined;
@@ -256,6 +261,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly body: readonly CallBodyBlock[];
       /** Where it stands open with an answer its page carried cut whose whole read has not settled: the part to read whole. */
       readonly cut: AgentPartCut | undefined;
+      /** What its body holds under its answer while it stands open, such as the window a computer call read, as the panel's body holds it; none while it is closed. */
+      readonly answered: readonly ShownMedia[];
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.FOLD;
@@ -325,6 +332,9 @@ export interface TranscriptReading {
   /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
   readonly waitingCalls?: ReadonlySet<string> | undefined;
 }
+
+/** What the items are read with: the page's reading, and the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`). */
+type ItemsReading = TranscriptReading & { readonly computerApps: ComputerApps };
 
 /** What an automation is called where it can't be named: by the panel's words (`namedAutomationActor`). */
 const ORIGIN_WORDS = {
@@ -776,11 +786,31 @@ function wholeRead(
 function callItems(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
   base: ItemBase,
-  reading: TranscriptReading,
+  reading: ItemsReading,
 ): readonly TranscriptItem[] {
   const { toggles } = reading;
   const shownSet = showedPictures(part);
   const pictures = shownSet ? shownPicturesOf(part.input, part.output) : [];
+  // Note that a computer call's window stands in its body, seen once it is opened, as the panel's does, because the agent reads a window at nearly every step and shows what matters itself.
+  const inBody = part.tool === AGENT_TOOL.COMPUTER;
+
+  // Note that a picture a call answered that was not kept has no bytes to draw, so it is left out.
+  const called: readonly ShownMedia[] = calledPicturesOf(
+    part.tool,
+    part.input,
+    part.output,
+  ).flatMap((each) =>
+    each.kept
+      ? [
+          {
+            id: each.picture.id,
+            caption: "",
+            label: each.name,
+            kind: shownKindOf(each.picture.mediaType),
+          },
+        ]
+      : [],
+  );
 
   const media: readonly ShownMedia[] = [
     ...pictures.flatMap(({ picture, caption, name }) =>
@@ -801,19 +831,7 @@ function callItems(
       label: caption === "" ? name : caption,
       kind: SHOWN_MEDIA.VIDEO,
     })),
-    // Note that a picture a call answered that was not kept has no bytes to draw, so it is left out.
-    ...calledPicturesOf(part.tool, part.input, part.output).flatMap((called) =>
-      called.kept
-        ? [
-            {
-              id: called.picture.id,
-              caption: "",
-              label: called.name,
-              kind: shownKindOf(called.picture.mediaType),
-            },
-          ]
-        : [],
-    ),
+    ...(inBody ? [] : called),
   ];
 
   const mediaItem: readonly TranscriptItem[] =
@@ -848,6 +866,8 @@ function callItems(
     callId: part.callId,
     callKind: view.kind,
     provider: view.provider,
+    // Note that a computer call that kept no icon wears the one an earlier call on its app kept, as the panel's row does (`useComputerIcon`).
+    appIcon: view.appIcon ?? reading.computerApps.byCall.get(part.callId)?.icon,
     ...callNaming(view),
     thread: calledThread(part),
     // Note that the row leads with the integration's mark, so it names only what the mark does not: the account among several, or a server of no integration's.
@@ -858,6 +878,7 @@ function callItems(
       ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
       : [],
     cut: read?.reading === true ? part.cut : undefined,
+    answered: open && inBody ? called : [],
   };
 
   const page: readonly TranscriptItem[] =
@@ -895,7 +916,7 @@ function callItems(
 function partItems(
   part: AgentPart,
   base: ItemBase,
-  reading: TranscriptReading,
+  reading: ItemsReading,
 ): readonly TranscriptItem[] {
   switch (part.kind) {
     case AGENT_PART.TEXT:
@@ -916,7 +937,7 @@ function rowItems(
   rows: readonly TurnRow<AgentPart>[],
   message: string,
   depth: number,
-  reading: TranscriptReading,
+  reading: ItemsReading,
 ): readonly TranscriptItem[] {
   return rows.flatMap((row): readonly TranscriptItem[] => {
     const base = {
@@ -1039,6 +1060,7 @@ export function transcriptItems(
   // A turn a call's delegation opened folds its written words with its work, as the panel's does.
   const delegated = delegatedTurnsOf(placed);
   const { origin } = reading;
+  const read: ItemsReading = { ...reading, computerApps: computerAppsOf(messages) };
 
   // Note that an automation's prompt is the first line anyone sent, which the run's card stands in place of.
   const head =
@@ -1069,7 +1091,7 @@ export function transcriptItems(
 
     const turn = turnStretches(rows).flatMap((stretch) =>
       stretch.line === undefined
-        ? rowItems(stretch.rows, message.id, 0, reading)
+        ? rowItems(stretch.rows, message.id, 0, read)
         : [
             saidItem(
               stretch.line,
@@ -1186,10 +1208,18 @@ export function shownFiles(items: readonly TranscriptItem[]): readonly ShownFile
   );
 }
 
-/** The ids of every picture and recording the items show, which the list reads the bytes of. */
+/** The ids of every picture and recording the items show, an open call's body's among them, which the list reads the bytes of. */
 export function shownMediaIds(items: readonly TranscriptItem[]): readonly string[] {
   return items.flatMap((item) => {
     if (item.kind === TRANSCRIPT_ITEM.MEDIA) return item.media.map(({ id }) => id);
+
+    // Note that an app's icon is read wherever its call's row stands, and what an open call's body holds as it opens, so a turn of many windows reads only the ones opened.
+    if (item.kind === TRANSCRIPT_ITEM.CALL) {
+      return [
+        ...(item.appIcon === undefined ? [] : [item.appIcon]),
+        ...item.answered.map(({ id }) => id),
+      ];
+    }
 
     // Note that a picture a sent line kept by its id is read as the agent's shown ones are, through the same door.
     if (item.kind === TRANSCRIPT_ITEM.SAID) {

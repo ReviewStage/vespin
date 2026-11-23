@@ -9,7 +9,7 @@ import {
   type ReviewState,
 } from "@repo/features/agent-wire";
 import { GLYPH, type MarkLook } from "./glyph.js";
-import { STATUS_TONE } from "./tokens/colors.js";
+import { STATUS_TONE } from "./tokens/status-tone.js";
 
 /**
  * Each check's glyph, the panel's own: passed a green

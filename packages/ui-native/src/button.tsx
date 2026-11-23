@@ -375,11 +375,23 @@ type FieldChipProps = {
   readonly heard?: string | undefined;
 };
 
-/** A field's values as its chip's menu offers them: the field's name, which VoiceOver hears before its value, and each value, the one it holds checked. */
+/** An act a field's chip's menu offers rather than a value, such as Close pull request on a pull request's state. */
+export type FieldAct = {
+  readonly label: string;
+  readonly symbol: Glyph;
+  /** Whether it ends what it acts on, which the system draws red, as Close pull request is. */
+  readonly destructive: boolean;
+  /** Whether it stands dimmed and takes no press, as every act does while another change is out. */
+  readonly disabled: boolean;
+  readonly onPress: () => void;
+};
+
+/** A field's values as its chip's menu offers them: the field's name, which VoiceOver hears before its value, each value, the one it holds checked, and the acts after them, such as a pull request's changes to where it stands. */
 export type FieldMenu = {
   /** The field's name, such as Status, heard before the chip's words. */
   readonly label: string;
   readonly choices: readonly MenuChoice[];
+  readonly actions?: readonly FieldAct[] | undefined;
 };
 
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
@@ -463,7 +475,7 @@ function systemCapsule(colors: BrandColors) {
   ];
 }
 
-/** A field chip's menu of its values, the system's small bordered capsule as its button, heard as the field's name and its value. */
+/** A field chip's menu of its values and then its acts, the system's small bordered capsule as its button, heard as the field's name and its value. */
 function FieldValuesMenu({
   menu,
   label,
@@ -493,6 +505,15 @@ function FieldValuesMenu({
           {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
+        />
+      ))}
+      {(menu.actions ?? []).map((act) => (
+        <SwiftUIButton
+          key={act.label}
+          {...actContent(act.label, act.symbol)}
+          onPress={act.onPress}
+          modifiers={[disabledModifier(act.disabled)]}
+          {...(act.destructive ? { role: "destructive" } : {})}
         />
       ))}
     </Menu>

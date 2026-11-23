@@ -1,4 +1,4 @@
-// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and in the bar's ⋯ the changes to where it stands (Ready for review, Convert to draft, Close, Reopen) and Open on GitHub.
+// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and on its state chip and in the bar's ⋯ the changes to where it stands (Ready for review, Convert to draft, Close, Reopen), and Open on GitHub.
 
 import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
@@ -8,7 +8,7 @@ import {
   type PullRequestCheck,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { iosAgentPullRequestOf } from "@repo/features/ios-app-links";
+import { iosAgentPullRequestOf, iosPullRequestFilesRoute } from "@repo/features/ios-app-links";
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import {
@@ -57,6 +57,7 @@ import {
   ConfirmAsk,
   EmptyState,
   FACE_KIND,
+  type FieldMenu,
   GLYPH,
   type Glyph,
   githubFace,
@@ -81,7 +82,7 @@ import {
   WriteNoteRow,
 } from "@repo/ui-native";
 import { setStringAsync } from "expo-clipboard";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent, useShownAgent } from "../agents/use-agent.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -94,10 +95,14 @@ import {
 } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useOnOwnTab } from "../tab-route.js";
 
 /** What the bar's ⋯ menu offers beside the merge, in the panel's words. */
 const MENU_WORDS = {
   MORE: "More",
+  /** What the state chip's menu is heard as before where it stands, as the panel's pill is named "Pull request Open". */
+  STATE: "Pull request",
+  FILES_CHANGED: "Files changed",
   COPY_GITHUB_LINK: "Copy GitHub link",
   OPEN_ON_GITHUB: "Open on GitHub",
 } as const;
@@ -330,8 +335,9 @@ const DESCRIPTION_WORDS = "Description";
 
 /**
  * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
- * Edit title, as a task's ⋯ offers Rename, then the changes to where the
- * pull request stands, as the panel's state pill
+ * Edit title, as a task's ⋯ offers Rename, then Files changed, which opens
+ * the files it changes on a screen of their own, then the changes to where
+ * the pull request stands, as the panel's state pill
  * offers them, Close in red, then Copy GitHub link and Open on GitHub.
  * It offers no Refresh, since a pull down on the page reads it again in
  * every window, as Mail's menu offers none, and a read that failed says so
@@ -343,11 +349,14 @@ function PullRequestToolbar({
   url,
   editTitle,
   changes,
+  onFiles,
 }: {
   readonly url: string | undefined;
   /** Opens the title's edit; none until the pull request is read, and dimmed while a change is out. */
   readonly editTitle: { readonly disabled: boolean; readonly onPress: () => void } | undefined;
   readonly changes: readonly StateChange[];
+  /** Opens the files the pull request changes on a screen of their own. */
+  readonly onFiles: () => void;
 }) {
   return (
     <Stack.Toolbar placement="right">
@@ -363,6 +372,11 @@ function PullRequestToolbar({
             </Stack.Toolbar.MenuAction>
           </Stack.Toolbar.Menu>
         )}
+        <Stack.Toolbar.Menu inline>
+          <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.CHANGES)} onPress={onFiles}>
+            {MENU_WORDS.FILES_CHANGED}
+          </Stack.Toolbar.MenuAction>
+        </Stack.Toolbar.Menu>
         {changes.length === 0 ? null : (
           <Stack.Toolbar.Menu inline>
             {changes.map((change) => (
@@ -483,6 +497,8 @@ function PullRequestPage({
 }) {
   const id = agentId;
   useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(key.number));
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const colors = useColors();
   const openLink = useOpenLink(key.workspaceId);
   const agent = useFollowedAgent(id);
@@ -584,6 +600,22 @@ function PullRequestPage({
             }),
         };
 
+  // Note that the state chip offers the same changes as the bar's ⋯, as the panel's pill opens them where it says where the pull request stands; none once merged, where nothing changes.
+  const stateMenu: FieldMenu | undefined =
+    changes.length === 0
+      ? undefined
+      : {
+          label: MENU_WORDS.STATE,
+          choices: [],
+          actions: changes.map((change) => ({
+            label: PULL_REQUEST_STATE_ACTION_WORDS[change.action],
+            symbol: STATE_ACTION_GLYPHS[change.action],
+            destructive: change.action === PULL_REQUEST_ACTION.CLOSE,
+            disabled: change.disabled,
+            onPress: change.onPress,
+          })),
+        };
+
   useScreenActivity((workspaces) =>
     agent === undefined || agent.taskId === null || title === undefined
       ? undefined
@@ -616,7 +648,12 @@ function PullRequestPage({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar url={url} editTitle={editTitle} changes={changes} />
+      <PullRequestToolbar
+        url={url}
+        editTitle={editTitle}
+        changes={changes}
+        onFiles={() => router.push(onOwnTab(iosPullRequestFilesRoute(key)))}
+      />
     </>
   );
 
@@ -689,6 +726,7 @@ function PullRequestPage({
                 ? queuedLabel(queued.position)
                 : PULL_REQUEST_STATE_LABEL[state]
           }
+          stateMenu={stateMenu}
           branches={
             pullRequest === undefined
               ? undefined
@@ -786,16 +824,20 @@ function PullRequestPage({
         )}
       </ListSection>
       <ListSection title="Reviews" count={reviewers.length}>
-        {reviewers.map((reviewer) => (
-          <MarkRow
-            key={reviewer.by.login}
-            id={reviewer.by.login}
-            mark={REVIEW_LOOK[reviewer.state]}
-            title={reviewer.by.login}
-            detail={REVIEW_WORDS[reviewer.state]}
-            face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
-          />
-        ))}
+        {reviewers.map((reviewer) => {
+          const face = githubFace(reviewer.by);
+
+          return (
+            <MarkRow
+              key={reviewer.by.login}
+              id={reviewer.by.login}
+              mark={REVIEW_LOOK[reviewer.state]}
+              title={face.name}
+              detail={REVIEW_WORDS[reviewer.state]}
+              face={{ of: face, stands: MARK_FACE.LEAD }}
+            />
+          );
+        })}
         {conversation === undefined && !failedOf(parts.conversation) ? (
           <LoadingRow words={PULL_REQUEST_READ_WORDS.READING_CONVERSATION} />
         ) : (

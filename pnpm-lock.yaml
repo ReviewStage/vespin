@@ -274,6 +274,9 @@ patchedDependencies:
   '@sentry/browser@11.8.0':
     hash: af32b6645b074a081cae42956870b6c779240a52fac319191531b3724c5be619
     path: patches/@sentry__browser@11.8.0.patch
+  '@tanstack/db@1.0.0-rc.1.5':
+    hash: aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f
+    path: patches/@tanstack__db@1.0.0-rc.1.5.patch
   '@tiptap/extension-list@3.33.1':
     hash: bb7489824f41b416b467a2ad6911a14b3c76d71068ee395dd0842a6a59b5d456
     path: patches/@tiptap__extension-list@3.33.1.patch
@@ -1303,7 +1306,7 @@ importers:
         version: 4.6.0
       '@tanstack/db':
         specifier: 'catalog:'
-        version: 1.0.0-rc.1.5(typescript@7.0.2)
+        version: 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
       effect:
         specifier: 'catalog:'
         version: 4.0.4
@@ -1729,7 +1732,7 @@ importers:
     dependencies:
       '@tanstack/db':
         specifier: 'catalog:'
-        version: 1.0.0-rc.1.5(typescript@7.0.2)
+        version: 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
       effect:
         specifier: 'catalog:'
         version: 4.0.4
@@ -2000,6 +2003,25 @@ importers:
       '@embedded-postgres/linux-x64':
         specifier: 18.7.0-beta.19
         version: 18.7.0-beta.19
+
+  tools/model-catalog-drift:
+    dependencies:
+      '@repo/service':
+        specifier: workspace:*
+        version: link:../../packages/service
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.4
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.6
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.15
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
 
   tools/oxlint/vespin:
     dependencies:
@@ -14613,7 +14635,7 @@ snapshots:
       fractional-indexing: 3.4.0
       typescript: 7.0.2
 
-  '@tanstack/db@1.0.0-rc.1.5(typescript@7.0.2)':
+  '@tanstack/db@1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@tanstack/db-ivm': 1.0.0-rc.1.3(typescript@7.0.2)
@@ -14628,14 +14650,14 @@ snapshots:
 
   '@tanstack/react-db@1.0.0-rc.1.5(react@19.2.8)(typescript@7.0.2)':
     dependencies:
-      '@tanstack/db': 1.0.0-rc.1.5(typescript@7.0.2)
+      '@tanstack/db': 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
       react: 19.2.8
     transitivePeerDependencies:
       - typescript
 
   '@tanstack/react-db@1.0.0-rc.1.5(react@19.3.0)(typescript@7.0.2)':
     dependencies:
-      '@tanstack/db': 1.0.0-rc.1.5(typescript@7.0.2)
+      '@tanstack/db': 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
       react: 19.3.0
     transitivePeerDependencies:
       - typescript

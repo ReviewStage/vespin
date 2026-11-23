@@ -2081,6 +2081,8 @@ const reviewThreadCommentSchema = EffectSchema.Struct({
   by: githubPersonSchema,
   html: EffectSchema.NullOr(EffectSchema.String),
   body: EffectSchema.String,
+  /** The markdown GitHub rendered `html` from, beside a rendering, which a client that draws markdown alone (the iOS app) draws; absent where `body` holds the words, none were written, or from a service before it. */
+  markdown: EffectSchema.optionalKey(EffectSchema.String),
   at: countedNumber,
   url: EffectSchema.String,
   reactions: EffectSchema.optionalKey(reactionsSchema),
@@ -2164,6 +2166,8 @@ const conversationEntrySchema = EffectSchema.Struct({
   state: EffectSchema.optionalKey(reviewStateSchema),
   html: EffectSchema.NullOr(EffectSchema.String),
   body: EffectSchema.String,
+  /** The markdown GitHub rendered `html` from, beside a rendering, which a client that draws markdown alone (the iOS app) draws; absent where `body` holds the words, none were written, or from a service before it. */
+  markdown: EffectSchema.optionalKey(EffectSchema.String),
   at: countedNumber,
   url: EffectSchema.String,
   threads: EffectSchema.optionalKey(

@@ -1,5 +1,5 @@
 /**
- * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; the rounding agent's, ten finished turns with wide words; the digest agent's short run, still at work; and the release Manager's short chat.
+ * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; the rounding agent's, ten finished turns with wide words; the digest agent's short run, which reads its draft in an app on the reader's Mac, still at work; and the release Manager's short chat.
  *
  * The Inbox fixture lays it on the document where the host holds an
  * agent's transcript (`LIVE_READ.TRANSCRIPT`), so the panel's agent page
@@ -24,6 +24,7 @@ import { MP4_TYPE } from "@repo/features/video-signature";
 import { MESSAGE_CHANNEL, MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import type { AppTranscript } from "./app-state.js";
 import {
+  FIXTURE_APP_ICON_PNG,
   FIXTURE_PICTURE_PNG,
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
@@ -44,7 +45,12 @@ const KEPT = {
   DIALOG: "fixture-picture-invite-dialog",
   EMAIL: "fixture-picture-invite-email",
   RECORDING: "fixture-recording-accept",
+  MAIL_WINDOW: "fixture-picture-mail-window",
+  MAIL_ICON: "fixture-picture-mail-icon",
 } as const;
+
+/** The mail app the digest agent reads its draft in on the reader's Mac, as the Mac names it. */
+const MAIL_APP = { name: "Mail", bundleId: "com.apple.mail" } as const;
 
 /** The file the account sent with its ask to resend an expired invite: the invites that expired, as a short CSV sent as plain text as every text file is, so a sent line's file chip has a text file to count the lines of. */
 const EXPIRED_INVITES = {
@@ -57,6 +63,16 @@ const EXPIRED_INVITES = {
 /** The fixture's picture as the service keeps one: a screenshot-sized PNG. */
 function keptPicture(id: string): WireRecord {
   return { id, mediaType: AGENT_ATTACHMENT_TYPE.PNG, width: 320, height: 180, byteCount: 7549 };
+}
+
+/** The app's icon as the service keeps one: a 64 by 64 PNG. */
+function keptIcon(id: string): WireRecord {
+  return { id, mediaType: AGENT_ATTACHMENT_TYPE.PNG, width: 64, height: 64, byteCount: 695 };
+}
+
+/** The reader's Mac, as a computer call's answer names the machine it ran on. */
+function readerMac(reader: { readonly userId: string; readonly name: string }): WireRecord {
+  return { id: "fixture-machine-mac", name: "MacBook Pro", owner: { ...reader } };
 }
 
 /** A tool's call as the transcript stores it, answered. */
@@ -391,8 +407,9 @@ export function fixtureAgentTranscript(
 /**
  * The digest agent's transcript, its instants counted from `startedAt`: the
  * weekly digest automation's prompt, which began the run, and the agent's
- * turn on it, still at work on its last call, so the page an automation's
- * run opens draws a transcript.
+ * turn on it, which reads its draft in Mail on the reader's Mac, still at
+ * work on its last call there, so the page an automation's run opens draws
+ * a transcript, and a computer call's row, icon, and window stand drawn.
  */
 export function fixtureDigestTranscript(
   startedAt: number,
@@ -415,9 +432,39 @@ export function fixtureDigestTranscript(
           type: "text",
           text: "Reading this week's merged pull requests before I write the digest.",
         },
-        runningPart(AGENT_TOOL.BASH, "fixture-digest-merged", {
-          command: "gh pr list --state merged --limit 50",
-          description: "List this week's merged pull requests",
+        toolPart(
+          AGENT_TOOL.BASH,
+          "fixture-digest-merged",
+          {
+            command: "gh pr list --state merged --limit 50",
+            description: "List this week's merged pull requests",
+          },
+          {
+            stdout: "#131 Resend an expired invite\n#128 Invite a teammate by email",
+            stderr: "",
+            exitCode: 0,
+          },
+        ),
+        { type: "text", text: "Checking the draft reads well in Mail before it goes out." },
+        // Note that the read keeps the app's icon and its window, which a computer call's row wears and its body holds, and the click after it, still running, kept none, so its row wears the icon the read kept.
+        toolPart(
+          AGENT_TOOL.COMPUTER,
+          "fixture-digest-mail-read",
+          { action: "get_app_state", app: MAIL_APP.name },
+          {
+            status: "ran",
+            app: { ...MAIL_APP, icon: { picture: keptIcon(KEPT.MAIL_ICON) } },
+            window: { title: "Weekly digest — Draft" },
+            elements: "1 button Send\n2 text field Subject: Weekly digest\n3 text area",
+            truncated: false,
+            kept: { picture: keptPicture(KEPT.MAIL_WINDOW) },
+            machine: readerMac(reader),
+          },
+        ),
+        runningPart(AGENT_TOOL.COMPUTER, "fixture-digest-mail-click", {
+          action: "click",
+          app: MAIL_APP.name,
+          target: { element_index: 2 },
         }),
       ],
       startedAt: startedAt + MINUTE,
@@ -565,8 +612,12 @@ export function fixtureAgentPicture(
   pictureId: string,
   playable: string | undefined,
 ): AgentInboxAttachmentView {
-  if (pictureId === KEPT.DIALOG || pictureId === KEPT.EMAIL) {
+  if (pictureId === KEPT.DIALOG || pictureId === KEPT.EMAIL || pictureId === KEPT.MAIL_WINDOW) {
     return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
+  }
+
+  if (pictureId === KEPT.MAIL_ICON) {
+    return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_APP_ICON_PNG };
   }
 
   if (pictureId === KEPT.RECORDING) {

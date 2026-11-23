@@ -1,6 +1,7 @@
 import { githubUserAvatarUrl } from "@repo/features/account-picture";
 import type { GitHubPerson } from "@repo/features/agent-wire";
 import type { AutomationFiring, AutomationTrigger } from "@repo/features/automation-wire";
+import { githubLoginName, isBotLogin } from "@repo/features/github-login";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
@@ -157,14 +158,6 @@ const SOMEONE_SENTENCE_WORDS = {
   [SOMEONE_REASON.EARLIER]: "earlier",
 } as const satisfies Record<SomeoneReason, string>;
 
-/** The suffix GitHub gives an App's bot's login, which its name drops since its square says it is one. */
-const BOT_LOGIN_SUFFIX = "[bot]";
-
-/** Whether a GitHub login is an App's bot's, which GitHub spells with its suffix. */
-function isBotLogin(login: string): boolean {
-  return login.endsWith(BOT_LOGIN_SUFFIX);
-}
-
 /**
  * Someone GitHub names by their login alone, as a line GitHub told an agent
  * of does: an App's bot by its login's suffix, on its hard hat, since GitHub
@@ -176,13 +169,6 @@ export function githubLoginActor(login: string): GitHubActor {
   const actor: GitHubActor = { kind: ACTOR_KIND.GITHUB, login, bot };
 
   return bot ? actor : { ...actor, avatarUrl: githubUserAvatarUrl({ login }) };
-}
-
-/** What a GitHub account is called: its login, an App's bot's without the suffix GitHub gives it. */
-function githubName(actor: GitHubActor): string {
-  return actor.bot && isBotLogin(actor.login)
-    ? actor.login.slice(0, -BOT_LOGIN_SUFFIX.length)
-    : actor.login;
 }
 
 /** Lower-cases a line's opening word where the name stands inside a sentence. */
@@ -219,7 +205,7 @@ export function actorName(
           (sentence ? SOMEONE_SENTENCE_WORDS[actor.reason] : SOMEONE_WORDS[actor.reason])
         );
       case ACTOR_KIND.GITHUB:
-        return githubName(actor);
+        return githubLoginName(actor);
     }
   })();
 

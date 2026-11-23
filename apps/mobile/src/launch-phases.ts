@@ -1,4 +1,4 @@
-// launch-phases.ts -- how long a launch took to reach each of its phases, the bundle evaluated, the account read, the local copy opened, the host composed and stood, and the Inbox first grouped, and how many documents it took, for `app:ready` to count beside its own time.
+// launch-phases.ts -- how long a launch took to reach each of its phases, the bundle evaluated, the account read, the local copy opened, the host composed and stood, the screens first drawn, and the Inbox first grouped, and how many documents it took, for `app:ready` to count beside its own time and the launch's trace to hold.
 
 /** React Native's own startup marks, which its `performance` holds beside the web's and its types leave out. */
 interface StartupPerformance {
@@ -15,6 +15,8 @@ export const LAUNCH_PHASE = {
   LOCAL: "local",
   /** The host composed, before its first document is read. */
   STARTED: "started",
+  /** The screens first drawn, as the splash is let go over them (`splash.ts`). */
+  SCREENS: "screens",
   /** The Inbox's holders first grouped from a document (`useInboxGroupsIn`). */
   INBOX: "inbox",
 } as const;
@@ -71,6 +73,13 @@ export function launchDelivered(): number {
 /** Notes that the launch reached `phase`, the first time alone, so a later read or open of the same thing moves nothing. */
 export function noteLaunchPhase(phase: LaunchPhase): void {
   if (!reached.has(phase)) reached.set(phase, sinceLaunch());
+}
+
+/** When this launch started, in epoch milliseconds, as React Native marks it (`sinceLaunch`); none where the runtime keeps no start. */
+export function launchStartedAt(): number | undefined {
+  const since = sinceLaunch();
+
+  return since === undefined ? undefined : Date.now() - since;
 }
 
 /** How long after the launch's start it first reached `phase`; none before it does, or where the runtime keeps no start. */

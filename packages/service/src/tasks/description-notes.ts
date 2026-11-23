@@ -21,7 +21,7 @@ import {
   type NoteMiss,
   withAgentEdit,
 } from "@repo/features/description-notes";
-import { changedSections } from "@repo/features/description-sections";
+import { changedSections, descriptionSections } from "@repo/features/description-sections";
 import {
   DESCRIPTION_ACTOR,
   type Description,
@@ -121,6 +121,8 @@ export type DescriptionSaveResult =
   | {
       readonly status: typeof DESCRIPTION_SAVE_STATUS.NOT_SAVED;
       readonly reason: string;
+      /** The refusal in words a writer can act on, where it says more than reason, which stays the fixed key callers match. */
+      readonly detail?: string;
     };
 
 /** A batch of notes one of which no longer lands in the text as it stands: that note, why, and the text; nothing was saved. */
@@ -142,10 +144,40 @@ const NO_TASK_RESULT: DescriptionNotSaved = {
   reason: DESCRIPTION_SAVE_REFUSAL.NO_TASK,
 };
 
-const TOO_LONG_RESULT: DescriptionNotSaved = {
-  status: DESCRIPTION_SAVE_STATUS.NOT_SAVED,
-  reason: DESCRIPTION_SAVE_REFUSAL.TOO_LONG,
-};
+/** How many of the description's largest sections a too-long refusal names. */
+const TOO_LONG_SECTIONS_NAMED = 3;
+
+/** A count of characters as the refusal writes it, grouped by thousands. */
+const charsOf = (count: number) => count.toLocaleString("en-US");
+
+/**
+ * A too-long refusal that says how long the text would be, the bound, and
+ * the largest sections of the text as it stands. Note that we name the
+ * stored text's sections rather than the refused text's, because a replace
+ * note finds its words in the text as it stands, and that is where the
+ * writer trims.
+ */
+function tooLongResult(stored: string, refused: string): DescriptionNotSaved {
+  const largest = descriptionSections(stored)
+    .map((section) => ({ heading: section.heading, chars: section.text.length }))
+    .sort((a, b) => b.chars - a.chars)
+    .slice(0, TOO_LONG_SECTIONS_NAMED)
+    .map(({ heading, chars }) =>
+      heading === ""
+        ? `the text before the first heading (${charsOf(chars)})`
+        : `"${heading}" (${charsOf(chars)})`,
+    );
+
+  const named = largest.length === 0 ? "" : ` Its largest sections now: ${largest.join(", ")}.`;
+
+  return {
+    status: DESCRIPTION_SAVE_STATUS.NOT_SAVED,
+    reason: DESCRIPTION_SAVE_REFUSAL.TOO_LONG,
+    detail:
+      `Not saved: the description would be ${charsOf(refused.length)} characters, over the ${charsOf(TASK_BOUNDS.MAX_BODY_CHARS)} a description may hold.${named}` +
+      ` Free at least ${charsOf(refused.length - TASK_BOUNDS.MAX_BODY_CHARS)} characters: delete or condense text in those sections with replace notes in this same call, then send it again.`,
+  };
+}
 
 /** What a change made of the description's text under its lock: the text to save, how many changes it made, the agents' journal where it moved, and where the developer's editor reported its comment anchors. */
 interface TextTaken {
@@ -213,7 +245,7 @@ function savedUnderLock<T extends TextTaken, F>(
     const before = stored.value.text;
     const after = taken.text;
 
-    if (after.length > TASK_BOUNDS.MAX_BODY_CHARS) return TOO_LONG_RESULT;
+    if (after.length > TASK_BOUNDS.MAX_BODY_CHARS) return tooLongResult(before, after);
     const moved = after !== before;
     let txid: string | undefined;
 

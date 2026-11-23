@@ -268,24 +268,27 @@ function threadWords(thread: ReviewThread) {
   return {
     ...thread,
     diffHunk: hunkTail(thread.diffHunk),
-    comments: thread.comments.map(({ html: _html, subject: _subject, body, ...comment }) => ({
-      ...comment,
-      ...cutWords(body, WORDS_CHARS),
-    })),
+    comments: thread.comments.map(
+      ({ html: _html, subject: _subject, body, markdown, ...comment }) => ({
+        ...comment,
+        ...cutWords(markdown ?? body, WORDS_CHARS),
+      }),
+    ),
   };
 }
 
-/** One entry of the conversation as a page carries it: its words cut, and none of GitHub's rendering. */
+/** One entry of the conversation as a page carries it: its words as written, cut, and none of GitHub's rendering. */
 function entryWords({
   html: _html,
   subject: _subject,
   body,
+  markdown,
   threads,
   ...entry
 }: ConversationEntry) {
   return {
     ...entry,
-    ...cutWords(body, WORDS_CHARS),
+    ...cutWords(markdown ?? body, WORDS_CHARS),
     ...(threads !== undefined && { threads: threads.map(threadWords) }),
   };
 }

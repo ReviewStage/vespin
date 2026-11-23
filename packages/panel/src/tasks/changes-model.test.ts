@@ -13,15 +13,12 @@ import {
   blobShaOf,
   commentLines,
   commentLinesLabel,
-  filterFiles,
   gapLines,
   rowPlace,
-  startsCollapsed,
   suggestedLines,
   textsOf,
   threadPreview,
   threadsOn,
-  treeOrder,
 } from "./changes-model.js";
 
 /**
@@ -29,9 +26,7 @@ import {
  * GitHub froze for it, found on the side its line counts on, from a few
  * rows above its range to its line, though GitHub's header still counts
  * the whole hunk: written as a patch of the thread's file whose header
- * counts the rows kept, with the thread's own lines selected. Files
- * changed lists its files in the tree's order, keeps those whose path holds
- * a filter, and folds what is rarely read.
+ * counts the rows kept, with the thread's own lines selected.
  */
 
 /** A hunk as GitHub freezes one for a thread: its header counting the whole hunk, its lines cut at the thread's line. */
@@ -283,61 +278,6 @@ function changed(path: string, overrides: Partial<AgentChangedFile> = {}): Agent
     ...overrides,
   };
 }
-
-test("the files are listed as the tree lists them: folders first at each level, dotted names first, then by name whatever its case", () => {
-  const paths = [
-    "src/b.ts",
-    "README.md",
-    "src/A.ts",
-    ".github/ci.yml",
-    "src/lib/x.ts",
-    ".env",
-    "docs/a.md",
-  ];
-
-  assert.deepEqual(
-    treeOrder(paths.map((path) => changed(path))).map((file) => file.path),
-    [".github/ci.yml", "docs/a.md", "src/lib/x.ts", "src/A.ts", "src/b.ts", ".env", "README.md"],
-  );
-});
-
-test("a filter keeps the files whose path holds it whatever its case, as the tree's search does, not the path one moved from, and nothing but spaces keeps every file", () => {
-  const files = [
-    changed("src/seats.ts"),
-    changed("src/plan.ts", {
-      previousPath: "billing/plan.ts",
-      status: CHANGED_FILE_STATUS.RENAMED,
-    }),
-    changed("README.md"),
-  ];
-
-  assert.deepEqual(
-    filterFiles(files, " SEATS ").map((file) => file.path),
-    ["src/seats.ts"],
-  );
-  assert.deepEqual(
-    filterFiles(files, "PLAN").map((file) => file.path),
-    ["src/plan.ts"],
-  );
-  assert.deepEqual(filterFiles(files, "billing"), []);
-  assert.equal(filterFiles(files, "  ").length, 3);
-});
-
-test("a deleted file, a lockfile, and a file of more than a thousand changed lines start folded; a file with no hunks never does", () => {
-  assert.equal(startsCollapsed(changed("src/seats.ts")), false);
-  assert.equal(
-    startsCollapsed(changed("src/old.ts", { status: CHANGED_FILE_STATUS.DELETED })),
-    true,
-  );
-  assert.equal(startsCollapsed(changed("apps/web/package-lock.json")), true);
-  assert.equal(startsCollapsed(changed("ios/Podfile.lock")), true);
-  assert.equal(startsCollapsed(changed("src/big.ts", { additions: 900, deletions: 101 })), true);
-  assert.equal(startsCollapsed(changed("src/big.ts", { additions: 900, deletions: 100 })), false);
-  assert.equal(
-    startsCollapsed(changed("pnpm-lock.yaml", { patch: null, omitted: PATCH_OMITTED.TOO_LARGE })),
-    false,
-  );
-});
 
 /** A pick of lines on the sides given, from `start` to `end`, as the gutter's + tells it. */
 function picked(

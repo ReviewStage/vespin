@@ -1,0 +1,60 @@
+name: E2E quarantine
+
+# The journeys tagged `@quarantine` (`apps/e2e/README.md`, "Quarantine"),
+# which the PR gate's `test:e2e` leaves out: the nightly runs them alone, on
+# the gate's Linux and Chromium, so each one's flakes keep a record until it
+# is fixed or deleted. With none quarantined it passes. It is not a PR gate;
+# a failed run uploads the HTML report and opens an issue, or adds to the one
+# already open.
+on:
+  schedule:
+    - cron: "41 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  quarantine:
+    name: Run the quarantined journeys
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter @repo/e2e exec playwright install --with-deps chromium-headless-shell
+      - run: pnpm --filter @repo/e2e test:e2e:quarantine
+        env:
+          CI: "true"
+      - if: ${{ failure() }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report/
+          retention-days: 14
+
+  report:
+    name: Open an issue for a failed run
+    needs: quarantine
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="E2E quarantine: a quarantined journey failed"
+          open="$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')"
+          if [[ -n "$open" ]]; then
+            gh issue comment "$open" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --title "$title" --body "A journey tagged @quarantine failed its nightly run: $RUN_URL"
+          fi
