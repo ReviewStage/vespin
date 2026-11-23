@@ -51,7 +51,6 @@ import {
   continueFailureNote,
   dockedPullRequests,
   finishedReplyLead,
-  lastTurnEnding,
   messageFailureNote,
   modelLabel,
   modelsRunOn,
@@ -152,7 +151,7 @@ test("a stored message's parts are read for drawing: text, reasoning, a tool cal
   ]);
 });
 
-test("a finished turn that ended with end_turn replies in its summary, folding the words it wrote on the way with its work, while a turn still moving keeps its words", () => {
+test("a finished turn that ended with the retired end_turn replies in its summary, folding the words it wrote on the way with its work, while a turn still moving keeps its words", () => {
   const summary = "- Fixed the failing check.\n- Pushed to #214.";
 
   const turn: AgentTranscriptMessage = {
@@ -164,7 +163,7 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
         type: "tool-end_turn",
         toolCallId: "call_end",
         state: "output-available",
-        input: { summary, followUps: ["Show pending invitations on the Members page"] },
+        input: { summary },
         output: { status: "accepted" },
       },
       { type: "text", text: "It's all in the summary above." },
@@ -180,33 +179,6 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
   assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
   assert.equal(messageWords(turn), summary);
   assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
-
-  // A follow-up offered twice is one to tick.
-  const twice: AgentTranscriptMessage = {
-    ...turn,
-    parts: [
-      {
-        type: "tool-end_turn",
-        toolCallId: "call_end",
-        state: "output-available",
-        input: { summary, followUps: ["Add a Members page", " Add a Members page", "Resend"] },
-        output: { status: "accepted" },
-      },
-    ],
-  };
-
-  assert.deepEqual(lastTurnEnding([twice])?.followUps, ["Add a Members page", "Resend"]);
-
-  // A line the turn took in under way stands after its journal yet waits on no turn; one no turn took does.
-  const line = (taken: boolean): AgentTranscriptMessage => ({
-    id: taken ? "steer" : "next",
-    role: MESSAGE_ROLE.USER,
-    parts: [{ type: "text", text: "Keep the link valid for a week." }],
-    ...(taken && { arrivedIn: { journalId: twice.id, afterStep: 1 } }),
-  });
-
-  assert.equal(lastTurnEnding([twice, line(true)])?.messageId, twice.id);
-  assert.equal(lastTurnEnding([twice, line(false)]), undefined);
 
   // A later call refused stands for the turn, which then replies in its own words.
   const refused: AgentTranscriptMessage = {

@@ -42,7 +42,6 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
 import { readingWords } from "@repo/features/words";
-import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
   ERROR_STATE_PLACEMENT,
@@ -74,9 +73,8 @@ import { ManagerGlyph } from "../tasks/tab-look.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
 import { useListedPullRequest } from "../tasks/use-agent-pull-request.js";
 import { type AgentsControl, placeAgents } from "../tasks/use-agents.js";
-import { useHeldTaskInbox, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
+import { useHeldTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
 import { AgentPane } from "./main-tabs.js";
@@ -176,8 +174,7 @@ function useOwnAgents(
  * The threads an agent on no task posted, as the line over its box draws
  * them (`ThreadsDock`): read from the account's feed through the held read
  * an Inbox thread on no task answers on (`useHeldTaskInbox`'s `agentId`),
- * each opening in the window's Inbox, and an ask's buttons answering as the
- * Inbox's Send does; none while it posted none.
+ * each opening in the window's Inbox; none while it posted none.
  */
 function useOwnAgentThreads(
   tasks: TasksControl,
@@ -193,23 +190,13 @@ function useOwnAgentThreads(
     agents,
   });
 
-  const drafts = useInboxCardDrafts(control, { taskId: undefined });
   const inbox = useInboxDoor(tasks);
-
-  const turnEnd =
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.TURN_END) }).data === true;
 
   const onOpen = useSteadyDoor((item: InboxItem) =>
     inbox.openItem({ itemId: item.id, opened: true }),
   );
 
-  // An ask the bar answers from its row's buttons is sent as the Inbox's Send sends it, with the words drafted on its card.
-  const onChoose = useSteadyDoor((item: InboxItem, label: string) =>
-    control.onMessage(item, { ...drafts.draftOf(item), choices: [label] }),
-  );
-
   const { open, settled, waiting } = control.board;
-  const { sending } = control;
 
   return useMemo(() => {
     const posted = [...open, ...settled]
@@ -222,11 +209,8 @@ function useOwnAgentThreads(
       waiting: waiting.filter((item) => item.agentId === agentId),
       posted,
       onOpen,
-      turnEnd,
-      onChoose,
-      sending,
     };
-  }, [open, settled, waiting, agentId, onOpen, turnEnd, onChoose, sending]);
+  }, [open, settled, waiting, agentId, onOpen]);
 }
 
 /**

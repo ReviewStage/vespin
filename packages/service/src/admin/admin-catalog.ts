@@ -79,7 +79,6 @@ const PLACEHOLDER_STANDING: AgentStanding = {
   experiments: {
     descriptionsOn: true,
     memoryOn: false,
-    turnEndOn: false,
     replyButtonsOn: false,
     computerUseOn: false,
     inboxOn: true,
