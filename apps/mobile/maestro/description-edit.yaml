@@ -65,16 +65,24 @@ env:
 # Mention types an `@`, which offers what the task can mention over the
 # keyboard, as a composer's `@` offers it; a pick stands as the person's
 # pill in the word's place, here in the middle of the paragraph pressed.
-- inputText: " "
-- tapOn: "Mention"
-- inputText: "Ad"
-- assertVisible: "Ada Lovelace"
-- waitForAnimationToEnd
-- takeScreenshot: description-edit-mention
-- tapOn: "Ada Lovelace"
-- waitForAnimationToEnd
-- assertNotVisible: "Ada Lovelace.*You"
-- takeScreenshot: description-edit-mentioned
+# Note that an iPad's split view stands no offer over the keyboard yet, its
+# detail column being SwiftUI's, so the steps run on the iPhone; there the
+# offer's row is found by the reader's "You", since the page's Assignee chip
+# names Ada Lovelace too.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - inputText: " "
+      - tapOn: "Mention"
+      - inputText: "Ad"
+      - assertVisible: "Ada Lovelace.*You"
+      - waitForAnimationToEnd
+      - takeScreenshot: description-edit-mention
+      - tapOn: "Ada Lovelace.*You"
+      - waitForAnimationToEnd
+      - assertNotVisible: "Ada Lovelace.*You"
+      - takeScreenshot: description-edit-mentioned
 # A list made on a new line stands Indent and Outdent on the bar while the
 # caret is in its items, as Notion's bar does. Text first makes the new line
 # a paragraph whatever the mentioned line was, so Bulleted list turns it
