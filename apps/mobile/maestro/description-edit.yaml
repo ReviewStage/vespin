@@ -33,11 +33,23 @@ env:
 # Note that no step selects words for the edit menu's Format here: the field
 # stands as tall as the description, so a tap at a share of its height can
 # land off the screen.
+# Note that on an iPhone the words are scrolled to the screen's middle, clear
+# of the floating tab bar, which takes a press on words scrolled only into
+# sight at the screen's foot.
 - runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: "Only an admin can add.*"
+          centerElement: true
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
     file: subflows/scroll-in.yaml
     env:
       ELEMENT: "Only an admin can add.*"
-      BESIDE: ${FLOATING_TABS}
+      BESIDE: "true"
 - tapOn: "Only an admin can add.*"
 - extendedWaitUntil:
     visible:
