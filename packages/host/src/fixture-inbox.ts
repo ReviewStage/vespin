@@ -202,8 +202,9 @@ export {
   FIXTURE_PULL_REQUEST,
   PULL_REQUEST_MOVE,
   type PullRequestMove,
+  type PullRequestMoved,
   type PullRequestMoves,
-  pullRequestMoveOf,
+  pullRequestMovedBy,
   pullRequestPartsAppState,
 } from "./fixture-pull-requests.js";
 

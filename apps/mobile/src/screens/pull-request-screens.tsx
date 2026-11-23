@@ -31,6 +31,7 @@ import {
   PULL_REQUEST_READ_WORDS,
   PULL_REQUEST_STATE_ACTION_WORDS,
   PULL_REQUEST_STATE_LABEL,
+  PULL_REQUEST_TITLE_WORDS,
   type PullRequestStateAction,
   pullRequestStateActions,
   QUEUE_WARNING,
@@ -41,11 +42,13 @@ import {
 import {
   type MergeMethod,
   PULL_REQUEST_ACTION,
+  PULL_REQUEST_WRITE_BOUNDS,
   type PullRequestActionRequest,
 } from "@repo/features/pull-request-write-wire";
 import { workingTime } from "@repo/features/time-format";
 import type { AppHostRead } from "@repo/host/app-state";
 import {
+  askForName,
   BAR_TITLE,
   BUZZ,
   buzz,
@@ -327,7 +330,8 @@ const DESCRIPTION_WORDS = "Description";
 
 /**
  * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
- * the changes to where the pull request stands, as the panel's state pill
+ * Edit title, as a task's ⋯ offers Rename, then the changes to where the
+ * pull request stands, as the panel's state pill
  * offers them, Close in red, then Copy GitHub link and Open on GitHub.
  * It offers no Refresh, since a pull down on the page reads it again in
  * every window, as Mail's menu offers none, and a read that failed says so
@@ -337,14 +341,28 @@ const DESCRIPTION_WORDS = "Description";
  */
 function PullRequestToolbar({
   url,
+  editTitle,
   changes,
 }: {
   readonly url: string | undefined;
+  /** Opens the title's edit; none until the pull request is read, and dimmed while a change is out. */
+  readonly editTitle: { readonly disabled: boolean; readonly onPress: () => void } | undefined;
   readonly changes: readonly StateChange[];
 }) {
   return (
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+        {editTitle === undefined ? null : (
+          <Stack.Toolbar.Menu inline>
+            <Stack.Toolbar.MenuAction
+              icon={glyphSymbol(GLYPH.RENAME)}
+              disabled={editTitle.disabled}
+              onPress={editTitle.onPress}
+            >
+              {PULL_REQUEST_TITLE_WORDS.EDIT}
+            </Stack.Toolbar.MenuAction>
+          </Stack.Toolbar.Menu>
+        )}
         {changes.length === 0 ? null : (
           <Stack.Toolbar.Menu inline>
             {changes.map((change) => (
@@ -492,6 +510,12 @@ function PullRequestPage({
   const press = shownPressOf(pullRequest, method, writes.pending);
   const offered = offeredActionOf(pullRequest);
 
+  // The title typed into Edit title, drawn in the title's place until GitHub answers, as the panel's title stands as typed; the pull request it was typed on, so another route never draws it.
+  const [retitled, setRetitled] = useState<{
+    readonly on: PullRequestKey;
+    readonly title: string;
+  }>();
+  const shownTitle = retitled !== undefined && sameKey(retitled.on, key) ? retitled.title : title;
   const notices = useFailureNotices();
   // The pull request whose Close stands asked about, since it is or may be in the merge queue.
   const [closing, setClosing] = useState<PullRequestKey | undefined>(undefined);
@@ -538,6 +562,27 @@ function PullRequestPage({
     },
   }));
 
+  // Note that the title is edited in the system's name alert, as a task is renamed, Return keeping the words; they stand in its place until GitHub answers, and the title as it was comes back where it refused them.
+  const editTitle =
+    pullRequest === undefined
+      ? undefined
+      : {
+          disabled: writes.pending !== undefined,
+          onPress: () =>
+            askForName({
+              title: PULL_REQUEST_TITLE_WORDS.EDIT,
+              act: PULL_REQUEST_TITLE_WORDS.SAVE,
+              name: pullRequest.title,
+              onName: (typed) => {
+                const kept = typed.slice(0, PULL_REQUEST_WRITE_BOUNDS.MAX_TITLE_CHARS).trim();
+                setRetitled({ on: key, title: kept });
+                void writes
+                  .write({ action: PULL_REQUEST_ACTION.EDIT_TITLE, title: kept })
+                  .finally(() => setRetitled(undefined));
+              },
+            }),
+        };
+
   useScreenActivity((workspaces) =>
     agent === undefined || agent.taskId === null || title === undefined
       ? undefined
@@ -570,7 +615,7 @@ function PullRequestPage({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar url={url} changes={changes} />
+      <PullRequestToolbar url={url} editTitle={editTitle} changes={changes} />
     </>
   );
 
@@ -626,7 +671,12 @@ function PullRequestPage({
     >
       <ListSection>
         <PullRequestHead
-          title={title}
+          title={shownTitle ?? title}
+          titleEdit={
+            editTitle === undefined || editTitle.disabled
+              ? undefined
+              : { heard: PULL_REQUEST_TITLE_WORDS.EDIT, onPress: editTitle.onPress }
+          }
           number={key.number}
           state={state}
           queued={queued !== null || (pullRequest === undefined && listed?.queued === true)}

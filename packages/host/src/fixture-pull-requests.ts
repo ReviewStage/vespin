@@ -7,10 +7,10 @@
  * agent's repository, and its number, so the iPhone's pull request screen
  * reads them as it reads a live run's. A fixture run asks GitHub nothing, so
  * a change a screen makes is answered as made (`fixture-inbox.ts`'s act
- * door) and handed back here as a move (`pullRequestMoveOf`), which the run
+ * door) and handed back here as a move (`pullRequestMovedBy`), which the run
  * keeps and lays over the parts: merged, out of the merge queue, into it,
- * closed, reopened, or turned to a draft and back. Every person, repository,
- * and line here is invented.
+ * closed, reopened, or turned to a draft and back, and its title as it was
+ * last edited. Every person, repository, and line here is invented.
  */
 
 import {
@@ -79,11 +79,17 @@ export const PULL_REQUEST_MOVE = {
 
 export type PullRequestMove = (typeof PULL_REQUEST_MOVE)[keyof typeof PULL_REQUEST_MOVE];
 
-/** The moves a fixture run kept, by the pull request's number. */
-export type PullRequestMoves = ReadonlyMap<number, PullRequestMove>;
+/** What a fixture run's changes left of one pull request: the last move of where it stands, and the title it was last given. */
+export interface PullRequestMoved {
+  readonly move?: PullRequestMove | undefined;
+  readonly title?: string | undefined;
+}
 
-/** How a change moves its pull request, as GitHub would take it; none for a change that moves nothing a screen draws. */
-export function pullRequestMoveOf(request: PullRequestActionRequest): PullRequestMove | undefined {
+/** What a fixture run's changes left, by the pull request's number. */
+export type PullRequestMoves = ReadonlyMap<number, PullRequestMoved>;
+
+/** How a change moves where its pull request stands, as GitHub would take it; none for a change that moves no state. */
+function pullRequestMoveOf(request: PullRequestActionRequest): PullRequestMove | undefined {
   switch (request.action) {
     case PULL_REQUEST_ACTION.MERGE:
       return PULL_REQUEST_MOVE.MERGED;
@@ -102,6 +108,17 @@ export function pullRequestMoveOf(request: PullRequestActionRequest): PullReques
     default:
       return undefined;
   }
+}
+
+/** What `moved` becomes once `request` lands, as GitHub would take it: a new title kept, or where it stands moved; none for a change that moves nothing a screen draws. */
+export function pullRequestMovedBy(
+  moved: PullRequestMoved | undefined,
+  request: PullRequestActionRequest,
+): PullRequestMoved | undefined {
+  if (request.action === PULL_REQUEST_ACTION.EDIT_TITLE) return { ...moved, title: request.title };
+  const move = pullRequestMoveOf(request);
+
+  return move === undefined ? undefined : { ...moved, move };
 }
 
 /** One check, begun `ago` before the fixture landed and run for `ran`; one still running has run for none. */
@@ -344,8 +361,18 @@ const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerVie
   ],
 ]);
 
-/** A pull request as a move left it: merged, out of the queue and ready to queue again, into the queue last, closed and out of the queue, open again and still out of it, since GitHub never queues a reopened one again, or a draft and open again. */
+/** A pull request under the title it was last given, where it was given one, as `movedState` leaves where it stands. */
 function moved(
+  pullRequest: AgentOverviewPullRequest,
+  changes: PullRequestMoved | undefined,
+): AgentOverviewPullRequest {
+  const stands = movedState(pullRequest, changes?.move);
+
+  return changes?.title === undefined ? stands : { ...stands, title: changes.title };
+}
+
+/** A pull request as a move left it: merged, out of the queue and ready to queue again, into the queue last, closed and out of the queue, open again and still out of it, since GitHub never queues a reopened one again, or a draft and open again. */
+function movedState(
   pullRequest: AgentOverviewPullRequest,
   move: PullRequestMove | undefined,
 ): AgentOverviewPullRequest {

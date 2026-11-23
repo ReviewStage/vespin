@@ -2,6 +2,8 @@
 
 import { HStack, Menu, ScrollView, Text, Toggle, VStack } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
+  accessibilityHint,
   buttonStyle,
   controlSize,
   disabled,
@@ -13,6 +15,7 @@ import {
   listRowSeparator,
   menuIndicator,
   monospacedDigit,
+  onTapGesture,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { GitHubPerson, PullRequestLabel, PullRequestState } from "@repo/features/agent-wire";
@@ -52,6 +55,8 @@ type Opened = {
 
 type PullRequestHeadProps = {
   readonly title: string;
+  /** What a tap on the title does, opening its edit, and what VoiceOver hears it does ("Edit title"); none where it can't be edited now, as while another change is out. */
+  readonly titleEdit?: { readonly heard: string; readonly onPress: () => void } | undefined;
   readonly number: number;
   readonly state: PullRequestState;
   /** Whether GitHub's merge queue holds it, which its mark says in the merge's glyph. */
@@ -132,7 +137,8 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
 
 /**
  * A pull request's heading, as a list's first row: its title in 20 pt
- * semibold with its number muted after it, then where it stands as a chip,
+ * semibold with its number muted after it, which a tap opens to edit where
+ * it may be edited, then where it stands as a chip,
  * its state's glyph in GitHub's color and its word, then who opened it and
  * when, by their face, then its labels filled with their colors, scrolling
  * sideways where they run past the row, then its branches on a line of
@@ -143,6 +149,7 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
  */
 export function PullRequestHead({
   title,
+  titleEdit,
   number,
   state,
   queued,
@@ -176,6 +183,14 @@ export function PullRequestHead({
         modifiers={[
           font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
           foregroundStyle(colors.TEXT),
+          // Note that the title opens its edit on a tap, as Notes and Reminders edit a title where it stands, heard as a button with what it does, since nothing marks it to the eye.
+          ...(titleEdit === undefined
+            ? []
+            : [
+                onTapGesture(titleEdit.onPress),
+                accessibilityAddTraits(["isButton"]),
+                accessibilityHint(titleEdit.heard),
+              ]),
         ]}
       >
         <Text>{title}</Text>
