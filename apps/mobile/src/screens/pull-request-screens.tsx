@@ -515,6 +515,7 @@ function PullRequestPage({
     readonly on: PullRequestKey;
     readonly title: string;
   }>();
+
   const shownTitle = retitled !== undefined && sameKey(retitled.on, key) ? retitled.title : title;
   const notices = useFailureNotices();
   // The pull request whose Close stands asked about, since it is or may be in the merge queue.
