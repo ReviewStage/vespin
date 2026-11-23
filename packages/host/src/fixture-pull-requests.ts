@@ -23,6 +23,7 @@ import {
   CHECK_SUMMARY,
   type CheckState,
   CONVERSATION_ENTRY,
+  DIFF_SIDE,
   type GitHubPerson,
   MERGE_STATE,
   PATCH_OMITTED,
@@ -313,6 +314,37 @@ function entry(
     : { kind: CONVERSATION_ENTRY.REVIEW, by, state, html: `<p>${body}</p>`, body, at, url };
 }
 
+/** The thread the failing pull request's review started on its expiry check, answered by its author. */
+const EXPIRY_THREAD = {
+  path: "src/invites/expiry.ts",
+  line: 20,
+  startLine: 18,
+  originalLine: 20,
+  originalStartLine: 18,
+  side: DIFF_SIDE.RIGHT,
+  startSide: DIFF_SIDE.RIGHT,
+  diffHunk: "@@ -15,3 +15,6 @@ export function expired(invite: Invite): boolean {",
+  resolved: false,
+  outdated: false,
+  comments: [
+    {
+      by: GRACE,
+      html: "<p>This reads <code>Date.now()</code> twice.</p>",
+      body: "This reads `Date.now()` twice.",
+      at: LANDED - 15 * MINUTE,
+      url: `${REPOSITORY_URL}/pull/127#discussion_r18`,
+    },
+    {
+      by: ADA,
+      html: "<p>Good catch, it takes the request's time now.</p>",
+      body: "Good catch, it takes the request's time now.",
+      at: LANDED - 5 * MINUTE,
+      url: `${REPOSITORY_URL}/pull/127#discussion_r19`,
+    },
+  ],
+  more: 0,
+} as const;
+
 /** Each one's conversation: where its reviewers stand, and its comments and reviews, oldest first. */
 const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerView> = new Map([
   [
@@ -350,13 +382,21 @@ const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerVie
       pullRequest: {
         reviewers: [{ by: GRACE, state: REVIEW_STATE.CHANGES_REQUESTED }],
         conversation: [
-          entry(
-            127,
-            GRACE,
-            "An invite made just under seven days ago expires mid-accept.",
-            15 * MINUTE,
-            REVIEW_STATE.CHANGES_REQUESTED,
-          ),
+          {
+            ...entry(
+              127,
+              GRACE,
+              [
+                "An invite made just under seven days ago expires mid-accept: the check reads the clock once when the page loads and again when the invite is taken.",
+                "",
+                "- Read the clock once per request",
+                "- Treat the seventh day as still open",
+              ].join("\n"),
+              15 * MINUTE,
+              REVIEW_STATE.CHANGES_REQUESTED,
+            ),
+            threads: [EXPIRY_THREAD],
+          },
         ],
         earlier: 0,
       },

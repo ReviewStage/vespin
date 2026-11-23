@@ -41,6 +41,9 @@ import {
   conversationCount,
   PULL_REQUEST_READ_WORDS,
   reviewersOf,
+  THREAD_STATE_WORDS,
+  threadLineSpan,
+  threadStateWords,
 } from "@repo/features/pull-request-model";
 import type { RepositoryPullRequestParams } from "@repo/features/pull-request-view";
 import type { FailureSurface } from "@repo/features/shown-failure";
@@ -387,13 +390,13 @@ const PULL_REQUEST_WORDS = {
   /** What the button says to a reader while a filter leaves something out. */
   FILTERED: "Filtered",
   /** What the conversation says of the earlier entries a read left on GitHub, by how many. */
-  earlier: (count: number) => `${count} earlier ${count === 1 ? "comment" : "comments"} on GitHub`,
+  earlier: PULL_REQUEST_READ_WORDS.earlierCount,
   /** What a review thread says of the replies a read left on GitHub, by how many. */
   moreReplies: (count: number) => `${count} more ${count === 1 ? "reply" : "replies"} on GitHub`,
   /** What a thread drawn on its line says of how many comments it holds. */
   commentCount: PULL_REQUEST_READ_WORDS.commentCount,
-  RESOLVED: "Resolved",
-  OUTDATED: "Outdated",
+  RESOLVED: THREAD_STATE_WORDS.RESOLVED,
+  OUTDATED: THREAD_STATE_WORDS.OUTDATED,
   /** What a review thread's card is called, and who it is by. */
   THREAD: "Review thread",
   BY: "by",
@@ -1173,25 +1176,9 @@ function GitHubEntryMenu({ thing, url }: { thing: EntryThing; url: string }): Re
   );
 }
 
-/** A review thread's lines as its strip names them, GitHub's way: `L12–13`, or the one line; none for a thread on the whole file. */
-function lineSpan(
-  thread: Pick<ReviewThread, "line" | "startLine" | "originalLine" | "originalStartLine">,
-): string | undefined {
-  const line = thread.line ?? thread.originalLine;
-  const start = thread.line === null ? thread.originalStartLine : thread.startLine;
-
-  if (line === null) return undefined;
-
-  return start === null || start === line ? `L${line}` : `L${start}–${line}`;
-}
-
 /** The states a review thread's head wears: resolved, outdated by a later push, and pending, the member's own not yet submitted. */
 function threadStates(thread: ReviewThread, pending: boolean): readonly string[] {
-  return [
-    ...(thread.resolved ? [PULL_REQUEST_WORDS.RESOLVED] : []),
-    ...(thread.outdated ? [PULL_REQUEST_WORDS.OUTDATED] : []),
-    ...(pending ? [PENDING_WORDS.PENDING] : []),
-  ];
+  return [...threadStateWords(thread), ...(pending ? [PENDING_WORDS.PENDING] : [])];
 }
 
 /**
@@ -1329,7 +1316,7 @@ function ThreadCard({
         open={landed.open}
         onOpenChange={landed.onOpenChange}
         landing={landed}
-        where={<ThreadWhere path={thread.path} lines={lineSpan(thread)} onPress={toFiles} />}
+        where={<ThreadWhere path={thread.path} lines={threadLineSpan(thread)} onPress={toFiles} />}
         menu={
           <CommentTools>
             <ThreadResolve
@@ -1536,7 +1523,7 @@ function InlineThread({
     landed.onOpenChange(true),
   );
 
-  const lines = place === THREAD_PLACE.ABOVE ? lineSpan(thread) : undefined;
+  const lines = place === THREAD_PLACE.ABOVE ? threadLineSpan(thread) : undefined;
   const controls = useThreadControls(thread);
 
   return (

@@ -17,6 +17,7 @@ import {
   REVIEW_DECISION,
   REVIEW_STATE,
   type ReviewState,
+  type ReviewThread,
 } from "./agent-wire.js";
 import { saidWords } from "./integration-health.js";
 import { MERGE_QUEUE_ENTRY_STATE, type MergeQueueEntryState } from "./merge-queue-wire.js";
@@ -421,6 +422,36 @@ export function descriptionFolds(markdown: string): boolean {
   return lines > DESCRIPTION_FOLD.LINES || markdown.length > DESCRIPTION_FOLD.CHARACTERS;
 }
 
+/* ----- The review threads ----- */
+
+/** The states a review thread stands in, in the panel's words: resolved, and outdated by a later push. */
+export const THREAD_STATE_WORDS = {
+  RESOLVED: "Resolved",
+  OUTDATED: "Outdated",
+} as const;
+
+/** A review thread's lines as its head names them, "L12" or "L12–14", where it stands now, or where it was made once a later push outdated it; none for a thread on the whole file. */
+export function threadLineSpan(
+  thread: Pick<ReviewThread, "line" | "startLine" | "originalLine" | "originalStartLine">,
+): string | undefined {
+  const line = thread.line ?? thread.originalLine;
+  const start = thread.line === null ? thread.originalStartLine : thread.startLine;
+
+  if (line === null) return undefined;
+
+  return start === null || start === line ? `L${line}` : `L${start}–${line}`;
+}
+
+/** The states a review thread stands in, in their words: Resolved, then Outdated. */
+export function threadStateWords(
+  thread: Pick<ReviewThread, "resolved" | "outdated">,
+): readonly string[] {
+  return [
+    ...(thread.resolved ? [THREAD_STATE_WORDS.RESOLVED] : []),
+    ...(thread.outdated ? [THREAD_STATE_WORDS.OUTDATED] : []),
+  ];
+}
+
 /* ----- The checks ----- */
 
 /** Where a check stands, in the words its glyph says to a reader who cannot see it and the count says. */
@@ -583,4 +614,7 @@ export const PULL_REQUEST_READ_WORDS = {
   NO_CONVERSATION: "Nobody has commented yet.",
   /** How many comments a thread or a conversation holds. */
   commentCount: (count: number) => `${count} ${count === 1 ? "comment" : "comments"}`,
+  /** What the conversation says of the earlier entries a read left on GitHub, by how many. */
+  earlierCount: (count: number) =>
+    `${count} earlier ${count === 1 ? "comment" : "comments"} on GitHub`,
 } as const;
