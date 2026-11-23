@@ -25,6 +25,10 @@ import { AUTH_SESSION_END, type AuthSession } from "@repo/credentials";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
 import { LIVE_POLL, LIVE_POLL_URL } from "@repo/features/live-wire";
 import type { WireRecord } from "@repo/wire";
+import { Settings } from "react-native";
+
+/** PROBE ONLY: whether the stub leaves the kept workspaces standing, so a seeded local copy draws as it was kept. */
+const PROBE_KEEP_ROWS = Settings.get("probeKeepRows") === "true";
 
 /** The account the stub signs in, as its identity answers it. */
 export const STUB_ACCOUNT = {
@@ -118,6 +122,8 @@ export const stubAuthFetch: typeof globalThis.fetch = (input, init) => {
     case STUB_PATH.REVOKE:
       return Promise.resolve(json({}));
     case HOSTED_SERVICE_PATH.LIVE_WORKSPACES:
+      if (PROBE_KEEP_ROWS) return Promise.resolve(new Response(null, { status: 404 }));
+
       return Promise.resolve(workspacesAnswer(url.searchParams.has(LIVE_POLL.AFTER)));
     default:
       return Promise.resolve(new Response(null, { status: 404 }));
