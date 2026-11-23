@@ -844,10 +844,18 @@ export function ListSection({
     ...(foldable && !reduceMotion ? [animation(Animation.default, folded)] : []),
   ];
 
+  // Note that a plain list's header pins over the rows scrolling under it, as Mail's do, so it stands on the list's ground, because the list hides its scroll content's background to stand on the brand's ground, which left the pinned header clear and a scrolled row's words drawn through it; a page's grouped list never pins its headers.
+  const grounded =
+    header === undefined || look === LIST_LOOK.DETAIL ? (
+      header
+    ) : (
+      <HStack modifiers={[listRowBackground(colors.GROUND)]}>{header}</HStack>
+    );
+
   return (
     <Section
       modifiers={modifiers}
-      {...(header === undefined ? {} : { header })}
+      {...(grounded === undefined ? {} : { header: grounded })}
       {...(footer === undefined
         ? {}
         : { footer: <SectionFooter words={footer} tone={footerTone} /> })}
