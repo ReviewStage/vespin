@@ -1,0 +1,31 @@
+settings.yaml centred 6 orient added
+settings-mcp.yaml centred 1 orient added
+settings-cloud-environment.yaml centred 2 orient added
+fset9970.yaml centred 2 orient added
+fset9967a.yaml centred 1 orient added
+fcloud9977.yaml centred 0 orient kept
+#9967 on main
+#9970 on main
+#9972 on main
+#9973 on main
+#9977 on main
+== bundle PSETM3 base 590dab3977
+  built 590dab3977 base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+p9970-ipad27-light: fails 0 shots 2 
+p9967-ipad27-light a: fails 0 shots 1 
+  p9967-ipad27-light: NO-MORE
+p9972-ipad27-light: fails 0 shots 4 
+p9973-ipad27-light: fails 1 shots 2 Assert that "Notifications, On" is visible... FAILED
+p9977-ipad27-light: fails 0 shots 3 
+p9977-ipad27-light-alerts: fails 0 shots 4 
+p9970-ipad27-dark: fails 0 shots 2 
+p9967-ipad27-dark a: fails 0 shots 1 
+  p9967-ipad27-dark: NO-MORE
+p9972-ipad27-dark: fails 0 shots 4 
+p9973-ipad27-dark: fails 1 shots 2 Assert that "Notifications, On" is visible... FAILED
+p9977-ipad27-dark: fails 0 shots 3 
+p9977-ipad27-dark-alerts: fails 0 shots 4 
