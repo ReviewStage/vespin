@@ -3,6 +3,7 @@ import type { NativeAgentSessions } from "@repo/service/agents/coder-host/runtim
 import { agentMachinesLayer } from "@repo/service/agents/machine/agent-machines";
 import { agentSandboxDoors } from "@repo/service/agents/workspace-mcp/sandbox-door";
 import { AfterResponse } from "@repo/service/http/after-response";
+import { localRuntimeOverride } from "@repo/service/local/local-runtime-override";
 import { sentryLayer, sentryQueueSent } from "@repo/service/observability/sentry";
 import { type WebServices, type WebServicesError, webServices } from "@repo/service/runtime";
 import { waitUntil } from "@vercel/functions";
@@ -38,18 +39,33 @@ const afterResponseLayer = Layer.succeed(AfterResponse, {
 const sandboxLayer = vercelSandboxLayer.pipe(Layer.provide(FetchHttpClient.layer));
 
 /**
+ * The deployment's services over its sandboxes, Sentry, and the
+ * after-response work, with a local server's override standing over the
+ * sandboxes and the model catalog where one was handed it
+ * (`@repo/service/local/local-runtime-override`), which no deployment honors.
+ */
+function webLayer(): Layer.Layer<WebServices, WebServicesError> {
+  const override = localRuntimeOverride(process.env);
+
+  const services = Layer.provideMerge(
+    webServices,
+    Layer.mergeAll(sentryLayer(), afterResponseLayer, override.sandbox ?? sandboxLayer),
+  );
+
+  // Note that the catalog is provided over the services, because what a layer provides on top wins over what it is merged with.
+  return override.modelCatalog === undefined
+    ? services
+    : Layer.provideMerge(override.modelCatalog, services);
+}
+
+/**
  * The one runtime a web function runs an effect on, with Sentry started
  * before the services it watches, as Sentry's Effect guide provides it to
  * the HTTP layer, the deployment's sandboxes beneath them, and the
  * after-response work beside them.
  */
 function webRuntime(): ManagedRuntime.ManagedRuntime<WebServices, WebServicesError> {
-  standing ??= ManagedRuntime.make(
-    Layer.provideMerge(
-      webServices,
-      Layer.mergeAll(sentryLayer(), afterResponseLayer, sandboxLayer),
-    ),
-  );
+  standing ??= ManagedRuntime.make(webLayer());
 
   return standing;
 }

@@ -20,14 +20,22 @@ import { fileURLToPath } from "node:url";
 import { agentImageFromDirectory } from "@repo/service/agents/coder-host/agent-image";
 import { nativeAgentSessionsLayer } from "@repo/service/agents/coder-host/native-agent-sessions";
 import { workspaceDriveFillsLayer } from "@repo/service/agents/workspace-drive";
+import { localRuntimeOverride } from "@repo/service/local/local-runtime-override";
 import { Layer } from "effect";
 import { runWeb } from "./runtime.js";
 
 /** The agents' image's reference, read beside this function's entry, which the harnesses and every other opener of a sandbox in the function are handed. */
 export const agentImage = agentImageFromDirectory(dirname(fileURLToPath(import.meta.url)));
 
-/** The harnesses over the web runtime and the agents' image, and beside them the fills of a workspace's drive (`workspace-drive.ts`), which open their sandboxes on the same image. */
+/**
+ * The harnesses over the web runtime and the agents' image, or a local
+ * server's in their place where one was handed it
+ * (`@repo/service/local/local-runtime-override`), and beside them the fills
+ * of a workspace's drive (`workspace-drive.ts`), which open their sandboxes
+ * on the same image.
+ */
 export const nativeAgents = Layer.merge(
-  nativeAgentSessionsLayer({ run: runWeb }),
+  localRuntimeOverride(process.env).nativeAgentSessions ??
+    nativeAgentSessionsLayer({ run: runWeb }),
   workspaceDriveFillsLayer(runWeb),
 ).pipe(Layer.provide(agentImage));
