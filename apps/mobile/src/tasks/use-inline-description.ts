@@ -46,7 +46,7 @@ import {
   useFailureNotices,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AppState } from "react-native";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -101,11 +101,93 @@ export interface InlineDescription {
   readonly mentions: DocumentPageMentions | undefined;
 }
 
-/** The description of the task `taskId` names, `body` as the page last read it, edited in place; nothing is saved before the task is read. */
+/** What of the description edited in place the page around its section stands: whether it is edited, which its bar's Done follows, and what an `@` offers, which the page docks over the keyboard. */
+interface InlineChromeState {
+  readonly editing: boolean;
+  readonly mentions: DocumentPageMentions | undefined;
+}
+
+/**
+ * What the page holds of the description edited in its section, so a press
+ * on the words and each key draw the section, the bar's Done and the dock
+ * again, never the page's other sections: the section publishes what the
+ * page stands and binds its Start and Done, which the page's bar and menu
+ * press.
+ */
+export interface InlineChrome {
+  readonly get: () => InlineChromeState;
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly start: (at?: PressedAt) => void;
+  readonly done: () => void;
+  /** Publishes what the page stands of the description, from its section. */
+  readonly publish: (state: InlineChromeState) => void;
+  /** Binds the section's Start and Done while it stands, the page's state set back once it goes. */
+  readonly bind: (doors: {
+    readonly start: (at?: PressedAt) => void;
+    readonly done: () => void;
+  }) => () => void;
+}
+
+/** Nothing edited, and nothing offered. */
+const IDLE: InlineChromeState = { editing: false, mentions: undefined };
+
+/** A page's chrome for its description edited in place, before any section binds it. */
+function chromeMade(): InlineChrome {
+  let state = IDLE;
+  let doors: { readonly start: (at?: PressedAt) => void; readonly done: () => void } | undefined;
+  const listeners = new Set<() => void>();
+
+  return {
+    get: () => state,
+    subscribe: (listener) => {
+      listeners.add(listener);
+
+      return () => listeners.delete(listener);
+    },
+    start: (at) => doors?.start(at),
+    done: () => doors?.done(),
+    publish: (next) => {
+      if (next.editing === state.editing && next.mentions === state.mentions) return;
+
+      state = next;
+
+      for (const listener of listeners) listener();
+    },
+    bind: (bound) => {
+      doors = bound;
+
+      return () => {
+        if (doors === bound) doors = undefined;
+
+        state = IDLE;
+
+        for (const listener of listeners) listener();
+      };
+    },
+  };
+}
+
+/** The page's chrome for its description edited in place, made once for the page. */
+export function useInlineChrome(): InlineChrome {
+  return useState(chromeMade)[0];
+}
+
+/** Whether the page's description is edited now, which the page's bar reads. */
+export function useInlineEditing(chrome: InlineChrome): boolean {
+  return useSyncExternalStore(chrome.subscribe, () => chrome.get().editing);
+}
+
+/** What an `@` typed in the page's description offers now, which the page's dock reads. */
+export function useInlineMentions(chrome: InlineChrome): DocumentPageMentions | undefined {
+  return useSyncExternalStore(chrome.subscribe, () => chrome.get().mentions);
+}
+
+/** The description of the task `taskId` names, `body` as the page last read it, edited in place in its section; what the page stands of it published to the page's `chrome`; nothing is saved before the task is read. */
 export function useInlineDescription(
   taskId: string | undefined,
   workspaceId: string | undefined,
   body: string,
+  chrome: InlineChrome,
 ): InlineDescription {
   const acts = useHostActs();
   const write = useWrite();
@@ -286,6 +368,36 @@ export function useInlineDescription(
     if (editorCloses(live.current)) setEditing(false);
   };
 
+  const offered: DocumentPageMentions | undefined =
+    mentions === undefined
+      ? undefined
+      : {
+          groups: mentions.groups,
+          empty: mentions.empty,
+          crumb: mentions.crumb,
+          onPick: mentions.pick,
+        };
+
+  // Note that the page's bar and dock read what the section publishes, so neither draws the page again.
+  useEffect(() => {
+    chrome.publish({ editing, mentions: offered });
+  });
+
+  const doors = useRef({ start, done });
+
+  useEffect(() => {
+    doors.current = { start, done };
+  });
+
+  useEffect(
+    () =>
+      chrome.bind({
+        start: (at) => doors.current.start(at),
+        done: () => doors.current.done(),
+      }),
+    [chrome],
+  );
+
   return {
     editing,
     start,
@@ -297,14 +409,6 @@ export function useInlineDescription(
     editable: editor.sending === undefined || !editor.closing,
     problem: problemOf(editor, conflict?.note),
     onAtWord: setAtWord,
-    mentions:
-      mentions === undefined
-        ? undefined
-        : {
-            groups: mentions.groups,
-            empty: mentions.empty,
-            crumb: mentions.crumb,
-            onPick: mentions.pick,
-          },
+    mentions: offered,
   };
 }
