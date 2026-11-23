@@ -688,6 +688,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// Whether the words have been laid out whole since they were last laid in, which a field grown to its words does once, then lays out again only the paragraph a key changes.
   private var laidWhole = false
+  // PROBE: when the words prop landed, how long taking it took, and the whole layout.
+  var probeValueAt: Double = 0
+  var probeTakeMs: Double = 0
+  var probeWholeMs: Double = 0
 
   /// The acts the field offers on its selection, in the edit menu and the bar over the keyboard; none for a field that offers none.
   var formats: FormatsRecord? {
@@ -706,6 +710,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// Takes the keyboard where the field opens, once for each opening told: at the words' start, or where a press on the words as read landed. Note that it is laid after the props told with it, the words among them, have been taken, and once the field stands in a window.
   func open(_ opening: OpeningRecord?) {
+    if let opening, opening.pressedAt > 0 {
+      NSLog("PROBEINLINE split press-to-render=%.0fms read=%.0fms handed=%.0fms render-to-value=%.0fms take=%.0fms whole=%.0fms value-to-open=%.0fms", opening.renderAt - opening.pressedAt, opening.readMs, opening.handedMs, probeValueAt - opening.renderAt, probeTakeMs, probeWholeMs, Date().timeIntervalSince1970 * 1000 - probeValueAt)
+    }
+    NSLog("PROBEINLINE open nonce=%d start=%@ line=%d window=%@ press-to-open=%.0fms", opening?.nonce ?? -1, String(opening?.start ?? false), opening?.line ?? -1, String(window != nil), Date().timeIntervalSince1970 * 1000 - (opening?.pressedAt ?? 0))
     guard let opening, opening.nonce != openedNonce else { return }
     openedNonce = opening.nonce
 
@@ -825,7 +833,11 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   /// Tells JavaScript the height the words ask for at the field's width, while the field grows to them, once it moves by a point or more.
   private func tellHeight() {
     guard fitsWords, bounds.width > 0 else { return }
+    let probeStart = CFAbsoluteTimeGetCurrent()
+    let whole = laidWhole
     let height = wordsHeight()
+    if whole == false { probeWholeMs = (CFAbsoluteTimeGetCurrent() - probeStart) * 1000 }
+    NSLog("PROBEINLINE wordsHeight=%.2fms whole=%@ height=%.0f told=%@ chars=%d container=%.0f scrolls=%@ content=%.0f", (CFAbsoluteTimeGetCurrent() - probeStart) * 1000, String(!whole), height, String(describing: toldHeight), textView.textStorage.length, min(textView.textContainer.size.height, 99_999_999), String(textView.isScrollEnabled), textView.contentSize.height)
     if let toldHeight, abs(toldHeight - height) < 1 { return }
     toldHeight = height
     onHeight(["height": height])
@@ -936,12 +948,17 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// Takes the keyboard with the caret where a press on the words as read landed: on the line at `index`, `x` and `y` points in from its first line's start, as near as the words drawn here allow, else at the line's start.
   func focus(atLine index: Int, x: CGFloat, y: CGFloat) {
+    NSLog("PROBEINLINE focusAt asked window=%@ chars=%d", String(window != nil), textView.textStorage.length)
+    let probeStart = CFAbsoluteTimeGetCurrent()
+    defer { NSLog("PROBEINLINE focusAt=%.0fms first=%@", (CFAbsoluteTimeGetCurrent() - probeStart) * 1000, String(textView.isFirstResponder)) }
     guard window != nil else {
       focusWhenShown = { [weak self] in self?.focus(atLine: index, x: x, y: y) }
       return
     }
 
+    let probeLayout = CFAbsoluteTimeGetCurrent()
     layoutIfNeeded()
+    NSLog("PROBEINLINE focusAt layoutIfNeeded=%.1fms", (CFAbsoluteTimeGetCurrent() - probeLayout) * 1000)
     let string = textView.textStorage.string as NSString
     var location = 0
 
@@ -956,8 +973,12 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
     let top = textView.caretRect(for: start).minY
     let point = CGPoint(x: textView.textContainerInset.left + x, y: top + y)
+    let probeClosest = CFAbsoluteTimeGetCurrent()
     let landed = textView.closestPosition(to: point) ?? start
+    NSLog("PROBEINLINE focusAt closestPosition=%.1fms", (CFAbsoluteTimeGetCurrent() - probeClosest) * 1000)
+    let probeFirst = CFAbsoluteTimeGetCurrent()
     textView.becomeFirstResponder()
+    NSLog("PROBEINLINE focusAt becomeFirstResponder=%.1fms (keyboard and its accessory, iOS's)", (CFAbsoluteTimeGetCurrent() - probeFirst) * 1000)
     textView.selectedRange = NSRange(location: textView.offset(from: textView.beginningOfDocument, to: landed), length: 0)
     revealCaret()
   }
@@ -1774,6 +1795,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// Draws again the marks of the list an edit stands in, each item numbered among its run, since a key, a paste, a Return or a pill laid over an item's words changes the run while the words around keep the marks they were drawn with: every paragraph of the edit's block, from the block's first, its mark laid where it differs and taken off a line that is no item.
   private func refreshMarks(around edit: NSRange) {
+    let probeStart = CFAbsoluteTimeGetCurrent()
+    defer { NSLog("PROBEINLINE refreshMarks=%.2fms chars=%d", (CFAbsoluteTimeGetCurrent() - probeStart) * 1000, textView.textStorage.length) }
     let storage = textView.textStorage
     let string = storage.string as NSString
     guard string.length > 0 else { return }

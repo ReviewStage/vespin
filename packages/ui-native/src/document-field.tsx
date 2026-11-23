@@ -319,6 +319,7 @@ export function DocumentField({
   fitsWords = false,
   opensAt,
 }: DocumentFieldProps) {
+  const probeFirstRender = useRef(Date.now()); // PROBE
   const colors = useColors();
   const native = useRef<NativeDocumentFieldDoors>(null);
   // The height the words ask for while the field grows to them, none until the field first tells it.
@@ -344,23 +345,33 @@ export function DocumentField({
   }, [ready]);
 
   // The blocks the Markdown the lines stand on reads as, read once for each Markdown: the field's lines are laid from them, and each key's write is laid against them.
-  const read = useMemo(
-    () => (ready ? documentBlocks(base, files) : NO_BLOCKS),
-    [ready, base, files],
-  );
+  const read = useMemo(() => {
+    const probeReadStart = Date.now(); // PROBE
+    const probeRead = ready ? documentBlocks(base, files) : NO_BLOCKS;
+    if (ready)
+      (globalThis as { __probeReadMs?: number }).__probeReadMs = Date.now() - probeReadStart;
+
+    return probeRead;
+  }, [ready, base, files]);
 
   const handed = useMemo(() => {
-    const reading = { repository, now: Date.now(), zone: readerZone() };
-    const laid = own ? told.lines : fieldLines(read);
+    const probeHandedStart = Date.now(); // PROBE
+    const probeHanded = (() => {
+      const reading = { repository, now: Date.now(), zone: readerZone() };
+      const laid = own ? told.lines : fieldLines(read);
 
-    const lines = laid.map(
-      (line): NativeDocumentLine => ({
-        ...line,
-        runs: line.runs.map((run) => nativeRun(run, line, reading)),
-      }),
-    );
+      const lines = laid.map(
+        (line): NativeDocumentLine => ({
+          ...line,
+          runs: line.runs.map((run) => nativeRun(run, line, reading)),
+        }),
+      );
 
-    return { markdown: base, value: { lines, seen } };
+      return { markdown: base, value: { lines, seen } };
+    })();
+    (globalThis as { __probeHandedMs?: number }).__probeHandedMs = Date.now() - probeHandedStart;
+
+    return probeHanded;
   }, [own, told, read, base, repository, seen]);
 
   const look = {
@@ -449,7 +460,23 @@ export function DocumentField({
     const found = handed.value.lines.findIndex((each) => each.from === block);
     const line = Math.max(0, found);
 
-    return { nonce: 1, start: false, line, x: opensAt.x, y: opensAt.y };
+    const pressedAt = (globalThis as { __probePressedAt?: number }).__probePressedAt ?? 0;
+
+    const renderAt = probeFirstRender.current;
+    const handedMs = (globalThis as { __probeHandedMs?: number }).__probeHandedMs ?? -1;
+    const readMs = (globalThis as { __probeReadMs?: number }).__probeReadMs ?? -1;
+
+    return {
+      nonce: 1,
+      start: false,
+      line,
+      x: opensAt.x,
+      y: opensAt.y,
+      pressedAt,
+      renderAt,
+      handedMs,
+      readMs,
+    };
   }, [opensAt, read, base, handed]);
 
   const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {

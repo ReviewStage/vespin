@@ -118,6 +118,12 @@ export interface NativeOpening {
   readonly line: number;
   readonly x: number;
   readonly y: number;
+  /** PROBE: when the press landed, in milliseconds since 1970. */
+  readonly pressedAt?: number;
+  /** PROBE: when the field first rendered, and how long its lines took to read. */
+  readonly renderAt?: number;
+  readonly handedMs?: number;
+  readonly readMs?: number;
 }
 
 interface NativeDocumentFieldProps {

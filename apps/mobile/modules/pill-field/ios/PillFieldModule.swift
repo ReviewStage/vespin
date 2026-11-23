@@ -84,7 +84,10 @@ public final class PillFieldModule: Module {
       Events("onLines", "onHeight", "onFocusChange", "onLinkAsk", "onCaret")
 
       Prop("value") { (view: DocumentFieldView, value: DocumentValueRecord) in
+        view.probeValueAt = Date().timeIntervalSince1970 * 1000
+        let probeTake = CFAbsoluteTimeGetCurrent()
         view.take(value.lines.map(DocumentLine.init), seen: value.seen)
+        view.probeTakeMs = (CFAbsoluteTimeGetCurrent() - probeTake) * 1000
       }
 
       Prop("look") { (view: DocumentFieldView, look: LookRecord) in
@@ -200,6 +203,11 @@ struct OpeningRecord: Record {
   @Field var line: Int = 0
   @Field var x: Double = 0
   @Field var y: Double = 0
+  /// PROBE: when the press landed, in milliseconds since 1970.
+  @Field var pressedAt: Double = 0
+  @Field var renderAt: Double = 0
+  @Field var handedMs: Double = 0
+  @Field var readMs: Double = 0
 }
 
 struct LookRecord: Record {
