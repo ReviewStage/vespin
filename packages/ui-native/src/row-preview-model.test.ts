@@ -62,6 +62,7 @@ describe("latestStep", () => {
         open: false,
         body: [],
         cut: undefined,
+        answered: [],
       },
       {
         place: PLACE,

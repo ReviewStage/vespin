@@ -385,6 +385,7 @@ const OPEN_THREAD_ACTION = { name: "openThread", label: "Open thread" } as const
 function CallRow({
   item,
   held,
+  drawing,
   onToggle,
   onOpenThread,
   placeCall,
@@ -392,6 +393,8 @@ function CallRow({
   readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.CALL }>;
   /** The answer the agent holds the call for, where it does. */
   readonly held: HeldCall | undefined;
+  /** How the media its open body holds is read and opened. */
+  readonly drawing: RowDrawing;
   readonly onToggle: (item: TranscriptItem) => void;
   readonly onOpenThread: ((threadId: string) => void) | undefined;
   readonly placeCall: ((callId: string, row: HostInstance | null) => void) | undefined;
@@ -506,6 +509,17 @@ function CallRow({
         <View style={styles.body}>
           {item.body.map((block) => (
             <BodyBlock key={block.title} title={block.title} text={block.text} colors={colors} />
+          ))}
+          {/* Note that what the body holds under its answer, such as the window a computer call read, stands after its blocks, as the panel's body ends on it. */}
+          {item.answered.map((shown) => (
+            <View key={shown.id} style={styles.shown}>
+              <ShownMediaView
+                shown={shown}
+                source={drawing.mediaSource(shown.id)}
+                onOpenElsewhere={drawing.onOpenElsewhere}
+                onRetry={retryOf(drawing, shown.id)}
+              />
+            </View>
           ))}
         </View>
       ) : null}
@@ -948,6 +962,7 @@ function TranscriptRow({
         <CallRow
           item={item}
           held={drawing.heldCall?.(item.callId)}
+          drawing={drawing}
           onToggle={drawing.onToggle}
           onOpenThread={drawing.onOpenThread}
           placeCall={drawing.placeCall}

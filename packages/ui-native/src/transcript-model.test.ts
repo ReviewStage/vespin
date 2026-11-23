@@ -9,6 +9,7 @@ import {
   openCuts,
   SHOWN_MEDIA,
   shownFiles,
+  shownMediaIds,
   TRANSCRIPT_ITEM,
   transcriptItems,
   transcriptOriginOf,
@@ -64,6 +65,39 @@ describe("transcriptItems", () => {
         { id: "clip-1", caption: "The chime", label: "The chime", kind: SHOWN_MEDIA.AUDIO },
       ],
     });
+  });
+
+  it("stands a computer call's window in its body once opened, never under its row, and reads it only then", () => {
+    const work = {
+      id: "work",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        {
+          type: "tool-computer",
+          toolCallId: "read",
+          state: "output-available",
+          input: { action: "get_app_state", app: "Mail" },
+          output: { status: "ran", app: { name: "Mail" }, kept: { picture: PICTURE } },
+        },
+      ],
+      finishedAt: 1,
+    };
+
+    const reading = { writing: false, readerId: undefined, now: 2, pullRequests: [] };
+    const closed = transcriptItems([work], { ...reading, toggles: NO_TOGGLES });
+
+    const opened = transcriptItems([work], {
+      ...reading,
+      toggles: { ...NO_TOGGLES, calls: new Set(["read"]) },
+    });
+
+    expect(closed.map((item) => item.kind)).toEqual([TRANSCRIPT_ITEM.CALL]);
+    expect(shownMediaIds(closed)).toEqual([]);
+    expect(opened.map((item) => item.kind)).toEqual([TRANSCRIPT_ITEM.CALL]);
+    expect(opened[0]).toMatchObject({
+      answered: [{ id: "picture-1", label: "Mail", kind: SHOWN_MEDIA.PICTURE }],
+    });
+    expect(shownMediaIds(opened)).toEqual(["picture-1"]);
   });
 
   it("draws the pictures a line carried over its words, one kept apart read by its id, and its other files as chips under them", () => {

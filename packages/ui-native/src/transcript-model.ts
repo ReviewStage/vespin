@@ -12,7 +12,8 @@
  * the transcript on Working… while its agent works. The pictures and the
  * recordings it showed, and those a call answered and the service kept (a
  * browser's screenshots, an integration's pictures), stand under the call
- * that showed them, a page it
+ * that showed them, but a computer call's window, which stands in its body
+ * once it is opened, as the panel's does; a page it
  * showed as a card under its line, which opens it whole, and a pull request
  * it opened as the pull request's card, as it stands now where the task list
  * holds it. A call whose answer its page carried cut is read whole as it
@@ -256,6 +257,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly body: readonly CallBodyBlock[];
       /** Where it stands open with an answer its page carried cut whose whole read has not settled: the part to read whole. */
       readonly cut: AgentPartCut | undefined;
+      /** What its body holds under its answer while it stands open, such as the window a computer call read, as the panel's body holds it; none while it is closed. */
+      readonly answered: readonly ShownMedia[];
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.FOLD;
@@ -781,6 +784,26 @@ function callItems(
   const { toggles } = reading;
   const shownSet = showedPictures(part);
   const pictures = shownSet ? shownPicturesOf(part.input, part.output) : [];
+  // Note that a computer call's window stands in its body, seen once it is opened, as the panel's does, because the agent reads a window at nearly every step and shows what matters itself.
+  const inBody = part.tool === AGENT_TOOL.COMPUTER;
+
+  // Note that a picture a call answered that was not kept has no bytes to draw, so it is left out.
+  const called: readonly ShownMedia[] = calledPicturesOf(
+    part.tool,
+    part.input,
+    part.output,
+  ).flatMap((each) =>
+    each.kept
+      ? [
+          {
+            id: each.picture.id,
+            caption: "",
+            label: each.name,
+            kind: shownKindOf(each.picture.mediaType),
+          },
+        ]
+      : [],
+  );
 
   const media: readonly ShownMedia[] = [
     ...pictures.flatMap(({ picture, caption, name }) =>
@@ -801,19 +824,7 @@ function callItems(
       label: caption === "" ? name : caption,
       kind: SHOWN_MEDIA.VIDEO,
     })),
-    // Note that a picture a call answered that was not kept has no bytes to draw, so it is left out.
-    ...calledPicturesOf(part.tool, part.input, part.output).flatMap((called) =>
-      called.kept
-        ? [
-            {
-              id: called.picture.id,
-              caption: "",
-              label: called.name,
-              kind: shownKindOf(called.picture.mediaType),
-            },
-          ]
-        : [],
-    ),
+    ...(inBody ? [] : called),
   ];
 
   const mediaItem: readonly TranscriptItem[] =
@@ -858,6 +869,7 @@ function callItems(
       ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
       : [],
     cut: read?.reading === true ? part.cut : undefined,
+    answered: open && inBody ? called : [],
   };
 
   const page: readonly TranscriptItem[] =
@@ -1186,10 +1198,13 @@ export function shownFiles(items: readonly TranscriptItem[]): readonly ShownFile
   );
 }
 
-/** The ids of every picture and recording the items show, which the list reads the bytes of. */
+/** The ids of every picture and recording the items show, an open call's body's among them, which the list reads the bytes of. */
 export function shownMediaIds(items: readonly TranscriptItem[]): readonly string[] {
   return items.flatMap((item) => {
     if (item.kind === TRANSCRIPT_ITEM.MEDIA) return item.media.map(({ id }) => id);
+
+    // Note that what an open call's body holds is read as it opens, so a turn of many windows reads only the ones opened.
+    if (item.kind === TRANSCRIPT_ITEM.CALL) return item.answered.map(({ id }) => id);
 
     // Note that a picture a sent line kept by its id is read as the agent's shown ones are, through the same door.
     if (item.kind === TRANSCRIPT_ITEM.SAID) {
