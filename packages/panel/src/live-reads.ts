@@ -23,7 +23,8 @@
  *   (`useLiveReadSubscription`), as the docs' guide to data pushed over a
  *   socket does, so a surface mounted after they landed draws them in its
  *   first frame, and the query is never stale (`staleTime: Infinity`) and
- *   never read again. A read the host could not answer before it ever had
+ *   never read again, not even a failed one as another reader mounts
+ *   (`retryOnMount: false`). A read the host could not answer before it ever had
  *   is the query's error (`LiveReadFailed`); one that holds rows keeps them
  *   whatever it says after, and one whose rows the document drops, as a
  *   sign-out drops them, is reset to pending (`resetQueries`).
@@ -519,6 +520,8 @@ function liveReadQuery<Read extends LiveReadName>(
     enabled: ids !== undefined,
     staleTime: Infinity,
     retry: false,
+    // Note that a failed read is not read again as another reader mounts, because that read goes pending for every reader, and only the host says a read failed no more (`writeLiveReads`).
+    retryOnMount: false,
   });
 }
 
