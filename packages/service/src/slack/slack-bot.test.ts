@@ -35,7 +35,7 @@ import {
   slackBotFromEnvironment,
   slackBotOver,
 } from "./slack-bot.js";
-import { readSlackBot, updateSlackBot } from "./slack-bot-operations.js";
+import { disconnectSlackBot, readSlackBot, updateSlackBot } from "./slack-bot-operations.js";
 
 /**
  * Our Slack bot writing to a member, over a real store and a fake
@@ -46,7 +46,8 @@ import { readSlackBot, updateSlackBot } from "./slack-bot-operations.js";
  * own install granted, and one that holds none writes nothing. Settings
  * offers the bot only where the deployment holds both the key ring that
  * opens a token and our Slack app whose install grants one. An update
- * that Slack refuses part of changes none of it.
+ * that Slack refuses part of changes none of it. Only an owner or admin
+ * moves the bot or disconnects it.
  *
  * Synthetic accounts, workspaces, and Slack ids throughout.
  */
@@ -285,6 +286,38 @@ it.layer(getTestDB())("the Slack bot", (it) => {
           [],
         ),
       ),
+    ),
+  );
+
+  it.effect("moves or disconnects the bot for an owner alone, never a member or a stranger", () =>
+    Effect.gen(function* () {
+      const owner = yield* openAccount(`${randomUUID()}@app.test`);
+      const teammate = yield* openAccount(`${randomUUID()}@app.test`);
+      const stranger = yield* openAccount(`${randomUUID()}@app.test`);
+      const workspace = yield* openWorkspace(owner);
+      yield* joinWorkspace(workspace, teammate);
+      yield* linkSlackInstallation({
+        organizationId: workspace,
+        teamId: "T0001",
+        teamName: "Team",
+        userId: owner,
+      });
+      const before = yield* readSlackBot(owner, workspace);
+      const moved = { channel: { channelId: "C0001", member: true } };
+
+      for (const [userId, error] of [
+        [teammate, HOSTED_API_ERROR.NOT_PERMITTED],
+        [stranger, HOSTED_API_ERROR.NOT_FOUND],
+      ] as const) {
+        assert.deepEqual(yield* Effect.flip(updateSlackBot(userId, workspace, moved)), { error });
+        assert.deepEqual(yield* Effect.flip(disconnectSlackBot(userId, workspace)), { error });
+      }
+
+      assert.deepEqual(yield* readSlackBot(owner, workspace), before);
+    }).pipe(
+      Effect.provideService(SlackBot, slackBotOver(fakeSlack)),
+      Effect.provideService(SlackApp, slackAppService(undefined, [])),
+      Effect.provide(NO_GITHUB),
     ),
   );
 
