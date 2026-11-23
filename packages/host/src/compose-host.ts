@@ -499,6 +499,13 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const agentListed = (agentId: string) =>
       tasks.agentsListed()?.find((agent) => agent.id === agentId);
 
+    /** The tasks of `taskIds` the task list holds now, as it sums them up; none before it is drawn. */
+    const tasksListed = (taskIds: readonly string[]) => {
+      const named = new Set(taskIds);
+
+      return tasks.snapshot().tasks.filter((task) => named.has(task.id));
+    };
+
     /** Waits until the task list says an agent's sandbox stands open, answering whether it waited: false at once where it already says so, or does not know. */
     const sandboxOpened = (agentId: string) =>
       Effect.scoped(
@@ -557,6 +564,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         pullRequestListings: tasks.pullRequestListings,
         openedOutside: tasks.openedOutside,
         inboxNamed: tasks.inboxNamed,
+        tasksListed,
         pool,
         agentListed,
       }),
