@@ -144,6 +144,26 @@ export function signingModeDefine(env) {
 }
 
 /**
+ * The esbuild define telling the bundle whether it was built for the
+ * desktop's end-to-end smoke (`apps/e2e`), asked for with `APP_E2E_BUILD=1`.
+ * Such a build lets `APP_ACCOUNT_BASE_URL` name a loopback service and
+ * `APP_STATE_ROOT` its state (`src/main/bootstrap.ts`). Note that a Developer
+ * ID build asking for it is refused rather than built, because every release
+ * is one, so no release can carry the flag whatever its environment holds.
+ */
+export function e2eBuildDefine(env) {
+  const asked = env.APP_E2E_BUILD === "1";
+
+  if (asked && resolveSigningMode(env).mode === SIGNING_MODE.DEVELOPER_ID) {
+    throw new Error(
+      "APP_E2E_BUILD is set beside APP_CODESIGN_IDENTITY: a Developer ID build cannot be an end-to-end build",
+    );
+  }
+
+  return { PACKAGED_FOR_E2E: JSON.stringify(asked) };
+}
+
+/**
  * The esbuild define holding the analytics project key the renderer's session
  * replay records into, baked only into a bundle built for Developer ID
  * release: `scripts/release-macos.sh` and the release workflow set

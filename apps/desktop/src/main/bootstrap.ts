@@ -40,6 +40,8 @@ export interface BootstrapDependencies {
   showMenuBar: (change?: MenuBarChange) => void;
   /** The links of ours the system hands the app, heard from module scope, before the launch. */
   appLinks: AppLinkInbox;
+  /** Whether this bundle was built for the desktop's end-to-end run (`buildForEndToEnd`). */
+  endToEndBuild: boolean;
   /**
    * The crash reporter, begun here rather than inside a service: Electron
    * spawns its GPU process during bootstrap, and the reporter has to stand
@@ -51,11 +53,69 @@ export interface BootstrapDependencies {
   initializeCrashReporting: (runMode: RunMode, environment: SentryEnvironment) => void;
 }
 
+/**
+ * The one host a packaged end-to-end build may be pointed at: the loopback
+ * address the suite's local server stands on, so even that build can reach
+ * no service but one on the machine it runs on.
+ */
+const END_TO_END_HOSTNAME = "127.0.0.1";
+
+/**
+ * Baked by `build.mjs` from `APP_E2E_BUILD` (`package-config.mjs`'s
+ * `e2eBuildDefine`), which a release never sets. Absent under tsx, which
+ * reads as no end-to-end build.
+ */
+declare const PACKAGED_FOR_E2E: boolean | undefined;
+
+/** Whether this bundle was built for the desktop's end-to-end run, the nightly smoke's (`apps/e2e`). */
+export function buildForEndToEnd(): boolean {
+  try {
+    // SAFETY: esbuild replaces this free identifier on every bundle build.
+    return PACKAGED_FOR_E2E === true;
+  } catch {
+    return false;
+  }
+}
+
 /** Reads one `--name value` argument. */
 function argumentValue(argv: readonly string[], name: string): string | undefined {
   const index = argv.indexOf(name);
 
   return index >= 0 ? argv[index + 1] : undefined;
+}
+
+/** What a packaged end-to-end build reads from its environment in place of the release's own. */
+interface EndToEndOverrides {
+  readonly accountBaseUrl?: string;
+  readonly stateRoot?: string;
+}
+
+/**
+ * What a packaged end-to-end build takes from its environment, and nothing
+ * else does: the account service on loopback (`APP_ACCOUNT_BASE_URL`) and a
+ * state root of the run's own (`APP_STATE_ROOT`), so the smoke stands on a
+ * fresh profile against the suite's server. A development run reads the
+ * account override on its own terms, and a release reads neither. An origin
+ * off loopback is refused rather than read, so this build cannot be sent to
+ * a service on the web either.
+ */
+function endToEndOverrides(
+  packaged: boolean,
+  endToEndBuild: boolean,
+  environment: NodeJS.ProcessEnv,
+): EndToEndOverrides {
+  if (!packaged || !endToEndBuild) return {};
+  const requested = environment.APP_ACCOUNT_BASE_URL;
+
+  const accountBaseUrl =
+    requested !== undefined && URL.parse(requested)?.hostname === END_TO_END_HOSTNAME
+      ? requested
+      : undefined;
+
+  return {
+    ...(accountBaseUrl === undefined ? undefined : { accountBaseUrl }),
+    ...(environment.APP_STATE_ROOT ? { stateRoot: environment.APP_STATE_ROOT } : undefined),
+  };
 }
 
 /**
@@ -89,7 +149,8 @@ export function bootstrapDesktop(dependencies: BootstrapDependencies): DesktopCo
 
   const appName = resolveAppName({ ...identity, instance });
   app.setName(appName);
-  const stateRoot = path.join(app.getPath("appData"), appName);
+  const overrides = endToEndOverrides(app.isPackaged, dependencies.endToEndBuild, environment);
+  const stateRoot = overrides.stateRoot ?? path.join(app.getPath("appData"), appName);
   app.setPath("userData", stateRoot);
   app.setPath("sessionData", stateRoot);
 
@@ -103,9 +164,10 @@ export function bootstrapDesktop(dependencies: BootstrapDependencies): DesktopCo
 
   const commit = buildCommit();
 
-  // The account service's one development override stops at packaging.
+  // The account service's development override stops at packaging, bar an end-to-end build's loopback one.
   const accountBaseUrl =
-    (app.isPackaged ? undefined : environment.APP_ACCOUNT_BASE_URL) ?? `${LINK_ORIGIN}/api/auth`;
+    (app.isPackaged ? overrides.accountBaseUrl : environment.APP_ACCOUNT_BASE_URL) ??
+    `${LINK_ORIGIN}/api/auth`;
 
   return {
     stateRoot,

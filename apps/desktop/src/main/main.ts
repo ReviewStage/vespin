@@ -6,7 +6,7 @@ import { desktopQuit, QUIT_STAGE } from "@repo/host/quit";
 import { Duration, Effect, Fiber, ManagedRuntime, Option } from "effect";
 import { app, Menu, protocol, shell } from "electron";
 import { menuBarDrawer } from "./app-menu";
-import { bootstrapDesktop } from "./bootstrap";
+import { bootstrapDesktop, buildForEndToEnd } from "./bootstrap";
 import { offerMoveToApplications } from "./move-to-applications";
 import { composeDesktop, DesktopTag } from "./services/compose-desktop";
 import {
@@ -86,6 +86,7 @@ const config = bootstrapDesktop({
   ),
   initializeCrashReporting,
   appLinks,
+  endToEndBuild: buildForEndToEnd(),
 });
 
 tolerateClosedStderr();
