@@ -11,6 +11,7 @@
  * settle that stops them, and the surface draws the question beside it.
  */
 
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentStillWriting, agentsOfTask } from "@repo/features/task-agents-model";
 import {
@@ -34,8 +35,10 @@ import { neverBusyAct } from "@repo/ui/confirm-state";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { askKept, firstNotKept, KEPT, type Kept, notKept } from "../act.js";
+import { TaskStatusGlyph } from "../entities/entity-glyph.js";
 import { confirmFailure } from "../failure-report.js";
 import { useToast } from "../toast.js";
+import { toastChip } from "../toast-chip.js";
 import { heldTask, pressRows, ROW_WRITE, type TaskRows } from "../undo-stack.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useTaskRowDoors } from "./task-row-doors.js";
@@ -191,8 +194,15 @@ export function useStandingWrites(typedNames: () => TaskNames): StandingWrites {
 
       const words = settledNote(status, landed.length, refused);
       const said = pressed.keep(words, (taskId) => landed.includes(taskId));
+      const [one, ...more] = standingTasksOf(standingDoors.rows(), landed);
 
-      if (said !== undefined) toast(said);
+      if (said === undefined) return;
+      toast({
+        ...said,
+        glyph: () => <TaskStatusGlyph status={status} />,
+        chip:
+          one === undefined || more.length > 0 ? undefined : toastChip(ENTITY_KIND.PLAN, one.name),
+      });
     });
   };
 

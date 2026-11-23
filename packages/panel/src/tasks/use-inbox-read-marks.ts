@@ -14,12 +14,14 @@ import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STATUS_TONE } from "@repo/ui";
 import { afterPaint } from "@repo/ui/after-paint";
+import { GLYPH } from "@repo/ui/icons";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { firstNotKept, KEPT, type Kept, notKept, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { useAppCommand } from "../app-commands.js";
 import { useToast } from "../toast.js";
+import { inboxItemChip } from "../toast-chip.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import type { InboxReminder, RemindSaying } from "./inbox-remind.js";
 import { useInboxPresses } from "./inbox-writes.js";
@@ -208,8 +210,9 @@ export function useInboxReadMarks({
           if (pressed !== undefined && until !== null) {
             const words = `Reminder set for ${remindWords(until, Date.now())}`;
             const said = pressed.keep(words);
+            const chip = inboxItemChip([item]);
 
-            if (said !== undefined) toast(said);
+            if (said !== undefined) toast({ ...said, glyph: GLYPH.TIME, chip });
           }
 
           return KEPT;

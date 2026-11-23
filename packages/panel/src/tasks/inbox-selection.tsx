@@ -3,8 +3,8 @@ import { type InboxAnyHolder, type InboxListed, isUnread } from "@repo/features/
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { markedNote } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { type SelectionGlyphAct, STATUS_TONE } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
+import { MailIcon, type SelectionGlyphAct, STATUS_TONE } from "@repo/ui";
+import { GLYPH, MailOpenIcon } from "@repo/ui/icons";
 import { useRef } from "react";
 import { firstNotKept, type Kept } from "../act.js";
 import { COMMAND_PLACE, commandWords, PANEL_COMMAND } from "../command-items.js";
@@ -94,7 +94,8 @@ export function useInboxSelection({
           const kept = new Set(landed.map(({ item }) => item.id));
           const said = pressed.keep(note, (id) => kept.has(id));
 
-          if (said !== undefined) toast(said);
+          if (said !== undefined)
+            toast({ ...said, glyph: unread ? MailIcon : () => <MailOpenIcon /> });
 
           return;
         }

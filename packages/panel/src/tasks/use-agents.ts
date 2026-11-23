@@ -17,6 +17,7 @@ import {
   type AgentSummary,
   CONTEXT_WINDOW,
 } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { choiceRequest } from "@repo/features/model-effort";
@@ -80,6 +81,7 @@ import {
   useTaskListRowAs,
 } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
+import { toastChip } from "../toast-chip.js";
 import {
   type LocalWrite,
   pressLocal,
@@ -2431,7 +2433,15 @@ export function useAgents(input: {
         ? toastOnlyUndo(TOAST_ONLY_UNDO.AGENT_ARCHIVE, done, unarchive)
         : pressed.keep(done, (id) => kept.includes(id));
 
-    if (said !== undefined) toast(said);
+    const one = kept.length === 1 ? listedNow().find((agent) => agent.id === kept[0]) : undefined;
+
+    if (said !== undefined) {
+      toast({
+        ...said,
+        glyph: archived ? GLYPH.ARCHIVE : GLYPH.UNARCHIVE,
+        chip: one === undefined ? undefined : toastChip(ENTITY_KIND.AGENT, agentName(one)),
+      });
+    }
 
     return results;
   };

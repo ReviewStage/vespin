@@ -39,6 +39,7 @@ import { workspaceExperimentChoices } from "@repo/host/app-state-reads";
 import { EXPERIMENT, experimentOn } from "@repo/settings";
 import type { SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE, useRest } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import {
   agentTab,
   changesTab,
@@ -2007,6 +2008,7 @@ export function useTasksTab(input: {
         toast({
           words: switchedNote(target.name),
           tone: STATUS_TONE.COMPLETE,
+          glyph: GLYPH.WORKSPACE,
           action: { label: backNote(from.name), onPress: back },
         });
       };

@@ -24,7 +24,7 @@ import {
   Toolbar,
   Tooltip,
 } from "@repo/ui";
-import { RotateCcwIcon } from "@repo/ui/icons";
+import { GLYPH, RotateCcwIcon } from "@repo/ui/icons";
 import { MARKDOWN_CLASS, markdownClass } from "@repo/ui/markdown-class";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { useRef, useState } from "react";
@@ -354,13 +354,15 @@ export function sayRestored(
       replayUnmasked: true,
       words: VERSION_RESTORE.words,
       tone: STATUS_TONE.COMPLETE,
+      glyph: GLYPH.HISTORY,
     });
 
     return;
   }
 
-  toast(
-    toastOnlyUndo(TOAST_ONLY_UNDO.VERSION_RESTORE, VERSION_RESTORE.words, () => {
+  toast({
+    glyph: GLYPH.HISTORY,
+    ...toastOnlyUndo(TOAST_ONLY_UNDO.VERSION_RESTORE, VERSION_RESTORE.words, () => {
       undo().then((undone) => {
         const words = VERSION_RESTORE.refused(undone);
 
@@ -373,7 +375,7 @@ export function sayRestored(
         });
       });
     }),
-  );
+  });
 }
 
 /**

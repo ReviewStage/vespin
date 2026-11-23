@@ -166,6 +166,7 @@ const UNANSWERED: AllowedCommandsWriteAnswerView = {
  */
 const REMOVE_UNDO = {
   words: ({ words }) => `Removed ${words}`,
+  glyph: GLYPH.DELETE,
   unmasked: () => false,
   kind: ACT_KIND.ALLOWED_COMMANDS_WRITE,
   read: (rows, command) =>

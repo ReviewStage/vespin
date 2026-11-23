@@ -1,9 +1,10 @@
 /**
  * toasts.tsx -- the passing notices in each tone, stacked as the window stacks
  * them, each stack on a Base UI manager of its own, every toast's × showing
- * under the pointer or focus: a plain one, one with a second line, and one
- * carrying Undo; then ones carrying an action, one of them led by a
- * provider's mark and one opening a page; failures that offer
+ * under the pointer or focus: a copy led by its act's glyph, one with a
+ * second line, and one carrying Undo and naming its agent as a pill; then
+ * ones carrying an action, a status set naming its task, one led by a
+ * provider's mark, and one opening a page; failures that offer
  * their details to copy, alone and beside a Retry; one whose work is under
  * way, turned in place into done or failed by a press; and one to swipe
  * sideways away, shown again by a press.
@@ -11,6 +12,7 @@
 
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { TASK_STATUS } from "@repo/features/task-wire";
 import {
   BUTTON_VARIANT,
   Button,
@@ -20,14 +22,17 @@ import {
   type MarkProvider,
   STATUS_TONE,
   type StandingToast,
+  TaskStatusMark,
   TOAST_TYPE,
   Toast,
   ToastActions,
+  type ToastChip,
   type ToastCopy,
   ToastStack,
   type ToastStackManager,
   type ToastTone,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { type ReactNode, useEffect, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -41,6 +46,10 @@ interface CatalogNotice {
   readonly words: string;
   readonly detail?: string;
   readonly mark?: MarkProvider;
+  /** The glyph it leads with in place of its tone's, naming the act. */
+  readonly glyph?: () => React.JSX.Element;
+  /** The one thing it is about, as a pill under its words. */
+  readonly chip?: ToastChip;
   /** Its action's label, and the page it opens, where it opens one. */
   readonly action?: { readonly label: string; readonly href?: string };
   readonly copy?: ToastCopy;
@@ -64,8 +73,10 @@ function CatalogToast({
     <Toast
       toast={toast}
       tone={notice.tone}
+      glyph={notice.glyph}
       mark={notice.mark}
       words={notice.words}
+      chip={notice.chip}
       detail={notice.detail}
       actions={
         <ToastActions
@@ -137,9 +148,9 @@ function useCatalogManager(): ToastStackManager<CatalogNotice> {
   return useState(() => createToastManager<CatalogNotice>())[0];
 }
 
-/** The window's stack at its fullest: a plain toast, a refusal with a second line, and an Undo. */
+/** The window's stack at its fullest: a copy led by its act's glyph, a refusal with a second line, and an Undo naming the agent it archived as a pill. */
 const STACKED: readonly CatalogNotice[] = [
-  { id: "copied", tone: STATUS_TONE.COMPLETE, words: "Link copied" },
+  { id: "copied", tone: STATUS_TONE.COMPLETE, glyph: GLYPH.LINK, words: "Link copied" },
   {
     id: "unsaved",
     tone: STATUS_TONE.DANGER,
@@ -149,19 +160,22 @@ const STACKED: readonly CatalogNotice[] = [
   {
     id: "archived",
     tone: STATUS_TONE.COMPLETE,
-    words: "Task archived",
+    glyph: GLYPH.ARCHIVE,
+    words: "Agent archived",
+    chip: { glyph: <GLYPH.AGENT />, label: "Refactor auth middleware", kind: "agent" },
     action: { label: "Undo" },
   },
 ];
 
-/** Toasts carrying an action: an ask, a connection led by its provider's mark, and one opening a page. */
+/** Toasts carrying an action: a task's status set, led by the status and naming the task, a connection led by its provider's mark, and one opening a page. */
 const ACTING: readonly CatalogNotice[] = [
   {
-    id: "ask",
-    tone: STATUS_TONE.ATTENTION,
-    words: "Should withdrawn invitations count?",
-    detail: "Relay · Retry the webhook",
-    action: { label: "View" },
+    id: "status",
+    tone: STATUS_TONE.COMPLETE,
+    glyph: () => <TaskStatusMark status={TASK_STATUS.DONE} />,
+    words: "Marked done",
+    chip: { glyph: <GLYPH.TASK />, label: "Fix the login redirect", kind: "task" },
+    action: { label: "Undo" },
   },
   {
     id: "expired",
@@ -309,7 +323,8 @@ function swipeable(): CatalogNotice {
   return {
     id: crypto.randomUUID(),
     tone: STATUS_TONE.COMPLETE,
-    words: "Task archived",
+    glyph: GLYPH.ARCHIVE,
+    words: "Agent archived",
     detail: "Swipe it sideways",
     action: { label: "Undo" },
   };

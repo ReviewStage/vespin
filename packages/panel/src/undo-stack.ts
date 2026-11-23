@@ -73,7 +73,8 @@ import { priorityOf, statusOf } from "@repo/features/tasks-page-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import type { PortActKind } from "@repo/host/contract";
-import { STATUS_TONE } from "@repo/ui";
+import { RetryIcon, STATUS_TONE, type ToastChip } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { Store, useSelector } from "@tanstack/react-store";
 import { Predicate } from "effect";
 import { type ActResult, type ActVariables, askKept, KEPT, type Kept, notKept } from "./act.js";
@@ -119,6 +120,8 @@ type ToastAction = NonNullable<ToastNotice["action"]>;
 /** One press's write: what it did, in a toast's words, and how to take it back and put it back; one that cannot be put back names no redo. */
 interface UndoEntry {
   readonly words: string;
+  /** The one thing it is about, which its toast and ⌘Z's name as a pill under the words. */
+  readonly chip?: ToastChip | undefined;
   readonly undo: () => Promise<UndoRun>;
   readonly redo?: () => Promise<UndoRun>;
   /** What taking it back claims as it is pressed, before its run's turn comes, as a held write's hold. */
@@ -154,6 +157,12 @@ const DONE_WORDS = {
   [UNDO_WAY.UNDO]: "Undone",
   [UNDO_WAY.REDO]: "Redone",
 } as const satisfies Record<UndoWay, string>;
+
+/** The glyph a key's run that applied leads its toast with: the arrow back for Undo, and forward for Redo. */
+const DONE_GLYPH = {
+  [UNDO_WAY.UNDO]: GLYPH.GO_BACK,
+  [UNDO_WAY.REDO]: RetryIcon,
+} as const satisfies Record<UndoWay, () => React.JSX.Element>;
 
 /** What a toast says where a run found no row still holding what it would change. */
 const CHANGED_WORDS = {
@@ -248,6 +257,8 @@ function said(entry: UndoEntry, way: UndoWay, run: UndoRun, keyed: boolean): voi
   showToast({
     words: `${DONE_WORDS[way]}: ${entry.words}`,
     tone: STATUS_TONE.COMPLETE,
+    glyph: DONE_GLYPH[way],
+    chip: entry.chip,
   });
 }
 
@@ -312,7 +323,7 @@ function undoable(entry: UndoEntry): ToastNotice {
   const { undo } = lineNow();
   undoLine.setState(() => ({ undo: stacked(undo, entry), redo: [] }));
 
-  return { ...undoToast(entry.words, press), subject };
+  return { ...undoToast(entry.words, press), chip: entry.chip, subject };
 }
 
 /** ⌘Z: takes back the newest entry, answering what it came to, or nothing where none waits. */
@@ -595,6 +606,8 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
 export interface UndoWrite<Rows, Asked, Change, Kind extends PortActKind, Answer> {
   /** What its toast says once the act is kept, and what ⌘Z's toast calls it: the same for every press, or of what the press changed. */
   readonly words: string | ((change: Change) => string);
+  /** The glyph its toast leads with, where the act has one of its own (a section's delete its trash); the done check where none. */
+  readonly glyph?: ToastNotice["glyph"];
   /** Whether its toast's words are all the app's own, which a screen recording shows as they read; one quoting a name answers false. */
   readonly unmasked: (change: Change) => boolean;
   /** The act its write and its inverse are sent on, whose mutation a caller's doors send it on. */
@@ -735,7 +748,7 @@ function keptWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
     redo: () => run(write.undone, write.act),
   });
 
-  say({ ...toast, replayUnmasked: write.unmasked(change) });
+  say({ ...toast, glyph: write.glyph, replayUnmasked: write.unmasked(change) });
 }
 
 /** What a refusal of a take-back write or its take-back says, and what it is reported as. */
@@ -764,8 +777,10 @@ export interface TakeBackUndoRefusal<Change> extends TakeBackRefusal {
 export interface TakeBackWrite<Doors, Change, Answer, TakenBack> {
   /** What its toast says, and what ⌘Z's toast calls it. */
   readonly words: (change: Change) => string;
-  /** The glyph its toast leads with. */
-  readonly glyph: NonNullable<ToastNotice["glyph"]>;
+  /** The glyph its toast leads with, where the act has one of its own; the done check where none. */
+  readonly glyph?: ToastNotice["glyph"];
+  /** The one thing it is about, named as a pill under its toast's words; none where it is about many. */
+  readonly chip?: (change: Change) => ToastChip | undefined;
   /** Whether its toast's words are the app's own, which a screen recording shows as they read; one quoting a name leaves this false. */
   readonly unmasked: (change: Change) => boolean;
   /** Sends the write. */
@@ -799,6 +814,7 @@ export function pressTakeBack<Doors, Change, Answer, TakenBack>(
 
   const entry: UndoEntry = {
     words: write.words(change),
+    chip: write.chip?.(change),
     claim: () => {
       taken = true;
     },
@@ -861,6 +877,8 @@ export function pressTakeBack<Doors, Change, Answer, TakenBack>(
 export interface LocalWrite<Doors, Change> {
   /** What its toast says, and what ⌘Z's toast calls it. */
   readonly words: string;
+  /** The glyph its toast leads with, where the act has one of its own; the done check where none. */
+  readonly glyph?: ToastNotice["glyph"];
   /** Whether its toast's words are all the app's own, which a screen recording shows as they read; one quoting a name answers false. */
   readonly unmasked: (change: Change) => boolean;
   /** Makes the write. */
@@ -912,6 +930,7 @@ export function pressLocal<Doors, Change>(
 
   showToast({
     ...toast,
+    glyph: write.glyph,
     replayUnmasked: write.unmasked(change),
     ...(subject === undefined ? undefined : { subject }),
   });

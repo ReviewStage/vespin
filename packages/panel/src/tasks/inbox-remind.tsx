@@ -16,6 +16,7 @@ import { useAppCommand } from "../app-commands.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "../desktop/action-menu.js";
 import type { ShortcutSubject } from "../shortcut-target.js";
 import { useToast } from "../toast.js";
+import { inboxItemChip } from "../toast-chip.js";
 import {
   DATE_PICKER_CLOSE,
   type DatePicked,
@@ -205,8 +206,9 @@ export function useRemindMany(onRemind: InboxReminder | undefined): InboxRemindM
 
         if (kept.size === 0) return;
         const said = pressed.keep(words, (id) => kept.has(id));
+        const chip = inboxItemChip(touched.filter(({ id }) => kept.has(id)));
 
-        if (said !== undefined) toast(said);
+        if (said !== undefined) toast({ ...said, glyph: GLYPH.TIME, chip });
       });
     },
     [onRemind, remind, toast],
