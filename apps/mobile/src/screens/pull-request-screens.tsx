@@ -3,7 +3,6 @@
 import {
   type AgentOverviewPullRequest,
   CHECK_SUMMARY,
-  type ConversationEntry,
   PULL_REQUEST_STATE,
   type ReviewThread,
 } from "@repo/features/agent-wire";
@@ -19,7 +18,6 @@ import {
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import {
-  ADD_REACTION_WORDS,
   CHECK_SUMMARY_WORDS,
   CLOSE_WORDS,
   checksLineOf,
@@ -44,7 +42,6 @@ import {
   pullRequestStateActions,
   QUEUE_WARNING,
   queuedLabel,
-  REACTION_FACES,
   REVIEW_WORDS,
   reactionsLine,
   reviewersOf,
@@ -58,7 +55,6 @@ import {
   type MergeMethod,
   PULL_REQUEST_ACTION,
   type PullRequestActionRequest,
-  REACTION,
 } from "@repo/features/pull-request-write-wire";
 import { SHOW_LESS_WORDS, SHOW_MORE_WORDS } from "@repo/features/words";
 import { answerFailed, landedAnswer } from "@repo/host/app-state-reads";
@@ -90,7 +86,6 @@ import {
   ROW_ACTION_TONE,
   type RowAction,
   RowList,
-  type RowSubmenu,
   Screen,
   STATUS_TONE,
   ThreadRow,
@@ -105,6 +100,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent, useShownAgent } from "../agents/use-agent.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { reactionMenu } from "../pull-requests/reaction-menu.js";
 import {
   type PullRequestKey,
   type PullRequestWrites,
@@ -543,37 +539,6 @@ function PullRequestPage({
       });
     });
 
-  // Note that a comment or review offers GitHub's eight reactions in its long press menu, the reader's own ticked, a press giving one or taking it back as the panel's pill does, by the id GitHub names what wears them by; one the read names no id for offers none.
-  const reactionMenus = (entry: ConversationEntry): readonly RowSubmenu[] => {
-    const subject = entry.subject;
-
-    if (subject === undefined) return [];
-
-    const mine = new Set(
-      (entry.reactions ?? []).filter((each) => each.mine === true).map((each) => each.content),
-    );
-
-    return [
-      {
-        label: ADD_REACTION_WORDS,
-        symbol: GLYPH.ADD,
-        choices: Object.values(REACTION).map((content) => ({
-          label: REACTION_FACES[content].item,
-          emoji: REACTION_FACES[content].emoji,
-          on: mine.has(content),
-          onPress: () =>
-            void writes.write({
-              action: mine.has(content)
-                ? PULL_REQUEST_ACTION.REMOVE_REACTION
-                : PULL_REQUEST_ACTION.ADD_REACTION,
-              subject,
-              content,
-            }),
-        })),
-      },
-    ];
-  };
-
   // Note that a thread is resolved or opened again as the panel's thread does, by GitHub's id for it, on the member's own sign-in; one the read names no id for offers neither, and every act stands dimmed while a change is out, as the merge's does.
   const threadActs = (thread: ReviewThread): readonly RowAction[] => {
     const threadId = thread.id;
@@ -822,6 +787,14 @@ function PullRequestPage({
             onOpenLink={openLink}
             hidesHtml
             folded={folded}
+            reactions={reactionsLine(conversation?.descriptionReactions ?? [])}
+            menuGroups={[
+              reactionMenu(
+                conversation?.descriptionSubject,
+                conversation?.descriptionReactions,
+                writes,
+              ),
+            ]}
             last={!folds}
           />
           {folds ? (
@@ -930,7 +903,7 @@ function PullRequestPage({
                 repository={agent?.repository}
                 onOpenLink={openLink}
                 reactions={reactionsLine(entry.reactions ?? [])}
-                submenus={reactionMenus(entry)}
+                submenus={reactionMenu(entry.subject, entry.reactions, writes)}
               />,
               // Note that a thread is named by its first comment's page, which no other row shares.
               ...(entry.threads ?? []).flatMap((thread) => {

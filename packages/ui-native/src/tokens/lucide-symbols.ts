@@ -56,6 +56,7 @@ export const LUCIDE_SYMBOL = {
   EXTERNAL_LINK: "ExternalLink",
   EYE: "Eye",
   EYE_OFF: "EyeOff",
+  FACE_SLIGHTLY_SMILING_PLUS: "FaceSlightlySmilingPlus",
   FILE: "File",
   FILE_DIFF: "FileDiff",
   FILE_PEN: "FilePen",

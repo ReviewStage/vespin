@@ -44,6 +44,7 @@ import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face } from "./marks.js";
 import type { MediaSize } from "./media-frame.js";
 import { PictureSet, type SetPicture } from "./picture-set.js";
+import type { LongPressGroup } from "./row-menu-model.js";
 import {
   type BarFootItem,
   type BarMenu,
@@ -145,6 +146,10 @@ export type ThreadMessage = {
   readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
   /** That the reader sent it and it did not go, which it says under its words with what mends it; none for a message that went. */
   readonly undelivered?: UndeliveredLine | undefined;
+  /** The reactions it wears as one line, such as "👍 2  ❤️ 1", under its words; none where it wears none. */
+  readonly reactions?: string | undefined;
+  /** What its long press menu holds after Copy message, such as Add reaction; none where it offers nothing more. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
 };
 
 /** A line of what happened to a thread: who did it, what they did in the panel's words, when, and an agent's why for a withdrawn ask. */
@@ -483,7 +488,7 @@ function MessageView({
 
   // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from run to run, that a message after its run's head is a container labeled who and when, so VoiceOver says it on entering the message as Messages reads the sender on every bubble, while the message's lines, links and files stay elements of their own, and that past the accessibility sizes the time stands under the name rather than beside it, as Mail's and Settings' do, so a long name keeps its width, and that a long press on the message offers Copy message, a picture's, a recording's, or a file's own menu standing over it.
   return (
-    <CopyWordsSwiftMenu words={message.words}>
+    <CopyWordsSwiftMenu words={message.words} groups={message.menu}>
       <VStack
         alignment="leading"
         spacing={SPACE.TIGHT}
@@ -560,6 +565,16 @@ function MessageView({
         {message.undelivered === undefined ? null : (
           <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
             <UndeliveredMark line={message.undelivered} />
+            <Spacer />
+          </HStack>
+        )}
+        {message.reactions === undefined ? null : (
+          <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
+            <Text
+              modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}
+            >
+              {message.reactions}
+            </Text>
             <Spacer />
           </HStack>
         )}

@@ -844,6 +844,10 @@ type WordsRowProps = {
   readonly change?: VersionUnit["change"] | undefined;
   /** Takes a press on the words, by how far in from their start it landed, as a description edited in place puts the caret there; none where the words are read alone. A link or a chip pressed still opens. */
   readonly onPressAt?: ((x: number, y: number) => void) | undefined;
+  /** Groups its long press menu holds after its acts, such as a pull request description's Add reaction; none where it offers nothing more. */
+  readonly menuGroups?: readonly LongPressGroup[] | undefined;
+  /** The reactions the words wear as one line, such as "👍 2  ❤️ 1", under them; none where they wear none. */
+  readonly reactions?: string | undefined;
   /** Whether the words stand cut to their first dozen lines or so, fading into the ground at their foot, as a long pull request description stands until Show more. */
   readonly folded?: boolean | undefined;
 };
@@ -1015,6 +1019,8 @@ export function WordsRow({
   change = VERSION_CHANGE.SAME,
   onPressAt,
   folded = false,
+  menuGroups = [],
+  reactions,
 }: WordsRowProps) {
   const colors = useColors();
   const foldedHeight = useScaledSize(FOLDED_HEIGHT);
@@ -1045,7 +1051,7 @@ export function WordsRow({
     </RNHostView>
   );
 
-  const held = <LongPressMenu groups={[menuActions]}>{host}</LongPressMenu>;
+  const held = <LongPressMenu groups={[menuActions, ...menuGroups]}>{host}</LongPressMenu>;
 
   return (
     <HStack
@@ -1063,38 +1069,51 @@ export function WordsRow({
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
       ]}
     >
-      {!folded ? (
-        <VStack modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}>
-          {held}
-        </VStack>
-      ) : (
-        // Note that folded words are laid out whole and cut by their frame, so a block is never split mid-structure, and their foot fades into the ground rather than cutting a line in half.
-        <ZStack alignment="bottom">
-          <VStack
-            modifiers={[
-              frame({
-                maxWidth: Number.POSITIVE_INFINITY,
-                maxHeight: foldedHeight,
-                alignment: "topLeading",
-              }),
-              clipped(),
-            ]}
-          >
+      <VStack
+        alignment="leading"
+        spacing={SPACE.TIGHT}
+        modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}
+      >
+        {!folded ? (
+          <VStack modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}>
             {held}
           </VStack>
-          <Rectangle
-            modifiers={[
-              frame({ height: FOLD_FADE }),
-              foregroundStyle({
-                type: "linearGradient",
-                colors: ["clear", colors.GROUND],
-                startPoint: { x: 0.5, y: 0 },
-                endPoint: { x: 0.5, y: 1 },
-              }),
-            ]}
-          />
-        </ZStack>
-      )}
+        ) : (
+          // Note that folded words are laid out whole and cut by their frame, so a block is never split mid-structure, and their foot fades into the ground rather than cutting a line in half.
+          <ZStack alignment="bottom">
+            <VStack
+              modifiers={[
+                frame({
+                  maxWidth: Number.POSITIVE_INFINITY,
+                  maxHeight: foldedHeight,
+                  alignment: "topLeading",
+                }),
+                clipped(),
+              ]}
+            >
+              {held}
+            </VStack>
+            <Rectangle
+              modifiers={[
+                frame({ height: FOLD_FADE }),
+                foregroundStyle({
+                  type: "linearGradient",
+                  colors: ["clear", colors.GROUND],
+                  startPoint: { x: 0.5, y: 0 },
+                  endPoint: { x: 0.5, y: 1 },
+                }),
+              ]}
+            />
+          </ZStack>
+        )}
+        {reactions === undefined ? null : (
+          <Text
+            modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}
+          >
+            {reactions}
+          </Text>
+        )}
+      </VStack>
       {comments === undefined || comments.count === 0 ? null : <CommentCount comments={comments} />}
     </HStack>
   );

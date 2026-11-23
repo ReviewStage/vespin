@@ -283,6 +283,13 @@ env:
     timeout: 10000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-thread
+# A long press on one of its comments offers Add reaction beside Copy.
+- longPressOn: ".*Good catch, it takes the request's time now.*"
+- tapOn: "Add reaction"
+- assertVisible: "Rocket"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-thread-reactions
+- tapOn: "Rocket"
 - tapOn: "Reply"
 - inputText: "Thanks, that reads right now."
 - tapOn: "Send"

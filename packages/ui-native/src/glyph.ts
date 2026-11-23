@@ -103,6 +103,8 @@ export const GLYPH = {
   AGENT: lucide(LUCIDE_SYMBOL.HARD_HAT),
   PAGE: lucide(LUCIDE_SYMBOL.APP_WINDOW),
   COMMENT: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE),
+  /** Add reaction, as the panel's smiley offers GitHub's reactions on a comment. */
+  REACT: lucide(LUCIDE_SYMBOL.FACE_SLIGHTLY_SMILING_PLUS),
   THREAD: lucide(LUCIDE_SYMBOL.MESSAGES_SQUARE),
   RELATIONS: lucide(LUCIDE_SYMBOL.NETWORK),
   SUB_TASK: lucide(LUCIDE_SYMBOL.LIST_TREE),

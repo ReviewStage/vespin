@@ -30,6 +30,7 @@ import {
   keepActs,
 } from "./keep-model.js";
 import { LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
+import type { LongPressGroup } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE } from "./tokens/space.js";
 import { PROSE_SIZE } from "./tokens/type.js";
@@ -518,15 +519,18 @@ function heldItem(act: HeldAct): RowAction {
 export function HeldSwiftMenu({
   acts,
   title,
+  groups = [],
   children,
 }: {
   readonly acts: readonly HeldAct[];
   /** What heads the menu, such as when a message was sent. */
   readonly title?: string | undefined;
+  /** Groups the menu holds after the held thing's own acts, each set apart by a divider, such as a comment's Add reaction. */
+  readonly groups?: readonly LongPressGroup[] | undefined;
   readonly children: ReactElement;
 }) {
   return (
-    <LongPressMenu groups={[acts.map(heldItem)]} title={title}>
+    <LongPressMenu groups={[acts.map(heldItem), ...groups]} title={title}>
       {children}
     </LongPressMenu>
   );
@@ -606,14 +610,19 @@ export function CopyWordsMenu({
 /** A message drawn in SwiftUI, such as a thread's, whose long press offers Copy message, Select text and Share; the message alone where it has no words. */
 export function CopyWordsSwiftMenu({
   words,
+  groups,
   children,
 }: {
   readonly words: string;
+  /** Groups the menu holds after Copy message, such as a comment's Add reaction. */
+  readonly groups?: readonly LongPressGroup[] | undefined;
   readonly children: ReactElement;
 }) {
   // Note that a message SwiftUI draws offers no Select text, since a SwiftUI line under a menu selects no span of its words in place.
   return (
-    <HeldSwiftMenu acts={useMessageActs(words, undefined, [], undefined)}>{children}</HeldSwiftMenu>
+    <HeldSwiftMenu acts={useMessageActs(words, undefined, [], undefined)} groups={groups}>
+      {children}
+    </HeldSwiftMenu>
   );
 }
 
