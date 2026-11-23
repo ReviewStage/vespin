@@ -239,6 +239,29 @@ export function usePictureView(
   };
 }
 
+/** Where a picture opened from no thumbnail grows from: the window's middle, as nothing on the page stands for it. */
+const NO_PLACE: PicturePlace = { x: 0, y: 0, width: 0, height: 0 };
+
+/**
+ * Opens pictures no thumbnail on the page draws full screen in the app's
+ * viewer, at `index`, a swipe stepping through the rest, such as the
+ * newest window of each app an agent uses, which its capsule opens; none
+ * where no app answers it.
+ */
+export function usePicturesView():
+  | ((pictures: readonly Omit<ViewedPicture, "place">[], index: number) => void)
+  | undefined {
+  const keeping = useContext(KeepingDoor);
+
+  if (keeping === undefined) return undefined;
+
+  return (pictures, index) =>
+    keeping.view(
+      pictures.map((picture) => ({ ...picture, place: NO_PLACE })),
+      index,
+    );
+}
+
 /** Copies words to the pasteboard through the app's keeping, as a held link's Copy link does; none where no app answers it. */
 export function useCopyWords(): ((words: string) => void) | undefined {
   return useContext(KeepingDoor)?.copyWords;

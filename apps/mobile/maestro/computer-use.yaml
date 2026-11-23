@@ -1,4 +1,4 @@
-# computer-use.yaml -- an agent's computer calls on the reader's Mac: each row leads with the app's icon, the click still running wearing the icon its read kept, and the window a read kept stands in the call's body once it is opened, never under its row.
+# computer-use.yaml -- an agent's computer calls on the reader's Mac: each row leads with the app's icon, the click still running wearing the icon its read kept, the window a read kept stands in the call's body once it is opened, never under its row, and the app the agent is in stands as a capsule over the composer, which opens its newest window in the viewer.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -39,14 +39,27 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: computer-use-rows
+# The app the agent is in stands over the composer as its capsule, led by its
+# icon, and a press opens its newest window full screen in the viewer.
+- assertVisible: "Mail"
+- tapOn: "Mail"
+- assertVisible:
+    id: "picture-viewer-close"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: computer-use-viewer
+- tapOn:
+    id: "picture-viewer-close"
+- assertNotVisible:
+    id: "picture-viewer-close"
 # The read opens on its body: what it was given, what it answered, and the
-# window it kept, which the viewer names by its app.
+# window it kept, the last thing in its body, over the click's row.
 - tapOn: "Looked at.*"
 - assertVisible: "Input"
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
-      ELEMENT: "Mail"
+      ELEMENT: "Clicked in.*"
       BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd:
     timeout: 5000

@@ -378,6 +378,7 @@
     "./turn-files-wire": "./src/turn-files-wire.js",
     "./agent-goal-model": "./src/agent-goal-model.js",
     "./agent-parts": "./src/agent-parts.js",
+    "./apps-in-use": "./src/apps-in-use.js",
     "./agent-ports-model": "./src/agent-ports-model.js",
     "./glyph-state": "./src/glyph-state.js",
     "./sealed-page": "./src/sealed-page.js",

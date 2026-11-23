@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { test } from "vitest";
-import { appsInUse } from "./computer-dock.js";
+import type { AgentTranscriptMessage } from "./agent-wire.js";
+import { appsInUse } from "./apps-in-use.js";
 
 /**
- * computer-dock.test.ts -- the stack over an agent's box holds every app
+ * apps-in-use.test.ts -- the apps in use over an agent's box hold every app
  * it used this turn, the one it used last first, each with the newest window
  * it read of that app, none in use once the agent is done. Synthetic words.
  */
