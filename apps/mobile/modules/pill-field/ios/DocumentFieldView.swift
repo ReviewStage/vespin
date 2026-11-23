@@ -825,13 +825,19 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     guard textView.isFirstResponder, let keyboardTop, let end = textView.selectedTextRange?.end else { return }
     textView.scrollRangeToVisible(textView.selectedRange)
     let caret = textView.convert(textView.caretRect(for: end), to: window)
-    let page = holdingScrollView()
-    // Note that the page may end above the keyboard, as a split view's column does over what an `@` offers at its foot, so the caret clears whichever edge is higher. Note too that the page's own frame is read, never less its insets, because a SwiftUI list the keyboard has shortened still insets itself by the keyboard's height, which counted the keyboard twice and scrolled the page to its end on the first key.
-    let pageBottom = page.map { $0.convert($0.bounds, to: window).maxY } ?? keyboardTop
-    let clear = min(keyboardTop - (keepClear ?? 0), pageBottom) - DocumentSpace.caretClearance
-    guard caret.maxY > clear, let page else { return }
+    guard let page = holdingScrollView() else { return }
+    // Note that the page's place is read from its frame, which a scroll under way leaves still, never from its bounds, which move with the scroll.
+    let frame = (page.superview ?? page).convert(page.frame, to: window)
+    // Note that the page may end above the keyboard, as a split view's column does over what an `@` offers at its foot, so the caret clears whichever edge is higher.
+    let higher = min(keyboardTop - (keepClear ?? 0), frame.maxY) - DocumentSpace.caretClearance
+    // Note that the caret's line never goes past the page's top, however little room what stands over the keyboard leaves.
+    let clear = max(higher, frame.minY + caret.height + DocumentSpace.caretClearance)
+    guard caret.maxY > clear else { return }
+    // Note that the offset asked for is where the caret's line stands in the page's words, laid at the clear edge, rather than the page's offset now moved on by how far the caret stands past it, because the calls a key, the keyboard and an offer coming each make land while the page still scrolls to the first, and each moved it on again until the page ran to its end.
+    let line = page.convert(textView.caretRect(for: end), from: textView).maxY
     let lowest = max(0, page.contentSize.height + page.adjustedContentInset.bottom - page.bounds.height)
-    let offset = min(page.contentOffset.y + caret.maxY - clear, lowest)
+    let offset = min(line - (clear - frame.minY), lowest)
+    guard offset > page.contentOffset.y else { return }
     page.setContentOffset(CGPoint(x: page.contentOffset.x, y: offset), animated: true)
   }
 
