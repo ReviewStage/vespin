@@ -8,6 +8,7 @@ import {
   DockPanel,
   GLYPH,
   HeldCallBanner,
+  pullRequestChipLook,
   QueuedLines,
 } from "@repo/ui-native";
 import { type ReactNode, useState } from "react";
@@ -28,7 +29,6 @@ const DOCK_WORDS = {
   queued: (count: number) => `${count} queued`,
   PAUSED: "Queue paused",
   INBOX: "Inbox",
-  pullRequest: (number: number) => `#${number}`,
   APPROVAL_SHOW_HINT: "Shows the call waiting",
   APPROVAL_OPEN_HINT: "Shows or hides the call waiting",
   DENIES: "Sending a message denies it",
@@ -83,7 +83,7 @@ function approvalChip(
   ];
 }
 
-/** The row's capsules for where the agent's work went: its Inbox threads, which open the thread the line names, and its pull request, which opens its page. */
+/** The row's capsules for where the agent's work went: its Inbox threads, which open the thread the line names, and its pull request, wearing where it stands and how its checks went, which opens its page. */
 function placeChips({ threads, pullRequest, onOpenPullRequest }: AgentDockReading): DockChip[] {
   const chips: DockChip[] = [];
 
@@ -101,10 +101,10 @@ function placeChips({ threads, pullRequest, onOpenPullRequest }: AgentDockReadin
   }
 
   if (pullRequest !== undefined) {
+    // Note that the capsule reads the pull request as the task list holds it, live, so its state and checks move as GitHub's do, with no read of its own.
     chips.push({
       id: "pull-request",
-      glyph: GLYPH.PULL_REQUEST,
-      words: DOCK_WORDS.pullRequest(pullRequest.number),
+      ...pullRequestChipLook(pullRequest),
       hint: DOCK_WORDS.PULL_REQUEST_HINT,
       onPress: () => onOpenPullRequest(pullRequest.url),
     });
