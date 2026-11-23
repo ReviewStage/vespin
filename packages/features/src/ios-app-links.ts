@@ -82,6 +82,8 @@ const IOS_ROUTE = {
   REPOSITORY_PULL_REQUEST: "/tasks/pull",
   /** The files a pull request changes, under its own route. */
   PULL_REQUEST_FILES: "files",
+  /** The checks run on a pull request's head, under its own route. */
+  PULL_REQUEST_CHECKS: "checks",
   /** A person's page in the workspace the phone works in. */
   PERSON: "/tasks/person",
 } as const;
@@ -259,6 +261,15 @@ export function iosPullRequestFilesRoute(pullRequest: {
   readonly number: number;
 }): string {
   return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_FILES}`;
+}
+
+/** The app's route for the checks run on a pull request's head, by its workspace, its repository, and its number: its own route's Checks. */
+export function iosPullRequestChecksRoute(pullRequest: {
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly number: number;
+}): string {
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_CHECKS}`;
 }
 
 /**
