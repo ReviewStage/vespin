@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxShown, useKeepInboxShown } from "../../inbox/inbox-shown.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
+import { probeOnce } from "../../launch-probe.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { PAD_IDIOM } from "../../screens/app-sidebar.js";
 import { useNewTaskAfterSetup } from "../../setup/setup-place.js";
@@ -107,6 +108,7 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // itself changes, since the host's first document, read before anything is
 // drawn, carries it.
 export default function TabsLayout() {
+  probeOnce("tabs-render");
   const colors = useColors();
   const inboxShown = useInboxShown();
   useKeepInboxShown(inboxShown);

@@ -1,5 +1,7 @@
 // launch-phases.ts -- how long a launch took to reach each of its phases, the bundle evaluated, the account read, the local copy opened, the host composed and stood, the screens first drawn, and the Inbox first grouped, and how many documents it took, for `app:ready` to count beside its own time and the launch's trace to hold.
 
+import { probe, probeOnce } from "./launch-probe.js";
+
 /** React Native's own startup marks, which its `performance` holds beside the web's and its types leave out. */
 interface StartupPerformance {
   readonly rnStartupTiming?: { readonly startTime?: number | null };
@@ -63,6 +65,7 @@ export function noteHostStarting(): void {
 /** Notes that the host wrote one more document into the screens' client. */
 export function noteDelivered(): void {
   delivered += 1;
+  probe("delivered", delivered);
 }
 
 /** How many documents the host wrote into the screens' client since it started. */
@@ -72,7 +75,10 @@ export function launchDelivered(): number {
 
 /** Notes that the launch reached `phase`, the first time alone, so a later read or open of the same thing moves nothing. */
 export function noteLaunchPhase(phase: LaunchPhase): void {
-  if (!reached.has(phase)) reached.set(phase, sinceLaunch());
+  if (!reached.has(phase)) {
+    reached.set(phase, sinceLaunch());
+    probeOnce(`phase:${phase}`);
+  }
 }
 
 /** When this launch started, in epoch milliseconds, as React Native marks it (`sinceLaunch`); none where the runtime keeps no start. */
@@ -89,6 +95,7 @@ export function launchPhaseMs(phase: LaunchPhase): number | undefined {
 
 /** Notes, once the host stood, how long it took. */
 export function noteHostStood(): void {
+  probeOnce("stood");
   stood = { ms: sinceLaunch() };
 }
 

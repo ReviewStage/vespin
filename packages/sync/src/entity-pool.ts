@@ -816,6 +816,10 @@ function answeredWhole<Row extends object, Change>(
   ]);
 }
 
+/** PROBE ONLY: a launch mark, where the app's probe stands. */
+const launchProbe = (n: string, d?: unknown): void =>
+  (globalThis as { __launchProbe?: (n: string, d?: unknown) => void }).__launchProbe?.(n, d);
+
 /**
  * What `store` holds of `holding`'s kept read taken as its answer, before the
  * service's first: each row held and counted as already reported, but taken
@@ -835,18 +839,25 @@ function loadedFrom<Row extends object, Change>(
     store.loaded({ read: kept.name, kind: kept.kind, workspace: kept.workspace }),
     (load) => {
       if (load === undefined) return Effect.undefined;
+      const takeStart = performance.now();
       // SAFETY: the store hands back only rows it was handed as this kind's (`KeptAnswer`), under the kind it names.
       const keyed = new Map(load.rows.map((row) => [rows.kind.key(row as Row), row as Row]));
       const synced = rows.synced.held();
       holding.reported = keyed;
 
+      const answered = answeredWhole(
+        rows,
+        holding,
+        new Map([...keyed].filter(([key]) => !synced.has(key))),
+        new Set(keyed.keys()),
+      );
+      launchProbe(`kept-take:${kept.name}`, {
+        rows: keyed.size,
+        ms: Math.round(performance.now() - takeStart),
+      });
+
       return Effect.as(
-        answeredWhole(
-          rows,
-          holding,
-          new Map([...keyed].filter(([key]) => !synced.has(key))),
-          new Set(keyed.keys()),
-        ),
+        Effect.tap(answered, () => Effect.sync(() => launchProbe(`kept-redrawn:${kept.name}`))),
         load,
       );
     },
