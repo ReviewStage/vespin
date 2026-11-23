@@ -150,7 +150,8 @@ test("a mirror's failure travels its wait on a rung, never as the raw time", () 
 
 test("a launch travels its time to the first rows on a rung, never as the raw time, and nothing else", () => {
   assert.equal(productLaunchSeconds(6_400), 5);
-  assert.equal(productLaunchSeconds(700), 0);
+  assert.equal(productLaunchSeconds(700), 0.6);
+  assert.equal(productLaunchSeconds(150), 0);
   assert.deepEqual(
     productEventFromWire({
       name: PRODUCT_EVENT.APP_READY,
@@ -173,7 +174,7 @@ test("a launch travels its time to the first rows on a rung, never as the raw ti
   );
 });
 
-test("a launch may add when its bundle evaluated, its account was read, its local copy opened, its host was composed and stood, its Inbox was first grouped and how many documents it took, which rows it first showed, its build number and what it waited from, each read strictly", () => {
+test("a launch may add when its bundle evaluated, its account was read, its local copy opened, its host was composed and stood, its screens first drew, its Inbox was first grouped and how many documents it took, which rows it first showed, its build number and what it waited from, each read strictly", () => {
   const phases = {
     [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 8,
     [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: 5,
@@ -182,6 +183,7 @@ test("a launch may add when its bundle evaluated, its account was read, its loca
     [PRODUCT_EVENT_PROPERTY.LOCAL_SECONDS]: 2,
     [PRODUCT_EVENT_PROPERTY.STARTED_SECONDS]: 3,
     [PRODUCT_EVENT_PROPERTY.INBOX_SECONDS]: 5,
+    [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: 0.4,
     [PRODUCT_EVENT_PROPERTY.DELIVERIES]: 5,
     [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "52",
     [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: "feed",

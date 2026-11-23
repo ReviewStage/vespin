@@ -137,3 +137,66 @@ env:
     timeout: 10000
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-done
+# Typed at the foot of a long description, the caret's line stays in sight
+# over the keyboard and over what an `@` offers: docked over the keyboard on
+# an iPhone, and at the detail column's foot on an iPad. A press on the last
+# task list's words puts the caret in it, and Mention's offer comes up under
+# it; the screenshot shows the line being typed above the offer. Note that
+# the list is found by its last item's words, which the quote words apart,
+# and pressed past its last line's end, so the caret stands after a word: an
+# `@` typed inside one takes the rest of that word with it, as the panel's
+# does.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: ".*A withdrawn link grants nothing.*"
+          centerElement: true
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-in.yaml
+          env:
+            ELEMENT: ".*A withdrawn link grants nothing.*"
+            BESIDE: "true"
+      - swipe:
+          start: "85%, 65%"
+          end: "85%, 45%"
+          duration: 1200
+- tapOn:
+    text: ".*A withdrawn link grants nothing.*"
+    point: "97%,75%"
+- extendedWaitUntil:
+    visible:
+      id: "description-words"
+    timeout: 10000
+- inputText: " for "
+- tapOn: "Mention"
+- inputText: "Ad"
+- assertVisible:
+    text: "Ada Lovelace"
+    below: "People"
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-foot-mention
+- tapOn:
+    text: "Ada Lovelace"
+    below: "People"
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-foot-mentioned
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Done editing description"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "Done"
+- extendedWaitUntil:
+    notVisible:
+      id: "description-words"
+    timeout: 10000

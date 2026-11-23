@@ -7,6 +7,7 @@ import {
   PATCH_OMITTED,
   type ReviewThread,
 } from "@repo/features/agent-wire";
+import { CHANGES_WORDS, fileNotice, treeOrder } from "@repo/features/changed-files";
 import { imageTypeOfPath } from "@repo/features/github-image";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import {
@@ -89,7 +90,6 @@ import {
 } from "./changes-list.js";
 import {
   blobShaOf,
-  CHANGES_WORDS,
   changedFolders,
   changeMarks,
   commentLines,
@@ -99,7 +99,6 @@ import {
   EXPANSION_REFUSED_WORDS,
   type ExpansionRefusal,
   expandable,
-  fileNotice,
   gapLines,
   headerPatch,
   listPatch,
@@ -110,7 +109,6 @@ import {
   textsOf,
   threadsOn,
   tooLargeToDiff,
-  treeOrder,
   wholeable,
 } from "./changes-model.js";
 import { ChangesStrip } from "./changes-strip.js";

@@ -1,0 +1,53 @@
+# computer-use.yaml -- an agent's computer calls on the reader's Mac: each row leads with the app's icon, the click still running wearing the icon its read kept, and the window a read kept stands in the call's body once it is opened, never under its row.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the page draws its turn still running, whose mark never stops
+# moving, so an uncapped wait always ran to Maestro's fifteen.
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose digest agent reads its draft
+# in Mail on the reader's Mac (`@repo/host/fixture-agent-transcript`'s
+# `fixtureDigestTranscript`), and opened on its page by `-agent <id>`;
+# nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 6fc08203-4b7d-4e95-90bd-7c8d9eafb0c6
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+- extendedWaitUntil:
+    visible: "Checking the draft reads well in Mail before it goes out."
+    timeout: 30000
+# Note that the turn's calls may stand folded under their count, which opens them.
+- runFlow:
+    when:
+      notVisible: "Looked at.*"
+    commands:
+      - tapOn: ".*tool calls?.*"
+- assertVisible: "Looked at.*"
+- assertVisible: "Clicked in.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: computer-use-rows
+# The read opens on its body: what it was given, what it answered, and the
+# window it kept, which the viewer names by its app.
+- tapOn: "Looked at.*"
+- assertVisible: "Input"
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Mail"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: computer-use-opened

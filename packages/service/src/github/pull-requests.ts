@@ -1299,6 +1299,8 @@ interface GitHubConversationEntry {
   readonly state: ReviewState | undefined;
   readonly html: string | null;
   readonly body: string;
+  /** The markdown GitHub rendered `html` from, beside a rendering; none where `body` holds the words or none were written. */
+  readonly markdown?: string;
   readonly at: number;
   readonly url: string;
   /** The review threads a review started, oldest first; none on a comment. */
@@ -1315,6 +1317,8 @@ interface GitHubThreadComment {
   readonly account: GitHubAccount;
   readonly html: string | null;
   readonly body: string;
+  /** The markdown GitHub rendered `html` from, beside a rendering; none where `body` holds the words or none were written. */
+  readonly markdown?: string;
   readonly at: number;
   readonly url: string;
   readonly reactions: readonly GitHubReaction[];
@@ -1491,10 +1495,11 @@ function readListed<A>(
   );
 }
 
-/** An entry's words as a read carries them, whole: GitHub's rendering, or the markdown where GitHub sent none. */
+/** An entry's words as a read carries them, whole: GitHub's rendering, or the markdown where GitHub sent none; and beside a rendering, the markdown it was rendered from, which a client that draws markdown alone, such as the iOS app, draws. */
 interface EntryWords {
   readonly html: string | null;
   readonly body: string;
+  readonly markdown?: string;
   readonly said: boolean;
 }
 
@@ -1502,9 +1507,11 @@ function wordsOf(body: string | null | undefined, html: string | null | undefine
   const words = body?.trim() ?? "";
   const rendered = html?.trim() ?? "";
 
-  return rendered === ""
-    ? { html: null, body: words, said: words !== "" }
-    : { html: rendered, body: "", said: words !== "" };
+  if (rendered === "") return { html: null, body: words, said: words !== "" };
+
+  return words === ""
+    ? { html: rendered, body: "", said: false }
+    : { html: rendered, body: "", markdown: words, said: true };
 }
 
 /**

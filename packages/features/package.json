@@ -258,6 +258,7 @@
     "./pull-request-chapters-view": "./src/pull-request-chapters-view.js",
     "./pull-request-chapters-live": "./src/pull-request-chapters-live.js",
     "./pull-request-moved-live": "./src/pull-request-moved-live.js",
+    "./changed-files": "./src/changed-files.js",
     "./diff-hunks": "./src/diff-hunks.js",
     "./provider-key-wire": "./src/provider-key-wire.js",
     "./inbox-push-wire": "./src/inbox-push-wire.js",

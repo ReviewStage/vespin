@@ -60,6 +60,7 @@ import {
   type ProviderKeySummary,
 } from "@repo/features/provider-key-wire";
 import { PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
+import type { TaskSummary } from "@repo/features/task-wire";
 import {
   GATEWAY_CLIENT_ROLE,
   GATEWAY_EVENT,
@@ -1298,6 +1299,7 @@ export function subject(
     accountId?: () => string | undefined;
     listed?: (txid: string | undefined) => Effect.Effect<void>;
     agentListed?: (agentId: string) => AgentSummary | undefined;
+    tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
   } = {},
@@ -1338,6 +1340,7 @@ export function subject(
       },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
+      ...(options.tasksListed === undefined ? undefined : { tasksListed: options.tasksListed }),
       pool,
     }).pipe(Effect.provide(noNetwork));
 

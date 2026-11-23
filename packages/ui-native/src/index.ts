@@ -64,6 +64,8 @@ export {
 
 export type { CaretAtWord } from "./caret-at-word.js";
 
+export { ChangedFileRow } from "./changed-file-row.js";
+
 export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
 export {
@@ -136,7 +138,7 @@ export { releaseFields } from "./field-focus.js";
 
 export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
 
-export { GlassBar, GlassDock } from "./glass-bar.js";
+export { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 
 export {
   GLYPH,
@@ -266,6 +268,12 @@ export {
 } from "./provider-button.js";
 
 export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
+
+export {
+  type PullRequestChipFacts,
+  type PullRequestChipLook,
+  pullRequestChipLook,
+} from "./pull-request-chip-model.js";
 
 export {
   CHECK_LOOK,

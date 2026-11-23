@@ -7,13 +7,13 @@ import {
   PATCH_OMITTED,
   type ReviewThread,
 } from "@repo/features/agent-wire";
+import { fileNotice } from "@repo/features/changed-files";
 import {
   DIFF_ROW,
   type DiffHunk,
   type DiffRow,
   type DiffRowKind,
   HUNK_COUNTS,
-  LOCKFILE_NAMES,
   patchHunks,
 } from "@repo/features/diff-hunks";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
@@ -49,13 +49,10 @@ import {
  * hunks to draw), in the order the tree beside it lists them, folders
  * before files at each level, as Pierre's tree sorts them (`treeOrder`), so
  * a key stepping to the next file steps to the next row of the tree. A
- * filter keeps the files whose path holds what is typed,
- * whatever its case (`filterFiles`), as the tree's search narrows its rows.
- * A file starts collapsed, its header alone drawn, where reading it is
- * rarely the point, as GitHub keeps such a diff folded until asked
- * (`startsCollapsed`): one deleted, one changing more than
- * `LARGE_FILE_LINES` lines, and a package manager's lockfile, which GitHub
- * would mark generated.
+ * filter keeps the files whose path holds what is typed (`filterFiles`),
+ * and a file starts collapsed, its header alone drawn, where reading it is
+ * rarely the point (`startsCollapsed`): the rules every client lists a pull
+ * request's files by, in `@repo/features/changed-files`.
  *
  * The view draws its files in a File tab's tree and breadcrumbs, which list
  * a folder at a time: the folders here are listed from the changed paths
@@ -83,25 +80,6 @@ import {
  * starts from those lines as the file's patch holds them (`suggestedLines`).
  */
 
-/** What the tab says where the changes cannot be drawn. */
-export const CHANGES_WORDS = {
-  READING: "Reading changes",
-  FAILED: "The changes could not be read.",
-  NO_PULL_REQUEST: "No pull request yet.",
-  EMPTY: "This pull request changes no files.",
-  TRUNCATED: "Only the first files are shown; this pull request has more.",
-  OMITTED: {
-    [PATCH_OMITTED.BINARY]: "Binary file not shown.",
-    [PATCH_OMITTED.TOO_LARGE]: "This file's diff is too large to show.",
-    [PATCH_OMITTED.SECRET]: "This file is kept secret.",
-  },
-  UNCHANGED_CONTENTS: "File renamed without changes to its contents.",
-  NO_HUNKS: "No changes to show in this file.",
-  UNREADABLE: "This file's diff could not be read.",
-  TOO_NARROW_TO_SPLIT: "Needs a wider panel",
-  UNPLACED_THREADS: "Comments on lines this diff does not show",
-} as const;
-
 /** Why a changed file's lines between its hunks could not be opened: not read as text, read but not the text its patch was made against, or not read at all just now. */
 export const EXPANSION_REFUSAL = {
   NOT_TEXT: "not-text",
@@ -126,14 +104,6 @@ export const DIFF_LOAD_REFUSED_WORDS = {
   [EXPANSION_REFUSAL.UNAVAILABLE]: "Cannot load its diff just now.",
 } as const satisfies Record<ExpansionRefusal, string>;
 
-/** The letter a file wears for what became of it, as an editor's source control marks it. */
-export const STATUS_LETTER = {
-  [CHANGED_FILE_STATUS.ADDED]: "A",
-  [CHANGED_FILE_STATUS.MODIFIED]: "M",
-  [CHANGED_FILE_STATUS.DELETED]: "D",
-  [CHANGED_FILE_STATUS.RENAMED]: "R",
-} as const;
-
 /** What each status marks a file's row in the tree with. */
 const STATUS_MARK = {
   [CHANGED_FILE_STATUS.ADDED]: FILE_MARK.ADDED,
@@ -142,19 +112,8 @@ const STATUS_MARK = {
   [CHANGED_FILE_STATUS.RENAMED]: FILE_MARK.RENAMED,
 } as const satisfies Record<ChangedFileStatus, FileMarkStatus>;
 
-/** What the letter a file wears says in words, in its hint. */
-export const STATUS_WORDS = {
-  [CHANGED_FILE_STATUS.ADDED]: "Added",
-  [CHANGED_FILE_STATUS.MODIFIED]: "Modified",
-  [CHANGED_FILE_STATUS.DELETED]: "Deleted",
-  [CHANGED_FILE_STATUS.RENAMED]: "Renamed",
-} as const satisfies Record<ChangedFileStatus, string>;
-
 /** Where git's diff names a side the file does not stand on: before it was added, or after it was deleted. */
 const NO_SIDE = "/dev/null";
-
-/** The most lines a file may add and remove together before it starts collapsed. */
-const LARGE_FILE_LINES = 1000;
 
 /** How many rows a review thread's preview shows above the first line it is on. */
 const THREAD_CONTEXT_ROWS = 3;
@@ -512,23 +471,6 @@ export function threadsOn(
 }
 
 /**
- * What a file's pane says in its patch's place, or nothing where it draws
- * its hunks: why it carries no patch, that a file only moved kept its
- * contents, or that a patch holds no hunk.
- */
-export function fileNotice(file: AgentChangedFile): string | undefined {
-  if (file.omitted !== null) return CHANGES_WORDS.OMITTED[file.omitted];
-
-  if (file.patch === null) return CHANGES_WORDS.OMITTED[PATCH_OMITTED.TOO_LARGE];
-
-  if (file.patch.trim() !== "") return undefined;
-
-  return file.status === CHANGED_FILE_STATUS.RENAMED
-    ? CHANGES_WORDS.UNCHANGED_CONTENTS
-    : CHANGES_WORDS.NO_HUNKS;
-}
-
-/**
  * Each changed file's row mark in the tree: what became of it, the lines it
  * adds and removes, and, where Files changed knows them, how many review
  * threads stand on it, every one counted, resolved or not, as stage-cli's
@@ -651,62 +593,6 @@ export function listPatch(file: AgentChangedFile): string {
   LIST_PATCHES.set(file, patch);
 
   return patch;
-}
-
-/** The files whose path holds `query`, whatever its case, as the tree's search narrows its rows; every file for a query of nothing but spaces. */
-
-export function filterFiles(
-  files: readonly AgentChangedFile[],
-  query: string,
-): readonly AgentChangedFile[] {
-  const asked = query.trim().toLowerCase();
-
-  if (asked === "") return files;
-
-  return files.filter((file) => file.path.toLowerCase().includes(asked));
-}
-
-/** One step of a path as the tree sorts its rows: folders before files, a dotted name before the rest, then by name whatever its case. */
-function compareStep(a: string, aFolder: boolean, b: string, bFolder: boolean): number {
-  if (aFolder !== bFolder) return aFolder ? -1 : 1;
-  const aDot = a.startsWith(".");
-
-  if (aDot !== b.startsWith(".")) return aDot ? -1 : 1;
-
-  return a.toLowerCase().localeCompare(b.toLowerCase());
-}
-
-/** Two paths in the tree's order: at the first folder or name they part at, as `compareStep` sorts them. */
-function compareTreePaths(a: string, b: string): number {
-  const aSteps = a.split("/");
-  const bSteps = b.split("/");
-
-  for (let at = 0; at < Math.min(aSteps.length, bSteps.length); at += 1) {
-    const aStep = aSteps[at] ?? "";
-    const bStep = bSteps[at] ?? "";
-
-    if (aStep === bStep) continue;
-
-    return compareStep(aStep, at < aSteps.length - 1, bStep, at < bSteps.length - 1);
-  }
-
-  return aSteps.length - bSteps.length;
-}
-
-/** The files in the order the tree lists them, as Pierre's tree sorts its rows. */
-export function treeOrder(files: readonly AgentChangedFile[]): readonly AgentChangedFile[] {
-  return files.toSorted((a, b) => compareTreePaths(a.path, b.path));
-}
-
-/** Whether a file starts collapsed: deleted, changing more than `LARGE_FILE_LINES` lines, or a lockfile. Note that a file with no hunks never does, because what stands under its header is why. */
-export function startsCollapsed(file: AgentChangedFile): boolean {
-  if (fileNotice(file) !== undefined) return false;
-
-  return (
-    file.status === CHANGED_FILE_STATUS.DELETED ||
-    file.additions + file.deletions > LARGE_FILE_LINES ||
-    LOCKFILE_NAMES.has(file.path.split("/").at(-1) ?? "")
-  );
 }
 
 /** The lines a comment is on, as GitHub takes them: its last line and the side it counts on, and, for more than one, its first and that one's side. */

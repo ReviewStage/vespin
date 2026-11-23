@@ -1181,7 +1181,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           listed.tools.find((tool) => tool.name === name)?._meta?.["anthropic/alwaysLoad"];
 
         assert.equal(loaded("edit_description"), true);
-        assert.equal(loaded("look_at_picture"), undefined);
+        assert.equal(loaded("stop_agent"), undefined);
       }),
   );
 

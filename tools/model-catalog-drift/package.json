@@ -1,0 +1,20 @@
+{
+  "name": "@repo/model-catalog-drift",
+  "version": "0.24.0",
+  "private": true,
+  "type": "module",
+  "description": "Holds the end-to-end suite's fake AI Gateway catalog against the live one, nightly, so a hermetic green run cannot hide drift",
+  "scripts": {
+    "check": "tsx check-model-catalog-fake.ts",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@repo/service": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  }
+}
