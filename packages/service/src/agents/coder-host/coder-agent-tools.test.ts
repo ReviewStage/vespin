@@ -3823,7 +3823,7 @@ function openingsOf(
     );
 }
 
-test("message_agent hands another agent of the workspace the words under the sender's mention link, closing on how to answer it by its id, and refuses the sender's own id", async () => {
+test("message_agent hands another agent of the workspace the words under the sender's mention link, closing on how to answer it by its id, and refuses the sender's own id and another workspace's agent", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const host = hostOf();
@@ -3867,6 +3867,18 @@ test("message_agent hands another agent of the workspace the words under the sen
       reason: MESSAGE_AGENT_REFUSAL.SELF,
     },
   );
+
+  // An agent of another workspace is none of the caller's, even one its starter is also in.
+  const sentBefore = agentSessions.sent.length;
+
+  for (const other of [agents.otherWorkspaces, agents.strangers]) {
+    assert.deepEqual(
+      await directMessage(host, agents.caller, other, agentSessions.services, other.id),
+      { status: ACTION_RESULT_STATUS.REJECTED, reason: MESSAGE_AGENT_REFUSAL.NO_AGENT },
+    );
+  }
+
+  assert.equal(agentSessions.sent.length, sentBefore);
 });
 
 test("add_suggestion keeps the start or the send a suggestion runs, answers the link the agent writes it by, and refuses a send to the agent itself a field its kind does not take, or a start naming no model", async () => {
