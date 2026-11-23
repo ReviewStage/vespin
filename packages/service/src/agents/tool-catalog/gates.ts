@@ -51,8 +51,6 @@ export const TOOL_GATE = {
   DESCRIPTIONS: "descriptions",
   /** The agent's workspace has Reply buttons on. */
   REPLY_BUTTONS: "reply-buttons",
-  /** The agent's workspace has Done and follow-ups on, and it is no Manager, whose words reach people through `send_to_user` alone. */
-  TURN_END: "turn-end",
   /** The member whose Mac the agent reaches has Computer use on, as their own experiment. */
   COMPUTER_USE: "computer-use",
   /** The member the agent's threads would land with, its task's assignee else its starter, keeps an Inbox. */
@@ -113,11 +111,6 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
   },
   [TOOL_GATE.REPLY_BUTTONS]: {
     opens: (_agent, { experiments }) => experiments.replyButtonsOn,
-    refusal: EXPERIMENT_OFF_REFUSAL,
-  },
-  // Note that a Manager ends no turn with a summary, since its page draws none: its chat holds its `send_to_user` messages alone.
-  [TOOL_GATE.TURN_END]: {
-    opens: (agent, { experiments }) => experiments.turnEndOn && agent.kind !== AGENT_KIND.MANAGER,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
   [TOOL_GATE.COMPUTER_USE]: {

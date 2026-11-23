@@ -532,7 +532,6 @@ const AGENT_TOOLS = [
   "forget_memory",
   ...SLACK_TOOLS,
   "schedule_wakeup",
-  "end_turn",
 ] as const;
 
 /** The tools a native agent is served: every tool of our catalog that its harness has no equal of. */
@@ -800,7 +799,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const agent = yield* agentWithBearer;
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.MEMORY);
         yield* writeAccountPreferences(agent.userId, {
-          experiments: { [EXPERIMENT.TURN_END]: true, [EXPERIMENT.COMPUTER_USE]: true },
+          experiments: { [EXPERIMENT.COMPUTER_USE]: true },
         });
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.REPLY_BUTTONS);
         yield* descriptionsOn(agent.userId);
@@ -821,7 +820,6 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           experiments: {
             descriptionsOn: true,
             memoryOn: true,
-            turnEndOn: true,
             replyButtonsOn: true,
             computerUseOn: true,
             inboxOn: true,
@@ -929,7 +927,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       withheld: ["show_page", "browser"],
     },
   ])(
-    "tools/list leaves out what the catalog's gates offer no agent $why, the memory, the description's, the turn's end, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Done and follow-ups, Reply buttons, and Computer use off, and the Slack tools, named in no tool's words, where its workspace has not connected the Slack bot",
+    "tools/list leaves out what the catalog's gates offer no agent $why, the memory, the description's, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Reply buttons, and Computer use off, and the Slack tools, named in no tool's words, where its workspace has not connected the Slack bot",
     ({ agent: made, withheld }) =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -946,7 +944,6 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "list_memories",
           "forget_memory",
           "edit_description",
-          "end_turn",
           "add_suggestion",
           "computer",
           ...SLACK_TOOLS,
@@ -965,32 +962,23 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       }),
   );
 
-  it.effect(
-    "tools/list offers a Manager send_to_user in place of end_turn, though its starter has Done and follow-ups on",
-    () =>
-      Effect.gen(function* () {
-        const fetch = yield* standing;
-        const agent = yield* agentWithBearer;
-        yield* writeAccountPreferences(agent.userId, {
-          experiments: { [EXPERIMENT.TURN_END]: true },
-        });
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({ kind: AGENT_KIND.MANAGER, taskId: null })
-            .where(eq(agentTable.id, agent.agentId)),
-        );
-        const client = yield* connected(fetch, agent.bearer);
+  it.effect("tools/list offers a Manager send_to_user", () =>
+    Effect.gen(function* () {
+      const fetch = yield* standing;
+      const agent = yield* agentWithBearer;
+      yield* Database.use((db) =>
+        db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER, taskId: null })
+          .where(eq(agentTable.id, agent.agentId)),
+      );
+      const client = yield* connected(fetch, agent.bearer);
 
-        const listed = yield* Effect.promise(() => client.listTools());
-        yield* Effect.promise(() => client.close());
+      const listed = yield* Effect.promise(() => client.listTools());
+      yield* Effect.promise(() => client.close());
 
-        const names = listed.tools.map((tool) => tool.name);
-        assert.deepEqual(
-          [names.includes("send_to_user"), names.includes("end_turn")],
-          [true, false],
-        );
-      }),
+      assert.ok(listed.tools.some((tool) => tool.name === "send_to_user"));
+    }),
   );
 
   it.effect(

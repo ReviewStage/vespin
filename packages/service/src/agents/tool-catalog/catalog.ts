@@ -160,7 +160,6 @@ import {
   EDIT_DESCRIPTION_TOOL,
   requestedNotes,
 } from "../coder-host/description-edit.js";
-import { END_TURN_TOOL, runEndTurn } from "../coder-host/end-turn-tool.js";
 import { INBOX_TOOLS, postThreadToolOf } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
@@ -690,8 +689,6 @@ const CATALOG = [
   agentTool(REACT_SLACK_TOOL, runReactSlack, SLACK_BOT),
   // A wakeup booked for later.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
-  // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.
-  agentTool(END_TURN_TOOL, runEndTurn, { ...LOADED, gates: [TOOL_GATE.TURN_END] }),
   // A Manager's message to its chat, the one way its words reach people.
   agentTool(SEND_TO_USER_TOOL, runSendToUser, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
 ] as const;

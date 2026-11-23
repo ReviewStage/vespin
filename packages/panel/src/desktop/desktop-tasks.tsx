@@ -6,7 +6,6 @@ import {
   type NumberedAddress,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { agentName } from "@repo/features/model-label";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type {
@@ -53,7 +52,7 @@ import {
   turnChangesTab,
 } from "@repo/ui/tab-strip-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Activity, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
@@ -120,7 +119,6 @@ import type { TaskLooks } from "../tasks/use-task-looks.js";
 import { useTaskRelationWrites } from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWindowAccount } from "../tasks/window-account.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
@@ -524,9 +522,6 @@ function DescriptionDocument({
       : (listedActive?.workspaceId ?? tasks.workspace?.id);
 
   const descriptionsOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.DESCRIPTIONS);
-
-  const turnEndOn =
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.TURN_END) }).data === true;
 
   const commentsTaskId = tasks.shown && descriptionsOn ? tasks.activeTaskId : undefined;
 
@@ -973,13 +968,6 @@ function DescriptionDocument({
   // Note that the dock stands, quiet, while the agent's threads are all settled, the one way into them from its card.
   const { open: boardOpen, settled: boardSettled } = inbox.board;
 
-  // An ask the bar answers from its row's buttons is sent as the Inbox's Send sends it, with the words drafted on its card.
-  const chooseAnswer = useSteadyDoor((item: InboxItem, label: string) =>
-    inbox.onMessage(item, { ...inbox.draftOf(item), choices: [label] }),
-  );
-
-  const { sending: inboxSending } = inbox;
-
   const threads = useMemo(() => {
     if (tabAgent === undefined) return undefined;
 
@@ -989,39 +977,8 @@ function DescriptionDocument({
 
     const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
 
-    // Note that with Done and follow-ups on the bar stands with nothing posted, since an agent done with nothing to ask still offers its Archive.
-    // Note that the others are named as they stand when the posts move, which a step of a turn does not.
-    const others = (agents.agentIds ?? []).flatMap((agentId) => {
-      const count = agentId === tabAgent ? 0 : (waitingOf.get(agentId)?.length ?? 0);
-      const each = count === 0 ? undefined : agents.rowNow(agentId);
-
-      return each === undefined ? [] : [{ agentId, name: agentName(each), waiting: count }];
-    });
-
-    return posted.length === 0 && !turnEndOn
-      ? undefined
-      : {
-          waiting,
-          posted,
-          onOpen: openWaitingThread,
-          turnEnd: turnEndOn,
-          onChoose: chooseAnswer,
-          sending: inboxSending,
-          others,
-          onOpenAgent: openAgent,
-        };
-  }, [
-    tabAgent,
-    boardOpen,
-    boardSettled,
-    waitingOf,
-    openWaitingThread,
-    turnEndOn,
-    chooseAnswer,
-    inboxSending,
-    agents,
-    openAgent,
-  ]);
+    return posted.length === 0 ? undefined : { waiting, posted, onOpen: openWaitingThread };
+  }, [tabAgent, boardOpen, boardSettled, waitingOf, openWaitingThread]);
 
   const reader = useMemo(() => ({ readerId: tasks.me }), [tasks.me]);
   const editAgents = useMemo(() => ({ control: agents, onOpen: openAgent }), [agents, openAgent]);

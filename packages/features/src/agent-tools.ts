@@ -109,8 +109,6 @@ export const AGENT_TOOL = {
   REACT_SLACK: "react_slack",
   // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
-  // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
-  END_TURN: "end_turn",
   // A Manager's message to its chat, the one way its words reach people.
   SEND_TO_USER: "send_to_user",
   // The retired runtime's own durable pause, which a coding agent took before it checked on its checks or a deploy again.
@@ -158,8 +156,8 @@ export const CONNECTION_TOOL = {
  * hang-up, removed with GPT Live, the memory's two tools, since named for
  * the memory, the plan comments' resolve and reopen, folded into
  * `update_comment`, the plan's edit, renamed for the description it
- * edits, and the show of pictures, renamed for the sound clips it shows
- * beside them.
+ * edits, the show of pictures, renamed for the sound clips it shows
+ * beside them, and a turn's end, removed with Done and follow-ups.
  */
 export const RETIRED_TOOL = {
   WEB_FETCH: "web_fetch",
@@ -211,6 +209,8 @@ export const RETIRED_TOOL = {
   EDIT_PLAN: "edit_plan",
   // Renamed `show_media`, as it shows sound clips beside pictures and recordings.
   SHOW_IMAGE: "show_image",
+  // Removed with Done and follow-ups: a coding agent's turn ended in a short summary, the reply its developer read.
+  END_TURN: "end_turn",
 } as const;
 
 /**

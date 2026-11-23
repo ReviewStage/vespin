@@ -338,7 +338,7 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
  * token. A line on a gated tool of ours is told by whether the agent's
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
- * `edit_description`, its reply by `end_turn`, or a Manager's by
+ * `edit_description`, a Manager's reply by
  * `send_to_user`, which stands for its threads' and unclear request's lines
  * too, and its threads by
  * `post_thread`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
@@ -361,7 +361,6 @@ export function coderInstructions(
   // An agent on no task has no description to record in and no status to keep.
   const describes = ownTask !== undefined && offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
-  const endsTurns = offers(standing, AGENT_TOOL.END_TURN);
   const chats = offers(standing, AGENT_TOOL.SEND_TO_USER);
   const posts = offers(standing, INBOX_TOOLS.POST.name);
   const showsPages = offers(standing, AGENT_TOOL.SHOW_PAGE);
@@ -387,9 +386,7 @@ export function coderInstructions(
       : []),
     chats
       ? chatLine(posts)
-      : endsTurns
-        ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
-        : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
+      : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
     ...(posts && !chats
       ? [
           `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`,
