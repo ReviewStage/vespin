@@ -15,4 +15,8 @@ describe("addressWords", () => {
     expect(unbreakableRuns(words)).toEqual(["ada@", "example", ".com"]);
     expect(words.split("\u200B")[1]).toBe("e\u2060x\u2060a\u2060m\u2060p\u2060l\u2060e");
   });
+
+  it("leaves words with a space in them to wrap between words", () => {
+    expect(addressWords("Already following")).toBe("Already following");
+  });
 });
