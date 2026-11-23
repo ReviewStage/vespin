@@ -52,8 +52,21 @@ export function GlyphImage({
  * round at a menu glyph's size and kept as it is (`photoSize`, from the app's
  * `@expo/ui` patch), because a menu templates any other image in its ink.
  */
-function MenuPhoto({ photo }: { readonly photo: MenuPhotoFile }) {
-  return <Image uiImage={photo} photoSize={MARK_SIZE.MENU_PHOTO} />;
+function MenuPhoto({
+  photo,
+  corner,
+}: {
+  readonly photo: MenuPhotoFile;
+  /** Its corners' radius, of its side, as a repository's owner picture stands; a circle where none is given. */
+  readonly corner?: number | undefined;
+}) {
+  return (
+    <Image
+      uiImage={photo}
+      photoSize={MARK_SIZE.MENU_PHOTO}
+      {...(corner === undefined ? {} : { photoCorner: corner })}
+    />
+  );
 }
 
 /**
@@ -107,11 +120,15 @@ export function LookIcon({
         />
       );
     case MENU_ICON.PHOTO:
-      return <MenuPhoto photo={look.photo} />;
+      return <MenuPhoto photo={look.photo} corner={look.corner} />;
     case MENU_ICON.EMOJI:
       return <Image emoji={look.emoji} emojiSize={MARK_SIZE.MENU_PHOTO} />;
     case MENU_ICON.MARK:
-      return <Image assetName={look.asset} />;
+      return look.sized ? (
+        <Image assetName={look.asset} assetSize={MARK_SIZE.MENU_PHOTO} />
+      ) : (
+        <Image assetName={look.asset} />
+      );
   }
 }
 

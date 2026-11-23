@@ -1,6 +1,7 @@
 // row-menu-model.ts -- a row's acts as the plain tree the app's native module builds SwiftUI's own long press menu and swipes from, as they're asked for, and the press a place in that tree names.
 
 import type { IntegrationProvider } from "@repo/features/integration-wire";
+import type { ModelProvider } from "@repo/features/models-wire";
 import {
   TASK_PRIORITY_WORDS,
   TASK_STATUS_TONE,
@@ -9,6 +10,7 @@ import {
 import { TASK_STATUS, type TaskPriority, type TaskStatus } from "@repo/features/task-wire";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
+import { HARNESS_MARK_ASSET, REPOSITORY_CORNER } from "./mark-look.js";
 import {
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
@@ -82,6 +84,8 @@ export const CHOICE_MARK = {
   EMOJI: "emoji",
   INTEGRATION: "integration",
   MANAGER: "manager",
+  HARNESS: "harness",
+  REPOSITORY: "repository",
 } as const;
 
 /**
@@ -104,6 +108,14 @@ export type ChoiceMark =
       readonly kind: typeof CHOICE_MARK.MANAGER;
       /** Its face's picture in the asset catalog (`managerFaceAsset`), drawn in its own colors. */
       readonly asset: string;
+    }
+  | { readonly kind: typeof CHOICE_MARK.HARNESS; readonly provider: ModelProvider }
+  | {
+      readonly kind: typeof CHOICE_MARK.REPOSITORY;
+      /** Its `owner/name`, which a row draws its owner's picture from. */
+      readonly repository: string;
+      /** Its owner's picture as a file on this device, which a menu draws; none while it isn't read. */
+      readonly picture: MenuPhotoFile | undefined;
     };
 
 /**
@@ -139,12 +151,24 @@ export type ChoiceLook =
       readonly tone?: StatusTone | undefined;
       readonly under?: MarkLayer | undefined;
     }
-  | { readonly kind: typeof MENU_ICON.PHOTO; readonly photo: MenuPhotoFile }
+  | {
+      readonly kind: typeof MENU_ICON.PHOTO;
+      readonly photo: MenuPhotoFile;
+      /** Its corners' radius, of its side, as a repository's owner picture stands on a rounded square; a circle where none is given. */
+      readonly corner?: number | undefined;
+      /** The glyph that stands in its place until its photo is drawn, where a menu can't wait for it. */
+      readonly fallback: Glyph;
+    }
   | { readonly kind: typeof MENU_ICON.EMOJI; readonly emoji: string }
-  | { readonly kind: typeof MENU_ICON.MARK; readonly asset: string };
+  | {
+      readonly kind: typeof MENU_ICON.MARK;
+      readonly asset: string;
+      /** Whether it is drawn fit in a glyph's square, as a harness's mark is, rather than at its own size, as an integration's is drawn for menus. */
+      readonly sized: boolean;
+    };
 
 /** An entity's mark as its choice's head, as its rows draw it. */
-function markLook(mark: ChoiceMark): ChoiceLook {
+export function markLook(mark: ChoiceMark): ChoiceLook {
   switch (mark.kind) {
     case CHOICE_MARK.STATUS:
       return {
@@ -162,7 +186,7 @@ function markLook(mark: ChoiceMark): ChoiceLook {
     case CHOICE_MARK.PERSON:
       return mark.photo === undefined
         ? { kind: MENU_ICON.GLYPH, glyph: GLYPH.PERSON }
-        : { kind: MENU_ICON.PHOTO, photo: mark.photo };
+        : { kind: MENU_ICON.PHOTO, photo: mark.photo, fallback: GLYPH.PERSON };
     // Note that no one's ring stands in the muted ink the chip draws it in, which also lays its faint seat under it.
     case CHOICE_MARK.UNASSIGNED:
       return {
@@ -174,9 +198,20 @@ function markLook(mark: ChoiceMark): ChoiceLook {
     case CHOICE_MARK.EMOJI:
       return { kind: MENU_ICON.EMOJI, emoji: mark.emoji };
     case CHOICE_MARK.INTEGRATION:
-      return { kind: MENU_ICON.MARK, asset: INTEGRATION_MARK_ASSET[mark.provider] };
+      return { kind: MENU_ICON.MARK, asset: INTEGRATION_MARK_ASSET[mark.provider], sized: false };
+    case CHOICE_MARK.HARNESS:
+      return { kind: MENU_ICON.MARK, asset: HARNESS_MARK_ASSET[mark.provider], sized: true };
+    case CHOICE_MARK.REPOSITORY:
+      return mark.picture === undefined
+        ? { kind: MENU_ICON.GLYPH, glyph: GLYPH.REPOSITORY }
+        : {
+            kind: MENU_ICON.PHOTO,
+            photo: mark.picture,
+            corner: REPOSITORY_CORNER,
+            fallback: GLYPH.REPOSITORY,
+          };
     case CHOICE_MARK.MANAGER:
-      return { kind: MENU_ICON.MARK, asset: mark.asset };
+      return { kind: MENU_ICON.MARK, asset: mark.asset, sized: false };
   }
 }
 
@@ -222,6 +257,19 @@ export function taskChoice(
   return {
     label: name,
     mark: { kind: CHOICE_MARK.STATUS, status: status ?? TASK_STATUS.TODO },
+    ...press,
+  };
+}
+
+/** A repository's choice: its `owner/name` beside its owner's picture on a tile's rounded square, read from a file on this device, or the repository glyph where it has none, as the panel's repository pickers lead each. */
+export function repositoryChoice(
+  repository: string,
+  picture: MenuPhotoFile | undefined,
+  press: ChoicePress,
+): MenuChoice {
+  return {
+    label: repository,
+    mark: { kind: CHOICE_MARK.REPOSITORY, repository, picture },
     ...press,
   };
 }
@@ -287,8 +335,17 @@ type MenuIcon =
       readonly color?: string | undefined;
       readonly under?: { readonly asset: string; readonly opacity: number } | undefined;
     }
-  | { readonly kind: typeof MENU_ICON.PHOTO; readonly photo: MenuPhotoFile; readonly size: number }
-  | { readonly kind: typeof MENU_ICON.MARK; readonly asset: string }
+  | {
+      readonly kind: typeof MENU_ICON.PHOTO;
+      readonly photo: MenuPhotoFile;
+      readonly size: number;
+      readonly corner?: number | undefined;
+    }
+  | {
+      readonly kind: typeof MENU_ICON.MARK;
+      readonly asset: string;
+      readonly size?: number | undefined;
+    }
   | { readonly kind: typeof MENU_ICON.EMOJI; readonly emoji: string; readonly size: number };
 
 /**
@@ -380,11 +437,20 @@ function choiceIcon(choice: MenuChoice, inks: MenuInks): MenuIcon | undefined {
     case undefined:
       return undefined;
     case MENU_ICON.MARK:
-      return { kind: MENU_ICON.MARK, asset: look.asset };
+      return {
+        kind: MENU_ICON.MARK,
+        asset: look.asset,
+        size: look.sized ? MARK_SIZE.MENU_PHOTO : undefined,
+      };
     case MENU_ICON.EMOJI:
       return { kind: MENU_ICON.EMOJI, emoji: look.emoji, size: MARK_SIZE.MENU_PHOTO };
     case MENU_ICON.PHOTO:
-      return { kind: MENU_ICON.PHOTO, photo: look.photo, size: MARK_SIZE.MENU_PHOTO };
+      return {
+        kind: MENU_ICON.PHOTO,
+        photo: look.photo,
+        size: MARK_SIZE.MENU_PHOTO,
+        corner: look.corner,
+      };
     // Note that a choice saying more under its words draws its glyph alone, as `menuActContent` drew it, with no faint glyph under it.
     case MENU_ICON.GLYPH:
       return glyphIcon(

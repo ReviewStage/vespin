@@ -166,6 +166,7 @@ import {
   type RowQuestion,
   type RowSubmenu,
   type RowSwipe,
+  repositoryChoice,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
@@ -508,13 +509,14 @@ function repositorySubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu 
   return {
     label: current === null ? CHOOSE_REPOSITORY : CHANGE_REPOSITORY,
     symbol: GLYPH.REPOSITORY,
-    choices: listed.map((repository) => ({
-      label: repository,
-      on: repository === current,
-      onPress: () => {
-        if (repository !== current) placing.setRepository(task.id, repository);
-      },
-    })),
+    choices: listed.map((repository) =>
+      repositoryChoice(repository, placing.repositoryPictureOf(repository), {
+        on: repository === current,
+        onPress: () => {
+          if (repository !== current) placing.setRepository(task.id, repository);
+        },
+      }),
+    ),
     actions:
       current === null
         ? []

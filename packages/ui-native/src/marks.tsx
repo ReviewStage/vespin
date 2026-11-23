@@ -51,6 +51,7 @@ import { managerFaceAsset } from "./manager-face-look.js";
 import {
   HARNESS_MARK_ASSET,
   LETTER_SCALE,
+  REPOSITORY_CORNER,
   TILE_GLYPH_SCALE,
   TILE_MARK_SCALE,
   TILE_ROUNDING,
@@ -158,9 +159,6 @@ export const TaskStatusMark = memo(function TaskStatusMark({
     />
   );
 });
-
-/** How round a repository's picture stands, of its size: a tile's, as the panel draws a repository's owner, not a person's circle. */
-const REPOSITORY_CORNER = 0.25;
 
 /**
  * A repository as the panel's sidebar marks it (`@repo/ui`'s

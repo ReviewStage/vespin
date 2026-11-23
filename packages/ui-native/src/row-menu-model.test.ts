@@ -1,3 +1,4 @@
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { describe, expect, it } from "vitest";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -7,6 +8,7 @@ import {
   MENU_ICON,
   MENU_NODE,
   type MenuInks,
+  markLook,
   menuPhotoFile,
   menuPressAt,
   menuTree,
@@ -189,6 +191,31 @@ describe("menuTree", () => {
       "Garden",
       "Permanently delete",
     ]);
+  });
+});
+
+describe("markLook", () => {
+  // Note that a repository's owner stands on a tile's rounded square, a quarter of its side, as the panel draws it, never a person's circle, and a harness's mark is fit to a glyph's square.
+  it.each([
+    {
+      mark: {
+        kind: CHOICE_MARK.REPOSITORY,
+        repository: "acme/web",
+        picture: menuPhotoFile("file:///acme.png"),
+      } as const,
+      look: {
+        kind: MENU_ICON.PHOTO,
+        photo: "file:///acme.png",
+        corner: 0.25,
+        fallback: GLYPH.REPOSITORY,
+      },
+    },
+    {
+      mark: { kind: CHOICE_MARK.HARNESS, provider: MODEL_PROVIDER.ANTHROPIC } as const,
+      look: { kind: MENU_ICON.MARK, asset: "ClawdMark", sized: true },
+    },
+  ])("draws a $mark.kind as its rows do", ({ mark, look }) => {
+    expect(markLook(mark)).toStrictEqual(look);
   });
 });
 

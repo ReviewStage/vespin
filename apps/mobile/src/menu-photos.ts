@@ -1,6 +1,7 @@
-// menu-photos.ts -- a picture as a file in the app's caches, which a system menu draws round in a choice's glyph place: each member's sign-in picture, and a workspace's photo.
+// menu-photos.ts -- a picture as a file in the app's caches, which a system menu draws in a choice's glyph place: each member's sign-in picture, a workspace's photo, and a repository's owner's picture.
 
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
+import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
 import { MARK_SIZE, type MenuPhotoFile, menuPhotoFile } from "@repo/ui-native";
 import { File, Paths } from "expo-file-system";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -218,5 +219,34 @@ export function useMenuPhotos(
       return address === undefined ? undefined : fileOf(address);
     },
     [byUser, fileOf],
+  );
+}
+
+/** Each repository's owner's picture as a file on this device, by `owner/name`, for a menu that leads each repository with it, as `useMenuPictureFiles` holds them; none while it's on its way, or failed. */
+export function useMenuRepositoryPictures(
+  repositories: readonly string[],
+): (repository: string) => MenuPhotoFile | undefined {
+  const byRepository = useMemo(() => {
+    const addresses = new Map<string, string>();
+
+    for (const repository of repositories) {
+      const address = menuAddress(repositoryOwnerPictureUrl(repository));
+
+      if (address !== undefined) addresses.set(repository, address);
+    }
+
+    return addresses;
+  }, [repositories]);
+
+  const addresses = useMemo(() => [...byRepository.values()], [byRepository]);
+  const fileOf = useMenuPictureFiles(addresses);
+
+  return useCallback(
+    (repository: string) => {
+      const address = byRepository.get(repository);
+
+      return address === undefined ? undefined : fileOf(address);
+    },
+    [byRepository, fileOf],
   );
 }

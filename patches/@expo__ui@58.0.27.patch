@@ -27,10 +27,10 @@ index b542a50431f0a501a81c96d06d8705e745364a81..25de3ea1f08148cf00abb15c275fc229
       * Description of why the content is not available.
       */
 diff --git a/build/swift-ui/Image/index.d.ts b/build/swift-ui/Image/index.d.ts
-index f1aeaae3b55fd5cb2d30b952c096b086391575a6..bd0f057265c6a7d6fc53f0b9a572eadf00ab9c70 100644
+index f1aeaae3b55fd5cb2d30b952c096b086391575a6..fa0691fa29803c0498724a905fcdeff268403f1c 100644
 --- a/build/swift-ui/Image/index.d.ts
 +++ b/build/swift-ui/Image/index.d.ts
-@@ -28,6 +28,31 @@ export interface ImageProps extends CommonViewModifierProps {
+@@ -28,6 +28,43 @@ export interface ImageProps extends CommonViewModifierProps {
       * Can be a color name like '#ff00ff', 'red', 'blue', etc.
       */
      color?: ColorValue;
@@ -52,6 +52,18 @@ index f1aeaae3b55fd5cb2d30b952c096b086391575a6..bd0f057265c6a7d6fc53f0b9a572eadf
 +     * rendering kept original. Any other address draws nothing.
 +     */
 +    photoSize?: number;
++    /**
++     * The radius of a photo's corners, as a share of `photoSize`, as a
++     * repository's owner picture stands on a rounded square; a circle where
++     * none is given.
++     */
++    photoCorner?: number;
++    /**
++     * The side, in points, `assetName` is drawn at, fit in its square with
++     * its rendering kept original, so a system menu draws it as wide as a
++     * glyph rather than at the asset's own size.
++     */
++    assetSize?: number;
 +    /**
 +     * An emoji drawn as the image, at `emojiSize` points square, its
 +     * rendering kept original, so a system menu keeps its colors in the place
@@ -189,10 +201,10 @@ index 56dc559f87456e0b6b86f1b91529d9395d4c6a61..495964269db54444a1344d045cb893a4
    }
  }
 diff --git a/ios/ImageView.swift b/ios/ImageView.swift
-index 170de73445439a3ba4e5495643ee5f7c3eb332ab..35b5a142bf18361b51003a306bf245ceb4fe1485 100644
+index 170de73445439a3ba4e5495643ee5f7c3eb332ab..7a10640139dc3340f48e6d75c83a80cbbd7802b9 100644
 --- a/ios/ImageView.swift
 +++ b/ios/ImageView.swift
-@@ -8,6 +8,16 @@ public final class ImageViewProps: UIBaseViewProps {
+@@ -8,6 +8,20 @@ public final class ImageViewProps: UIBaseViewProps {
    @Field var systemName: String?
    @Field var assetName: String?
    @Field var variableValue: Double?
@@ -203,13 +215,17 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..35b5a142bf18361b51003a306bf245ce
 +  @Field var underOpacity: Double?
 +  // The side, in points, a photo stands at where a system menu draws it: drawn into its circle at that size, read only from a file on this device.
 +  @Field var photoSize: Double?
++  // The radius of a photo's corners as a share of its side, as a repository's owner picture stands on a tile's rounded square; a circle where none is given.
++  @Field var photoCorner: Double?
++  // The side, in points, an asset from the catalog is drawn at, fit in its square and kept in its own colors, as a model's harness mark leads its name in a system menu, which would otherwise draw the asset at its own size.
++  @Field var assetSize: Double?
 +  // An emoji drawn as the image, at `emojiSize` points square, as a task section's emoji leads its name in a system menu where its glyphs stand.
 +  @Field var emoji: String?
 +  @Field var emojiSize: Double?
    @Field var useTapGesture: Bool?
    var onTap = EventDispatcher()
  }
-@@ -19,7 +29,67 @@ public struct ImageView: ExpoSwiftUI.View {
+@@ -19,7 +33,86 @@ public struct ImageView: ExpoSwiftUI.View {
      self.props = props
    }
  
@@ -246,7 +262,8 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..35b5a142bf18361b51003a306bf245ce
 +    }
 +    let size = CGSize(width: side, height: side)
 +    let round = UIGraphicsImageRenderer(size: size).image { _ in
-+      UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).addClip()
++      let frame = CGRect(origin: .zero, size: size)
++      (props.photoCorner.map { UIBezierPath(roundedRect: frame, cornerRadius: side * $0) } ?? UIBezierPath(ovalIn: frame)).addClip()
 +      // The photo fills the circle, its longer side cropped about its center.
 +      let scale = max(side / photo.size.width, side / photo.size.height)
 +      let drawn = CGSize(width: photo.size.width * scale, height: photo.size.height * scale)
@@ -270,14 +287,32 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..35b5a142bf18361b51003a306bf245ce
 +    return Image(uiImage: drawn.withRenderingMode(.alwaysOriginal))
 +  }
 +
++  // An asset from the catalog already drawn at its size, fit in its square, its rendering kept original, so a system menu, which takes an image at its own size, draws it as wide as a glyph.
++  private var sizedAssetImage: Image? {
++    guard let side = props.assetSize, side > 0, let name = props.assetName,
++          let asset = UIImage(named: name), asset.size.width > 0, asset.size.height > 0 else {
++      return nil
++    }
++    let scale = min(side / asset.size.width, side / asset.size.height)
++    let drawn = CGSize(width: asset.size.width * scale, height: asset.size.height * scale)
++    let fitted = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
++      asset.draw(in: CGRect(origin: CGPoint(x: (side - drawn.width) / 2, y: (side - drawn.height) / 2), size: drawn))
++    }
++    // A template asset, such as Cursor's cube, stays a template, so it takes the menu's ink.
++    return Image(uiImage: fitted.withRenderingMode(asset.renderingMode == .alwaysTemplate ? .alwaysTemplate : .alwaysOriginal))
++  }
++
    private var symbolImage: Image? {
 +    if let originalImage {
 +      return originalImage
 +    }
++    if let sizedAssetImage {
++      return sizedAssetImage
++    }
      if let systemName = props.systemName {
        if #available(iOS 16.0, tvOS 16.0, *) {
          return Image(systemName: systemName, variableValue: props.variableValue)
-@@ -41,6 +111,18 @@ public struct ImageView: ExpoSwiftUI.View {
+@@ -41,6 +134,18 @@ public struct ImageView: ExpoSwiftUI.View {
        symbolImage
          .applyImageModifiers(props.modifiers, appContext: props.appContext)
          .applyOnTapGesture(useTapGesture: props.useTapGesture, eventDispatcher: props.onTap)
