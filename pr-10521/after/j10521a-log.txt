@@ -1,0 +1,37 @@
+pinned to 54032c4bfa
+== bundle PJj10521a base 54032c4bfa
+  built 54032c4bfa base app Vmain11.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-large-tasks: fails 0 shots 1 
+iphone-light-large-inbox: fails 0 shots 1 
+iphone-light-large-rest: fails 0 shots 1 
+ipad27-light-large-tasks: fails 0 shots 1 
+ipad27-light-large-rest: fails 0 shots 1 
+iphone-light-ax3-tasks: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-tasks: fails 0 shots 1 
+iphone-light-ax3-inbox: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-inbox: fails 0 shots 1 
+iphone-light-ax3-rest: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-rest: fails 0 shots 1 
+ipad27-light-ax3-tasks: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-tasks: fails 0 shots 1 
+ipad27-light-ax3-rest: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-rest: fails 0 shots 1 
+iphone-dark-large-tasks: fails 0 shots 1 
+iphone-dark-large-inbox: fails 0 shots 1 
+iphone-dark-large-rest: fails 0 shots 1 
+ipad27-dark-large-tasks: fails 0 shots 1 
+ipad27-dark-large-rest: fails 0 shots 1 
+iphone-dark-ax3-tasks: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-dark-ax3-tasks: fails 0 shots 1 
+iphone-dark-ax3-inbox: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-dark-ax3-inbox: fails 0 shots 1 
+iphone-dark-ax3-rest: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-dark-ax3-rest: fails 0 shots 1 
+ipad27-dark-ax3-tasks: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-dark-ax3-tasks: fails 0 shots 1 
+ipad27-dark-ax3-rest: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-dark-ax3-rest: fails 0 shots 1 
