@@ -1,0 +1,80 @@
+chore/probe-inline-timing pinned to 8b05e4243b (wanted 8b05e4243b)
+built main abccd932c6 + #10483 (on main) as abccd932c6
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 22:41:22 38267 MB
+curve 22:41:52 38208 MB
+curve 22:42:22 37001 MB
+curve 22:42:52 36043 MB
+curve 22:43:22 35806 MB
+curve 22:43:52 35601 MB
+curve 22:44:23 35550 MB
+curve 22:44:53 35494 MB
+curve 22:45:23 35479 MB
+curve 22:45:53 35409 MB
+curve 22:46:23 35135 MB
+curve 22:46:53 34950 MB
+curve 22:47:23 35518 MB
+curve 22:47:54 35448 MB
+curve 22:48:24 35388 MB
+curve 22:48:54 35363 MB
+curve 22:49:24 35191 MB
+curve 22:49:54 35043 MB
+curve 22:50:25 34990 MB
+curve 22:50:55 34909 MB
+curve 22:51:25 34835 MB
+curve 22:51:55 34696 MB
+curve 22:52:25 34609 MB
+curve 22:52:56 34585 MB
+curve 22:53:26 34553 MB
+curve 22:53:56 34524 MB
+curve 22:54:26 34494 MB
+curve 22:54:56 34463 MB
+curve 22:55:26 34278 MB
+curve 22:55:56 34227 MB
+curve 22:56:27 34188 MB
+curve 22:56:57 34159 MB
+curve 22:57:27 34130 MB
+curve 22:57:57 34089 MB
+curve 22:58:27 34027 MB
+curve 22:58:58 33910 MB
+curve 22:59:28 33381 MB
+curve 22:59:58 33168 MB
+curve 23:00:28 33071 MB
+curve 23:00:58 32966 MB
+curve 23:01:28 32763 MB
+curve 23:01:59 32682 MB
+curve 23:02:29 32561 MB
+curve 23:02:59 32542 MB
+curve 23:03:29 32469 MB
+curve 23:03:59 32434 MB
+curve 23:04:29 32322 MB
+curve 23:05:00 32284 MB
+curve 23:05:30 32265 MB
+curve 23:06:00 32242 MB
+curve 23:06:30 32253 MB
+curve 23:07:00 32224 MB
+curve 23:07:30 32202 MB
+curve 23:08:01 32098 MB
+curve 23:08:31 32096 MB
+curve 23:09:01 32099 MB
+curve 23:09:31 32009 MB
+BUILD EXIT 0 23:10:01
+sizes: Assets.car 23863128 bytes (main Vmain10.app 23863128), .app 121012 KB (main 119968 KB), zipped .app 45266956 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjprobe-inline4.app: replacing existing signature
+p10483-iphone-light-pill-field: fails 0 shots 11 
+p10483-iphone-light-description-edit: fails 1 shots 1 Assert that id: description-words is visible... FAILED
+p10483-iphone-light-probe-inline-12000: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+PROBEINLINE 12000: show 2, stream 1
+p10483-iphone-light-probe-inline-25000: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+PROBEINLINE 25000: show 2, stream 1
+p10483-iphone-light-probe-inline-179000: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+PROBEINLINE 179000: show 2, stream 1
+p10483-iphone-light-probe-inline-12000b: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+PROBEINLINE 12000b: show 2, stream 1
+p10483-ipad27-light-description-edit: fails 0 shots 5 
