@@ -17,8 +17,8 @@ import { AGENT_WARM_EVERY_MS, agentWarmable } from "@repo/features/agent-warm";
 import { AGENT_CHAT, type AgentChat } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { randomUUID } from "expo-crypto";
-import { useIsFocused } from "expo-router";
-import { useEffect, useSyncExternalStore } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useSyncExternalStore } from "react";
 import { AppState } from "react-native";
 import { useHostActs } from "../host/host-provider.js";
 import { useFollowedAgent } from "./use-agent.js";
@@ -41,33 +41,39 @@ function appActive(): boolean {
   return AppState.currentState === "active";
 }
 
-/** Holds the sandbox of the agent `agentId` names while its page is in focus and the app in the foreground, said at once and every minute, and lets go as it stops being; nothing for an agent the service keeps no warm for. */
+/**
+ * Holds the sandbox of the agent `agentId` names while its page is in focus
+ * and the app in the foreground, said at once and every minute, and lets go
+ * as it stops being; nothing for an agent the service keeps no warm for.
+ * Note that focus is heard through `useFocusEffect` rather than read with
+ * `useIsFocused`, because a read of focus draws the whole agent page again
+ * as a page is pushed over it, in the frames the push opens in.
+ */
 export function useWarmAgent(agentId: string): void {
   const acts = useHostActs();
-  const focused = useIsFocused();
   const active = useSyncExternalStore(onAppStateChanged, appActive);
   const agent = useFollowedAgent(agentId);
+  const warmId = active && agent !== undefined && agentWarmable(agent) ? agentId : undefined;
 
-  const warmId =
-    focused && active && agent !== undefined && agentWarmable(agent) ? agentId : undefined;
+  useFocusEffect(
+    useCallback(() => {
+      if (warmId === undefined) return undefined;
 
-  useEffect(() => {
-    if (warmId === undefined) return undefined;
+      const said = (chat: AgentChat) => {
+        saying = saying
+          .then(() => acts[ACT_KIND.AGENTS_WARM]({ agentId: warmId, chat, holder: HOLDER }))
+          .catch((cause: unknown) => {
+            console.warn("The agent's chat was not said to the service.", cause);
+          });
+      };
 
-    const said = (chat: AgentChat) => {
-      saying = saying
-        .then(() => acts[ACT_KIND.AGENTS_WARM]({ agentId: warmId, chat, holder: HOLDER }))
-        .catch((cause: unknown) => {
-          console.warn("The agent's chat was not said to the service.", cause);
-        });
-    };
+      said(AGENT_CHAT.SHOWN);
+      const every = setInterval(() => said(AGENT_CHAT.SHOWN), AGENT_WARM_EVERY_MS);
 
-    said(AGENT_CHAT.SHOWN);
-    const every = setInterval(() => said(AGENT_CHAT.SHOWN), AGENT_WARM_EVERY_MS);
-
-    return () => {
-      clearInterval(every);
-      said(AGENT_CHAT.HIDDEN);
-    };
-  }, [warmId, acts]);
+      return () => {
+        clearInterval(every);
+        said(AGENT_CHAT.HIDDEN);
+      };
+    }, [warmId, acts]),
+  );
 }

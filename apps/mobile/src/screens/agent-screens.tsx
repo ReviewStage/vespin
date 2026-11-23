@@ -125,6 +125,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import {
+  memo,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -845,9 +846,13 @@ export function AgentScreen() {
 /**
  * One agent's page as `AgentScreen` describes it, by the agent's id and the
  * suggestion a box opened it on, on its tab's stack over the window. A page
- * or a pull request it opens is pushed over it on the same stack.
+ * or a pull request it opens is pushed over it on the same stack. Note that
+ * it is drawn again only as its own reads move, never as its words in the
+ * route are handed again, because the stack draws every screen's route
+ * again on each push and pop, and this page stands drawn under the one
+ * pushed over it, in the very render the push stands its first frame in.
  */
-function AgentConversation({
+const AgentConversation = memo(function AgentConversation({
   id,
   suggestedBy,
   button,
@@ -1579,7 +1584,7 @@ function AgentConversation({
       {asks}
     </>
   );
-}
+});
 
 /** A page the agent showed, opened whole, by the agent's task, read once the agent is. */
 export function AgentPageScreen() {
