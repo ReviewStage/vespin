@@ -1,0 +1,8 @@
+pinned to 16785bde5f
+== bundle PJj10484b base 16785bde5f
+  built 16785bde5f base app Vp10456.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-accessibility-ax3: fails 0 shots 6 
