@@ -1,0 +1,84 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow description-edit
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+    Assert that "${TAB}" is visible... COMPLETED
+    Tap on "${TAB}", Index: -1... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+Run flow when false is true... SKIPPED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run subflows/scroll-in.yaml...
+    Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+      Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+        Swipe from (85%, 65%) to (85%, 40%) in 1200 ms... COMPLETED
+      Repeat while "${ELEMENT}" is not visible (up to 40 times)... COMPLETED
+      Assert that "${ELEMENT}" is visible... COMPLETED
+    Run flow when true is true... COMPLETED
+  Run subflows/scroll-in.yaml... COMPLETED
+  Swipe from (85%, 65%) to (85%, 45%) in 1200 ms... COMPLETED
+Run flow when true is true... COMPLETED
+Tap on "Only an admin can add.*"... COMPLETED
+Assert that id: description-words is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot description-edit-inline... COMPLETED
+Assert that "Bold" is visible... COMPLETED
+Assert that "Mention" is visible... COMPLETED
+Take screenshot description-edit-bar... COMPLETED
+Input text  ... COMPLETED
+Tap on "Mention"... COMPLETED
+Input text Ad... COMPLETED
+Assert that "Ada Lovelace", Below "People" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot description-edit-mention... COMPLETED
+Tap on "Ada Lovelace", Below "People"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "People" is not visible... COMPLETED
+Take screenshot description-edit-mentioned... COMPLETED
+Press Enter key... COMPLETED
+Tap on "Turn into"... COMPLETED
+Tap on "Text"... COMPLETED
+Tap on "Turn into"... COMPLETED
+Tap on "Bulleted list"... COMPLETED
+Input text Plan... COMPLETED
+Press Enter key... COMPLETED
+Input text Model... COMPLETED
+Tap on "Indent"... COMPLETED
+Assert that "Outdent" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot description-edit-nested... COMPLETED
+Press Enter key... COMPLETED
+Press Enter key... COMPLETED
+Input text Ship... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot description-edit-nested-out... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+Run flow when false is true... SKIPPED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Tap on "Done"... COMPLETED
+Run flow when true is true... COMPLETED
+Assert that id: description-words is not visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot description-edit-done... COMPLETED
