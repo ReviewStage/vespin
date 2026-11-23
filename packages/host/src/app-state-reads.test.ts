@@ -1,6 +1,7 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { taskSummaryOf } from "@repo/features/task-list-live";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { Context } from "effect";
 import { describe, expect, it } from "vitest";
@@ -8,12 +9,14 @@ import type { AppStateSnapshot } from "./app-state.js";
 import {
   answerKeeper,
   INBOX_FEED,
+  inboxGroupsIn,
   selectInboxFeed,
   selectInboxHoldings,
   shareAppState,
 } from "./app-state-reads.js";
 import { AppStateStore, initialAppState } from "./client/app-state-store.js";
 import { runModeFor } from "./run-mode.js";
+import { planListRow } from "./testing/task-list-rows.js";
 
 describe("shareAppState", () => {
   it("answers a reader's changed slice with the document's own nodes, not copies of them", () => {
@@ -99,11 +102,12 @@ describe("selectInboxHoldings", () => {
     updatedAt,
   });
 
-  /** A launch's document with the feed's rows by task, whether they're the phone's kept ones, and the tasks the account's read named. */
+  /** A launch's document with the feed's rows by task, whether they're the phone's kept ones, the tasks the account's read named, and the tasks kept beside the rows. */
   const documentWith = (
     byTask: Readonly<Record<string, readonly InboxItem[]>>,
     kept: boolean,
     named: readonly { readonly taskId: string }[],
+    keptHolders: readonly string[] = [],
   ): AppStateSnapshot => {
     const launched = new AppStateStore(initialAppState(RUN, true, []), Context.empty()).snapshot();
 
@@ -113,6 +117,11 @@ describe("selectInboxHoldings", () => {
       [LIVE_READ.INBOX_ITEMS]: {
         rows: { [INBOX_SCOPE_KIND.TASK]: byTask },
         ...(kept ? { kept: true } : undefined),
+        ...(keptHolders.length === 0
+          ? undefined
+          : {
+              keptHolders: keptHolders.map((id) => taskSummaryOf(planListRow(id, id), undefined)),
+            }),
       },
       inbox: {
         ...launched.inbox,
@@ -144,5 +153,30 @@ describe("selectInboxHoldings", () => {
 
     expect(listing(TASKS_READ.READING)).toBe(INBOX_FEED.READING);
     expect(listing(TASKS_READ.READY)).toBe(INBOX_FEED.ANSWERED);
+  });
+
+  /** `document` with its task list standing as `listStatus` says. */
+  const withList = (
+    document: AppStateSnapshot,
+    listStatus: AppStateSnapshot["tasks"]["listStatus"],
+  ): AppStateSnapshot => ({ ...document, tasks: { ...document.tasks, listStatus } });
+
+  /** The tasks the Inbox groups `document`'s rows under, with none of the task list's own drawn. */
+  const groupedUnder = (document: AppStateSnapshot) =>
+    inboxGroupsIn(selectInboxHoldings(document), [], undefined).map(({ holder }) => holder.task.id);
+
+  it("groups the kept rows under the tasks kept beside them while the task list is read, and under the list's own once it is drawn", () => {
+    const kept = documentWith(byTask, true, [], ["older", "newer"]);
+
+    expect(groupedUnder(withList(kept, TASKS_READ.READING))).toEqual(["newer", "older"]);
+    expect(groupedUnder(withList(kept, TASKS_READ.READY))).toEqual([]);
+  });
+
+  it("reads the kept rows as answered while the task list is read only where the tasks kept beside them hold every one they stand on", () => {
+    const feedOf = (keptHolders: readonly string[]) =>
+      selectInboxFeed(withList(documentWith(byTask, true, [], keptHolders), TASKS_READ.READING));
+
+    expect(feedOf(["older", "newer"])).toBe(INBOX_FEED.ANSWERED);
+    expect(feedOf(["older"])).toBe(INBOX_FEED.READING);
   });
 });
