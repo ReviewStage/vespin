@@ -28,6 +28,7 @@ import {
 import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { noteDelivered } from "../launch-phases.js";
+import { probeTimed } from "../launch-probe.js";
 
 /** The one key the document is held under in the app's client. */
 const APP_STATE_KEY = "app-state";
@@ -68,7 +69,7 @@ export function followAppStateInto(
   const followed = followAppStateOver(
     bridge,
     (state) => {
-      client.setQueryData(appStateQuery.queryKey, state);
+      probeTimed("setQueryData", () => client.setQueryData(appStateQuery.queryKey, state));
       noteDelivered();
 
       return undefined;
@@ -78,9 +79,10 @@ export function followAppStateInto(
     },
     {
       heard: ({ taskList: rows }) => {
-        if (rows !== undefined) taskList.deliver(rows);
+        if (rows !== undefined) probeTimed("taskList.deliver", () => taskList.deliver(rows));
       },
-      read: (read, lists) => taskList.write(read.version, lists),
+      read: (read, lists) =>
+        probeTimed("taskList.write", () => taskList.write(read.version, lists)),
     },
   );
 

@@ -1,5 +1,6 @@
 // _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, an agent's model sheet, and a task's Task relation sheet once an account is signed in, or setup in their place while the account owes it, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
 
+import "../probe-marks/layout-imports-start.js";
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
@@ -29,6 +30,7 @@ import { useHostConnectLink } from "../host-connect-link.js";
 import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
 import { useKeeping } from "../keeping.js";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
+import { probeOnce } from "../launch-probe.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useNewTaskDraftsSignOut } from "../new-task-draft.js";
@@ -179,6 +181,7 @@ function screenLayout({
  * while a sheet stands, it stands in the sheet on top (`screenLayout`).
  */
 function GuardedScreens() {
+  probeOnce("guarded-render");
   const { data: signedIn = false } = useQuery({
     ...appStateQuery,
     select: (state) => state.account.status === ACCOUNT_STATUS.SIGNED_IN,
@@ -349,6 +352,7 @@ function KeptScreens() {
  * drew light beside the dark tab bar.
  */
 export default function RootLayout() {
+  probeOnce("root-render");
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
