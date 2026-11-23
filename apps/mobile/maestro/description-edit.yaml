@@ -45,12 +45,29 @@ env:
           centerElement: true
 - runFlow:
     when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Only an admin can add.*"
+# Note that an iPad's split view edits the description in its sheet until an
+# offer for an `@` stands over the keyboard there: Edit opens it, and a tap
+# on its words, which fill the sheet, takes the keyboard.
+- runFlow:
+    when:
       true: ${FLOATING_TABS == 'true'}
-    file: subflows/scroll-in.yaml
-    env:
-      ELEMENT: "Only an admin can add.*"
-      BESIDE: "true"
-- tapOn: "Only an admin can add.*"
+    commands:
+      - runFlow:
+          file: subflows/scroll-in.yaml
+          env:
+            ELEMENT: "Edit description"
+            BESIDE: "true"
+      - tapOn: "Edit description"
+      - extendedWaitUntil:
+          visible:
+            id: "description-words"
+          timeout: 10000
+      - tapOn:
+          id: "description-words"
+          point: "8%,50%"
 - extendedWaitUntil:
     visible:
       id: "description-words"
@@ -65,24 +82,18 @@ env:
 # Mention types an `@`, which offers what the task can mention over the
 # keyboard, as a composer's `@` offers it; a pick stands as the person's
 # pill in the word's place, here in the middle of the paragraph pressed.
-# Note that an iPad's split view stands no offer over the keyboard yet, its
-# detail column being SwiftUI's, so the steps run on the iPhone; there the
-# offer's row is found by the reader's "You", since the page's Assignee chip
-# names Ada Lovelace too.
-- runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - inputText: " "
-      - tapOn: "Mention"
-      - inputText: "Ad"
-      - assertVisible: "Ada Lovelace.*You"
-      - waitForAnimationToEnd
-      - takeScreenshot: description-edit-mention
-      - tapOn: "Ada Lovelace.*You"
-      - waitForAnimationToEnd
-      - assertNotVisible: "Ada Lovelace.*You"
-      - takeScreenshot: description-edit-mentioned
+# Note that the offer's row is found by the reader's "You", since the page's
+# Assignee chip names Ada Lovelace too.
+- inputText: " "
+- tapOn: "Mention"
+- inputText: "Ad"
+- assertVisible: "Ada Lovelace.*You"
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-mention
+- tapOn: "Ada Lovelace.*You"
+- waitForAnimationToEnd
+- assertNotVisible: "Ada Lovelace.*You"
+- takeScreenshot: description-edit-mentioned
 # A list made on a new line stands Indent and Outdent on the bar while the
 # caret is in its items, as Notion's bar does. Text first makes the new line
 # a paragraph whatever the mentioned line was, so Bulleted list turns it
@@ -110,19 +121,21 @@ env:
 - inputText: "Ship"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-nested-out
-# Done, in the page's bar on the iPhone and at the Description's header in an
-# iPad's split view, saves what is typed and leaves the field once the
-# service holds it, the page reading the words again. Note that the fixture
+# Done, in the page's bar on the iPhone, saves what is typed and leaves the
+# field once the service holds it, the page reading the words again; an
+# iPad's sheet saves with Save. Note that the fixture
 # answers the save without changing the description it serves, so the words
 # read afterwards are the fixture's own.
 - runFlow:
     when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Done editing description"
+- runFlow:
+    when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - scrollUntilVisible:
-          element: "Done editing description"
-          direction: UP
-- tapOn: "Done editing description"
+      - tapOn: "Save"
 - extendedWaitUntil:
     notVisible:
       id: "description-words"
