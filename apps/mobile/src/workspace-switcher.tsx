@@ -54,15 +54,19 @@ export function switcherWorkspace(
 
   const picture = workspace.photoVersion === undefined ? workspace.pictureUrl : undefined;
   const address = menuPictureAddress(photo, picture);
+  const menuPhoto = address === undefined ? undefined : pictures?.fileOf(address);
+  const menuPhotoComing = address !== undefined && pictures?.coming(address) === true;
+  // Note that a picture whose file could not be kept stands as the letter, because the tile in a SwiftUI bar draws only a kept file, and a picture that could not be fetched as a file would not draw as an address either.
+  const missed = pictures !== undefined && menuPhoto === undefined && !menuPhotoComing;
 
   return {
     id: workspace.id,
     name: workspace.name,
     line: workspaceSharedWords(workspace.memberCount, first),
-    photo,
-    picture,
-    menuPhoto: address === undefined ? undefined : pictures?.fileOf(address),
-    menuPhotoComing: address !== undefined && pictures?.coming(address) === true,
+    photo: missed ? undefined : photo,
+    picture: missed ? undefined : picture,
+    menuPhoto,
+    menuPhotoComing,
   };
 }
 

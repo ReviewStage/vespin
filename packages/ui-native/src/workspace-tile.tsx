@@ -87,26 +87,28 @@ export function WorkspaceTile({
 
   const picture = tilePicture(workspace, size);
   const pictured = picture !== undefined && picture !== failed;
+  // Note that a photo whose file is still on its way stands as its hue alone, so the tile is never an empty glass and the letter never shows before the photo.
+  const coming = workspace.menuPhotoComing === true;
 
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
-      {pictured ? null : (
-        <>
-          <RoundedRectangle
-            cornerRadius={corner}
-            modifiers={[foregroundStyle(tileHue(workspace.id, dark))]}
-          />
-          <Text
-            modifiers={[
-              font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
-              foregroundStyle(ON_IDENTITY),
-            ]}
-          >
-            {identityLetter(workspace.name)}
-          </Text>
-        </>
+      {pictured && !coming ? null : (
+        <RoundedRectangle
+          cornerRadius={corner}
+          modifiers={[foregroundStyle(tileHue(workspace.id, dark))]}
+        />
       )}
-      {pictured ? (
+      {pictured ? null : (
+        <Text
+          modifiers={[
+            font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
+            foregroundStyle(ON_IDENTITY),
+          ]}
+        >
+          {identityLetter(workspace.name)}
+        </Text>
+      )}
+      {pictured && !coming ? (
         <AvatarPhoto
           address={picture}
           size={size}
