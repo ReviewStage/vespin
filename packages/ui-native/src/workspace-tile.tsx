@@ -16,6 +16,7 @@ import { useState } from "react";
 import { PixelRatio, useColorScheme } from "react-native";
 import { TILE_ROUNDING } from "./mark-look.js";
 import { AvatarPhoto } from "./marks.js";
+import type { MenuPhotoFile } from "./row-menu-model.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import { tileHue } from "./workspace-tile-model.js";
@@ -34,7 +35,7 @@ export type SwitcherWorkspace = {
   /** Its owner's sign-in picture, which a personal workspace with no photo stands. */
   readonly picture?: string | undefined;
   /** Its photo or its owner's picture as a file on this device, which a system menu draws and its tile draws in SwiftUI's own image; its letter in its hue while it has none. */
-  readonly menuPhoto?: string | undefined;
+  readonly menuPhoto?: MenuPhotoFile | undefined;
   /** Whether that file is still on its way, so its menu row stands with no image meanwhile rather than its letter. */
   readonly menuPhotoComing?: boolean | undefined;
 };

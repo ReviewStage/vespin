@@ -329,6 +329,8 @@ export {
   RowList,
 } from "./row-list.js";
 
+export { type MenuPhotoFile, menuPhotoFile } from "./row-menu-model.js";
+
 export {
   agentPreview,
   latestStep,

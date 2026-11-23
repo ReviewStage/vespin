@@ -41,6 +41,26 @@ export type RowAction = {
   readonly heard?: string | undefined;
 };
 
+/** What marks a photo's address as a file on this device, which only `menuPhotoFile` mints. */
+declare const MENU_PHOTO_FILE: unique symbol;
+
+/**
+ * A person's or a workspace's photo as a file on this device, the one kind
+ * of photo a system menu can draw, since it reads its images at once and
+ * never from the network: an address that names a picture on the web drew
+ * no icon at all. Minted only by `menuPhotoFile`, so a picture's web address
+ * can't be handed to a menu.
+ */
+export type MenuPhotoFile = string & { readonly [MENU_PHOTO_FILE]: true };
+
+/** A photo's address as a menu's photo where it names a file on this device; none for any other address, such as a picture on the web. */
+export function menuPhotoFile(address: string): MenuPhotoFile | undefined {
+  if (!address.startsWith("file://")) return undefined;
+
+  // SAFETY: the address names a file on this device, which is all the brand claims.
+  return address as MenuPhotoFile;
+}
+
 /** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
 export type MenuChoice = {
   readonly label: string;
@@ -52,7 +72,7 @@ export type MenuChoice = {
   /** A glyph drawn faint under its own in the same tone, as a priority's lit bars stand over every bar it can light (`MarkLayers`); none where its glyph stands alone. */
   readonly under?: MarkLayer | undefined;
   /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
-  readonly photo?: string | undefined;
+  readonly photo?: MenuPhotoFile | undefined;
   /** The integration whose mark leads it in the glyph's place, as the panel's MCP server rows lead with their provider's mark. */
   readonly mark?: IntegrationProvider | undefined;
   /** An emoji drawn as its image in the glyph's place, as a section the member gave an emoji leads with it in the panel's Move to, so its words line up with its glyphs' choices. */
@@ -123,7 +143,7 @@ type MenuIcon =
       readonly color?: string | undefined;
       readonly under?: { readonly asset: string; readonly opacity: number } | undefined;
     }
-  | { readonly kind: typeof MENU_ICON.PHOTO; readonly photo: string; readonly size: number }
+  | { readonly kind: typeof MENU_ICON.PHOTO; readonly photo: MenuPhotoFile; readonly size: number }
   | { readonly kind: typeof MENU_ICON.MARK; readonly asset: string }
   | { readonly kind: typeof MENU_ICON.EMOJI; readonly emoji: string; readonly size: number };
 
