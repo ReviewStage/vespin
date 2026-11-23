@@ -46,7 +46,7 @@
     },
     "apps/e2e": {
       "entry": ["playwright.config.ts", "specs/**/*.e2e.ts", "server/e2e-server.ts"],
-      "project": ["*.ts", "specs/**", "server/**"]
+      "project": ["*.ts", "specs/**", "server/**", "support/**"]
     },
     "apps/catalog": {
       "project": ["src/**"],

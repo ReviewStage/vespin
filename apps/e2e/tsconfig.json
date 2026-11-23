@@ -3,7 +3,7 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["playwright.config.ts", "specs/**/*.ts", "server/**/*.ts"],
+  "include": ["playwright.config.ts", "specs/**/*.ts", "server/**/*.ts", "support/**/*.ts"],
   "references": [
     {
       "path": "../../packages/sandbox"
