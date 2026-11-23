@@ -213,8 +213,28 @@ private func requestPermissions() async -> [String: Any] {
 
 // MARK: - Grant panel
 
-/// The app macOS holds the grants against: the one that spawned this helper, as its responsible process, which the developer drags into the pane's list.
-private let parentBundleURL = NSRunningApplication(processIdentifier: getppid())?.bundleURL
+/// A process's parent, by the kernel's record; nothing for one gone.
+private func parentPid(_ pid: pid_t) -> pid_t? {
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    var name = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+    guard sysctl(&name, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+    return info.kp_eproc.e_ppid
+}
+
+/// The app macOS holds the grants against, which the developer drags into the pane's list: the outermost app among
+/// this helper's ancestors. Note that a process started by another keeps that one's app responsible for it, so this
+/// is Vespin.app where it was opened as an app, and the terminal a development build was started from.
+private let responsibleAppURL: URL? = {
+    var found: URL?
+    var pid = getppid()
+    while pid > 1 {
+        if let url = NSRunningApplication(processIdentifier: pid)?.bundleURL { found = url }
+        guard let parent = parentPid(pid), parent != pid else { break }
+        pid = parent
+    }
+    return found
+}()
 
 private let SYSTEM_SETTINGS_BUNDLE_ID = "com.apple.systempreferences"
 private let GRANT_PANEL_SIZE = NSSize(width: 260, height: 168)
@@ -296,7 +316,7 @@ private final class GrantPanel {
 
     func show(_ grant: Grant) {
         close()
-        guard let app = parentBundleURL else { return }
+        guard let app = responsibleAppURL else { return }
         let made = NSPanel(
             contentRect: NSRect(origin: .zero, size: GRANT_PANEL_SIZE),
             styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
