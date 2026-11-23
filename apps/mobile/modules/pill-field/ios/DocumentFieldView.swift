@@ -661,6 +661,20 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     didSet { textView.isEditable = editable }
   }
 
+  /// Whether the field grows to its words inside the page that holds it, as a description edited in place stands in its task's list, rather than scrolling them itself; it then tells JavaScript the height its words ask for.
+  var fitsWords = false {
+    didSet {
+      guard fitsWords != oldValue else { return }
+      textView.isScrollEnabled = !fitsWords
+      textView.alwaysBounceVertical = !fitsWords
+      toldHeight = nil
+      setNeedsLayout()
+    }
+  }
+
+  /// The height last told while the field grows to its words.
+  private var toldHeight: CGFloat?
+
   /// The acts the field offers on its selection, in the edit menu and the bar over the keyboard; none for a field that offers none.
   var formats: FormatsRecord? {
     didSet { buildBar() }
@@ -734,6 +748,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   override func layoutSubviews() {
     super.layoutSubviews()
     textView.frame = bounds
+    tellHeight()
     let line = ceil(bodyFont().lineHeight)
     placeholderLabel.frame = CGRect(
       x: textView.textContainerInset.left,
@@ -766,7 +781,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   private func keepCaretClear() {
     guard let window else { return }
     let mine = convert(bounds, to: window)
-    let covered = keyboardTop.map { max(0, min(mine.height, mine.maxY - $0)) } ?? 0
+    // Note that a field grown to its words scrolls none of its own, so the page that holds it scrolls the caret clear instead.
+    let covered = fitsWords ? 0 : keyboardTop.map { max(0, min(mine.height, mine.maxY - $0)) } ?? 0
     textView.contentInset.bottom = covered
     textView.verticalScrollIndicatorInsets.bottom = covered
     guard textView.isFirstResponder, let keyboardTop, let end = textView.selectedTextRange?.end else { return }
@@ -777,6 +793,16 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     let lowest = max(0, page.contentSize.height + page.adjustedContentInset.bottom - page.bounds.height)
     let offset = min(page.contentOffset.y + caret.maxY - clear, lowest)
     page.setContentOffset(CGPoint(x: page.contentOffset.x, y: offset), animated: true)
+  }
+
+  /// Tells JavaScript the height the words ask for at the field's width, while the field grows to them, once it moves by a point or more.
+  private func tellHeight() {
+    let width = bounds.width
+    guard fitsWords, width > 0 else { return }
+    let height = ceil(textView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+    if let toldHeight, abs(toldHeight - height) < 1 { return }
+    toldHeight = height
+    onHeight(["height": height])
   }
 
   /// The nearest scroll view the field stands in, the page it scrolls with.
@@ -813,6 +839,28 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   func focus() {
     textView.becomeFirstResponder()
+  }
+
+  /// Takes the keyboard with the caret where a press on the words as read landed: on the line at `index`, `x` and `y` points in from its first line's start, as near as the words drawn here allow, else at the line's start.
+  func focus(atLine index: Int, x: CGFloat, y: CGFloat) {
+    layoutIfNeeded()
+    let string = textView.textStorage.string as NSString
+    var location = 0
+
+    for _ in 0..<max(0, index) where location < string.length {
+      location = NSMaxRange(string.paragraphRange(for: NSRange(location: location, length: 0)))
+    }
+
+    guard let start = textView.position(from: textView.beginningOfDocument, offset: min(location, string.length)) else {
+      textView.becomeFirstResponder()
+      return
+    }
+
+    let top = textView.caretRect(for: start).minY
+    let point = CGPoint(x: textView.textContainerInset.left + x, y: top + y)
+    let landed = textView.closestPosition(to: point) ?? start
+    textView.becomeFirstResponder()
+    textView.selectedRange = NSRange(location: textView.offset(from: textView.beginningOfDocument, to: landed), length: 0)
   }
 
   func blur() {
@@ -857,6 +905,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     tell()
     keepCaretClear()
     tellCaret()
+    // Note that a field grown to its words tells its new height as a key wraps a line or takes one away.
+    tellHeight()
     // Note that the bar is marked again once the typed words hold their looks, which they take only now.
     updateBar()
   }

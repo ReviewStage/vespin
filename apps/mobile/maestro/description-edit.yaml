@@ -1,4 +1,4 @@
-# description-edit.yaml -- a task's description edited whole, as Notion edits a page: its blocks drawn with no syntax, a table as a card, the selection formatted from the edit menu's Format and the bar over the keyboard, a person mentioned from an `@`, and a list's item moved in and back out.
+# description-edit.yaml -- a task's description edited in place on its page, as the desktop and Notion edit one: its blocks drawn with no syntax, a table as a card, the selection formatted from the edit menu's Format and the bar over the keyboard, a person mentioned from an `@`, a list's item moved in and back out, and Done.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -24,10 +24,11 @@ env:
     element: "Teammate invitations"
 - tapOn: "Teammate invitations"
 - assertVisible: "Created by .*"
-# The Description's Edit, heard as Edit description, opens the sheet on the
-# description as the page read it: headings, bold and italic words, the
-# lists' marks and the quote drawn as the page draws them, with no Markdown
-# syntax, and the table as a card the phone does not edit.
+# The Description's Edit, heard as Edit description, puts the description in
+# its field where the page read it, the sections around it standing as they
+# stood: headings, bold and italic words, the lists' marks and the quote
+# drawn as the page draws them, with no Markdown syntax, and the table as a
+# card the phone does not edit.
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
@@ -120,3 +121,22 @@ env:
 - inputText: "Ship"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-nested-out
+# Done, in the page's bar on the iPhone and at the Description's header in an
+# iPad's split view, saves what is typed and leaves the field once the
+# service holds it, the page reading the words again. Note that the fixture
+# answers the save without changing the description it serves, so the words
+# read afterwards are the fixture's own.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: "Done editing description"
+          direction: UP
+- tapOn: "Done editing description"
+- extendedWaitUntil:
+    notVisible:
+      id: "description-words"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-done

@@ -103,6 +103,10 @@ public final class PillFieldModule: Module {
         view.formats = formats
       }
 
+      Prop("fitsWords") { (view: DocumentFieldView, fits: Bool?) in
+        view.fitsWords = fits ?? false
+      }
+
       AsyncFunction("setLink") { (view: DocumentFieldView, address: String) in
         view.setLink(address)
       }
@@ -117,6 +121,10 @@ public final class PillFieldModule: Module {
 
       AsyncFunction("focus") { (view: DocumentFieldView) in
         view.focus()
+      }
+
+      AsyncFunction("focusAt") { (view: DocumentFieldView, line: Int, x: Double, y: Double) in
+        view.focus(atLine: line, x: CGFloat(x), y: CGFloat(y))
       }
 
       AsyncFunction("blur") { (view: DocumentFieldView) in
