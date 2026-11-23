@@ -1899,23 +1899,24 @@ function runOfCaller(calling: Agent) {
  * that its final message reaches that agent by itself once its turn ends
  * (`coder-host/starter-report.ts`), that it messages it before then with
  * `message_agent` by that agent's id, as every word between two agents goes
- * (`coder-host/agent-message.ts`), and that it posts its own threads and
- * sends that agent each one's mention, so the developer never hears of one
- * thing from both agents, or, where a Manager started it, which closes its
- * threads (`tool-catalog/gates.ts`'s `UNMANAGED`), that it reports to that
- * Manager alone, then the note it was given.
+ * (`coder-host/agent-message.ts`), and, where a Manager started it, which
+ * closes its threads (`tool-catalog/gates.ts`'s `UNMANAGED`), that it
+ * reports to that Manager alone, then the note it was given. Note that an
+ * agent another coder started hears of its own threads from its
+ * instructions instead (`coder-host/instructions.ts`), worded from its
+ * standing on every session, since whether it posts any follows its task's
+ * assignee, who may change after the start.
  */
 function startedByNote(starter: Agent, note: string | undefined): string {
   const lead =
     `You were started by another agent of your workspace, ${agentIntroduction(starter)}, ` +
     `not by the developer. Message it with ${AGENT_TOOL.MESSAGE_AGENT}, its agentId ${starter.id}, ` +
     "when you finish, with what you did, what you published, and what you need of it, and whenever " +
-    "you need something from it; if your turn fails, it is told. " +
+    "you need something from it; if your turn fails, it is told." +
     (starter.kind === AGENT_KIND.MANAGER
-      ? `It is a Manager, and you post no threads: send your questions and reports to it with ${AGENT_TOOL.MESSAGE_AGENT}, and it reaches people for you. ` +
+      ? ` It is a Manager, and you post no threads and send no Slack message: send your questions and reports to it with ${AGENT_TOOL.MESSAGE_AGENT}, and it reaches people for you. ` +
         `To hand it a picture, show the file with ${AGENT_TOOL.SHOW_MEDIA} and put the picture ids it answers in your message, never a sandbox path.`
-      : "Post your own threads to the developer, with their pictures, as your instructions say, and " +
-        "send that agent each thread's mention, so it posts none of its own on the same thing.");
+      : "");
 
   return note === undefined ? lead : `${lead}\n\n${note}`;
 }

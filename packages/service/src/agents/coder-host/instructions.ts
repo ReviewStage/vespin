@@ -23,7 +23,7 @@ import { writtenMention } from "../written-mentions.js";
 import { CODER } from "./bounds.js";
 import { COMMIT_BY, type CommitAuthorship } from "./checkout.js";
 import { EDIT_DESCRIPTION_TOOL } from "./description-edit.js";
-import { INBOX_TOOLS } from "./inbox.js";
+import { INBOX_TOOLS, MANAGER_THREAD_ASKS } from "./inbox.js";
 
 /**
  * instructions.ts -- what a coding agent's session runs under, appended to its harness's own prompt.
@@ -71,7 +71,7 @@ function chatLine(posts: boolean): string {
   const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there, as a coworker would on Slack: several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
 
   return posts
-    ? `${chat} Post a thread with \`${INBOX_TOOLS.POST.name}\` only for a decision with options or a to-do, since every post reaches people as a notification.`
+    ? `${chat} Post a thread with \`${INBOX_TOOLS.POST.name}\` only for ${MANAGER_THREAD_ASKS}, since every post reaches people as a notification: your pull requests and pages are named in your chat once ready, and a go-ahead you want on one is a decision.`
     : chat;
 }
 
@@ -379,10 +379,12 @@ export function coderInstructions(
     ownLine(ownTask, own, repository, startBranch, workspace),
     ...machineLines(machine, repository !== null),
     ...(posts && !chats ? [UNCLEAR_LINE] : []),
-    ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff, posts) : []),
+    ...(publishes
+      ? publishLines(authorship, startBranch, memberToken, wakesOff, posts && !chats)
+      : []),
     ...(showsPages
       ? [
-          `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\`${posts ? " and post it in a thread" : ""}.`,
+          `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\`${posts && !chats ? " and post it in a thread" : ""}.`,
         ]
       : []),
     chats
@@ -391,6 +393,11 @@ export function coderInstructions(
     ...(posts && !chats
       ? [
           `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`,
+          ...(own.startedByAgent
+            ? [
+                `Another agent started you: post your own threads, and send it each one's mention with \`${AGENT_TOOL.MESSAGE_AGENT}\`, so it posts none of its own on the same thing.`,
+              ]
+            : []),
         ]
       : []),
     ...(describes
@@ -431,13 +438,14 @@ function managerRepositoryOf(repositories: readonly string[]): string {
 /**
  * What a Manager is told beyond the coder's lines: its role, the greeting its
  * conversation opens on,
- * how it starts and briefs work, and when it reaches a person. Note that
+ * how it starts and briefs work, and when it reaches a person, its threads
+ * named only where it posts them (`post_thread`, behind its Inbox). Note that
  * this is short on purpose, as its starter asked: each tool's description
  * carries how to call it, so these lines say only what a Manager does that a
  * coder does not. The agents it starts get no prompt of their own; the
  * brief it writes carries their context.
  */
-export function managerInstructions(place: ManagerPlace): string {
+export function managerInstructions(place: ManagerPlace, posts: boolean): string {
   const manager = place.name === null ? "the <your name> Manager" : `the ${place.name} Manager`;
 
   return [
@@ -446,8 +454,12 @@ export function managerInstructions(place: ManagerPlace): string {
     `To start work, first make a task with \`${AGENT_TOOL.CREATE_TASK}\`: named, assigned to whoever asked, ${managerRepositoryOf(place.repositories)}. Then start an agent on it with \`${AGENT_TOOL.START_AGENT}\`, choosing its model and effort for the work (\`${AGENT_TOOL.LIST_MODELS}\`); it runs where you run unless you name \`runsOn\`.`,
     `Lay work out as a good engineering manager would, with Linear's hygiene: split it into tasks, group related ones under a parent task (\`parentTaskId\`, \`subTaskIds\`), and name what must land first with \`blockedBy\`. Split work that can run in parallel across several agents rather than leaving it to one big agent doing everything. One task is one logical change, ideally one pull request; two changes never share a task, even related ones. Give each task a clear name, the right assignee, and a description of what is decided and what is not.`,
     `Open each brief with "You're an agent started by ${manager}, for <the person who asked>.", then a line of project context, what is known and what to read first, what is decided and what is not, and the agent's job and what to hand back to you with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
-    `Relay what people tell you, in your chat or on a thread, to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
-    `A thread you post carries everything its reader needs to answer: the pictures, the facts, and the choice, never a pointer to another task, agent, or description. To show an agent's pictures, ask it for the ids \`${AGENT_TOOL.SHOW_MEDIA}\` answered and draw each in the body as \`![alt](<id> "caption")\`, and a description's picture by the address \`${AGENT_TOOL.READ_TASK}\` writes it at.`,
+    `Relay what people tell you, in your chat${posts ? " or on a thread" : ""}, to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
+    ...(posts
+      ? [
+          `A thread you post carries everything its reader needs to answer: the pictures, the facts, and the choice, never a pointer to another task, agent, or description. To show an agent's pictures, ask it for the ids \`${AGENT_TOOL.SHOW_MEDIA}\` answered and draw each in the body as \`![alt](<id> "caption")\`, and a description's picture by the address \`${AGENT_TOOL.READ_TASK}\` writes it at.`,
+        ]
+      : []),
     `Only message me when it's worth my time. Tell me when you've got a plan for something I asked, when something I can actually use is done, or when something goes wrong or changes. I don't need play-by-plays of PRs, CI, or what your agents are up to, and don't remind me about stuff that's already in my inbox. Tell me what changed for me, not how you did it. If there's nothing worth saying, don't say anything.`,
     `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers, but never start another Manager.`,
   ].join("\n");
@@ -464,11 +476,12 @@ export interface OwnDeveloper {
   readonly name: string | undefined;
 }
 
-/** The agent itself: its id, where it runs as `start_agent`'s `runsOn` names it (none for a local agent whose device is gone), and the developer it works for. */
+/** The agent itself: its id, where it runs as `start_agent`'s `runsOn` names it (none for a local agent whose device is gone), the developer it works for, and whether another agent started it. */
 export interface OwnAgent {
   readonly id: string;
   readonly runsOn: AgentRunsOnRequest | null;
   readonly developer: OwnDeveloper;
+  readonly startedByAgent: boolean;
 }
 
 /** What an agent's instructions are composed on beyond its row. */
@@ -528,6 +541,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
       id: agent.id,
       runsOn: agentRunsOnOf(agent),
       developer: { userId: agent.userId, name: context.developerName },
+      startedByAgent: agent.startedByAgentId !== null,
     },
     context.standing,
     context.authorship,
@@ -549,5 +563,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
   const repositories =
     context.repositories ?? (agent.repository === null ? [] : [agent.repository]);
 
-  return `${coder}\n${managerInstructions({ name: agent.title, repositories })}`;
+  const posts = offers(context.standing, INBOX_TOOLS.POST.name);
+
+  return `${coder}\n${managerInstructions({ name: agent.title, repositories }, posts)}`;
 }
