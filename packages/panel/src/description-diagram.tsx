@@ -6,10 +6,13 @@ import {
   CARD_ELEMENT,
   CARD_PADDING,
   Card,
+  ExpandIcon,
   FailureNote,
+  IconButton,
   IMAGE_OPENING,
   PictureTile,
   PortalFence,
+  Tooltip,
 } from "@repo/ui";
 import { DIAGRAM_DRAWING } from "@repo/ui/diagram-contract";
 import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from "react";
@@ -21,6 +24,7 @@ import { failureShown } from "./failure-report.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { ShellRoomContext } from "./stage-room.js";
 import { AttachmentViewer } from "./tasks/attachment-viewer.js";
+import { useDescriptionPicturesDoor } from "./tasks/description-pictures.js";
 
 /**
  * description-diagram.tsx -- a description's ```` ```mermaid ```` fence drawn as its diagram, in the one card the read view and the editor draw it in.
@@ -33,20 +37,20 @@ import { AttachmentViewer } from "./tasks/attachment-viewer.js";
  * flipping draws each shown diagram again in the new one.
  *
  * A diagram is drawn no wider than its column, which shrinks a wide one's
- * words past reading, so its head's Full screen opens it over the window at
- * its own pixels, to be moved about and pinched
- * (`tasks/attachment-viewer.tsx`), in any room and with any pointer. Where
- * the room is narrow or the window is worked by a finger a tap on the
- * picture opens it too; with a mouse in a wide room the picture takes no
- * pointer's press, so a click on a description's diagram still opens its
- * section to be edited.
+ * words past reading, so its head's Expand opens it over the window at its
+ * own pixels, to be moved about and pinched (`tasks/attachment-viewer.tsx`),
+ * in any room and with any pointer, as the media players' Expand opens a
+ * video. A press on the picture opens it too, as a picture's does
+ * (`tasks/description-pictures.tsx`), but for a mouse's in a wide room where
+ * a press edits the text there: in the editor, or in a description the
+ * reader may edit, whose section a click opens to be edited.
  */
 
 /** What a diagram opened over the window is named, its header's title and the file Download saves. */
 const DIAGRAM_FILE = "Diagram.svg";
 
-/** What the head's press that opens the diagram over the window says. */
-const FULL_SCREEN_LABEL = "Full screen";
+/** What the head's press that opens the diagram over the window is named, as the media players' is. */
+const EXPAND_LABEL = "Expand";
 
 /** A figure's head: what it is, in the caption's size and the muted ink, and its presses at the row's end. */
 const HEAD_CLASS =
@@ -55,8 +59,8 @@ const HEAD_CLASS =
 /** The shell standing as one pane, a phone's, which the stylesheet reads off its `data-room` (`shell-room.ts`). */
 const NARROW_ROOM = '[data-room="narrow"]';
 
-/** Whether a press on `element` opens its diagram over the window: in a narrow room, or on a device worked by a finger, asked as the press lands. */
-function opensFullScreen(element: Element): boolean {
+/** Whether a pointer's press on `element` opens its diagram over the window where a mouse's press edits the text there: in a narrow room, or on a device worked by a finger, asked as the press lands. */
+function opensOverEdits(element: Element): boolean {
   return coarsePointerNow() || element.closest(NARROW_ROOM) !== null;
 }
 
@@ -131,14 +135,16 @@ function DiagramCard({
   kept: boolean;
 }): React.JSX.Element {
   const { drawing: drawingNow, retry } = useDrawing(code, useAppearance());
-  const [fullScreen, setFullScreen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const picture = drawingNow?.kind === DIAGRAM_DRAWING.DRAWN ? drawingNow.url : undefined;
   const alt = diagramAlt(code);
   const pictureShown = picture !== undefined && !shown.showingCode;
-  // Note that this draws what a press would do, where `opensFullScreen` asks again as the press lands.
+  // Note that this draws what a press would do, where `opensOverEdits` asks again as the press lands.
+  const door = useDescriptionPicturesDoor();
+  const pressEdits = kept || (door?.pressEdits ?? false);
   const coarse = useCoarsePointer();
   const room = useContext(ShellRoomContext);
-  const pointerOpens = coarse || room === SHELL_ROOM.NARROW;
+  const pointerOpens = !pressEdits || coarse || room === SHELL_ROOM.NARROW;
   const outsideText = kept ? false : undefined;
 
   return (
@@ -157,7 +163,13 @@ function DiagramCard({
               {shown.showingCode ? DIAGRAM_WORDS.SHOW_DIAGRAM : DIAGRAM_WORDS.SHOW_CODE}
             </Button>
             {pictureShown ? (
-              <Button onClick={() => setFullScreen(true)}>{FULL_SCREEN_LABEL}</Button>
+              <Tooltip label={EXPAND_LABEL}>
+                <IconButton
+                  icon={<ExpandIcon />}
+                  label={EXPAND_LABEL}
+                  onClick={() => setExpanded(true)}
+                />
+              </Tooltip>
             ) : null}
           </span>
         )}
@@ -169,13 +181,13 @@ function DiagramCard({
             name={alt}
             pointerOpens={pointerOpens}
             onOpen={(event) => {
-              // Note that a key's press (no pointer's click count) opens it in any room, as the head's Full screen does.
+              // Note that a key's press (no pointer's click count) opens it in any room, as the head's Expand does.
               const keyed = event.detail === 0;
 
-              if (!keyed && !opensFullScreen(event.currentTarget)) return;
+              if (!keyed && pressEdits && !opensOverEdits(event.currentTarget)) return;
               // The press is the picture's, so the section around it does not open to be edited.
               event.stopPropagation();
-              setFullScreen(true);
+              setExpanded(true);
             }}
           >
             <DiagramPicture url={picture} alt={alt} />
@@ -183,8 +195,8 @@ function DiagramCard({
         </div>
       ) : null}
       {kept ? <div hidden={pictureShown}>{source}</div> : pictureShown ? null : source}
-      {fullScreen && picture !== undefined ? (
-        <OpenDiagram url={picture} onClose={() => setFullScreen(false)} />
+      {expanded && picture !== undefined ? (
+        <OpenDiagram url={picture} onClose={() => setExpanded(false)} />
       ) : null}
     </Card>
   );

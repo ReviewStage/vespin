@@ -20,6 +20,7 @@ import { MarkdownMessage } from "./markdown-message.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { ShellRoomContext } from "./stage-room.js";
 import { DescriptionBody } from "./tasks/description-body.js";
+import { descriptionEditMutation } from "./tasks/description-edit-mutation.js";
 import { TranscriptWords } from "./tasks/transcript-blocks.js";
 import { HISTORY_READ } from "./tasks/use-description-history.js";
 import { VersionView } from "./tasks/version-view.js";
@@ -39,8 +40,9 @@ import { landedBundles, onSideBundles, standInBundles } from "./testing/side-bun
  * its one boundary, the bundle's importer, answering a picture named by the
  * code and the appearance it was asked in. On a finger's device, or in a
  * phone's narrow room, a tap on a diagram opens it over the window, which
- * its Close or Escape shuts; with a mouse in a wide room a tap opens nothing,
- * while the keyboard's press on the picture opens it in any room.
+ * its Close or Escape shuts; with a mouse in a wide room a click opens it
+ * too, but in a description the reader may edit, where its head's Expand
+ * does, while the keyboard's press on the picture opens it in any room.
  * Synthetic description.
  */
 
@@ -418,13 +420,35 @@ test("in a phone's narrow room a tap on a diagram opens it, and Escape shuts it"
   assert.equal(viewer(), null);
 });
 
-test("with a mouse in a wide room a tap on a diagram opens nothing over the window", async () => {
+test("with a mouse in a wide room a click on a diagram in a reply opens it over the window", async () => {
   const code = "flowchart LR\n  Invite --> Join";
-  const page = await drawn(createElement(DescriptionBody, { task: taskWith(mermaidFence(code)) }));
+  const reply = await drawn(createElement(TranscriptWords, { text: mermaidFence(code) }));
+
+  act(() => tap(picture(reply)));
+
+  assert.ok(viewer(), "the diagram opens over the window");
+});
+
+test("with a mouse in a description the reader may edit a click on a diagram opens nothing, and its head's Expand opens it", async () => {
+  const code = "flowchart LR\n  Invite --> Join";
+  // The edit never lands, since the test never edits; it only makes the description one the reader may edit.
+  const edit = descriptionEditMutation(DOCUMENT_TASK.id, () => new Promise(() => undefined));
+
+  const page = await drawn(
+    createElement(DescriptionBody, { task: taskWith(mermaidFence(code)), edit }),
+  );
 
   act(() => tap(picture(page)));
+  assert.equal(viewer() === null, true, "a click edits the description rather than opening it");
 
-  assert.equal(viewer(), null);
+  const expand =
+    page.querySelector<HTMLButtonElement>(
+      '.description-diagram-head button[aria-label="Expand"]',
+    ) ?? assert.fail("the head offers Expand");
+
+  act(() => tap(expand));
+
+  assert.ok(viewer(), "the diagram opens over the window");
 });
 
 test("in a wide room the keyboard's press on a diagram, named for what it does, opens it over the window", async () => {
