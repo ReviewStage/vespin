@@ -1,0 +1,9 @@
+== bundle PJjland2 base c10465046c
+  built c10465046c base app Vmain10.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-ax3-landscape: content_size accessibility-extra-large
+iphone-light-ax3-landscape: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-landscape: fails 0 shots 1 
