@@ -20,10 +20,19 @@ appId: dev.vespin.ios
     timeout: 5000
 - takeScreenshot: ax3-inbox
 # A do ask: its steps, then Mark done and Couldn't do it, one to a line.
-- scrollUntilVisible:
-    element: "Verify the digest's sender domain"
-    direction: DOWN
-    centerElement: true
+# Note that the swipe stands in the list's own column: on a portrait iPad the
+# screen's center, where `scrollUntilVisible` swipes, is the empty detail
+# column, so the list never moved. A bounded loop with an assert after it
+# fails a row that never appears rather than looping on.
+- repeat:
+    times: 8
+    while:
+      notVisible: "Verify the digest's sender domain"
+    commands:
+      - swipe:
+          start: "15%, 80%"
+          end: "15%, 40%"
+- assertVisible: "Verify the digest's sender domain"
 - tapOn: "Verify the digest's sender domain"
 - scrollUntilVisible:
     element: "Mark done"
