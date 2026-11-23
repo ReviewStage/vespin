@@ -248,6 +248,9 @@ const DICTATION_WORDS = {
   TRANSCRIBING: "Transcribing",
 } as const;
 
+/** How far the row under the field stands in from the glass on each side, so Send's round at its end keeps the room the + keeps at its start, rather than meeting the glass's edge once the reader's text grows it past its press frame. */
+const ROW_SIDES = padding({ horizontal: SPACE.TIGHT });
+
 /** How often the strip's clock counts on, in milliseconds. */
 const CLOCK_TICK_MS = 1_000;
 
@@ -320,7 +323,7 @@ function DictationStrip({ dictation }: { readonly dictation: ComposerDictation }
 
   if (dictation.phase === DICTATION_PHASE.TRANSCRIBING) {
     return (
-      <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
+      <HStack spacing={TOOL_SPACING} modifiers={[ROW_SIDES]}>
         <ProgressView modifiers={[...PRESS_FRAME, tint(colors.TEXT_MUTED)]} />
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
@@ -333,7 +336,7 @@ function DictationStrip({ dictation }: { readonly dictation: ComposerDictation }
   }
 
   return (
-    <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
+    <HStack spacing={TOOL_SPACING} modifiers={[ROW_SIDES]}>
       <DictationPress
         glyph={GLYPH.REMOVE}
         label={DICTATION_WORDS.CANCEL}
@@ -943,10 +946,7 @@ function ComposerRow({
     <VStack
       alignment="leading"
       spacing={TOOL_SPACING}
-      modifiers={[
-        onGeometryChange(({ width }) => measured("row")(width)),
-        padding({ leading: SPACE.TIGHT }),
-      ]}
+      modifiers={[onGeometryChange(({ width }) => measured("row")(width)), ROW_SIDES]}
     >
       {capsulesOwnLine(widths) ? (
         <>
