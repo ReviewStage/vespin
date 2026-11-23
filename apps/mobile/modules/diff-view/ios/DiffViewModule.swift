@@ -443,7 +443,7 @@ final class DiffView: ExpoView, UICollectionViewDataSource {
       DispatchQueue.main.async {
         guard let self, self.handed == turn else { return }
         self.runs = colored
-        NSLog("DiffView colored: %.1f ms, %d rows, %@", took, colored.count, language.rawValue)
+        NSLog("DiffView colored: %.1f ms, %ld rows, %@", took, colored.count, language.rawValue as NSString)
         self.list.reloadItems(at: self.list.indexPathsForVisibleItems)
       }
     }
