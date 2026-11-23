@@ -9,8 +9,16 @@
  * runs with its default data collection and the desktop renderer's filters:
  * a breadcrumb or an event that names an access token is dropped whole
  * (`@repo/features/sentry-breadcrumbs`), and each event names the account
- * signed in by its id alone (`@repo/features/sentry-account`). It traces
- * nothing, so no request becomes a span.
+ * signed in by its id alone (`@repo/features/sentry-account`).
+ *
+ * It traces a launch alone, never a request, a screen, or a press: Sentry's
+ * app start, from the process's start through its native steps and the
+ * bundle's run, held open to the launch's first Inbox rows, with the
+ * launch's own phases inside it (`launch-phases.ts`) and a processor profile
+ * of the app's functions while it stands. Each carries only durations and the
+ * names of the app's own functions, never a value they handled, and no span
+ * is made for a request, so no address is traced, and no trace header goes
+ * out on one.
  *
  * The native half starts first, as the app launches and before React Native
  * loads, on the same DSN, environment, release and build number, which
@@ -40,10 +48,14 @@ import { SENTRY_ENVIRONMENT, type SentryEnvironment } from "@repo/host/sentry-en
 import {
   addBreadcrumb,
   captureException,
+  extendAppStart,
+  finishExtendedAppStart,
+  getExtendedAppStartSpan,
   init,
   nativeCrash,
   setTag,
   setUser,
+  startInactiveSpan,
 } from "@sentry/react-native";
 import { useQuery } from "@tanstack/react-query";
 import { type Layer, Option, Schema } from "effect";
@@ -56,6 +68,7 @@ import {
   launchFixtureProfile,
   launchSentryTest,
 } from "./host/launch-arguments.js";
+import { LAUNCH_PHASE, launchPhaseMs, launchStartedAt, launchStood } from "./launch-phases.js";
 
 /** What `app.config.ts` writes into `extra.sentry`: the project's DSN, empty where the build names none, and whether this is a TestFlight build. */
 const SentryBuildSchema = Schema.Struct({ dsn: Schema.String, released: Schema.Boolean });
@@ -84,6 +97,31 @@ const MECHANISM = {
 export const SIGN_IN_END = { CLOSED: "closed" } as const;
 
 type SignInEnd = (typeof SIGN_IN_END)[keyof typeof SIGN_IN_END] | SignInFailure;
+
+/**
+ * The SDK's automatic tracing, left out so only a launch is traced: a span
+ * for each request and its trace header (`ReactNativeTracing`), the
+ * navigation it reads through expo-router (`ExpoRouter`), the root's
+ * registration it starts a screen's span on (`AppRegistry`), and a screen's
+ * time to display (`TimeToDisplay`). Note that they're left out by name
+ * rather than by `enableAutoPerformanceTracing`, because the SDK hands that
+ * option to its native half, which then stops measuring the app's start.
+ */
+const UNTRACED: ReadonlySet<string> = new Set([
+  "ReactNativeTracing",
+  "ExpoRouter",
+  "AppRegistry",
+  "TimeToDisplay",
+]);
+
+/** The operation a launch phase's span names, inside the app start's extension. */
+const LAUNCH_PHASE_OP = "app.start.phase";
+
+/** The span that ends as the launch's Inbox first shows its rows, which the app start's extension is trimmed to. */
+const LAUNCH_READY = "ready";
+
+/** The span that ends as the host stands (`launchStood`). */
+const LAUNCH_STOOD = "stood";
 
 /** What the test report says, so it is found in Sentry by its words. */
 const TEST_REPORT_WORDS = `A test report from ${PRODUCT_NAME}'s iOS app (-sentryTest js)`;
@@ -117,9 +155,11 @@ function startCrashReports(): void {
   const version = Constants.expoConfig?.version;
   const buildNumber = Constants.expoConfig?.ios?.buildNumber;
   const bundleId = Constants.expoConfig?.ios?.bundleIdentifier;
+  const enabled = sentryReportingEnabled(launchFixtureProfile() === undefined, build.dsn);
+
   init({
     dsn: build.dsn,
-    enabled: sentryReportingEnabled(launchFixtureProfile() === undefined, build.dsn),
+    enabled,
     environment: environmentOf(build),
     ...(version && buildNumber && bundleId
       ? { release: `${bundleId}@${version}+${buildNumber}`, dist: buildNumber }
@@ -127,9 +167,18 @@ function startCrashReports(): void {
     enableNetworkBreadcrumbs: false,
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,
+    // Note that every launch is traced and profiled, and nothing else: the SDK's automatic tracing is left out, so no request, screen, or press becomes a span, and no request carries a trace header.
+    tracesSampleRate: 1,
+    profilesSampleRate: 1,
+    integrations: (defaults) => defaults.filter(({ name }) => !UNTRACED.has(name)),
+    tracePropagationTargets: [],
+    _experiments: { enableStandaloneAppStartTracing: true },
   });
 
   if (buildNumber !== undefined) setTag(BUILD_NUMBER_TAG, buildNumber);
+
+  // Note that a launch in front holds Sentry's app start open until its Inbox shows (`finishLaunchTrace`); one woken in the background isn't held, since nobody waits through it.
+  if (enabled && AppState.currentState !== "background") extendAppStart();
   const test = launchSentryTest();
 
   if (test === LAUNCH_SENTRY_TEST.JS) captureException(new Error(TEST_REPORT_WORDS));
@@ -148,6 +197,43 @@ export function useCrashReportAccount(): void {
   });
 
   useEffect(() => setUser(sentryUser(accountId)), [accountId]);
+}
+
+/**
+ * Ends the trace of a launch that waited in front, as its Inbox first shows
+ * rows `readyMs` after the launch's start: each phase the launch reached is a
+ * span from its start to the phase (`launch-phases.ts`), and the app start's
+ * extension ends with the rows, so Sentry's app start runs from the process's
+ * start to them, beside the native steps it measures itself. Note that a
+ * launch that went to the background first is never ended here, so its time
+ * away is never counted: the extension's own deadline ends it, with no
+ * measurement. Nothing happens where no extension stands.
+ */
+export function finishLaunchTrace(readyMs: number): void {
+  const startedAt = launchStartedAt();
+  const extension = getExtendedAppStartSpan();
+
+  if (startedAt !== undefined) {
+    const spans = [
+      ...Object.values(LAUNCH_PHASE).map((phase) => ({ name: phase, ms: launchPhaseMs(phase) })),
+      { name: LAUNCH_STOOD, ms: launchStood()?.ms },
+      { name: LAUNCH_READY, ms: readyMs },
+    ];
+
+    for (const { name, ms } of spans) {
+      if (ms === undefined) continue;
+      startInactiveSpan({
+        parentSpan: extension,
+        op: LAUNCH_PHASE_OP,
+        name,
+        startTime: startedAt / 1000,
+      }).end((startedAt + ms) / 1000);
+    }
+  }
+
+  finishExtendedAppStart().catch((cause: unknown) => {
+    console.error("The launch's trace could not end.", cause);
+  });
 }
 
 /** Reports a screen whose drawing threw, once for each throw its boundary caught. */

@@ -330,8 +330,12 @@ messages, stack traces, the addresses of the app's own requests, device and
 iOS details, the app's version and build, and your IP address. A report
 naming a sign-in token in an address is dropped, and reports name your
 account by its id only, or not at all for a crash before you are signed in
-again at launch. The app sends no performance traces, screenshots, or
-recordings of the screen.
+again at launch. Each time you open the app, it sends Sentry a performance
+trace of its start: how long each of its startup steps took, from iOS
+starting it to your Inbox's first rows, and a processor profile of which of
+the app's own functions ran and for how long, never the values they handled.
+It sends no other performance traces, and no screenshots or recordings of the
+screen.
 
 ### Feedback
 

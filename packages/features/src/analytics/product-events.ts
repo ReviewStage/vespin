@@ -124,6 +124,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   LOCAL_SECONDS: "local_seconds",
   STARTED_SECONDS: "started_seconds",
   INBOX_SECONDS: "inbox_seconds",
+  SCREENS_SECONDS: "screens_seconds",
   DELIVERIES: "deliveries",
   APP_BUILD: "app_build",
   FIRST_ROWS: "first_rows",
@@ -449,15 +450,26 @@ export function productElapsedSeconds(milliseconds: number): ProductElapsedSecon
 
 /**
  * The rungs a launch travels on, in seconds from the app's start to its
- * first Inbox rows, each the shortest launch that reaches it: fine near a
- * second, where a launch feels quick or slow, and coarse past it, for the
- * reason a wait travels on rungs.
+ * first Inbox rows, each the shortest launch that reaches it: a fifth of a
+ * second apart under one, where the first frame and the first rows aim to
+ * land, fine through a few seconds, where a launch feels quick or slow, and
+ * coarse past them, for the reason a wait travels on rungs. Note that every
+ * rung a released build sends stays, since the service refuses a value it
+ * doesn't list.
  */
 const PRODUCT_LAUNCH_SECONDS = {
-  UNDER_ONE: 0,
+  UNDER_A_FIFTH: 0,
+  ONE_FIFTH: 0.2,
+  TWO_FIFTHS: 0.4,
+  THREE_FIFTHS: 0.6,
+  FOUR_FIFTHS: 0.8,
   ONE: 1,
+  ONE_AND_A_QUARTER: 1.25,
+  ONE_AND_A_HALF: 1.5,
   TWO: 2,
+  TWO_AND_A_HALF: 2.5,
   THREE: 3,
+  FOUR: 4,
   FIVE: 5,
   EIGHT: 8,
   THIRTEEN: 13,
@@ -493,13 +505,15 @@ const PRODUCT_LAUNCH_LADDER: readonly ProductLaunchSeconds[] = Object.values(
   PRODUCT_LAUNCH_SECONDS,
 ).sort((left, right) => right - left);
 
-/** The highest rung a launch in milliseconds reaches; anything under a second, or a time that is no number, is the first. */
+/** The highest rung a launch in milliseconds reaches; anything under a fifth of a second, or a time that is no number, is the first. */
 export function productLaunchSeconds(milliseconds: number): ProductLaunchSeconds {
   const seconds = milliseconds / 1000;
 
-  if (!Number.isFinite(seconds)) return PRODUCT_LAUNCH_SECONDS.UNDER_ONE;
+  if (!Number.isFinite(seconds)) return PRODUCT_LAUNCH_SECONDS.UNDER_A_FIFTH;
 
-  return PRODUCT_LAUNCH_LADDER.find((rung) => seconds >= rung) ?? PRODUCT_LAUNCH_SECONDS.UNDER_ONE;
+  return (
+    PRODUCT_LAUNCH_LADDER.find((rung) => seconds >= rung) ?? PRODUCT_LAUNCH_SECONDS.UNDER_A_FIFTH
+  );
 }
 
 /**
@@ -624,6 +638,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.LOCAL_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.STARTED_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.INBOX_SECONDS]: ProductLaunchSeconds;
+  [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.DELIVERIES]: ProductSessionCountBucket;
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
@@ -656,6 +671,7 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.LOCAL_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.STARTED_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.INBOX_SECONDS
+  | typeof PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.DELIVERIES
   | typeof PRODUCT_EVENT_PROPERTY.APP_BUILD
 >;
@@ -749,6 +765,7 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.LOCAL_SECONDS,
     PRODUCT_EVENT_PROPERTY.STARTED_SECONDS,
     PRODUCT_EVENT_PROPERTY.INBOX_SECONDS,
+    PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS,
     PRODUCT_EVENT_PROPERTY.DELIVERIES,
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
     PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
@@ -957,6 +974,7 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.LOCAL_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.STARTED_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.INBOX_SECONDS]: launchReader,
+  [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.DELIVERIES]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: buildNumberReader,
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: experimentScopeReader,
