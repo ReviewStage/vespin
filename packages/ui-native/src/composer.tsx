@@ -49,7 +49,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize, useTextScale } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import type { CaretAtWord } from "./caret-at-word.js";
 import {
@@ -875,13 +875,18 @@ function CapsuleScroll({
   );
 }
 
-/** The widths the row under the field is laid out by, in points: its own, the + at its start, what stands at its end, and the capsules' whole. */
+/** The widths the row under the field is laid out by, in points: its own, the + at its start, what stands at its end, the capsules' whole, and, each at its whole width, what is picked (the model chip) and the presses after it. */
 type RowWidths = {
   readonly row: number;
   readonly add: number;
   readonly end: number;
   readonly capsules: number;
+  readonly picked: number;
+  readonly presses: number;
 };
+
+/** A row not yet measured. */
+const UNMEASURED: RowWidths = { row: 0, add: 0, end: 0, capsules: 0, picked: 0, presses: 0 };
 
 /** Whether the capsules stand on a line of their own: where they would not stand whole between the + and what stands at the row's end; a row not yet measured keeps one line. */
 function capsulesOwnLine(widths: RowWidths): boolean {
@@ -890,9 +895,16 @@ function capsulesOwnLine(widths: RowWidths): boolean {
   return widths.row > 0 && widths.capsules > room;
 }
 
-/** Whether what stands at the row's end fits the row whole, on one line: its widest kept (`measuredEnd`), so the choice never turns back once it stacks; a row not yet measured keeps one line. */
+/** Whether what is picked and the presses fit the row whole on one line, each at its whole width; a row not yet measured keeps one line. */
 function endFits(widths: RowWidths): boolean {
-  return widths.row === 0 || widths.end <= widths.row;
+  const gap = widths.picked > 0 && widths.presses > 0 ? TOOL_SPACING : 0;
+
+  return widths.row === 0 || widths.picked + gap + widths.presses <= widths.row;
+}
+
+/** Whether what is picked holds its whole width: where it fits the row even on a line of its own; a chip not yet measured holds it, so it is measured whole. */
+function pickedWhole(widths: RowWidths): boolean {
+  return widths.row === 0 || widths.picked <= widths.row;
 }
 
 /**
@@ -916,7 +928,8 @@ function ComposerRow({
   readonly parts: ComposerParts;
 }) {
   const { addMenu, onAdd, tools, trailing, testIds, dictation } = props;
-  const [widths, setWidths] = useState<RowWidths>({ row: 0, add: 0, end: 0, capsules: 0 });
+  const [widths, setWidths] = useState<RowWidths>(UNMEASURED);
+  const scale = useTextScale();
 
   // Note that each width is set only as it changes, and none of them moves with the layout chosen, so choosing one line or two never turns the choice again.
   const measured = (key: keyof RowWidths) => (width: number) =>
@@ -925,6 +938,11 @@ function ComposerRow({
   // Note that the end keeps the widest it has stood, so the capsules don't jump back up beside it as Talk gives way to Send under the first word typed.
   const measuredEnd = (width: number) =>
     setWidths((was) => (width <= was.end ? was : { ...was, end: width }));
+
+  // Note that a change of the reader's text size measures the end again, since a chip too wide for even a line of its own is cut and so no longer measured whole, and the end's widest kept would hold the old size's.
+  useEffect(() => {
+    setWidths((was) => (was.picked === 0 && was.end === 0 ? was : { ...was, picked: 0, end: 0 }));
+  }, [scale]);
 
   // Note that a dictation under way stands its strip in the row's place, as the desktop's strip stands in its box's foot.
   if (dictation !== undefined && dictation.phase !== DICTATION_PHASE.IDLE) {
@@ -940,8 +958,25 @@ function ComposerRow({
     </HStack>
   );
 
+  // Note that what is picked and the presses are each measured at their whole width (`fixedSize`) whichever layout stands, so the layout never feeds what chooses it; a model of a longer or shorter name is measured as it is drawn.
+  const picked =
+    trailing === undefined ? null : (
+      <HStack
+        modifiers={
+          pickedWhole(widths)
+            ? [fixedSize(), onGeometryChange(({ width }) => measured("picked")(width))]
+            : []
+        }
+      >
+        {trailing}
+      </HStack>
+    );
+
   const presses = (
-    <>
+    <HStack
+      spacing={TOOL_SPACING}
+      modifiers={[fixedSize(), onGeometryChange(({ width }) => measured("presses")(width))]}
+    >
       {dictation === undefined ? null : (
         <DictationPress
           glyph={GLYPH.DICTATE}
@@ -951,20 +986,16 @@ function ComposerRow({
       )}
       {parts.call}
       {parts.send}
-    </>
+    </HStack>
   );
 
-  // Note that what is picked for the message, such as the model, is offered the row first and holds its whole words (`fixedSize`), so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room; a priority alone still left the agent page's chip "Op…" beside the capsules' scroll.
+  // Note that what is picked for the message, such as the model, is offered the row first and holds its whole words, so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room; a priority alone still left the agent page's chip "Op…" beside the capsules' scroll.
   const end = (
     <HStack
       spacing={TOOL_SPACING}
-      modifiers={[
-        layoutPriority(1),
-        fixedSize(),
-        onGeometryChange(({ width }) => measuredEnd(width)),
-      ]}
+      modifiers={[layoutPriority(1), onGeometryChange(({ width }) => measuredEnd(width))]}
     >
-      {trailing}
+      {picked}
       {presses}
     </HStack>
   );
@@ -977,10 +1008,10 @@ function ComposerRow({
     </HStack>
   ) : (
     <>
-      {trailing === undefined ? null : (
+      {picked === null ? null : (
         <HStack spacing={TOOL_SPACING}>
           <Spacer />
-          {trailing}
+          {picked}
         </HStack>
       )}
       <HStack spacing={TOOL_SPACING}>

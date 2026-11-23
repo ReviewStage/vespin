@@ -103,6 +103,11 @@ export function useAccessibilitySize(): boolean {
   return useWindowDimensions().fontScale > ACCESSIBILITY_SCALE;
 }
 
+/** The reader's text size as a scale of the default, which changes as they change it in Settings or Control Center, so a measure taken at the old size can be taken again. */
+export function useTextScale(): number {
+  return useWindowDimensions().fontScale;
+}
+
 /** How far a fixed size grows with the reader's text: no smaller than drawn at the default size, and no more than twice it, as a mark beside words grows less than they do. */
 const SCALED_RANGE = { MIN: 1, MAX: 2 } as const;
 
