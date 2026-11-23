@@ -94,6 +94,9 @@ const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 /** The least a section's + answers a press across, in points: Apple's least target, wider than it draws so a finger finds it beside the header's small words. */
 const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
 
+/** A plain list's header's own space above and below its words, as the system's header stands them, now the header draws its cell's ground itself. */
+const HEADER_VERTICAL = SPACE.TIGHT + 2;
+
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists
  * stand rather than as grouped cards; a page of one thing's sections, such
@@ -844,12 +847,21 @@ export function ListSection({
     ...(foldable && !reduceMotion ? [animation(Animation.default, folded)] : []),
   ];
 
-  // Note that a plain list's header pins over the rows scrolling under it, as Mail's do, so it stands on the list's ground, because the list hides its scroll content's background to stand on the brand's ground, which left the pinned header clear and a scrolled row's words drawn through it; a page's grouped list never pins its headers.
+  // Note that a plain list's header pins over the rows scrolling under it, as Mail's do, so it paints the list's ground across its whole cell itself, its insets its own: the list hides its scroll content's background to stand on the brand's ground, which left the pinned header clear and a scrolled row's words drawn through it, and a section's `listRowBackground` never reached the header. A page's grouped list never pins its headers.
   const grounded =
     header === undefined || look === LIST_LOOK.DETAIL ? (
       header
     ) : (
-      <HStack modifiers={[listRowBackground(colors.GROUND)]}>{header}</HStack>
+      <HStack
+        modifiers={[
+          listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
+          padding({ horizontal: SPACE.EDGE, vertical: HEADER_VERTICAL }),
+          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+          background(colors.GROUND),
+        ]}
+      >
+        {header}
+      </HStack>
     );
 
   return (
