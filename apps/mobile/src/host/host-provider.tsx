@@ -30,6 +30,7 @@ import {
   noteHostStood,
   noteLaunchPhase,
 } from "../launch-phases.js";
+import { probeOnce } from "../launch-probe.js";
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
 import { appStateQuery, followAppStateInto } from "./app-state-query.js";
@@ -348,6 +349,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
     let stopFollowing: (() => void) | undefined;
     setStanding(undefined);
     noteHostStarting();
+    probeOnce("host-start-call");
     startMobileHost(launchOptions()).then(
       async (host) => {
         started = host;
@@ -355,6 +357,8 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         const client = new QueryClient();
         const following = followAppStateInto(host.bridge, client);
         stopFollowing = following.stop;
+
+        probeOnce("following-started");
 
         try {
           await following.written;
@@ -394,6 +398,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
   useEffect(() => (standing === undefined ? undefined : releaseSplashAfterFrame()), [standing]);
 
   if (standing === undefined) return <HostStartingScreen />;
+  probeOnce("screens-render");
 
   if ("failed" in standing) {
     return <HostFailedScreen onRetry={() => setAttempt((count) => count + 1)} />;
