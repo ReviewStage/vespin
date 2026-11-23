@@ -1,5 +1,5 @@
 /**
- * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; the rounding agent's, ten finished turns with wide words; the digest agent's short run, which reads its draft in an app on the reader's Mac, still at work; and the release Manager's short chat.
+ * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a teammate's review GitHub steered in, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; the rounding agent's, ten finished turns with wide words; the digest agent's short run, which reads its draft in an app on the reader's Mac, still at work; and the release Manager's short chat.
  *
  * The Inbox fixture lays it on the document where the host holds an
  * agent's transcript (`LIVE_READ.TRANSCRIPT`), so the panel's agent page
@@ -123,11 +123,65 @@ function agentMessage(id: string, at: number, words: string): AgentTranscriptMes
   };
 }
 
+/** The review a teammate left on the agent's pull request, as GitHub's line steers it into the agent: their words and two inline comments, which the transcript folds under the card's head. */
+const REVIEW = {
+  login: "gracehopper",
+  url: "https://github.com/ada/relay/pull/128#pullrequestreview-2041",
+  words:
+    "Close, but an invite to an address that's already a member should say so rather than mint a second link.",
+  comments: [
+    {
+      path: "src/members/invite.ts",
+      line: 18,
+      url: "https://github.com/ada/relay/pull/128#discussion_r3101",
+      body: "Check `members.byEmail` before `pending(…)`, and answer *Already a member*.",
+    },
+    {
+      path: "src/pages/invite.tsx",
+      line: 42,
+      url: "https://github.com/ada/relay/pull/128#discussion_r3102",
+      body: "This copy should read **Invite sent** once it lands.",
+    },
+  ],
+} as const;
+
+/** The review as the agent read it, `at` milliseconds into the run: what GitHub said, fenced, under the line that names it, as the service words a wake. */
+function reviewed(at: number): AgentTranscriptMessage {
+  return {
+    id: "fixture-invites-review",
+    role: MESSAGE_ROLE.USER,
+    parts: [
+      {
+        type: "text",
+        text: [
+          `@${REVIEW.login} requested changes on your pull request [@#128](${REVIEW.url}).`,
+          `<github-review>\n${REVIEW.words}\n</github-review>`,
+          "Act on it as you judge best.",
+        ].join("\n\n"),
+      },
+    ],
+    metadata: {
+      channel: MESSAGE_CHANNEL.GITHUB,
+      event: "review",
+      repository: "ada/relay",
+      number: 128,
+      url: REVIEW.url,
+      by: REVIEW.login,
+      verdict: "changes_requested",
+      words: REVIEW.words,
+      comments: REVIEW.comments,
+    },
+    sentAt: at,
+    sentBy: { kind: AGENT_SENDER.GITHUB, name: REVIEW.login },
+  };
+}
+
 /**
  * The transcript, its instants counted from `startedAt`, its turns written
  * by `reader`, the account the fixture signs in as: the ask that began the
  * run and the agent's work on it, the dialog and its email shown and its
- * pull request opened; a second
+ * pull request opened; a teammate's review of it, which GitHub's line
+ * steers in, and the agent's answer; a second
  * ask, answered with the funnel's page and a recording of an invite
  * accepted; a teammate's line and another agent's message, which a
  * transcript stands at its leading edge under their senders, the reader's
@@ -221,6 +275,29 @@ function transcriptMessages(
       ],
       startedAt,
       finishedAt: startedAt + 9 * MINUTE,
+    },
+    reviewed(startedAt + 20 * MINUTE),
+    {
+      id: "fixture-invites-review-answer",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        { type: "step-start" },
+        toolPart(
+          AGENT_TOOL.APPLY_PATCH,
+          "fixture-invites-review-patch",
+          {
+            patchText:
+              "*** Begin Patch\n*** Update File: src/members/invite.ts\n*** Update File: src/pages/invite.tsx\n*** End Patch",
+          },
+          { output: "Done." },
+        ),
+        {
+          type: "text",
+          text: "An invite to someone already in the workspace now answers *Already a member* and mints no link, and the dialog reads **Invite sent** once it lands.",
+        },
+      ],
+      startedAt: startedAt + 20 * MINUTE,
+      finishedAt: startedAt + 24 * MINUTE,
     },
     asked(
       "fixture-invites-funnel-ask",
