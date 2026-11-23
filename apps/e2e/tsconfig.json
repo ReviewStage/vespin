@@ -6,6 +6,12 @@
   "include": ["playwright.config.ts", "specs/**/*.ts", "server/**/*.ts", "support/**/*.ts"],
   "references": [
     {
+      "path": "../../packages/database"
+    },
+    {
+      "path": "../../packages/features"
+    },
+    {
       "path": "../../packages/sandbox"
     },
     {

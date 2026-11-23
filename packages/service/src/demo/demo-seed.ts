@@ -156,7 +156,7 @@ import {
 const SEED_AUTH_SECRET = "demo-seed-better-auth-signs-nothing-with-this";
 
 /** What a step of the seed was refused, where a model answered that it wrote nothing. */
-class DemoSeedRefused extends Data.TaggedError("DemoSeedRefused")<{
+export class DemoSeedRefused extends Data.TaggedError("DemoSeedRefused")<{
   readonly step: string;
 }> {
   override get message(): string {
@@ -227,24 +227,33 @@ const AUTH_ID_KIND: ReadonlyMap<string, DemoIdKind> = new Map([
   ["member", DEMO_ID_KIND.MEMBER],
 ]);
 
-/**
- * A Better Auth over the database, with the admin plugin, which writes
- * each account's role, and the organization plugin, as the deployment's
- * (`auth.ts`), whose ids count up from
- * one for each kind. Note that Dean's and his teammates' ids are handed in
- * (`DEMO_PEOPLE`), which the internal adapter keeps; the generator mints
- * the workspaces' and the members', in the order the seed writes them.
- */
-export function demoAuth(database: DB): DemoAuth {
+/** Fixed ids counted up from one for each kind, in the order they are minted. */
+function countedIds(): (kind: DemoIdKind) => string {
   const minted = new Map<DemoIdKind, number>();
 
-  const generateId = ({ model }: { readonly model: string }) => {
-    const kind = AUTH_ID_KIND.get(model) ?? DEMO_ID_KIND.AUTH_ROW;
+  return (kind) => {
     const next = (minted.get(kind) ?? 0) + 1;
     minted.set(kind, next);
 
     return demoId(kind, next);
   };
+}
+
+/**
+ * A Better Auth over the database, with the admin plugin, which writes
+ * each account's role, and the organization plugin, as the deployment's
+ * (`auth.ts`), whose ids count up from
+ * one for each kind unless `mintId` mints them otherwise, as a journey's
+ * fresh member's do (`demo-member.ts`). Note that Dean's and his teammates' ids are handed in
+ * (`DEMO_PEOPLE`), which the internal adapter keeps; the generator mints
+ * the workspaces' and the members', in the order the seed writes them.
+ */
+export function demoAuth(
+  database: DB,
+  mintId: (kind: DemoIdKind) => string = countedIds(),
+): DemoAuth {
+  const generateId = ({ model }: { readonly model: string }) =>
+    mintId(AUTH_ID_KIND.get(model) ?? DEMO_ID_KIND.AUTH_ROW);
 
   const auth = betterAuth({
     database: authDatabaseAdapter(database),
@@ -994,11 +1003,11 @@ function seedThreads(agents: ReadonlyMap<DemoAgent, Agent>, clock: SeedClock, ke
 /* ----- The credential ----- */
 
 /**
- * Dean's credential sealed under the ring the local server opens it with.
+ * A member's credential, Dean's for the demo, sealed under the ring the local server opens it with.
  * Note that it is sealed before anything is written, because a ring that
  * does not parse should refuse the seed while the database is still empty.
  */
-function sealedCredential(credential: DemoCredential) {
+export function sealedCredential(credential: DemoCredential, userId: string) {
   const ring = parseKeyRing(credential.ring);
 
   if (Result.isFailure(ring)) {
@@ -1006,7 +1015,7 @@ function sealedCredential(credential: DemoCredential) {
   }
 
   const owner = {
-    userId: DEMO_DEAN.id,
+    userId,
     provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
     kind: credential.kind,
   };
@@ -1018,8 +1027,8 @@ function sealedCredential(credential: DemoCredential) {
   });
 }
 
-/** Dean's sealed credential saved, and marked his agents' payer. */
-function seedCredential({
+/** A member's sealed credential saved, and marked their agents' payer. */
+export function seedCredential({
   owner,
   sealed,
   hint,
@@ -1089,7 +1098,10 @@ export function seedDemoWorld(
   host: Option.Option<DemoHost>,
 ): DemoSeedEffect<DemoSeeded> {
   return Effect.gen(function* () {
-    const sealed = yield* Effect.transposeOption(Option.map(credential, sealedCredential));
+    const sealed = yield* Effect.transposeOption(
+      Option.map(credential, (handed) => sealedCredential(handed, DEMO_DEAN.id)),
+    );
+
     const clock = yield* seedClock;
     const key = clientKeys();
     const { personalWorkspaceId, workspaceId, memberIds } = yield* seedPeople(auth, clock);

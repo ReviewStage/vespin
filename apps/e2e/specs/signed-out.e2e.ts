@@ -1,6 +1,6 @@
 // signed-out.e2e.ts -- the web app, served by the local server over the suite's database, offers a visitor with no session a way to sign in.
 
-import { expect, test } from "../support/test.js";
+import { expect, test } from "../support/member.js";
 
 test("the app asks a visitor with no session to sign in", async ({ page }) => {
   await page.goto("/app");
