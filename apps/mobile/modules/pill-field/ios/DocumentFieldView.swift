@@ -667,11 +667,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   var fitsWords = false {
     didSet {
       guard fitsWords != oldValue else { return }
-      textView.isScrollEnabled = !fitsWords
+      // Note that the text view still scrolls, though sized to its words it has nothing to scroll, because a text view that scrolls none sizes its container to its own frame as it lays out, so only the lines that fit were ever laid out; one that scrolls keeps its container unbounded, its words laid out whole.
       textView.alwaysBounceVertical = !fitsWords
-      // Note that a text view that scrolls none keeps its container as tall as itself, which lays out only the lines that fit, so a field grown to its words lifts it: its words are laid out whole however tall the field stands yet.
-      textView.textContainer.heightTracksTextView = !fitsWords
-      if fitsWords { textView.textContainer.size.height = .greatestFiniteMagnitude }
+      textView.bounces = !fitsWords
+      textView.showsVerticalScrollIndicator = !fitsWords
       laidWhole = false
       toldHeight = nil
       setNeedsLayout()

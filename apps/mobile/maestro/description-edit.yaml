@@ -82,17 +82,22 @@ env:
 # Mention types an `@`, which offers what the task can mention over the
 # keyboard, as a composer's `@` offers it; a pick stands as the person's
 # pill in the word's place, here in the middle of the paragraph pressed.
-# Note that the offer's row is found by the reader's "You", since the page's
-# Assignee chip names Ada Lovelace too.
+# Note that the offer's row is found under its People heading, since the
+# page's Assignee chip names Ada Lovelace too; the heading goes with the
+# offer once the pick closes it.
 - inputText: " "
 - tapOn: "Mention"
 - inputText: "Ad"
-- assertVisible: "Ada Lovelace.*You"
+- assertVisible:
+    text: "Ada Lovelace"
+    below: "People"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-mention
-- tapOn: "Ada Lovelace.*You"
+- tapOn:
+    text: "Ada Lovelace"
+    below: "People"
 - waitForAnimationToEnd
-- assertNotVisible: "Ada Lovelace.*You"
+- assertNotVisible: "People"
 - takeScreenshot: description-edit-mentioned
 # A list made on a new line stands Indent and Outdent on the bar while the
 # caret is in its items, as Notion's bar does. Text first makes the new line
