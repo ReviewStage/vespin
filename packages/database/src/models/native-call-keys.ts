@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { DateTime, Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -75,5 +75,46 @@ export function nativeCallKeyOf(
   }).pipe(
     // Note that an upsert always answers the one row it wrote, so no row is a defect rather than a failure a caller reads.
     Effect.catchTag("NoSuchElementError", (error) => Effect.die(error)),
+  );
+}
+
+const findKeys = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    conversationId: Schema.String,
+    digests: Schema.Array(Schema.String),
+  }),
+  Result: Schema.Struct({ digest: Schema.String, key: Schema.String }),
+  execute: ({ userId, conversationId, digests }) =>
+    Database.use((db) =>
+      db
+        .select({ digest: nativeCallKey.digest, key: nativeCallKey.key })
+        .from(nativeCallKey)
+        .where(
+          and(
+            eq(nativeCallKey.userId, userId),
+            eq(nativeCallKey.conversationId, conversationId),
+            inArray(nativeCallKey.digest, [...digests]),
+          ),
+        ),
+    ),
+});
+
+/**
+ * The keys the account's conversation holds for these digests, by digest:
+ * the newest call's of each, since a call of the same input past the window
+ * replaces the key. None for a digest no call was keyed by, and none of
+ * another account's or another conversation's.
+ */
+export function readNativeCallKeys(
+  userId: string,
+  conversationId: string,
+  digests: readonly string[],
+): Effect.Effect<ReadonlyMap<string, string>, StoreFailure, DatabaseServices> {
+  if (digests.length === 0) return Effect.succeed(new Map());
+
+  return Effect.map(
+    findKeys({ userId, conversationId, digests }),
+    (rows) => new Map(rows.map((row) => [row.digest, row.key])),
   );
 }

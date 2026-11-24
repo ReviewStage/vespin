@@ -39,7 +39,7 @@ function ordered(value: UnparsedWireValue): WireBoundaryInput {
 }
 
 /** The digest a call is keyed by: the tool's name and its input. */
-function nativeCallDigest(tool: string, input: UnparsedWireValue): string {
+export function nativeCallDigest(tool: string, input: UnparsedWireValue): string {
   return createHash("sha256")
     .update(JSON.stringify([tool, ordered(input)]))
     .digest("hex");
