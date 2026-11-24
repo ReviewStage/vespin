@@ -137,9 +137,9 @@ export function SettingsFoldRow({
  * head row or its glyph: `head` draws the row, handed the glyph (named
  * `label`) to stand among its controls or in its `end`, before any ⋯ it
  * holds, or, where there are no `rows` to fold, the glyph's room alone, so
- * the controls of every row in the card end in one column whether it folds
- * or not; where no row of the section draws a glyph there, that room stands
- * nowhere (`SettingsRowActSlot`). A head that stands its glyph among its
+ * a value it ends in stands in one column with the values of the rows that
+ * fold; beside any other control, or where no row of the section draws a
+ * glyph there, that room stands nowhere (`SettingsRowActSlot`). A head that stands its glyph among its
  * controls, before its ⋯, rather than last asks for no room (`room` false),
  * since its ⋯ already ends the row's column, and is handed nothing where it
  * folds nothing. A head that folds nothing is pressed as a plain row is.

@@ -74,6 +74,17 @@
     display: flex;
   }
 
+  /* The room of a ⋯ a row lacks (`SettingsRowActSlot`) is kept only where
+     the row's controls are a value, a role or a sum, so its value stands in
+     one column with the values of the rows that end in a ⋯. Beside any
+     other control, a button, a switch, a picker, a ✓, it stands nowhere,
+     gap and all, so that control ends at the card's padding as every row's
+     last control does, whatever its neighbors end in. */
+  .ui-settings-row-line:not(:has(.ui-settings-row-controls .ui-settings-row-value))
+  > .ui-settings-row-end:not(:has(> :not(.ui-settings-row-act-slot))) {
+    display: none;
+  }
+
   /* Note that the gaps, the subject's share of the line, and the title's
      wrap stay here rather than in utilities, because the rules below undo
      them, and a rule in this layer cannot undo a utility. The line holds the
