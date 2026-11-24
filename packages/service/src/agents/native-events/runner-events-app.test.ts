@@ -580,21 +580,22 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a NUL a tool's answer carries, in its text or in the JSON our own tool answers, lands as a replacement character, not a refused batch",
+    "a NUL or half a character a tool's answer carries, in its text or in the JSON our own tool answers, lands as a replacement character, not a refused batch",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
 
-        // A command's output may hold a NUL, and our own tool's JSON may spell one that its reading
-        // makes real, which no Postgres text or jsonb value can hold.
+        // A command's output may hold a NUL, and our own tool's JSON may spell one, or half an
+        // emoji a cut of its words split (STAG-3994), that its reading makes real, which no Postgres
+        // jsonb value can hold.
         const events = workflowTurn(agent.lineId).map(
           (event) =>
             // SAFETY: each event is one the pinned SDK or the runner emits, two tool answers' text alone changed.
             JSON.parse(
               JSON.stringify(event)
-                .replace("File created", "File\\u0000created")
-                .replace('\\"inbox\\":[]', '\\"inbox\\":[\\"a\\\\u0000b\\"]'),
+                .replace("File created", "File\\u0000created\\ud83d")
+                .replace('\\"inbox\\":[]', '\\"inbox\\":[\\"a\\\\u0000b\\",\\"adds \\\\ud83d\\"]'),
             ) as RunnerEvent,
         );
 
@@ -606,9 +607,9 @@ it.layer(SUITE)("the runner events route", (it) => {
           body: { applied: 6, sequence: 5 },
         });
         assert.deepEqual(rows.at(-1)?.parts.map(drawn).slice(1, 4), [
-          ["tool-Write", "output-available", "File�created"],
+          ["tool-Write", "output-available", "File�created�"],
           ["step-start"],
-          ["tool-read_inbox", "output-available", { status: "accepted", inbox: ["a�b"] }],
+          ["tool-read_inbox", "output-available", { status: "accepted", inbox: ["a�b", "adds �"] }],
         ]);
       }),
   );

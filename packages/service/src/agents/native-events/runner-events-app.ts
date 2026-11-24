@@ -127,7 +127,7 @@ import {
   withTurnServers,
 } from "./native-projection.js";
 import { isApprovalEvent, landApprovalEvent } from "./runner-approvals.js";
-import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
+import { redactKeepingPlanCodes, storableValue } from "./runner-moments.js";
 
 /**
  * runner-events-app.ts -- where a native harness's runner posts its events, which land in the agent's transcript.
@@ -217,12 +217,12 @@ type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
 
-/** A batch as the store can keep it: every NUL its events carry replaced (`withoutNul`). */
+/** A batch as the store can keep it: every NUL and half character its events carry replaced (`storableValue`). */
 function storable(batch: RunnerEventBatch): RunnerEventBatch {
   return {
     events: batch.events.map(({ sequence, message }) => ({
       sequence,
-      message: withoutNul(message),
+      message: storableValue(message),
     })),
   };
 }
