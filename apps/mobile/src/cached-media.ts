@@ -29,6 +29,13 @@ const KEPT_EXTENSIONS: readonly string[] = [
   ...new Set(PLAYED_EXTENSION.values()),
 ];
 
+/** A file an earlier read wrote: its address, its size in bytes, and whether it is a picture rather than a video or a clip. */
+export interface KeptMedia {
+  readonly uri: string;
+  readonly bytes: number;
+  readonly picture: boolean;
+}
+
 /** Each write still under way, by the address of the file it writes, so a second read of one video, clip, or file waits on the first rather than writing over it. */
 const writing = new Map<string, Promise<string>>();
 
@@ -103,11 +110,17 @@ export async function cachedPlayed(
  * still being written stands under another name until it is whole, so one
  * found here is always whole.
  */
-export function keptMedia(prefix: string, id: string): string | undefined {
+export function keptMedia(prefix: string, id: string): KeptMedia | undefined {
   for (const extension of KEPT_EXTENSIONS) {
     const file = new File(Paths.cache, `${prefix}-${id}.${extension}`);
 
-    if (file.exists) return file.uri;
+    if (file.exists) {
+      return {
+        uri: file.uri,
+        bytes: file.size,
+        picture: PICTURE_FILE_EXTENSIONS.includes(extension),
+      };
+    }
   }
 
   return undefined;
