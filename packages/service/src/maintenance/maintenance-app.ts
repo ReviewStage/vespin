@@ -20,6 +20,7 @@ import { refreshLiveActivities } from "../push/live-activities.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
 import { MAINTENANCE_SWEEP, MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
 import { handleMaintenanceSweep } from "./maintenance-sweep.js";
+import { sweepManagerChatBackfill } from "./manager-chat-backfill.js";
 
 /** The sweep as Sentry's Crons watches it: three minutes in a row missed, late, or failed open an issue. */
 const SWEEP_MONITOR: CronMonitor = {
@@ -60,6 +61,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
       markCommandsAwayDevices(now, Duration.toMillis(MACHINE_LISTENER_FRESH)),
     pruneMachineAsks,
     releaseSandboxes: releaseUnusedSandboxes,
+    backfillManagerChats: sweepManagerChatBackfill,
   });
 });
 

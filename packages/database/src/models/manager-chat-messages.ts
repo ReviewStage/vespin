@@ -35,6 +35,7 @@ import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, queryBuilder } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { user } from "../schemas/auth.js";
+import { managerChatBackfill } from "../schemas/manager-chat-backfill.js";
 import { managerChatMessage } from "../schemas/manager-chat-message.js";
 import { agentAutomationNameSql } from "./agent-name.js";
 import { type AgentStoreEffect, containing } from "./agent-store.js";
@@ -690,6 +691,7 @@ const findEveryManager = SqlSchema.findAll({
   Request: Schema.Struct({
     after: Schema.NullOr(Schema.String),
     agent: Schema.NullOr(Schema.String),
+    unmarked: Schema.Boolean,
     limit: Schema.Number,
   }),
   Result: Schema.Struct({
@@ -701,7 +703,7 @@ const findEveryManager = SqlSchema.findAll({
     automationName: Schema.NullOr(Schema.String),
     starterName: Schema.NullOr(Schema.String),
   }),
-  execute: ({ after, agent, limit }) =>
+  execute: ({ after, agent, unmarked, limit }) =>
     Database.use((db) =>
       db
         .select({
@@ -715,11 +717,13 @@ const findEveryManager = SqlSchema.findAll({
         })
         .from(agentTable)
         .leftJoin(user, eq(user.id, agentTable.userId))
+        .leftJoin(managerChatBackfill, eq(managerChatBackfill.agentId, agentTable.id))
         .where(
           and(
             eq(agentTable.kind, AGENT_KIND.MANAGER),
             after === null ? undefined : sql`${agentTable.id} > ${after}::uuid`,
             agent === null ? undefined : eq(agentTable.id, agent),
+            unmarked ? isNull(managerChatBackfill.agentId) : undefined,
           ),
         )
         .orderBy(asc(agentTable.id))
@@ -876,15 +880,22 @@ const insertedPlanned = Effect.fnUntraced(function* (
   return false;
 });
 
-/** Every Manager past the id given, or the one named, in the order of their ids, at most `limit`: a backfill's next batch, whatever account started each. */
+/**
+ * Every Manager past the id given, or the one named, in the order of their
+ * ids, at most `limit`: a backfill's next batch, whatever account started
+ * each; only those not yet marked backfilled where `unmarked` asks it, as
+ * the scheduled sweep does (`markManagerChatBackfilled`).
+ */
 export function listManagersForBackfill(batch: {
   readonly after: string | null;
   readonly agent: string | null;
+  readonly unmarked?: boolean;
   readonly limit: number;
 }): AgentStoreEffect<readonly ManagerOfBackfill[]> {
   const { after, agent, limit } = batch;
+  const unmarked = batch.unmarked ?? false;
 
-  return Effect.map(findEveryManager({ after, agent, limit }), (managers) =>
+  return Effect.map(findEveryManager({ after, agent, unmarked, limit }), (managers) =>
     managers.map((manager) => ({ ...manager, starterName: manager.starterName ?? "" })),
   );
 }
@@ -941,4 +952,29 @@ export function backfillManagerChat(
       }),
     ),
   );
+}
+
+const insertBackfillMark = SqlSchema.void({
+  Request: Schema.Struct({ agentId: Schema.String, now: Schema.Date }),
+  execute: ({ agentId, now }) =>
+    Database.use((db) =>
+      db
+        .insert(managerChatBackfill)
+        // Note that the mark is read off the agent's row, so a Manager deleted since its batch was listed is marked nowhere rather than failing the sweep.
+        .select(
+          queryBuilder
+            .select({
+              agentId: agentTable.id,
+              backfilledAt: sql<Date>`${now.toISOString()}::timestamptz`.as("backfilled_at"),
+            })
+            .from(agentTable)
+            .where(eq(agentTable.id, agentId)),
+        )
+        .onConflictDoNothing(),
+    ),
+});
+
+/** The Manager marked as backfilled, so the scheduled sweep passes it by from now on; a mark already standing is kept, and a Manager gone is marked nowhere. */
+export function markManagerChatBackfilled(agentId: string, now: Date): AgentStoreEffect<void> {
+  return insertBackfillMark({ agentId, now });
 }

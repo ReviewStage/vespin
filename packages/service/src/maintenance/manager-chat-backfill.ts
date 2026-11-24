@@ -32,6 +32,7 @@ import {
   type ManagerChatBackfilled,
   type ManagerChatBackfillMessage,
   type ManagerOfBackfill,
+  markManagerChatBackfilled,
 } from "@repo/database/models/manager-chat-messages";
 import { listMessagesFrom, type StoredMessageRecord } from "@repo/database/models/message-reads";
 import { readNativeCallKeys } from "@repo/database/models/native-call-keys";
@@ -68,6 +69,8 @@ import { logStoreFailure } from "../http/store-failure.js";
 const BACKFILL_BATCH = {
   DEFAULT: 10,
   MAX: 50,
+  /** How many Managers one scheduled sweep backfills: few enough that the sweep still ends inside its minute. */
+  SWEEP: 5,
 } as const;
 
 /** How many rows of a transcript one read takes: the store's own page. */
@@ -535,6 +538,53 @@ export function backfillManagerChats(batch: {
       next:
         batch.agent !== null || listed.length < batch.limit || last === undefined ? null : last.id,
     };
+  });
+}
+
+/** What one scheduled sweep of the backfill did: its counts, and whether no Manager is left to backfill after it. */
+export interface ManagerChatBackfillSwept extends ManagerChatBackfillCounts {
+  readonly done: boolean;
+}
+
+/**
+ * One scheduled sweep of the backfill: the next Managers not yet marked,
+ * a sweep's worth, each backfilled as the endpoint backfills it
+ * (`backfillOne`) and then marked, so the next sweep takes the next ones
+ * and, once every Manager is marked, reads one query and does nothing. A
+ * Manager whose store failed stays unmarked for the next sweep to try
+ * again; one whose transcript the vocabulary cannot read is marked, since
+ * it never will. A sweep that did anything logs its counts alone, no
+ * Manager and no word of any chat.
+ */
+export function sweepManagerChatBackfill(
+  now: number,
+): Effect.Effect<ManagerChatBackfillSwept, StoreFailure, DatabaseServices> {
+  return Effect.gen(function* () {
+    const listed = yield* listManagersForBackfill({
+      after: null,
+      agent: null,
+      unmarked: true,
+      limit: BACKFILL_BATCH.SWEEP,
+    });
+
+    let counts = NO_COUNTS;
+    let failed = false;
+
+    for (const manager of listed) {
+      const outcome = yield* backfillOne(manager, false);
+      counts = counted(counts, outcome);
+
+      if (!outcome.read && outcome.failed) failed = true;
+      else yield* markManagerChatBackfilled(manager.id, new Date(now));
+    }
+
+    const swept = { ...counts, done: listed.length < BACKFILL_BATCH.SWEEP && !failed };
+
+    if (listed.length > 0) {
+      yield* Effect.logInfo(`the manager chat backfill swept: ${JSON.stringify(swept)}`);
+    }
+
+    return swept;
   });
 }
 
