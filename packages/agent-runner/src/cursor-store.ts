@@ -20,6 +20,12 @@
  * a line with no mark (one steered into a run going, or one from before
  * marks were kept) is no cut the store can make.
  *
+ * A checkpoint whose blob is too large for one call to the service is kept
+ * as parts, each in a call of its own, and joined again as the store is read
+ * back. The store keeps too whether the agent's next message leads with our
+ * instructions, which a summary drops from what the model reads, so a launch
+ * that ends before that message leaves it to the next.
+ *
  * Note that the SDK reads an agent only where its row names the checkout it
  * runs in (`scopedWorkspaceRef`), and a sandbox made anew may hold the
  * checkout at another path, so a row is answered with the launch's own
@@ -35,7 +41,7 @@ import type {
   LocalAgentStore,
   LocalAgentStoreListResult,
 } from "@cursor/sdk";
-import { Data, Effect, Option, Schema } from "effect";
+import { Data, Duration, Effect, Option, Schema, Semaphore } from "effect";
 import { RUNNER_TRANSCRIPTS } from "./protocol.js";
 import type { transcriptStore } from "./transcripts.js";
 
@@ -45,7 +51,9 @@ type TranscriptStore = Pick<ReturnType<typeof transcriptStore>, "append" | "load
 const CURSOR_ENTRY = {
   AGENT: "agent",
   CHECKPOINT: "checkpoint",
+  CHECKPOINT_PART: "checkpoint_part",
   CUT: "cut",
+  INSTRUCTIONS: "instructions",
 } as const;
 
 /** An agent's row as the pinned SDK writes it (`LocalAgentDocument`). */
@@ -63,7 +71,7 @@ const AgentRowSchema = Schema.Struct({
   sdkMetadata: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
 });
 
-/** One entry the service keeps: an agent's row as the SDK wrote it, one checkpoint blob, base64, or a cut mark. */
+/** One entry the service keeps: an agent's row as the SDK wrote it, one checkpoint blob, base64, whole or a part of it, whether our instructions are due, or a cut mark. */
 const CursorEntrySchema = Schema.Union([
   Schema.Struct({ type: Schema.Literal(CURSOR_ENTRY.AGENT), agent: AgentRowSchema }),
   Schema.Struct({
@@ -71,6 +79,21 @@ const CursorEntrySchema = Schema.Union([
     agentId: Schema.String,
     blobId: Schema.String,
     data: Schema.String,
+  }),
+  Schema.Struct({
+    type: Schema.Literal(CURSOR_ENTRY.CHECKPOINT_PART),
+    agentId: Schema.String,
+    blobId: Schema.String,
+    /** The part's place among the blob's parts, from 0. */
+    part: Schema.Int,
+    parts: Schema.Int,
+    data: Schema.String,
+  }),
+  Schema.Struct({
+    type: Schema.Literal(CURSOR_ENTRY.INSTRUCTIONS),
+    agentId: Schema.String,
+    /** Whether the agent's next message leads with our instructions. */
+    due: Schema.Boolean,
   }),
   Schema.Struct({
     type: Schema.Literal(CURSOR_ENTRY.CUT),
@@ -87,11 +110,17 @@ type CursorEntry = typeof CursorEntrySchema.Type;
 const decodeEntry = Schema.decodeUnknownOption(CursorEntrySchema);
 
 /**
- * How much one mirror's call carries at most, counted as the entries' JSON:
- * well under the platform's 4.5 MB bound on a function's request, so a turn
- * that wrote much is sent over several calls.
+ * How much one mirror's call carries at most, counted as the entries' JSON
+ * in bytes: well under the platform's 4.5 MB bound on a function's request,
+ * so a turn that wrote much is sent over several calls.
  */
 const APPEND_BYTES = 3 * 1024 * 1024;
+
+/** How much of a blob's base64 one entry carries at most, so every part fits a call under `APPEND_BYTES`. */
+const PART_CHARS = 2 * 1024 * 1024;
+
+/** How long one call of a mirror waits on the service before it counts as not taken. */
+const APPEND_TIMEOUT = Duration.seconds(30);
 
 /** How many items a listing answers where the SDK asks no bound. */
 const LIST_DEFAULT = 100;
@@ -144,7 +173,15 @@ export interface CursorStore {
    * anew; the agent is left as it is where no mark stands.
    */
   readonly cutBefore: (agentId: string, before: string) => void;
-  /** The rows and blobs written since the last mirror, sent to the service in order; fails where the service did not take them all, what it did not take going with the next. */
+  /** Whether the agent's next message leads with our instructions. */
+  readonly instructionsDue: (agentId: string) => boolean;
+  /** Notes whether the agent's next message leads with our instructions, kept at the service with the rest. */
+  readonly dueInstructions: (agentId: string, due: boolean) => void;
+  /**
+   * The entries written since the last mirror, sent to the service in order,
+   * one mirror at a time; fails where the service did not take them all
+   * within `APPEND_TIMEOUT` a call, what it did not take going with the next.
+   */
   readonly mirror: Effect.Effect<void, StoreUnkept>;
 }
 
@@ -165,6 +202,7 @@ export function cursorStore(
   const runs = new Map<string, LocalAgentRunDocument>();
   const events = new Map<string, LocalAgentRunEventDocument[]>();
   const cuts = new Map<string, Map<string, string | null>>();
+  const due = new Map<string, boolean>();
   const entries = forkAs === undefined ? held : held.map((entry) => ownedBy(entry, forkAs));
   const unsent: CursorEntry[] = forkAs === undefined ? [] : [...entries];
 
@@ -179,10 +217,14 @@ export function cursorStore(
       agents.set(entry.agent.agentId, entry.agent);
     } else if (entry.type === CURSOR_ENTRY.CHECKPOINT) {
       blobs.set(entry.blobId, { agentId: entry.agentId, data: Buffer.from(entry.data, "base64") });
-    } else {
+    } else if (entry.type === CURSOR_ENTRY.INSTRUCTIONS) {
+      due.set(entry.agentId, entry.due);
+    } else if (entry.type === CURSOR_ENTRY.CUT) {
       keepCut(entry.agentId, entry.before, entry.root);
     }
   }
+
+  for (const [blobId, blob] of joinedParts(entries)) blobs.set(blobId, blob);
 
   const keepAgent = (agent: LocalAgentDocument) => {
     agents.set(agent.agentId, agent);
@@ -193,12 +235,13 @@ export function cursorStore(
 
   const keepBlob = (agentId: string, blobId: string, data: Uint8Array) => {
     blobs.set(blobId, { agentId, data });
-    unsent.push({
-      type: CURSOR_ENTRY.CHECKPOINT,
-      agentId,
-      blobId,
-      data: Buffer.from(data).toString("base64"),
-    });
+    unsent.push(...blobEntries(agentId, blobId, Buffer.from(data).toString("base64")));
+  };
+
+  const dueInstructions = (agentId: string, value: boolean) => {
+    if (due.get(agentId) === value) return;
+    due.set(agentId, value);
+    unsent.push({ type: CURSOR_ENTRY.INSTRUCTIONS, agentId, due: value });
   };
 
   const markCut = (agentId: string, before: string) => {
@@ -343,6 +386,9 @@ export function cursorStore(
     },
   };
 
+  // Note that mirrors run one at a time, because each sends the front of `unsent` and takes it off once the service took it.
+  const sending = Semaphore.makeUnsafe(1);
+
   const mirror = Effect.gen(function* () {
     if (transcripts === undefined) return;
 
@@ -351,12 +397,25 @@ export function cursorStore(
       const agentId = agentOf(batch[0]);
 
       // A batch the service did not take stays at the front, for the next mirror.
-      yield* Effect.tryPromise(() => transcripts.append(keyOf(agentId), batch));
+      yield* Effect.tryPromise(() => transcripts.append(keyOf(agentId), batch)).pipe(
+        Effect.timeout(APPEND_TIMEOUT),
+      );
       unsent.splice(0, batch.length);
     }
-  }).pipe(Effect.mapError(() => new StoreUnkept()));
+  }).pipe(
+    Effect.mapError(() => new StoreUnkept()),
+    sending.withPermit,
+  );
 
-  return { store, holds: (agentId) => agents.has(agentId), markCut, cutBefore, mirror };
+  return {
+    store,
+    holds: (agentId) => agents.has(agentId),
+    markCut,
+    cutBefore,
+    instructionsDue: (agentId) => due.get(agentId) === true,
+    dueInstructions,
+    mirror,
+  };
 }
 
 /** The agent an entry belongs to. */
@@ -373,6 +432,47 @@ function ownedBy(entry: CursorEntry, agentId: string): CursorEntry {
     : { ...entry, agentId };
 }
 
+/** The entries a blob is kept as, its base64 given: one where it fits a part, and its parts in order otherwise. */
+function blobEntries(agentId: string, blobId: string, data: string): CursorEntry[] {
+  if (data.length <= PART_CHARS) return [{ type: CURSOR_ENTRY.CHECKPOINT, agentId, blobId, data }];
+  const parts = Math.ceil(data.length / PART_CHARS);
+
+  return Array.from({ length: parts }, (_, part) => ({
+    type: CURSOR_ENTRY.CHECKPOINT_PART,
+    agentId,
+    blobId,
+    part,
+    parts,
+    data: data.slice(part * PART_CHARS, (part + 1) * PART_CHARS),
+  }));
+}
+
+/** The blobs the entries hold as parts, each joined from its parts; a blob missing a part is none. */
+function joinedParts(entries: readonly CursorEntry[]) {
+  const held = new Map<
+    string,
+    { readonly agentId: string; readonly parts: (string | undefined)[] }
+  >();
+
+  for (const entry of entries) {
+    if (entry.type !== CURSOR_ENTRY.CHECKPOINT_PART) continue;
+
+    const blob = held.get(entry.blobId) ?? {
+      agentId: entry.agentId,
+      parts: Array.from({ length: entry.parts }, () => undefined),
+    };
+
+    blob.parts[entry.part] = entry.data;
+    held.set(entry.blobId, blob);
+  }
+
+  return [...held].flatMap(([blobId, { agentId, parts }]) =>
+    parts.every((part) => part !== undefined)
+      ? [[blobId, { agentId, data: Buffer.from(parts.join(""), "base64") }] as const]
+      : [],
+  );
+}
+
 /** The entries one call carries: the first's agent's alone, from the front, up to `APPEND_BYTES`, and at least one. */
 function batchOf(unsent: readonly CursorEntry[]): CursorEntry[] {
   const agentId = agentOf(unsent[0]);
@@ -380,7 +480,7 @@ function batchOf(unsent: readonly CursorEntry[]): CursorEntry[] {
   let bytes = 0;
 
   for (const entry of unsent) {
-    const size = JSON.stringify(entry).length;
+    const size = Buffer.byteLength(JSON.stringify(entry));
 
     if (agentOf(entry) !== agentId || (batch.length > 0 && bytes + size > APPEND_BYTES)) break;
     batch.push(entry);
