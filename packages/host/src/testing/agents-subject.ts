@@ -1374,6 +1374,7 @@ export function subject(
 
     const composer = yield* composeAgents({
       kernel,
+      recordProductEvent: () => undefined,
       account,
       accountId,
       kept: yield* keptContent(KEPT_CONTENT_CHARACTERS),

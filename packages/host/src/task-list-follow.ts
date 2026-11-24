@@ -5,6 +5,7 @@ import {
 } from "@repo/features/task-list-live";
 import { Effect } from "effect";
 import {
+  droppedParts,
   followTakingRows,
   LIVE_GONE,
   type LiveBroken,
@@ -38,6 +39,9 @@ import {
  * for ends the follow, which the next sign-in starts again.
  */
 
+/** The parts of the list's read whose rows are taken, and counted where its reading drops any. */
+const TASK_LIST_PARTS = ["tasks", "agents"] as const;
+
 /** What an answer says beside its rows (`TASK_LIST_READ.beside`). */
 type TaskListBeside = Pick<TaskListLiveAnswer, "taskWorkspaces" | "liveSince">;
 
@@ -65,6 +69,8 @@ export interface TaskListFollowDependencies {
   readonly behind: () => void;
   /** Hears the list's wait for a write's transaction where it has one, and none once it is let go. */
   readonly onTxWait?: (wait: TxWait | undefined) => void;
+  /** Hears each part of an answer whose reading left rows out, since they did not decode, and how many (`live-follow.ts`). */
+  readonly dropped?: (part: "tasks" | "agents", count: number) => void;
 }
 
 /** The rows each answer carries taken as its poll answers (`followTakingRows`), with where it stands by sync id and what it says beside them, for as long as the follow stands; it fails where the read is gone or a first row does not decode. */
@@ -72,7 +78,7 @@ function followRows(
   dependencies: TaskListFollowDependencies,
   first: TaskListLiveAnswer,
 ): Effect.Effect<void, LiveBroken> {
-  const { onTxWait, behind } = dependencies;
+  const { onTxWait, behind, dropped } = dependencies;
 
   // Note that the issues part, which answers no rows and a released desktop alone follows, is followed as every part is, though this build reads none of it.
   return followTakingRows<"tasks" | "agents", TaskListLiveRows, TaskListLiveAnswer>(
@@ -83,13 +89,16 @@ function followRows(
     },
     first,
     TASK_LIST_READ.rows,
-    (rows, standing, read) =>
-      dependencies.take(rows, standing, {
+    (rows, standing, read) => {
+      for (const [part, count] of droppedParts(TASK_LIST_PARTS, read, rows)) dropped?.(part, count);
+
+      return dependencies.take(rows, standing, {
         ...(read.taskWorkspaces === undefined
           ? undefined
           : { taskWorkspaces: read.taskWorkspaces }),
         ...(read.liveSince === undefined ? undefined : { liveSince: read.liveSince }),
-      }),
+      });
+    },
   );
 }
 

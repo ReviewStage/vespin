@@ -14,6 +14,11 @@ import {
 } from "@repo/features/agent-browser-tab-wire";
 import type { ListedAgent } from "@repo/features/agent-wire";
 import {
+  PRODUCT_ROW_KIND,
+  type ProductRowKind,
+  type RecordProductEvent,
+} from "@repo/features/analytics";
+import {
   AGENT_BROWSER_TABS_READ,
   browserTabsOfLiveRows,
   nextBrowserTabLapse,
@@ -154,6 +159,7 @@ import type { Composer } from "./composer.js";
 import { type TASKS_ACTS, TASKS_FOLLOWS } from "./contract/index.js";
 import { commentSubjectOf, descriptionCommentReads } from "./description-comment-reads.js";
 import { descriptionCommentWrites } from "./description-comment-writes.js";
+import { droppedRowsCount } from "./dropped-rows.js";
 import { lateService } from "./effect/kernel.js";
 import { fixtureNewestPage, fixturePage } from "./fixture-stage.js";
 import type { HostMethodTable } from "./gateway-door.js";
@@ -440,7 +446,15 @@ export interface TasksDependencies {
   offlineRefused: Pick<OfflineRefused, "clear">;
   /** The member signed in, by id and name, whose comment a write draws before the service answers; none where nobody is. */
   member: () => { readonly userId: string; readonly name: string } | undefined;
+  /** Counts a product event, as the rows the task list's reading left out are counted (`dropped-rows.ts`). */
+  recordProductEvent: RecordProductEvent;
 }
+
+/** The kind each part of the task list's read counts its dropped rows as. */
+const TASK_LIST_ROW_KIND = {
+  tasks: PRODUCT_ROW_KIND.TASK_LIST_TASKS,
+  agents: PRODUCT_ROW_KIND.TASK_LIST_AGENTS,
+} as const satisfies Record<"tasks" | "agents", ProductRowKind>;
 
 /** What the tasks reach of a concern built after them, linked once it is (`compose-host.ts`). */
 export interface TasksLinks {
@@ -711,6 +725,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   dependencies: TasksDependencies,
 ): Effect.fn.Return<TasksComposer, never, Scope.Scope | HttpClient.HttpClient> {
   const { kernel, account, client, kept } = dependencies;
+  const countDropped = droppedRowsCount(dependencies.recordProductEvent);
   const http = yield* HttpClient.HttpClient;
 
   /** One ask of the service, over the host's own HTTP client. */
@@ -1557,6 +1572,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
     return followTaskList({
       ...(from === undefined ? undefined : { from }),
+      dropped: (part, count) => countDropped(TASK_LIST_ROW_KIND[part], count),
       live: (sync) =>
         userId === undefined
           ? Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true })
