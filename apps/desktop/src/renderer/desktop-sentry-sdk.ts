@@ -54,7 +54,9 @@ const PANEL_SPAN_OP = "ui.panel";
  * span sent has its addresses scrubbed (`@repo/features/sentry-breadcrumbs`).
  * The DSN, release, and environment are main's, which every renderer event
  * goes through, and its reports reach main as requests of their own, which
- * are never traced (`sentryTracesRequest`).
+ * are never traced (`sentryTracesRequest`). So does the device's "Share usage
+ * data" switch: main's transport sends nothing of the window's while it is
+ * off (`main/services/telemetry-service.ts`).
  *
  * A failure the panel showed is sent as a Sentry log line, and as an issue
  * besides where nothing named it (`@repo/features/shown-failure`); the

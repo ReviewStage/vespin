@@ -65,6 +65,7 @@
     "./sentry-reporting": "./src/sentry-reporting.js",
     "./sentry-tracing": "./src/sentry-tracing.js",
     "./sentry-tunnel": "./src/sentry-tunnel.js",
+    "./sentry-usage-data": "./src/sentry-usage-data.js",
     "./shown-failure": "./src/shown-failure.js",
     "./live-read": "./src/live-read.js",
     "./client-identity": "./src/client-identity.js",

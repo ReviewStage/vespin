@@ -1829,17 +1829,37 @@ export function isAppStateDelivery(value: UnparsedWireValue): boolean {
 }
 
 /**
+ * Whether this device shares usage data, Settings › Account › "Share usage
+ * data", as the document carries it: undefined until the host has read the
+ * device's settings, so a reader that must not send before the device has
+ * chosen can wait for the answer rather than take a default for it. Every
+ * optional telemetry a client sends follows it: the counts, session replay
+ * (`sessionReplayBootstrap`), and the client's Sentry
+ * (`@repo/features/sentry-usage-data`).
+ */
+export function sharesUsageData(state: Pick<AppState, "settings">): boolean | undefined {
+  return state.settings === undefined ? undefined : state.settings.stored.usageData === true;
+}
+
+/**
  * What this run may record, as the renderer is handed it. Note that an
  * unpackaged run never records, whatever its bundle was built with, because
  * `pnpm start` builds the renderer in whatever shell it is run from, and one
  * left holding the release's replay key would otherwise record a development
- * run into production's project.
+ * run into production's project. Nor does a device that does not share usage
+ * data, or one whose settings are not read yet: turning the switch off stops
+ * a recording where it stands, and turning it on starts one, at once.
  */
 export function sessionReplayBootstrap(
   state: Pick<AppState, "run" | "sessionReplay">,
+  usageData: boolean | undefined,
 ): SessionReplayBootstrap {
   return {
-    permitted: state.run.packaged && state.sessionReplay.permitted && !state.sessionReplay.halted,
+    permitted:
+      state.run.packaged &&
+      usageData === true &&
+      state.sessionReplay.permitted &&
+      !state.sessionReplay.halted,
     appVersion: state.run.appVersion,
     packaged: state.run.packaged,
     ...(state.sessionReplay.accountId ? { accountId: state.sessionReplay.accountId } : undefined),

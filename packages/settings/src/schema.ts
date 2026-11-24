@@ -397,16 +397,22 @@ export const APP_SETTING_SCHEMA = {
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
   /*
-   * Whether this copy of the app sends its counts of how features are used. On by
-   * default in a packaged build, the app people download, and off in a
-   * development one, so a run from source counts nothing until its
-   * developer turns it on. Kept on this device rather than with the account,
-   * since which build runs is the device's.
+   * Whether this copy of the app sends any optional telemetry: its counts of
+   * how features are used, session replay
+   * (`packages/panel/src/session-replay.ts`), and its Sentry error, crash,
+   * and performance reports (`@repo/features/sentry-usage-data`). Turning it
+   * off stops all three on this device at once, and turning it on resumes
+   * them, with no relaunch. On by default in a packaged build, the app people
+   * download, and off in a development one, so a run from source sends none
+   * of it until its developer turns it on. Kept on this device rather than
+   * with the account, since which build runs is the device's.
    */
   usageData: buildToggleSetting({
     field: "usageData",
     id: APP_SETTING_ID.USAGE_DATA,
     label: "Share usage data",
+    detail:
+      "Counts of the features you use, recordings of this window with your words masked, and error and crash reports, from this device.",
     default: true,
     unpackagedDefault: false,
     page: SETTINGS_PAGE.ACCOUNT,
