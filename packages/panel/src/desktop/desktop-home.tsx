@@ -1,4 +1,8 @@
-import { type InboxListed, waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import {
+  type InboxAnyHolder,
+  type InboxListed,
+  waitsOnReaderNow,
+} from "@repo/features/inbox-list-model";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TERM } from "@repo/features/words";
 import {
@@ -163,7 +167,7 @@ function HomeInbox({
 }: {
   tasks: TasksControl;
   read: WaitingItems;
-  waiting: readonly InboxListed[];
+  waiting: readonly InboxListed<InboxAnyHolder>[];
 }): React.JSX.Element | null {
   // Note that nothing waiting draws nothing, while a read is still out or the list was refused too, because an empty section would only say what the page already shows; a refused list is Recent's to say.
   if (waiting.length === 0 && (tasks.listFailed || !read.failed)) return null;
