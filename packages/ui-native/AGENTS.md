@@ -278,7 +278,7 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   press on it opening the model sheet. A page opened from a split view's detail, such as a
   task's agent, its pull request, or a thread's task, is pushed on the
   tab's own stack over the whole window, as a compact window pushes it,
-  never inside the detail's column.
+  never inside the detail's column; on an iPad, beside its own sidebar.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back

@@ -1,6 +1,7 @@
 // app-sidebar.tsx -- a regular window's tab roots: an iPad's own sidebar of places and tasks beside the tabs, with the workspace and account at its foot, each tab's list column beside its detail, and New task, the compose button leading the detail's bar where the tab bar has no round +.
 
 import { IOS_TAB, type IosTab, iosTabOfGroup } from "@repo/features/ios-app-links";
+import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import {
   AccountBarItem,
   type BarAction,
@@ -23,10 +24,12 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useWindowDimensions } from "react-native";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxBadge } from "../inbox/use-inbox.js";
-import { useSettingsAccount } from "../settings-button.js";
+import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-on.js";
+import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "../settings-button.js";
 import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
 import { useSidebarTasks } from "../sidebar-tasks.js";
 import { SPLIT_TAB, showSplitList, useSplitPicked } from "../split-route.js";
+import { useOnTab } from "../tab-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
 /** New task as the detail's bar offers it, under the compose glyph, as the tab bar's round + names it. */
@@ -38,6 +41,7 @@ export const SIDEBAR_PLACE = {
   INBOX: "place-inbox",
   TASKS: "place-tasks",
   AUTOMATIONS: "place-automations",
+  MERGE_QUEUE: "place-merge-queue",
 } as const;
 
 export type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
@@ -48,6 +52,7 @@ const PLACE_WORDS = {
   [SIDEBAR_PLACE.INBOX]: "Inbox",
   [SIDEBAR_PLACE.TASKS]: "Tasks",
   [SIDEBAR_PLACE.AUTOMATIONS]: "Automations",
+  [SIDEBAR_PLACE.MERGE_QUEUE]: MERGE_QUEUE_PAGE_WORDS.TITLE,
 } as const satisfies Record<SidebarPlace, string>;
 
 /** The list a tab's split view stands beside its detail, and its bar: its title, its menu, and its search. */
@@ -83,6 +88,9 @@ type FirstColumn = SidebarVisibility & {
  */
 export const PLUS_TAB = !APP_SIDEBAR;
 
+/** The last segment of the Merge queue's route, by which the sidebar knows its page stands in front. */
+const MERGE_QUEUE_SEGMENT = MERGE_QUEUE_ROUTE.split("/").at(-1);
+
 /** The place a tab stands for in the sidebar, by the tab's group. */
 const TAB_PLACE = {
   [IOS_TAB.INBOX]: SIDEBAR_PLACE.INBOX,
@@ -98,10 +106,13 @@ const TAB_PLACE = {
 function useSidebarHere(): string | undefined {
   const segments: readonly string[] = useSegments();
   const tab = iosTabOfGroup(segments[1]);
+  // Note that the Merge queue's page, pushed on a tab's stack, stands its own row selected, as the panel's sidebar stands its place.
+  const queued = segments.at(-1) === MERGE_QUEUE_SEGMENT;
   const pickedTask = useSplitPicked(SPLIT_TAB.TASKS);
 
-  const here =
-    tab === undefined
+  const here = queued
+    ? SIDEBAR_PLACE.MERGE_QUEUE
+    : tab === undefined
       ? undefined
       : tab === IOS_TAB.TASKS
         ? (pickedTask ?? TAB_PLACE[tab])
@@ -147,8 +158,8 @@ export function useSidebarShowAction(): BarAction | undefined {
  * An iPad's own sidebar, standing beside the tabs as the panel's sidebar
  * stands beside its pages, so every page, a pushed one included, keeps it
  * beside it: Hide Sidebar heading it; its places (Search, the Inbox with
- * what waits on the reader, Tasks, and Automations, which opens Settings'
- * list of them); then the tasks, as the Tasks list draws them, read once
+ * what waits on the reader, Tasks, Automations, which opens Settings' list
+ * of them, and Merge queue, while the account has it on); then the tasks, as the Tasks list draws them, read once
  * above the tabs (`useSidebarTasks`); the place or task in front standing
  * selected (`useSidebarHere`); and at its foot, in the system's glass, the
  * workspace switcher with the account's photo opening Settings beside it,
@@ -165,6 +176,8 @@ export function AppSidebarPane() {
   const tasks = useSidebarTasks();
   const here = useSidebarHere();
   const { toggle } = useAppSidebarShown();
+  const mergeQueueOn = useMergeQueueOn();
+  const onTab = useOnTab();
 
   const go = (id: string) => {
     switch (id) {
@@ -178,6 +191,8 @@ export function AppSidebarPane() {
         return router.navigate(SPLIT_TAB.TASKS);
       case SIDEBAR_PLACE.AUTOMATIONS:
         return router.navigate("/automations");
+      case SIDEBAR_PLACE.MERGE_QUEUE:
+        return router.push(onTab(MERGE_QUEUE_ROUTE));
     }
 
     if (tasks?.opens(id) === true) return;
@@ -226,6 +241,14 @@ export function AppSidebarPane() {
               symbol={GLYPH.AUTOMATION}
               label={PLACE_WORDS[SIDEBAR_PLACE.AUTOMATIONS]}
             />
+            {/* Note that Merge queue stands only while the account has it on, as the panel's row does. */}
+            {mergeQueueOn ? (
+              <PlaceRow
+                id={SIDEBAR_PLACE.MERGE_QUEUE}
+                symbol={GLYPH.QUEUED}
+                label={PLACE_WORDS[SIDEBAR_PLACE.MERGE_QUEUE]}
+              />
+            ) : null}
           </ListSection>
           {tasks?.sections}
         </RowList>
