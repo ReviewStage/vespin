@@ -244,9 +244,8 @@ export {
 } from "./marks.js";
 
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
-
+export { MergeQueueRow } from "./merge-queue-row.js";
 export { useMinute, useToday } from "./minute.js";
-
 export {
   type ModeChoice,
   ModelChoicePopover,
@@ -254,41 +253,29 @@ export {
   type ModelChoices,
   type ModelOption,
 } from "./model-choice-sheet.js";
-
 export { SwitchRow } from "./option-rows.js";
-
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
-
 export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
-
 export { PersonHead } from "./person-head.js";
-
 export { PictureSet, type SetPicture } from "./picture-set.js";
-
 export { PillField, type PillFieldHandle } from "./pill-field.js";
-
 export { ProblemLine } from "./problem-line.js";
-
 export {
   PROVIDER_MARK_ASSET,
   ProviderButton,
   type ProviderMarkAsset,
 } from "./provider-button.js";
-
 export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
-
 export {
   type PullRequestChipFacts,
   type PullRequestChipLook,
   pullRequestChipLook,
 } from "./pull-request-chip-model.js";
-
 export {
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
   REVIEW_LOOK,
 } from "./pull-request-look.js";
-
 export {
   BotTag,
   githubFace,
@@ -300,11 +287,8 @@ export {
   PullRequestHead,
   WriteNoteRow,
 } from "./pull-request-page.js";
-
 export { type QueuedLine, QueuedLines } from "./queued-lines.js";
-
 export { RemindPickSheet } from "./remind-sheet.js";
-
 export {
   FOOTER_TONE,
   type FooterTone,
@@ -316,7 +300,6 @@ export {
   RowForEach,
   RowList,
 } from "./row-list.js";
-
 export {
   agentPreview,
   latestStep,
@@ -327,15 +310,10 @@ export {
   taskPreview,
   threadPreview,
 } from "./row-preview-model.js";
-
 export { NO_GROUND, SCREEN_GROUND, Screen, type ScreenGround, Spacer } from "./screen.js";
-
 export { ScreenFailure } from "./screen-failure.js";
-
 export { SealedPage } from "./sealed-page.js";
-
 export { sectionGlyphColor, sectionInk } from "./section-ink.js";
-
 export {
   AccountHead,
   AccountRow,
@@ -369,7 +347,6 @@ export {
   WorkspacePickRows,
   WorkspaceRow,
 } from "./settings-form.js";
-
 export {
   type BarAction,
   type BarFootItem,
@@ -385,7 +362,6 @@ export {
   PATH_PART,
   SplitView,
 } from "./split-view.js";
-
 export {
   type ChipMenu,
   type ChipMenuGroup,
@@ -393,16 +369,13 @@ export {
   MenuChip,
   StartPage,
 } from "./start-page.js";
-
 export {
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
   priorityMarkUnder,
   STATUS_MARK_SYMBOL,
 } from "./status-mark-model.js";
-
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
-
 export {
   askForName,
   askForWords,
@@ -416,7 +389,6 @@ export {
   type WordsAsk,
   type WordsKind,
 } from "./system-asks.js";
-
 export {
   AGENT_ROW_STATE,
   AgentRow,
