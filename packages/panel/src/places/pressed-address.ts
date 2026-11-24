@@ -39,7 +39,12 @@
  *   beside it, by its repository and number, a pull request its own lines
  *   name and any other no listed task's lines name (`pullRequestBeside`);
  *   and a page of any other task or agent on no task, read on its own place,
- *   its own pages being the window's to open as the panel's.
+ *   its own pages being the window's to open as the panel's. An agent on no
+ *   task's page, as a Manager's, answers by the same choices, standing for
+ *   no task: every pull request and every task's page opens beside it, and
+ *   a file its words name opens there too, read through the agent's
+ *   workspace and repository, as a file named on a task's page opens in its
+ *   panel.
  * - The window (`use-open-link.ts`'s `throughWindow`) goes to every place in
  *   the app, and opens a pull request a listed task's lines name in its
  *   Pull request tab on that task; anything else leaves for the browser, as
@@ -119,7 +124,7 @@ export type PlaceAddress = Extract<Address, { readonly kind: typeof ADDRESS.PLAC
 export const HERE = {
   /** An Inbox item, the panel beside it standing for what holds the item. */
   INBOX_ITEM: "inbox-item",
-  /** A task's page. */
+  /** A task's page, or an agent on no task's page, which stands for no task. */
   TASK: "task",
 } as const;
 

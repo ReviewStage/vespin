@@ -166,13 +166,16 @@ export interface TasklessPlace {
  * The mentions of a place no task holds, as New task's composer and an
  * automation's prompt are: its repository's files and folders, its skills,
  * and the servers, and no description's sections nor pages; a task or a
- * section a message names opens through `onOpenTask`. A place of no
- * repository offers the rest all the same.
+ * section a message names opens through `onOpenTask`, and a file through
+ * `onOpenFile` where the place has a panel to open it in, as an agent on
+ * no task's page does, else on GitHub. A place of no repository offers the
+ * rest all the same.
  */
 export function tasklessMentions(
   place: TasklessPlace,
   onOpenTask: MentionDoors["onOpenTask"],
   readAgents?: MentionAgentsReader,
+  onOpenFile?: MentionDoors["onOpenFile"],
 ): TaskMentionsValue {
   const { workspace, workspaceId, repository } = place;
 
@@ -191,7 +194,7 @@ export function tasklessMentions(
       place: { workspace, repository },
       anchors: NO_ANCHORS,
       onOpenTask,
-      onOpenFile: undefined,
+      onOpenFile,
     },
   };
 }

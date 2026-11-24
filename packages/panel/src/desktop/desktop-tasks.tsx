@@ -1288,6 +1288,7 @@ function DescriptionDocument({
         {
           kind: HERE.TASK,
           taskId: openedId ?? "",
+          workspaceId: openedWorkspace,
           repository: openedRepository,
           agentIds: agents.agentIds,
           heldIds: agents.heldIds,
@@ -1295,7 +1296,7 @@ function DescriptionDocument({
         openPullRequestDoor,
         openPageBeside,
       ),
-    [agents, openPullRequestDoor, openPageBeside, openedRepository, openedId],
+    [agents, openPullRequestDoor, openPageBeside, openedRepository, openedId, openedWorkspace],
   );
 
   // What every place on the page that picks or draws a mention reads (`task-mentions.tsx`).
@@ -1757,6 +1758,7 @@ function DescriptionDocument({
                           unread={tasks.unreadTabs}
                           holder={SIDE_PANEL_HOLDER.TASK}
                           taskId={task.id}
+                          workspaceId={openedWorkspace}
                           repository={task.repository}
                           pages={tasks.pages}
                           agents={agents}

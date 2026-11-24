@@ -38,6 +38,8 @@ import {
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import type { NumberedAddress } from "@repo/features/link-grammar";
+import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
@@ -55,13 +57,14 @@ import {
   type ToolbarTitleEdit,
   useMenu,
 } from "@repo/ui";
-import { agentTab } from "@repo/ui/tab-strip-model";
+import { agentTab, pageTab, type StripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
 import { FindScope } from "../find-in-tab.js";
+import { HERE } from "../places/pressed-address.js";
 import { useInboxDoor } from "../places/routed-doors.js";
 import { useShortcutTarget } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
@@ -69,10 +72,15 @@ import { useTaskListCollections, useTaskListRow } from "../task-list-collections
 import { agentName } from "../tasks/agent-model.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
+import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { ManagerGlyph } from "../tasks/tab-look.js";
+import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
+import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
 import { useListedPullRequest } from "../tasks/use-agent-pull-request.js";
 import { type AgentsControl, placeAgents } from "../tasks/use-agents.js";
+import { OpenAddressesHere, openPullRequestsHere } from "../tasks/use-open-link.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { useHeldTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu } from "./action-menu.js";
@@ -81,7 +89,14 @@ import { AgentPane } from "./main-tabs.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
-import { taskCards } from "./side-panel.js";
+import {
+  SIDE_PANEL_HOLDER,
+  SidePanel,
+  showPullRequest,
+  taskCards,
+  useColumnFocus,
+  useSidePanelDrawing,
+} from "./side-panel.js";
 import { useTabViews } from "./strip-tabs.js";
 
 /** What the page says where the agent could not be read. */
@@ -96,6 +111,12 @@ const OWN_AGENT_KEYS: readonly KeyedCommand[] = [
   APP_COMMAND.COPY_FULL_TRANSCRIPT,
   APP_COMMAND.DELETE,
 ];
+
+/** No tab of the panel beside the page holds anything unseen, since only its words open them. */
+const NO_UNREAD: readonly StripTab[] = [];
+
+/** No agent's tab stands open beside the page, whose one agent is drawn in its column. */
+const NO_OPEN_AGENTS: readonly string[] = [];
 
 /** What the agent's menu is named, as its head's ⋯ names it. */
 const AGENT_THING = "Agent";
@@ -324,7 +345,14 @@ function OwnAgentHead({
 /**
  * An agent on no task as its own page draws it: its head, and under it its
  * conversation and box, the pane its tab on a task draws, a row naming a
- * task opening that task, and one naming anything else opening nothing.
+ * task opening that task, and one naming anything else opening nothing. Beside them stands the window's side
+ * panel, as beside a task's page (`use-tasks-tab.ts` holds it at the
+ * agent's own stop, standing for no task): a link its words write opens
+ * there as one on a task's page does (`openPullRequestsHere`), a page of
+ * any task read on that task and a pull request read through the agent's
+ * workspace, and a file its words name opens there read through the
+ * agent's workspace and repository; anything else is the window's, a task
+ * or an agent opening its task as from a task's page.
  */
 function OwnAgentPage({
   tasks,
@@ -335,13 +363,76 @@ function OwnAgentPage({
   agent: ListedAgent;
   away: TaskHeadBack | undefined;
 }): React.JSX.Element {
-  const place = useOwnAgentPlace(tasks, agent, tasks.agents.models);
+  const { sidePanel } = tasks;
+  const { onArea, focus, setFocus } = useColumnFocus(tasks.tabKeys, tasks.onTabKeysTaken);
+  const { workspaceId, repository } = agent;
+
+  // What the page's words name opens through the window's one door for a press, the panel taking the keys, so ⌘W closes the tab it opened (`tab-press.ts`).
+  const onPressTab = (pressed: TabPressed) =>
+    pressTab({ sidePanel, mainTabs: tasks.mainTabs, onKeys: setFocus }, pressed);
+
+  const openPanelTab = (tab: SidePanelTab, at?: PagePlace) =>
+    onPressTab({ kind: TAB_PRESS.PANEL, tab, place: at });
+
+  // A file its words name is read through the agent's own workspace and repository, which a panel standing for no task names on each tab.
+  const openFile = useSteadyDoor((path: string, lines: OpenFileLines | undefined) =>
+    onPressTab({
+      kind: TAB_PRESS.FILE,
+      ref:
+        lines === undefined
+          ? { path }
+          : { path, startLine: lines.startLine, endLine: lines.endLine },
+      commit: lines?.commit,
+      reads: repository === null ? undefined : { place: { workspaceId, repository }, repository },
+    }),
+  );
+
+  const place = useOwnAgentPlace(
+    tasks,
+    agent,
+    tasks.agents.models,
+    repository === null ? undefined : openFile,
+  );
+
   const agents = useOwnAgents(tasks, agent, place);
   const threads = useOwnAgentThreads(tasks, agents, agent.id);
   const views = useTabViews();
   const label = agentName(agent, agents.models);
   const cards = taskCards({ agents, held: views.held, chosen: () => false, pages: undefined });
   const findSubject = useMemo(() => ({ agent: agent.id }), [agent.id]);
+  const drawing = useSidePanelDrawing(sidePanel);
+  // The panel holds the keys while the focus went into it last, or while it fills the window over the page.
+  const sideFocused = sidePanel.open && (focus === COLUMN.SIDE || sidePanel.fullScreen);
+
+  const openPullRequest = useSteadyDoor((pullRequest: NumberedAddress) =>
+    showPullRequest(
+      { ...sidePanel, onOpen: openPanelTab },
+      pullRequest,
+      PULL_REQUEST_VIEW.CONVERSATION,
+    ),
+  );
+
+  const openPageBeside = useSteadyDoor((page: string, at: PagePlace) =>
+    openPanelTab(pageTab(page), at),
+  );
+
+  // A link its words write opens what a task's page opens beside it, standing for no task (`openPullRequestsHere`).
+  const openHere = useMemo(
+    () =>
+      openPullRequestsHere(
+        {
+          kind: HERE.TASK,
+          taskId: undefined,
+          workspaceId,
+          repository,
+          agentIds: agents.agentIds,
+          heldIds: agents.heldIds,
+        },
+        openPullRequest,
+        openPageBeside,
+      ),
+    [workspaceId, repository, agents.agentIds, agents.heldIds, openPullRequest, openPageBeside],
+  );
 
   const openTarget = (target: ToolTarget) => {
     if (target.kind !== TOOL_TARGET.TASK) return;
@@ -352,38 +443,68 @@ function OwnAgentPage({
 
   return (
     <OwnAgentPlaceProvider place={place} readerId={tasks.me}>
-      <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">
-        <Fill
-          as={FILL_ELEMENT.SECTION}
-          className="agent-page"
-          aria-label={label}
-          data-chat={agent.kind === AGENT_KIND.MANAGER ? "" : undefined}
+      <OpenAddressesHere value={openHere}>
+        <div
+          ref={onArea}
+          className="desktop-task relative flex min-h-0 flex-1"
+          data-panel-open={String(sidePanel.open)}
         >
-          <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
-          {/* Note that the scope stands as the column's own box, as its fill did. */}
-          <FindScope
-            className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
-            active={tasks.shown}
-            subject={findSubject}
+          <Fill
+            as={FILL_ELEMENT.SECTION}
+            className="agent-page"
+            aria-label={label}
+            data-chat={agent.kind === AGENT_KIND.MANAGER ? "" : undefined}
+            hidden={sidePanel.fullScreen}
           >
-            <AgentPane
-              label={label}
-              tabbed={false}
-              tab={agentTab(agent.id)}
+            <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
+            {/* Note that the scope stands as the column's own box, as its fill did. */}
+            <FindScope
+              className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+              active={tasks.shown && !sideFocused}
+              subject={findSubject}
+            >
+              <AgentPane
+                label={label}
+                tabbed={false}
+                tab={agentTab(agent.id)}
+                agents={agents}
+                shown={tasks.shown && !sidePanel.fullScreen}
+                views={views}
+                // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
+                onOpenDelegation={(_agent, callId, _task, status) =>
+                  views.onWorkerStatus(callId, status)
+                }
+                onOpenPullRequest={openPullRequest}
+                onOpenTarget={openTarget}
+                cards={cards}
+                threads={threads}
+              />
+            </FindScope>
+          </Fill>
+          {/* Note that the panel stands while its toggle asks for its "+" with nothing to show, drawing the menu alone. */}
+          {drawing.panel !== undefined || sidePanel.toggleAsked ? (
+            <SidePanel
+              {...drawing}
+              panel={drawing.panel ?? sidePanel}
+              unread={NO_UNREAD}
+              holder={SIDE_PANEL_HOLDER.INBOX}
+              taskId=""
+              workspaceId={workspaceId}
+              repository={repository}
+              pages={undefined}
               agents={agents}
-              shown={tasks.shown}
+              openAgents={NO_OPEN_AGENTS}
+              shownAgent={undefined}
               views={views}
-              // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
-              onOpenDelegation={(_agent, callId, _task, status) =>
-                views.onWorkerStatus(callId, status)
-              }
+              shown={tasks.shown}
+              focused={sideFocused}
               onOpenTarget={openTarget}
-              cards={cards}
-              threads={threads}
+              phone={away === undefined ? undefined : { back: label, onBack: sidePanel.onToggle }}
+              taskOfTab={tasks}
             />
-          </FindScope>
-        </Fill>
-      </div>
+          ) : null}
+        </div>
+      </OpenAddressesHere>
     </OwnAgentPlaceProvider>
   );
 }

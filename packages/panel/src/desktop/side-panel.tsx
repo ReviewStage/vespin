@@ -127,7 +127,7 @@ import { ADDRESS, type Address } from "../places/pressed-address.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
-import { useNamedTask, useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { useNamedTask } from "../task-list-collections.js";
 import { agentName, subagentActor } from "../tasks/agent-model.js";
 import { AgentActorRef, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AgentSubagentTab, type BriefTask, type TranscriptCards } from "../tasks/agent-tab.js";
@@ -331,7 +331,9 @@ const NO_TYPED_NAMES: TaskNames = new Map();
  * files, pages, and Pull requests, and none of the kinds its page draws
  * from what it holds, the fixed three and Terminal; nor is a tab of it
  * pinned there, since the Inbox is no plan's page, and its one Inbox tab
- * is named for the thread rather than the task's Inbox (`thread`).
+ * is named for the thread rather than the task's Inbox (`thread`). An
+ * agent on no task's page, as a Manager's, holds its panel as the Inbox
+ * does, standing for no task: only what its words opened there.
  */
 export const SIDE_PANEL_HOLDER = {
   TASK: "plan",
@@ -698,12 +700,15 @@ export function showPullRequest(
  * its pull request, which the task list carries live, and for one no line
  * names, as a link to another repository's opens, by what the host holds of
  * it as GitHub has it now (`repositoryPullRequestPublishedQuery`), held
- * through the task's workspace for every such tab the strip holds, since
+ * through the panel's workspace for every such tab the strip holds, since
  * only the tab shown reads it on its own.
  */
-function usePullRequestNames(taskId: string, tabs: readonly ChangesKindTab[]): PullRequestNames {
+function usePullRequestNames(
+  taskId: string,
+  workspaceId: string | undefined,
+  tabs: readonly ChangesKindTab[],
+): PullRequestNames {
   const lines = useTaskPullRequests(taskId);
-  const workspaceId = useTaskListRow(useTaskListCollections().tasks, taskId)?.workspaceId;
 
   const named = useMemo(
     () =>
@@ -2319,6 +2324,7 @@ function KeptPageTabs({
 function TabContent({
   tab,
   taskId,
+  workspaceId,
   codeFilesRead,
   pagePlace,
   repository,
@@ -2346,6 +2352,8 @@ function TabContent({
 }: {
   tab: SidePanelTab;
   taskId: string;
+  /** The workspace the panel reads its pull requests through: its task's, or the agent's whose page holds it; none until it is known. */
+  workspaceId: string | undefined;
   /** What the panel's pages and cloud Browser drafts stand on: the task, or the agent whose page holds the panel. */
   pagePlace: PagePlace;
   /** The task's repository, which a file's tab is read from as it stands now. */
@@ -2397,8 +2405,6 @@ function TabContent({
   onTabActions: (tab: SidePanelTab, actions: TabActionGroups | undefined) => void;
 }): React.JSX.Element | null {
   const directory = useMemberDirectory();
-  // The workspace the task holding the strip reads its pull requests through.
-  const workspaceId = useTaskListRow(useTaskListCollections().tasks, taskId)?.workspaceId;
 
   // Note that no fixed kind is drawn now (`DRAWN_KINDS`): the plan's, the Inbox's, and Comments stand elsewhere.
   if (Predicate.isString(tab)) return null;
@@ -2479,7 +2485,7 @@ function TabContent({
         </LazyBoundary>
       );
     case STRIP_TAB_KIND.CHANGES: {
-      // A task the list does not hold yet names no workspace to read the pull request through, which it soon will.
+      // A panel whose task or agent is not read yet names no workspace to read the pull request through, which it soon will.
       if (workspaceId === undefined) {
         return <SpinnerRegion delay label={readingWords("the pull request")} />;
       }
@@ -2838,6 +2844,7 @@ export function SidePanel({
   unread,
   holder,
   taskId,
+  workspaceId,
   repository,
   pages,
   agents: agentsSource,
@@ -2860,6 +2867,8 @@ export function SidePanel({
   holder: SidePanelHolder;
   /** The task the panel stands beside. */
   taskId: string;
+  /** The workspace the panel reads its pull requests through: its task's, or the agent's on no task whose page it stands beside; none until it is known. */
+  workspaceId: string | undefined;
   /** The task's repository, `owner/name`, or none before one is chosen. */
   repository: string | null;
   /** The pages agents wrote for the plan, each by its newest version; none where it has none. */
@@ -2947,7 +2956,7 @@ export function SidePanel({
   const { tab } = panel;
 
   // Each Pull request tab is named by its pull request as the task's lines name it, or as the host holds what GitHub says of it.
-  const pullRequestNames = usePullRequestNames(taskId, panel.changes);
+  const pullRequestNames = usePullRequestNames(taskId, workspaceId, panel.changes);
   // Whether a File or Changes tab's tree is open, for every one of them
   // alike and for the window's life, as an editor's explorer stands across
   // its tabs.
@@ -3361,6 +3370,7 @@ export function SidePanel({
             <TabContent
               tab={tab}
               taskId={taskId}
+              workspaceId={workspaceId}
               codeFilesRead={holder === SIDE_PANEL_HOLDER.TASK}
               pagePlace={pagePlace}
               repository={repository}
