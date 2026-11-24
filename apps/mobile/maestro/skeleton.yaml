@@ -17,9 +17,8 @@ appId: dev.vespin.ios
     visible: "Inbox"
     timeout: 30000
 - takeScreenshot: inbox
-# New task opens as a sheet over the tabs, from the tab bar's round + on a
-# compact window and the Inbox bar's on a regular one, and Cancel puts the
-# empty sheet away unasked. Note that it is opened here, on the Inbox, since
+# New task opens as a sheet over the tabs, from the Inbox bar's compose in
+# either window, and Cancel puts the empty sheet away unasked. Note that it is opened here, on the Inbox, since
 # an iPad's Search tab turns its floating tabs into the search field, which
 # leaves no tab to go back by.
 - tapOn: "New task"
