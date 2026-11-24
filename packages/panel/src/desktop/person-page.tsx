@@ -1,4 +1,4 @@
-import type { AgentPullRequest } from "@repo/features/agent-wire";
+import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import {
   automationOwner,
@@ -127,11 +127,13 @@ import {
   useAgentsStartedBy,
   useListedAgentPullRequests,
 } from "../tasks/use-workspace-agents.js";
+import { useManagerAgents } from "../tasks/workspace-managers.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
-import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
+import { AGENT_ROW_CELLS, AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
 import { STANDING_GLYPH } from "./automation-runs-panel.js";
+import { ManagerRow } from "./manager-row.js";
 
 import {
   PERSON_SECTION_FOLD,
@@ -160,7 +162,8 @@ import { useAutomations } from "./use-automations.js";
  * wherever the window names a member, the reader among them, or someone
  * who left. Its head is their face at the page's size, their name, and
  * their role and email as the members read lists them, or that they left.
- * Under it stand their agents at work, the Inbox
+ * Under it stand the Managers they started, each the sidebar's Manager
+ * row (`ManagerRow`), then their agents at work, the Inbox
  * items their agents wait on, the tasks assigned to them, the rest of the
  * tasks they created, and their other
  * agents, each from the listed workspace's task list and Inbox
@@ -422,6 +425,116 @@ const PersonAgentsSection = memo(function PersonAgentsSection({
                 tasks={tasks}
                 agents={control}
                 pullRequests={pullRequests}
+                more={more}
+                chosen={selection.chosenOf(entry.key)}
+                place={place}
+              />
+            );
+          }}
+        </VirtualTaskRows>
+      </ReplayMask>
+      {selection.dialog}
+    </PersonSectionFrame>
+  );
+});
+
+/** A Manager's key, by which its row leaves its list (`ListMotion`). */
+function managerKey(agent: ListedAgent): string {
+  return agent.id;
+}
+
+/** One of their Managers as a row, the sidebar's Manager row (`ManagerRow`), reading its own agent so a step of its turn draws it alone, its face wearing the working mark while it works. */
+function PersonManagerRow({
+  handed,
+  tasks,
+  agents,
+  more,
+  chosen,
+  place,
+}: {
+  handed: ListedAgent;
+  tasks: TasksControl;
+  /** The agents control its menu acts through (`useManagerAgents`). */
+  agents: AgentsControl;
+  /** Whether it draws its ⋯, as its list does. */
+  more: boolean;
+  /** The selection it stands in, where it is one of several chosen. */
+  chosen: ChosenRows | undefined;
+  /** Where it stands in its section's run of rows (`VirtualTaskRows`). */
+  place: VirtualRowPlace;
+}): React.JSX.Element {
+  const agent = useTaskListRow(useTaskListCollections().agents, handed.id) ?? handed;
+
+  return (
+    <ManagerRow
+      agent={agent}
+      agents={agents}
+      me={tasks.me}
+      shown={tasks.shown}
+      more={more}
+      current={false}
+      chosen={chosen}
+      place={place}
+      look={AGENT_ROW_LOOK.LIST}
+      onOpen={tasks.agentView.onOpen}
+    />
+  );
+}
+
+/**
+ * The section of their Managers, the workspace's agents on no task they
+ * started, drawn as their agents' section is (`PersonAgentsSection`): its
+ * name and count over its rows, chosen together, each a Manager's row
+ * (`ManagerRow`). Every Manager of theirs is listed, since the list
+ * carries the workspace's every one, so it counts what it lists.
+ */
+const PersonManagersSection = memo(function PersonManagersSection({
+  managers,
+  tasks,
+}: {
+  managers: readonly ListedAgent[];
+  tasks: TasksControl;
+}): React.JSX.Element {
+  const title = PERSON_PAGE_WORDS.MANAGERS;
+  const drawn = useLeaving(managers, managerKey);
+  const keys = useMemo(() => drawn.map(({ key }) => key), [drawn]);
+  const { scroller, shiftedBy } = usePageScroll();
+  const finding = useFindOpen();
+  const more = !useCoarsePointer();
+  const control = useManagerAgents(tasks.agents);
+  const selection = useAgentsSelection(control, managers, tasks.shown);
+
+  return (
+    <PersonSectionFrame
+      label={title}
+      title={title}
+      count={managers.length}
+      noun={TERM.MANAGER}
+      fold={PERSON_SECTION_FOLD}
+    >
+      <ReplayMask>
+        <VirtualTaskRows
+          id={selection.regionId}
+          label={title}
+          cells={AGENT_ROW_CELLS}
+          more={more}
+          selection={{ selected: selection.selected, onChange: selection.onChange }}
+          moves
+          scroller={scroller}
+          shiftedBy={shiftedBy}
+          keys={keys}
+          overscan={finding ? keys.length : undefined}
+          fit={AGENT_ROWS_FIT}
+        >
+          {(index, place) => {
+            const entry = drawn[index];
+
+            return entry === undefined ? null : (
+              <PersonManagerRow
+                key={entry.key}
+                handed={entry.value}
+                tasks={tasks}
+                agents={control}
                 more={more}
                 chosen={selection.chosenOf(entry.key)}
                 place={place}
@@ -1093,15 +1206,21 @@ function PersonColumn({
   );
 
   // Note that the page keeps one identity while the list stands, because each of its lists follows its rows (`useLeaving`).
-  const page = useMemo(() => personPage(userId, listed, liveAgents), [userId, listed, liveAgents]);
+  const workspaceId = tasks.workspace?.id;
+
+  const page = useMemo(
+    () => personPage(userId, listed, liveAgents, workspaceId),
+    [userId, listed, liveAgents, workspaceId],
+  );
+
   // Note that each section is handed its list as it was while its items stand, so a turn ending, which re-sorts their tasks, draws only the rows it moves.
   const working = useHeldAgents(page.working);
   const theirAgents = useHeldAgents(page.agents);
+  const managers = useSteadyList(page.managers);
   const assigned = useSteadyList(page.assigned);
   const created = useSteadyList(page.created);
   // Each section counts what the list holds and what the service counted past it.
   const held = personHeld(page);
-  const workspaceId = tasks.workspace?.id;
 
   const counted = useQuery(personPageQueryOptions(workspaceId, userId, held, tasks.listRead));
 
@@ -1227,6 +1346,9 @@ function PersonColumn({
               fold={PERSON_SECTION_FOLD}
             />
           ) : null}
+          {managers.length === 0 ? null : (
+            <PersonManagersSection managers={managers} tasks={tasks} />
+          )}
           {working.length === 0 ? null : (
             <PersonAgentsSection
               title={PERSON_PAGE_WORDS.WORKING}
