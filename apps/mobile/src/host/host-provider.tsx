@@ -89,13 +89,16 @@ const TaskListCollectionsContext = createContext<TaskListCollections | undefined
 const DeferredAgentsContext = createContext<DeferredAgents | undefined>(undefined);
 
 /**
- * How many of the archived agents kept back are written in one commit once
- * the first frame stands, a task of its own between each. Note that it is a
- * couple of hundred because a written agent cost the agents' collection
- * about 20 µs on the iPhone simulator, more with live queries over it, so a
- * commit stays near the 8 ms a frame can spare on a phone.
+ * How many of the archived agents kept back are written in one commit.
+ * Note that it is a couple of hundred because a written agent cost the
+ * agents' collection about 20 µs on the iPhone simulator, more with live
+ * queries over it, so a commit stays well inside the idle time a frame
+ * leaves.
  */
 const DEFERRED_AGENTS_CHUNK = 200;
+
+/** The idle time left in a frame below which no further commit is begun. */
+const DEFERRED_AGENTS_SPARE_MS = 4;
 
 /** The host's act port, for a screen drawn under `HostProvider`. */
 export function useHostActs(): ActPortClient {
@@ -204,24 +207,32 @@ export function useArchivedAgentsWritten(asked = true): void {
 
 /**
  * Writes the archived agents the task list keeps back once the first frame
- * stands, `DEFERRED_AGENTS_CHUNK` to a commit and a task of their own
- * between each, so no commit holds a frame; at once wherever a place asks
- * for them sooner (`useArchivedAgentsWritten`).
+ * stands, in React Native's idle callbacks, `DEFERRED_AGENTS_CHUNK` to a
+ * commit for as long as each leaves time over, so no commit holds a frame;
+ * at once wherever a place asks for them sooner (`useArchivedAgentsWritten`).
  */
 function useDeferredAgentsWritten(deferred: DeferredAgents | undefined): void {
   const released = useSplashReleased();
 
   useEffect(() => {
     if (deferred === undefined || !released) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let asked: number | undefined;
 
-    const step = () => {
-      timer = deferred.write(DEFERRED_AGENTS_CHUNK) > 0 ? setTimeout(step, 0) : undefined;
+    const step = (idle: IdleDeadline) => {
+      let left = deferred.write(DEFERRED_AGENTS_CHUNK);
+
+      while (left > 0 && idle.timeRemaining() > DEFERRED_AGENTS_SPARE_MS) {
+        left = deferred.write(DEFERRED_AGENTS_CHUNK);
+      }
+
+      asked = left > 0 ? requestIdleCallback(step) : undefined;
     };
 
-    timer = setTimeout(step, 0);
+    asked = requestIdleCallback(step);
 
-    return () => clearTimeout(timer);
+    return () => {
+      if (asked !== undefined) cancelIdleCallback(asked);
+    };
   }, [deferred, released]);
 }
 
