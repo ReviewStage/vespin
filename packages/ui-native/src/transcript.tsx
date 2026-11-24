@@ -5,6 +5,7 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import { chatWorkWords } from "@repo/features/manager-chat";
+import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
@@ -55,7 +56,7 @@ import {
 import { InlineHost } from "./inline-host.js";
 import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
-import { IntegrationMark, WorkingMark } from "./marks.js";
+import { IntegrationMark, ManagerFace, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
 import { Press } from "./press.js";
@@ -86,6 +87,12 @@ const SENT_BY_YOU = "You";
 /** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart, and in a Manager's chat `CHAT_RUN_GAP` twice, as Messages' do. */
 const RUN_GAP = 1;
 const CHAT_RUN_GAP = SPACE.ROW / 2;
+
+/** A Manager's face beside its chat's bubbles, as Messages stands a sender's picture beside a group's: its side, and how far it stands from the bubble, room for the bubble's tail. */
+const CHAT_FACE = { SIZE: MARK_SIZE.AVATAR, GAP: 8 } as const;
+
+/** How far a Manager's bubbles stand in from the row's edge, past its face. */
+const CHAT_FACE_ROOM = CHAT_FACE.SIZE + CHAT_FACE.GAP;
 
 /** How far a row a fold or a group holds stands in, for each step it is held. */
 const DEPTH_INSET = 18;
@@ -172,6 +179,10 @@ const styles = StyleSheet.create({
   turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
+  faced: { alignSelf: "stretch", flexDirection: "row", alignItems: "flex-end" },
+  // Note that the face stands over the bubble's tail, whose cut of the ground reaches into its room.
+  faceSeat: { width: CHAT_FACE_ROOM, zIndex: 1 },
+  facedBubble: { flex: 1, alignItems: "flex-start" },
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
   wrapped: { flexWrap: "wrap" },
@@ -267,9 +278,45 @@ function rowWidth(column: number, depth = 0): number {
   return column - SPACE.EDGE * 2 - depth * DEPTH_INSET;
 }
 
-/** The widest a sent line's words stand inside its bubble, in a column of `column` points. */
-function bubbleWordsWidth(column: number): number {
-  return Math.floor(rowWidth(column) * BUBBLE_SHARE) - BUBBLE_PADDING.HORIZONTAL * 2;
+/** The widest a sent line's words stand inside its bubble, in a column of `column` points, past any room its sender's face takes (`room`). */
+function bubbleWordsWidth(column: number, room = 0): number {
+  return Math.floor((rowWidth(column) - room) * BUBBLE_SHARE) - BUBBLE_PADDING.HORIZONTAL * 2;
+}
+
+/**
+ * A Manager's bubble with its face beside it, as Messages stands a sender's
+ * picture: shown level with the foot of its run's last bubble (`shown`),
+ * and its room kept beside the run's others, so the run's bubbles line up,
+ * as the panel's chat stands its face. The face is SwiftUI's, in a host of
+ * its own only where it shows, so a run costs one host, never one a
+ * bubble; it stands over the bubble's tail, whose cut of the ground reaches
+ * into its room. The bubble alone where the chat wears no face.
+ */
+function ChatFaced({
+  face,
+  shown,
+  working = false,
+  children,
+}: {
+  readonly face: ManagerFaceValue | undefined;
+  readonly shown: boolean;
+  readonly working?: boolean | undefined;
+  readonly children: ReactNode;
+}) {
+  if (face === undefined) return children;
+
+  return (
+    <View style={styles.faced}>
+      <View style={styles.faceSeat}>
+        {shown ? (
+          <InlineHost style={{ width: CHAT_FACE.SIZE, height: CHAT_FACE.SIZE }}>
+            <ManagerFace face={face} size={CHAT_FACE.SIZE} working={working} />
+          </InlineHost>
+        ) : null}
+      </View>
+      <View style={styles.facedBubble}>{children}</View>
+    </View>
+  );
 }
 
 /**
@@ -763,6 +810,8 @@ interface RowDrawing {
   readonly placeCall?: ((callId: string, row: HostInstance | null) => void) | undefined;
   /** That a line of the reader's did not go, by the id it is drawn under, with what mends it; none for a line that went. */
   readonly undelivered?: ((lineId: string) => UndeliveredLine | undefined) | undefined;
+  /** The face of the Manager whose chat this is, beside the last bubble of each run of its messages and its working line; none for any other agent, or a Manager a service older than faces answers. */
+  readonly managerFace?: ManagerFaceValue | undefined;
 }
 
 /** A message whose acts the transcript draws: a sent line, held for its menu, and a finished turn's foot. */
@@ -882,7 +931,11 @@ function TranscriptRow({
   const copyWords = useCopyWords();
 
   switch (item.kind) {
-    case TRANSCRIPT_ITEM.SAID:
+    case TRANSCRIPT_ITEM.SAID: {
+      // Note that a Manager's own bubbles stand past its face, as the panel's chat stands them.
+      const faced = item.manager === true ? drawing.managerFace : undefined;
+      const room = faced === undefined ? 0 : CHAT_FACE_ROOM;
+
       return (
         <View
           style={[
@@ -940,40 +993,44 @@ function TranscriptRow({
           {/* Note that a line of files alone draws no empty bubble under them. */}
           {item.words.trim() === "" &&
           (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
-            <MessageMenu
-              words={item.words}
-              at={item.at}
-              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id; a Manager's message offers no link or rewind, as the panel's offers none, since one after its turn's first stands under its call's id, which names no message.
-              link={item.manager === true ? undefined : drawing.messageLink?.(item.place.row)}
-              more={item.manager === true ? workActs(item, drawing) : drawing.messageMore?.(item)}
-              width={rowWidth(drawing.column)}
-            >
-              <View style={[styles.saidHeld, item.received ? styles.received : null]}>
-                <ChatBubble
-                  side={item.received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
-                  run={chatRunOf(item.joinsAbove, item.joinsBelow)}
-                  accent={item.chat === true}
-                >
-                  {/* Note that Select text selects the words in the bubble itself, as Messages does (`MessageWords`). */}
-                  <MessageWords>
-                    <Markdown
-                      words={item.words}
-                      typed={item.manager !== true}
-                      repository={drawing.repository}
-                      onOpenLink={drawing.onOpenLink}
-                      width={bubbleWordsWidth(drawing.column)}
-                      wordPictures={item.wordPictures}
-                      wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
-                    />
-                  </MessageWords>
-                </ChatBubble>
-              </View>
-            </MessageMenu>
+            <ChatFaced face={faced} shown={!item.joinsBelow}>
+              <MessageMenu
+                words={item.words}
+                at={item.at}
+                // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id; a Manager's message offers no link or rewind, as the panel's offers none, since one after its turn's first stands under its call's id, which names no message.
+                link={item.manager === true ? undefined : drawing.messageLink?.(item.place.row)}
+                more={item.manager === true ? workActs(item, drawing) : drawing.messageMore?.(item)}
+                width={rowWidth(drawing.column) - room}
+              >
+                <View style={[styles.saidHeld, item.received ? styles.received : null]}>
+                  <ChatBubble
+                    side={item.received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
+                    run={chatRunOf(item.joinsAbove, item.joinsBelow)}
+                    accent={item.chat === true}
+                  >
+                    {/* Note that Select text selects the words in the bubble itself, as Messages does (`MessageWords`). */}
+                    <MessageWords>
+                      <Markdown
+                        words={item.words}
+                        typed={item.manager !== true}
+                        repository={drawing.repository}
+                        onOpenLink={drawing.onOpenLink}
+                        width={bubbleWordsWidth(drawing.column, room)}
+                        wordPictures={item.wordPictures}
+                        wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
+                      />
+                    </MessageWords>
+                  </ChatBubble>
+                </View>
+              </MessageMenu>
+            </ChatFaced>
           )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
           <UndeliveredUnder line={drawing.undelivered?.(item.place.row)} />
         </View>
       );
+    }
+
     case TRANSCRIPT_ITEM.FOOT:
       // Note that a finished turn ends on how long it worked, then the acts on its words, standing rather than on a hover, as ChatGPT's row stands under its reply.
       return (
@@ -996,20 +1053,22 @@ function TranscriptRow({
         return (
           <View style={[styles.row, styles.received, { paddingVertical: CHAT_RUN_GAP * 2 }]}>
             {/* Note that a long press offers the turn under way's work, as the press beside the panel's working line does. */}
-            <HeldMenu acts={workActs(item, drawing)}>
-              <View>
-                <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
-                  <Text
-                    style={{
-                      fontSize: PROSE_SIZE,
-                      color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
-                    }}
-                  >
-                    {item.words}
-                  </Text>
-                </ChatBubble>
-              </View>
-            </HeldMenu>
+            <ChatFaced face={drawing.managerFace} shown working>
+              <HeldMenu acts={workActs(item, drawing)}>
+                <View>
+                  <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+                    <Text
+                      style={{
+                        fontSize: PROSE_SIZE,
+                        color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
+                      }}
+                    >
+                      {item.words}
+                    </Text>
+                  </ChatBubble>
+                </View>
+              </HeldMenu>
+            </ChatFaced>
           </View>
         );
       }
@@ -1058,14 +1117,20 @@ function TranscriptRow({
       );
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
-    case TRANSCRIPT_ITEM.MEDIA:
+    case TRANSCRIPT_ITEM.MEDIA: {
+      // Note that what a Manager shows in its chat stands past its face, in line with its bubbles.
+      const mediaInset =
+        drawing.managerFace === undefined || item.depth > 0
+          ? inset(item.depth)
+          : { paddingLeft: SPACE.EDGE + CHAT_FACE_ROOM };
+
       // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
       if (
         item.media.length > 1 &&
         item.media.every((shown) => shown.kind === SHOWN_MEDIA.PICTURE && shown.caption === "")
       ) {
         return (
-          <View style={[styles.row, inset(item.depth), styles.media]}>
+          <View style={[styles.row, mediaInset, styles.media]}>
             <PictureSet
               pictures={item.media.map((shown) => ({
                 key: shown.id,
@@ -1079,7 +1144,7 @@ function TranscriptRow({
       }
 
       return (
-        <View style={[styles.row, inset(item.depth), styles.media]}>
+        <View style={[styles.row, mediaInset, styles.media]}>
           {item.media.map((shown) => (
             <View key={shown.id} style={styles.shown}>
               <ShownMediaView
@@ -1097,6 +1162,8 @@ function TranscriptRow({
           ))}
         </View>
       );
+    }
+
     case TRANSCRIPT_ITEM.PAGE:
       return (
         <View style={[styles.row, inset(item.depth)]}>
