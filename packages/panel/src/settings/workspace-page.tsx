@@ -445,6 +445,7 @@ function MemberLeave({
         toast({
           words: LEAVE_WORDS.LEFT(workspace.name),
           tone: STATUS_TONE.COMPLETE,
+          glyph: GLYPH.WORKSPACE,
         });
         onLeft();
       }),
@@ -689,6 +690,7 @@ function WorkspaceDelete({
         toast({
           words: DELETE_WORDS.DELETED(workspace.name),
           tone: STATUS_TONE.COMPLETE,
+          glyph: GLYPH.DELETE,
         });
         onDeleted();
       }),

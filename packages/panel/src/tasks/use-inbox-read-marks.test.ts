@@ -231,7 +231,7 @@ test("Undo after marking a notice read takes its Got it back at the service by i
   const hook = marks();
   hook.mark(notice(item(Y, true)), false);
   await settle();
-  assert.deepEqual(hook.toasts(), ["Got it: “Alert at 80%?”"]);
+  assert.deepEqual(hook.toasts(), ["Got it: Inbox item Alert at 80%?"]);
   await act(() => undoLast());
   assert.deepEqual(hook.tookBack, [`taken back:${Y}`]);
   assert.deepEqual(

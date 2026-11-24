@@ -28,6 +28,7 @@ import {
 import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import {
   ACKNOWLEDGE_UNTAKEN,
+  ACKNOWLEDGED_ONE,
   acknowledgedNote,
   acknowledgedWords,
   NOT_ACKNOWLEDGED,
@@ -35,11 +36,11 @@ import {
 } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
-import { GLYPH } from "@repo/ui/icons";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
+import { inboxItemChip } from "../toast-chip.js";
 import { pressTakeBack, type TakeBackWrite } from "../undo-stack.js";
 import {
   type Send,
@@ -77,10 +78,10 @@ function refusalWords(answer: NodAnswer): string | undefined {
  * as a resolve is.
  */
 const ACKNOWLEDGE_WRITE = {
-  words: ({ items }) => acknowledgedWords(items),
-  glyph: () => <GLYPH.DONE />,
-  // Note that one notice's toast quotes its title, which a screen recording masks.
-  unmasked: ({ items }) => items.length > 1,
+  words: ({ items }) => (items.length === 1 ? `${ACKNOWLEDGED_ONE}:` : acknowledgedWords(items)),
+  chip: ({ items }) => inboxItemChip(items),
+  // Note that its words are the app's own, the one item's title standing in its chip, which a screen recording masks.
+  unmasked: () => true,
   act: ({ nod }, { items, keys }) =>
     Promise.all(
       items.map((item, at) =>

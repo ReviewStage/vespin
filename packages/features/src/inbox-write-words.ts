@@ -34,12 +34,18 @@ export const REMIND_REFUSED = {
   CLEAR: "Could not clear the reminder",
 } as const;
 
+/** What a toast says of a Got it on one notice, which names the notice beside its words rather than in them, as the panel's toast does. */
+export const ACKNOWLEDGED_ONE = "Got it";
+
+/** What a toast says of a resolve of one item, which names the item beside its words rather than in them, as the panel's toast does. */
+export const RESOLVED_ONE = "Resolved";
+
 /** What the Undo of a Got it says it settled: the one notice by its title, or how many. */
 export function acknowledgedWords(items: readonly InboxItem[]): string {
   const [only] = items;
 
   return items.length === 1 && only !== undefined
-    ? `Got it: “${cardTitle(only.title)}”`
+    ? `${ACKNOWLEDGED_ONE}: “${cardTitle(only.title)}”`
     : `Got it: ${countWords(items.length, TERM.INBOX_ITEM)}`;
 }
 
@@ -48,7 +54,7 @@ export function resolvedWords(items: readonly InboxItem[]): string {
   const [only] = items;
 
   return items.length === 1 && only !== undefined
-    ? `Resolved “${cardTitle(only.title)}”`
+    ? `${RESOLVED_ONE} “${cardTitle(only.title)}”`
     : `${countWords(items.length, TERM.INBOX_ITEM)} resolved`;
 }
 

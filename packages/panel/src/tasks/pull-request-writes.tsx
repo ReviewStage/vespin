@@ -82,6 +82,7 @@ import { confirmFailure, failureShown } from "../failure-report.js";
 import { useGitHubConnection } from "../github-connect.js";
 import { OPEN_SETTINGS_LABEL, useOpenSettings } from "../open-settings.js";
 import { useToast, useWithdrawToast } from "../toast.js";
+import { pullRequestChip } from "../toast-chip.js";
 import { PULL_REQUEST_TONE, PullRequestMark } from "./pull-request-mark.js";
 import { usePullRequestSource, writeScopeOf } from "./pull-request-source.js";
 import { useOpenWorkspaceGitHub } from "./repository-remedy.js";
@@ -531,8 +532,9 @@ export function PullRequestStateMenu({
         ? () =>
             toast({
               replayUnmasked: true,
-              words: CLOSE_WORDS.CLOSED,
+              words: CLOSE_WORDS.CLOSED_NAMED,
               tone: STATUS_TONE.COMPLETE,
+              chip: pullRequestChip(pullRequest.number),
               subject: toastSubject,
               action: {
                 label: CLOSE_WORDS.REOPEN,

@@ -90,6 +90,7 @@ export function useUpdatedToast(update: UpdateSnapshot | undefined): void {
     toast({
       words: `Updated to ${version}`,
       tone: STATUS_TONE.COMPLETE,
+      glyph: UpdateIcon,
       replayUnmasked: true,
       action: {
         label: "What's new",

@@ -1,5 +1,6 @@
 import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
-import { AppIcon, ProductMark } from "@repo/ui";
+import type { TaskStatus } from "@repo/features/task-wire";
+import { AppIcon, ProductMark, TaskStatusMark } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 
 /**
@@ -65,4 +66,9 @@ export function EntityGlyph({ kind }: { kind: EntityKind }): React.JSX.Element {
   const Glyph = ENTITY_GLYPH[kind];
 
   return <Glyph />;
+}
+
+/** A task status's glyph, where what is drawn is the status a task was set at, as a toast leads with the one a press set. */
+export function TaskStatusGlyph({ status }: { status: TaskStatus }): React.JSX.Element {
+  return <TaskStatusMark status={status} />;
 }

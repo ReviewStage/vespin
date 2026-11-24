@@ -152,6 +152,7 @@ const resetWrite = (
   ResetAnswer
 > => ({
   words: RESET_NOTES[scope],
+  glyph: GLYPH.GO_BACK,
   unmasked: () => true,
   kind: ACT_KIND.SETTINGS_RESET,
   read: (_settings, reset) => reset,
