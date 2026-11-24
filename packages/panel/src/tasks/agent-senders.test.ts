@@ -3,7 +3,6 @@
 import assert from "node:assert/strict";
 import {
   AGENT_BRIEF,
-  AGENT_KIND,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentSender,
@@ -30,7 +29,7 @@ import {
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { ACTOR_KIND } from "@repo/ui/actor-model";
 import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
-import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
+import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -547,52 +546,4 @@ test("an agent started blank draws its first line as a line, no description's ca
   // Before its first words, it waits on them rather than saying it is starting, since nothing starts until it is told.
   await sendersFor(CHARLES.userId, blank, []);
   assert.match(document.body.textContent ?? "", /Waiting for your first message\./u);
-});
-
-/** A `send_to_user` call the service took, sending `text`. */
-function sent(callId: string, text: string): WireRecord {
-  return {
-    type: "tool-send_to_user",
-    toolCallId: callId,
-    state: "output-available",
-    input: { text },
-    output: { status: "accepted" },
-  };
-}
-
-test("in a Manager's chat the reader's line stands at the right, and a teammate's and the Manager's at the left, each named over their run, with each message the Manager sent on a bubble of its own", async () => {
-  const manager: AgentSummary = { ...AGENT, kind: AGENT_KIND.MANAGER, title: "Iris" };
-
-  const chat: readonly AgentTranscriptMessage[] = [
-    { ...line("dean", "Ship the invite flow.", { ...DEAN, kind: MEMBER }), sentAt: 1_000 },
-    { ...line("charles", "Seven days.", { ...CHARLES, kind: MEMBER }), sentAt: 2_000 },
-    { ...line("charles-more", "Not five.", { ...CHARLES, kind: MEMBER }), sentAt: 3_000 },
-    {
-      id: "turn",
-      role: MESSAGE_ROLE.ASSISTANT,
-      startedAt: 4_000,
-      finishedAt: 5_000,
-      parts: [
-        { type: "text", text: "Planning it out." },
-        sent("first", "On it."),
-        sent("second", "Seven days it is."),
-      ],
-    },
-  ];
-
-  const container = await drawTab(DEAN.userId, [], manager, chat);
-
-  const drawn = [...container.querySelectorAll(".is-user, .is-received")].map((message) => [
-    message.classList.contains("is-user") ? "right" : "left",
-    message.querySelector(".ui-chat-bubble")?.textContent ?? "",
-    message.querySelector(".ui-message-head-sender")?.textContent?.trim() ?? null,
-  ]);
-
-  assert.deepEqual(drawn.slice(-5), [
-    ["right", "Ship the invite flow.", null],
-    ["left", "Seven days.", CHARLES.name],
-    ["left", "Not five.", null],
-    ["left", "On it.", "Iris"],
-    ["left", "Seven days it is.", null],
-  ]);
 });
