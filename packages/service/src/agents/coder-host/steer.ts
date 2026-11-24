@@ -1058,13 +1058,16 @@ export const handWaitedTurnsOn = /* @__PURE__ */ Effect.fnUntraced(function* (
  * as a send is, read as it runs, and only where a line was lost, so a send
  * to an agent that lost none reads nothing past the one read of its lines.
  * Answers how many went; fails with the refusal that stopped one, or as an
- * outage where none was said.
+ * outage where none was said. A carry-on names the turn it carries on
+ * (`cutOff`), whose lines go after its own line, though its line opened a
+ * newer turn (`carry-on.ts`).
  */
-const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(function* (
+export const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(function* (
   agentSessions: AgentSessions<TypedTurn>,
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   agent: Agent,
+  cutOff?: string,
 ): Effect.fn.Return<number, HostedRefusal, DatabaseServices> {
   // The member who may not steer the agent resends nothing, and their own words are refused as they go.
   if (!controlsAgent(userId, agent)) return 0;
@@ -1107,7 +1110,7 @@ const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(functio
     );
 
   const resent = yield* hostedStoreOrUnavailable(
-    Effect.flatMap(writer, (write) => write.resendLostLines(target, dispatch)),
+    Effect.flatMap(writer, (write) => write.resendLostLines(target, dispatch, cutOff)),
   );
 
   if (Result.isFailure(resent)) {

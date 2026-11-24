@@ -693,6 +693,8 @@ export interface StoreWriter {
   resendLostLines(
     target: ConversationTarget,
     dispatch: (line: LostLine) => Effect.Effect<boolean>,
+    /** The failed turn whose lines alone are handed, whether or not a newer turn opened since (`findCutOffLines`), as a carry-on of it hands them; the newest failed turn's otherwise. */
+    cutOff?: string,
   ): Write<LostLinesResent>;
   /**
    * Points the developer's line given, where no turn took it, at a turn of
@@ -3156,6 +3158,62 @@ const findLostLines = SqlSchema.findAll({
     ),
 });
 
+/**
+ * The developer's lines sent to the failed turn named that no turn took and
+ * no hand-over withdrew, oldest first, left out as `findLostLines` leaves
+ * lines out: what a carry-on of a turn cut off hands on after its own line,
+ * whatever turn has opened since, which is the carry-on's own.
+ */
+const findCutOffLines = SqlSchema.findAll({
+  Request: Schema.Struct({ ...ConversationTargetSchema.fields, turnId: Schema.String }),
+  Result: LostLineSchema,
+  execute: (key) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: messages.id,
+          clientId: messages.clientId,
+          parts: messages.parts,
+          sender: messages.sender,
+          senderUserId: messages.senderUserId,
+          metadata: messages.metadata,
+        })
+        .from(messages)
+        .innerJoin(
+          failedAwaited,
+          and(
+            eq(failedAwaited.id, messages.awaitsTurnId),
+            eq(failedAwaited.status, TURN_STATUS.FAILED),
+          ),
+        )
+        .where(
+          and(
+            eq(messages.userId, key.userId),
+            eq(messages.conversationId, key.conversationId),
+            eq(messages.awaitsTurnId, key.turnId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+            isNull(messages.turnId),
+            isNull(messages.withdrawnAt),
+            not(recordedSpokenLine(messages)),
+            noReceiptOfLine(),
+          ),
+        )
+        .orderBy(asc(messages.seq)),
+    ),
+});
+
+/**
+ * The developer's lines sent to the failed turn named that no turn took,
+ * oldest first (`findCutOffLines`): what a carry-on of that turn hands on
+ * after its own line (`StoreWriter`'s `resendLostLines`).
+ */
+export function cutOffTurnLines(
+  target: ConversationTarget,
+  turnId: string,
+): Effect.Effect<readonly LostLine[], StoreFailure, DatabaseServices> {
+  return findCutOffLines({ ...target, turnId });
+}
+
 /** Where a line stands in its conversation: its place, and the instants it was written and placed at. */
 const LinePlaceSchema = Schema.Struct({
   seq: Schema.Number,
@@ -3594,9 +3652,13 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
   function resentLines(
     target: ConversationTarget,
     dispatch: (line: LostLine) => Effect.Effect<boolean>,
+    cutOff: string | undefined,
   ): Write<LostLinesResent> {
     return Effect.gen(function* () {
-      const lines = yield* findLostLines(target);
+      const lines = yield* cutOff === undefined
+        ? findLostLines(target)
+        : findCutOffLines({ ...target, turnId: cutOff });
+
       const taken: string[] = [];
 
       for (const line of lines) {
@@ -3688,7 +3750,8 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
       underConversation(target, (context) => takeAwaitingLine(context, take)),
     recordVoiceLine: (target, line) =>
       underConversation(target, (context) => recordVoiceLine(context, line)),
-    resendLostLines: (target, dispatch) => Effect.uninterruptible(resentLines(target, dispatch)),
+    resendLostLines: (target, dispatch, cutOff) =>
+      Effect.uninterruptible(resentLines(target, dispatch, cutOff)),
     requeueLine: (target, lineId) =>
       underConversation(target, (context) => requeueLine(context, lineId)),
     carryTurn: (target, carry) =>

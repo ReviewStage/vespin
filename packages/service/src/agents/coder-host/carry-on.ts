@@ -19,7 +19,12 @@
  * and the `carry_on` channel), which opens a fresh turn through the one
  * path a message takes, so the sweep's reap of the cut-off turn always
  * lands first and nothing fights it; a steer into a turn still running,
- * as a lost connection's carry-on is, takes the same line.
+ * as a lost connection's carry-on is, takes the same line. The lines sent
+ * to the cut-off turn that its runner never took (a member's words, another
+ * agent's message, a thread's answer) follow the carry-on into its turn, in
+ * the order they were written, and its words say they follow: the turn the
+ * carry-on opens is newer than the failed one, so the next send's resend of
+ * lost lines (`steer.ts`'s `resendLostLines`) would never find them.
  *
  * The decision (`carryOnDecision`) resumes only where every one of these
  * holds: the agent is not archived; the turn was cut off, not failed for a
@@ -52,7 +57,12 @@ import {
   ownDeviceHost,
 } from "@repo/database/models/device-agent-store";
 import { hostLastSeen } from "@repo/database/models/device-store";
-import { type LostLine, storeWriter, turnOpeningLine } from "@repo/database/models/writer";
+import {
+  cutOffTurnLines,
+  type LostLine,
+  storeWriter,
+  turnOpeningLine,
+} from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
@@ -65,10 +75,11 @@ import type * as HttpClient from "effect/http/HttpClient";
 import { MESSAGE_CHANNEL, TURN_FAILURE, TURN_STATUS } from "../../core.js";
 import type { GitHubApp } from "../../github/github-app.js";
 import { afterResponse } from "../../http/after-response.js";
+import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import { agentLogIds } from "./agent-log.js";
 import type { QueueSessions } from "./runtime-sessions.js";
 import { hostLostOf } from "./status.js";
-import { STEER_DELIVERY, steerAgentWritten } from "./steer.js";
+import { resendLostLines, STEER_DELIVERY, steerAgentWritten } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
 /** The services a carry-on's send runs over: the store, and what a message to an agent reaches (`steerAgentWritten`). */
@@ -152,14 +163,18 @@ function carryOnLine(reason: CarryOnReason): CarryOnLineMetadata {
 
 /**
  * The words the carry-on sends the agent: that its previous turn was
- * interrupted and why, and to check the state of its work before going on,
+ * interrupted and why, whether messages sent to that turn that never
+ * reached it follow, and to check the state of its work before going on,
  * since what the turn had under way may be half done and the model's own
  * memory of it stops where the turn did.
  */
-function carryOnPrompt(reason: CarryOnReason): string {
+function carryOnPrompt(reason: CarryOnReason, sentMeanwhile: boolean): string {
   return (
     `${PROMPT_LEAD} your previous turn was interrupted before it ended: ${CUT_OFF_WORDS[reason]}. ` +
-    "Nothing was sent to you meanwhile. Whatever that turn had under way may be half done: " +
+    (sentMeanwhile
+      ? "Messages sent to you during it never reached you, and follow this one: read and answer each. "
+      : "Nothing was sent to you meanwhile. ") +
+    "Whatever that turn had under way may be half done: " +
     "check the state of your work first, your files, your branch, and any command or background task it had running, " +
     "then carry on from where it stopped. If it had finished, say so and end your turn."
   );
@@ -267,13 +282,16 @@ export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
 ) {
   return yield* Effect.gen(function* () {
     const agentSessions = yield* sessionsFor(agent.userId);
+    const writer = storeWriter({ tools: CODER_TOOL_SET });
+    const target = { userId: agent.userId, conversationId: agent.conversationId };
+    const meanwhile = yield* hostedStoreOrUnavailable(cutOffTurnLines(target, turnId));
     yield* steerAgentWritten(
       agentSessions,
-      storeWriter({ tools: CODER_TOOL_SET }),
+      writer,
       agent.userId,
       agent,
       {
-        text: carryOnPrompt(reason),
+        text: carryOnPrompt(reason, meanwhile.length > 0),
         clientKey: carryOnKey(turnId, occurrence),
         sender: { kind: MESSAGE_SENDER.APP },
         metadata: carryOnLine(reason),
@@ -281,8 +299,20 @@ export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
       // Note that a carry-on is the cut-off turn's own continuation, which the queue already stood aside for.
       STEER_DELIVERY.NOW,
     );
+
+    // Note that the lines sent to the cut-off turn that its runner never took go after the carry-on, into its turn,
+    // because the turn the carry-on opened buries them from the next send's resend, and nobody else sends them again.
+    if (meanwhile.length > 0) {
+      yield* resendLostLines(agentSessions, writer, agent.userId, agent, turnId).pipe(
+        Effect.catch((refusal) =>
+          Effect.logWarning(`a cut-off turn's lines were not handed on: ${refusal.error}`),
+        ),
+        Effect.annotateLogs({ turnId, reason }),
+      );
+    }
+
     yield* Effect.logInfo("a cut-off turn was carried on").pipe(
-      Effect.annotateLogs({ turnId, reason }),
+      Effect.annotateLogs({ turnId, reason, handedOn: meanwhile.length }),
     );
 
     return true;

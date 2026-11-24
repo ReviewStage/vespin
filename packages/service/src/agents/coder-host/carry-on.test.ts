@@ -17,7 +17,7 @@ import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/de
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
-import { storeWriter } from "@repo/database/models/writer";
+import { storeWriter, turnWaitingLines } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB } from "@repo/database/testing";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
@@ -310,6 +310,43 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           assert.deepEqual(
             yield* deviceAgentLinesWaiting(ownDeviceHost(userId, warm.deviceId)),
             [],
+          );
+        }),
+    );
+
+    it.effect(
+      "a line sent to the turn that its lost runner never took follows the carry-on into the carry-on's turn",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const { userId, agent } = warm;
+          const target = { userId, conversationId: agent.conversationId };
+          const lost = yield* turnRunning(warm, "Now the emails.");
+          // The developer steers the turn after its runner already went, so no runner takes the line.
+          const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+          yield* writer.writeAwaitingLine(
+            target,
+            {
+              text: "Also plan the settings.",
+              clientKey: "Also plan the settings.",
+              sender: { kind: MESSAGE_SENDER.MEMBER, userId },
+            },
+            Effect.succeed(true),
+          );
+          yield* TestClock.adjust("1 second");
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, warm.deviceId), warm.launchId, 1);
+
+          yield* turnEnded(warm);
+
+          const resumed = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
+            agent.conversationId,
+          );
+
+          assert.notEqual(resumed?.id, lost);
+          assert.deepEqual(
+            (yield* turnWaitingLines(target, resumed?.id ?? "")).map((line) => line.clientId),
+            [sentLineId(carryOnKey(lost)), sentLineId("Also plan the settings.")],
+            "the carry-on's turn awaits the carry-on, then the line the lost turn never took",
           );
         }),
     );
