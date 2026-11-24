@@ -1,0 +1,89 @@
+pinned to 070a1e6e19
+== bundle PJjxdefer base 070a1e6e192
+  built 070a1e6e192 base app Vmain13.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(337,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(341,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(361,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(394,185): error TS18048: 'item.thread' is possibly 'undefined'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+t1 (681f5fd5d5) bundle 25280 KB over Vmain13.app
+seed (holders, t1 070a1e6e19): 28136 KB
+source maps: index-d2a7ac3e3467991c63ff005907bcb520.hbc.map (67204 KB); hbc matches the installed main.jsbundle
+sign-in: fails 0 shots 3 
+== bundle PJjxdeferA base 06de0d42087
+  built 06de0d42087 base app Vmain13.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(337,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(341,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(361,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(394,185): error TS18048: 'item.thread' is possibly 'undefined'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+A (t1 06de0d4208) bundle 25280 KB; B (070a1e6e19) bundle 21604 KB
+  touch-A1 fresh: launch-probe.json written +80.6 s wallAtLoad +4139 ms; launch-profile-60.json written +80.6 s; launch-profile.json written +80.6 s; launch-watch-65.json written +80.6 s; launch-watch-76.json written +80.6 s; launch-watch.json written +80.6 s
+touch-A1: pid 99447, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-A1 watch:profile marks: [{"n": "watch:profile-start", "t": 92, "d": {"started": true}}]
+  touch-A1 cpu peak 123.1% (at 60 s: 21.5%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 16, inbox rows 0, probe-touch: 
+touch-A1: 
+  touch-B1 fresh: launch-probe.json written +80.1 s wallAtLoad +3899 ms; launch-profile-60.json written +80.1 s; launch-profile.json written +80.1 s; launch-watch-65.json written +80.1 s; launch-watch-76.json written +80.1 s; launch-watch.json written +80.1 s
+touch-B1: pid 1797, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-B1 watch:profile marks: [{"n": "watch:profile-start", "t": 98.9, "d": {"started": true}}]
+  touch-B1 cpu peak 160.1% (at 60 s: 20.5%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 18, inbox rows 0, probe-touch: 
+touch-B1: 
+  touch-A2 fresh: launch-probe.json written +80.4 s wallAtLoad +4367 ms; launch-profile-60.json written +80.4 s; launch-profile.json written +80.4 s; launch-watch-65.json written +80.4 s; launch-watch-76.json written +80.4 s; launch-watch.json written +80.4 s
+touch-A2: pid 6019, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-A2 watch:profile marks: [{"n": "watch:profile-start", "t": 105.3, "d": {"started": true}}]
+  touch-A2 cpu peak 135% (at 60 s: 31.0%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 14, inbox rows 0, probe-touch: 
+touch-A2: 
+  touch-B2 fresh: launch-probe.json written +80.6 s wallAtLoad +3776 ms; launch-profile-60.json written +80.7 s; launch-profile.json written +80.6 s; launch-watch-65.json written +80.6 s; launch-watch-76.json written +80.7 s; launch-watch.json written +80.6 s
+touch-B2: pid 8002, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-B2 watch:profile marks: [{"n": "watch:profile-start", "t": 111.7, "d": {"started": true}}]
+  touch-B2 cpu peak 177.7% (at 60 s: 27.4%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 15, inbox rows 0, probe-touch: 
+touch-B2: 
+  touch-A3 fresh: launch-probe.json written +80.2 s wallAtLoad +4062 ms; launch-profile-60.json written +80.3 s; launch-profile.json written +80.3 s; launch-watch-65.json written +80.3 s; launch-watch-76.json written +80.3 s; launch-watch.json written +80.2 s
+touch-A3: pid 10423, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-A3 watch:profile marks: [{"n": "watch:profile-start", "t": 85.3, "d": {"started": true}}]
+  touch-A3 cpu peak 118.4% (at 60 s: 16.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 15, inbox rows 0, probe-touch: 
+touch-A3: 
+  touch-B3 fresh: launch-probe.json written +80.6 s wallAtLoad +2679 ms; launch-profile-60.json written +80.6 s; launch-profile.json written +80.6 s; launch-watch-65.json written +80.6 s; launch-watch-76.json written +80.6 s; launch-watch.json written +80.6 s
+touch-B3: pid 12092, probe ok, watch ok, profile 792 KB, maestro FAILED
+  touch-B3 cpu peak 191.9% (at 60 s: 16.2%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 16, inbox rows 0, probe-touch: 
+touch-B3: 
+  touch-A4 fresh: launch-probe.json written +80.3 s wallAtLoad +3071 ms; launch-profile-60.json written +80.3 s; launch-profile.json written +80.3 s; launch-watch-65.json written +80.3 s; launch-watch-76.json written +80.3 s; launch-watch.json written +80.3 s
+touch-A4: pid 13739, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-A4 watch:profile marks: [{"n": "watch:profile-start", "t": 81.3, "d": {"started": true}}]
+  touch-A4 cpu peak 168.5% (at 60 s: 34.2%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 15, inbox rows 0, probe-touch: 
+touch-A4: 
+  touch-B4 fresh: launch-probe.json written +80.2 s wallAtLoad +3329 ms; launch-profile-60.json written +80.2 s; launch-profile.json written +80.2 s; launch-watch-65.json written +80.2 s; launch-watch-76.json written +80.2 s; launch-watch.json written +80.2 s
+touch-B4: pid 15461, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-B4 watch:profile marks: [{"n": "watch:profile-start", "t": 88.2, "d": {"started": true}}]
+  touch-B4 cpu peak 200% (at 60 s: 23.4%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 17, inbox rows 0, probe-touch: 
+touch-B4: 
+  touch-A5 fresh: launch-probe.json written +81.0 s wallAtLoad +3326 ms; launch-profile-60.json written +81.0 s; launch-profile.json written +81.0 s; launch-watch-65.json written +81.0 s; launch-watch-76.json written +81.0 s; launch-watch.json written +81.0 s
+touch-A5: pid 17157, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-A5 watch:profile marks: [{"n": "watch:profile-start", "t": 88.4, "d": {"started": true}}]
+  touch-A5 cpu peak 215.1% (at 60 s: 21.1%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 17, inbox rows 0, probe-touch: 
+touch-A5: 
+  touch-B5 fresh: launch-probe.json written +80.2 s wallAtLoad +3349 ms; launch-profile-60.json written +80.2 s; launch-profile.json written +80.2 s; launch-watch-65.json written +80.2 s; launch-watch-76.json written +80.2 s; launch-watch.json written +80.2 s
+touch-B5: pid 18825, probe ok, watch ok, profile 912 KB, maestro FAILED
+  touch-B5 cpu peak 194.5% (at 60 s: 20.7%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 13, inbox rows 0, probe-touch: 
+touch-B5: 
+launch | app-ready | touchend | tap d | switch frame | whole-list:begin | rows frame | swipe-up d  (ms; frame and whole-list columns from touchend)
+touch-A1 | 2366 | 21612 | 1272 | 657 | 264 | 657 | 49
+touch-B1 | 1996 | 17714 | 1083 | 1530 | 1086 | 1530 | 442
+touch-A2 | 2140 | 17602 | 1497 | 754 | 329 | 754 | 230
+touch-B2 | 1968 | 15093 | 287 | 664 | 288 | 664 | 206
+touch-A3 | 2010 | 16161 | 1423 | 790 | 363 | 790 | 22
+touch-B3 | 1800 | 15602 | 240 | 621 | 241 | 621 | 286
+touch-A4 | 2119 | 16477 | 1316 | 662 | 248 | 662 | 232
+touch-B4 | 1973 | 15266 | 287 | 692 | 288 | 692 | 76
+touch-A5 | 1979 | 15459 | 1344 | 728 | 316 | 728 | 343
+touch-B5 | 1966 | 22652 | 6906 | — | — | — | 75
+median A (n=5) | 2119 | 16477 | 1344 | 728 | 316 | 728 | 230
+median B (n=5) | 1968 | 15602 | 287 | 678 | 288 | 678 | 206
