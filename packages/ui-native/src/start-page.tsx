@@ -389,9 +389,9 @@ function StartHead({ title, head }: Pick<StartPageProps, "title" | "head">) {
  * Send, or Talk while it holds nothing, at its end. Under its field, inside
  * the same glass, stand the + and the capsules saying where and how the work
  * starts (`MenuChip` in its composer look), so the keyboard, or the bar iOS
- * stands over it, never covers them. The skills a `/` offers, what an `@` offers, the pictures
- * attached, and what a start said stand over the field, as they do on an
- * agent's page. The page's own bar holds its close.
+ * stands over it, never covers them. The pictures attached and what a start said stand over the field, and
+ * what a `/` or an `@` offers pops over it, as they do on an agent's
+ * page. The page's own bar holds its close.
  */
 export function StartPage(props: StartPageProps) {
   const { words, skills, mentions, pictures, onDetach, notes } = props;
@@ -400,22 +400,8 @@ export function StartPage(props: StartPageProps) {
   const shown = props.pills === undefined ? pictures : [];
 
   const head =
-    skills === undefined &&
-    mentions === undefined &&
-    shown.length === 0 &&
-    notes.length === 0 ? undefined : (
+    shown.length === 0 && notes.length === 0 ? undefined : (
       <>
-        {skills === undefined ? null : (
-          <SkillSuggestions skills={skills.skills} empty={skills.empty} onPick={skills.onPick} />
-        )}
-        {mentions === undefined ? null : (
-          <MentionSuggestions
-            groups={mentions.groups}
-            empty={mentions.empty}
-            crumb={mentions.crumb}
-            onPick={mentions.onPick}
-          />
-        )}
         <AttachedPictures pictures={shown} onDetach={onDetach} />
         {notes.map((note) => (
           <StartNote key={note} words={note} />
@@ -437,6 +423,22 @@ export function StartPage(props: StartPageProps) {
           onAdd={add.onAdd}
           call={onTalk === undefined ? undefined : { kind: COMPOSER_CALL.TALK, onTalk }}
           head={head}
+          offer={
+            skills !== undefined ? (
+              <SkillSuggestions
+                skills={skills.skills}
+                empty={skills.empty}
+                onPick={skills.onPick}
+              />
+            ) : mentions === undefined ? undefined : (
+              <MentionSuggestions
+                groups={mentions.groups}
+                empty={mentions.empty}
+                crumb={mentions.crumb}
+                onPick={mentions.onPick}
+              />
+            )
+          }
           tools={chips}
           trailing={trailing}
           dictation={props.dictation}

@@ -41,7 +41,7 @@ public final class PillFieldModule: Module {
     Name("PillField")
 
     View(PillFieldView.self) {
-      Events("onWords", "onHeight", "onFocusChange")
+      Events("onWords", "onHeight", "onFocusChange", "onListKey")
 
       Prop("value") { (view: PillFieldView, value: ValueRecord) in
         view.take(StyledRuns(value.runs), seen: value.seen)
@@ -61,6 +61,14 @@ public final class PillFieldModule: Module {
 
       Prop("editable") { (view: PillFieldView, editable: Bool?) in
         view.editable = editable ?? true
+      }
+
+      Prop("listKeys") { (view: PillFieldView, on: Bool?) in
+        view.listKeys = on ?? false
+      }
+
+      Prop("listPicks") { (view: PillFieldView, on: Bool?) in
+        view.listPicks = on ?? false
       }
 
       AsyncFunction("insertPills") { (view: PillFieldView, pills: [PillRecord], word: WordRecord?) in
@@ -493,12 +501,45 @@ final class PillTextView: UITextView {
     get { field?.heardWords() ?? super.accessibilityValue }
     set { super.accessibilityValue = newValue }
   }
+
+  /// A hardware keyboard's ↑ and ↓ while a list is offered over the field, and its Return once an arrow has chosen a row, each told to JavaScript rather than moving the caret or breaking the line, as the desktop's picker takes them.
+  override var keyCommands: [UIKeyCommand]? {
+    guard let field, field.listKeys else { return super.keyCommands }
+    var commands = [
+      listCommand(UIKeyCommand.inputUpArrow, key: "up"),
+      listCommand(UIKeyCommand.inputDownArrow, key: "down"),
+    ]
+    if field.listPicks { commands.append(listCommand("\r", key: "pick")) }
+
+    return commands + (super.keyCommands ?? [])
+  }
+
+  /// A key the offered list takes, ahead of the text view's own use of it.
+  private func listCommand(_ input: String, key: String) -> UIKeyCommand {
+    let command = UIKeyCommand(
+      title: "", action: #selector(listKey(_:)), input: input, modifierFlags: [], propertyList: key)
+    command.wantsPriorityOverSystemBehavior = true
+
+    return command
+  }
+
+  @objc private func listKey(_ command: UIKeyCommand) {
+    guard let key = command.propertyList as? String else { return }
+    field?.onListKey(["key": key])
+  }
 }
 
 final class PillFieldView: ExpoView, UITextViewDelegate {
   let onWords = EventDispatcher()
   let onHeight = EventDispatcher()
   let onFocusChange = EventDispatcher()
+  let onListKey = EventDispatcher()
+
+  /// Whether a list is offered over the field, whose rows a hardware keyboard's arrows move through.
+  var listKeys = false
+
+  /// Whether an arrow has chosen one of the offered list's rows, which Return then picks.
+  var listPicks = false
 
   private let textView = PillTextView(usingTextLayoutManager: true)
   private let placeholderLabel = UILabel()

@@ -13,6 +13,7 @@ import {
   type NativeWords,
 } from "./pill-field-native.js";
 import { pillLook } from "./pill-look.js";
+import { type ListKeysField, listKeyOf } from "./suggestion-keys.js";
 import { useColors } from "./tokens/colors.js";
 
 /** No files held: every marker stays words. */
@@ -53,6 +54,8 @@ interface PillFieldProps {
   /** The `@` word the caret stands in as it changes, which a mention offer reads; none once the caret stands in none. */
   readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
+  /** The list offered over the field, whose rows a hardware keyboard's keys move through and pick (`useSuggestionKeysHost`); none while none floats. */
+  readonly listKeys?: ListKeysField | undefined;
   readonly testID?: string | undefined;
 }
 
@@ -79,6 +82,7 @@ export function PillField({
   autoFocus,
   onAtWord,
   onFocusChange,
+  listKeys,
   testID,
 }: PillFieldProps) {
   const colors = useColors();
@@ -174,6 +178,13 @@ export function PillField({
         void native.current?.focus();
       }}
       onFocusChange={({ nativeEvent }) => onFocusChange?.(nativeEvent.focused)}
+      listKeys={listKeys !== undefined}
+      listPicks={listKeys?.picks === true}
+      onListKey={({ nativeEvent }) => {
+        const key = listKeyOf(nativeEvent.key);
+
+        if (key !== undefined) listKeys?.onKey(key);
+      }}
     />
   );
 }

@@ -385,20 +385,17 @@ export function ThreadComposer({
   // Note that the thread's own agent, whom the reply goes to, is left out of what an `@` offers, as on its own page.
   const mentions = useMentionOffer({ ...place, agentId: item.agentId }, pillField.mentions);
 
-  // Note that the box's head holds what an `@` offers, then the newest refusal.
-  const head =
-    mentions === undefined && said === undefined ? undefined : (
-      <>
-        {mentions === undefined ? null : (
-          <MentionSuggestions
-            groups={mentions.groups}
-            empty={mentions.empty}
-            crumb={mentions.crumb}
-            onPick={mentions.pick}
-          />
-        )}
-        {said === undefined ? null : <AskNote words={said} />}
-      </>
+  // Note that the box's head holds the newest refusal; what an `@` offers stands in the system's popover over the box.
+  const head = said === undefined ? undefined : <AskNote words={said} />;
+
+  const offer =
+    mentions === undefined ? undefined : (
+      <MentionSuggestions
+        groups={mentions.groups}
+        empty={mentions.empty}
+        crumb={mentions.crumb}
+        onPick={mentions.pick}
+      />
     );
 
   const placeholder = asNew
@@ -418,6 +415,7 @@ export function ThreadComposer({
     sendAs: nods ? GOT_IT_SEND : undefined,
     // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
     head,
+    offer,
     tools: box.tools,
     trailing: box.trailing,
     dictation: dictated.dictation,
