@@ -307,16 +307,22 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   so only the button under a finger or the pointer reacts, and no button
   is handed a hover effect: the system draws its own on each style, where
   an added highlight drew a second platter on iPadOS 26.
-- **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
-  unread dot in the margin, at 9 pt the strongest mark a row carries as
-  Mail's is, a 16 pt leading mark in a 20 pt column (the
-  status ring, or the ask's glyph on an agent's own thread), the words from
-  `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
-  words. An Inbox thread stands roomier, as Mail's message rows do
-  (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
-  its lines), while a task's row keeps the list's tighter inset and draws no
-  dot, its ring standing at the list's edge (`ROW_INSET.PLAIN`) where a
-  dotted row's ring stands past the dot's margin, so the two line up. A row a
+- **Rows** stand plain and edge to edge on `GROUND`, never as cards, laid
+  out as Mail's Inbox, measured from Apple's own screenshot of it, from the
+  system's layout margin (`useRowInset`: 16 pt in an iPhone's window, 20 pt
+  in a Plus or Pro Max's, on its side, and on an iPad, as UIKit's stand):
+  the unread dot in the leading margin, its trailing edge on it, at 9 pt the
+  strongest mark a row carries as Mail's is, then Mail's 8 pt gutter
+  (`ROW_INSET.GUTTER`), a 16 pt leading mark in a 20 pt column (the status
+  ring, or the ask's glyph on an agent's own thread), the words from
+  `inset.text`, a hairline in `CHIP_EDGE` that starts under the words, and
+  the row's end on the trailing margin; a section's header starts where the
+  marks do. An Inbox thread stands as Mail's message rows do, its three
+  lines in Mail's type 8 pt from its top and bottom
+  (`ROW_INSET.THREAD_VERTICAL`, `THREAD_LINE_GAP` between its lines), while
+  a task's row keeps one line 44 pt tall and draws no dot, its ring
+  standing where a dotted row's stands past the dot and the gutter
+  (`inset.lead`), so the two line up. A row a
   split view's list keeps selected stands on a rounded `SELECTED` fill set in
   from the column's edges (`ROW_INSET.FILL`), its hairlines stepping aside, as
   Mail's selected message does; its words don't move.

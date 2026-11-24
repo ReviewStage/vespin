@@ -14,13 +14,14 @@ import { agoText } from "@repo/features/time-format";
 import { type ReactElement, useMemo } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
+import { useRowInset } from "./layout-margin.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import { Avatar, type Face, ToneGlyph } from "./marks.js";
 import { BotTag } from "./pull-request-page.js";
 import type { RowAction, RowSubmenu } from "./row-menu-model.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The most of an entry's Markdown its folded preview reads, so a long comment's preview costs no more than a short one's. */
@@ -45,13 +46,15 @@ export type EntryStanding = { readonly mark: MarkLook; readonly words: string };
 /**
  * Words under a row's head, set in from the screen's edge as the page's
  * other words stand (`SPACE.EDGE`), since the row's own content starts at
- * the unread dot's margin.
+ * the unread dot's inset.
  */
 function UnderHead({ children }: { readonly children: ReactElement }) {
+  const inset = useRowInset();
+
   return (
     <VStack
       alignment="leading"
-      modifiers={[padding({ leading: SPACE.EDGE - ROW_INSET.LEADING, top: SPACE.TIGHT })]}
+      modifiers={[padding({ leading: SPACE.EDGE - inset.dotted, top: SPACE.TIGHT })]}
     >
       {children}
     </VStack>

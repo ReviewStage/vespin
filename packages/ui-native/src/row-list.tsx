@@ -63,6 +63,7 @@ import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink, headerMenu, rowHeard, sideMargins, stackScrollEdge } from "./interactions.js";
+import { useRowInset } from "./layout-margin.js";
 import type { LongPressGroup } from "./list-row.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
@@ -740,6 +741,7 @@ export function ListSection({
   const folded = held ?? own;
   const look = useContext(ListLookContext);
   const reduceMotion = useReduceMotion();
+  const inset = useRowInset();
   const colors = useColors();
 
   const setFolded = (next: boolean) => {
@@ -855,7 +857,7 @@ export function ListSection({
       <HStack
         modifiers={[
           listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
-          padding({ horizontal: SPACE.EDGE, vertical: HEADER_VERTICAL }),
+          padding({ leading: inset.lead, trailing: inset.margin, vertical: HEADER_VERTICAL }),
           frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
           background(colors.GROUND),
         ]}
