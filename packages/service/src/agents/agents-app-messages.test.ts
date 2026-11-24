@@ -2260,9 +2260,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, agent, ask, target } = yield* messagedAgent(agentSessions, {
           running: false,
         });
+
         const db = yield* Database;
 
         yield* db
@@ -2291,6 +2293,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
 
         const [written] = yield* readManagerChatPage(owner, agent.id, { limit: 10 });
+
         const kept = yield* db
           .select({ id: attachment.id })
           .from(attachment)
