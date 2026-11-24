@@ -1,0 +1,283 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fmenu10566-iphone
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Pinned" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot c1-view-options-closed... COMPLETED
+Run flow when "View options" is not visible...
+Run flow when "View options" is not visible... SKIPPED
+Tap on "View options"... COMPLETED
+Assert that "Group by" is visible... COMPLETED
+Tap on "Status"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m1a-view-status... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot c2-view-options-closed... COMPLETED
+Run flow when "View options" is not visible...
+Run flow when "View options" is not visible... SKIPPED
+Tap on "View options"... COMPLETED
+Assert that "Group by" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m1b-view-menu... COMPLETED
+Tap on (Optional) "Assigned to"... WARNED
+Wait for animation to end... COMPLETED
+Take screenshot m1b-view-assigned... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Tap on "Weekly digest email"... COMPLETED
+Wait for animation to end... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot c3-more-closed... COMPLETED
+Run flow when "More" is not visible...
+Run flow when "More" is not visible... SKIPPED
+Tap on "More"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m2-task-more... COMPLETED
+Tap on (Optional) "Move to section"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m2a-move-to-section... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Tap on "Weekly digest email"... COMPLETED
+Wait for animation to end... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot c4-more-closed... COMPLETED
+Run flow when "More" is not visible...
+Run flow when "More" is not visible... SKIPPED
+Tap on "More"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on (Optional) "Change repository|Choose a repository"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m2b-task-repository... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Weekly digest email", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Tap on "Assignee"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m3a-row-assignee... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Weekly digest email", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot c5-more-closed... COMPLETED
+Run flow when "More" is not visible...
+Run flow when "More" is not visible... SKIPPED
+Tap on "More"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m3b-row-more... COMPLETED
+Tap on (Optional) "Change repository|Choose a repository"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m3b-row-repository... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "New task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "ada/relay"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m4-newtask-repository... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Managers" is visible... COMPLETED
+Tap on (Optional) "New Manager"... COMPLETED
+Assert that (Optional) "Repositories" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m5a-new-manager... COMPLETED
+Tap on (Optional) "Model"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m5b-new-manager-model... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that ".*walked the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot c6-more-closed... COMPLETED
+Run flow when "More" is not visible...
+Run flow when "More" is not visible... SKIPPED
+Tap on "More", Index: -1... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m6-thread-more... COMPLETED
+Tap on "Open agent"... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot c7-more-closed... COMPLETED
+Run flow when "More" is not visible...
+Run flow when "More" is not visible... SKIPPED
+Tap on "More", Index: -1... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot m7-agent-more... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: automations-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot c8-automations-view-options-closed... COMPLETED
+Run flow when "View options" is not visible...
+Run flow when "View options" is not visible... SKIPPED
+Tap on (Optional) "View options"...
