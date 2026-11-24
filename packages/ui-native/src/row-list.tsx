@@ -73,7 +73,6 @@ import {
   RowOpenContext,
   RowSearchedContext,
   RowSelectedContext,
-  RowSystemLookContext,
 } from "./row-open.js";
 import { sectionInk } from "./section-ink.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
@@ -108,7 +107,7 @@ const HEADER_VERTICAL = SPACE.ROW;
 export const LIST_LOOK = {
   PLAIN: "plain",
   DETAIL: "grouped",
-  /** An iPad's own sidebar, the system's sidebar list, so it keeps the system's sidebar metrics, keyboard focus and arrow keys, and pointer hover. */
+  /** An iPad's own sidebar: plain rows, as a list's, on no ground of its own, so they stand clear on the sidebar's floating glass. Note that it is not the system's sidebar list style, which, outside a system split view's sidebar column, draws its rows as inset cards. */
   SIDEBAR: "sidebar",
 } as const;
 
@@ -342,9 +341,9 @@ export function RowList({
         if (id !== undefined) onSelect?.(id);
       }}
       modifiers={[
-        listStyle(look),
+        listStyle(sidebar ? LIST_LOOK.PLAIN : look),
         scrollContentBackground("hidden"),
-        // Note that the system's sidebar list paints no ground of ours, so it stands clear on the sidebar's glass.
+        // Note that a sidebar's list paints no ground of ours, so it stands clear on the sidebar's glass.
         ...(sidebar ? [] : listGround(colors)),
         onGeometryChange(({ width: next }) => setWidth(next)),
         ...(sides > 0 ? [sideMargins(sides)] : []),
@@ -365,20 +364,18 @@ export function RowList({
       ]}
     >
       <ListLookContext value={look}>
-        <RowSystemLookContext value={sidebar}>
-          <RowOpenContext value={onSelect}>
-            <RowSelectedContext value={choosing === undefined && !sidebar ? selected : undefined}>
-              {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
-              {lead === undefined || choosing !== undefined ? null : lead}
-              {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
-              {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
-              <RowSearchedContext value={searchedWords}>
-                <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
-              </RowSearchedContext>
-              {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
-            </RowSelectedContext>
-          </RowOpenContext>
-        </RowSystemLookContext>
+        <RowOpenContext value={onSelect}>
+          <RowSelectedContext value={choosing === undefined ? selected : undefined}>
+            {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
+            {lead === undefined || choosing !== undefined ? null : lead}
+            {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
+            {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
+            <RowSearchedContext value={searchedWords}>
+              <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
+            </RowSearchedContext>
+            {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
+          </RowSelectedContext>
+        </RowOpenContext>
       </ListLookContext>
     </List>
   );

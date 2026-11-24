@@ -181,6 +181,7 @@ export function useSidebarShowAction(): BarAction | undefined {
  */
 export function AppSidebarPane() {
   const router = useRouter();
+  const openSettings = useOpenSettings();
   const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const inboxShown = useInboxShown();

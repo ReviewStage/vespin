@@ -101,7 +101,6 @@ import {
   RowOpenContext,
   RowSearchedContext,
   RowSelectedContext,
-  RowSystemLookContext,
 } from "./row-open.js";
 import { previewTree, type RowPreview } from "./row-preview-model.js";
 import { searchedTitleMarkdown } from "./searched-title-model.js";
@@ -451,7 +450,6 @@ export function rowPlacement(
     indent = 0,
     dot = true,
     reach = 0,
-    system = false,
   }: {
     readonly selected?: boolean | undefined;
     readonly vertical?: number | undefined;
@@ -459,15 +457,12 @@ export function rowPlacement(
     /** Whether the row draws the unread dot's column, which stands in the margin; a task's row, which draws none, starts its lead at `inset.lead`. */
     readonly dot?: boolean | undefined;
     readonly reach?: number | undefined;
-    /** Whether the row keeps the system sidebar list's own ground and selection highlight, as an iPad's own sidebar's rows do, rather than clearing it for a fill of ours. */
-    readonly system?: boolean | undefined;
   } = {},
 ) {
   const leading = dot ? inset.dotted : inset.lead;
 
   return [
-    // Note that a row of the system's sidebar list keeps its cell's ground, since a row ground of ours hides the list's own selection highlight.
-    ...(system ? [] : [listRowBackground("clear")]),
+    listRowBackground("clear"),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({
       leading: leading - ROW_INSET.FILL,
@@ -593,7 +588,6 @@ export function RowFrame({
   const fills = useSystemColors();
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
-  const system = useContext(RowSystemLookContext);
   const disclosed = useContext(RowDisclosedContext);
   const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
@@ -664,7 +658,6 @@ export function RowFrame({
       indent,
       dot,
       reach: disclosed ? inset.margin + chevronRoom : 0,
-      system,
     }),
     ...(heard === undefined
       ? []
