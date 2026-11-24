@@ -1,4 +1,4 @@
-// marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar or photo, an agent's tile, the needs-you, working, and failed marks and a glyph in its tone.
+// marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar or photo, an agent's tile or a Manager's face, the needs-you, working, and failed marks and a glyph in its tone.
 
 import {
   Circle,
@@ -11,8 +11,10 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
+  Animation,
   accessibilityHidden,
   accessibilityLabel,
+  animation,
   fixedSize,
   font,
   foregroundStyle,
@@ -30,6 +32,7 @@ import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-pictu
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
+import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import {
   TASK_PRIORITY_WORDS,
@@ -44,6 +47,7 @@ import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
+import { managerFaceAsset } from "./manager-face-look.js";
 import {
   HARNESS_MARK_ASSET,
   LETTER_SCALE,
@@ -398,14 +402,22 @@ export function Avatar({
 export function AgentTile({
   harness,
   size = MARK_SIZE.AVATAR,
+  face,
+  working = false,
 }: {
   /** The provider whose harness the agent runs in (`providerOf` its model); none where it is not known. */
   readonly harness?: ModelProvider | undefined;
   /** Its width, in points; a row's where none is given. */
   readonly size?: number | undefined;
+  /** A Manager's face, which stands in the tile's place, as the panel's `ManagerGlyph` stands in its glyph's; none for any other agent. */
+  readonly face?: ManagerFaceValue | undefined;
+  /** Whether the agent is at work, which a Manager's face wears; a tile says nothing of it. */
+  readonly working?: boolean | undefined;
 }) {
   const colors = useColors();
   const glyph = size * TILE_GLYPH_SCALE;
+
+  if (face !== undefined) return <ManagerFace face={face} size={size} working={working} />;
 
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
@@ -434,6 +446,106 @@ export function AgentTile({
     </ZStack>
   );
 }
+
+/** Where a Manager's face stands: as a mark of its own, such as a row's lead or a writer's, which wears the working disc, or among words, such as a suggestion's, too small to hold it, where its mood and its bob say it works alone, as the panel's face among words does. */
+export const MANAGER_FACE_SEAT = {
+  MARK: "mark",
+  WORDS: "words",
+} as const;
+
+export type ManagerFaceSeat = (typeof MANAGER_FACE_SEAT)[keyof typeof MANAGER_FACE_SEAT];
+
+/** The least side a working Manager's disc stands at, in points: the panel's at a row's 20 px face. */
+const FACE_DISC_LEAST = 12;
+
+/** How much of a face's side its working disc stands at past the least, and how much of the disc the working mark inside it fills, as the panel's seats size them. */
+const FACE_DISC_SCALE = 0.5;
+const FACE_DISC_MARK_SCALE = 2 / 3;
+
+/** How far past the face's end corner its disc stands, in points, as the panel's stands 2 px out. */
+const FACE_DISC_OUT = 2;
+
+/** How high a working face bobs, of its side, and how long each rise or fall takes, in seconds: the panel's 8% each 0.8 s, half the working mark's lap. */
+const FACE_BOB = 0.08;
+const FACE_BOB_SECONDS = 0.8;
+
+/** How many of the working beat's steps a bob's rise or fall lasts, so a face and the mark beside it keep one time. */
+const FACE_BOB_STEPS = 4;
+
+/** Never bobs, for a face at rest or held still. */
+function holdBob(): () => void {
+  return () => undefined;
+}
+
+/** Whether a working face stands risen: half the working mark's lap up, half down, read off the one beat, so it draws again only as it turns; never where it rests or the reader reduces motion. */
+function useBobRisen(bobs: boolean): boolean {
+  return useSyncExternalStore(
+    bobs ? subscribeWorkingBeat : holdBob,
+    () => bobs && Math.floor(readWorkingBeat() / FACE_BOB_STEPS) % 2 === 0,
+  );
+}
+
+/**
+ * A Manager's face, as the panel's `ManagerFace` draws it
+ * (`@repo/features/manager-face`'s character and color): one vector picture
+ * of the asset catalog (`managerFaceAsset`), drawn and cached by the system,
+ * so a long list of them costs no more than its glyphs. At rest it smiles;
+ * while the Manager works the same character turns excited, bobs gently
+ * on the working beat, SwiftUI easing each rise and fall, and, as a mark
+ * of its own, wears the working mark on a disc of the ground at its end
+ * corner (`MANAGER_FACE_SEAT`), so working
+ * changes how the face looks and never which face it is. Where the reader
+ * reduces motion it holds still, the disc saying it works. It is never
+ * heard, since it always stands beside the name it leads, as `AgentTile` is.
+ */
+export const ManagerFace = memo(function ManagerFace({
+  face,
+  size,
+  working = false,
+  seat = MANAGER_FACE_SEAT.MARK,
+}: {
+  readonly face: ManagerFaceValue;
+  /** Its side, in points. */
+  readonly size: number;
+  readonly working?: boolean | undefined;
+  /** Where it stands, which says whether it wears the working disc; a mark of its own where none is given. */
+  readonly seat?: ManagerFaceSeat | undefined;
+}) {
+  const colors = useColors();
+  const reduceMotion = useReduceMotion();
+  const risen = useBobRisen(working && !reduceMotion);
+  const disc = Math.max(FACE_DISC_LEAST, size * FACE_DISC_SCALE);
+
+  return (
+    <ZStack
+      alignment="bottomTrailing"
+      modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
+    >
+      <Image
+        assetName={managerFaceAsset(face, working)}
+        modifiers={[
+          resizable(),
+          frame({ width: size, height: size }),
+          offset({ y: risen ? -size * FACE_BOB : 0 }),
+          ...(working && !reduceMotion
+            ? [animation(Animation.easeInOut({ duration: FACE_BOB_SECONDS }), risen)]
+            : []),
+        ]}
+      />
+      {working && seat === MANAGER_FACE_SEAT.MARK ? (
+        <ZStack
+          modifiers={[
+            frame({ width: disc, height: disc }),
+            offset({ x: FACE_DISC_OUT, y: FACE_DISC_OUT }),
+          ]}
+        >
+          <Circle modifiers={[foregroundStyle(colors.GROUND)]} />
+          <WorkingMark side={disc * FACE_DISC_MARK_SCALE} />
+        </ZStack>
+      ) : null}
+    </ZStack>
+  );
+});
 
 /** The mark of the harness a model runs in, as the panel leads a model's name with it: Claude Code's Clawd or Codex's picture, in its own colors, at `size`, unheard beside the name it leads. */
 export function HarnessMark({
@@ -538,9 +650,15 @@ function useBeat(still: boolean): number {
  * mark itself draws again on a step, never the row it stands in, since it
  * reads the beat alone. It is heard as Working.
  */
-export function WorkingMark() {
+export function WorkingMark({
+  side: given,
+}: {
+  /** Its side, in points, such as inside a Manager's face's disc; the 16 pt mark at the reader's text size where none is given. */
+  readonly side?: number | undefined;
+} = {}) {
   const colors = useColors();
-  const side = useScaledSize(WORKING_SIDE);
+  const scaled = useScaledSize(WORKING_SIDE);
+  const side = given ?? scaled;
   const scale = side / WORKING_SIDE;
   const beat = useBeat(useReduceMotion());
   const cell = WORKING_CELL * scale;

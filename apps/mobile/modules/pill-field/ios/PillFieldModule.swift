@@ -425,7 +425,8 @@ final class PillView: UIView {
     isAccessibilityElement = false
     glyph.image = Self.image(named: pill.glyph)
     glyph.tintColor = look.pillGlyph
-    glyph.contentMode = .center
+    // Note that a picture, such as a Manager's face, is fit to the glyph's square, where a symbol stands at its font's own size.
+    glyph.contentMode = glyph.image?.isSymbolImage == false ? .scaleAspectFit : .center
     label.text = pill.words
     label.font = pillFont()
     label.textColor = look.pillWords
@@ -439,7 +440,7 @@ final class PillView: UIView {
     fatalError("A pill is never decoded.")
   }
 
-  /// The glyph by its name: one of the app's symbol sets, or an SF Symbol where the panel draws none of its own.
+  /// The glyph by its name: one of the app's symbol sets or pictures, such as a Manager's face, or an SF Symbol where the panel draws none of its own.
   static func image(named name: String) -> UIImage? {
     let configuration = UIImage.SymbolConfiguration(font: pillFont(), scale: .small)
     return UIImage(named: name, in: nil, with: configuration)

@@ -40,6 +40,8 @@ import {
   sameAtWord,
   toldWord,
 } from "./caret-at-word.js";
+import { useChipMarkOf } from "./chip-mark.js";
+import type { ChipMarkOf } from "./chip-mark-model.js";
 import { editedBlocks, editedLines, type FieldLine, fieldLines } from "./document-field-model.js";
 import {
   FORMAT_ACT,
@@ -237,11 +239,16 @@ function cardOf(locked: LockedKind, source: string): NativeCard {
 }
 
 /** A run as the native field takes it: words, a pill drawn as the panel's chip, a picture or break kept as its source as a pill of its own, or a locked block's card. */
-function nativeRun(run: InlineRun, line: FieldLine, reading: MarkdownReading): NativeDocumentRun {
+function nativeRun(
+  run: InlineRun,
+  line: FieldLine,
+  reading: MarkdownReading,
+  markOf: ChipMarkOf,
+): NativeDocumentRun {
   if (run.kind === INLINE_RUN.WORDS) return { text: run.text, marks: run.marks, link: run.link };
 
   if (run.kind === INLINE_RUN.PILL)
-    return { pill: { markdown: run.pill.markdown, ...pillLook(run.pill, reading) } };
+    return { pill: { markdown: run.pill.markdown, ...pillLook(run.pill, reading, markOf) } };
 
   if (line.kind === BLOCK_KIND.LOCKED)
     return { card: cardOf(line.locked ?? LOCKED_KIND.OTHER, run.source) };
@@ -352,6 +359,9 @@ export function DocumentField({
     [ready, base, files],
   );
 
+  // Note that a pill leads with a Manager's face where the app holds one, so the words are handed again as the marks move, as they are on each key.
+  const markOf = useChipMarkOf();
+
   const handed = useMemo(() => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
     const laid = own ? told.lines : fieldLines(read);
@@ -359,12 +369,12 @@ export function DocumentField({
     const lines = laid.map(
       (line): NativeDocumentLine => ({
         ...line,
-        runs: line.runs.map((run) => nativeRun(run, line, reading)),
+        runs: line.runs.map((run) => nativeRun(run, line, reading, markOf)),
       }),
     );
 
     return { markdown: base, value: { lines, seen } };
-  }, [own, told, read, base, repository, seen]);
+  }, [own, told, read, base, repository, seen, markOf]);
 
   const look = {
     text: colors.TEXT,
@@ -471,7 +481,10 @@ export function DocumentField({
     ref,
     () => ({
       pick: (pill) => {
-        void native.current?.insertPills([drawnPill(pill, repository)], toldWord(atWord.current));
+        void native.current?.insertPills(
+          [drawnPill(pill, repository, markOf)],
+          toldWord(atWord.current),
+        );
       },
       rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
       focus: () => void native.current?.focus(),
@@ -481,7 +494,7 @@ export function DocumentField({
         latest.current();
       },
     }),
-    [repository],
+    [repository, markOf],
   );
 
   // Note that the read-only head is no field, so nothing waits on it as the field it stands in for; it stands clear of the bar as the field's text view does, and in a page's list it stands at its own height, as the words read there.

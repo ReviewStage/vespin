@@ -2454,6 +2454,7 @@ export function TaskAgentRow({
       id={agent.id}
       name={name}
       harness={harness}
+      face={agent.face}
       state={agentState(agent.status)}
       runsOn={runsOn}
       runsOnGlyph={placeGlyph}
@@ -2512,6 +2513,7 @@ export function TaskAgentRow({
       preview={agentPreview({
         name,
         harness,
+        face: agent.face,
         status: agent.status,
         task: task === undefined ? undefined : { name: task.name, status: task.status },
         model: modelLabel(agent.model),

@@ -6,6 +6,7 @@ import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { type CaretAtWord, caretAtWord, drawnPill, sameAtWord, toldWord } from "./caret-at-word.js";
+import { useChipMarkOf } from "./chip-mark.js";
 import {
   NativePillField,
   type NativePillFieldDoors,
@@ -95,11 +96,14 @@ export function PillField({
   const told = useRef({ markdown: value });
   const atWord = useRef<CaretAtWord | undefined>(undefined);
 
+  // Note that a pill leads with a Manager's face where the app holds one, so the words are handed again as the marks move, as they are on each key.
+  const markOf = useChipMarkOf();
+
   const handed = useMemo((): NativeValue => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
 
     const drawn = (pill: Pill) => ({
-      pill: { markdown: pill.markdown, ...pillLook(pill, reading) },
+      pill: { markdown: pill.markdown, ...pillLook(pill, reading, markOf) },
     });
 
     // Note that the looks are read only for a field that draws them, so a message's box never parses its words on each key.
@@ -113,7 +117,7 @@ export function PillField({
           );
 
     return { runs, seen };
-  }, [value, files, repository, seen, styled]);
+  }, [value, files, repository, seen, styled, markOf]);
 
   const look = {
     text: colors.TEXT,
@@ -128,19 +132,22 @@ export function PillField({
     ref,
     () => ({
       pick: (pill) => {
-        void native.current?.insertPills([drawnPill(pill, repository)], toldWord(atWord.current));
+        void native.current?.insertPills(
+          [drawnPill(pill, repository, markOf)],
+          toldWord(atWord.current),
+        );
       },
       rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
       place: (pills) => {
         void native.current?.insertPills(
-          pills.map((pill) => drawnPill(pill, repository)),
+          pills.map((pill) => drawnPill(pill, repository, markOf)),
           undefined,
         );
       },
       focus: () => void native.current?.focus(),
       blur: () => void native.current?.blur(),
     }),
-    [repository],
+    [repository, markOf],
   );
 
   const onWords = ({ nativeEvent: words }: NativeSyntheticEvent<NativeWords>) => {
