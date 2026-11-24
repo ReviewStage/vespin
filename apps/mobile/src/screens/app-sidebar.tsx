@@ -189,6 +189,7 @@ export function AppSidebarPane() {
   const { toggle } = useAppSidebarShown();
   const mergeQueueOn = useMergeQueueOn();
   const onTab = useOnTab();
+  const compose = useComposeAction();
 
   const go = (id: string) => {
     switch (id) {
@@ -249,7 +250,11 @@ export function AppSidebarPane() {
         <RowList look={LIST_LOOK.SIDEBAR} selected={here} onSelect={go}>
           {/* Note that the workspace heads the sidebar, as the panel's does, its menu holding the workspaces and Manage; the account and Settings stand at the foot instead. */}
           {switcher === undefined ? null : (
-            <WorkspaceSwitcherRow {...switcher} account={undefined} />
+            <WorkspaceSwitcherRow
+              {...switcher}
+              account={undefined}
+              compose={{ label: compose.label, symbol: GLYPH.NEW_TASK, onPress: compose.onPress }}
+            />
           )}
           <ListSection>
             <PlaceRow

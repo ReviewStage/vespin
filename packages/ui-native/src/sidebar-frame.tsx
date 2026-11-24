@@ -3,6 +3,7 @@
 import { type ReactNode, useState } from "react";
 import { LayoutAnimation, StyleSheet, View } from "react-native";
 import { useReduceMotion } from "./accessibility.js";
+import { useColors } from "./tokens/colors.js";
 
 /** How wide the sidebar stands, as the panel's sidebar stands beside its pages. */
 const SIDEBAR_WIDTH = 300;
@@ -33,6 +34,7 @@ export function SidebarFrame({
   readonly children: ReactNode;
 }) {
   const reduceMotion = useReduceMotion();
+  const colors = useColors();
   const [was, setWas] = useState(shown);
 
   // Note that the slide is asked for as the render that moves it begins, because React Native's layout animation takes the next layout it commits, and an effect runs after that one.
@@ -43,7 +45,8 @@ export function SidebarFrame({
   }
 
   return (
-    <View style={styles.frame}>
+    // Note that the window's ground stands behind the sidebar's floating glass, as the pages' ground does beside it.
+    <View style={[styles.frame, { backgroundColor: colors.GROUND }]}>
       <View style={[styles.room, { width: shown ? SIDEBAR_WIDTH : 0 }]}>
         <View style={styles.sidebar}>{sidebar}</View>
       </View>

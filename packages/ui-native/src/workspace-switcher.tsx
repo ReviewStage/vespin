@@ -20,6 +20,7 @@ import {
   font,
   foregroundStyle,
   frame,
+  labelStyle,
   lineLimit,
   listRowBackground,
   listRowInsets,
@@ -271,11 +272,16 @@ export const WorkspaceSwitcher = memo(function WorkspaceSwitcher(props: Workspac
  * The switcher heading an iPad's own sidebar, as the panel's sidebar heads
  * itself with the workspace: its tile, its name and ⌄ on the list's first
  * row, its words where the rows' words start, which picks nothing itself
- * and opens the switcher's menu.
+ * and opens the switcher's menu, and New task's glyph at the row's end, as
+ * the panel's head ends in it.
  */
-export const WorkspaceSwitcherRow = memo(function WorkspaceSwitcherRow(
-  props: WorkspaceSwitcherProps,
-) {
+export const WorkspaceSwitcherRow = memo(function WorkspaceSwitcherRow({
+  compose,
+  ...props
+}: WorkspaceSwitcherProps & {
+  /** New task at the row's end, as the panel's sidebar ends its workspace's row with it. */
+  readonly compose?: SwitcherAction | undefined;
+}) {
   const inset = useRowInset();
 
   return (
@@ -293,6 +299,13 @@ export const WorkspaceSwitcherRow = memo(function WorkspaceSwitcherRow(
     >
       <WorkspaceSwitcherItem {...props} look={SWITCHER_LOOK.NAMED} />
       <Spacer />
+      {compose === undefined ? null : (
+        <SwiftUIButton
+          {...actContent(compose.label, compose.symbol)}
+          onPress={compose.onPress}
+          modifiers={[labelStyle("iconOnly"), buttonStyle("borderless")]}
+        />
+      )}
     </HStack>
   );
 });

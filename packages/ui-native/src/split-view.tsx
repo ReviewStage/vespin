@@ -25,6 +25,7 @@ import {
   font,
   foregroundStyle,
   frame,
+  glassEffect,
   ignoreSafeArea,
   lineLimit,
   type ModifierConfig,
@@ -476,15 +477,17 @@ function Column({
   const colors = useColors();
   const text = useSearchWords(bar.search);
   const listed = place === COLUMN_PLACE.LIST;
-  // Note that the list ends in a hairline beside the detail, as Mail's message list does, and an iPad's own sidebar beside the tabs, because the columns paint one ground and the system's sidebar column draws no edge of its own.
-  const ruled = listed || place === COLUMN_PLACE.APP;
+  // Note that the list ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own.
+  const ruled = listed;
+  // Note that an iPad's own sidebar paints no ground, so it stands clear on its floating glass, as Mail's sidebar does.
+  const grounded = place !== COLUMN_PLACE.APP;
 
   const stacked = (
     <ZStack
       modifiers={[
         // Note that the column paints its ground itself, filling it under its bar too, because the shots showed `containerBackground` leaving a dark column at the system's black beside the list's ground, where Mail paints its columns one ground.
         frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
-        background(colors.GROUND),
+        ...(grounded ? [background(colors.GROUND)] : []),
         // Note that the list column is drawn at its own width, which a person drags its divider within, rather than the system's fixed one.
         ...(listed ? [navigationSplitViewColumnWidth(LIST_COLUMN_WIDTH)] : []),
         // Note that the list stands its title large under its bar, collapsing into it as the list scrolls, as Mail's list column does, rather than leading the bar (`inlineLarge`), because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline, because iPadOS 26 otherwise holds an empty large-title band under it.
@@ -652,12 +655,17 @@ export function PageColumn({
   );
 }
 
+/** How far an iPad's own sidebar floats in from the window's edges, and how round its glass stands, as iPadOS 26 floats its sidebars. */
+const PANE_FLOAT = { INSET: 8, RADIUS: 24 } as const;
+
 /**
  * An iPad's own sidebar, standing beside the tabs as the panel's sidebar
  * stands beside its pages, so every page, a pushed one included, keeps it
  * beside it: its rows under its bar, which holds Hide Sidebar, and at its
- * foot what its bar's `bottom` pins in the system's glass, such as the
- * workspace switcher and the account. It is one SwiftUI host of its own.
+ * foot what its bar's `bottom` pins, such as the account and Settings. It
+ * floats in from the window's edges on the system's Liquid Glass, rounded,
+ * as iPadOS 26's own sidebars float, the glass going solid where the reader
+ * reduces transparency. It is one SwiftUI host of its own.
  */
 export function SidebarPane({
   view,
@@ -669,8 +677,17 @@ export function SidebarPane({
   const colors = useColors();
 
   return (
-    <Host style={{ flex: 1 }} modifiers={[tint(colors.TEXT)]}>
-      <NavigationStack>
+    <Host style={{ flex: 1, margin: PANE_FLOAT.INSET }} modifiers={[tint(colors.TEXT)]}>
+      <NavigationStack
+        modifiers={[
+          glassEffect({
+            glass: { variant: "regular" },
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+            shape: "roundedRectangle",
+            cornerRadius: PANE_FLOAT.RADIUS,
+          }),
+        ]}
+      >
         <Column view={view} bar={bar} place={COLUMN_PLACE.APP} />
       </NavigationStack>
     </Host>
