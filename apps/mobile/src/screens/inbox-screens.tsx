@@ -1562,7 +1562,7 @@ export function InboxThreadScreen() {
   const steps = useThreadSteps(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
-  useOpenDrawnCount(handed ? undefined : PRODUCT_SURFACE.THREAD);
+  useOpenDrawnCount(handed ? undefined : PRODUCT_SURFACE.THREAD, listed !== undefined);
 
   return (
     <>

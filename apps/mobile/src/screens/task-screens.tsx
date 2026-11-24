@@ -3623,7 +3623,7 @@ export function TaskScreen() {
   const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
   // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
-  useOpenDrawnCount(handed ? undefined : PRODUCT_SURFACE.TASK);
+  useOpenDrawnCount(handed ? undefined : PRODUCT_SURFACE.TASK, held !== undefined);
   // Note that the read waits for the push to end, since the list it redraws under a push still running left the page unpushed (`usePushStood`).
   const stood = usePushStood();
   useTaskReadOnOpen(handed || !stood ? undefined : overview?.task.id);
