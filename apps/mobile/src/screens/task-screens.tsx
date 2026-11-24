@@ -267,7 +267,6 @@ import {
 } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
-  PLUS_TAB,
   useComposeAction,
   useDetailColumnBar,
   useListColumn,
@@ -3415,7 +3414,7 @@ function TasksStackList({
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
-      {/* Note that View options stands at the bar's edge, as Mail's filter stands by its list, and a narrow iPad window's tab bar has no round +, so its list's bar offers New task beside it, as its wider windows' bars do. */}
+      {/* Note that View options stands at the bar's edge, as Mail's filter stands by its list, and New task's compose ends the bar, as Messages' and Mail's stand. */}
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(viewMenu.symbol)} accessibilityLabel={viewMenu.label}>
           {stackMenuItems(viewMenu)}
@@ -3428,13 +3427,11 @@ function TasksStackList({
             onPress={() => router.push(onOwnTab(MERGE_QUEUE_ROUTE))}
           />
         ) : null}
-        {PLUS_TAB ? null : (
-          <Stack.Toolbar.Button
-            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
-            accessibilityLabel={compose.label}
-            onPress={compose.onPress}
-          />
-        )}
+        <Stack.Toolbar.Button
+          icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+          accessibilityLabel={compose.label}
+          onPress={compose.onPress}
+        />
       </Stack.Toolbar>
       <Screen>
         <TasksTree

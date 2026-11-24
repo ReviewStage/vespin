@@ -51,10 +51,10 @@ type FirstColumn = SidebarVisibility & {
 export const PLUS_TAB = !(Platform.OS === "ios" && Platform.isPad);
 
 /**
- * New task where the tab bar has no round + (`PLUS_TAB`): the compose button
- * leading the detail's bar, as Mail's stands over its message, or in a
- * list's or Search's own bar where no detail stands beside it; ⌘N opens it
- * from the menu bar too.
+ * New task's compose: leading the detail's bar where the tab bar has no
+ * round + (`PLUS_TAB`), as Mail's stands over its message, and ending the
+ * Inbox's and Tasks' own bars in a compact window, as Messages' stands;
+ * ⌘N opens it from the menu bar too.
  */
 export function useComposeAction(): BarAction {
   const router = useRouter();
