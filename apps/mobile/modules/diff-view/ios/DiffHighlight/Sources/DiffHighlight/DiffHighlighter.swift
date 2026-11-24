@@ -8,10 +8,10 @@
 // recovers from. The grammar's own `highlights.scm` names each node it
 // colors (`keyword`, `string`, `function.method`); those names are read into
 // the few styles a GitHub theme colors (`SyntaxStyle`), and every other name
-// is left plain. Where captures overlap, the one spanning less is drawn over
-// the one spanning more, and of two over the same text the later pattern
-// wins, as the grammars' queries are written: generic patterns first, the
-// specific after them.
+// is left plain. The query is run and resolved by SwiftTreeSitter itself
+// (`highlights()`), which orders its ranges less specific first; the one
+// thing done here is flattening them, each painted over the ones before it,
+// so the most specific stands.
 //
 // Nothing here draws. The runs are offsets in UTF-16 units into each row's
 // own words, which a view lays over its text; a row of a side whose language
@@ -243,20 +243,9 @@ public final class DiffHighlighter: @unchecked Sendable {
 
     guard (try? parser.setLanguage(language.grammar)) != nil, let tree = parser.parse(source) else { return [] }
 
-    let context = Predicate.Context(string: source)
-    var painted = [(range: NSRange, pattern: Int, style: SyntaxStyle)]()
-
-    for match in query.execute(in: tree) where match.allowed(in: context) {
-      for capture in match.captures {
-        guard let name = capture.name, let style = SyntaxStyle(capture: name) else { continue }
-        painted.append((capture.range, match.patternIndex, style))
-      }
-    }
-
-    // Note that the wider captures are painted first and the narrower over them, and of two over the same text the later pattern last, so it stands.
-    painted.sort { a, b in
-      a.range.length != b.range.length ? a.range.length > b.range.length : a.pattern < b.pattern
-    }
+    // Note that the library resolves the query's predicates and sorts its ranges less specific first, so painting them in order leaves the most specific standing.
+    let highlights = query.execute(in: tree).resolve(with: Predicate.Context(string: source)).highlights()
+    let painted = highlights.compactMap { named in SyntaxStyle(capture: named.name).map { (range: named.range, style: $0) } }
 
     var styles = [UInt8](repeating: UInt8.max, count: max(source.utf16.count, 0))
 
