@@ -9,8 +9,10 @@ import {
   createContext,
   type ReactNode,
   type RefObject,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
@@ -74,6 +76,24 @@ const ReplyDoorContext = createContext<((reply: string) => void) | undefined>(un
 
 /** Hands what is drawn under it the door a reply's words are laid into the message box through; none while the box takes no change. */
 export const ReplyDoorProvider = ReplyDoorContext.Provider;
+
+/** The box's reply door: the ref the box fills, and the door that calls through it. */
+interface BoxReplyDoor {
+  readonly door: RefObject<((words: string) => void) | undefined>;
+  readonly reply: (words: string) => void;
+}
+
+/**
+ * The door the box hands Reply, which lays a quote in at its caret: the ref
+ * the box fills (`AgentComposer`'s `replyDoor`), and the door Reply and a
+ * selection's Reply call through it, the same door from draw to draw.
+ */
+export function useBoxReplyDoor(): BoxReplyDoor {
+  const door = useRef<((words: string) => void) | undefined>(undefined);
+  const reply = useCallback((words: string) => door.current?.(words), []);
+
+  return { door, reply };
+}
 
 /** The door a reply's words are laid into the message box through, where one stands. */
 export function useReplyDoor(): ((reply: string) => void) | undefined {
