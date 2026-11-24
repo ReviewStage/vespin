@@ -686,16 +686,18 @@ function toolbarMenuActions(menu: BarMenu) {
   ];
 }
 
-/** The name an agent is called by, as the panel names it, and the harness its model runs in, whose mark its tile wears, as the task list's collections hold it; the unlisted name and no harness before the agent is listed. */
+/** The name an agent is called by, as the panel names it, the harness its model runs in, whose mark its tile wears, and a Manager's face, as the task list's collections hold them; the unlisted name and no harness or face before the agent is listed. */
 function useAgentLabel(agentId: string): {
   readonly name: string;
   readonly harness: ModelProvider | undefined;
+  /** A Manager's face, which a menu naming it leads with; none for a coder. */
+  readonly face: ManagerFace | undefined;
 } {
   const agent = useTaskListRow(useTaskListCollections().agents, agentId);
 
   return agent === undefined
-    ? { name: UNLISTED_AGENT, harness: undefined }
-    : { name: agentNameOf(agent), harness: providerOf(agent.model) };
+    ? { name: UNLISTED_AGENT, harness: undefined, face: undefined }
+    : { name: agentNameOf(agent), harness: providerOf(agent.model), face: agent.face };
 }
 
 /** The threads either side of an open one, in the order it steps through, which it hands on with each step; none at an end. */
@@ -750,7 +752,7 @@ function ThreadDetail({
   const workspaceId = holderWorkspaceId(holder);
   // Note that a pull request a thread names opens in the app by its task's workspace.
   const openLink = useOpenLink(workspaceId);
-  const { name: agentName, harness } = useAgentLabel(item.agentId);
+  const { name: agentName, harness, face: agentFace } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
   // Note that a Manager's face stands in its tile on each message it wrote, read as a chip naming it reads it (`useChipMarkOf`), so the writer line and the app's menus wear one face.
   const agentMark = useChipMarkOf()({ kind: ENTITY_KIND.AGENT, agentId: item.agentId });
@@ -910,7 +912,7 @@ function ThreadDetail({
   // Note that the path opens its task and its agent as pages pushed over the thread on the stack it stands on, in any window, as the panel's crumbs open them, where the window stands a split view, the path heading the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path. A thread on no task opens its agent alone. Each leads with its own mark: the task's status ring and the agent's harness.
   const openAgent = {
     label: PATH_OPENS.AGENT,
-    ...agentLead(harness),
+    ...agentLead(harness, agentFace),
     onPress: () => router.push(onOwnTab(iosAgentRoute(item.agentId))),
   };
 
