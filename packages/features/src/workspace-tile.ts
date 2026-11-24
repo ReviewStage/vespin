@@ -14,8 +14,8 @@
 /** How many hues an identity's letter is drawn on. */
 const IDENTITY_HUE_COUNT = 6;
 
-/** Splits a name into the characters a reader sees, an emoji's parts as one. */
-const CHARACTERS = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+/** Splits a name into the characters a reader sees, an emoji's parts as one; made on its first use, since the phone installs `Intl.Segmenter` only as it is first read. */
+let characters: Intl.Segmenter | undefined;
 
 /** The switcher's words, as the panel's menu says them. */
 export const WORKSPACE_SWITCHER_WORDS = {
@@ -43,7 +43,8 @@ export function identityHue(id: string): number {
 
 /** A name's first character as a reader sees it, an emoji's whole, upper-cased; none for a blank name. */
 export function identityLetter(name: string): string {
-  const [first] = CHARACTERS.segment(name.trim());
+  characters ??= new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const [first] = characters.segment(name.trim());
 
   return first === undefined ? "" : first.segment.toUpperCase();
 }
