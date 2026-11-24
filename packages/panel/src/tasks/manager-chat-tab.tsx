@@ -305,8 +305,9 @@ function ManagerMessage({
 /**
  * A person's message: the reader's own in a bubble at the column's right,
  * and anyone else's at its left, under their name where it opens their run
- * and beside their picture, its files over the words, and when it was sent
- * under the run's last.
+ * and beside their picture, its files over the words, Reply and Copy beside
+ * it and in its menu, as every message of the chat offers them, and when it
+ * was sent under the run's last.
  */
 function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoors }): ReactNode {
   const { message, place } = line;
@@ -322,6 +323,8 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const lineId = own ? (message.lineId ?? undefined) : undefined;
   const ownLine = lineId === undefined ? undefined : doors.lines.get(lineId);
   const editor = useMessageEdit(lineId ?? "");
+  // Note that any message of the chat is answered as the Manager's is: Reply quotes it whole into the box, beside its Copy and in its menu.
+  const menu = useChatMessageMenu(message.text);
 
   if (ownLine !== undefined && editor !== undefined) {
     return <EditComposer message={ownLine} words={message.text} edit={editor} />;
@@ -345,17 +348,20 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
           side={own ? CHAT_SIDE.SENT : CHAT_SIDE.RECEIVED}
           run={chatRunOf(place.opens, place.closes)}
           avatar={own ? undefined : <ActorMark actor={sender} size={ACTOR_SIZE.CARD} />}
+          contextMenu={menu.contextMenu}
           beside={
             <CopyMessageAction
               words={message.text}
               messageId={ownLine === undefined ? undefined : lineId}
               rewind={ownLine === undefined ? undefined : REWIND_ACTION.EDIT}
+              lead={<ReplyMessageAction words={message.text} />}
             />
           }
         >
           <TranscriptWords text={message.text} />
         </ChatBubble>
       )}
+      {menu.menu}
       {place.closes ? (
         <MessageLine
           align={own ? MESSAGE_LINE_ALIGN.END : MESSAGE_LINE_ALIGN.START}
