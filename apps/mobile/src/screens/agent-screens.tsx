@@ -1433,7 +1433,7 @@ const AgentConversation = memo(function AgentConversation({
             : {
                 title,
                 face: shown.face,
-                working: agentGlyphState(shown.status) === GLYPH_STATE.WORKING,
+                working: status !== undefined && agentGlyphState(status) === GLYPH_STATE.WORKING,
               }
         }
       />
