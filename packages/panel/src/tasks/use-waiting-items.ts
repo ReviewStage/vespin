@@ -1,4 +1,5 @@
 import {
+  type InboxAnyHolder,
   type InboxGroup,
   type InboxListed,
   inboxGroups,
@@ -12,6 +13,7 @@ import {
   useHolderInboxItems,
 } from "./use-holder-inbox-items.js";
 import { useListedInbox } from "./use-inbox-slices.js";
+import { useTasklessInboxGroups } from "./use-taskless-inbox-groups.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -21,13 +23,15 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * a place that lists what waits as the window's Inbox does follows each plan
  * holding an item whole, as the Inbox follows them. Every open item is listed, whoever
  * it waits on, since a person's page lists what waits on them; Home keeps only the reader's own
- * (`needsReader`). The sidebar's Inbox row counts the same groups under the
- * Inbox's view (`places-waiting.ts`).
+ * (`needsReader`). A thread on no task, a Manager's, waits as a task's does,
+ * listed beside them as the Inbox lists it (`use-taskless-inbox-groups.ts`).
+ * The sidebar's Inbox row counts the same groups under the Inbox's view
+ * (`places-waiting.ts`).
  */
 
 /** What waits, the latest changed first; whether a read is still out or did not answer; and Retry. */
 export interface WaitingItems {
-  readonly items: readonly InboxListed[];
+  readonly items: readonly InboxListed<InboxAnyHolder>[];
   /** The plans whose items were read as main says they stand now, which `items` speaks for whole; a plan that changed since, its read out or failed, is not among them. */
   readonly readTasks: ReadonlySet<string>;
   readonly reading: boolean;
@@ -80,11 +84,22 @@ export function useListedInboxGroups(
   return { groups, read };
 }
 
-/** Every open Inbox item of the listed workspace's plans, the latest changed first, read as the window's Inbox reads them (`useListedInboxGroups`). */
+/** Every open Inbox item of the listed workspace's plans and of its agents on no task, the latest changed first, read as the window's Inbox reads them (`useListedInboxGroups`, `useTasklessInboxGroups`). */
 export function useWaitingItems(tasks: TasksControl): WaitingItems {
   const { groups, read } = useListedInboxGroups(tasks);
-  // Note that every open item is kept as one that waits, whoever started its agent.
-  const items = openItems(groups);
+
+  const { groups: taskless } = useTasklessInboxGroups(
+    tasks.workspace?.id,
+    tasks.agentsCarried,
+    tasks.agents.models,
+  );
+
+  // Note that every open item is kept as one that waits, whoever started its agent, and stands while the groups do.
+  const items = useMemo(() => {
+    const held: readonly InboxGroup<InboxAnyHolder>[] = [...groups, ...taskless];
+
+    return openItems(held);
+  }, [groups, taskless]);
 
   return {
     items,

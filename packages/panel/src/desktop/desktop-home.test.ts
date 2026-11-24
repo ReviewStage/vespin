@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { AGENT_STATUS } from "@repo/features/agent-wire";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -36,7 +37,12 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { overEveryTask } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { layScrollerOut } from "../testing/scroller.js";
-import { type TasksControlOverrides, tasksControl, waitingOf } from "../testing/tasks-control.js";
+import {
+  listedAgent,
+  type TasksControlOverrides,
+  tasksControl,
+  waitingOf,
+} from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { DesktopHome } from "./desktop-home.js";
 
@@ -103,6 +109,27 @@ function item(n: number, title: string, ago: number): InboxItem {
 
 const RETRY_429 = item(1, "Retry 429s too?", 8 * MINUTE);
 
+/** A Manager of Acme's, an agent on no task, as the list followed live holds it. */
+const RELEASE_MANAGER = listedAgent(
+  {
+    id: "00000000-0000-4000-8000-000000000002",
+    taskId: null,
+    title: "Release manager",
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    status: AGENT_STATUS.RUNNING,
+    createdAt: NOW - 60 * MINUTE,
+    turnId: null,
+  },
+  { workspaceId: ACME.id },
+);
+
+/** The Manager's open thread, on no task, newer than `RETRY_429`. */
+const CUT_RELEASE: InboxItem = {
+  ...item(2, "Cut the release tonight?", 5 * MINUTE),
+  agentId: RELEASE_MANAGER.id,
+};
+
 let root: Root | undefined;
 
 // Landed before any page renders, as the panel lands it after its first paint.
@@ -151,12 +178,13 @@ function home(
 
 type Opened = { tasks: string[]; settings: SettingsLink[] };
 
-/** Home over Acme with `items` waiting on `RETRIES`, read by Dean, with `overrides`, their feed refused where `refused` says; each task and place of Settings it opens recorded, and the window's router, where an item it opens takes it. */
+/** Home over Acme with `items` waiting on `RETRIES` and `managed` on `RELEASE_MANAGER`, read by Dean, with `overrides`, their feed refused where `refused` says; each task and place of Settings it opens recorded, and the window's router, where an item it opens takes it. */
 function mount(
   overrides: TasksControlOverrides = {},
   items: readonly InboxItem[] = [RETRY_429],
   room: ShellRoom = SHELL_ROOM.WIDE,
   refused = false,
+  managed: readonly InboxItem[] = [],
 ) {
   const opened: Opened = { tasks: [], settings: [] };
   handHostReads({
@@ -165,6 +193,7 @@ function mount(
       : {
           rows: {
             [INBOX_SCOPE_KIND.TASK]: items.length === 0 ? {} : { [RETRIES.id]: items },
+            ...(managed.length === 0 ? undefined : { agents: { [RELEASE_MANAGER.id]: managed } }),
           },
         },
     inbox: {
@@ -228,8 +257,15 @@ function row(page: HTMLElement, name: string): HTMLElement {
   );
 }
 
-test("Home greets the reader by first name over New task's composer, the items waiting on them, and the tasks worked on latest, newest first", async () => {
-  const { page, opened, router } = mount();
+test("Home greets the reader by first name over New task's composer, the items waiting on them, a Manager's among them, and the tasks worked on latest, newest first", async () => {
+  const { page, opened, router } = mount(
+    { listedAgents: [RELEASE_MANAGER] },
+    [RETRY_429],
+    SHELL_ROOM.WIDE,
+    false,
+    [CUT_RELEASE],
+  );
+
   await settle();
 
   assert.equal(page.querySelector("h1")?.textContent, "Welcome back, Dean");
@@ -237,7 +273,7 @@ test("Home greets the reader by first name over New task's composer, the items w
   // Note that the Inbox's items stand once the account's feed reaches its query.
   await vi.waitFor(() =>
     assert.deepEqual(sections(page), {
-      Inbox: [RETRY_429.title],
+      Inbox: [CUT_RELEASE.title, RETRY_429.title],
       Recent: [CACHE.name, RETRIES.name, DASHBOARD.name],
     }),
   );
@@ -246,6 +282,8 @@ test("Home greets the reader by first name over New task's composer, the items w
   act(() => row(page, RETRY_429.title).click());
   assert.deepEqual(opened.tasks, [CACHE.id]);
   assert.equal(router.history.location.pathname, `${HOME_AT}/inbox/${RETRY_429.id}`);
+  act(() => row(page, CUT_RELEASE.title).click());
+  assert.equal(router.history.location.pathname, `${HOME_AT}/inbox/${CUT_RELEASE.id}`);
 });
 
 /** A task's agents as its row counts them: one, `working` at work, its last settled activity at `activityAt`. */

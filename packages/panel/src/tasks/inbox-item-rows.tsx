@@ -10,7 +10,7 @@ import { useInboxResolver } from "./inbox-close.js";
 import { useInboxRowPresses } from "./inbox-columns.js";
 import { INBOX_ROW_ESTIMATE_PX, InboxItemRow, inboxRowDraft } from "./inbox-list.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
-import { choiceOf, onTask } from "./use-inbox-listing.js";
+import { anyChoiceOf } from "./use-inbox-listing.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
@@ -49,7 +49,7 @@ export function InboxItemRows({
   moves = false,
 }: {
   label: string;
-  listed: readonly InboxListed[];
+  listed: readonly InboxListed<InboxAnyHolder>[];
   tasks: TasksControl;
   /** Whether the rows stand under a name that already says Needs you. */
   needsYouShown?: boolean;
@@ -92,11 +92,9 @@ export function InboxItemRows({
   // Note that the press stands across draws, as the acts' doors do, so a row is drawn again only where its item moves.
   const inbox = useInboxDoor(tasks);
 
-  // Note that these rows list only threads on a task (`openItems` over the tasks' groups), so one on no task opens nothing here.
+  // Note that a thread on no task, a Manager's, opens as the Inbox opens it, by its id alone (`anyChoiceOf`).
   const open = useSteadyDoor((each: InboxListed<InboxAnyHolder>) => {
-    const held = onTask(each);
-
-    if (held !== undefined) inbox.openItem(choiceOf(held));
+    inbox.openItem(anyChoiceOf(each));
   });
 
   return (
