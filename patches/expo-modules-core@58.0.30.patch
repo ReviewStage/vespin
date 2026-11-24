@@ -1,0 +1,36 @@
+diff --git a/ios/Core/Views/SwiftUI/SwiftUIVirtualView.swift b/ios/Core/Views/SwiftUI/SwiftUIVirtualView.swift
+index 26417f58ffcdb093b9e1a6f7bb8bcc58c4337477..bafe8ce4b00cb17ca301d73b9024ee94f80ab974 100644
+--- a/ios/Core/Views/SwiftUI/SwiftUIVirtualView.swift
++++ b/ios/Core/Views/SwiftUI/SwiftUIVirtualView.swift
+@@ -43,7 +43,7 @@ extension ExpoSwiftUI {
+       self.viewDefinition = viewDefinition
+       self.appContext = appContext
+       super.init()
+-      self.componentName = String(describing: viewType)
++      self.componentName = unqualifiedComponentName(viewType)
+ 
+       props.shadowNodeProxy.setViewSize = { [weak self] size in
+         self?.setShadowNodeSize(Float(size.width), height: Float(size.height))
+@@ -211,7 +211,7 @@ extension ExpoSwiftUI {
+       self.viewDefinition = viewDefinition
+       self.appContext = appContext
+       super.init()
+-      self.componentName = String(describing: viewType)
++      self.componentName = unqualifiedComponentName(viewType)
+ 
+       props.shadowNodeProxy.setViewSize = { [weak self] size in
+         self?.setShadowNodeSize(Float(size.width), height: Float(size.height))
+@@ -410,3 +410,13 @@ private func virtualViewResignFirstResponderInSubtree<ContentView: SwiftUI.View>
+   }
+   children?.forEach { ($0 as? any ExpoSwiftUI.FocusableViewContainer)?.resignFirstResponderInSubtree() }
+ }
++
++/**
++ The name `String(describing:)` gives a metatype, without the protocol conformance probes and the `Mirror`
++ it runs, which every view made paid. Never inlined, so a statically known metatype's name is never folded
++ into one that keeps a private type's file discriminator, as expo-ui's `UIBaseView` names its views.
++ */
++@inline(never)
++private func unqualifiedComponentName(_ type: Any.Type) -> String {
++  return _typeName(type, qualified: false)
++}
