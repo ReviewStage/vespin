@@ -12,6 +12,26 @@ appId: dev.vespin.ios
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
+# Launched on the host's Inbox fixture, signed in as Ada Lovelace: her own
+# page, opened by its link, leads with the Managers she started, the
+# fixture's Release manager, its face in the ring's place.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- openLink: "vespin://tasks/person/user-ada"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Release manager"
+    timeout: 15000
+- assertVisible: "Managers.*"
+- waitForAnimationToEnd
+- takeScreenshot: person-managers
 # Launched on the host's Inbox fixture, whose invite recording thread names
 # Grace Hopper, a member, and Nobody Known, who is none, each by a chip
 # leading its own line (`@repo/host/fixture-inbox`); nothing reaches a server.
@@ -110,15 +130,3 @@ env:
     timeout: 5000
 - takeScreenshot: person-chip-hold-transcript
 - tapOn: "Cancel"
-# The account's own page, opened by its link, leads with the Managers it
-# started: the fixture's Release manager, its face in the ring's place.
-- openLink: "vespin://tasks/person/user-ada"
-- tapOn:
-    text: "Open"
-    optional: true
-- extendedWaitUntil:
-    visible: "Release manager"
-    timeout: 15000
-- assertVisible: "Managers.*"
-- waitForAnimationToEnd
-- takeScreenshot: person-managers
