@@ -601,6 +601,7 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
       stop: undefined,
       fullScreen: false,
       fullScreenOnly: false,
+      expands: true,
       newTabAsked: false,
       toggleAsked: false,
       tabs: DRAWN_KINDS,

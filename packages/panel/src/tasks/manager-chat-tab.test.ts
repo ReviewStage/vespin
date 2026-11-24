@@ -118,11 +118,14 @@ afterEach(() => {
 function ChatBesideThread({
   agent,
   control,
+  opened,
 }: {
   agent: AgentSummary;
   control: ReturnType<typeof agentsControl>;
+  /** The thread the panel already shows as the page opens, as a tab left open there does. */
+  opened: string | undefined;
 }): ReactNode {
-  const [open, setOpen] = useState<string | undefined>(undefined);
+  const [open, setOpen] = useState<string | undefined>(opened);
 
   return createElement(
     ThreadDoorsProvider,
@@ -145,6 +148,7 @@ async function drawChat(
     readonly manager?: AgentSummary;
     readonly sending?: readonly ManagerChatSending[];
     readonly transcript?: readonly AgentTranscriptMessage[];
+    readonly opened?: string;
   } = {},
 ) {
   const manager = held.manager ?? MANAGER;
@@ -209,7 +213,11 @@ async function drawChat(
         createElement(MemberDirectory, {
           workspace: { id: "workspace-acme", memberCount: 2 },
           readerId: DEAN.userId,
-          children: createElement(ChatBesideThread, { agent: manager, control }),
+          children: createElement(ChatBesideThread, {
+            agent: manager,
+            control,
+            opened: held.opened,
+          }),
         }),
       ),
     ),
@@ -275,11 +283,17 @@ test("each message is a row under its sender's name where their run opens, a thr
       (button) => button.getAttribute("aria-label") ?? button.textContent ?? "",
     );
 
-  // Note that a reply is no turn of its own, and a call's lines land in the chat, so the thread's box leaves out the Manager's own presses.
-  const chatPresses = pressesIn(container.querySelector(".agent-tab") ?? container);
-  assert.ok(chatPresses.includes("Talk"), "the chat's own box offers Talk");
-  assert.ok(!pressesIn(thread).includes("Talk"), "the thread's box offers no Talk");
-  assert.ok(pressesIn(thread).includes("Add files and more"), "the thread's box takes files");
+  // Note that what acts on the Manager itself stands in the chat's own box alone: its machine, its ports, its model, its MCP servers in the +, and Talk.
+  assert.deepEqual(pressesIn(container.querySelector(".agent-tab") ?? container), [
+    "Add files and more",
+    "Machine: Cloud, Off",
+    "Ports: Ports",
+    "Opus 5.5 High",
+    "Dictate",
+    "Composer actions",
+    "Talk",
+  ]);
+  assert.deepEqual(pressesIn(thread), ["Attach files", "Dictate", "Composer actions", "Send"]);
 
   typeInComposer(thread, "And the nightly?");
   pressInComposer(thread, "Enter");
@@ -338,6 +352,15 @@ test("a thread's reply the service refused stands marked in its thread, and Retr
   assert.deepEqual(threads, ["first"]);
   assert.deepEqual(keys, [["c4d1e7a2-5b3f-4e9a-8c60-1f2e3d4c5b6a", false]]);
   assert.deepEqual(carried, [["nightly.png"]]);
+});
+
+test("a thread whose message is gone from the chat, its start read, says so rather than reading on", async () => {
+  const { container } = await drawChat([row("first", 1, "On it.")], { opened: "rewound" });
+
+  const thread =
+    container.querySelector("[data-thread-tab]") ?? assert.fail("the thread's tab stands");
+
+  assert.match(thread.textContent ?? "", /This thread is no longer in the chat\./u);
 });
 
 test("an ended turn's work stands folded over the Manager's first message of the turn, saying how long the turn worked, and opens onto its calls", async () => {

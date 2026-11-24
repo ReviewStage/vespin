@@ -150,8 +150,9 @@ interface TabSurface {
  * stack (`reopens`); whether its close ends the session it stands for
  * (`endsSession`); whether it closes itself once idle (`closesIdle`); how it
  * is pinned (`pin`); whether each strip keeps it across a launch (`kept`);
- * whether the window's find reaches its body (`takesFind`); and whether it never closes nor
- * moves (`stays`).
+ * whether the window's find reaches its body (`takesFind`); whether it never closes nor
+ * moves (`stays`); and whether the side panel showing it may fill the window
+ * (`expands`).
  */
 interface StripTabKindDeclaration<K extends StripTabKind> {
   readonly title: (tab: KindTab<K>, names: TabNames) => string | undefined;
@@ -167,6 +168,7 @@ interface StripTabKindDeclaration<K extends StripTabKind> {
   readonly kept: KeptIn;
   readonly takesFind: boolean;
   readonly stays: (tab: KindTab<K>) => boolean;
+  readonly expands: boolean;
 }
 
 /** No link, for a kind whose thing has no link of its own. */
@@ -225,6 +227,7 @@ const STRIP_TAB_KINDS = {
     kept: { column: true, sidePanel: true },
     takesFind: true,
     stays: isOverviewTab,
+    expands: true,
   },
   [STRIP_TAB_KIND.AGENT]: {
     title: (tab, names) => names.agent(tab.agent),
@@ -245,6 +248,7 @@ const STRIP_TAB_KINDS = {
     kept: { column: true, sidePanel: false },
     takesFind: true,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.TRANSCRIPT]: {
     title: (tab, names) => names.agent(tab.transcript),
@@ -260,6 +264,7 @@ const STRIP_TAB_KINDS = {
     kept: KEPT_NOWHERE,
     takesFind: true,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.DRAFT]: {
     title: () => TAB_WORDS.NEW_AGENT,
@@ -276,6 +281,7 @@ const STRIP_TAB_KINDS = {
     kept: KEPT_NOWHERE,
     takesFind: true,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.SUBAGENT]: {
     title: (tab, names) => names.subagent(tab),
@@ -303,6 +309,7 @@ const STRIP_TAB_KINDS = {
     kept: KEPT_NOWHERE,
     takesFind: true,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.FILE]: {
     title: (tab, names) => names.file(tab.file),
@@ -318,6 +325,7 @@ const STRIP_TAB_KINDS = {
     kept: KEPT_NOWHERE,
     takesFind: true,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.CHANGES]: {
     title: (tab, names) => names.pullRequest(tab),
@@ -334,6 +342,7 @@ const STRIP_TAB_KINDS = {
     kept: { column: false, sidePanel: true },
     takesFind: true,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.TURN_CHANGES]: {
     title: () => TAB_WORDS.TURN_CHANGES,
@@ -350,6 +359,7 @@ const STRIP_TAB_KINDS = {
     kept: { column: false, sidePanel: true },
     takesFind: true,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.TERMINAL]: {
     title: (tab) => tab.title,
@@ -366,6 +376,7 @@ const STRIP_TAB_KINDS = {
     kept: KEPT_NOWHERE,
     takesFind: true,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.LOCAL]: {
     title: (tab) => tab.title,
@@ -382,6 +393,7 @@ const STRIP_TAB_KINDS = {
     kept: KEPT_NOWHERE,
     takesFind: true,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.PAGE]: {
     title: (tab, names) => names.page(tab),
@@ -403,6 +415,7 @@ const STRIP_TAB_KINDS = {
     // A page draws in a frame of its own, which no find of the window reaches.
     takesFind: false,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.CLOUD_BROWSER]: {
     title: (tab, names) => names.browser(tab.cloudBrowser),
@@ -420,6 +433,7 @@ const STRIP_TAB_KINDS = {
     // Its page is drawn on a canvas, which no find of the window reaches.
     takesFind: false,
     stays: NEVER,
+    expands: true,
   },
   [STRIP_TAB_KIND.THREAD]: {
     title: () => TAB_WORDS.THREAD,
@@ -435,6 +449,8 @@ const STRIP_TAB_KINDS = {
     kept: KEPT_NOWHERE,
     takesFind: true,
     stays: NEVER,
+    // A thread reads as a column beside its chat, so it never fills the window over the chat it answers.
+    expands: false,
   },
 } as const satisfies { readonly [K in StripTabKind]: StripTabKindDeclaration<K> };
 
@@ -493,6 +509,11 @@ export function stripTabLink(tab: AnyKindTab, holder: PagePlace): LinkDestinatio
 /** Whether the open task's strips draw a tab closed on it again, by what the task draws. */
 export function stripTabDrawsAgain(tab: StripTab, draws: TaskDraws): boolean {
   return declarationOf(tab).drawsAgain(asKindTab(tab), draws);
+}
+
+/** Whether the side panel showing a tab may fill the window, as its full-screen button and a drag of its edge past its widest ask. */
+export function stripTabExpands(tab: StripTab): boolean {
+  return declarationOf(tab).expands;
 }
 
 /** Whether a tab's close puts it on the stack of closed tabs ⇧⌘T opens again. */

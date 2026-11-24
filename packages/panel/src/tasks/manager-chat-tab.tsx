@@ -60,6 +60,7 @@ import {
   Disclosure,
   DisclosureBody,
   DisclosureSummary,
+  EmptyState,
   GlyphSlot,
   ThreadRule,
   TIME_LOOK,
@@ -71,7 +72,7 @@ import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
@@ -1186,6 +1187,33 @@ const THREAD_USAGE = {
   context: undefined,
 } as const;
 
+/** No chip after a thread's +. */
+const NO_TOOLS = (): null => null;
+
+/**
+ * The Manager's box as a thread's reply draws it: what acts on the Manager
+ * itself rather than on one reply stands in the chat's own box alone. Note
+ * that a reply steers whatever turn runs, so Stop and the model chip, with
+ * its cost and permission mode, are the turn's; `/clear` starts the
+ * Manager's session afresh; its MCP servers are switched for its next turn;
+ * and the chips after the + say and move where the Manager runs and what
+ * it forwards. With no servers to switch, the + attaches files at once.
+ */
+function threadBoxOf(box: AgentBox): AgentBox {
+  return {
+    ...box,
+    stoppable: false,
+    model: undefined,
+    mode: undefined,
+    onClear: undefined,
+    servers: undefined,
+    tools: NO_TOOLS,
+  };
+}
+
+/** What a thread's tab says once the message it stood on is gone from the chat. */
+const THREAD_GONE_WORDS = "This thread is no longer in the chat.";
+
 /** What a thread's box asks for and calls its field. */
 const THREAD_BOX_WORDS: ComposerWords = {
   placeholder: THREAD_WORDS.BOX,
@@ -1198,10 +1226,11 @@ const THREAD_BOX_WORDS: ComposerWords = {
  * draws it: the message it stands on (`root`), the replies under a rule
  * that counts them, the reader's on their way after them, and the chat's
  * own composer at its foot, which sends the reader's words and files to the
- * chat as a reply in the thread. Note that the box leaves out what is the
- * Manager's own turn's rather than the reply's: Stop, the queue, the model
- * chip with its cost and permission mode, and `/clear`; and Talk, since a
- * call's lines land in the chat rather than the thread.
+ * chat as a reply in the thread. Note that the box leaves out what acts on
+ * the Manager itself rather than on the reply (`threadBoxOf`): Stop, the
+ * queue, the model chip with its cost and permission mode, `/clear`, the
+ * MCP servers, and the Cloud and Ports chips; and Talk, since a call's lines
+ * land in the chat rather than the thread.
  */
 export function ManagerThreadTab({
   agent,
@@ -1216,6 +1245,8 @@ export function ManagerThreadTab({
 }): ReactNode {
   const chatBox = useManagerChatBox({ agent, control, shown, onOpenTarget, cards, thread: root });
   const { read, chat, composer, box, pictures, marks, view, drawLine, doors } = chatBox;
+  const { mutate: retryChat } = useMutation(managerChatRetryMutation());
+  const { mutate: readOlder } = useMutation(actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_OLDER));
   const tab = useRef<HTMLElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const rowsHandle = useRef<VirtualRowsHandle>(null);
@@ -1224,6 +1255,13 @@ export function ManagerThreadTab({
   const rootLine = view.top.find(
     (line) => line.message.id === root && line.message.threadRoot === null,
   );
+
+  // Note that a root older than the pages read is read for, a page at a time, until it stands or the chat's start is read.
+  const before = chat?.before;
+  const lacksRoot = chat !== undefined && rootLine === undefined && before !== undefined;
+  useEffect(() => {
+    if (lacksRoot && before !== undefined) readOlder({ agentId: agent.id, before });
+  }, [lacksRoot, before, readOlder, agent.id]);
 
   const rows = useMemo(
     () =>
@@ -1256,33 +1294,42 @@ export function ManagerThreadTab({
     return drawLine(row.line, doors);
   };
 
-  // Note that the thread is read off the chat's own read, so it stands as the chat does, and a root not read yet stands as reading.
-  const log =
-    chat === undefined || (rootLine === undefined && read.isError) ? (
-      <TranscriptSkeleton />
-    ) : rootLine === undefined ? (
-      <TranscriptSkeleton />
-    ) : (
-      <Conversation list={list}>
-        <ConversationContent>
-          <ConversationRows
-            keys={keys}
-            estimate={CHAT_ROW_ESTIMATE_PX}
-            gap={0}
-            rowClassName={rowClassOf}
-            handle={rowsHandle}
-            ownLast={ownLast}
-          >
-            {(at) => {
-              const row = rows[at];
+  // Note that the thread is read off the chat's own read, so it fails and stands as the chat does.
+  const log = read.isError ? (
+    <TranscriptReadFailed
+      failedWith={read.error}
+      agentId={agent.id}
+      onRetry={() => retryChat({ agentId: agent.id })}
+      centered
+    />
+  ) : chat === undefined || (rootLine === undefined && chat.before !== undefined) ? (
+    <TranscriptSkeleton />
+  ) : rootLine === undefined ? (
+    // A root gone from the chat, as a rewind drops one, takes its thread with it.
+    <EmptyState icon={<EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />}>
+      {THREAD_GONE_WORDS}
+    </EmptyState>
+  ) : (
+    <Conversation list={list}>
+      <ConversationContent>
+        <ConversationRows
+          keys={keys}
+          estimate={CHAT_ROW_ESTIMATE_PX}
+          gap={0}
+          rowClassName={rowClassOf}
+          handle={rowsHandle}
+          ownLast={ownLast}
+        >
+          {(at) => {
+            const row = rows[at];
 
-              return row === undefined ? null : drawRow(row);
-            }}
-          </ConversationRows>
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
-    );
+            return row === undefined ? null : drawRow(row);
+          }}
+        </ConversationRows>
+      </ConversationContent>
+      <ConversationScrollButton />
+    </Conversation>
+  );
 
   return (
     <AgentTabFrame ref={tab} label={TAB_WORDS.THREAD}>
@@ -1292,14 +1339,7 @@ export function ManagerThreadTab({
             {log}
             <AgentTabFoot>
               {chatBox.dock({
-                // Note that a reply steers whatever turn runs, so Stop, the model chip, and `/clear` stand in the chat's own box alone.
-                box: {
-                  ...box,
-                  stoppable: false,
-                  model: undefined,
-                  mode: undefined,
-                  onClear: undefined,
-                },
+                box: threadBoxOf(box),
                 approvalsWaiting: chatBox.approvals.waiting,
                 transcript: THREAD_USAGE,
                 queue: undefined,

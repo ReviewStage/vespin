@@ -5,8 +5,10 @@ import {
   changesTab,
   fileTab,
   pageTab,
+  sameTab,
   type TerminalStripTab,
   terminalTab,
+  threadTab,
   transcriptTab,
   turnChangesTab,
 } from "@repo/ui/tab-strip-model";
@@ -64,6 +66,8 @@ interface Stood {
   account?: string;
   /** The agent the task's column shows, whose tabs alone the strip draws. */
   agent?: string;
+  /** The Manager on no task whose own page the panel stands beside, at a stop of its own, in the task's place. */
+  manager?: string;
 }
 
 /** Mounts the panel alone, as a launch does, over the task and agents given, answering the control as it stands. */
@@ -73,9 +77,11 @@ function launch(stood: Stood) {
   function Probe({ held }: { held: Stood }) {
     control = useSidePanel(
       undefined,
-      held.bare === true
-        ? { id: held.task, holds: {} }
-        : { ...usedTask(held.task), agent: held.agent },
+      held.manager !== undefined
+        ? { id: undefined, holds: {}, bare: true, stop: held.manager }
+        : held.bare === true
+          ? { id: held.task, holds: {} }
+          : { ...usedTask(held.task), agent: held.agent },
       held.taskAgents,
       [],
       [],
@@ -390,6 +396,22 @@ test("a file named alone, as ⌘K finds it, shows the tab it has as it stands, a
   assert.deepEqual(
     now().files.map(({ path }) => path),
     [shown, found],
+  );
+});
+
+test("a thread of a Manager's chat stands beside that Manager's page alone, and holds the panel beside the page though full screen is asked for", () => {
+  const thread = threadTab("7b2d40e8-1c3e-4f5a-9b7d-2e4f6a8c0e1b", AGENT);
+  const panel = launch({ task: TASK, taskAgents: undefined, manager: AGENT });
+  act(() => panel.control().onChoose(thread));
+  assert.deepEqual([panel.control().open, panel.control().tab], [true, thread]);
+
+  act(() => panel.control().onToggleFullScreen());
+  assert.equal(panel.control().fullScreen, false, "a thread never fills the window");
+
+  panel.render({ task: TASK, taskAgents: undefined, manager: OTHER_AGENT });
+  assert.ok(
+    !panel.control().strip.some((tab) => sameTab(tab, thread)),
+    "another Manager's page draws no tab of this one's thread",
   );
 });
 

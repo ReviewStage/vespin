@@ -1610,6 +1610,15 @@ body,
   padding-left: 0;
 }
 
+/* Where the window draws no panel toggle, as a Manager's page draws none,
+   the row keeps it no room: on the frame its last control ends on one line
+   with its sheet's edge below, as its first tab starts. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell[data-panel-toggle="false"]
+  .side-panel-bar {
+  padding-right: 0;
+}
+
 [data-ui-profile="desktop"] .side-panel-bar {
   -webkit-app-region: drag;
 }

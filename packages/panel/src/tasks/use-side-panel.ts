@@ -39,7 +39,7 @@ import {
   ofPullRequest,
   withPullRequest,
 } from "./by-pull-request.js";
-import { stripTabKept, stripTabPin, TAB_PIN } from "./strip-tab-kinds.js";
+import { stripTabExpands, stripTabKept, stripTabPin, TAB_PIN } from "./strip-tab-kinds.js";
 import {
   type FixedSidePanelTab,
   type PullRequestView,
@@ -593,6 +593,8 @@ export interface SidePanelControl {
   fullScreen: boolean;
   /** Whether the room holds the open panel only full screen, as a narrow one does: it has no edge to resize it and no full-screen button, and leaving full screen shuts it. */
   fullScreenOnly: boolean;
+  /** Whether the tab shown may fill the window, as its kind declares (`stripTabExpands`): where it may not, the panel offers no full screen, by its button or a drag of its edge. */
+  expands: boolean;
   /** Whether ⌘T asked for the "+" menu and the "+" has not yet opened it. */
   newTabAsked: boolean;
   /** The open task's fixed tabs, in the strip's order. */
@@ -2756,6 +2758,9 @@ export function useSidePanel(
     [update],
   );
 
+  const shownTabNow = shownIn(state, drawn);
+  const expands = shownTabNow === undefined || stripTabExpands(shownTabNow);
+
   return {
     open: shown,
     stop,
@@ -2774,10 +2779,12 @@ export function useSidePanel(
     pullRequestViews: state.pullRequestViews,
     onPullRequestView,
     files: state.files,
-    tab: shownIn(state, drawn),
+    tab: shownTabNow,
     width: state.width,
     opened,
-    fullScreen: shown && (fullScreen || narrow),
+    // Note that a tab that never fills the window holds the panel beside the page, whatever was asked of the panel.
+    fullScreen: shown && ((fullScreen && expands) || narrow),
+    expands,
     fullScreenOnly: shown && narrow,
     newTabAsked: shown && newTabAsked,
     onToggle,

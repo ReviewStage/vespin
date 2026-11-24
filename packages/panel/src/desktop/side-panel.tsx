@@ -2797,7 +2797,8 @@ export function useSidePanelDrawing(panel: SidePanelControl): SidePanelDrawing {
     label: "Resize panel",
     onResize: panel.onResize,
     onToggleCollapsed: panel.onToggle,
-    onToggleExpanded: panel.onToggleFullScreen,
+    // Note that a tab that never fills the window, as a Manager's chat's thread, holds at the panel's widest rather than growing over the page.
+    onToggleExpanded: panel.expands ? panel.onToggleFullScreen : undefined,
   });
 
   return {
@@ -3567,7 +3568,10 @@ function PanelFrame({
   onLeavingHere,
   children,
 }: Omit<SidePanelDrawing, "panel"> & {
-  panel: Pick<SidePanelControl, "width" | "fullScreen" | "fullScreenOnly" | "onToggleFullScreen">;
+  panel: Pick<
+    SidePanelControl,
+    "width" | "fullScreen" | "fullScreenOnly" | "expands" | "onToggleFullScreen"
+  >;
   /** What the pane is called to a reader. */
   label: string;
   /** Whether the full-screen button stands just before the panel's toggle, where one is drawn, rather than at the row's end: a task's page's, whose agents' tabs' row holds both. */
@@ -3601,13 +3605,15 @@ function PanelFrame({
     panel.fullScreen && leaving === PANEL_LEAVING.NONE ? panel.onToggleFullScreen : undefined,
   );
 
-  const fullScreenToggle = panel.fullScreenOnly ? null : (
-    <FullScreenToggle
-      fullScreen={panel.fullScreen}
-      leaving={leaving !== PANEL_LEAVING.NONE}
-      onToggle={panel.onToggleFullScreen}
-    />
-  );
+  // Note that a tab that never fills the window offers no full screen, its kind's own answer (`stripTabExpands`).
+  const fullScreenToggle =
+    panel.fullScreenOnly || !panel.expands ? null : (
+      <FullScreenToggle
+        fullScreen={panel.fullScreen}
+        leaving={leaving !== PANEL_LEAVING.NONE}
+        onToggle={panel.onToggleFullScreen}
+      />
+    );
 
   return (
     <>
