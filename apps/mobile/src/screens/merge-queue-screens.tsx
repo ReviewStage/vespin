@@ -1,5 +1,6 @@
 // merge-queue-screens.tsx -- the Merge queue screen: every pull request GitHub's merge queues hold across the workspace's repositories, each repository's line front first, as the panel's Merge queue page draws them.
 
+import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { isBotLogin } from "@repo/features/github-login";
 import {
   MERGE_QUEUE_PAGE_WORDS,
@@ -31,6 +32,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useKeeping } from "../keeping.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useSurfaceOpen } from "../surface-open.js";
 
 /** Where the screen's read is kept among the app's queries. */
 const QUERY_ROOT = { MERGE_QUEUE: "merge-queue" } as const;
@@ -137,6 +139,7 @@ export function MergeQueueScreen() {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const workspaceId = useChosenWorkspace(workspaces).chosen?.id;
   const openLink = useOpenLink(workspaceId);
+  useSurfaceOpen(PRODUCT_SURFACE.MERGE_QUEUE);
 
   const read = useQuery({
     queryKey: [QUERY_ROOT.MERGE_QUEUE, workspaceId],

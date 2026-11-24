@@ -507,8 +507,7 @@ export const ROUTED_PLACE = {
     links: () => [],
     narrowBack: undefined,
     narrowInstead: undefined,
-    // Note that it counts no surface opened while it stands behind an experiment, so the service's events read no value it does not know.
-    surfaces: () => [],
+    surfaces: () => [{ surface: PRODUCT_SURFACE.MERGE_QUEUE }],
     draft: noDraft,
   },
   VERSION_HISTORY: {

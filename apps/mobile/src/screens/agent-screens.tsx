@@ -762,7 +762,6 @@ const AgentConversation = memo(function AgentConversation({
   /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
   readonly brief?: string | undefined;
 }) {
-  useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const onTab = useOnTab();
@@ -771,6 +770,10 @@ const AgentConversation = memo(function AgentConversation({
   const agent = useFollowedAgent(id);
   // Note that an agent the list doesn't hold is named and placed from its own read, while what acts on it reads the list alone.
   const shown = useShownAgent(id);
+  // Note that a Manager's chat counts apart from a coding agent's page, once the read names which it is.
+  const surface =
+    shown?.kind === AGENT_KIND.MANAGER ? PRODUCT_SURFACE.MANAGER : PRODUCT_SURFACE.AGENT;
+  useSurfaceOpen(shown === undefined ? undefined : surface, id);
   const openLink = useOpenLink(shown?.workspaceId);
   const pullRequests = useAgentPullRequests(id);
 

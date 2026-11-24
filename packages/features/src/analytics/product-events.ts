@@ -261,10 +261,14 @@ export const PRODUCT_SURFACE = {
   TASK: "task",
   VERSION_HISTORY: "version_history",
   INBOX: "inbox",
+  /** The iOS app's Tasks tab, its list of the workspace's tasks. */
+  TASKS: "tasks",
   /** Removed with Channels, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   CHANNEL: "channel",
   THREAD: "thread",
   AGENT: "agent",
+  /** A Manager's chat, counted apart from a coding agent's page, which `AGENT` names. */
+  MANAGER: "manager",
   SUBAGENT: "subagent",
   PERSON: "person",
   AUTOMATIONS: "automations",
@@ -277,6 +281,9 @@ export const PRODUCT_SURFACE = {
   TERMINAL: "terminal",
   BROWSER: "browser",
   PAGE: "page",
+  MERGE_QUEUE: "merge_queue",
+  /** The iOS app's Search tab, its field over what it finds. */
+  SEARCH: "search",
 } as const;
 
 export type ProductSurface = (typeof PRODUCT_SURFACE)[keyof typeof PRODUCT_SURFACE];
