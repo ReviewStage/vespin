@@ -1301,24 +1301,23 @@ const AgentConversation = memo(function AgentConversation({
     copyable || openable || openTask !== undefined
       ? menuOfGroups(MENU_WORDS.MORE, GLYPH.MORE, [
           {
-            actions:
+            items:
               openTask === undefined
                 ? []
                 : [{ label: PATH_OPENS.TASK, ...taskLead(taskStatus), onPress: openTask }],
           },
           {
-            actions:
+            items:
               openOverview === undefined
                 ? []
                 : [{ label: MENU_WORDS.OVERVIEW, symbol: GLYPH.LIST, onPress: openOverview }],
           },
           {
-            actions:
-              copyable && address !== undefined
+            items: [
+              ...(copyable && address !== undefined
                 ? [{ label: MENU_WORDS.COPY_LINK, symbol: GLYPH.LINK, onPress: actions.copyLink }]
-                : [],
-            submenus:
-              copyable && copiable
+                : []),
+              ...(copyable && copiable
                 ? [
                     {
                       label: COPY_TRANSCRIPT_WORDS.COPY,
@@ -1341,10 +1340,11 @@ const AgentConversation = memo(function AgentConversation({
                       ],
                     },
                   ]
-                : [],
+                : []),
+            ],
           },
           {
-            actions:
+            items:
               agent === undefined
                 ? []
                 : [
@@ -1364,7 +1364,7 @@ const AgentConversation = memo(function AgentConversation({
                   ],
           },
           {
-            actions: openable
+            items: openable
               ? [
                   ...(address === undefined
                     ? []
@@ -1380,7 +1380,9 @@ const AgentConversation = memo(function AgentConversation({
                     : []),
                 ]
               : [],
-            submenus:
+          },
+          {
+            items:
               openable && agent !== undefined && runActions.length > 0
                 ? [
                     {
@@ -1398,26 +1400,15 @@ const AgentConversation = memo(function AgentConversation({
                 : [],
           },
           {
-            actions:
+            items:
               continueOf === undefined
                 ? []
                 : [{ label: continueOf.label, symbol: GLYPH.CONTINUE, onPress: continueAgent }],
           },
           {
-            actions:
-              agent === undefined || barActs
-                ? []
-                : [
-                    archived
-                      ? {
-                          label: MENU_WORDS.UNARCHIVE,
-                          symbol: GLYPH.UNARCHIVE,
-                          onPress: actions.unarchive,
-                        }
-                      : { label: MENU_WORDS.ARCHIVE, symbol: GLYPH.ARCHIVE, onPress: askArchive },
-                  ],
-            leadingSubmenus:
-              agent === undefined || move.places === undefined
+            // Note that Move to stands before Archive, as the panel's menu stands them.
+            items: [
+              ...(agent === undefined || move.places === undefined
                 ? []
                 : [
                     {
@@ -1431,10 +1422,22 @@ const AgentConversation = memo(function AgentConversation({
                         onPress: place.onPress,
                       })),
                     },
-                  ],
+                  ]),
+              ...(agent === undefined || barActs
+                ? []
+                : [
+                    archived
+                      ? {
+                          label: MENU_WORDS.UNARCHIVE,
+                          symbol: GLYPH.UNARCHIVE,
+                          onPress: actions.unarchive,
+                        }
+                      : { label: MENU_WORDS.ARCHIVE, symbol: GLYPH.ARCHIVE, onPress: askArchive },
+                  ]),
+            ],
           },
           {
-            actions:
+            items:
               agent === undefined
                 ? []
                 : [

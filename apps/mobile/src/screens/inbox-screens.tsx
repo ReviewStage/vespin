@@ -938,8 +938,8 @@ function ThreadDetail({
     choices: [],
     actions: [],
     groups: [
-      { title: path.join(PATH_PART), actions: pathActions },
-      { choices: menu.choices, actions: menu.actions, submenus: menu.submenus },
+      { title: path.join(PATH_PART), items: pathActions },
+      { choices: menu.choices, items: [...menu.actions, ...(menu.submenus ?? [])] },
     ],
   };
 

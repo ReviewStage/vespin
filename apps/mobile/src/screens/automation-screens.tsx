@@ -130,8 +130,7 @@ function viewMenu(order: AutomationsOrder, setOrder: (next: AutomationsOrder) =>
     actions: [],
     groups: [
       {
-        actions: [],
-        submenus: [
+        items: [
           {
             label: TASKS_VIEW_WORDS.ORDER_BY,
             symbol: GLYPH.TIME,
@@ -146,7 +145,7 @@ function viewMenu(order: AutomationsOrder, setOrder: (next: AutomationsOrder) =>
         ],
       },
       {
-        actions: [
+        items: [
           {
             label: TASKS_VIEW_WORDS.RESET_VIEW,
             symbol: GLYPH.RESTORE,
