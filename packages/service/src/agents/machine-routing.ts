@@ -13,12 +13,15 @@
  * the Mac itself, so an action on an app may go to it and be refused there.
  *
  * Second, which machine: the agent's own pick (`agent.target_device_id`),
- * which a member sets from its composer or a refusal's card; else the
+ * which a member sets from its composer or a refusal's card; else, for a
+ * Manager, the default machine of the member who asked for the turn under
+ * way (`turnAsker`), where they let its agents use their machines; else the
  * owner's default machine, as they set it in Settings › Machines
  * (`isDefaultMachine`), read at each call so a change there is followed at
- * once. A call names no machine of its own. A machine so chosen that
- * cannot take the call refuses it, rather than moving it to another without
- * a word, and nothing rewrites a pick: a reassignment that leaves one out of
+ * once. A turn an automation or an agent opened has no asker, so its calls
+ * go to the owner's default. A call names no machine of its own. A machine
+ * so chosen that cannot take the call refuses it, rather than moving it to
+ * another without a word, and nothing rewrites a pick: a reassignment that leaves one out of
  * reach refuses the next call. A refusal lists the machines that could take
  * it: in words for the model, and as data (`why`, `others`) for the
  * transcript, which says why in its own words and offers each to make the
@@ -39,6 +42,7 @@ import {
 } from "@repo/database/models/machine-command-store";
 import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import type { TaskStoreEffect } from "@repo/database/models/task-store";
+import { turnAsker } from "@repo/database/models/turn-asker";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import {
   MACHINE_COMMAND_KIND,
@@ -263,7 +267,8 @@ export interface RouteAsk {
 
 /**
  * Where a call made in the conversation given goes: the agent's pick, else
- * the owner's default machine, as the module says.
+ * a Manager's asker's default machine, else the owner's, as the module
+ * says.
  */
 export function routeOf(
   target: ConversationTarget,
@@ -296,6 +301,17 @@ export function routeOf(
         },
         reachable,
       );
+    }
+
+    // Note that the asker's default is passed over only where they don't let the Manager use their machines or have none: one that cannot take the call now refuses it, rather than moving it to the owner's Mac without a word.
+    if (routing.managerId !== null) {
+      const asker = yield* turnAsker(target);
+
+      const askersDefault = candidates.find(
+        (machine) => machine.userId === asker && machine.isDefault && machine.lets,
+      );
+
+      if (asker !== routing.userId && askersDefault !== undefined) return to(askersDefault);
     }
 
     const ownersDefault = candidates.find(

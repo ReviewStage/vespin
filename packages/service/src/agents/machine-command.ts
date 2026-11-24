@@ -75,8 +75,9 @@ import {
  *
  * An agent's call goes to one machine (`machine-routing.ts`): the agent's
  * pick, which a member sets, or else the default machine of its task's
- * assignee, or its starter's where the task is assigned to no one; a call
- * names none of its own. It is queued for that machine alone, and its
+ * assignee, or its starter's where the task is assigned to no one; for a
+ * Manager, the default machine of the member who asked for its turn, where
+ * they let it, else its owner's; a call names none of its own. It is queued for that machine alone, and its
  * answer names the machine. A call that can go nowhere is
  * refused with the machines that could take it. Note that who has written
  * to the agent decides nothing: the Mac's own setting (Ask every time by

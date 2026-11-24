@@ -11,7 +11,8 @@
  * Never. Where none of the owner's machines listens but a Mac from before
  * machines claimed does, the call goes to the account. A Manager, an agent
  * on no task, reaches its own followers' machines as a task's agent reaches
- * the task's.
+ * the task's, and with no pick sends a call to the default machine of the
+ * member who asked for its turn, where they let it.
  *
  * Synthetic accounts, workspaces, and machines throughout.
  */
@@ -36,6 +37,7 @@ import {
   DEVICE_LAYOUT,
   getTestDB,
   joinWorkspace,
+  openRunningTurn,
   openTaskAgent,
   openWorkspace,
 } from "@repo/database/testing";
@@ -290,6 +292,33 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
           [bens],
           "the composer's list offers the follower's machine alone",
         );
+      }),
+  );
+
+  it.effect(
+    "a Manager's call with no pick goes to the default machine of the member whose line opened the turn, and to the owner's for a turn an automation opened or an asker whose switch is off",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, workspace } = yield* openPeople;
+        const { managerId, target } = yield* openManager(owner, workspace);
+        const anas = yield* openMachine(owner, "Laptop", true);
+        const bens = yield* openMachine(teammate, "Studio", true);
+        yield* followAgent(teammate, { agentId: managerId, followerId: teammate, machines: true });
+
+        const machineOf = (route: MachineRoute) =>
+          route.kind === MACHINE_ROUTE.MACHINE ? route.machine.id : undefined;
+
+        yield* openRunningTurn(target, [{ member: teammate }]);
+        const benAsks = yield* route(target, {});
+        yield* openRunningTurn(target, [{ automation: "Nightly triage" }]);
+        const automationAsks = yield* route(target, {});
+        yield* openRunningTurn(target, [{ member: teammate }]);
+        yield* setAgentFollowerMachines(teammate, managerId, false);
+        const switchedOff = yield* route(target, {});
+
+        assert.equal(machineOf(benAsks), bens);
+        assert.equal(machineOf(automationAsks), anas);
+        assert.equal(machineOf(switchedOff), anas);
       }),
   );
 
