@@ -79,8 +79,8 @@ const HEAD_SHARE = 0.35;
 /** The most a float over a bar stands, in points, before it scrolls: about five rows and a half, as Mail's recipient suggestions stand over its keyboard, so the last row shows cut and says the list goes on. */
 const FLOAT_MOST = 300;
 
-/** The least a float over a bar stands before it scrolls, in points: two rows, even where the window over the keyboard is shorter, such as a landscape iPhone's, where it may stand over the screen's bar. */
-const FLOAT_LEAST = 100;
+/** The least a float over a bar stands before it scrolls, in points: a row and a half, so one row stands whole and the cut one under it says the list goes on, even where the window over the keyboard leaves less, such as a landscape iPhone's, whose bar and keyboard leave a few points, where it stands over the screen's own bar while an `@` is typed. */
+const FLOAT_LEAST = 66;
 
 /** What a float leaves clear over it, in points: the screen's own bar under the top safe area, so it never runs up under the bar's buttons where there is room. */
 const FLOAT_TOP_CLEAR = PRESS_SIZE + SPACE.ROW;
