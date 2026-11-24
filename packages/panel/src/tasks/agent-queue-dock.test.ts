@@ -85,7 +85,7 @@ function drawn(
               controls,
               paused: { because: QUEUE_PAUSE.STOPPED },
               editing: undefined,
-              onMove: ignore,
+              onReorder: ignore,
               onSteer: ignore,
               onEdit: ignore,
               onCancelEdit: ignore,

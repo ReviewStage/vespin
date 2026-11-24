@@ -120,7 +120,7 @@ export function AgentQueueDock({
   controls,
   paused,
   editing,
-  onMove,
+  onReorder,
   onSteer,
   onEdit,
   onCancelEdit,
@@ -135,7 +135,8 @@ export function AgentQueueDock({
   editing: string | undefined;
   /** Gives up the edit of the message on its row, this box's own or one another window left standing. */
   onCancelEdit: (message: QueuedMessage) => void;
-  onMove: (from: number, to: number) => void;
+  /** Stands the queue in `order`, by id, the order its rows are drawn in once a drag dropped one among them. */
+  onReorder: (order: readonly string[]) => void;
   /** Steers a queued message into the turn under way or as the next; none while the agent's first launch boots, which takes no line until its machine is up. */
   onSteer: ((message: QueuedMessage) => void) | undefined;
   /** Opens a queued message in the box to be written again; none while the box holds what its words must not join, such as a suggestion's draft. */
@@ -147,8 +148,14 @@ export function AgentQueueDock({
   // Note that a drag's order is drawn in the drop's own draw, since the host's queue reaches the panel a moment after it (`dropped-order.ts`).
   const { drawn: messages, move: standMoved } = useDroppedOrder(listed, queuedKey);
 
+  // Note that the order sent is the one drawn, so a drag landing before the queue a move asked for arrives moves the row it was pressed on.
   const move = (from: number, to: number) => {
-    onMove(from, to);
+    const order = messages.map(queuedKey);
+    const [taken] = order.splice(from, 1);
+
+    if (taken === undefined || from === to) return;
+    order.splice(to, 0, taken);
+    onReorder(order);
     standMoved(from, to);
   };
 

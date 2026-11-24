@@ -32,12 +32,13 @@ const HOLD_LIMIT_MS = 10_000;
 
 /**
  * The order a list keeps: the keys in the order the last move asked for,
- * and every order handed or asked since the list was last drawn as handed
- * that its writes may yet pass through on their way, the first of them the
- * order before any move.
+ * the order handed as it asked, and every order handed or asked since the
+ * list was last drawn as handed that its writes may yet pass through on
+ * their way, the first of them the order before any move.
  */
 interface KeptOrder {
   readonly asked: readonly string[];
+  readonly handed: readonly string[];
   readonly passing: readonly (readonly string[])[];
 }
 
@@ -57,9 +58,12 @@ function sameOrder(one: readonly string[], other: readonly string[]): boolean {
 /**
  * The keys handed, `listed`, in the order `kept` asked for, or none where
  * the order handed settles it: it stands the kept rows as asked, or as none
- * of the orders it may pass through. The kept rows fill the places the
- * order handed stands them at, in the order asked, and every other row
- * stands where it is handed.
+ * of the orders it may pass through, each read over the rows it held. The
+ * kept rows fill the places the order handed stands them at, in the order
+ * asked, and every other row stands where it is handed. Note that a move
+ * asking for the very order handed as it was made, one taking back a move
+ * not yet handed back, is settled by no order but one handed since, since
+ * the earlier move's write may yet pass through.
  */
 function keptKeys(listed: readonly string[], kept: KeptOrder): readonly string[] | undefined {
   const handed = new Set(listed);
@@ -67,12 +71,18 @@ function keptKeys(listed: readonly string[], kept: KeptOrder): readonly string[]
   const standing = listed.filter((key) => keeps.has(key));
   const asked = kept.asked.filter((key) => handed.has(key));
 
-  if (sameOrder(standing, asked)) return undefined;
+  if (sameOrder(standing, asked) && !sameOrder(listed, kept.handed)) return undefined;
 
-  const among = (order: readonly string[]) =>
-    order.filter((key) => keeps.has(key) && handed.has(key));
+  const passes = (order: readonly string[]) => {
+    const held = new Set(order);
 
-  if (!kept.passing.some((order) => sameOrder(standing, among(order)))) return undefined;
+    return sameOrder(
+      standing.filter((key) => held.has(key)),
+      order.filter((key) => keeps.has(key) && handed.has(key)),
+    );
+  };
+
+  if (!sameOrder(standing, asked) && !kept.passing.some(passes)) return undefined;
   const next = asked.values();
 
   return listed.map((key) => (keeps.has(key) ? (next.next().value ?? key) : key));
@@ -121,7 +131,11 @@ export function useDroppedOrder<Item>(
 
     if (moved === undefined || from === to) return;
     asked.splice(Math.max(0, Math.min(to, asked.length)), 0, moved);
-    keep({ asked, passing: kept === undefined ? [keys] : [...kept.passing, kept.asked] });
+    keep({
+      asked,
+      handed: keys,
+      passing: kept === undefined ? [keys] : [...kept.passing, kept.asked, keys],
+    });
   };
 
   return { drawn, move };

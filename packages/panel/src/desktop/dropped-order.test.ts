@@ -81,3 +81,19 @@ test("a second move before the first is handed back keeps its own order while th
   list.hand(items("B", "A", "C", "D"));
   assert.deepEqual(list.titles(), ["D", "B", "A", "C"]);
 });
+
+test("a move taking back one not yet handed back keeps its order while the first move's order arrives", () => {
+  const list = drawnList(items("A", "B", "C"));
+  list.move(0, 1);
+  list.move(1, 0);
+  list.hand(items("B", "A", "C"));
+  assert.deepEqual(list.titles(), ["A", "B", "C"]);
+});
+
+test("a row handed between two moves leaves the second move's order kept", () => {
+  const list = drawnList(items("A", "B", "C"));
+  list.move(0, 2);
+  list.hand(items("A", "B", "C", "D"));
+  list.move(3, 0);
+  assert.deepEqual(list.titles(), ["D", "B", "C", "A"]);
+});

@@ -517,11 +517,18 @@ function leaveSection(tasks: ListTasks, taskId: string): TaskSectionWrite[] {
     : [];
 }
 
-/** A section's entries for the tasks its group draws, in its own order. */
+/**
+ * A section's entries for the tasks its group draws, in the order it draws
+ * them, which is the section's own but while a move it asked for is kept
+ * (`useDroppedOrder`), so a place counted among the rows is counted among
+ * the entries.
+ */
 function drawnEntries(tasks: ListTasks, group: TasksGroup, sectionId: string) {
-  const drawn = new Set(group.tasks.map((task) => task.id));
+  const entries = new Map(
+    sectionOrder(tasks.taskSections, sectionId).map((entry) => [entry.taskId, entry]),
+  );
 
-  return sectionOrder(tasks.taskSections, sectionId).filter((entry) => drawn.has(entry.taskId));
+  return group.tasks.flatMap((task) => entries.get(task.id) ?? []);
 }
 
 /** What a group's drag does, each row heard by its task's id: its rows moved within it, where it keeps an order, and a row let go over another group's zone. */
