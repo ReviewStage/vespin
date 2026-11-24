@@ -92,6 +92,7 @@ import {
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
+  rowsNear,
   Screen,
   SettingsForm,
   SkillSuggestions,
@@ -185,6 +186,9 @@ import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useDictation } from "../use-dictation.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
+
+/** How many rows on each side of those on screen a transcript reads the pictures of before they scroll in. */
+const MEDIA_REACH = 5;
 
 /** The agent's threads line over its box, and what a press on it opens. */
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -920,10 +924,10 @@ const AgentConversation = memo(function AgentConversation({
     [messages, status],
   );
 
-  // Note that only the pictures and recordings of the rows on screen are read, so a transcript of hundreds of screenshots never holds them all as it opens.
+  // Note that only the pictures and recordings of the rows on screen and the few beside them are read, so a transcript of hundreds of screenshots never holds them all as it opens, and the next rows to scroll in are drawn as they land.
   const mediaIds = useMemo(
-    () => [...shownMediaIds(rowsShown), ...appsDockMediaIds(inUse)],
-    [rowsShown, inUse],
+    () => [...shownMediaIds(rowsNear(items, rowsShown, MEDIA_REACH)), ...appsDockMediaIds(inUse)],
+    [items, rowsShown, inUse],
   );
 
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));

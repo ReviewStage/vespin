@@ -6,7 +6,7 @@ import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
 import { AUDIO_TYPE } from "@repo/features/audio-signature";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { MP4_TYPE } from "@repo/features/video-signature";
-import { pictureExtension } from "@repo/ui-native";
+import { PICTURE_FILE_EXTENSIONS, pictureExtension } from "@repo/ui-native";
 import { Directory, File, Paths } from "expo-file-system";
 
 /** What a video's file is named with while its bytes are still being written, so no read takes it for the whole file. */
@@ -22,6 +22,12 @@ const PLAYED_EXTENSION: ReadonlyMap<string, string> = new Map([
   [AUDIO_TYPE.AAC, "aac"],
   [AUDIO_TYPE.OGG, "ogg"],
 ]);
+
+/** Every extension a picture, a video, or a sound clip is written under, which a file already written is looked for by. */
+const KEPT_EXTENSIONS: readonly string[] = [
+  ...PICTURE_FILE_EXTENSIONS,
+  ...new Set(PLAYED_EXTENSION.values()),
+];
 
 /** Each write still under way, by the address of the file it writes, so a second read of one video, clip, or file waits on the first rather than writing over it. */
 const writing = new Map<string, Promise<string>>();
@@ -84,6 +90,27 @@ export async function cachedPlayed(
   const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
 
   return once(new File(Paths.cache, name), base64);
+}
+
+/**
+ * Where a picture, a video, or a sound clip of `id` already stands under the
+ * app's caches, as `cachedPicture` or `cachedPlayed` wrote it on an earlier
+ * read, this launch's or one before it; none where no file of it stands, as
+ * before its first read or once iOS has cleared the caches. Note that a page
+ * asks this before it reads through the host, because the id names bytes
+ * that never change, so a picture shown once draws from its file again with
+ * no request, no base64 on the JS thread, and no write; and that a file
+ * still being written stands under another name until it is whole, so one
+ * found here is always whole.
+ */
+export function keptMedia(prefix: string, id: string): string | undefined {
+  for (const extension of KEPT_EXTENSIONS) {
+    const file = new File(Paths.cache, `${prefix}-${id}.${extension}`);
+
+    if (file.exists) return file.uri;
+  }
+
+  return undefined;
 }
 
 /**

@@ -82,6 +82,12 @@ const DECODED_PICTURE_EXTENSION: ReadonlyMap<string, string> = new Map([
 /** The extension a picture the system does not decode is shared under. */
 const SHARED_PICTURE_EXTENSION: ReadonlyMap<string, string> = new Map([["image/svg+xml", "svg"]]);
 
+/** Every extension a picture is written under (`pictureExtension`), so a file written for one is found again by its name alone. */
+export const PICTURE_FILE_EXTENSIONS: readonly string[] = [
+  ...DECODED_PICTURE_EXTENSION.values(),
+  ...SHARED_PICTURE_EXTENSION.values(),
+];
+
 /** The scheme of a file the app wrote. */
 const FILE_SCHEME = "file://";
 
