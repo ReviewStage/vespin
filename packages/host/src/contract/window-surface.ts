@@ -121,6 +121,16 @@ export const windowSurfaceActsContract = {
   )
     .input(exactInput(EffectSchema.Undefined))
     .output(EffectSchema.Void),
+  [WINDOW_SURFACE_ACT_KIND.SCREEN_RECORDING_OPEN_SETTINGS]: actProcedure(
+    "Could not open the Screen Recording privacy settings.",
+  )
+    .input(exactInput(EffectSchema.Undefined))
+    .output(EffectSchema.Void),
+  [WINDOW_SURFACE_ACT_KIND.ACCESSIBILITY_OPEN_SETTINGS]: actProcedure(
+    "Could not open the Accessibility privacy settings.",
+  )
+    .input(exactInput(EffectSchema.Undefined))
+    .output(EffectSchema.Void),
   [WINDOW_SURFACE_ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS]: actProcedure(
     "Could not open the login items settings.",
   )

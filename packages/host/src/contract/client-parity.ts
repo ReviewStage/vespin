@@ -508,6 +508,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MICROPHONE_ROUTE]: desktopOnly(WEB.MICROPHONE, IOS.DICTATION),
   [PORT_ACT_KIND.MICROPHONE_OPEN_SETTINGS]: desktopOnly(WEB.MICROPHONE, IOS.DICTATION),
   [PORT_ACT_KIND.NOTIFICATIONS_OPEN_SETTINGS]: desktopOnly(WEB.NOTIFICATIONS, IOS.NOTIFICATIONS),
+  [PORT_ACT_KIND.SCREEN_RECORDING_OPEN_SETTINGS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
+  [PORT_ACT_KIND.ACCESSIBILITY_OPEN_SETTINGS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS]: desktopOnly(
     byDesign("Allows the host the app carries on the Mac it is on, which a tab is not"),
     byDesign("Allows the host the app carries on the Mac it is on, which a phone is not"),
