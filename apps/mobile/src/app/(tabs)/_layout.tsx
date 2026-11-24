@@ -9,7 +9,6 @@ import {
 import {
   CallAccessory,
   GLYPH,
-  SidebarFrame,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -17,11 +16,12 @@ import {
 import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
+import { Split } from "react-native-screens/experimental";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxShown, useKeepInboxShown } from "../../inbox/inbox-shown.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
-import { AppSidebarPane, PLUS_TAB, useAppSidebarShown } from "../../screens/app-sidebar.js";
+import { AppSidebarPane, PLUS_TAB } from "../../screens/app-sidebar.js";
 import { SidebarTasksProvider } from "../../screens/task-screens.js";
 import { useNewTaskAfterSetup } from "../../setup/setup-place.js";
 import { APP_SIDEBAR, useSidebarChoiceLapse } from "../../sidebar-shown.js";
@@ -133,7 +133,6 @@ export default function TabsLayout() {
   // New task over the app setup's Finish just let in, where the workspace reaches a repository.
   useNewTaskAfterSetup();
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
-  const sidebar = useAppSidebarShown();
   const pathname = usePathname();
   const conversation = iosRouteHidesTabs(pathname);
   const segments: readonly string[] = useSegments();
@@ -215,9 +214,23 @@ export default function TabsLayout() {
   // Note that an iPad stands its own sidebar beside the tabs, and reads its task list once, above them, for the sidebar and Tasks alike; whether it does is the device's idiom, so the tabs never mount again under it, and a compact window folds the sidebar away rather than unmounting it.
   return APP_SIDEBAR ? (
     <SidebarTasksProvider>
-      <SidebarFrame shown={sidebar.shown} sidebar={<AppSidebarPane />}>
-        {tabs}
-      </SidebarFrame>
+      <Split.Host
+        primaryBackgroundStyle="sidebar"
+        displayModeButtonVisibility="automatic"
+        presentsWithGesture
+        preferredSplitBehavior="automatic"
+        topColumnForCollapsing="secondary"
+        columnMetrics={{
+          minimumPrimaryColumnWidth: 260,
+          preferredPrimaryColumnWidthOrFraction: 320,
+          maximumPrimaryColumnWidth: 380,
+        }}
+      >
+        <Split.Column>
+          <AppSidebarPane />
+        </Split.Column>
+        <Split.Column>{tabs}</Split.Column>
+      </Split.Host>
     </SidebarTasksProvider>
   ) : (
     tabs

@@ -13,7 +13,7 @@ import {
   MARK_SIZE,
   PlaceRow,
   RowList,
-  SidebarPane,
+  SidebarColumn,
   SWITCHER_LOOK,
   sidebarAction,
   useWindowSizeClass,
@@ -157,10 +157,8 @@ export function useAppSidebarShown(): AppSidebarShown {
  * when Hide Sidebar heads the sidebar itself, or where none can stand.
  */
 export function useSidebarShowAction(): BarAction | undefined {
-  const { shown, toggle } = useAppSidebarShown();
-  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-
-  return APP_SIDEBAR && regular && !shown ? sidebarAction(false, toggle) : undefined;
+  // Note that the system's split view stands its own sidebar button, its edge swipe and its menu command, so no bar of ours stands Show Sidebar.
+  return undefined;
 }
 
 /**
@@ -181,6 +179,7 @@ export function useSidebarShowAction(): BarAction | undefined {
  */
 export function AppSidebarPane() {
   const router = useRouter();
+  const openSettings = useOpenSettings();
   const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const inboxShown = useInboxShown();
@@ -245,8 +244,8 @@ export function AppSidebarPane() {
         };
 
   return (
-    <SidebarPane
-      bar={{ lead: [sidebarAction(true, toggle)], bottom }}
+    <SidebarColumn
+      foot={bottom}
       view={
         <RowList look={LIST_LOOK.SIDEBAR} selected={here} onSelect={go}>
           {/* Note that the workspace heads the sidebar, as the panel's does, its menu holding the workspaces and Manage; the account and Settings stand at the foot instead. */}

@@ -407,6 +407,7 @@ export {
   PATH_PART,
   PageColumn,
   SIDEBAR_BUTTON_WORDS,
+  SidebarColumn,
   SidebarPane,
   SidebarStackButton,
   SplitView,

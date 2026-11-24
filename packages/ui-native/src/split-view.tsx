@@ -8,12 +8,14 @@ import {
   Menu,
   NavigationSplitView,
   NavigationStack,
+  Spacer,
   Button as SwiftUIButton,
   Text,
   Toggle,
   Toolbar,
   ToolbarItem,
   useNativeState,
+  VStack,
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
@@ -35,6 +37,7 @@ import {
   navigationSplitViewStyle,
   navigationTitle,
   overlay,
+  padding,
   searchable,
   tint,
   toolbarTitleDisplayMode,
@@ -44,6 +47,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, memo, type ReactElement, type ReactNode, useEffect } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { BarContent } from "./bar-content.js";
+import { BAR_GLASS } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
@@ -690,6 +694,45 @@ export function SidebarPane({
       >
         <Column view={view} bar={bar} place={COLUMN_PLACE.APP} />
       </NavigationStack>
+    </Host>
+  );
+}
+
+/**
+ * An iPad's sidebar as the content of the system's own sidebar column
+ * (UISplitViewController's, whose own bar holds its toggle): its list, and
+ * at its foot what `foot` stands in the system's glass, such as the account
+ * and Settings' gear, the list scrolling under it. It draws no bar or
+ * panel of its own, since the column is the system's.
+ */
+export function SidebarColumn({
+  view,
+  foot,
+}: {
+  readonly view: ReactNode;
+  readonly foot?: BarBottom | undefined;
+}) {
+  const colors = useColors();
+
+  return (
+    <Host style={{ flex: 1 }} modifiers={[tint(colors.TEXT)]}>
+      <ZStack alignment="bottom">
+        {view}
+        {foot === undefined ? null : (
+          <HStack
+            spacing={SPACE.ROW}
+            modifiers={[
+              padding({ horizontal: SPACE.EDGE, vertical: SPACE.ROW }),
+              ...BAR_GLASS,
+              padding({ horizontal: SPACE.ROW, bottom: SPACE.ROW }),
+            ]}
+          >
+            {foot.leading}
+            <Spacer />
+            {foot.trailing === undefined ? null : <BarActionButton action={foot.trailing} />}
+          </HStack>
+        )}
+      </ZStack>
     </Host>
   );
 }
