@@ -48,7 +48,8 @@ import {
  * words came from moves with them: an agent's keep names it and its turn's
  * line, a correction names the corrector's or none for a member's, and the
  * same words kept again stay where they first came from; and only a member
- * who may open the agent's task reads where they came from. A memory kept
+ * who may open the agent's task reads where they came from, or, for a
+ * Manager, which works on no task, the Manager by its name. A memory kept
  * for one Manager alone is never read, deduped against, corrected, or
  * forgotten from the workspace's own memories nor from another Manager's.
  *
@@ -250,6 +251,41 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
         assert.deepEqual([...teammates], []);
         assert.deepEqual([...fromElsewhere], []);
       }),
+  );
+
+  it.effect("a memory a Manager kept reads back with the Manager it came from", () =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const { owner, teammate, workspaceId } = yield* openTeam;
+
+      const started = yield* createAgent(owner, {
+        taskId: null,
+        workspaceId,
+        idempotencyKey: randomUUID(),
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+        repository: null,
+        descriptionSnapshot: null,
+        prompt: null,
+        runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        kind: AGENT_KIND.MANAGER,
+      });
+
+      const agentId = Option.getOrThrow(started).agent.id;
+      yield* db.update(agentTable).set({ title: "Release desk" }).where(eq(agentTable.id, agentId));
+      const line = randomUUID();
+
+      const kept = keptId(
+        yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined, { agentId, messageId: line }),
+      );
+
+      const read = yield* readMemorySources(teammate, workspaceId, [kept]);
+
+      assert.deepEqual(
+        [...read],
+        [[kept, { agentId, messageId: line, taskId: null, managerName: "Release desk" }]],
+      );
+    }),
   );
 
   it.effect("a correction into words another memory already holds leaves that one memory", () =>

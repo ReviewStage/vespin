@@ -34,9 +34,11 @@ import { trimmedText } from "./text-schema.js";
  * Each memory also says where its words came from (`source`): the coding
  * agent that kept or last corrected them, the line that opened its turn
  * then, which a link to the agent's transcript lands on, and the task the
- * agent works on, only where the reader may open that task; none for a
- * member's own keep, a memory kept before it was recorded, or one whose
- * agent is gone. And how often coding agents were handed it, by their
+ * agent works on, only where the reader may open that task; or, for a
+ * Manager, which works on no task, the Manager and its line
+ * (`managerSource`), beside a null `source` that a client from before it
+ * reads as no source; none for a member's own keep, a memory kept before
+ * it was recorded, or one whose agent is gone. And how often coding agents were handed it, by their
  * search or as a turn opened, in the last `MEMORY_RECALL_WINDOW_DAYS` days
  * (`recalls30d`), and when last (`lastRecalledAt`), a member's own search
  * not counted.
@@ -79,6 +81,14 @@ const memorySourceSchema = EffectSchema.Struct({
   taskName: EffectSchema.String,
 });
 
+/** Where a memory's words came from when a Manager kept them: the Manager, which works on no task, by its id and name, and the line that opened its turn. */
+const memoryManagerSourceSchema = EffectSchema.Struct({
+  agentId: EffectSchema.String,
+  /** The line that opened the Manager's turn as it kept them, a `messages` id; null for a turn no line opened. */
+  messageId: EffectSchema.NullOr(EffectSchema.String),
+  name: EffectSchema.String,
+});
+
 /** One memory as a member of its workspace sees it. */
 const memorySummarySchema = EffectSchema.Struct({
   id: memoryIdSchema,
@@ -93,6 +103,8 @@ const memorySummarySchema = EffectSchema.Struct({
   updatedAt: countedNumber,
   /** The agent, line, and task its words came from; null for a member's own keep, one from before it was kept, one whose agent is gone, and one whose task the reader may not open. */
   source: EffectSchema.NullOr(memorySourceSchema),
+  /** The Manager its words came from, where a Manager the reader may open kept or last corrected them, `source` null beside it; absent otherwise, and from a service that predates it. */
+  managerSource: EffectSchema.optionalKey(memoryManagerSourceSchema),
   /** How often coding agents were handed it in the last `MEMORY_RECALL_WINDOW_DAYS` days. */
   recalls30d: countedNumber,
   /** When a coding agent was last handed it, in epoch milliseconds; null where none ever was. */
