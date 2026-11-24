@@ -22,8 +22,8 @@ declare global {
 const roots: Root[] = [];
 
 const SECTIONS: readonly SettingsDialogSection<string>[] = [
-  { id: "general", title: "General" },
-  { id: "people", title: "People" },
+  { id: "general", title: "General", icon: null },
+  { id: "people", title: "People", icon: null },
 ];
 
 /** jsdom's stand-in for the browser's ResizeObserver, which it lacks: nothing is laid out here. */
@@ -112,8 +112,11 @@ test("on a phone, the keyboard goes to the way back as a section opens, and back
     place("People").click();
   });
 
-  const back = document.querySelector<HTMLButtonElement>("section button");
-  expect(back?.textContent).toContain("Release Manager");
+  const back = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent === "Release Manager",
+  );
+
+  expect(back).toBeDefined();
   expect(document.activeElement).toBe(back);
 
   act(() => back?.click());

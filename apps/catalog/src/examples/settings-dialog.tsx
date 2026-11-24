@@ -1,6 +1,7 @@
 import {
   BUTTON_VARIANT,
   Button,
+  EmptyState,
   Inline,
   PlusIcon,
   SETTINGS_SKELETON_CONTROL,
@@ -13,6 +14,7 @@ import {
   type SettingsSectionSkeletonLayout,
   Switch,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -20,7 +22,8 @@ import { CatalogSection } from "../section";
 /**
  * settings-dialog.tsx -- a Manager's settings in a dialog, its sections
  * listed down the card's start and the one chosen beside them, each of its
- * rows saving itself; and the same dialog while its section's rows are read,
+ * rows saving itself, and Automations an empty state filling the room under
+ * its title as a settings page's does; and the same dialog while its section's rows are read,
  * its list whole and placeholder sections in the section's place. At a
  * phone's width each opens on its list, and a section pressed there stands in
  * the list's room under the way back to it.
@@ -37,10 +40,10 @@ const SECTION = {
 type Section = (typeof SECTION)[keyof typeof SECTION];
 
 const SECTIONS: readonly SettingsDialogSection<Section>[] = [
-  { id: SECTION.GENERAL, title: "General" },
-  { id: SECTION.PEOPLE, title: "People" },
-  { id: SECTION.AUTOMATIONS, title: "Automations" },
-  { id: SECTION.MEMORY, title: "Memory" },
+  { id: SECTION.GENERAL, title: "General", icon: <GLYPH.SETTINGS /> },
+  { id: SECTION.PEOPLE, title: "People", icon: <GLYPH.PEOPLE /> },
+  { id: SECTION.AUTOMATIONS, title: "Automations", icon: <GLYPH.AUTOMATION /> },
+  { id: SECTION.MEMORY, title: "Memory", icon: <GLYPH.MEMORY /> },
 ];
 
 /** What People's rows land as while they are read: three people, each with a switch. */
@@ -138,12 +141,7 @@ function SectionBody({ section }: { section: Section }): React.JSX.Element {
         </SettingsSection>
       );
     case SECTION.AUTOMATIONS:
-      return (
-        <SettingsSection title="Runs here">
-          <SwitchRow label="Morning triage" description="Every weekday at 9:00" />
-          <SwitchRow label="Weekly release notes" description="Fridays at 16:00" on={false} />
-        </SettingsSection>
-      );
+      return <EmptyState icon={<GLYPH.AUTOMATION />}>No automations run here yet.</EmptyState>;
     case SECTION.MEMORY:
       return (
         <SettingsSection title="Its own">

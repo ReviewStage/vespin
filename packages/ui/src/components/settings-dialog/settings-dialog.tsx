@@ -9,28 +9,34 @@ import { GAP, LAYOUT_ELEMENT, Stack } from "../layout/layout.js";
 import { NAV_CURRENT, NavItem } from "../nav-item/nav-item.js";
 import { useRovingKeys } from "../roving-keys/roving-keys.js";
 import { SCROLL_FADE, ScrollArea } from "../scroll-area/scroll-area.js";
+import { SettingsPageColumn } from "../settings-page/settings-page.js";
 import {
   type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
 } from "../settings-section/settings-section.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
+import { TOOLBAR_INSET, TOOLBAR_LOOK, Toolbar } from "../toolbar/toolbar.js";
 
 /**
  * settings-dialog.tsx -- the settings of one thing in a dialog: a list of its sections down the card's start, and the section chosen beside it, one page of `SettingsSection`s.
  *
  * A thing whose settings are more than one card holds, a Manager's, opens
  * them in this dialog rather than a page of its own, since they are its and
- * not the window's. Its section stands at Settings' own measure, so its rows
- * read as Settings' do, and the card at a height it holds as the reader turns
- * from one section to the next, so the list never jumps under the pointer. Down its start stands the list, on the sidebar's
- * ground, headed by the dialog's name, which names the card: one place for
- * each section (`NavItem`), the one shown lit and announced as the page,
- * one Tab stop the arrows walk, as Settings' own list of pages is. Beside it
- * stands the section chosen, headed by its name with the card's close at its
- * end, over the section's own `SettingsSection`s a page's section gap
- * apart, which scroll under the head and fade into it. Each row saves
- * itself, as Settings' rows do, so the card has no answers at its foot:
- * the close, Escape, and a press on the dimmed window put it away.
+ * not the window's. It reads exactly as Settings does, drawn by Settings'
+ * own parts: down its start, on the sidebar's ground at the sidebar's inset,
+ * the list, headed by the dialog's name in a group's role as Settings heads a
+ * group of pages, which names the
+ * card, with one place for each section (`NavItem`), its glyph and name, the
+ * one shown lit and announced as the page, one Tab stop the arrows walk, as
+ * Settings' list of pages is; beside it, the section chosen as a settings
+ * page's column (`SettingsPageColumn`), at the page's inset and Settings'
+ * measure, its name the page's title with the card's close at its end, over
+ * its `SettingsSection`s a page's gap apart, scrolling under its top edge as
+ * a page does, an empty state filling the room under the title. The card
+ * holds its height as the reader turns from one section to the next, so the
+ * list never jumps under the pointer. Each row saves itself, as Settings'
+ * rows do, so the card has no answers at its foot: the close, Escape, and a
+ * press on the dimmed window put it away.
  *
  * Which section shows is its owner's (`current`, `onChoose`), so a link or a
  * menu item can open the card on the section it names, and the owner draws
@@ -39,13 +45,18 @@ import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
  *
  * On a phone, or in a room as narrow (`room-narrow`), the card takes the
  * window's room and shows the list or the section, one at a time, as
- * Settings does there: the list first, each place ending in the › of a row
- * that opens a page, its close at the head's end; a place pressed opens its
- * section in the list's room, headed by the way back to the list, which
- * hands the keyboard back to the place it opened. Wider, both stand, and
- * what was last chosen on a phone is simply the section shown. The choice
- * between them is drawn, not measured, so the card answers the room as the
- * rest of the dialog does, at no render of its own as the window resizes.
+ * Settings does there, each headed as a phone heads every page (`Toolbar`'s
+ * phone look): the list under the card's name centered and its close in the
+ * end corner, each place ending in the › of a row that opens a page; a place
+ * pressed opens its section in the list's room, under the way back to the
+ * list in the start corner, the back glyph alone, hinted "Back to" the card's
+ * name, the section's name centered, and the close in the end corner, the
+ * section's column then opening on its sections a section's gap under the
+ * bar, as a settings page's does under a phone's. The way back hands the
+ * keyboard back to the place it opened. Wider, both stand, and what was last
+ * chosen on a phone is simply the section shown. The choice between them is
+ * drawn, not measured, so the card answers the room as the rest of the
+ * dialog does, at no render of its own as the window resizes.
  *
  * While a section's rows are read, the card stands as it will
  * (`SettingsDialogSkeleton`): its list whole, from the sections it is
@@ -56,11 +67,11 @@ import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
  * (`DIALOG_SIZE.SECTIONS`), whose card it lays out edge to edge.
  */
 
-/** One section of the dialog: its id, its name in the list and over its page, and its glyph in the list. */
+/** One section of the dialog: its id, its name in the list and over its page, and its glyph in the list, as every page in Settings' list has one. */
 export interface SettingsDialogSection<Id extends string> {
   readonly id: Id;
   readonly title: string;
-  readonly icon?: ReactNode;
+  readonly icon: ReactNode;
 }
 
 /** What a settings dialog is told: its name, its sections and the one shown, and how it is put away. */
@@ -88,16 +99,24 @@ export interface SettingsDialogProps<Id extends string> {
 /** What a card, its list, and its section are named for where they say nothing else. */
 const CLOSE = "Close";
 
-/**
- * The card's grid: the list's column and the section's, or on a phone one
- * column holding whichever of them shows (`data-listed`).
- */
-const GRID =
-  "ui-settings-dialog group/settings-dialog grid min-h-0 min-w-0 flex-1 grid-cols-dialog-sections room-narrow:grid-cols-1";
+/** Where a phone's bar stands, as its toolbar names its place. */
+const PLACE = "settings-dialog";
 
-/** The list's column, on the sidebar's ground, a hairline at its end; on a phone the card's whole room while it shows. */
+/** The card's room: on a phone the bar of whichever of the list and the section shows (`data-listed`), over the grid. */
+const ROOM = "group/settings-dialog flex min-h-0 min-w-0 flex-1 flex-col";
+
+/** The card's grid: the list's column and the section's, or on a phone one column holding whichever of them shows. */
+const GRID =
+  "ui-settings-dialog grid min-h-0 min-w-0 flex-1 grid-cols-dialog-sections room-narrow:grid-cols-1";
+
+/**
+ * The list's column, on the sidebar's ground at the sidebar's inset, a
+ * hairline at its end, its top level with the section's title; on a phone
+ * the card's whole room while it shows, on the card's own ground under its
+ * bar, as Settings' list of pages stands under a phone's.
+ */
 const LIST =
-  "ui-settings-dialog-list flex min-h-0 min-w-0 flex-col gap-block-gap border-e border-border bg-sidebar p-dialog-inset pe-ui-12 room-narrow:border-e-0 room-narrow:pe-dialog-inset room-narrow:group-data-[listed=false]/settings-dialog:hidden";
+  "ui-settings-dialog-list flex min-h-0 min-w-0 flex-col gap-tight-gap border-e border-border bg-sidebar px-column-inset pt-page-inset pb-column-inset room-narrow:border-e-0 room-narrow:bg-transparent room-narrow:pt-title-under-bar room-narrow:group-data-[listed=false]/settings-dialog:hidden";
 
 /**
  * The room the list scrolls in, reaching past the list's inset by a focus
@@ -111,25 +130,33 @@ const LIST_ROOM = "-m-ring-reach flex min-h-0 flex-1 flex-col";
 const PAGE =
   "ui-settings-dialog-page flex min-h-0 min-w-0 flex-col room-narrow:group-data-[listed=true]/settings-dialog:hidden";
 
-/** A head's row: its words, and what stands at their start or end, one control's height so a head with no control stands as tall as one with. */
-const HEAD = "flex min-h-control min-w-0 items-center gap-control-gap";
+/**
+ * The list's label, the card's name, over its places as Settings heads a
+ * group of pages (`GroupHeader`): in the group's role, a row's height, its
+ * words where the places' glyphs start; on a phone the list's bar names the
+ * card instead.
+ */
+const LABEL = "flex min-h-control min-w-0 items-center px-row-inset room-narrow:hidden";
 
-/** The section's head: its name and the card's close; on a phone, the way back and the close over the name, on a line of its own, as a phone heads a page under its bar. */
-const PAGE_HEAD = `${HEAD} px-dialog-inset pt-dialog-inset pb-block-gap room-narrow:flex-wrap room-narrow:gap-y-block-gap`;
+/** A phone's bar over the list, as a phone heads every page (`Toolbar`'s phone look): the card's name centered, its close in the end corner; drawn only while the list shows. */
+const LIST_BAR = "hidden room-narrow:group-data-[listed=true]/settings-dialog:block";
 
-/** What a phone alone draws: the way back to the list, the list's close, and a place's ›. */
+/** A phone's bar over a section: the way back to the list in the start corner, the section's name centered, and the close in the end corner; drawn only while the section shows. */
+const PAGE_BAR = "hidden room-narrow:group-data-[listed=false]/settings-dialog:block";
+
+/** What a phone alone draws: a place's ›. */
 const PHONE_ONLY = "hidden room-narrow:flex";
 
 /**
  * Hands the keyboard on where what held it is hidden as the list or the
  * section takes the card's room on a phone: to the way back to the list as
- * a section opens, and to the place it opened from as the list comes back.
+ * a section opens, in its bar, and to the place it opened from as the list comes back.
  * Note that wider, where both stand, what held it stays drawn and keeps it.
  */
 function useHandedFocus(
   listed: boolean,
   list: React.RefObject<HTMLElement | null>,
-  page: React.RefObject<HTMLElement | null>,
+  bar: React.RefObject<HTMLElement | null>,
 ): void {
   const last = useRef(listed);
 
@@ -142,10 +169,10 @@ function useHandedFocus(
 
     const to = listed
       ? list.current?.querySelector<HTMLElement>("[aria-current]")
-      : page.current?.querySelector<HTMLElement>("button");
+      : bar.current?.querySelector<HTMLElement>("button");
 
     to?.focus();
-  }, [listed, list, page]);
+  }, [listed, list, bar]);
 }
 
 /** The settings of one thing: its sections listed down the card's start, and the one chosen beside them; on a phone, one at a time. */
@@ -163,13 +190,13 @@ export function SettingsDialog<Id extends string>({
 }: SettingsDialogProps<Id>): React.JSX.Element {
   const dialog = useRef<DialogHandle>(null);
   const list = useRef<HTMLDivElement>(null);
-  const page = useRef<HTMLElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const pageTitleId = useId();
   // Whether a phone shows the list rather than the section; wider, both stand whatever it says.
   const [listed, setListed] = useState(true);
   const roving = useRovingKeys<HTMLDivElement>();
-  useHandedFocus(listed, list, page);
+  useHandedFocus(listed, list, bar);
   const shown = sections.find((section) => section.id === current);
 
   const close = (
@@ -190,76 +217,90 @@ export function SettingsDialog<Id extends string>({
       onDismiss={onDismiss}
       onExited={onExited}
     >
-      <div className={GRID} data-listed={listed}>
-        <div ref={list} className={LIST}>
-          <div className={HEAD}>
-            <Text
-              variant={TEXT_VARIANT.DIALOG}
-              as={TEXT_ELEMENT.H2}
-              id={titleId}
-              truncate
-              className="flex-1"
-            >
-              <ReplayWords masked={titleReplayMasked}>{title}</ReplayWords>
-            </Text>
-            <span className={PHONE_ONLY}>{close}</span>
-          </div>
-          <div className={LIST_ROOM}>
-            <ScrollArea fade={SCROLL_FADE.BOTH}>
-              <div {...roving} className="p-ring-reach">
-                <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.ROW} aria-labelledby={titleId}>
-                  {sections.map((section) => (
-                    <li key={section.id}>
-                      <NavItem
-                        icon={section.icon}
-                        current={section.id === current ? NAV_CURRENT.PAGE : undefined}
-                        roving
-                        mark={
-                          <span className={PHONE_ONLY}>
-                            <ForwardIcon />
-                          </span>
-                        }
-                        onClick={() => {
-                          onChoose(section.id);
-                          setListed(false);
-                        }}
-                      >
-                        {section.title}
-                      </NavItem>
-                    </li>
-                  ))}
-                </Stack>
-              </div>
-            </ScrollArea>
-          </div>
+      <div className={ROOM} data-listed={listed}>
+        <div className={LIST_BAR}>
+          <Toolbar
+            look={TOOLBAR_LOOK.PHONE}
+            place={PLACE}
+            start={TOOLBAR_INSET.COLUMN}
+            end={TOOLBAR_INSET.COLUMN}
+            title={<ReplayWords masked={titleReplayMasked}>{title}</ReplayWords>}
+            titleReplayUnmasked={!titleReplayMasked}
+            actions={close}
+          />
         </div>
-        <section ref={page} className={PAGE} aria-labelledby={pageTitleId}>
-          <div className={PAGE_HEAD}>
-            <span className={PHONE_ONLY}>
+        <div ref={bar} className={PAGE_BAR}>
+          <Toolbar
+            look={TOOLBAR_LOOK.PHONE}
+            place={PLACE}
+            start={TOOLBAR_INSET.COLUMN}
+            end={TOOLBAR_INSET.COLUMN}
+            lead={
               <BackButton
                 label={title}
                 place={title}
                 command={NO_BACK_KEY}
                 onBack={() => setListed(true)}
               />
-            </span>
-            <Text
-              variant={TEXT_VARIANT.DIALOG}
-              as={TEXT_ELEMENT.H2}
-              id={pageTitleId}
-              truncate
-              className="flex-1 room-narrow:order-last room-narrow:basis-full"
-            >
-              {shown?.title ?? ""}
-            </Text>
-            <span className="ms-auto flex">{close}</span>
-          </div>
-          <ScrollArea fade={SCROLL_FADE.BOTH}>
-            <div className="ui-settings-dialog-sections flex min-w-0 flex-col gap-page-section-gap px-dialog-inset pb-dialog-inset">
-              {children}
+            }
+            title={shown?.title ?? ""}
+            titleReplayUnmasked
+            actions={close}
+          />
+        </div>
+        <div className={GRID}>
+          <div ref={list} className={LIST}>
+            <div className={LABEL}>
+              <Text
+                variant={TEXT_VARIANT.GROUP}
+                as={TEXT_ELEMENT.H2}
+                id={titleId}
+                truncate
+                className="flex-1"
+              >
+                <ReplayWords masked={titleReplayMasked}>{title}</ReplayWords>
+              </Text>
             </div>
-          </ScrollArea>
-        </section>
+            <div className={LIST_ROOM}>
+              <ScrollArea fade={SCROLL_FADE.BOTH}>
+                <div {...roving} className="p-ring-reach">
+                  <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.ROW} aria-labelledby={titleId}>
+                    {sections.map((section) => (
+                      <li key={section.id}>
+                        <NavItem
+                          icon={section.icon}
+                          current={section.id === current ? NAV_CURRENT.PAGE : undefined}
+                          roving
+                          mark={
+                            <span className={PHONE_ONLY}>
+                              <ForwardIcon />
+                            </span>
+                          }
+                          onClick={() => {
+                            onChoose(section.id);
+                            setListed(false);
+                          }}
+                        >
+                          {section.title}
+                        </NavItem>
+                      </li>
+                    ))}
+                  </Stack>
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+          <section className={PAGE} aria-labelledby={pageTitleId}>
+            <SettingsPageColumn
+              title={shown?.title ?? ""}
+              titleId={pageTitleId}
+              actions={close}
+              titledWhenNarrow
+            >
+              {children}
+            </SettingsPageColumn>
+          </section>
+        </div>
       </div>
     </Dialog>
   );
