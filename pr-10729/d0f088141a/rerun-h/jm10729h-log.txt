@@ -1,0 +1,29 @@
+pinned to d0f088141a
+== bundle PJjm10729h base d0f088141ae
+  built d0f088141ae base app Vnatc1.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/features/src/turn-run/tool-set.ts(25,5): error TS2345: Argument of type 'WireValue' is not assignable to parameter of type 'JSONSchema7 | PromiseLike<JSONSchema7> | (() => JSONSchema7 | PromiseLike<JSONSchema7>)'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+H1: maestro ok
+  H1: sheets from 100.473s into rec.mp4
+== bundle PJjm10729hmain base aab69d1d0fe
+  built aab69d1d0fe base app Vnatc1.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/features/src/turn-run/tool-set.ts(25,5): error TS2345: Argument of type 'WireValue' is not assignable to parameter of type 'JSONSchema7 | PromiseLike<JSONSchema7> | (() => JSONSchema7 | PromiseLike<JSONSchema7>)'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+H2m: maestro ok
+  H2m: sheets from 27.854s into rec.mp4
+H2b: maestro ok
+  H2b: sheets from 21.745s into rec.mp4
+H3 part 1 (panel, '@' over it): ok
+  H3 hierarchy while the list stands: composer-field 0 hits, Steer 0, 2 queued 0, Suggested 1
+H3 part 2 (erase, close panel, '@' again): ok
+  H3-a: sheets from 26.242s into rec.mp4
+  H3-b: sheets from 53.799s into rec.mp4
+  device log:   173802 lines; presentation warnings: 0
