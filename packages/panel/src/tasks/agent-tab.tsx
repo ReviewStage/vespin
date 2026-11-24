@@ -237,7 +237,6 @@ import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { failureShown } from "../failure-report.js";
 import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
