@@ -34,6 +34,7 @@
 // drawn faded.
 
 import ExpoModulesCore
+import ImageIO
 import UIKit
 
 public final class PillFieldModule: Module {
@@ -41,7 +42,7 @@ public final class PillFieldModule: Module {
     Name("PillField")
 
     View(PillFieldView.self) {
-      Events("onWords", "onHeight", "onFocusChange")
+      Events("onWords", "onHeight", "onFocusChange", "onPillPress")
 
       Prop("value") { (view: PillFieldView, value: ValueRecord) in
         view.take(StyledRuns(value.runs), seen: value.seen)
@@ -165,6 +166,8 @@ struct PillRecord: Record {
   @Field var words: String = ""
   @Field var glyph: String = ""
   @Field var heard: String = ""
+  /// The file a picture's pill draws its thumbnail from in its glyph's place; none for every other pill.
+  @Field var thumbnail: String? = nil
 }
 
 struct RunRecord: Record {
@@ -221,12 +224,15 @@ struct Pill: Equatable {
   let words: String
   let glyph: String
   let heard: String
+  /// The file a picture's pill draws its thumbnail from, where JavaScript has written one.
+  let thumbnail: String?
 
-  init(markdown: String, words: String, glyph: String, heard: String) {
+  init(markdown: String, words: String, glyph: String, heard: String, thumbnail: String? = nil) {
     self.markdown = markdown
     self.words = words
     self.glyph = glyph
     self.heard = heard
+    self.thumbnail = thumbnail
   }
 
   init(_ record: PillRecord) {
@@ -234,6 +240,7 @@ struct Pill: Equatable {
     words = record.words
     glyph = record.glyph
     heard = record.heard
+    thumbnail = record.thumbnail
   }
 }
 
@@ -358,10 +365,13 @@ func pillFont() -> UIFont {
 final class PillAttachment: NSTextAttachment {
   let pill: Pill
   let look: Look
+  /// What a press on a picture's pill does, which opens the picture; none where the field opens nothing, so a press places the caret.
+  let onPress: ((Pill) -> Void)?
 
-  init(pill: Pill, look: Look) {
+  init(pill: Pill, look: Look, onPress: ((Pill) -> Void)? = nil) {
     self.pill = pill
     self.look = look
+    self.onPress = onPress
     super.init(data: nil, ofType: nil)
     accessibilityLabel = pill.heard
   }
@@ -391,7 +401,7 @@ final class PillAttachment: NSTextAttachment {
 final class PillViewProvider: NSTextAttachmentViewProvider {
   override func loadView() {
     guard let attachment = textAttachment as? PillAttachment else { return }
-    view = PillView(pill: attachment.pill, look: attachment.look)
+    view = PillView(pill: attachment.pill, look: attachment.look, onPress: attachment.onPress)
   }
 
   override func attachmentBounds(
@@ -410,18 +420,60 @@ final class PillViewProvider: NSTextAttachmentViewProvider {
   }
 }
 
-/// The panel's chip: its kind's glyph and its words on a rounded fill, cut short where the line is narrower.
+/// How round a picture pill's thumbnail is cut, as the sent message's chip cuts its own (`markdown.tsx`'s `THUMBNAIL_CORNER`).
+private let thumbnailCorner: CGFloat = 4
+
+/// Pictures' thumbnails, decoded at a pill's size from the files JavaScript wrote, by each file's address, so a pill drawn again, as each edit redraws the words, never decodes its picture twice.
+private enum PillThumbnails {
+  static let decoded = NSCache<NSString, UIImage>()
+
+  /// The thumbnail already decoded for the file, if any.
+  static func held(_ address: String) -> UIImage? {
+    decoded.object(forKey: address as NSString)
+  }
+
+  /// Decodes the file's picture off the main thread, no larger than `pixels` on its long edge, through ImageIO's thumbnail, which reads the file without drawing it whole, and answers on the main thread.
+  static func decode(_ address: String, pixels: CGFloat, done: @escaping (UIImage?) -> Void) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      var image: UIImage?
+
+      if let url = URL(string: address), let source = CGImageSourceCreateWithURL(url as CFURL, nil) {
+        let options: [CFString: Any] = [
+          kCGImageSourceCreateThumbnailFromImageAlways: true,
+          kCGImageSourceCreateThumbnailWithTransform: true,
+          kCGImageSourceShouldCacheImmediately: true,
+          kCGImageSourceThumbnailMaxPixelSize: max(pixels, 1),
+        ]
+
+        if let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) {
+          image = UIImage(cgImage: thumbnail)
+        }
+      }
+
+      DispatchQueue.main.async {
+        if let image { PillThumbnails.decoded.setObject(image, forKey: address as NSString) }
+        done(image)
+      }
+    }
+  }
+}
+
+/// The panel's chip: its kind's glyph and its words on a rounded fill, cut short where the line is narrower; a picture's wears its thumbnail in the glyph's place.
 final class PillView: UIView {
   private let glyph = UIImageView()
   private let label = UILabel()
+  private let pill: Pill
+  private let onPress: ((Pill) -> Void)?
 
-  init(pill: Pill, look: Look) {
+  init(pill: Pill, look: Look, onPress: ((Pill) -> Void)? = nil) {
+    self.pill = pill
+    self.onPress = onPress
     super.init(frame: .zero)
     backgroundColor = look.pillFill
     layer.cornerRadius = PillSpace.radius
     layer.cornerCurve = .continuous
-    // Note that a press goes through to the text view, which places the caret beside the pill, and VoiceOver hears the pill through the text view's words.
-    isUserInteractionEnabled = false
+    // Note that a press goes through to the text view, which places the caret beside the pill, and VoiceOver hears the pill through the text view's words; but a picture's pill with a thumbnail takes the press and opens the picture, as Messages opens a photo in its field.
+    isUserInteractionEnabled = pill.thumbnail != nil && onPress != nil
     isAccessibilityElement = false
     glyph.image = Self.image(named: pill.glyph)
     glyph.tintColor = look.pillGlyph
@@ -433,11 +485,45 @@ final class PillView: UIView {
     label.lineBreakMode = .byTruncatingTail
     addSubview(glyph)
     addSubview(label)
+    showThumbnail()
+
+    if isUserInteractionEnabled {
+      addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(pressed)))
+    }
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) {
     fatalError("A pill is never decoded.")
+  }
+
+  /// Stands the picture's thumbnail in the glyph's place, at once where it was decoded before, else once it is, the glyph standing until then so the pill never stands empty.
+  private func showThumbnail() {
+    guard let address = pill.thumbnail else { return }
+    glyph.layer.cornerRadius = thumbnailCorner
+    glyph.layer.cornerCurve = .continuous
+    glyph.clipsToBounds = true
+
+    if let held = PillThumbnails.held(address) {
+      wear(held)
+      return
+    }
+
+    let pixels = (ceil(pillFont().pointSize) + PillSpace.rise * 2) * UITraitCollection.current.displayScale
+    PillThumbnails.decode(address, pixels: pixels) { [weak self] image in
+      guard let self, let image, self.pill.thumbnail == address else { return }
+      self.wear(image)
+    }
+  }
+
+  private func wear(_ image: UIImage) {
+    glyph.image = image
+    glyph.contentMode = .scaleAspectFill
+    setNeedsLayout()
+  }
+
+  @objc private func pressed() {
+    onPress?(pill)
   }
 
   /// The glyph by its name: one of the app's symbol sets or pictures, such as a Manager's face, or an SF Symbol where the panel draws none of its own.
@@ -460,7 +546,11 @@ final class PillView: UIView {
   override func layoutSubviews() {
     super.layoutSubviews()
     let glyphSide = ceil(label.font.pointSize)
-    glyph.frame = CGRect(x: PillSpace.leading, y: 0, width: glyphSide, height: bounds.height)
+    // Note that a thumbnail stands as a square centered on the pill, a hair taller than the words, where a glyph stands at its font's own size in the pill's whole height.
+    glyph.frame =
+      pill.thumbnail == nil
+      ? CGRect(x: PillSpace.leading, y: 0, width: glyphSide, height: bounds.height)
+      : CGRect(x: PillSpace.leading, y: (bounds.height - glyphSide) / 2, width: glyphSide, height: glyphSide)
     let wordsStart = glyph.frame.maxX + PillSpace.gap
     label.frame = CGRect(
       x: wordsStart,
@@ -499,6 +589,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
   let onWords = EventDispatcher()
   let onHeight = EventDispatcher()
   let onFocusChange = EventDispatcher()
+  let onPillPress = EventDispatcher()
 
   private let textView = PillTextView(usingTextLayoutManager: true)
   private let placeholderLabel = UILabel()
@@ -634,7 +725,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     for (index, pill) in pills.enumerated() {
       let character = NSRange(location: range.location + index * 2, length: 1)
       storage.setAttributes(baseAttributes(), range: character)
-      storage.addAttribute(.attachment, value: PillAttachment(pill: pill, look: look), range: character)
+      storage.addAttribute(.attachment, value: attachment(of: pill), range: character)
     }
     quiet = false
     let after = range.location + (typed as NSString).length + (next == space ? 1 : 0)
@@ -705,7 +796,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
         built.append(NSAttributedString(string: text, attributes: baseAttributes()))
       case .pill(let pill):
         let piece = NSMutableAttributedString(
-          attributedString: NSAttributedString(attachment: PillAttachment(pill: pill, look: look))
+          attributedString: NSAttributedString(attachment: attachment(of: pill))
         )
         piece.addAttributes(baseAttributes(), range: NSRange(location: 0, length: piece.length))
         built.append(piece)
@@ -713,6 +804,13 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     }
 
     return built
+  }
+
+  /// A pill's attachment, whose press, on a picture's pill, tells JavaScript which pill it was, by its Markdown.
+  private func attachment(of pill: Pill) -> PillAttachment {
+    PillAttachment(pill: pill, look: look) { [weak self] pressed in
+      self?.onPillPress(["markdown": pressed.markdown])
+    }
   }
 
   /// The runs the words hold in the range: each pill's attachment a pill, and everything else words, any other attachment's character among them.
