@@ -148,6 +148,7 @@ import { useReplyDrawnCount } from "../reply-drawn.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { TabColumns } from "../split-columns.js";
 import {
   SPLIT_TAB,
@@ -156,6 +157,7 @@ import {
   useSplitPicked,
   useSplitSelection,
 } from "../split-route.js";
+import { StackColumnBar } from "../stack-column-bar.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -1108,8 +1110,9 @@ function ThreadDetail({
         ? {}
         : {
             pathInHead: true,
-            acts,
-            menu: menuWithout(menu, acts),
+            // Note that an iPad's page column stands the thread's acts and ⋯ in its screen's own header (`StackColumnBar`), and the page none of its own.
+            acts: APP_SIDEBAR ? [] : acts,
+            menu: APP_SIDEBAR ? undefined : menuWithout(menu, acts),
             foot: (
               <ThreadComposer
                 item={item}
@@ -1123,7 +1126,16 @@ function ThreadDetail({
     />
   );
 
-  if (!inStack) return page;
+  if (!inStack) {
+    return APP_SIDEBAR ? (
+      <>
+        <StackColumnBar bar={{ acts, menu: menuWithout(menu, acts) }} />
+        {page}
+      </>
+    ) : (
+      page
+    );
+  }
 
   return (
     <>
@@ -1547,7 +1559,8 @@ function InboxSplitScreen({
   return (
     <>
       {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
-      <Stack.Screen options={{ headerShown: false, title: INBOX_TITLE }} />
+      {/* Note that an iPad's page column stands its screen's own header instead, which its columns draw (`TabColumns`). */}
+      {APP_SIDEBAR ? null : <Stack.Screen options={{ headerShown: false, title: INBOX_TITLE }} />}
       <TabColumns build={build} {...first} detail={detail} detailBar={firstDetailBar} />
     </>
   );

@@ -468,7 +468,10 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   `PlaceRow` for each place and the tasks), then the list of the place
   picked (`ListColumn`, reading what the place holds above the split view,
   as its page does), then the picked
-  row's page (`PageColumn`) with every page pushed over it; the system draws
+  row's page with every page pushed over it, standing bare in its screen's
+  host under the screen's own native-stack header, as an iPhone's pushed page
+  stands, since a SwiftUI column around it left its hosted React Native views
+  undrawn there; the system draws
   the sidebar's glass, selection, toggle and swipe, and the columns' edges a
   person drags, the list's never folding away. A compact window hides it while a
   conversation stands in front (a thread, an agent's page, or a pull

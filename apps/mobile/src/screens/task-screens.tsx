@@ -3658,7 +3658,8 @@ function TasksSplitScreen({
   return (
     <>
       {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
-      <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />
+      {/* Note that an iPad's page column stands its screen's own header instead, which its columns draw (`TabColumns`). */}
+      {APP_SIDEBAR ? null : <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />}
       <InlineSplitView
         build={build}
         {...first}

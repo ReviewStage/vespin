@@ -656,26 +656,6 @@ export function SplitView({
 }
 
 /**
- * A page under its own bar in a column of the system's split view, as an
- * iPad stands the picked row's page beside its list: its view under its
- * column's bar, a title, a path, acts and a menu as a split view's detail
- * holds them.
- */
-export function PageColumn({
-  view,
-  bar,
-}: {
-  readonly view: ReactNode;
-  readonly bar?: ColumnBar | undefined;
-}) {
-  return (
-    <NavigationStack>
-      <Column view={view} bar={bar} system />
-    </NavigationStack>
-  );
-}
-
-/**
  * A tab's list as the middle column of the system's own split view on an
  * iPad (UISplitViewController's supplementary column, between the sidebar
  * and the picked row's page), as Mail stands a mailbox's messages between

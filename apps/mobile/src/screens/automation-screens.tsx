@@ -195,8 +195,6 @@ function AutomationsPageScreen() {
 
   return (
     <>
-      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over it names its back button by it. */}
-      <Stack.Screen options={{ headerShown: false, title: AUTOMATION_PHONE_WORDS.TITLE }} />
       <TabColumns
         build={build}
         sidebar={null}

@@ -421,7 +421,6 @@ export {
   menuOfGroups,
   menuWithout,
   PATH_PART,
-  PageColumn,
   SidebarColumn,
   SplitView,
   StackBarMenu,

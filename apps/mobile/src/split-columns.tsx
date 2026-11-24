@@ -1,10 +1,12 @@
 // split-columns.tsx -- a tab's list and its page in a regular window: beside each other in the tab's own split view, or on an iPad the page alone in the last column of the system's split view at the root, whose middle column draws the list itself.
 
-import { PageColumn, Screen, SplitView } from "@repo/ui-native";
+import { Screen, SplitView } from "@repo/ui-native";
+import { Stack } from "expo-router";
 import type { ComponentProps } from "react";
 import { Dimensions } from "react-native";
 import type { SplitHostCommands } from "react-native-screens/experimental";
 import { APP_SIDEBAR } from "./sidebar-shown.js";
+import { StackColumnBar } from "./stack-column-bar.js";
 
 /** The system's split view at the root, once it stands, for the page to be brought forward. */
 let splitHost: SplitHostCommands | null = null;
@@ -53,17 +55,27 @@ export function TabColumns({
   onSidebarShownChange = keepListShown,
   ...split
 }: TabColumnsProps) {
-  return (
-    <Screen key={build}>
-      {APP_SIDEBAR ? (
-        <PageColumn view={split.detail} bar={split.detailBar} />
-      ) : (
+  if (!APP_SIDEBAR) {
+    return (
+      <Screen key={build}>
         <SplitView
           {...split}
           sidebarShown={sidebarShown}
           onSidebarShownChange={onSidebarShownChange}
         />
+      </Screen>
+    );
+  }
+
+  // Note that the page stands bare in its screen's host under its screen's own header, as an iPhone's pushed page does, and a page that holds acts of its own, such as a thread's, stands them there itself (`StackColumnBar`).
+  return (
+    <>
+      {split.detailBar === undefined ? (
+        <Stack.Screen options={{ headerShown: true, headerLargeTitle: false, title: "" }} />
+      ) : (
+        <StackColumnBar bar={split.detailBar} />
       )}
-    </Screen>
+      <Screen key={build}>{split.detail}</Screen>
+    </>
   );
 }
