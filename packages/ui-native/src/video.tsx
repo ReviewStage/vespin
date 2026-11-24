@@ -175,8 +175,8 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
   const view = useRef<VideoView>(null);
   const { status } = useEvent(player, "statusChange", { status: player.status });
   // Note that a track the player read before this listens is taken as it stands, since its change has already gone by.
-  const natural = useEvent(player, "videoTrackChange", { videoTrack: player.videoTrack }).videoTrack
-    ?.size;
+  const { videoTrack } = useEvent(player, "videoTrackChange", { videoTrack: player.videoTrack });
+  const natural = videoTrack?.size;
   const failed = status === "error";
   const length = useVideoLength(player);
   const played = usePlayedOnce(player, source ?? "");
