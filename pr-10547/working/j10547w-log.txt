@@ -1,0 +1,11 @@
+pinned to d71d9100b9
+== bundle PJj10547w base d71d9100b9
+  built d71d9100b9 base app V10547.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-managers: fails 0 shots 6 
+ipad27-light-managers: fails 0 shots 6 
+iphone-dark-managers: fails 0 shots 6 
+ipad27-dark-managers: fails 0 shots 6 
