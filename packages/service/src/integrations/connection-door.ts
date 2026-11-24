@@ -37,6 +37,18 @@
  * listed, because a list carries no account's data and a warm runner lists
  * them only as it launches.
  *
+ * A Manager, shared across its workspace, acts instead for whoever asked
+ * where its workspace has Managers act for whoever asked on
+ * (`EXPERIMENT.MANAGER_ACTS_FOR_ASKER`): each call is read under the member
+ * who asked for its turn under way (`turnAsker`), read again at each call,
+ * on their own grant under the connection's name, and never falls back to
+ * the owner's; one who has not connected it is refused with the sentence
+ * that says how. That rule stands in place of the lockout, since no call
+ * runs on another member's accounts. Its servers and their tools stay its
+ * owner's, listed at launch as for any agent, so the tools a session lists
+ * never change with who asks, and the model's prompt keeps its cache; a
+ * provider its owner lists no tools for is one no asker reaches through it.
+ *
  * The app's account settings are where an integration is connected, so
  * nothing here starts a sign-in: a connection the member has not
  * connected, or whose grant expired, lists no tools, and a call of it is
@@ -59,11 +71,15 @@
  * call's error.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { readAgentOfConversation } from "@repo/database/models/agent-store";
 import { ledByAnotherAccount } from "@repo/database/models/machine-command-store";
 import { readNativeProjection } from "@repo/database/models/native-projection-store";
+import { turnAsker } from "@repo/database/models/turn-asker";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { causeKind } from "@repo/runtime/effect";
+import { EXPERIMENT } from "@repo/settings";
 import { isRecord, type WireRecord } from "@repo/wire";
 import { DateTime, Duration, Effect, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
@@ -71,6 +87,7 @@ import { CONNECTION_POLICY } from "../agents/agent-runtime/role.js";
 import { type HandedConnection, turnServers } from "../agents/agent-runtime/servers.js";
 import { heldProjection, turnServersOf } from "../agents/native-events/native-projection.js";
 import type { AdmittedConversation } from "../agents/sessions/admitted-conversation.js";
+import { experimentOnIn } from "../agents/workspace-experiment-on.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
 import type { GitHubApp } from "../github/github-app.js";
 import type { IntegrationConnect } from "./integration-connect.js";
@@ -153,6 +170,39 @@ function refused(error: string, extra: Partial<ConnectionRefusal> = {}): Connect
 /** The admission the reads run under: the conversation the runner's bearer admitted. */
 function admissionOf(admitted: AdmittedConversation): IntegrationAdmission {
   return Effect.succeed(Result.succeed(admitted));
+}
+
+/** Who a call of an integration's tool acts for: the conversation admitted under that account, and whether it is the asker of a Manager's turn rather than the agent's starter. */
+interface CallActor {
+  readonly admitted: AdmittedConversation;
+  readonly forAsker: boolean;
+}
+
+/**
+ * Who a call acts for, as the module says: for a Manager whose workspace has
+ * Managers act for whoever asked on, the member who asked for its turn under
+ * way (`turnAsker`), its owner standing in where no member did; for every
+ * other agent, the starter the runner's bearer admitted. A read that fails
+ * fails the call rather than falling back to the owner.
+ */
+function callActor(
+  admitted: AdmittedConversation,
+): Effect.Effect<CallActor, StoreFailure, DatabaseServices> {
+  return Effect.gen(function* () {
+    const starter: CallActor = { admitted, forAsker: false };
+    const { userId, conversationId } = admitted.target;
+    const agent = yield* readAgentOfConversation(userId, conversationId);
+
+    if (Option.isNone(agent) || agent.value.kind !== AGENT_KIND.MANAGER) return starter;
+
+    if (!(yield* experimentOnIn(agent.value.organizationId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER))) {
+      return starter;
+    }
+
+    const asker = yield* turnAsker(admitted.target);
+
+    return { admitted: { ...admitted, caller: asker }, forAsker: true };
+  });
 }
 
 /**
@@ -447,12 +497,14 @@ export function listConnectionTools(
 }
 
 /**
- * One call of a connection's tool with its input, on the member's own
- * grant: the provider's MCP result as it sent it, its own error among them.
- * A connection the agent is not handed, one the member has not connected,
- * a tool the server lists none of, a session that failed, and every call
- * while a teammate leads the agent (`LED_BY_TEAMMATE`) are each refused. The tools the session listed are kept on the grant, so the next
- * launch's listing shows what the provider lists now.
+ * One call of a connection's tool with its input, on the own grant of the
+ * member it acts for (`callActor`): the provider's MCP result as it sent
+ * it, its own error among them. A connection the agent is not handed, one
+ * the member has not connected, a tool the server lists none of, a session
+ * that failed, and, but for a Manager acting for whoever asked, every call
+ * while a teammate leads the agent (`LED_BY_TEAMMATE`) are each refused. The
+ * tools the session listed are kept on the grant, so the next launch's
+ * listing shows what the provider lists now.
  */
 export function callConnectionTool(
   admitted: AdmittedConversation,
@@ -461,18 +513,20 @@ export function callConnectionTool(
   input: WireRecord,
 ): Effect.Effect<ConnectionCall, never, ConnectionDoorServices> {
   return Effect.gen(function* () {
-    const connection = yield* handedConnection(admitted, name);
+    // Note that who the call acts for is read at each call, because each turn of a Manager may be another member's.
+    const actor = yield* callActor(admitted);
+    const connection = yield* handedConnection(actor.admitted, name);
 
     if (Option.isNone(connection)) {
       return Result.fail(refused(`Connection "${name}" is not available to this agent.`));
     }
 
     // Note that the lead is read at each call, because a teammate may steer a turn the starter began.
-    if (yield* ledByAnotherAccount(admitted.target)) {
+    if (!actor.forAsker && (yield* ledByAnotherAccount(admitted.target))) {
       return Result.fail(refused(LED_BY_TEAMMATE, { connection: name }));
     }
 
-    const grant = yield* connectionGrant(admitted, connection.value);
+    const grant = yield* connectionGrant(actor.admitted, connection.value);
 
     if (Result.isFailure(grant)) return Result.fail(grant.failure);
     const from = yield* DateTime.nowAsDate;
