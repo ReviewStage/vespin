@@ -1973,7 +1973,7 @@ async function mountWithManager(sections: TaskSections, asked: Asked): Promise<H
 
   // The list's agents land once it is written after the window follows it.
   writeListedTasks({ taskSections: sections });
-  await settle();
+  await settleQueries(settle);
   layOutRows();
 
   return sidebar;
@@ -1988,7 +1988,7 @@ test("a Manager open in a section stands under the folded Tasks head, as an open
   });
 
   writeListedTasks({ taskSections: MANAGER_IN_LAUNCH });
-  await settle();
+  await settleQueries(settle);
 
   const head = sidebar.querySelector(".sidebar-tasks-head") ?? assert.fail("the Tasks head");
   const fold = head.querySelector<HTMLButtonElement>("button[aria-expanded]");
@@ -2015,8 +2015,8 @@ test("a pinned Manager kept in a section, dragged onto Tasks, is unpinned and le
     taskSections: MANAGER_IN_LAUNCH,
     taskAgentPins: [{ agentId: KEPT_MANAGER.id, taskId: null, pinnedAt: 6 }],
   });
-
-  await settle();
+  // Note that the document's observers hear the pin on Query's notify tick, a timer, which no count of microtasks waits out.
+  await settleQueries(settle);
   layOutRows();
 
   // Down the column: Launch Manager under Pinned alone, Invite expiry under Launch, Retry audit under Tasks.
