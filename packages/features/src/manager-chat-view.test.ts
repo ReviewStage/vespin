@@ -9,8 +9,8 @@ import { managerChatView } from "./manager-chat-view.js";
 /**
  * manager-chat-view.test.ts -- a Manager's chat drawn from its rows: oldest
  * first in runs by sender, and each ended turn's work, less what the chat
- * draws, opened by the Manager's last message of words in the turn, the
- * turn under way's apart. Synthetic words.
+ * draws, folded over the Manager's first message of the turn, the turn
+ * under way's apart. Synthetic words.
  */
 
 const MINUTE = 60 * 1000;
@@ -66,7 +66,7 @@ function heldWork(parts: readonly AgentPart[] | undefined): readonly string[] | 
   });
 }
 
-test("a Manager's chat stands oldest first in runs by sender, a pause past ten minutes opening a new one, and the Manager's last message of words in each ended turn opens that turn's work, less its steps and what it sent, the turn under way's apart", () => {
+test("a Manager's chat stands oldest first in runs by sender, a pause past ten minutes opening a new one, and each ended turn's work stands over the Manager's first message of the turn, less its steps and what it sent, the turn under way's apart", () => {
   const rows = [
     row("m5", 10, 40, { turn: "t3" }),
     row("ben", 9, 39, { person: "user-ben" }),
@@ -98,9 +98,9 @@ test("a Manager's chat stands oldest first in runs by sender, a pause past ten m
     [
       ["ada-1", true, false, undefined],
       ["ada-2", false, true, undefined],
-      ["m2", true, false, undefined],
-      // Note that t1 ended on a set of no words, which offers no presses, so its last message of words opens its work.
-      ["m3", false, false, "t1"],
+      // Note that a turn's work stands over its first message, in the order it was done, however it went on.
+      ["m2", true, false, "t1"],
+      ["m3", false, false, undefined],
       ["set", false, true, undefined],
       // Note that t2 sent its words and a set, and did nothing else, so it keeps no work to open.
       ["m4", true, true, undefined],

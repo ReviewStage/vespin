@@ -15,9 +15,9 @@
  *
  * The transcript is the work under the chat, read beside it only for what
  * a chat shows of it: whether a turn is under way, which the working line
- * says, and each turn's work, which the Manager's last message of words in
- * the turn opens on Show work, and the working line opens for the turn under
- * way. A call the Manager holds for the reader's answer stands at the chat's
+ * says, and each turn's work, which stands folded over the Manager's first
+ * message of the turn, as a chat app stands what it thought over its answer,
+ * and which the working line opens for the turn under way. A call the Manager holds for the reader's answer stands at the chat's
  * foot, its answers under it, since the work it stands in is a press away. A
  * message the reader sends goes to the chat (`agents.chat.send`) and stands
  * drawn at its end from the moment it is sent, as the host draws it on its
@@ -42,11 +42,13 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { keptPictureSchema } from "@repo/features/conversation-picture-wire";
+import { chatWorkWords } from "@repo/features/manager-chat";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { type ManagerChatLine, managerChatView } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MessageFileChip } from "@repo/features/message-files";
+import { WORKED_WORDS, workingTime } from "@repo/features/time-format";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import {
@@ -55,6 +57,9 @@ import {
   ChatAside,
   ChatBubble,
   chatRunOf,
+  Disclosure,
+  DisclosureBody,
+  DisclosureSummary,
   MESSAGE_LINE_ALIGN,
   MESSAGE_LINE_INSET,
   MessageHead,
@@ -116,7 +121,7 @@ import { LOG_ROW_CLASS, ToolCallView, TurnWorkRows } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ReplyMessageAction, useChatMessageMenu } from "./chat-reply.js";
-import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
+import { type ChatWorkToggle, WorkingWorkAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { EditComposer } from "./edit-composer.js";
 import { useManagerChatLooks } from "./manager-chat-looks.js";
@@ -246,12 +251,30 @@ function ManagerGreeting({
   );
 }
 
+/** A turn's work as its fold draws it: what its line says, and the work's rows. */
+interface TurnWork {
+  readonly summary: string;
+  readonly rows: ReactNode;
+}
+
+/** What a turn's fold says: how long the turn worked, where its journal says when it began and ended, as the transcript's last line of a turn says it; Show work otherwise. */
+function turnWorkSummary(turn: AgentTranscriptMessage | undefined): string {
+  const startedAt = turn?.startedAt;
+  const finishedAt = turn?.finishedAt;
+
+  if (startedAt === undefined || finishedAt === undefined || finishedAt < startedAt) {
+    return chatWorkWords(false);
+  }
+
+  return `${WORKED_WORDS}${workingTime(finishedAt - startedAt)}`;
+}
+
 /**
  * One of the Manager's messages: its words in a bubble at the column's left,
  * under its name where it opens its run, beside its face, with Copy and
- * Reply beside it, and Show work where it is the last the Manager sent in a
- * turn that did work, which opens that turn's work under it; its files over
- * the words; when it was sent under the run's last.
+ * Reply beside it; the work of its turn folded over it where it is the
+ * first the Manager sent in a turn that did work; its files over the words;
+ * when it was sent under the run's last.
  */
 function ManagerMessage({
   line,
@@ -260,13 +283,11 @@ function ManagerMessage({
 }: {
   line: ManagerChatLine;
   doors: ChatDoors;
-  work: ReactNode | null;
+  work: TurnWork | null;
 }): ReactNode {
   const { message, place } = line;
   const { face } = doors.manager;
-  const toggle = useWorkToggle();
-  const offered = work === null ? undefined : toggle;
-  const menu = useChatMessageMenu(message.text, offered);
+  const menu = useChatMessageMenu(message.text);
   // Note that the Manager's pictures kept with their size stand as the set it showed, as the transcript draws a shown set.
   const shown = shownOf(message);
   const files = fileChipsOf(message, shown);
@@ -274,6 +295,17 @@ function ManagerMessage({
   return (
     <Message from="assistant" className={RECEIVED_MESSAGE_CLASS} data-message-id={message.id}>
       {place.opens ? <ManagerHead manager={doors.manager} /> : null}
+      {work === null ? null : (
+        // Note that the turn's work stands folded over its first message, in the order it was done, at the bubbles' inset past the face.
+        <ChatAside inset={chatInset(face)}>
+          <Disclosure data-turn-work="">
+            <DisclosureSummary>
+              <span>{work.summary}</span>
+            </DisclosureSummary>
+            <DisclosureBody>{work.rows}</DisclosureBody>
+          </Disclosure>
+        </ChatAside>
+      )}
       {shown.length === 0 && files.length === 0 ? null : (
         // Note that what the Manager showed stands at its bubbles' inset, past its face, as the work under a message does.
         <ChatAside inset={chatInset(face)}>
@@ -293,19 +325,13 @@ function ManagerMessage({
               // Note that a turn's journal stands under the turn's own id, which Rewind conversation to here names it by.
               messageId={place.closes && message.turnId !== null ? message.turnId : undefined}
               rewind={place.closes && message.turnId !== null ? REWIND_ACTION.REVERT : undefined}
-              lead={
-                <>
-                  <ReplyMessageAction words={message.text} />
-                  {offered === undefined ? null : <WorkMessageAction toggle={offered} />}
-                </>
-              }
+              lead={<ReplyMessageAction words={message.text} />}
             />
           }
         >
           <TranscriptWords text={message.text} />
         </ChatBubble>
       )}
-      {toggle.shown && work !== null ? <ChatAside inset={chatInset(face)}>{work}</ChatAside> : null}
       {menu.menu}
       {place.closes ? (
         <MessageLine
@@ -892,13 +918,18 @@ export function ManagerChatTab({
         line={line}
         doors={doors}
         work={
-          line.work === undefined ? null : (
-            <TurnWorkRows
-              parts={view.work.get(line.work) ?? []}
-              moving={false}
-              delegation={delegation}
-            />
-          )
+          line.work === undefined
+            ? null
+            : {
+                summary: turnWorkSummary(lines.get(line.work)),
+                rows: (
+                  <TurnWorkRows
+                    parts={view.work.get(line.work) ?? []}
+                    moving={false}
+                    delegation={delegation}
+                  />
+                ),
+              }
         }
       />
     );
