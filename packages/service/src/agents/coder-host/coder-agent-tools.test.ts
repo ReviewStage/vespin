@@ -65,6 +65,7 @@ import {
   joinWorkspace,
   leaveWorkspace,
   openHostedStoreTestDatabase,
+  openRunningTurn,
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
@@ -338,7 +339,7 @@ function hostOf(summaryModel?: SummaryModelOf): AgentDoorSeams {
 }
 
 /** The agent's own conversation as the MCP door admits its runner's bearer: its starter's, on the session it recorded. */
-function admittedOf(agent: StartedAgent): AdmittedConversation {
+function admittedOf(agent: CallingAgent): AdmittedConversation {
   return {
     caller: agent.userId,
     target: { userId: agent.userId, conversationId: agent.conversationId },
@@ -346,6 +347,9 @@ function admittedOf(agent: StartedAgent): AdmittedConversation {
     timeZone: undefined,
   };
 }
+
+/** An agent whose own session a call is made from: a task's agent or a Manager on none. */
+type CallingAgent = Pick<StartedAgent, "userId" | "conversationId" | "sessionId">;
 
 interface StartedAgent extends ConversationTarget {
   readonly id: string;
@@ -624,7 +628,7 @@ const UNREACHED = Layer.mergeAll(
  */
 function callAsAgent(
   host: AgentDoorSeams,
-  agent: StartedAgent,
+  agent: CallingAgent,
   tool: ServedTool,
   input: WireBoundaryInput,
   callId: string,
@@ -641,7 +645,7 @@ function callAsAgent(
 /** A caller of the agent tools from the agent's own session, as the MCP server runs them through the catalog under the seams given, over the suite's catalog and a configured Sentry integration unless others are given. */
 async function peerCaller(
   host: AgentDoorSeams,
-  agent: StartedAgent,
+  agent: CallingAgent,
   services: Awaited<ReturnType<typeof fakeCoderSessions>>["services"],
   catalog: Layer.Layer<ModelCatalog> = modelCatalogOf(CATALOG),
   sentry: Layer.Layer<SentryApp> = SENTRY_CONFIGURED,
@@ -1364,6 +1368,73 @@ test("start_agent starts an agent on the caller's own task as the deployment act
       .map((properties) => ("started_by" in properties ? properties.started_by : undefined)),
     [SERVER_AGENT_STARTER.AGENT],
   );
+});
+
+/** A Manager the account started in the workspace, on no task, its session recorded as the store hook records it. */
+async function managerOn(userId: string, workspaceId: string): Promise<CallingAgent> {
+  const started = await database.run(
+    createAgent(userId, {
+      ...AGENT_CHOICE,
+      payer: AGENT_PAYER.API_KEY,
+      idempotencyKey: randomUUID(),
+      taskId: null,
+      workspaceId,
+      descriptionSnapshot: null,
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      kind: AGENT_KIND.MANAGER,
+    }),
+  );
+
+  assert.ok(Option.isSome(started));
+  const target = { userId, conversationId: started.value.agent.conversationId };
+  const session = sessionId();
+  assert.equal(await database.run(claimRuntimeSession(target, session, new Date(NOW))), true);
+
+  return { ...target, sessionId: session };
+}
+
+test("start_agent from a Manager, with Managers act for whoever asked on, starts the agent as the member whose line opened its turn, refuses one whose asker pays for none of the model rather than paying as the owner, and with it off starts the owner's", async () => {
+  const { workspaceId, plans: tasks, agents } = await openWorkspaces();
+  const owner = agents.caller.userId;
+  const asker = agents.teammates.userId;
+  // A member whose only key is OpenAI's, so nothing of theirs pays for Opus while the owner's would.
+  const keyless = await database.createUser();
+  await database.run(connectAgentApiKeys(keyless, { providers: [PROVIDER_KEY_PROVIDER.OPENAI] }));
+  await database.run(joinWorkspace(workspaceId, keyless));
+  const manager = await managerOn(owner, workspaceId);
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), manager, agentSessions.services);
+  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, true);
+
+  const start = (callId: string) =>
+    call(
+      AGENT_TOOL.START_AGENT,
+      {
+        ...CHOSEN,
+        runsOn: IN_THE_CLOUD,
+        taskId: tasks.invitations,
+        branch: DEFAULT_BRANCH,
+        prompt: "Write the migration that adds the invitation's expiry.",
+      },
+      callId,
+    );
+
+  await database.run(openRunningTurn(manager, [{ member: asker }]));
+  const askers = await storedStart(asker, await start("call-asked"));
+  assert.equal(askers.userId, asker);
+  assert.equal(agentSessions.sent.at(-1)?.headers.get(HEADER.ACCOUNT), asker);
+
+  await database.run(openRunningTurn(manager, [{ member: keyless }]));
+  assert.deepEqual(await start("call-keyless"), {
+    status: ACTION_RESULT_STATUS.REJECTED,
+    reason:
+      "Not started: an agent you start is Test User's, who asked for this turn, and no subscription or API key of theirs pays for that model, and Vespin's key pays for no agent. Start it on a model whose provider they connected, or tell them to connect one in Settings › Agents.",
+  });
+
+  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, false);
+  const owners = await storedStart(owner, await start("call-off"));
+  assert.equal(owners.userId, owner);
 });
 
 test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {
