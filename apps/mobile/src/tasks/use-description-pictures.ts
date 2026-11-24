@@ -13,6 +13,8 @@
  * panel's description draws it.
  */
 
+import { base64Bytes } from "@repo/features/agent-wire";
+import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { sizeLabel } from "@repo/features/attachment-model";
 import { isAudioType } from "@repo/features/conversation-picture-wire";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
@@ -25,9 +27,17 @@ import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { MarkdownFile, MarkdownVideo } from "@repo/ui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cachedFile, cachedPicture, cachedPlayed } from "../cached-media.js";
+import {
+  cachedFile,
+  cachedPicture,
+  cachedPlayed,
+  KEPT_MEDIA,
+  type KeptMediaKind,
+  keptMedia,
+} from "../cached-media.js";
 import { useHostActs } from "../host/host-provider.js";
 import { openInSafari } from "../open-link.js";
+import { usePictureShownCount } from "../picture-shown.js";
 
 /** The prefix a description's video or sound clip is written under in the app's caches. */
 const DESCRIPTION_MEDIA_PREFIX = "description";
@@ -64,6 +74,13 @@ type PictureRead =
     }
   | { readonly kind: typeof PICTURE_READ.FILE; readonly source: string; readonly size: string }
   | { readonly kind: typeof PICTURE_READ.UNREAD };
+
+/** How a file an earlier read wrote is drawn, by what it holds. */
+const KEPT_READ = {
+  [KEPT_MEDIA.PICTURE]: PICTURE_READ.PICTURE,
+  [KEPT_MEDIA.VIDEO]: PICTURE_READ.VIDEO,
+  [KEPT_MEDIA.AUDIO]: PICTURE_READ.AUDIO,
+} as const satisfies Record<KeptMediaKind, PictureRead["kind"]>;
 
 /** The pictures read, by the description that owns each, then by its id. */
 type PicturesRead = ReadonlyMap<string, ReadonlyMap<string, PictureRead>>;
@@ -142,6 +159,7 @@ async function readOf(id: string, contentType: string, base64: string): Promise<
  */
 export function useDescriptionPictures(body: string | undefined): DescriptionPictures {
   const acts = useHostActs();
+  const shown = usePictureShownCount(PRODUCT_PICTURE_KIND.DESCRIPTION);
   const [read, setRead] = useState<PicturesRead>(NOTHING_READ);
   // The pictures asked for, by owner then id, so each is asked for once while the page stands.
   const asked = useRef(new Map<string, Set<string>>());
@@ -172,10 +190,26 @@ export function useDescriptionPictures(body: string | undefined): DescriptionPic
         if (mounted.current) setRead((held) => withRead(held, owner, id, picture));
       };
 
+      const askedAt = performance.now();
+      // Note that a picture, a video, or a clip shown before draws from the file its first read wrote, asking the host nothing; a PDF stands under its own name, so it is read as before.
+      const kept = keptMedia(DESCRIPTION_MEDIA_PREFIX, id);
+
+      if (kept !== undefined) {
+        landed({ kind: KEPT_READ[kept.kind], source: kept.uri });
+
+        if (kept.kind === KEPT_MEDIA.PICTURE) shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
+        continue;
+      }
+
       acts[ACT_KIND.TASKS_PICTURE_READ]({ taskId: owner, attachmentId: id })
         .then(async (answer) => {
           if ("base64" in answer) {
-            landed(await readOf(id, answer.contentType, answer.base64));
+            const picture = await readOf(id, answer.contentType, answer.base64);
+            landed(picture);
+
+            if (picture.kind === PICTURE_READ.PICTURE) {
+              shown(PRODUCT_PICTURE_FROM.READ, askedAt, base64Bytes(answer.base64));
+            }
 
             return;
           }
@@ -189,7 +223,7 @@ export function useDescriptionPictures(body: string | undefined): DescriptionPic
           console.error("A description's picture was not read.", cause);
         });
     }
-  }, [acts, body]);
+  }, [acts, body, shown]);
 
   return useMemo(() => {
     const readAt = (written: string) => {
