@@ -2999,15 +2999,48 @@ const PREVIEWS: InboxItem = {
   settledAt: 9_000,
 };
 
-/** The task's items as the feed holds them, or why it holds none. */
-type FedInbox = { readonly items: readonly InboxItem[] } | { readonly failure: string };
+/** A Manager of the listed workspace, an agent on no task, as the list followed live holds it. */
+const RELEASE_MANAGER = listedAgent(
+  {
+    id: "5b0e1d2c-0000-4000-8000-0000000000a2",
+    taskId: null,
+    title: "Release manager",
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    status: AGENT_STATUS.RUNNING,
+    createdAt: 1,
+    turnId: null,
+  },
+  { workspaceId: ROTATION_HOME.id },
+);
 
-/** The account's feed holding the items given on the listed workspace's task, or refused. */
+/** A Manager's open thread, on no task. */
+const CUT_RELEASE: InboxItem = {
+  ...askedItem(
+    "a1b2c3d4-0000-4000-8000-000000000013",
+    "Cut the release tonight?",
+    "Everything on main is green.",
+    6_000,
+  ),
+  agentId: RELEASE_MANAGER.id,
+};
+
+/** The task's items as the feed holds them, with the Manager's where given, or why it holds none. */
+type FedInbox =
+  | { readonly items: readonly InboxItem[]; readonly managers?: readonly InboxItem[] }
+  | { readonly failure: string };
+
+/** The account's feed holding the items given on the listed workspace's task and the Manager's, or refused. */
 function fedOf(inbox: FedInbox): AppHostRead<AppInboxItems> {
   if ("failure" in inbox) return { failed: true };
 
   return {
-    rows: { [INBOX_SCOPE_KIND.TASK]: { [ROTATION.id]: inbox.items } },
+    rows: {
+      [INBOX_SCOPE_KIND.TASK]: { [ROTATION.id]: inbox.items },
+      ...(inbox.managers === undefined
+        ? undefined
+        : { agents: { [RELEASE_MANAGER.id]: inbox.managers } }),
+    },
   };
 }
 
@@ -3019,6 +3052,8 @@ function paletteOverInbox(inbox: FedInbox, changed = 9_000) {
   };
 
   const { deliverItems: deliver } = handHostReads({ items: fedOf(inbox), inbox: held });
+  // Note that the list followed live holds the Manager, which names its threads.
+  listed = standingTaskList({ tasks: [ROTATION], taskAgents: [RELEASE_MANAGER] });
   const tasks = tasksControl({ tasks: [ROTATION], workspace: ROTATION_HOME });
   writeExperiments({}, { inbox: held });
   openPalette(tasks, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
@@ -3031,13 +3066,14 @@ function paletteOverInbox(inbox: FedInbox, changed = 9_000) {
   };
 }
 
-test("the Inbox searched lists what needs you first, each item beside its task", async () => {
-  paletteOverInbox({ items: [PREVIEWS, ROTATE] });
+test("the Inbox searched lists what needs you first, each item beside its task, a Manager's beside its Manager", async () => {
+  paletteOverInbox({ items: [PREVIEWS, ROTATE], managers: [CUT_RELEASE] });
   chooseFilter("Inbox");
   await settle();
 
   await vi.waitFor(() =>
     assert.deepEqual(rows(), [
+      "Cut the release tonight? · Release manager",
       "Which webhook secret should rotate? · Billing usage alerts",
       "Use acme.dev for previews? · Billing usage alerts",
     ]),

@@ -65,7 +65,12 @@ import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
 import { READING_AUTOMATIONS } from "@repo/features/automation-words";
 import { fileName } from "@repo/features/code-ref-words";
-import { type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
+import {
+  holderName,
+  type InboxAnyHolder,
+  type InboxListed,
+  inboxItemWords,
+} from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -247,7 +252,7 @@ import {
   placeAgents,
   useTaskAgents,
 } from "../tasks/use-agents.js";
-import { choiceOf } from "../tasks/use-inbox-listing.js";
+import { anyChoiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
@@ -1301,11 +1306,11 @@ function snippetOf(
   return undefined;
 }
 
-/** What an Inbox item's search reads: its title and its task's name, and else everything it says (`inboxItemWords`). */
-function inboxWords({ holder, item }: InboxListed): RowWords {
+/** What an Inbox item's search reads: its title and its task's name, or its agent's on no task, and else everything it says (`inboxItemWords`). */
+function inboxWords({ holder, item }: InboxListed<InboxAnyHolder>): RowWords {
   const title = cardTitle(item.title);
 
-  return { label: title, terms: [title, holder.task.name], keywords: inboxItemWords(item) };
+  return { label: title, terms: [title, holderName(holder)], keywords: inboxItemWords(item) };
 }
 
 /**
@@ -1315,20 +1320,20 @@ function inboxWords({ holder, item }: InboxListed): RowWords {
  * beside it (`inbox-item-parts.tsx`), drawn only once the filter lists it.
  */
 function inboxRow(
-  listed: InboxListed,
+  listed: InboxListed<InboxAnyHolder>,
   words: RowWords,
   seams: {
     readonly readerId: string | undefined;
     readonly models: AgentsControl["models"];
     readonly tokens: readonly string[];
     readonly now: number;
-    readonly open: (listed: InboxListed) => void;
+    readonly open: (listed: InboxListed<InboxAnyHolder>) => void;
   },
 ): UndrawnRow {
   const { holder, item } = listed;
 
   return undrawnRow(words, () => {
-    const name = holder.task.name;
+    const name = holderName(holder);
     const snippet = snippetOf(words.keywords ?? [], [item.title, words.label, name], seams.tokens);
 
     return {
@@ -2423,7 +2428,7 @@ export function CommandPalette({
           tokens,
           now,
           open: (chosen) =>
-            onTasks(() => inboxDoor.openItem({ ...choiceOf(chosen), opened: true })),
+            onTasks(() => inboxDoor.openItem({ ...anyChoiceOf(chosen), opened: true })),
         }),
       ),
   } as const;

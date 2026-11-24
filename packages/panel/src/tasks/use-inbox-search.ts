@@ -1,5 +1,5 @@
 /**
- * use-inbox-search.ts -- the listed workspace's Inbox as ⌘K searches it: every item of every standing task holding one, read only while a search asks for them.
+ * use-inbox-search.ts -- the listed workspace's Inbox as ⌘K searches it: every item of every standing task holding one, and of every agent on no task holding one, a Manager's, read only while a search asks for them.
  *
  * The palette reads the same followed inboxes the window's Inbox lists
  * (`use-holder-inbox-items.ts`), so an item found
@@ -10,6 +10,7 @@
  */
 
 import {
+  type InboxAnyHolder,
   type InboxGroup,
   type InboxListed,
   inboxGroups,
@@ -21,11 +22,12 @@ import { useMemo } from "react";
 import { useTaskListRows } from "../task-list-collections.js";
 import { NO_HOLDINGS, taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useListedInbox } from "./use-inbox-slices.js";
+import { useTasklessInboxGroups } from "./use-taskless-inbox-groups.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /** What a search finds in the Inbox: its items, what needs the reader first, then the latest changed; and how far their read has come. */
 export interface InboxSearch {
-  readonly items: readonly InboxListed[];
+  readonly items: readonly InboxListed<InboxAnyHolder>[];
   /** Whether an inbox the search asked for has not been pushed yet. */
   readonly reading: boolean;
   /** Whether an inbox the search asked for could not be read. */
@@ -34,7 +36,10 @@ export interface InboxSearch {
 }
 
 /** Every item the groups hold, the reader's waiting ones first, then the latest changed first. */
-function searchOrder(groups: readonly InboxGroup[], readerId: string | undefined): InboxListed[] {
+function searchOrder(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  readerId: string | undefined,
+): InboxListed<InboxAnyHolder>[] {
   const listed = groups.flatMap(({ holder, items }) => items.map((item) => ({ holder, item })));
 
   return listed.toSorted(
@@ -75,11 +80,20 @@ export function useInboxSearch(tasks: TasksControl, asked: boolean): InboxSearch
   const holdings = useMemo(() => (asked ? taskHoldings(held) : NO_HOLDINGS), [asked, held]);
   const read = useHolderInboxItems(holdings);
 
+  // Note that a thread on no task is searched as a task's is, from the account's feed the Inbox lists it from.
+  const { groups: taskless } = useTasklessInboxGroups(
+    workspaceId,
+    tasks.agentsCarried,
+    tasks.agents.models,
+  );
+
   const items = useMemo(() => {
-    const groups = asked ? inboxGroups(read.items, { tasks: held, listed }) : [];
+    const groups: readonly InboxGroup<InboxAnyHolder>[] = asked
+      ? [...inboxGroups(read.items, { tasks: held, listed }), ...taskless]
+      : [];
 
     return searchOrder(groups, tasks.me);
-  }, [asked, held, listed, read.items, tasks.me]);
+  }, [asked, held, listed, read.items, taskless, tasks.me]);
 
   // Note that an inbox counts as read only once its push holds what main says it now holds, since an older push kept from the last search may lack the item sought.
   const reading = read.pending;
