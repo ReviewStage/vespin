@@ -107,27 +107,6 @@
             "machine": {
               "type": "string",
               "enum": [
-                "workspace"
-              ]
-            },
-            "deviceId": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            }
-          },
-          "required": [
-            "machine",
-            "deviceId"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "machine": {
-              "type": "string",
-              "enum": [
                 "device"
               ]
             },
@@ -142,30 +121,9 @@
             "device"
           ],
           "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "machine": {
-              "type": "string",
-              "enum": [
-                "workspace"
-              ]
-            },
-            "name": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            }
-          },
-          "required": [
-            "machine",
-            "name"
-          ],
-          "additionalProperties": false
         }
       ],
-      "description": "Where the agent runs: {\"machine\":\"vercel\"} for the cloud, {\"machine\":\"device\",\"device\":\"<name>\"} for one of the member's own devices (a Mac or a host) by its name, or {\"machine\":\"device\",\"deviceId\":\"<id>\"} by its id, or {\"machine\":\"workspace\",\"name\":\"<name>\"} for one of the workspace's own machines, which run every member's agents, each in its own VM, by its name, or {\"machine\":\"workspace\",\"deviceId\":\"<id>\"} by its id; it must be online, and a name matching none of those machines, or several, is refused with them listed. list_machines lists each place with the runsOn to pass. Leave it out to run where you run, the runsOn your instructions' own values name, or with from where the agent it starts from runs; naming another place moves it there."
+      "description": "Where the agent runs: {\"machine\":\"vercel\"} for the cloud, {\"machine\":\"device\",\"device\":\"<name>\"} for one of the member's own devices (a Mac or a host) by its name, or {\"machine\":\"device\",\"deviceId\":\"<id>\"} by its id; it must be online, and a name matching none of those devices, or several, is refused with them listed. list_machines lists each place with the runsOn to pass. Leave it out to run where you run, the runsOn your instructions' own values name, or with from where the agent it starts from runs; naming another place moves it there."
     },
     "from": {
       "anyOf": [
