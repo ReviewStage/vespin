@@ -23,13 +23,16 @@ import {
   launchStood,
   sinceLaunch,
 } from "./launch-phases.js";
-import { launchFrontAt, launchLeftFront } from "./launch-state.js";
+import { launchActiveAt, launchFrontAt, launchLeftFront } from "./launch-state.js";
 
 /** Whether this launch has counted, or let go of, its first Inbox, which it does once. */
 let counted = false;
 
 /** Whether the rows the Inbox first showed this launch were the phone's kept ones, read at the first commit that showed any; none before. */
 let firstShownKept: boolean | undefined;
+
+/** How long after the launch's start the Inbox first showed its answer (`sinceLaunch`), read at the first commit that showed it; none before. */
+let firstShownAt: number | undefined;
 
 /** When the last sign-in returned with an account, by `performance.now()`, which the Inbox it shows is timed from; none for a launch signed in already. */
 let signedInAt: number | undefined;
@@ -56,6 +59,7 @@ export function noteSignedIn(): void {
   leftSinceSignIn = false;
   counted = false;
   firstShownKept = undefined;
+  firstShownAt = undefined;
 
   const subscription = AppState.addEventListener("change", (state) => {
     if (state === "background") leftSinceSignIn = true;
@@ -83,7 +87,11 @@ export function noteSignedIn(): void {
  * the first rung, since a wait from the launch would hold time nobody sat
  * through; it's marked so (`ready_after` front). After a sign-in
  * (`noteSignedIn`) it counts once more, timed from the sign-in's return and
- * marked so.
+ * marked so. A launch is counted to the first commit that showed the Inbox
+ * even where the app came active only later, as one a system alert covered
+ * does, since the wait behind the alert is none of the launch's: when the
+ * app first came active is counted beside it, on the same rungs
+ * (`active_seconds`).
  */
 export function useAppReadyCount(shown: boolean): void {
   const count = useHostCount();
@@ -110,6 +118,7 @@ export function useAppReadyCount(shown: boolean): void {
     if (counted || !shown) return;
     // Note that the rows' source is read at the first commit that shows them, since the service's answer can take the kept rows' place before the app comes active and counts.
     firstShownKept ??= keptRows;
+    firstShownAt ??= sinceLaunch();
 
     const after =
       signedInAt !== undefined
@@ -135,12 +144,15 @@ export function useAppReadyCount(shown: boolean): void {
     stopWatching();
     const sinceStart = sinceLaunch();
 
+    // Note that a launch that waited in front is timed to its first commit that showed the Inbox, whenever it came active, and one timed from the front to when it counts, the Inbox already shown or not.
     const elapsed =
-      signedInAt === undefined
-        ? sinceStart === undefined
-          ? undefined
-          : sinceStart - from
-        : performance.now() - signedInAt;
+      signedInAt !== undefined
+        ? performance.now() - signedInAt
+        : after === PRODUCT_READY_AFTER.LAUNCH
+          ? firstShownAt
+          : sinceStart === undefined
+            ? undefined
+            : sinceStart - from;
 
     if (elapsed === undefined) return;
 
@@ -159,9 +171,10 @@ export function useAppReadyCount(shown: boolean): void {
     const started = phase(LAUNCH_PHASE.STARTED);
     const screens = phase(LAUNCH_PHASE.SCREENS);
     const inbox = phase(LAUNCH_PHASE.INBOX);
+    const activeAt = after === PRODUCT_READY_AFTER.LAUNCH ? launchActiveAt() : undefined;
 
     // Note that only a launch that waited in front ends its trace, since one timed from the front or a sign-in waited from elsewhere.
-    if (after === PRODUCT_READY_AFTER.LAUNCH) finishLaunchTrace(elapsed);
+    if (after === PRODUCT_READY_AFTER.LAUNCH) finishLaunchTrace(elapsed, activeAt);
 
     count(PRODUCT_SURFACE_EVENT.APP_READY, {
       launch_seconds: productLaunchSeconds(elapsed),
@@ -173,6 +186,7 @@ export function useAppReadyCount(shown: boolean): void {
       ...(started === undefined ? undefined : { started_seconds: productLaunchSeconds(started) }),
       ...(screens === undefined ? undefined : { screens_seconds: productLaunchSeconds(screens) }),
       ...(inbox === undefined ? undefined : { inbox_seconds: productLaunchSeconds(inbox) }),
+      ...(activeAt === undefined ? undefined : { active_seconds: productLaunchSeconds(activeAt) }),
       ...(after === PRODUCT_READY_AFTER.SIGN_IN
         ? undefined
         : { deliveries: productSessionCountBucket(launchDelivered()) }),
