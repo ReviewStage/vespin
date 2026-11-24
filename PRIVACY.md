@@ -467,9 +467,10 @@ time and the holds are deleted with your account.
 
 If you answer the optional questions in setup (how you heard about Vespin,
 your role, and what you hope it helps with), we keep your answers, and
-anything you write beside "Other", with your account. We also record them in
-PostHog under your account's name and email, whether or not you share usage
-data, and post them to our team's Slack.
+anything you write beside "Other", with your account. We also post them to our
+team's Slack, by way of PostHog, whether or not you share usage data. That copy
+is filed under a random identifier, with no name, email, or account id and no
+person profile, so PostHog cannot tie it to you.
 
 ### Information stored on your Mac and iPhone
 

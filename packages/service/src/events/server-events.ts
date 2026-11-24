@@ -77,8 +77,8 @@ import { DEPLOYMENT_VARIABLE, deploymentNamed, WORKSPACE_GROUP_TYPE } from "./ev
  * One record leaves that rule on purpose: a response to one of our PostHog
  * surveys (`recordSurveyResponse`), which carries the person's own answers,
  * words they wrote among them, because answering a survey is telling us
- * something. It is filed under the same person, so the answers stand beside
- * the account's counts, and a PostHog destination posts it to the team's
+ * something. It is filed under a random distinct id with no person profile,
+ * never the account's, and a PostHog destination posts it to the team's
  * Slack. `PRIVACY.md` says so.
  */
 
@@ -658,11 +658,13 @@ const SURVEY_SENT_EVENT = "survey sent";
 
 /**
  * The item a survey response posts, in the shape PostHog's own survey SDKs
- * send one, under its person and the same stamps a server event carries.
+ * send one, under a random distinct id with no person profile, so the answers
+ * stand beside no name, email, or account id, and the same stamps a server
+ * event carries.
  */
 function surveyResponseItem(
   response: SurveyResponse,
-  person: PosthogPerson,
+  distinctId: string,
   now: number,
   environment: string,
 ): PosthogBatchItem {
@@ -670,7 +672,7 @@ function surveyResponseItem(
 
   return {
     event: SURVEY_SENT_EVENT,
-    distinct_id: response.userId,
+    distinct_id: distinctId,
     timestamp: new Date(now).toISOString(),
     properties: stamped(
       {
@@ -683,7 +685,7 @@ function surveyResponseItem(
           response: answer.response ?? null,
         })),
         ...Object.fromEntries(answered.map((answer) => [answer.responseKey, answer.response])),
-        $set: person,
+        $process_person_profile: false,
       },
       environment,
     ),
@@ -807,21 +809,8 @@ const productAnalyticsOfEnvironment = Layer.effect(
         }).pipe(Effect.ignore),
       respond: (response: SurveyResponse) =>
         Effect.gen(function* () {
-          // A deleted account's person must not be posted back.
-          const person = yield* readAccountPerson(response.userId).pipe(
-            Effect.provideContext(database),
-          );
-
-          if (person === undefined) return;
           const now = yield* Clock.currentTimeMillis;
-          yield* post([
-            surveyResponseItem(
-              response,
-              { name: person.name, email: person.email },
-              now,
-              deployment,
-            ),
-          ]);
+          yield* post([surveyResponseItem(response, crypto.randomUUID(), now, deployment)]);
         }).pipe(Effect.ignore),
       nameWorkspace: (userId: string, workspaceId: string) =>
         Effect.gen(function* () {
