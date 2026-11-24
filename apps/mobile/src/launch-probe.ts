@@ -37,6 +37,64 @@ export function probeTimed<T>(n: string, step: () => T, d?: (value: T) => unknow
   return value;
 }
 
+/** PROBE ONLY: what the engine itself has, read as this module loads, before `polyfills.ts` fills anything in. */
+function nativeFeatures(): Record<string, unknown> {
+  const kind = (read: () => unknown): string => {
+    try {
+      return typeof read();
+    } catch (cause) {
+      return `throws: ${String(cause).slice(0, 80)}`;
+    }
+  };
+  const anyIntl = Intl as unknown as Record<string, unknown>;
+  const arrays = Array.prototype as unknown as Record<string, unknown>;
+  const symbols = Symbol as unknown as Record<string, unknown>;
+  let zonedParts: string;
+  let deviceZone: string;
+
+  try {
+    const parts = new Intl.DateTimeFormat("en", {
+      timeZone: "America/New_York",
+      fractionalSecondDigits: 3,
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+    } as Intl.DateTimeFormatOptions).formatToParts(new Date(0));
+    zonedParts = parts.map((part) => `${part.type}=${part.value}`).join(" ");
+  } catch (cause) {
+    zonedParts = `throws: ${String(cause).slice(0, 120)}`;
+  }
+
+  try {
+    deviceZone = String(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  } catch (cause) {
+    deviceZone = `throws: ${String(cause).slice(0, 80)}`;
+  }
+
+  return {
+    toSorted: kind(() => arrays.toSorted),
+    toReversed: kind(() => arrays.toReversed),
+    toSpliced: kind(() => arrays.toSpliced),
+    with: kind(() => arrays.with),
+    symbolDispose: kind(() => symbols.dispose),
+    symbolAsyncDispose: kind(() => symbols.asyncDispose),
+    getCanonicalLocales: kind(() => anyIntl.getCanonicalLocales),
+    locale: kind(() => anyIntl.Locale),
+    pluralRules: kind(() => anyIntl.PluralRules),
+    listFormat: kind(() => anyIntl.ListFormat),
+    segmenter: kind(() => anyIntl.Segmenter),
+    relativeTimeFormat: kind(() => anyIntl.RelativeTimeFormat),
+    numberFormatToParts: kind(() => new Intl.NumberFormat("en").formatToParts),
+    dateTimeFormatRange: kind(
+      () => (Intl.DateTimeFormat.prototype as unknown as Record<string, unknown>).formatRange,
+    ),
+    deviceZone,
+    zonedParts,
+  };
+}
+
+const engineFeatures = nativeFeatures();
+
 // Note that the host's packages reach the probe through a global, since they can't import the app.
 (globalThis as Record<string, unknown>).__launchProbe = probe;
 (globalThis as Record<string, unknown>).__launchProbeTimed = probeTimed;
@@ -111,6 +169,7 @@ export function probeFlush(reason: string): void {
       marks: marks.map((mark) => ({ ...mark, t: at(mark.t) })),
       stalls: stalls.map(([from, to]) => [at(from), at(to), Math.round(to - from)]),
       modules: moduleTimes(at),
+      engineFeatures,
     });
 
     const file = new File(Paths.document, "launch-probe.json");
