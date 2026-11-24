@@ -154,7 +154,7 @@ const TOOL_CALL_RUNNING = "running";
 /** The outcomes of a run that end the launch as failed, as the SDK spells them. */
 const RUN_STATUS = {
   ERROR: "error",
-  CANCELLED: "cancelled",
+  CANCELED: "cancelled",
 } as const satisfies Record<string, RunResultStatus>;
 
 /** What Cursor answers a steer, as the SDK spells it: the run took it, or it is to go as a follow-up the launch sends. */
@@ -778,7 +778,7 @@ const takeRunEnded = Effect.fn("agent-runner/cursor/takeRunEnded")(function* (
     return ended(RUNNER_END.FAILED, signal.error ?? "the run failed");
   }
 
-  if (signal.status === RUN_STATUS.CANCELLED) {
+  if (signal.status === RUN_STATUS.CANCELED) {
     return ended(RUNNER_END.FAILED, signal.error ?? "the run was canceled");
   }
 
