@@ -478,8 +478,9 @@ export function useMentionOffer(
     pending,
   ]);
 
-  // Note that the words are searched on a deferred copy of them, so a key draws the field at once and the search over every row follows when React has the time, the list showing the last words' rows meanwhile.
-  const query = useDeferredValue(word?.query);
+  // Note that the words are searched on a deferred copy of them, so a key draws the field at once and the search over every row follows when React has the time, the list showing the last words' rows meanwhile; until a first copy has come, the list opens on what nothing typed offers, so it stands with the `@` rather than once the search catches up, which a busy page, such as a working agent's, could hold off.
+  const deferred = useDeferredValue(word?.query);
+  const query = deferred ?? (word === undefined ? undefined : "");
   const describedName = current?.name;
   const describedNumber = current?.number;
 
