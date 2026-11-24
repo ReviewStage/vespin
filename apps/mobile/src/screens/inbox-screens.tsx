@@ -44,6 +44,7 @@ import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
@@ -301,8 +302,10 @@ type InboxRowThread = {
   readonly workspaceId: TaskSummary["workspaceId"];
   /** What holds it: its task's name, or its agent's. */
   readonly taskName: string;
-  /** Its task's status, whose ring leads the name; none for an agent, named alone. */
+  /** Its task's status, whose ring leads the name; none for an agent. */
   readonly taskStatus: TaskSummary["status"] | undefined;
+  /** The face of the Manager it stands under, on no task, which leads the name; none for a task's, or another agent's. */
+  readonly managerFace: ManagerFace | undefined;
 };
 
 type InboxRowActs = {
@@ -347,6 +350,7 @@ export function InboxItemRow({
       workspaceId={holderWorkspaceId(holder)}
       taskName={holderName(holder)}
       taskStatus={task?.status}
+      managerFace={"agent" in holder ? holder.agent.face : undefined}
       {...acts}
     />
   );
@@ -367,6 +371,7 @@ function InboxRowView({
   workspaceId,
   taskName,
   taskStatus,
+  managerFace,
   readerId,
   pictureOf,
   onMark,
@@ -425,10 +430,12 @@ function InboxRowView({
     <ListRow
       id={item.id}
       title={title}
-      task={{
-        name: taskName,
-        status: taskStatus,
-      }}
+      // Note that a Manager's face leads its row at rest, as the panel's Inbox wears it, since the Inbox says what waits on the reader rather than who works.
+      task={
+        managerFace === undefined
+          ? { name: taskName, status: taskStatus }
+          : { name: taskName, manager: { face: managerFace, working: false } }
+      }
       line={inboxLineKind(item)}
       summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
       unread={unread}
@@ -1019,6 +1026,7 @@ function ThreadDetail({
     <ThreadPage
       path={path}
       status={task?.status}
+      manager={"agent" in holder ? holder.agent.face : undefined}
       pathActions={pathActions}
       title={cardTitle(item.title)}
       messages={drawn}
