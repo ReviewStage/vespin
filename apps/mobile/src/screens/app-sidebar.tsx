@@ -213,46 +213,14 @@ export function AppSidebarPane() {
     router.navigate({ pathname: SPLIT_TAB.TASKS, params: { selected: id } });
   };
 
-  // Note that the foot stands the account as the panel's does, its photo and name opening its menu, with Settings' gear at its end.
-  const bottom =
-    account === undefined
-      ? undefined
-      : {
-          leading: (
-            <AccountMenuItem
-              name={account.name}
-              picture={account.picture}
-              actions={[
-                {
-                  label: FOOT_WORDS.SETTINGS,
-                  symbol: GLYPH.SETTINGS,
-                  onPress: () => openSettings(),
-                },
-                {
-                  label: FOOT_WORDS.FEEDBACK,
-                  symbol: GLYPH.FEEDBACK,
-                  onPress: () => openSettings(SETTINGS_ROUTE.FEEDBACK),
-                },
-              ]}
-            />
-          ),
-          trailing: {
-            label: FOOT_WORDS.SETTINGS,
-            symbol: GLYPH.SETTINGS,
-            onPress: () => openSettings(),
-          },
-        };
-
   return (
     <SidebarColumn
-      foot={bottom}
       view={
         <RowList look={LIST_LOOK.SIDEBAR} selected={here} onSelect={go}>
-          {/* Note that the workspace heads the sidebar, as the panel's does, its menu holding the workspaces and Manage; the account and Settings stand at the foot instead. */}
+          {/* Note that the workspace heads the sidebar, as the panel's does, its menu holding the workspaces, Manage, and the account's Settings. */}
           {switcher === undefined ? null : (
             <WorkspaceSwitcherRow
               {...switcher}
-              account={undefined}
               compose={{ label: compose.label, symbol: GLYPH.NEW_TASK, onPress: compose.onPress }}
             />
           )}
