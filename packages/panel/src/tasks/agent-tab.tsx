@@ -156,8 +156,6 @@ import {
   chatRunOf,
   DisclosureChevron,
   DocumentIcon,
-  ERROR_STATE_PLACEMENT,
-  ErrorState,
   GlyphSlot,
   INLINE_REF_LOOK,
   InlineRef,
@@ -225,7 +223,6 @@ import {
   ConversationLead,
   ConversationRows,
   ConversationScrollButton,
-  FLOATING_OVER_LOG_CLASS,
 } from "../ai-elements/conversation.js";
 import { Fold, FoldBody } from "../ai-elements/fold.js";
 import {
@@ -240,7 +237,6 @@ import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
@@ -388,6 +384,7 @@ import {
   type TranscriptToolProps,
   TranscriptWords,
 } from "./transcript-blocks.js";
+import { OlderReadFailed, TranscriptReadFailed } from "./transcript-read-failed.js";
 import { TurnFilesOn, TurnFilesRow } from "./turn-files.js";
 import { keptPieces, PIECE_ROWS, pieceKey, type TurnPiece, turnPieces } from "./turn-pieces.js";
 import {
@@ -527,10 +524,6 @@ const ROW_ESTIMATE_PX = 172;
 
 /** The servers switched off for a teammate's agent as its mentions read them, whose switches the reader is not handed. */
 const NONE_DISABLED: readonly string[] = [];
-
-/** What the tab says where its transcript could not be read. */
-const TRANSCRIPT_FAILED_LINE = "The transcript could not be read.";
-const OLDER_FAILED_LINE = "Earlier messages could not be read.";
 
 /** A worker's transcript: the subagent task it was handed, and the worker starting. */
 const WORKER_LEAD: TranscriptLead = {
@@ -3445,16 +3438,7 @@ function AgentTranscriptView({
           )}
           {/* Note that the messages held keep standing with no line under them while the app is offline, since the Offline mark says why. */}
           {failed && connected ? (
-            <ErrorState
-              failure={failureShown({
-                surface: FAILURE_SURFACE.AGENT_TRANSCRIPT_READ,
-                cause: failedWith ?? FAILURE_CONDITION.UNREAD,
-                about: { agentId },
-              })}
-              onRetry={onRetry}
-            >
-              {TRANSCRIPT_FAILED_LINE}
-            </ErrorState>
+            <TranscriptReadFailed failedWith={failedWith} agentId={agentId} onRetry={onRetry} />
           ) : null}
         </>
       );
@@ -3476,18 +3460,8 @@ function AgentTranscriptView({
             <ChatDoors manager={manager} work={chatWork}>
               <ConnectionNames needed={callsServer}>
                 <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
-                  {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
                   {olderFailed && onOlder !== undefined ? (
-                    <div
-                      className={`${FLOATING_OVER_LOG_CLASS} top-ui-8 z-1 max-w-conversation-older bg-well px-list-inset py-tight-gap`}
-                    >
-                      <ErrorState
-                        failure={unreadShown(FAILURE_SURFACE.AGENT_TRANSCRIPT_OLDER_READ)}
-                        onRetry={onOlder}
-                      >
-                        {OLDER_FAILED_LINE}
-                      </ErrorState>
-                    </div>
+                    <OlderReadFailed onRetry={onOlder} />
                   ) : null}
                   {/* The description's card stands off the tab row by the gap between a column's groups; lines fade under the bar or banner above. */}
                   <ConversationContent
@@ -3608,17 +3582,7 @@ function AgentTranscriptView({
 
   if (failed) {
     return (
-      <ErrorState
-        failure={failureShown({
-          surface: FAILURE_SURFACE.AGENT_TRANSCRIPT_READ,
-          cause: failedWith ?? FAILURE_CONDITION.UNREAD,
-          about: { agentId },
-        })}
-        onRetry={onRetry}
-        placement={ERROR_STATE_PLACEMENT.CENTERED}
-      >
-        {TRANSCRIPT_FAILED_LINE}
-      </ErrorState>
+      <TranscriptReadFailed failedWith={failedWith} agentId={agentId} onRetry={onRetry} centered />
     );
   }
 
