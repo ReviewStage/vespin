@@ -1,8 +1,13 @@
 /* note-line.css -- a muted line said where a list's rows would stand. */
 
 @layer components {
-  .ui-note-line {
+  /* Its outer spacing is its container's, so its reset weighs nothing and
+     a container's own rhythm (a transcript's gap between its blocks) wins. */
+  :where(.ui-note-line) {
     margin: 0;
+  }
+
+  .ui-note-line {
     font-family: var(--ui-font-sans);
     overflow-wrap: anywhere;
   }
@@ -35,13 +40,19 @@
 
   /* A trail keeps the leading of the line that holds it, so its chips stand
      as they do in its holder's words, and is centered on its glyph's seat. */
-  .ui-note-line[data-look="trail"] {
+  .ui-note-line:is([data-look="trail"], [data-look="step"]) {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--ui-tight-gap);
     color: var(--ui-color-text-muted);
     font-size: var(--ui-type-caption-size);
+  }
+
+  /* A step stands among a transcript's rows at a row's height, its words on
+     the row's center, so it keeps the rows' rhythm. */
+  .ui-note-line[data-look="step"] {
+    min-height: var(--ui-control-height);
   }
 
   .ui-note-line[data-fill] {
