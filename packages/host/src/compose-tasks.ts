@@ -1580,7 +1580,6 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           view = {
             ...view,
             listStatus: TASKS_READ.READY,
-            listDrawn: true,
             live: HOST_LIVE.LIVE,
             ...(taskWorkspaces === undefined ? undefined : { taskWorkspaces }),
           };
@@ -1743,21 +1742,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     if (view.listStatus !== TASKS_READ.READY) {
       yield* Scope.close(taskList.scope, Exit.void);
       taskList = yield* openTaskList;
-      const { collections, scope } = taskList;
-      const stored = collections.stored();
-
-      // Note that a list drawn from disk is said drawn whole only once the agents filling in behind its tasks are drawn too, since a place standing behind waits on it to read the list whole; one that kept nothing is drawn whole at once.
-      yield* Effect.forkIn(
-        Effect.andThen(
-          collections.drawnWhole,
-          Effect.sync(() => write({ listDrawn: true })),
-        ),
-        scope,
-      );
+      const stored = taskList.collections.stored();
 
       if (stored !== undefined) {
         const { kept } = stored;
         listKeptAt = kept?.at;
+        const { collections, scope } = taskList;
 
         // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands. It is said ready only once its kept rows are drawn, which is just after it stands, so no window reads an empty list as one with no tasks; where the follow answered first, its answer said so already.
         yield* Effect.forkIn(
