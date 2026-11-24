@@ -97,6 +97,7 @@ import {
   useColors,
   useFailureNotices,
   useMinute,
+  WORDS_EDGE,
   WordsRow,
   WriteNoteRow,
 } from "@repo/ui-native";
@@ -859,6 +860,7 @@ function PullRequestPage({
             repository={agent?.repository}
             onOpenLink={openLink}
             hidesHtml
+            edge={WORDS_EDGE.ROWS}
             folded={folded}
             reactions={reactionsLine(conversation?.descriptionReactions ?? [])}
             menuGroups={[

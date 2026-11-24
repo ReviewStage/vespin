@@ -44,9 +44,9 @@ function previewOf(markdown: string): string {
 export type EntryStanding = { readonly mark: MarkLook; readonly words: string };
 
 /**
- * Words under a row's head, set in from the screen's edge as the page's
- * other words stand (`SPACE.EDGE`), since the row's own content starts at
- * the unread dot's inset.
+ * Words under a row's head, starting where the rows' leading marks do
+ * (`inset.lead`), as the page's heading and description stand, since the
+ * row's own content starts at the unread dot's inset.
  */
 function UnderHead({ children }: { readonly children: ReactElement }) {
   const inset = useRowInset();
@@ -54,7 +54,7 @@ function UnderHead({ children }: { readonly children: ReactElement }) {
   return (
     <VStack
       alignment="leading"
-      modifiers={[padding({ leading: SPACE.EDGE - inset.dotted, top: SPACE.TIGHT })]}
+      modifiers={[padding({ leading: inset.lead - inset.dotted, top: SPACE.TIGHT })]}
     >
       {children}
     </VStack>
