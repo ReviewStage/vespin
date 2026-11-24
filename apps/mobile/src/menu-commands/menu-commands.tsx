@@ -1,5 +1,6 @@
 // menu-commands.tsx -- the iPad menu bar's commands, routed: what stands in front told to the native menu, so each command is enabled and worded for it, and each press acted on as the screen's own press would.
 
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { holderTask, holderWorkspaceId, isUnread } from "@repo/features/inbox-list-model";
 import { REMIND_TIMES } from "@repo/features/inbox-remind-times";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
@@ -39,7 +40,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { selectAgentPinned, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
 import { BUZZ, ConfirmAsk, useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
-import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
+import { and, type Collection, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import {
@@ -272,7 +273,30 @@ function useSubject(signedIn: boolean): Subject {
   };
 }
 
-/** How many agents of the task are starting or running, so marking it done stops them and asks first. */
+/**
+ * How many agents of `taskId` are starting or running as Mark Done is
+ * pressed, read off the agents the list holds at that moment, so marking it
+ * done stops them and asks first. Note that it is read on the press rather
+ * than followed, because following it built a query over every agent each
+ * time a task came in front, inside the commit its page's push waited on.
+ */
+function workingAgentsNow(agents: Collection<ListedAgent, string>, taskId: string): number {
+  let working = 0;
+
+  for (const agent of agents.values()) {
+    if (
+      agent.taskId === taskId &&
+      agent.archivedAt === undefined &&
+      agentStillWriting(agent.status)
+    ) {
+      working += 1;
+    }
+  }
+
+  return working;
+}
+
+/** How many agents of the task are starting or running, followed while Mark Done's question stands, so its words count them as they stop. */
 function useWorkingAgents(taskId: string | undefined): number {
   const { agents } = useTaskListCollections();
 
@@ -350,8 +374,9 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     ...(sidebarStands && !sidebar.shown ? [MENU_COMMAND.SIDEBAR] : []),
   ];
 
-  const working = useWorkingAgents(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
+  const { agents } = useTaskListCollections();
+  const working = useWorkingAgents(asking === ASK.MARK_DONE ? subject.task?.id : undefined);
   // Note that the menu is told only as what it shows changes, since each telling rebuilds it.
   const told = useRef<string>(undefined);
   useEffect(() => {
@@ -461,8 +486,9 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
         return;
       case MENU_COMMAND.MARK_DONE:
-        if (working > 0) setAsking(ASK.MARK_DONE);
-        else markDone();
+        if (task !== undefined && workingAgentsNow(agents, task.id) > 0) {
+          setAsking(ASK.MARK_DONE);
+        } else markDone();
 
         return;
       case MENU_COMMAND.TOGGLE_READ:
