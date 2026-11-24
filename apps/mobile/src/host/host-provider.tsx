@@ -16,6 +16,7 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useDeferredValue,
   useEffect,
   useRef,
   useState,
@@ -224,10 +225,15 @@ const NOT_READ: readonly never[] = [];
  * draws on in the launch's first seconds; behind, it reads nothing until
  * it is first brought forward. A read begun holds every row in its first
  * render, and stays, so a page pushed over the tab, or the tab left, never
- * drops what it read only to read it again.
+ * drops what it read only to read it again. Note that the tab's coming in
+ * front is read deferred (`useDeferredValue`), because a read's first render
+ * builds its live queries over every row, about 0.3 s of JS at a busy
+ * account's size, and inside the tap's own commit it held the tab's switch
+ * that long: the tab now commits at once, saying it is reading, and React
+ * renders the read right after.
  */
 export function useWholeListRead(): boolean {
-  const inFront = useIsFocused();
+  const inFront = useDeferredValue(useIsFocused());
   const [begun, begin] = useState(false);
   const reading = begun || inFront;
 
