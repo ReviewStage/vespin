@@ -22,9 +22,8 @@ import {
   useColors,
   useFailureNotices,
 } from "@repo/ui-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { useFocusShown } from "../focus-shown.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -237,7 +236,7 @@ function CommentThread({
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   // Note that a thread stands only while it is in front, since a page pushed over it on the tab's stack, or another tab, keeps it mounted.
-  const standing = useFocusShown();
+  const standing = useIsFocused();
 
   useEffect(() => {
     if (!standing) return;
