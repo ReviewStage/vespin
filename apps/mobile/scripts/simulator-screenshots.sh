@@ -194,27 +194,33 @@ run_suite() {
         "$APP_DIRECTORY/maestro"
 }
 
-# Runs the notification flow on the booted simulator `$1`, its output under
-# `$2`: the app installed afresh and let notify, launched and sent to the
-# background, `ask.apns` pushed to it, and the notification tapped; then
-# launched and sent to the background afresh, `manager.apns`, a Manager's
-# thread on no task, pushed, and that notification tapped, since Maestro
-# cannot send a push. Note that the second round launches the app again, as
-# the first does, because one sent home from the thread the first opened
-# never showed the second push in Notification Center. Note that the app is installed here rather than
-# cleared by the flow's `launchApp`, because Maestro's clear reinstalls the
-# app, which takes back the permission.
-run_notification_flow() {
+# Runs one round of the notification flow on the booted simulator `$1`, its
+# output under `$2`: the app installed afresh and let notify, launched and
+# sent to the background, the payload `$3` pushed to it, and the flow `$4`
+# run to tap it, since Maestro cannot send a push. Note that the app is
+# installed here rather than cleared by the flow's `launchApp`, because
+# Maestro's clear reinstalls the app, which takes back the permission.
+run_notification_round() {
     local directory="$APP_DIRECTORY/maestro/notification"
     xcrun simctl uninstall "$1" "$bundle_id" || true
     xcrun simctl install "$1" "$app" || return 1
     allow_notifications "$1" || return 1
     run_maestro "$1" "$2" "$directory/background.yaml" || return 1
-    xcrun simctl push "$1" "$bundle_id" "$directory/ask.apns" || return 1
-    run_maestro "$1" "$2" "$directory/open.yaml" || return 1
-    run_maestro "$1" "$2" "$directory/background.yaml" || return 1
-    xcrun simctl push "$1" "$bundle_id" "$directory/manager.apns" || return 1
-    run_maestro "$1" "$2" "$directory/open-manager.yaml"
+    xcrun simctl push "$1" "$bundle_id" "$directory/$3" || return 1
+    run_maestro "$1" "$2" "$directory/$4"
+}
+
+# Runs the notification flow on the booted simulator `$1`, its output under
+# `$2`: a round for a task's decide, `ask.apns`, and one for a Manager's
+# thread on no task, `manager.apns`, each from a fresh install, and fails
+# where either failed. Note that each round installs the app anew, because
+# a second push to the app the first round left running showed in
+# Notification Center only now and then.
+run_notification_flow() {
+    local failed=0
+    run_notification_round "$1" "$2" ask.apns open.yaml || failed=1
+    run_notification_round "$1" "$2" manager.apns open-manager.yaml || failed=1
+    return "$failed"
 }
 
 # Deletes the simulator's own logs under `$1` of every flow that passed,

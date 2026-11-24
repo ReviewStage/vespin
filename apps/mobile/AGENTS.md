@@ -150,9 +150,9 @@ pass. The notification flow, whose push Maestro cannot
 send, runs apart: the script installs the app afresh, lets it notify through
 the applesimutils Maestro installs (Maestro's own `permissions` cannot grant
 notifications), runs `maestro/notification/background.yaml`, pushes
-`ask.apns` with `xcrun simctl push`, and runs `open.yaml`, then
-`background.yaml` again, pushes `manager.apns`, a Manager's thread on no
-task, and runs `open-manager.yaml`, its output under
+`ask.apns` with `xcrun simctl push`, and runs `open.yaml`; then does the
+same from a fresh install for `manager.apns`, a Manager's thread on no
+task, with `open-manager.yaml`, its output under
 `<light|dark>/notification/`.
 
 ## The host
