@@ -36,9 +36,7 @@ export interface TaskListPullRequests {
   readonly agentPullRequests: () => readonly ListedPullRequest[];
   /** Every pull request of each plan that has one, those still open first, the newest agent's first within each. */
   readonly taskPullRequests: () => readonly TaskPullRequests[];
-  /** Each plan's lines by its id, the very object `taskPullRequests` holds for it, for a plan's own query to join. */
-  readonly byTask: QueryCollection<PlanPullRequests>;
-  /** Each plan an agent names, with its agents gathered under it, for a plan's own query to join. */
+  /** Each plan an agent names, with its agents gathered under it, for a plan's own query to tally. */
   readonly agentsByTask: QueryCollection<PlanAgents>;
 }
 
@@ -47,13 +45,6 @@ export interface PlanAgents {
   /** Null for the agents on no task, gathered as one plan no plan joins. */
   readonly taskId: string | null;
   readonly agents: WithVirtualProps<AgentRow, string>[];
-}
-
-/** One plan an agent names, and every pull request its agents opened; none where they opened none. */
-export interface PlanPullRequests {
-  /** Null for the agents on no task, whose pull requests no plan lists. */
-  readonly taskId: string | null;
-  readonly listing: TaskPullRequests | undefined;
 }
 
 /** The task list's pull requests over `agents`, its agents as it draws them, for as long as the scope stands. */
@@ -126,7 +117,6 @@ export function taskListPullRequests(
     return {
       agentPullRequests,
       taskPullRequests,
-      byTask,
       agentsByTask: groups,
     };
   });

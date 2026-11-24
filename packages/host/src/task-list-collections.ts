@@ -531,7 +531,6 @@ export function taskListCollections(
       apart,
       agents: drawnAgents.collection,
       pastGrace,
-      pullRequests: pullRequests.byTask,
       agentsByTask: pullRequests.agentsByTask,
       continuations,
       archived: { activityOf: archived.activityOf, moved: archived.activityMoved },
