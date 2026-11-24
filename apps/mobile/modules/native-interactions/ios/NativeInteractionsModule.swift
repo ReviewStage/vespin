@@ -232,7 +232,7 @@ private final class StackSubtitleView: UIView {
   private var written: String?
   private var styleFound: UINavigationItem.ItemStyle?
   /// The attributed title this probe wrote, so it clears only its own.
-  private var writtenTitle: NSAttributedString?
+  private var writtenTitle: AttributedString?
 
   var subtitle = "" {
     didSet { write() }
@@ -313,9 +313,11 @@ private final class StackSubtitleView: UIView {
     let attachment = NSTextAttachment(image: picture)
     // Note that a bound's origin is measured up from the baseline, so the picture's middle stands on the middle of the title's capitals.
     attachment.bounds = CGRect(x: 0, y: (font.capHeight - side) / 2, width: side, height: side)
-    let title = NSMutableAttributedString(attachment: attachment)
-    title.addAttribute(.kern, value: font.pointSize / 3, range: NSRange(location: 0, length: title.length))
-    title.append(NSAttributedString(string: marked.title))
+    let built = NSMutableAttributedString(attachment: attachment)
+    built.addAttribute(.kern, value: font.pointSize / 3, range: NSRange(location: 0, length: built.length))
+    built.append(NSAttributedString(string: marked.title))
+    // Note that the item takes Swift's attributed string, so the attachment crosses as UIKit's own attribute, and a title that cannot cross is left plain.
+    guard let title = try? AttributedString(built, including: \.uiKit) else { return }
     held.attributedTitle = title
     item = held
     writtenTitle = title
