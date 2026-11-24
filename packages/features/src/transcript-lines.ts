@@ -14,6 +14,7 @@ import {
   MESSAGE_CHANNEL,
   MESSAGE_ROLE,
   type SlackLineMetadata,
+  START_LINE_BRIEF,
   type SuggestedBy,
   THREAD_LINE_EVENT,
   type ThreadLineMetadata,
@@ -57,17 +58,30 @@ export function agentMessageOf(message: AgentTranscriptMessage): AgentMessageMet
   return read?.channel === MESSAGE_CHANNEL.AGENT_MESSAGE ? read : undefined;
 }
 
-/** The channels a person's own words reach an agent on: typed into its box, said on a call, or sent from a suggestion. */
-const PEOPLES_CHANNELS: ReadonlySet<string> = new Set([
-  MESSAGE_CHANNEL.TYPED,
-  MESSAGE_CHANNEL.VOICE,
-  MESSAGE_CHANNEL.SUGGESTION,
-]);
+/**
+ * Whether what carried a person's line makes it their own words, a message
+ * of a Manager's chat: typed, said on a call by the caller rather than the
+ * voice, sent from a suggestion they pressed, or the prompt they started the
+ * agent with; never words the service wrote in their name (`app_words`), a
+ * description or another agent's work a Start handed on, nor a line any other
+ * channel carried. The one test the chat's live write (`chatOfLine`) and its
+ * derivation (`isPersonLine`) both take, so the two keep the same messages.
+ */
+export function isPersonChatMetadata(metadata: UserMessageMetadata): boolean {
+  if (!isDeveloperLine(metadata) || !("channel" in metadata)) return false;
+
+  if (metadata.channel === MESSAGE_CHANNEL.TYPED) return metadata.app_words !== true;
+
+  if (metadata.channel === MESSAGE_CHANNEL.START) return metadata.brief === START_LINE_BRIEF.PROMPT;
+
+  return (
+    metadata.channel === MESSAGE_CHANNEL.VOICE || metadata.channel === MESSAGE_CHANNEL.SUGGESTION
+  );
+}
 
 /**
- * Whether a line is a person's own words to the agent, sent from its page:
- * typed, said on a call by the caller rather than the voice, or sent from a
- * suggestion, or a line that holds no metadata, as one the window drew as it
+ * Whether a line is a person's own words to the agent (`isPersonChatMetadata`),
+ * or a line that holds no metadata, as one the window drew as it
  * sent; never another agent's message, a wakeup, a thread's, a comment's,
  * GitHub's, Slack's, an automation's, the app's, a runtime note, or a line
  * whose metadata this build cannot read.
@@ -89,12 +103,7 @@ export function isPersonLine(message: AgentTranscriptMessage): boolean {
   if (metadata === undefined) return true;
   const read = Option.getOrUndefined(readUserMetadata(metadata));
 
-  return (
-    read !== undefined &&
-    isDeveloperLine(read) &&
-    "channel" in read &&
-    PEOPLES_CHANNELS.has(read.channel)
-  );
+  return read !== undefined && isPersonChatMetadata(read);
 }
 
 /**

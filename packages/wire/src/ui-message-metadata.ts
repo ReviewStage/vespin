@@ -247,12 +247,14 @@ const spanInstant = nonNegativeInteger;
  * names a voice session only where it was typed into that call, with the
  * instant on the call's clock it was typed at, so the voice's reply to it
  * finds it as the line it followed; it carries no span, since nothing of it
- * was said.
+ * was said. One the service wrote in the member's name says so
+ * (`app_words`), since its words are no person's, though it goes as theirs.
  */
 const TYPED_ASK_METADATA = EffectSchema.Struct({
   channel: EffectSchema.Literal(MESSAGE_CHANNEL.TYPED),
   voice_session_id: EffectSchema.optional(identifier),
   from_ms: EffectSchema.optional(spanInstant),
+  app_words: EffectSchema.optional(EffectSchema.Literal(true)),
 });
 
 export type TypedAskMetadata = EffectSchema.Schema.Type<typeof TYPED_ASK_METADATA>;

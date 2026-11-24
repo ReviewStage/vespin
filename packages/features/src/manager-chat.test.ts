@@ -56,9 +56,21 @@ function drawn(messages: readonly AgentTranscriptMessage[]): [string, string[]][
   ]);
 }
 
-test("a Manager's chat keeps people's lines, each sent message and each set shown as one of its own, and the voice's lines on a call, and leaves out its other words and calls, a set refused, its agents' and wakes' lines, and a turn that sent nothing", () => {
+test("a Manager's chat keeps people's lines, a Start's prompt among them, each sent message and each set shown as one of its own, and the voice's lines on a call, and leaves out its other words and calls, a set refused, its agents' and wakes' lines, words the service wrote in a person's name, a Start handed the description, and a turn that sent nothing", () => {
   const messages = [
+    line("prompt", {
+      metadata: { channel: "start", brief: "prompt" },
+      sentBy: { name: "Ada", userId: "u-ada" },
+    }),
+    line("description", {
+      metadata: { channel: "start", brief: "plan" },
+      sentBy: { name: "Ada", userId: "u-ada" },
+    }),
     line("ada", { metadata: { channel: "typed" }, sentBy: { name: "Ada", userId: "u-ada" } }),
+    line("allowed", {
+      metadata: { channel: "typed", app_words: true },
+      sentBy: { name: "Ada", userId: "u-ada" },
+    }),
     turn("turn-1", [
       { type: "step-start" },
       { type: "text", text: "Let me look." },
@@ -90,6 +102,7 @@ test("a Manager's chat keeps people's lines, each sent message and each set show
   ];
 
   assert.deepEqual(drawn(messages), [
+    ["prompt", ["prompt"]],
     ["ada", ["ada"]],
     ["turn-1", ["On it: I made the task."]],
     ["screenshot", ["show_media screenshot"]],

@@ -88,6 +88,7 @@ import {
   type MachineAskSubject,
 } from "@repo/features/machine-ask-wire";
 import { EXPERIMENT } from "@repo/settings";
+import { MESSAGE_CHANNEL } from "@repo/wire";
 import { Clock, Effect, Option } from "effect";
 import { managedWorkspace, managedWorkspacesOf } from "../accounts/workspace-access.js";
 import { HOST_VERSION } from "../auth/device-secret.js";
@@ -206,9 +207,11 @@ const toldToTryAgain = (
 
     if (agent === undefined) return;
 
+    // Note that the words are the service's in the owner's name, so the line says so, and no Manager's chat holds it as theirs.
     yield* steerMemberWords(writer, userId, agent, {
       text: lateAllowedWords(late.subject),
       clientKey: askId,
+      metadata: { channel: MESSAGE_CHANNEL.TYPED, app_words: true },
     });
   }).pipe(Effect.ignore);
 

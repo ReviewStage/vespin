@@ -88,6 +88,7 @@ import {
 import { experimentsOnIn } from "../workspace-experiment-on.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
 import { messageCredentialMissing } from "./agent-runtime-choice.js";
+import { chatOfLine } from "./manager-chat-line.js";
 import { harnessOf, nativeRuntimeOfSession } from "./native-runtime.js";
 import { reconciledBeforeWrite } from "./reconcile.js";
 import { failedCallRefusal, NativeAgentSessions, routedSessions } from "./runtime-sessions.js";
@@ -582,7 +583,10 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
 > {
   // Note that a delegation goes under its newest line's key, so the row it adopts is the line the harness names back as its turn takes it.
   const newest = asked.adopts?.at(-1);
-  const line = newest === undefined ? asked : { ...asked, clientKey: newest };
+  // A person's own line to a Manager is a message of its chat whichever door sent it, minted here; one minted already, as the chat's own send's, keeps it.
+  const minted = asked.chat ?? (yield* chatOfLine(userId, agent, asked));
+  const steered = minted === undefined ? asked : { ...asked, chat: minted };
+  const line = newest === undefined ? steered : { ...steered, clientKey: newest };
 
   // An agent on its starter's own GitHub token, or on its starter's Mac, takes words from its starter alone.
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
@@ -637,7 +641,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   if (delivery === STEER_DELIVERY.HELD_WHILE_BOOTING) {
     // Note that a held delegation waits under the send's own key, never its newest line's, because an edit in the
     // queue drops the lines it names, and the edit's words would then find that line's row and go as a repeat.
-    const queued = yield* heldWhileBooting(userId, agent, asked);
+    const queued = yield* heldWhileBooting(userId, agent, steered);
 
     if (queued !== undefined) return queued;
   }
