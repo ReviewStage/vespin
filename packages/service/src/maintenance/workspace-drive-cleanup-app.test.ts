@@ -23,6 +23,7 @@ function environment(cronSecret: string | undefined): HostedEnvironmentValues {
     posthogApiHost: undefined,
     posthogProjectApiKey: undefined,
     posthogIngestHost: undefined,
+    posthogDistinctIdKey: undefined,
     cronSecret: cronSecret === undefined ? undefined : Redacted.make(cronSecret),
     githubWebhookSecret: undefined,
     providerKeyEncryptionKeys: undefined,

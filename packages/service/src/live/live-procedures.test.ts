@@ -2400,6 +2400,7 @@ const CHAPTERS_ENVIRONMENT: HostedEnvironmentValues = {
   posthogApiHost: undefined,
   posthogProjectApiKey: undefined,
   posthogIngestHost: undefined,
+  posthogDistinctIdKey: undefined,
   cronSecret: undefined,
   githubWebhookSecret: undefined,
   providerKeyEncryptionKeys: AGENT_KEY_RING,

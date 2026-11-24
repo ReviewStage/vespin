@@ -22,9 +22,9 @@ import { afterResponse } from "../http/after-response.js";
 import {
   type PosthogBatchItem,
   type PosthogGroupFields,
-  type PosthogPerson,
   postBatchEffect,
 } from "../providers/posthog.js";
+import { analyticsDistinctIdOf } from "./analytics-distinct-id.js";
 import { DEPLOYMENT_VARIABLE, deploymentNamed, WORKSPACE_GROUP_TYPE } from "./events.js";
 
 /**
@@ -51,8 +51,11 @@ import { DEPLOYMENT_VARIABLE, deploymentNamed, WORKSPACE_GROUP_TYPE } from "./ev
  * which the actor each event is typed with enforces (`ServerEventActor`); an
  * account's own setup carries none. Each workspace's group is named, by a
  * `$groupidentify` beside its first event on an instance and again once a day
- * or on a rename, with its name as its members read it and when it was made,
- * and nothing else.
+ * or on a rename, with when it was made and, for a workspace of more than one
+ * member, its name as its members read it, and nothing else. A workspace of
+ * one is one person, whose own name it often is, so its group is named by its
+ * key instead, which also overwrites the name it was given before it had one
+ * member, or before this rule.
  * No workspace is ever deleted, and PostHog's API deletes no single group,
  * so a group, once named, stays in PostHog as its workspace stays here.
  *
@@ -61,18 +64,24 @@ import { DEPLOYMENT_VARIABLE, deploymentNamed, WORKSPACE_GROUP_TYPE } from "./ev
  * than counted under the member who started the agent, so a count of posts is
  * a count of people talking, and an agent's work is the agent events'.
  *
- * The events are filed under the account's own user id, the person its
- * session replay and the site's sign-in are filed under, never the apps'
- * counted events, which go under each install's own random id (`events.ts`);
- * and erased with that person on account deletion, which deletes by that id. Since a capture runs after its request
+ * The events are filed under a keyed hash of the account's id
+ * (`analytics-distinct-id.ts`), never the id itself, and name nobody: no
+ * `$set` rides them, so the person PostHog keeps for the hash holds no name,
+ * no email, and no property at all. The hash is the same for every event of
+ * one account, so PostHog's funnels run through the service's counts, but it
+ * is shared with nothing else: the session replay and the site's sign-in
+ * stay filed under the account's own id, with its name and email, and the
+ * apps' counted events under each install's own random id (`events.ts`).
+ * The events keep a person rather than going personless
+ * (`$process_person_profile` false) because PostHog files a personless event
+ * under no group, which would lose the workspace counts above. A deployment
+ * without the hash's key records none of them, rather than file them under
+ * the bare id. Account deletion erases them by recomputing the hash
+ * (`analytics-erasure.ts`). Since a capture runs after its request
  * has answered, or with no request at all (a settled turn, the sweep, an
  * automation's run), it reads the account's row first and posts nothing for
  * one no longer there, so a late event does not bring back the person a
  * deletion erased; one that slips in during the deletion itself is accepted.
- * The row it read names the person, as `/api/events` names it (`events.ts`):
- * its name and email ride each event's `$set`, never a property, so an
- * account's sign-up, which comes before any client of its own has named it,
- * already says who signed up.
  *
  * One record leaves that rule on purpose: a response to one of our PostHog
  * surveys (`recordSurveyResponse`), which carries the person's own answers,
@@ -577,18 +586,18 @@ function stamped(properties: PosthogBatchItem["properties"], environment: string
  * The item a server event posts, under the same privacy fields the desktop's
  * batch carries, stamped with the deployment that recorded it as the
  * desktop's are (`events.ts`), so a preview's or a local service's counts can
- * be told from production's, filed under its workspace's group where it
- * has one, and naming its person.
+ * be told from production's, filed under its account's hashed id and its
+ * workspace's group where it has one, and naming nobody.
  */
 function serverEventItem(
   event: ServerEvent,
-  person: PosthogPerson,
+  distinctId: string,
   now: number,
   environment: string,
 ): PosthogBatchItem {
   return {
     event: event.name,
-    distinct_id: event.userId,
+    distinct_id: distinctId,
     timestamp: new Date(now).toISOString(),
     properties: stamped(
       {
@@ -596,7 +605,6 @@ function serverEventItem(
         ...(event.workspaceId === undefined
           ? undefined
           : { $groups: { [WORKSPACE_GROUP_TYPE]: event.workspaceId } }),
-        $set: person,
       },
       environment,
     ),
@@ -604,17 +612,21 @@ function serverEventItem(
 }
 
 /**
- * What a workspace's group is named with in PostHog: its name as its members
- * read it, and when it was made, and nothing else. The one place a
- * workspace's name leaves the service for PostHog.
+ * What a workspace's group is named with in PostHog: when it was made, and its
+ * name as its members read it where it has more than one member, or its own
+ * key where it has one (the header says why), and nothing else. The one place
+ * a workspace's name leaves the service for PostHog.
  */
-function workspaceGroupProperties(face: WorkspaceFace): PosthogGroupFields {
-  return { name: face.name, created_at: face.createdAt.toISOString() };
+function workspaceGroupProperties(workspaceId: string, face: WorkspaceFace): PosthogGroupFields {
+  return {
+    name: face.memberCount > 1 ? face.name : workspaceId,
+    created_at: face.createdAt.toISOString(),
+  };
 }
 
-/** The `$groupidentify` that names one workspace's group (`workspaceGroupProperties`). */
+/** The `$groupidentify` that names one workspace's group (`workspaceGroupProperties`), under the hashed id of the account whose event it rides beside. */
 function workspaceGroupItem(
-  userId: string,
+  distinctId: string,
   workspaceId: string,
   face: WorkspaceFace,
   now: number,
@@ -622,13 +634,13 @@ function workspaceGroupItem(
 ): PosthogBatchItem {
   return {
     event: GROUP_IDENTIFY_EVENT,
-    distinct_id: userId,
+    distinct_id: distinctId,
     timestamp: new Date(now).toISOString(),
     properties: stamped(
       {
         $group_type: WORKSPACE_GROUP_TYPE,
         $group_key: workspaceId,
-        $group_set: workspaceGroupProperties(face),
+        $group_set: workspaceGroupProperties(workspaceId, face),
       },
       environment,
     ),
@@ -713,7 +725,10 @@ class ProductAnalytics extends Context.Service<ProductAnalytics, ProductAnalytic
 /**
  * The deployment's analytics, from the same project token the desktop's batch
  * is posted under. A deployment without one — a Preview, a local run — records
- * nothing, the same kill switch `/api/events` has. Each workspace's group is
+ * nothing, the same kill switch `/api/events` has; one with a token but
+ * without the key its counts' ids are hashed under records no count and names
+ * no group, and still records a survey response, which names no account at
+ * all. Each workspace's group is
  * named beside the first of its events this instance posts and once a day
  * after (`WORKSPACE_GROUP_REFRESH_MS`), from the workspace's own row; an
  * instance keeps only when it last named each, and a read or a post that
@@ -737,6 +752,7 @@ const productAnalyticsOfEnvironment = Layer.effect(
     }
 
     const host = environment.posthogIngestHost;
+    const idKey = environment.posthogDistinctIdKey;
     // Vercel's own variable, read as the layer is built, as `/api/events` reads it per request.
     const deployment = deploymentNamed(process.env[DEPLOYMENT_VARIABLE]);
     const named = new Map<string, number>();
@@ -748,13 +764,13 @@ const productAnalyticsOfEnvironment = Layer.effect(
       ).pipe(Effect.provideService(HttpClient.HttpClient, client));
 
     // The group's naming item, or none where the workspace is gone or its row cannot be read.
-    const groupItems = (userId: string, workspaceId: string, now: number) =>
+    const groupItems = (distinctId: string, workspaceId: string, now: number) =>
       readWorkspaceFace(workspaceId).pipe(
         Effect.provideContext(database),
         Effect.map(
           Option.match({
             onNone: () => [],
-            onSome: (face) => [workspaceGroupItem(userId, workspaceId, face, now, deployment)],
+            onSome: (face) => [workspaceGroupItem(distinctId, workspaceId, face, now, deployment)],
           }),
         ),
         Effect.orElseSucceed((): PosthogBatchItem[] => []),
@@ -782,6 +798,8 @@ const productAnalyticsOfEnvironment = Layer.effect(
     return {
       capture: (event: ServerEvent) =>
         Effect.gen(function* () {
+          if (idKey === undefined) return;
+
           // A deleted account's person must not be posted back.
           const person = yield* readAccountPerson(event.userId).pipe(
             Effect.provideContext(database),
@@ -789,20 +807,14 @@ const productAnalyticsOfEnvironment = Layer.effect(
 
           if (person === undefined) return;
           const now = yield* Clock.currentTimeMillis;
-
-          const item = serverEventItem(
-            event,
-            { name: person.name, email: person.email },
-            now,
-            deployment,
-          );
-
+          const distinctId = analyticsDistinctIdOf(idKey, event.userId);
+          const item = serverEventItem(event, distinctId, now, deployment);
           const workspaceId = event.workspaceId;
 
           if (workspaceId === undefined || !due(workspaceId, now)) return yield* post([item]);
           yield* postNaming(
             workspaceId,
-            yield* groupItems(event.userId, workspaceId, now),
+            yield* groupItems(distinctId, workspaceId, now),
             [item],
             now,
           );
@@ -814,8 +826,10 @@ const productAnalyticsOfEnvironment = Layer.effect(
         }).pipe(Effect.ignore),
       nameWorkspace: (userId: string, workspaceId: string) =>
         Effect.gen(function* () {
+          if (idKey === undefined) return;
+
           const now = yield* Clock.currentTimeMillis;
-          const naming = yield* groupItems(userId, workspaceId, now);
+          const naming = yield* groupItems(analyticsDistinctIdOf(idKey, userId), workspaceId, now);
 
           if (naming.length > 0) yield* postNaming(workspaceId, naming, [], now);
         }),

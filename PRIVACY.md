@@ -257,8 +257,12 @@ you are signed in, but does not pass your account on with them. The ID stays
 the same when you sign out or sign in as someone else on that device.
 
 The Service counts work done through it (such as tasks created and agents
-started) under your account's name and email. Those counts are grouped by
-workspace, with each workspace's name and creation date.
+started), with no name or email. Each account's counts are filed under the
+same ID, made from your account's ID with a secret key only the Service
+holds, so the ID can't be traced back to your account without that key, and
+your counts can be erased with your account. Those counts are grouped by
+workspace, with each workspace's creation date, and its name only if it has
+more than one member.
 
 The Vespin iOS app sends the same kind of counts while you are signed in:
 when it opens, each day you use it, sign-ins and sign-outs, and the kind of
@@ -303,11 +307,11 @@ account's id, name, and email, so we can find them when you ask for help and
 erase them with your account. They are kept apart from the anonymous counts:
 the two share no ID and no workspace. Someone with access to our PostHog
 project could still match when a device's counts were made against when a
-recording was, or against the Service's counts, which are under your account;
-we do not do this. While a maintainer is signed in as your account with your
-support access (section 4), their use of the web app is recorded the same way,
-under your account, and counted under that browser's own ID. The iOS app
-records nothing.
+recording was, or match the Service's counts to a recording by their shared
+workspace and timing; we do not do this. While a maintainer is signed in as
+your account with your support access (section 4), their use of the web app is
+recorded the same way, under your account, and counted under that browser's
+own ID. The iOS app records nothing.
 
 Turning off Settings › Account › "Share usage data" stops the counts, the
 recordings, and the Sentry reports described below from that Mac or browser,
@@ -699,8 +703,9 @@ made before default-branch drives expires thirty days after its last use. When y
 - **Workspaces with other members**, and the tasks, memories, comments, and
   description text you left in them, stay with the workspace without your name.
 - **Screen recordings and the Service's counts:** we ask PostHog to erase
-  everything filed under your account, which also covers the apps' counts from
-  before they became anonymous; if it cannot be reached, your account is
+  everything filed under your account and under the ID the Service's counts
+  are filed under, which also covers the apps' counts and the Service's from
+  before they stopped naming you; if it cannot be reached, your account is
   deleted anyway and PostHog keeps them.
 - **The apps' anonymous counts** are not tied to your account, so deleting it
   cannot find or erase them; they stay in PostHog under each device's random

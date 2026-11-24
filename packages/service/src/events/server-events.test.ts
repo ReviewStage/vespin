@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { afterEach, expect, it, vi } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { organization, user } from "@repo/database/schemas/auth";
+import { member, organization, user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
@@ -27,12 +27,26 @@ const NOW = Date.parse("2026-08-19T12:00:00.000Z");
 /** When the workspace a group test names was made. */
 const CREATED = Date.parse("2026-03-02T09:30:00.000Z");
 
+/** The key the test deployment hashes an account's id under. */
+const DISTINCT_ID_KEY = "distinct-id-key";
+
+/** The id PostHog should hold an account's counts under: HMAC-SHA256 of its id under the deployment's key, as hex. */
+const hashedId = (userId: string) =>
+  createHmac("sha256", DISTINCT_ID_KEY).update(userId).digest("hex");
+
+/** A deployment that records the service's counts: a project token and the key its ids are hashed under. */
+const RECORDING = {
+  posthogProjectApiKey: Redacted.make("phc_project"),
+  posthogDistinctIdKey: Redacted.make(DISTINCT_ID_KEY),
+};
+
 const NO_ENVIRONMENT: HostedEnvironmentValues = {
   posthogPersonalApiKey: undefined,
   posthogProjectId: undefined,
   posthogApiHost: undefined,
   posthogProjectApiKey: undefined,
   posthogIngestHost: undefined,
+  posthogDistinctIdKey: undefined,
   cronSecret: undefined,
   githubWebhookSecret: undefined,
   providerKeyEncryptionKeys: undefined,
@@ -96,13 +110,30 @@ const agentStart = (userId: string) => agentStartIn(userId, "workspace-1");
 const itemsOf = (posted: readonly Posted[]): PosthogBatchItem[] =>
   posted.flatMap((each) => [...each.body.batch]);
 
-/** A workspace the service holds, named and made as given, answering its id. */
-const openWorkspaceNamed = (id: string, name: string) =>
+/** Each `$groupidentify` the processor was posted: who it was filed under, and the group it named. */
+const namedGroups = (posted: readonly Posted[]) =>
+  itemsOf(posted)
+    .filter((item) => item.event === "$groupidentify")
+    .map((item) => ({
+      by: item.distinct_id,
+      type: item.properties["$group_type"],
+      key: item.properties["$group_key"],
+      set: item.properties["$group_set"],
+    }));
+
+/** A workspace the service holds, named and made as given, with the accounts as its members, answering its id. */
+const openWorkspaceNamed = (id: string, name: string, members: readonly string[]) =>
   Effect.gen(function* () {
     const db = yield* Database;
     yield* db
       .insert(organization)
       .values({ id, name, slug: `workspace-${id}`, createdAt: new Date(CREATED) });
+
+    for (const userId of members) {
+      yield* db
+        .insert(member)
+        .values({ id: randomUUID(), organizationId: id, userId, createdAt: new Date(CREATED) });
+    }
 
     return id;
   });
@@ -113,15 +144,12 @@ afterEach(() => {
 
 it.layer(getTestDB())("server events", (it) => {
   it.effect(
-    "posts the event under the account's id and person, its workspace's group, its own properties, the deployment, and no location",
+    "posts the event under the account's hashed id with no person properties, its workspace's group, its own properties, the deployment, and no location",
     () => {
       // The layer reads the deployment's name as it is built, so it is named before.
       vi.stubEnv(DEPLOYMENT_VARIABLE, "preview");
 
-      const processor = analytics({
-        posthogProjectApiKey: Redacted.make("phc_project"),
-        posthogIngestHost: "https://eu.i.posthog.com",
-      });
+      const processor = analytics({ ...RECORDING, posthogIngestHost: "https://eu.i.posthog.com" });
 
       return Effect.gen(function* () {
         yield* TestClock.setTime(NOW);
@@ -136,7 +164,7 @@ it.layer(getTestDB())("server events", (it) => {
               batch: [
                 {
                   event: "agent:start",
-                  distinct_id: userId,
+                  distinct_id: hashedId(userId),
                   timestamp: "2026-08-19T12:00:00.000Z",
                   properties: {
                     model: "anthropic/claude-opus-5.5",
@@ -147,7 +175,6 @@ it.layer(getTestDB())("server events", (it) => {
                     has_task: true,
                     agent_kind: "coder",
                     $groups: { workspace: "workspace-1" },
-                    $set: { name: "Test User", email: `${userId}@app.test` },
                     $geoip_disable: true,
                     platform: "server",
                     environment: "preview",
@@ -166,7 +193,7 @@ it.layer(getTestDB())("server events", (it) => {
     "posts a survey response as PostHog's survey SDKs do, under no person, keyed by each answered question",
     () => {
       vi.stubEnv(DEPLOYMENT_VARIABLE, "production");
-      const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
+      const processor = analytics(RECORDING);
 
       return Effect.gen(function* () {
         yield* TestClock.setTime(NOW);
@@ -217,7 +244,7 @@ it.layer(getTestDB())("server events", (it) => {
   );
 
   it.effect("files an account's own event under no workspace", () => {
-    const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
+    const processor = analytics(RECORDING);
 
     return Effect.gen(function* () {
       yield* recordServerEvent(
@@ -232,22 +259,16 @@ it.layer(getTestDB())("server events", (it) => {
   });
 
   it.effect(
-    "names a workspace's group by its name and creation alone, beside its first event and again on a rename",
+    "names a team's workspace group by its name and creation alone, beside its first event and again on a rename",
     () => {
-      const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
+      const processor = analytics(RECORDING);
 
-      const named = () =>
-        itemsOf(processor.posted)
-          .filter((item) => item.event === "$groupidentify")
-          .map((item) => ({
-            type: item.properties["$group_type"],
-            key: item.properties["$group_key"],
-            set: item.properties["$group_set"],
-          }));
+      const named = () => namedGroups(processor.posted);
 
       return Effect.gen(function* () {
         const userId = yield* openUser;
-        const workspaceId = yield* openWorkspaceNamed("workspace-acme", "Acme");
+        const teammate = yield* openUser;
+        const workspaceId = yield* openWorkspaceNamed("workspace-acme", "Acme", [userId, teammate]);
         yield* agentStartIn(userId, workspaceId);
         yield* agentStartIn(userId, workspaceId);
         const db = yield* Database;
@@ -257,16 +278,44 @@ it.layer(getTestDB())("server events", (it) => {
           .where(eq(organization.id, workspaceId));
         yield* workspaceRenamed(userId, workspaceId);
         const created_at = new Date(CREATED).toISOString();
+        const by = hashedId(userId);
         expect(named()).toEqual([
-          { type: "workspace", key: workspaceId, set: { name: "Acme", created_at } },
-          { type: "workspace", key: workspaceId, set: { name: "Acme Labs", created_at } },
+          { by, type: "workspace", key: workspaceId, set: { name: "Acme", created_at } },
+          { by, type: "workspace", key: workspaceId, set: { name: "Acme Labs", created_at } },
         ]);
       }).pipe(Effect.provide(processor.layer));
     },
   );
 
-  it.effect("records nothing on a deployment without a project key", () => {
-    const processor = analytics({});
+  it.effect("names a workspace of one member by its key, never its name", () => {
+    const processor = analytics(RECORDING);
+
+    return Effect.gen(function* () {
+      const userId = yield* openUser;
+      const workspaceId = yield* openWorkspaceNamed("workspace-solo", "Ada's workspace", [userId]);
+      yield* agentStartIn(userId, workspaceId);
+      expect(namedGroups(processor.posted)).toEqual([
+        {
+          by: hashedId(userId),
+          type: "workspace",
+          key: workspaceId,
+          set: { name: workspaceId, created_at: new Date(CREATED).toISOString() },
+        },
+      ]);
+    }).pipe(Effect.provide(processor.layer));
+  });
+
+  it.effect.each([
+    {
+      lacking: "a project token",
+      environment: { posthogDistinctIdKey: RECORDING.posthogDistinctIdKey },
+    },
+    {
+      lacking: "the key ids are hashed under",
+      environment: { posthogProjectApiKey: RECORDING.posthogProjectApiKey },
+    },
+  ])("records no count on a deployment without $lacking", ({ environment }) => {
+    const processor = analytics(environment);
 
     return Effect.gen(function* () {
       yield* agentStart(yield* openUser);
@@ -275,7 +324,7 @@ it.layer(getTestDB())("server events", (it) => {
   });
 
   it.effect("a refusing processor costs the count, never the caller", () => {
-    const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") }, 500);
+    const processor = analytics(RECORDING, 500);
 
     return Effect.gen(function* () {
       const settled = yield* Effect.exit(agentStart(yield* openUser));
@@ -285,7 +334,7 @@ it.layer(getTestDB())("server events", (it) => {
   });
 
   it.effect("posts nothing for an account deleted before its event is captured", () => {
-    const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
+    const processor = analytics(RECORDING);
 
     return Effect.gen(function* () {
       const userId = yield* openUser;
