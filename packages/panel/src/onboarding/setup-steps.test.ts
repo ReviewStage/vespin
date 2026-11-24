@@ -379,10 +379,13 @@ test("setup's first card offers Share usage data, and turning it off there turns
   });
 
   const container = setupDrawn();
+
   const usageSwitch = container.querySelector<HTMLElement>(
     '[role="switch"][aria-label="Share usage data"]',
   );
+
   assert.ok(usageSwitch, container.textContent ?? "");
+
   assert.ok(
     container.querySelector('a[href="https://vespin.dev/privacy"]'),
     "the policy is linked",
