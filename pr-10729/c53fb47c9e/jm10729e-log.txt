@@ -1,0 +1,21 @@
+pinned to c53fb47c9e
+== bundle PJjm10729e base c53fb47c9ec
+  built c53fb47c9ec base app Vnatc1.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/features/src/turn-run/tool-set.ts(25,5): error TS2345: Argument of type 'WireValue' is not assignable to parameter of type 'JSONSchema7 | PromiseLike<JSONSchema7> | (() => JSONSchema7 | PromiseLike<JSONSchema7>)'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-compose: fails 1 shots 9 Assert that "Invite limits" is visible... FAILED
+  p10729e A1-at-invite-lim: kbd=Y popover=N (rows none) field=None field=
+  p10729e A1p-at-invite-li: kbd=Y popover=Y (rows Files and folders) field=None field=
+  p10729e s3-tasks-crumb: kbd=Y popover=N (rows none) field=None field=
+  p10729e s4-scrolled: kbd=Y popover=N (rows none) field=None field=
+  p10729e s5: tapped first row in the list: 201 158 | Invite landing page
+  p10729e s5-picked: kbd=Y popover=N (rows none) field='task Invite landing page ' field='task Invite landing page '
+  p10729e 5pre-dates: kbd=Y popover=N (rows none) field=None field=
+  p10729e 5a-slash: kbd=Y popover=N (rows none) field=None field=
+  p10729e 5b-down-return: kbd=Y popover=N (rows none) field='@dates:/
+' field='@dates:/
+'
