@@ -38,7 +38,7 @@ function placeholderCredential() {
 }
 
 /** The suite's database, read from the file its Postgres wrote, and refused unless it is on loopback. */
-function suiteDatabaseUrl(): string {
+export function suiteDatabaseUrl(): string {
   const url = demoDatabaseUrl(readFileSync(DATABASE_URL_PATH, "utf8").trim());
 
   if (Result.isFailure(url)) throw new Error(`The suite's database is refused (${url.failure})`);

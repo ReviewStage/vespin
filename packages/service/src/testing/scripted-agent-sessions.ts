@@ -3,7 +3,11 @@
  *
  * A journey starts an agent and watches what a runner's events would land:
  * its words drafted a sentence at a time, a tool call, a thread posted with
- * an ask, and the turn's end. Each message a session takes (a Start's first
+ * an ask, and the turn's end. A turn plays its events with no wait between
+ * them, so a journey that must see it while it runs holds it instead: the
+ * turn stops at its `hold` step until the journey lets go of its task's lock
+ * (`HELD_TURN_LOCK_SEED`), so how long it runs is the journey's to say,
+ * never a clock's. Each message a session takes (a Start's first
  * line, a member's later one, an Inbox answer, all of which reach the
  * harness as an open or a send) plays the next turn of the conversation's
  * script past the answer, written through the store writer as the runner's
@@ -34,7 +38,8 @@ import { type ConversationTarget, storeWriter } from "@repo/database/models/writ
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { INBOX_ASK, type InboxAsk } from "@repo/features/inbox-wire";
 import type { WireBoundaryInput } from "@repo/wire";
-import { Clock, Duration, Effect, Layer, Option, Predicate, Result } from "effect";
+import { Clock, Duration, Effect, Layer, Option, Predicate, Result, Schedule } from "effect";
+import { SqlClient } from "effect/sql";
 import { NATIVE_SESSION_PREFIX } from "../agents/coder-host/native-runtime.js";
 import { NativeAgentSessions } from "../agents/coder-host/runtime-sessions.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
@@ -58,9 +63,10 @@ import {
 import { postInboxThread } from "../inbox/inbox-store.js";
 import { scriptedHarness } from "./native-harness-fake.js";
 
-/** One step of a scripted turn: words drafted a sentence at a time, one tool call answered, or a thread posted with an ask. */
+/** One step of a scripted turn: words drafted a sentence at a time, one tool call answered, a thread posted with an ask, or a wait until the journey lets the turn go on. */
 export type ScriptedStep =
   | { readonly say: string }
+  | { readonly hold: true }
   | {
       readonly call: {
         readonly name: string;
@@ -81,38 +87,38 @@ export type ScriptedStep =
 export interface AgentScript {
   readonly cue: string;
   readonly turns: readonly (readonly ScriptedStep[])[];
-  /** How long the script waits before each event it writes. */
-  readonly pace: Duration.Duration;
-}
-
-/** One turn's steps and the wait before each event it writes. */
-interface ScriptedTurn {
-  readonly steps: readonly ScriptedStep[];
-  readonly pace: Duration.Duration;
 }
 
 /**
- * The wait a script a journey watches stream takes before each event, so the
- * journey sees the turn stream rather than land whole. Note that a script no
- * journey watches stream waits none, because its waits only spend the
- * journey's time budget on a cold first launch.
+ * The seed a journey hashes its task's id with (`hashtextextended`) for the
+ * advisory lock it holds while it watches that task's turn run
+ * (`apps/e2e/support/held-turn.ts`): a turn at its `hold` step goes on only
+ * once it can take the lock itself. Note that a lock rather than a message
+ * is the gate, because the journey takes it before its Send, so no release
+ * can come before the turn waits, and the journey's connection closing, as
+ * it does when the journey ends however it ends, lets the turn go.
+ * @public
  */
-const STREAM_PACE = Duration.millis(250);
+export const HELD_TURN_LOCK_SEED = 5_317;
+
+/** How often a held turn looks again whether its journey let go. */
+const HELD_TURN_LOOK = Duration.millis(50);
 
 /**
- * The scripts the end-to-end journeys play: words and a tool call that
- * stream to an end, and an ask that waits on its answer and a turn that
- * says it heard. A journey picks one by starting its agent on a prompt
+ * The scripts the end-to-end journeys play: words held while the journey
+ * watches them stand in a running turn, then a tool call and more words to
+ * the turn's end, and an ask that waits on its answer and a turn that says
+ * it heard. A journey picks one by starting its agent on a prompt
  * holding its cue.
  * @public
  */
 export const E2E_AGENT_SCRIPTS: readonly AgentScript[] = [
   {
     cue: "[script:stream]",
-    pace: STREAM_PACE,
     turns: [
       [
         { say: "Reading the repository first. The README says where to start." },
+        { hold: true },
         {
           call: {
             name: "Read",
@@ -126,7 +132,6 @@ export const E2E_AGENT_SCRIPTS: readonly AgentScript[] = [
   },
   {
     cue: "[script:ask]",
-    pace: Duration.zero,
     turns: [
       [
         { say: "I need one decision before I go on." },
@@ -198,8 +203,25 @@ function postedAsk(agent: Agent, posted: Extract<ScriptedStep, { readonly ask: u
   });
 }
 
-/** One scripted turn played into the conversation of the message it answers: started, its line taken, each step written a beat apart, and ended. */
-function playedTurn(account: string, message: SessionMessage, { steps, pace }: ScriptedTurn) {
+/** Waits until the journey watching the task's turn let go of its lock: at once where none holds it. */
+function heldUntilLetGo(taskId: string) {
+  const letGo = Effect.flatMap(SqlClient.SqlClient, (sql) =>
+    Effect.map(
+      sql<{
+        readonly taken: boolean;
+      }>`select pg_try_advisory_xact_lock(hashtextextended(${taskId}, ${HELD_TURN_LOCK_SEED})) as taken`,
+      ([row]) => row?.taken === true,
+    ),
+  );
+
+  return Effect.repeat(letGo, {
+    schedule: Schedule.spaced(HELD_TURN_LOOK),
+    until: (taken) => taken,
+  });
+}
+
+/** One scripted turn played into the conversation of the message it answers: started, its line taken, each step written in turn, waiting at a hold, and ended. */
+function playedTurn(account: string, message: SessionMessage, steps: readonly ScriptedStep[]) {
   return Effect.gen(function* () {
     const found = yield* readAgentOfConversation(account, message.conversationId);
 
@@ -212,16 +234,12 @@ function playedTurn(account: string, message: SessionMessage, { steps, pace }: S
       conversationId: agent.conversationId,
     };
 
-    yield* Effect.sleep(pace);
     const turnId = yield* turnIdOf(message);
     const turn = { conversationId: sessionKey(agent.conversationId), turnId };
     let sequence = 0;
 
     const tell = (body: RunEventBody) =>
-      Effect.andThen(
-        Effect.sleep(pace),
-        writer.consume(target, { ...body, ...turn, sequence: ++sequence }),
-      );
+      writer.consume(target, { ...body, ...turn, sequence: ++sequence });
 
     yield* writer.enqueueTurn(target, {
       turnId,
@@ -242,8 +260,16 @@ function playedTurn(account: string, message: SessionMessage, { steps, pace }: S
         : { clientId: message.lineId, turnId },
     );
 
-    for (const [index, step] of steps.entries()) {
-      const number = index + 1;
+    let number = 0;
+
+    for (const step of steps) {
+      // Note that only a task's turn is held, since the task is what a journey holds the lock on.
+      if ("hold" in step) {
+        if (agent.taskId !== null) yield* heldUntilLetGo(agent.taskId);
+        continue;
+      }
+
+      number += 1;
       yield* tell({ kind: RUN_EVENT.STEP_STARTED, step: number });
 
       if ("say" in step) {
@@ -294,16 +320,16 @@ export function scriptedAgentSessionsLayer(
   const [fallback] = scripts;
 
   /** The conversation's next turn, its script chosen by the first message it hears. */
-  const nextTurn = (message: SessionMessage): ScriptedTurn => {
+  const nextTurn = (message: SessionMessage): readonly ScriptedStep[] => {
     const words = wordsOf(message);
     const standing = played.get(message.conversationId);
     const script = standing?.script ?? scripts.find((each) => words.includes(each.cue)) ?? fallback;
 
-    if (script === undefined) return { steps: [], pace: Duration.zero };
+    if (script === undefined) return [];
     const turns = standing?.turns ?? 0;
     played.set(message.conversationId, { script, turns: turns + 1 });
 
-    return { steps: script.turns[Math.min(turns, script.turns.length - 1)] ?? [], pace: script.pace };
+    return script.turns[Math.min(turns, script.turns.length - 1)] ?? [];
   };
 
   return Layer.effect(
