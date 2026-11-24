@@ -345,9 +345,13 @@ function ChatWorking({
   );
 }
 
-/** The reader's messages on their way to the chat, as the box's lines read them: each under its key, which its Retry sends again and its Delete lets go by. */
+/** A message's files by the ids this window keeps their bytes under, by the key the message went under, which its Retry carries again. */
+type SentFiles = Map<string, NonNullable<SendingMessage["files"]>>;
+
+/** The reader's messages on their way to the chat, as the box's lines read them: each under its key, which its Retry sends again with the files this window keeps the bytes of, and its Delete lets go by. */
 function sendingLinesOf(
   sending: readonly ManagerChatSending[] | undefined,
+  files: SentFiles,
 ): readonly SendingMessage[] {
   return (sending ?? []).map((message) => ({
     id: message.clientKey,
@@ -355,6 +359,7 @@ function sendingLinesOf(
     text: message.text,
     sentAt: message.sentAt,
     steers: false,
+    ...(files.has(message.clientKey) ? { files: files.get(message.clientKey) } : undefined),
     ...(message.sentBy === undefined ? undefined : { sentBy: message.sentBy }),
     ...(message.refused === undefined ? undefined : { refused: message.refused }),
   }));
@@ -422,28 +427,51 @@ export function ManagerChatTab({
   const starter = teammateStarter(agent.startedBy, control.me);
   const approvals = useAgentApprovals({ agent, write: control.onAnswerApproval });
 
-  // Note that a message to the chat answers as a message to the agent does, with the id the chat holds it under beside it, which the host draws it by.
-  const send: MessageSender = useApprovingSend(
-    (agentId, message) =>
-      sendChat({
-        agentId,
-        text: message.text,
-        clientKey: message.clientKey,
-        ...(message.attachments === undefined ? undefined : { attachments: message.attachments }),
-        ...(message.retry === undefined ? undefined : { retry: message.retry }),
-      } satisfies AgentChatSendParams).then((answer): AgentActAnswer => {
-        if ("failure" in answer) return answer;
-        // Note that the box reads the answer as a message's: its agent, its transaction, and whether the service queued it, the id the chat holds it under being the host's to draw it by.
-        const { agent: sent, txid, queued } = answer;
+  // Note that the chat is sent no file's id, so the window keeps which bytes each message's files are under itself, for its Retry.
+  const sentFiles = useRef<SentFiles>(new Map());
+
+  /** Keeps a message's files by the ids this window holds their bytes under, as the host keeps a message to the agent's. */
+  const keepFiles = (clientKey: string, message: Parameters<MessageSender>[1]) => {
+    const { attachments, pictures } = message;
+
+    if (attachments === undefined || attachments.length === 0) return;
+
+    sentFiles.current.set(
+      clientKey,
+      attachments.map((file, index) => {
+        const id = pictures?.[index];
 
         return {
-          agent: sent,
-          ...(txid === undefined ? undefined : { txid }),
-          ...(queued === undefined ? undefined : { queued: true as const }),
+          name: file.name,
+          mediaType: file.mediaType,
+          ...(id === undefined ? undefined : { id }),
         };
       }),
-    approvals,
-  );
+    );
+  };
+
+  // Note that a message to the chat answers as a message to the agent does, with the id the chat holds it under beside it, which the host draws it by.
+  const send: MessageSender = useApprovingSend((agentId, message) => {
+    keepFiles(message.clientKey, message);
+
+    return sendChat({
+      agentId,
+      text: message.text,
+      clientKey: message.clientKey,
+      ...(message.attachments === undefined ? undefined : { attachments: message.attachments }),
+      ...(message.retry === undefined ? undefined : { retry: message.retry }),
+    } satisfies AgentChatSendParams).then((answer): AgentActAnswer => {
+      if ("failure" in answer) return answer;
+      // Note that the box reads the answer as a message's: its agent, its transaction, and whether the service queued it, the id the chat holds it under being the host's to draw it by.
+      const { agent: sent, txid, queued } = answer;
+
+      return {
+        agent: sent,
+        ...(txid === undefined ? undefined : { txid }),
+        ...(queued === undefined ? undefined : { queued: true as const }),
+      };
+    });
+  }, approvals);
 
   const unsend: MessageUnsender = (agentId, clientKey) => unsendChat({ agentId, clientKey });
 
@@ -451,7 +479,10 @@ export function ManagerChatTab({
     agentId: agent.id,
     taskId: agent.taskId,
     messages: transcript.messages,
-    sending: useMemo(() => sendingLinesOf(chat?.sending ?? NONE_SENDING), [chat?.sending]),
+    sending: useMemo(
+      () => sendingLinesOf(chat?.sending ?? NONE_SENDING, sentFiles.current),
+      [chat?.sending],
+    ),
     running: agent.status === AGENT_STATUS.RUNNING,
     send,
     unsend,
