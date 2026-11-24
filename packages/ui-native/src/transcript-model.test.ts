@@ -947,7 +947,7 @@ describe("managerChatItems", () => {
     });
   });
 
-  it("opens a finished turn's work under the Manager's message that offers it on Show work, and folds it away again", () => {
+  it("folds a finished turn's work over the Manager's message that opens it, saying how long it worked, and opens it on the work", () => {
     const said = row("m1", 1, {
       authorKind: MANAGER_CHAT_AUTHOR.AGENT,
       text: "Nothing open.",
@@ -967,7 +967,7 @@ describe("managerChatItems", () => {
         },
       ],
       startedAt: 0,
-      finishedAt: 1,
+      finishedAt: 78_000,
     };
 
     const read = (toggles: typeof NO_TOGGLES) =>
@@ -982,17 +982,20 @@ describe("managerChatItems", () => {
       );
 
     const closed = read(NO_TOGGLES);
-    const bubble = closed[0];
+    const fold = closed[0];
 
-    expect(closed).toHaveLength(1);
-    expect(bubble).toMatchObject({ kind: TRANSCRIPT_ITEM.SAID, workShown: false });
+    expect(closed.map((item) => [item.kind, item.depth])).toEqual([
+      [TRANSCRIPT_ITEM.FOLD, 0],
+      [TRANSCRIPT_ITEM.SAID, 0],
+    ]);
+    expect(fold).toMatchObject({ summary: "Worked for 1m 18s", open: false });
 
-    const opened = read(bubble === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, bubble));
+    const opened = read(fold === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, fold));
 
     expect(opened.map((item) => [item.kind, item.depth])).toEqual([
-      [TRANSCRIPT_ITEM.SAID, 0],
+      [TRANSCRIPT_ITEM.FOLD, 0],
       [TRANSCRIPT_ITEM.CALL, 1],
+      [TRANSCRIPT_ITEM.SAID, 0],
     ]);
-    expect(opened[0]).toMatchObject({ workShown: true });
   });
 });

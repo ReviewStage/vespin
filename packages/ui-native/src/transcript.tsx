@@ -707,9 +707,12 @@ function OriginBody({ body }: { readonly body: string }) {
 function FoldRow({
   item,
   onToggle,
+  inset: indent,
 }: {
   readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.FOLD }>;
   readonly onToggle: (item: TranscriptItem) => void;
+  /** How far in it stands. */
+  readonly inset: InsetResult;
 }) {
   const colors = useColors();
   const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
@@ -722,7 +725,7 @@ function FoldRow({
   ].filter((part) => part !== undefined);
 
   return (
-    <View style={[styles.row, inset(item.depth)]}>
+    <View style={[styles.row, indent]}>
       <Press
         onPress={() => onToggle(item)}
         accessibilityRole="button"
@@ -897,12 +900,9 @@ function ShownMediaView({
   }
 }
 
-/** Show work, or Hide work while it stands open, where a Manager's message or its working line came of work (`workShown`); none where it came of none. */
+/** Show work, or Hide work while it stands open, where a Manager's working line's turn has done work (`workShown`); none where it has done none. A finished turn's work stands in its fold over its first message instead. */
 function workActs(
-  item: Extract<
-    TranscriptItem,
-    { kind: typeof TRANSCRIPT_ITEM.SAID | typeof TRANSCRIPT_ITEM.WORKING }
-  >,
+  item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.WORKING }>,
   drawing: RowDrawing,
 ): readonly HeldAct[] {
   if (item.workShown === undefined) return [];
@@ -999,11 +999,7 @@ function TranscriptRow({
                 at={item.at}
                 // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id; a Manager's message offers no link or rewind, as the panel's offers none, only what the page offers every chat message, such as Reply, and its Show work.
                 link={item.manager === true ? undefined : drawing.messageLink?.(item.place.row)}
-                more={
-                  item.manager === true
-                    ? [...(drawing.messageMore?.(item) ?? []), ...workActs(item, drawing)]
-                    : drawing.messageMore?.(item)
-                }
+                more={drawing.messageMore?.(item)}
                 width={rowWidth(drawing.column) - room}
               >
                 <View style={[styles.saidHeld, item.received ? styles.received : null]}>
@@ -1120,7 +1116,18 @@ function TranscriptRow({
         />
       );
     case TRANSCRIPT_ITEM.FOLD:
-      return <FoldRow item={item} onToggle={drawing.onToggle} />;
+      // Note that a Manager's turn's work folds over its message past its face, in line with its bubbles, as its pictures stand.
+      return (
+        <FoldRow
+          item={item}
+          onToggle={drawing.onToggle}
+          inset={
+            drawing.managerFace === undefined || item.depth > 0
+              ? inset(item.depth)
+              : { paddingLeft: SPACE.EDGE + CHAT_FACE_ROOM }
+          }
+        />
+      );
     case TRANSCRIPT_ITEM.MEDIA: {
       // Note that what a Manager shows in its chat stands past its face, in line with its bubbles.
       const mediaInset =
