@@ -374,6 +374,8 @@ export * from "./components/selection/selection-toolbar.js";
 
 export * from "./components/session-line/session-line.js";
 
+export * from "./components/settings-dialog/settings-dialog.js";
+
 export * from "./components/settings-ordered-rows/settings-ordered-rows.js";
 
 export * from "./components/settings-page/settings-page.js";

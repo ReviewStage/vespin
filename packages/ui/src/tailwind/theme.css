@@ -413,6 +413,11 @@
   --container-dialog-wide: min(var(--ui-dialog-wide-width), 100%);
   --container-dialog-composer: min(var(--ui-dialog-composer-width), 100%);
   --container-dialog-composer-reach: calc(100% + 2 * var(--ui-space-12));
+  --container-dialog-sections: min(var(--ui-dialog-sections-width), 100%);
+  /* A settings dialog's height, held as it turns from section to section,
+     and its section list beside the section shown. */
+  --spacing-dialog-sections: var(--ui-dialog-sections-height);
+  --grid-template-columns-dialog-sections: var(--ui-dialog-sections-list-width) minmax(0, 1fr);
   --container-dialog-media-min: min(var(--ui-dialog-media-min-width), 100%);
   --container-dialog-media-max: min(var(--ui-dialog-media-max-width), 100%);
   /* off-scale: a command palette's card (`components/command/`), at its own
