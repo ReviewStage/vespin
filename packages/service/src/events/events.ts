@@ -35,10 +35,11 @@ import {
  *
  * Note that this is what keeps the counts apart from the session replay,
  * which stays filed under the account's id, name, and email
- * (`packages/panel/src/session-replay.ts`), as do the service's own counts
- * (`server-events.ts`): the counts share no distinct id with either, and no
- * workspace group either, since a workspace's group is filed beside both and
- * a workspace of one is a person. `PRIVACY.md` says what is left, which is
+ * (`packages/panel/src/session-replay.ts`), and from the service's own
+ * counts, which go under a keyed hash of that id (`server-events.ts`): the
+ * counts share no distinct id with either, and no workspace group either,
+ * since a workspace's group is filed beside both and a workspace of one is a
+ * person. `PRIVACY.md` says what is left, which is
  * when each was recorded.
  *
  * What the reader admits is the whole vocabulary: `productEventBatchFromWire`

@@ -28,43 +28,18 @@
 
 import { accountScheduledAutomations } from "@repo/database/models/automation-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
-import { Effect, Redacted } from "effect";
-import type { HttpClient } from "effect/http";
+import { Effect } from "effect";
 import { retireSessions, retiringReach } from "../agents/retire-sessions.js";
 import { type SignInGrant, SignInRevocation } from "../auth/sign-in-revocation.js";
 import { schedulesForgotten } from "../automations/automation-cadence.js";
-import { HostedEnvironment } from "../environment.js";
 import { revokeIntegrationGrants } from "../integrations/integration-connect.js";
 import {
   type IntegrationConnectionRow,
   readIntegrationConnections,
 } from "../integrations/integration-store.js";
-import { forgetPosthogPersonEffect } from "../providers/posthog.js";
 import { readAccountPerson } from "./account-person.js";
+import { forgetAnalytics } from "./analytics-erasure.js";
 import { onboardingForgotten } from "./onboarding-events.js";
-
-/** Erases the account's analytics person, where the deployment holds both halves of the analytics configuration. */
-const forgetAnalytics = /* @__PURE__ */ Effect.fn("web/forgetAnalytics")(function* (
-  userId: string,
-): Effect.fn.Return<void, never, HostedEnvironment | HttpClient.HttpClient> {
-  const environment = yield* HostedEnvironment;
-
-  if (!environment.posthogPersonalApiKey || !environment.posthogProjectId) return;
-  const personalApiKey = Redacted.value(environment.posthogPersonalApiKey);
-  const projectId = environment.posthogProjectId;
-  const host = environment.posthogApiHost;
-  yield* forgetPosthogPersonEffect(userId, {
-    personalApiKey,
-    projectId,
-    ...(host ? { host } : undefined),
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() =>
-        process.stderr.write(`Analytics erasure did not complete: ${error.message}\n`),
-      ),
-    ),
-  );
-});
 
 /** What the deletion read before Better Auth deleted the account, which it settles after. */
 export interface AccountDeletionPending {

@@ -28,6 +28,8 @@ export const POSTHOG_ENVIRONMENT = {
   /** Deletion is a private endpoint, so it takes a personal key rather than the project token. */
   PERSONAL_API_KEY: "POSTHOG_PERSONAL_API_KEY",
   PROJECT_ID: "POSTHOG_PROJECT_ID",
+  /** The key the service's own counts hash an account's id under (`analytics-distinct-id.ts`); never rotated once in use. */
+  DISTINCT_ID_KEY: "POSTHOG_DISTINCT_ID_KEY",
 } as const;
 
 const POSTHOG_DEFAULTS = {
@@ -168,7 +170,7 @@ const bulkDeleteAnswerSchema = Schema.Struct({
 const readBulkDeleteAnswer = readEither(bulkDeleteAnswerSchema, { excess: EXCESS_KEYS.DROP });
 
 /**
- * Asks the processor to erase the person behind one distinct id, with the
+ * Asks the processor to erase the people behind the distinct ids, with the
  * events and the recordings recorded against them. The documented bulk-delete
  * endpoint (https://posthog.com/docs/api/persons) reads the distinct ids and
  * both `delete_events` and `delete_recordings` from its body alone, and queues
@@ -180,7 +182,7 @@ const readBulkDeleteAnswer = readEither(bulkDeleteAnswerSchema, { excess: EXCESS
  * failure quotes the body. The request runs over the ambient `HttpClient`.
  */
 export function forgetPosthogPersonEffect(
-  distinctId: string,
+  distinctIds: readonly string[],
   options: PosthogForgetOptions,
 ): Effect.Effect<void, PosthogForgetError, HttpClient.HttpClient> {
   const requestTimeoutMs = positiveInteger(options.timeoutMs, POSTHOG_DEFAULTS.REQUEST_TIMEOUT_MS);
@@ -199,7 +201,7 @@ export function forgetPosthogPersonEffect(
       method: HTTP_METHOD.POST,
       path: `/api/projects/${encodeURIComponent(options.projectId)}/persons/bulk_delete/`,
       body: JSON.stringify({
-        distinct_ids: [distinctId],
+        distinct_ids: distinctIds,
         delete_events: true,
         delete_recordings: true,
       }),

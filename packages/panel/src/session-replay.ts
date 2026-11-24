@@ -51,7 +51,8 @@
  * under a person, named by the account's name and email, from its first
  * frame, and can be erased with the account. `PRIVACY.md` says so. A
  * recording is also filed under the workspace the window lists, by its id
- * alone, as the service's own counts are (`WORKSPACE_GROUP_TYPE`). The
+ * alone, as the service's own counts are (`WORKSPACE_GROUP_TYPE`), though
+ * those go under a keyed hash of the account's id, never this person. The
  * apps' counted events are not: they go under the install's own random id,
  * never this client's (whose anonymous id `identify` folds into the person),
  * and under no workspace, so nothing files them beside a recording
@@ -659,9 +660,9 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
    * Files what is being recorded under the signed-in account, and sets the
    * name, email, and platform the person is shown by.
    *
-   * The id is the account's own, the one the service's counts are filed
-   * under too, which is what makes deleting the account erase the
-   * recordings with it. The apps' counted events are filed under neither.
+   * The id is the account's own, which is what makes deleting the account
+   * erase the recordings with it. The service's own counts are filed under
+   * a keyed hash of it instead, and the apps' counted events under neither.
    *
    * A sign-out or a deletion stops the recording and resets the person
    * (`stop`). Someone else signing in in place of the account, with no
