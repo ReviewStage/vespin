@@ -1,0 +1,25 @@
+diff --git a/build/metro-require/require.js b/build/metro-require/require.js
+--- a/build/metro-require/require.js
++++ b/build/metro-require/require.js
+@@ -310,7 +310,20 @@
+         // keep args in sync with defineModuleCode in
+         // metro/src/Resolver/index.js
+         // and metro/src/ModuleGraph/worker.js
+-        factory?.(global, metroRequire, metroImportDefault, metroImportAll, moduleObject, moduleObject.exports, dependencyMap);
++        // PROBE ONLY: each module factory's own evaluation, its children's taken out, kept for the launch probe.
++        const probeNow = ()=>global.nativePerformanceNow ? global.nativePerformanceNow() : global.performance && global.performance.now ? global.performance.now() : Date.now();
++        const probeStack = global.__moduleProbeStack || (global.__moduleProbeStack = []);
++        const probeTimes = global.__moduleProbeTimes || (global.__moduleProbeTimes = []);
++        const probeStart = probeNow();
++        probeStack.push(0);
++        try {
++            factory?.(global, metroRequire, metroImportDefault, metroImportAll, moduleObject, moduleObject.exports, dependencyMap);
++        } finally{
++            const probeTotal = probeNow() - probeStart;
++            const probeChildren = probeStack.pop();
++            if (probeStack.length > 0) probeStack[probeStack.length - 1] += probeTotal;
++            probeTimes.push([moduleId, probeTotal - probeChildren, probeTotal, probeStart]);
++        }
+         // avoid removing factory in DEV mode as it breaks HMR
+         if (!__DEV__) {
+             module.factory = undefined;

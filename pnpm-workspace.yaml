@@ -164,8 +164,8 @@ ignoredOptionalDependencies:
 # nothing at runtime; delete it when an upstream release types them cleanly.
 patchedDependencies:
   "@better-auth/oauth-provider@1.7.7": patches/@better-auth__oauth-provider@1.7.7.patch
-  # PROBE ONLY, never merged: times each module factory's own evaluation for the launch probe.
-  "metro-runtime@0.87.3": patches/metro-runtime@0.87.3.patch
+  # PROBE ONLY, never merged: times each module factory's own evaluation for the launch probe, in the module system Expo's CLI bundles.
+  "@expo/cli@58.1.19": patches/@expo__cli@58.1.19.patch
 #
 # `drizzle-orm` 1.0.0-rc.4's Effect code is patched for three things. Its error
 # classes call `Schema.TaggedErrorClass`, which Effect 4.0.4 stable names
