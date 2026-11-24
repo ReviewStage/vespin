@@ -4,7 +4,9 @@ import {
   type TaskAssigneeNotMember,
   type TaskIdTaken,
 } from "@repo/database/models/task-store";
+import { turnAsker } from "@repo/database/models/turn-asker";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
@@ -518,6 +520,33 @@ function originOf(call: AgentCall): { readonly origin?: TaskOrigin } {
 }
 
 /**
+ * Who a made task is started for: a Manager's, for the member who asked for
+ * the turn under way (`turnAsker`), its owner standing in where no member
+ * did, who is its assignee too where the call names none; any other
+ * caller's, for the member it acts for, with no assignee but the one named.
+ * Note that a Manager is shared across its workspace, so its owner is no one
+ * in particular to start, assign, or follow the tasks it makes for others.
+ */
+function startedFor(
+  call: AgentCall,
+): Effect.Effect<
+  { readonly starter: string; readonly assignee: string | undefined },
+  StoreFailure,
+  DatabaseServices
+> {
+  const agent = callerAgent(call.caller);
+
+  if (agent?.kind !== AGENT_KIND.MANAGER) {
+    return Effect.succeed({ starter: callerUserId(call.caller), assignee: undefined });
+  }
+
+  return Effect.map(
+    turnAsker({ userId: agent.userId, conversationId: agent.conversationId }),
+    (asker) => ({ starter: asker, assignee: asker }),
+  );
+}
+
+/**
  * Why the make made nothing (`createTaskAsked`), in words the model can act
  * on; a store failure is left to `orStoreRefusal`. Note that the parent's
  * refusals and a sub-task's share their tags, so they are told apart by
@@ -651,9 +680,12 @@ export function runCreateTask(
       const relations = relationsOf(named.success);
       // Note that a description is written only for a caller with Task descriptions on; the schema takes one alike, so the tool's words stay the same.
       const descriptionsOn = yield* callerDescriptionsOn(call.caller);
+      const startedAs = yield* startedFor(call);
+      // A task named as no one's stays no one's; one naming no assignee takes the starter's default.
+      const assigned = assignee === undefined ? startedAs.assignee : assigneeId;
 
       const made = yield* createTaskAsked(
-        userId,
+        startedAs.starter,
         {
           id,
           organizationId: workspace.value,
@@ -663,7 +695,7 @@ export function runCreateTask(
           status,
           ...(priority === undefined ? undefined : { priority }),
           // Note that a child left without one is no one's, since an agent names who works a task, never the parent.
-          assigneeId: assigneeId ?? null,
+          assigneeId: assigned ?? null,
           ...(parentTaskId === undefined ? undefined : { parentTaskId }),
           ...originOf(call),
           text: descriptionsOn ? descriptionTextOf(description ?? "") : "",
