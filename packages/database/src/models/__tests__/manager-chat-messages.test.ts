@@ -228,7 +228,11 @@ it.layer(getTestDB())("a Manager's chat", (it) => {
           ),
         );
 
-        yield* deleteDroppedManagerChat(owner, agentId, { turnIds: [], lineIds: [droppedLine] });
+        yield* deleteDroppedManagerChat(owner, agentId, {
+          turnIds: [],
+          lineIds: [droppedLine],
+          lineKeys: [],
+        });
 
         assert.deepEqual(
           (yield* readManagerChatPage(owner, agentId, { limit: 10 })).map(
@@ -300,7 +304,11 @@ it.layer(getTestDB())("a Manager's chat", (it) => {
         [{ status: MANAGER_CHAT_OUTCOME.NO_CHAT }, true, [], [], []],
       );
 
-      yield* deleteDroppedManagerChat(outsider, agentId, { turnIds: [], lineIds: [lineId] });
+      yield* deleteDroppedManagerChat(outsider, agentId, {
+        turnIds: [],
+        lineIds: [lineId],
+        lineKeys: [],
+      });
       assert.equal(Option.isSome(yield* readManagerChatMessage(owner, agentId, root.id)), true);
     }),
   );
