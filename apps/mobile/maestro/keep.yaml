@@ -3,6 +3,8 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+env:
+  THREAD: "Recorded the invite flow"
 ---
 # Launched on the host's Inbox fixture, as `inbox.yaml` is, so the thread and
 # its picture's bytes are the fixture's (`@repo/host/fixture-inbox`) and no
@@ -13,9 +15,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "${THREAD}"
     timeout: 30000
-- tapOn: "Recorded the invite flow"
+- tapOn: "${THREAD}"
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd
 # The picture's menu, which the system opens over it lifted.
@@ -24,9 +26,12 @@ appId: dev.vespin.ios
 - assertVisible: "Share…"
 - waitForAnimationToEnd
 - takeScreenshot: keep-picture-menu
-- tapOn:
-    point: "50%, 10%"
+# Note that a menu is put away by a tap on the thread's own title in the bar,
+# never a bare point, since a point can land on a link chip in the message
+# once the menu is gone, which opens the link's sheet instead.
+- tapOn: "${THREAD}"
 - waitForAnimationToEnd
+- assertNotVisible: "Save to Photos"
 # The message's own menu, opened on its words. Note that they are scrolled to
 # the window's middle first, since the picture's menu closing left them under
 # the bar, where the long press landed on it instead.
@@ -39,9 +44,9 @@ appId: dev.vespin.ios
 - assertVisible: "Copy message"
 - waitForAnimationToEnd
 - takeScreenshot: keep-message-menu
-- tapOn:
-    point: "50%, 10%"
+- tapOn: "${THREAD}"
 - waitForAnimationToEnd
+- assertNotVisible: "Copy message"
 # The picture opens full screen in the app's viewer, whose share sheet copies
 # and saves it as the system's own wording names those acts.
 - tapOn: "The invite page"
@@ -54,8 +59,11 @@ appId: dev.vespin.ios
 - assertVisible: "Copy"
 - waitForAnimationToEnd
 - takeScreenshot: keep-viewer-share
-- tapOn:
-    point: "50%, 10%"
+# The share sheet is put away as the system puts a sheet away, by a swipe down.
+- swipe:
+    start: "50%, 55%"
+    end: "50%, 98%"
 - waitForAnimationToEnd
+- assertNotVisible: "Save Image"
 - tapOn:
     id: "picture-viewer-close"
