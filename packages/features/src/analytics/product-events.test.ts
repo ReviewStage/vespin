@@ -359,6 +359,32 @@ test("a page's open travels its waits on rungs with its kind and order, never wh
     }),
     undefined,
   );
+  // A tab's first switch travels its waits from the tap on the same rungs, with its kind, never what it shows.
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.TAB_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.SURFACE]: PRODUCT_SURFACE.TASKS,
+        [PRODUCT_EVENT_PROPERTY.BUSY_MS]: 500,
+        [PRODUCT_EVENT_PROPERTY.START_MS]: 600,
+        [PRODUCT_EVENT_PROPERTY.STAND_MS]: 1250,
+        [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "80",
+        workspaceId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.TAB_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.SURFACE]: PRODUCT_SURFACE.TASKS,
+        [PRODUCT_EVENT_PROPERTY.BUSY_MS]: 500,
+        [PRODUCT_EVENT_PROPERTY.START_MS]: 600,
+        [PRODUCT_EVENT_PROPERTY.STAND_MS]: 1250,
+        [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "80",
+      },
+    },
+  );
   // A page an agent showed travels its read and its draw on the same rungs, with where its version came from, never which page.
   assert.deepEqual(
     productEventFromWire({

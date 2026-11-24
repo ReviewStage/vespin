@@ -219,6 +219,7 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useTabDrawnCount } from "../tab-drawn.js";
 
 import { useOnOwnTab } from "../tab-route.js";
 import {
@@ -1390,6 +1391,7 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
   const status = useTasksReadStatus();
   // Note that a list its tab has not yet read says it is reading, never that it holds no task, as the tab first comes forward and its rows are read.
   const read = useWholeListRead() ? status : TASKS_READ.READING;
+  useTabDrawnCount(PRODUCT_SURFACE.TASKS, !treeEmpty(tree));
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const managers = useWorkspaceManagers(listing.workspace?.id);

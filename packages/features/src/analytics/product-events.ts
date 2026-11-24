@@ -60,6 +60,8 @@ export const PRODUCT_EVENT = {
   REPLY_DRAWN: "reply:drawn",
   /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was busy before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew. */
   OPEN_DRAWN: "open:drawn",
+  /** A tab of the iOS app chosen for the first time since launch, Tasks, counted once a launch by how long from the tap that chose it the app took to hear the switch, to draw the tab's first frame, and to draw its rows, each on a rung of `productOpenMilliseconds`, and its kind: never what it shows. */
+  TAB_DRAWN: "tab:drawn",
   /** A page an agent showed, opened on the iOS app, counted once an open by how long it took to read its HTML and to draw it, each on a rung of `productOpenMilliseconds`, whether its opener named its version or it waited on the task's pages for the newest, and whether it was the first page since launch. */
   PAGE_SHOWN: "page:shown",
   /** A picture an agent showed, drawn on the iOS app, counted once a read by how long it took from the page asking for it to its file in hand, on a rung of `productOpenMilliseconds`, whether it came from the phone's own copy or was read through the service, its kind, and its size on a rung. */
@@ -88,6 +90,7 @@ export const PRODUCT_SURFACE_EVENT = {
   APP_NOT_READY: PRODUCT_EVENT.APP_NOT_READY,
   REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
   OPEN_DRAWN: PRODUCT_EVENT.OPEN_DRAWN,
+  TAB_DRAWN: PRODUCT_EVENT.TAB_DRAWN,
   PAGE_SHOWN: PRODUCT_EVENT.PAGE_SHOWN,
   PICTURE_SHOWN: PRODUCT_EVENT.PICTURE_SHOWN,
 } as const;
@@ -919,6 +922,12 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.STAND_MS,
     PRODUCT_EVENT_PROPERTY.OPEN_ORDER,
   ],
+  [PRODUCT_EVENT.TAB_DRAWN]: [
+    PRODUCT_EVENT_PROPERTY.SURFACE,
+    PRODUCT_EVENT_PROPERTY.BUSY_MS,
+    PRODUCT_EVENT_PROPERTY.START_MS,
+    PRODUCT_EVENT_PROPERTY.STAND_MS,
+  ],
   [PRODUCT_EVENT.PAGE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.READ_MS,
     PRODUCT_EVENT_PROPERTY.SHOWN_MS,
@@ -972,6 +981,7 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.BUSY_MS,
     PRODUCT_EVENT_PROPERTY.PAGE_DATA,
   ],
+  [PRODUCT_EVENT.TAB_DRAWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PAGE_SHOWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PICTURE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.PICTURE_BYTES,
