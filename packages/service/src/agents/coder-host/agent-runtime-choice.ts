@@ -715,25 +715,26 @@ function payerNameOf(provider: ModelProvider, rows: AccountKeyRows, row: Provide
 
 /**
  * Where a turn cut short on the credential named, a subscription at its
- * limit or a key out of quota, or on the account's first subscription where
- * none is named, may go on with another payer at once: the next with room,
- * as `turnPayerOf` would choose the next launch's (`firstPayerRow`, past the
- * one cut short), or, where the account saved no API key of the provider, a
- * Preview's stand-in; each named as Settings names it, for the notice the
- * turn leaves where it moved. None where no other payer has room. Note that
- * the one cut short is passed over by name, since the turn's own word on it
- * may not be written yet.
+ * limit or a key out of quota, may go on with another payer at once: the
+ * next with room, as `turnPayerOf` would choose the next launch's
+ * (`firstPayerRow`, past the one cut short), or, where the account saved no
+ * API key of the provider, a Preview's stand-in; each named as Settings
+ * names it, for the notice the turn leaves where it moved. None where no
+ * other payer has room. Note that the one cut short is passed over by name,
+ * since the turn's own word on it may not be written yet; where none is
+ * named, as for an agent no launch recorded the credential of, none is
+ * passed over and the plan is named by its provider, since a guess may pass
+ * over a plan with room, and the next launch chooses and records its own.
  */
 export const roomAfterLimit = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   provider: ModelProvider,
   limitedSubscriptionId: string | undefined,
 ): Effect.fn.Return<UsageLimitMove | undefined, StoreFailure, DatabaseServices> {
-  const { rows, plans, ordered, environment, now } = yield* payersOf(userId, provider);
-  const limitedId = limitedSubscriptionId ?? plans[0]?.id;
-  const limited = rows.find((row) => row.id === limitedId);
+  const { rows, ordered, environment, now } = yield* payersOf(userId, provider);
+  const limited = rows.find((row) => row.id === limitedSubscriptionId);
   const from = limited === undefined ? PLAN_NAME[provider] : payerNameOf(provider, rows, limited);
-  const next = firstPayerRow(ordered, now, limitedId);
+  const next = firstPayerRow(ordered, now, limitedSubscriptionId);
 
   if (next !== undefined) return { from, to: payerNameOf(provider, rows, next) };
 
@@ -747,9 +748,10 @@ export const roomAfterLimit = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * When the soonest limit among the account's other subscriptions of the
- * plan resets, past the one named as `roomAfterLimit` passes it over, so a
- * turn no payer has room for now knows the earliest it could go on; none
- * where no other subscription is at a limit that names its reset.
+ * plan resets, past the one named as `roomAfterLimit` passes it over, none
+ * where none is named, so a turn no payer has room for now knows the
+ * earliest it could go on; none where no other subscription is at a limit
+ * that names its reset.
  */
 export const soonestResetBeside = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -760,10 +762,9 @@ export const soonestResetBeside = /* @__PURE__ */ Effect.fnUntraced(function* (
   const environment = yield* deploymentEnvironment;
   const now = yield* Clock.currentTimeMillis;
   const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
-  const limited = limitedSubscriptionId ?? plans[0]?.id;
 
   const resets = plans.flatMap((row) => {
-    const resetsAt = row.id === limited ? undefined : planLimitResetsAt(row, now);
+    const resetsAt = row.id === limitedSubscriptionId ? undefined : planLimitResetsAt(row, now);
 
     return resetsAt === undefined ? [] : [resetsAt];
   });

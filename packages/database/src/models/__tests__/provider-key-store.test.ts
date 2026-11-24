@@ -326,8 +326,8 @@ it.layer(getTestDB())("the provider key store", (it) => {
         const { OPENAI } = PROVIDER_KEY_PROVIDER;
         const { CHATGPT_OAUTH } = PROVIDER_KEY_KIND;
 
-        for (const account of [owner, other]) {
-          yield* saveProviderKey(
+        const signIn = (account: string) =>
+          saveProviderKey(
             account,
             OPENAI,
             CHATGPT_OAUTH,
@@ -336,7 +336,9 @@ it.layer(getTestDB())("the provider key store", (it) => {
             null,
             new Date(1_000),
           );
-        }
+
+        const owned = yield* signIn(owner);
+        yield* signIn(other);
 
         const read = (account: string) =>
           Effect.map(listProviderKeyRows(account, CHATGPT_OAUTH), ([row]) => [
@@ -357,6 +359,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
             resets === undefined ? undefined : new Date(resets),
             new Date(savedBy),
             new Date(5_000),
+            owned,
           );
 
         const seen: unknown[] = [];
@@ -485,6 +488,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
           undefined,
           new Date(2_000),
           new Date(5_000),
+          first,
         );
         assert.equal(
           yield* setProviderKeyForAgents(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, false, second),
