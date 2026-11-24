@@ -62,6 +62,7 @@ import {
   remedyLabel,
 } from "@repo/features/failure-remedy";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { contextWindowsOf, effortLabel, SPEED_WORD, windowOf } from "@repo/features/model-effort";
 import {
   agentName,
@@ -390,13 +391,15 @@ export function agentActorState(status: AgentStatus): ActorState {
 }
 
 /**
- * An agent as its tile draws it: its harness, read off its model, wearing where it stands
- * (at rest where that is not known), under the name it goes by.
+ * An agent as its tile draws it: its harness, read off its model, or a
+ * Manager's face, wearing where it stands (at rest where that is not known),
+ * under the name it goes by.
  */
 export function agentActor(
   agent: {
     readonly model: string;
     readonly status?: AgentStatus | undefined;
+    readonly face?: ManagerFace | undefined;
   },
   name: string,
 ): Extract<Actor, { kind: typeof ACTOR_KIND.AGENT }> {
@@ -408,6 +411,7 @@ export function agentActor(
       agent.status === undefined
         ? ACTOR_STATE.REST
         : ACTOR_STATE_OF_GLYPH[agentGlyphState(agent.status)],
+    ...(agent.face === undefined ? undefined : { face: agent.face }),
   };
 }
 
