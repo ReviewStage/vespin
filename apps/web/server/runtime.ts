@@ -1,5 +1,6 @@
 import { vercelSandboxLayer } from "@repo/sandbox/vercel";
 import type { NativeAgentSessions } from "@repo/service/agents/coder-host/runtime-sessions";
+import { deploymentSandboxLayer } from "@repo/service/agents/deployment-sandboxes";
 import { agentMachinesLayer } from "@repo/service/agents/machine/agent-machines";
 import { agentSandboxDoors } from "@repo/service/agents/workspace-mcp/sandbox-door";
 import { AfterResponse } from "@repo/service/http/after-response";
@@ -34,9 +35,13 @@ const afterResponseLayer = Layer.succeed(AfterResponse, {
 
 /**
  * The deployment's sandboxes: Vercel Sandbox under the function's own OIDC
- * token, its PTY reached over the platform's `fetch`.
+ * token, its PTY reached over the platform's `fetch`, and on a Preview only
+ * under its own namespace, so it never reaches production's.
  */
-const sandboxLayer = vercelSandboxLayer.pipe(Layer.provide(FetchHttpClient.layer));
+const sandboxLayer = deploymentSandboxLayer(
+  vercelSandboxLayer.pipe(Layer.provide(FetchHttpClient.layer)),
+  process.env,
+);
 
 /**
  * The deployment's services over its sandboxes, Sentry, and the

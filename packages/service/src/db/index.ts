@@ -7,7 +7,7 @@ import { Pool } from "pg";
  * are built from, and the unpooled one a connection that must keep its own
  * session, such as Sync's `LISTEN`, is opened on.
  */
-const DATABASE_ENVIRONMENT = {
+export const DATABASE_ENVIRONMENT = {
   URL: "DATABASE_URL",
   UNPOOLED_URL: "DATABASE_URL_UNPOOLED",
 } as const;
