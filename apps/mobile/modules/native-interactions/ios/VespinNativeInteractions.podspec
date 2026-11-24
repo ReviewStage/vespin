@@ -1,4 +1,4 @@
-# VespinNativeInteractions.podspec -- the SwiftUI modifiers @expo/ui lacks (`NativeInteractionsModule.swift`): a list row's focus ring left off, a bar's subtitle, drag and drop, and a row's menu and swipes built from data (`RowMenu.swift`). Expo's autolinking finds it under `modules/` and builds it into the app.
+# VespinNativeInteractions.podspec -- the SwiftUI modifiers and views @expo/ui lacks (`NativeInteractionsModule.swift`): a list row's focus ring left off, a bar's subtitle, drag and drop, a row's menu and swipes built from data (`RowMenu.swift`), and the working mark and a working face's bob (`WorkingMark.swift`). Expo's autolinking finds it under `modules/` and builds it into the app.
 Pod::Spec.new do |s|
   s.name           = 'VespinNativeInteractions'
   s.version        = '0.1.0'
