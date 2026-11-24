@@ -1,22 +1,18 @@
 /**
- * manager-overview.tsx -- a Manager's page's main panel: what the Manager is doing, beside its chat.
+ * manager-overview.tsx -- a Manager's page's Overview tab: what the Manager is doing.
  *
- * A Manager's page (`desktop-agent-page.tsx`) stands its chat in a column at
- * its right and this panel in the room it leaves, under the page's head,
- * which names the Manager, so the panel draws no title of its own: it is a
- * page under the window's toolbar (`PAGE_FRAME.TOOLBAR`), named for a
- * reader by its label, its content across the whole room it has. It is
- * dense, every row one line, so a Manager's whole state stands on one
- * screen beside the open sidebar, each of its sections on a card of its
- * own.
+ * A Manager's page (`desktop-agent-page.tsx`) stands it as the first of its
+ * views, under the page's head, which names the Manager, so the panel draws
+ * no title of its own: it is a page under the window's toolbar
+ * (`PAGE_FRAME.TOOLBAR`), on that bar's edges, named for a reader by its
+ * label, its content across the whole room it has. It is dense, every row
+ * one line, so a Manager's whole state stands on one screen beside the open
+ * sidebar, each of its sections on a card of its own, read from what the
+ * window already follows live (`manager-overview-model.ts`).
  *
- * It opens on one line of counts: what waits on the reader, its agents at
- * work, its pull requests open, and its tasks done this week, each read
- * from what the window already follows live (`manager-overview-model.ts`).
- * Under it stands Waiting on you, the Manager's own threads that wait on
- * the reader, each a row opening its thread (`WaitingRow`): an
- * ask of two short options answered from its buttons, any other opening its
- * thread in the window's Inbox; nothing while none waits. Under it stand two
+ * It opens on Waiting on you, the Manager's own threads that wait on
+ * the reader, each a row opening its thread in the window's Inbox
+ * (`WaitingRow`); nothing while none waits. Under it stand two
  * columns. The first lists its agents, each the row a task's agents stand
  * in (`AgentListRow`), and the pull requests they opened, each in a task
  * row's anatomy as the Merge queue page draws one, opening in its Pull
@@ -38,7 +34,6 @@ import {
   CARD_LOOK,
   CARD_PADDING,
   Card,
-  CountLine,
   CountParts,
   DETAIL_PAGE_INSET,
   DetailPage,
@@ -92,14 +87,9 @@ import { RecentTasks } from "./recent-tasks.js";
 /** What the panel is called, said to a reader as its region's name. */
 const OVERVIEW = "Overview";
 
-/** What the panel's sections and counts say. */
+/** What the panel's sections say. */
 const OVERVIEW_WORDS = {
-  COUNTS: "At a glance",
   WAITING: "Waiting on you",
-  WAITING_COUNT: "waiting on you",
-  WORKING: "agents working",
-  PULL_REQUESTS_OPEN: "pull requests open",
-  DONE_THIS_WEEK: "done this week",
   AGENTS: "Agents",
   PULL_REQUESTS: "Pull requests",
   OPEN_TASKS: "Open tasks",
@@ -473,8 +463,6 @@ export function ManagerOverview({
     [manager.id, listed, liveAgents, listedPullRequests, now],
   );
 
-  const waiting = threads?.waiting.length ?? 0;
-
   const byAgent = useMemo(
     () => new Map(overview.pullRequests.map((each) => [each.agent.id, each.pullRequest])),
     [overview.pullRequests],
@@ -489,22 +477,9 @@ export function ManagerOverview({
         // Note that the page's toolbar stands outside it, over the Manager's views, so the overview stands on that bar's edges.
         inset={DETAIL_PAGE_INSET.TOOLBAR}
       >
-        {/* Note that the counts and the sections' heads show in a screen recording, while each section masks its rows. */}
+        {/* Note that the sections' heads show in a screen recording, while each section masks its rows. */}
         <ReplayUnmask>
           <Stack gap={GAP.BLOCK}>
-            <CountLine
-              label={OVERVIEW_WORDS.COUNTS}
-              counts={[
-                {
-                  value: waiting,
-                  words: OVERVIEW_WORDS.WAITING_COUNT,
-                  tone: STATUS_TONE.ATTENTION,
-                },
-                { value: overview.working, words: OVERVIEW_WORDS.WORKING },
-                { value: overview.openPullRequests, words: OVERVIEW_WORDS.PULL_REQUESTS_OPEN },
-                { value: overview.doneThisWeek.length, words: OVERVIEW_WORDS.DONE_THIS_WEEK },
-              ]}
-            />
             {threads === undefined ? null : <WaitingOnYou threads={threads} />}
             <div className="manager-overview-columns">
               <div className="manager-overview-column">
