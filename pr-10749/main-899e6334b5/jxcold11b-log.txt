@@ -1,0 +1,41 @@
+pinned to 576a61fd20
+== bundle PJjxcold11b base 576a61fd20f
+  built 576a61fd20f base app Vmain13.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/features/src/turn-run/tool-set.ts(25,5): error TS2345: Argument of type 'WireValue' is not assignable to parameter of type 'JSONSchema7 | PromiseLike<JSONSchema7> | (() => JSONSchema7 | PromiseLike<JSONSchema7>)'.
+    packages/host/src/zz-probe-seed.test.ts(337,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(341,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(361,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(394,185): error TS18048: 'item.thread' is possibly 'undefined'.
+  type errors in 2 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+t1 (899e6334b5) bundle 25276 KB over Vmain13.app
+seed (holders, t1 576a61fd20): 28136 KB
+source maps: index-a82db2a0a55f3ccd7ceb08171e6a53d7.hbc.map (67204 KB); hbc matches the installed main.jsbundle
+sign-in: fails 0 shots 3 
+touch-1: pid 98468, probe ok, watch ok, profile 648 KB, touch lines 0, maestro ok
+  touch-1 cpu peak 156.6% (at 60 s: 17.0%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy at 30 s: task-row 0, on screen 0, probe-touch: 
+touch-1: 
+idle-1: pid 1262, probe ok, watch ok, profile 380 KB
+  idle-1 cpu peak 61.5% (at 60 s: 1.9%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy at 3 s: task-row 0, on screen 0, at 10 s: task-row 0, on screen 0
+idle-1: 
+touch-2: pid 3370, probe ok, watch ok, profile 536 KB, touch lines 0, maestro ok
+  touch-2 cpu peak 139.9% (at 60 s: 25.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy HUNG (killed after 75 s), probe-touch: 
+touch-2: 
+idle-2: pid 7012, probe ok, watch ok, profile 536 KB
+  idle-2 cpu peak 101.7% (at 60 s: 1.7%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+idle-2: 
+touch-3: pid 8685, probe ok, watch ok, profile 412 KB, touch lines 0, maestro ok
+  touch-3 cpu peak 190.4% (at 60 s: 25.9%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy HUNG (killed after 75 s), probe-touch: 
+touch-3: 
+touch-4: pid 11985, probe ok, watch ok, profile 412 KB, touch lines 0, maestro ok
+  touch-4 cpu peak 138.7% (at 60 s: 14.0%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy HUNG (killed after 75 s), probe-touch: 
+touch-4: 
+idle-3: pid 13514, probe ok, watch ok, profile 400 KB
+  idle-3 cpu peak 163.9% (at 60 s: 2.1%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+idle-3: 
+touch-5: pid 14462, probe ok, watch ok, profile 424 KB, touch lines 0, maestro ok
+  touch-5 cpu peak 181.8% (at 60 s: 20.1%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy HUNG (killed after 75 s), probe-touch: 
+touch-5: 
