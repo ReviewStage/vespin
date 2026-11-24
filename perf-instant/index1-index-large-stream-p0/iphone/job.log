@@ -1,0 +1,17 @@
+fatal: couldn't find remote ref refs/heads/pin2b/p10662
+FETCH FAILED pin2b/p10662
+screen.mp4 kept
+merging pin2b/p10662 at 2e955273b6e
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging apps/mobile/src/crash-reports.ts
+Auto-merging apps/mobile/src/host/app-state-query.ts
+Auto-merging apps/mobile/src/host/compose-mobile.ts
+Auto-merging apps/mobile/src/host/polyfills.ts
+Auto-merging apps/mobile/src/splash.ts
+Auto-merging packages/host/src/fixture-inbox.ts
+built 163dae424b8 = probe + pin2b/p10662 (PROFILE=0)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ALLDONE
