@@ -34,7 +34,7 @@ import {
   DESCRIPTION_ATTACHMENT_KEEP,
   keepDescriptionAttachment,
 } from "@repo/database/models/description-attachments";
-import { listPages, readPageVersion } from "@repo/database/models/task-pages";
+import { listPages, readPageById, readPageVersion } from "@repo/database/models/task-pages";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import {
   DESCRIPTION_ATTACHMENT_REFUSAL,
@@ -201,6 +201,16 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
       );
 
       return { page: yield* found(page) };
+    }),
+    // Note that the page is read by its id alone, so one standing on another task than the route names answers as not found.
+    newestPage: taskFiles.newestPage.effect(function* ({ input, context }) {
+      const taskId = yield* pathUuid(input.id);
+      const pageId = yield* pathUuid(input.page);
+
+      const read = yield* hostedStoreOrUnavailable(readPageById(context.userId, pageId, undefined));
+      const onTask = Option.filter(read, (each) => each.taskId === taskId);
+
+      return { page: (yield* found(onTask)).page };
     }),
     pageFrame: taskFiles.pageFrame.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);

@@ -731,6 +731,17 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.sync(() =>
         service.pages.find((page) => page.id === pageId && page.version === version),
       ),
+    // The service answers the page's highest version it holds.
+    readNewestPage: (_place, pageId) =>
+      Effect.sync(() =>
+        service.pages
+          .filter((page) => page.id === pageId)
+          .reduce<PageVersion | undefined>(
+            (newest, page) =>
+              newest === undefined || page.version > newest.version ? page : newest,
+            undefined,
+          ),
+      ),
     // The service puts the revision's document back and names the developer its last editor.
     restore: (taskId, seq) =>
       Effect.sync(() => {

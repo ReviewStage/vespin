@@ -439,6 +439,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   taskFiles: {
     skills: SCREEN_ONLY,
     keepPicture: SCREEN_ONLY,
+    // A page opened from a link with no version: an agent reads a page's newest with its own tools.
+    newestPage: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
   },
   taskFollowers: {

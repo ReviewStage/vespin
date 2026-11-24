@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { writePage } from "@repo/database/models/task-pages";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, startTask } from "@repo/database/testing";
+import { getTestDB, openTaskAgent, startTask } from "@repo/database/testing";
+import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { type Context, Effect, Option } from "effect";
 import {
   recordingProductAnalytics,
@@ -19,7 +21,8 @@ import { taskFilesProcedures } from "./task-files-procedures.js";
  * A picture added to a description through the plan files procedures, over a real
  * dialect: the member who adds one is counted as having added a file to the
  * description, in the plan's workspace, and one who may not write the description is
- * refused and counted for nothing.
+ * refused and counted for nothing. A page read by its id alone answers its
+ * newest version, under its own task alone.
  *
  * Synthetic accounts, bearers, workspaces, and tasks throughout.
  */
@@ -41,8 +44,8 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-/** A picture sent to the description under the account's bearer, as its status. */
-const keepAs = (userId: string, taskId: string) =>
+/** A request handled by the plan files procedures under the account's bearer. */
+const handleAs = (userId: string, path: string, init: RequestInit = {}) =>
   Effect.gen(function* () {
     // SAFETY: the procedures yield the database, the clock and the analytics alone, which the test's own context holds.
     const services = (yield* Effect.context<never>().pipe(
@@ -58,18 +61,38 @@ const keepAs = (userId: string, taskId: string) =>
       }),
     });
 
-    const response = yield* Effect.promise(() =>
-      handle(
-        new Request(new URL(`/api/tasks/${taskId}/attachments`, ORIGIN), {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${userId}` },
-          body: JSON.stringify({ picture: PNG }),
-        }),
-        services,
-      ),
-    );
+    const headers = new Headers(init.headers);
+    headers.set("authorization", `Bearer ${userId}`);
 
-    return response.status;
+    return yield* Effect.promise(() =>
+      handle(new Request(new URL(path, ORIGIN), { ...init, headers }), services),
+    );
+  });
+
+/** A picture sent to the description under the account's bearer, as its status. */
+const keepAs = (userId: string, taskId: string) =>
+  Effect.map(
+    handleAs(userId, `/api/tasks/${taskId}/attachments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ picture: PNG }),
+    }),
+    (response) => response.status,
+  );
+
+/** A page read by its id alone under a task, as its status and the version and HTML it answered. */
+const readNewestAs = (userId: string, taskId: string, pageId: string) =>
+  Effect.gen(function* () {
+    const response = yield* handleAs(userId, `/api/tasks/${taskId}/pages/${pageId}`);
+
+    if (response.status !== HOSTED_HTTP_STATUS.OK) return { status: response.status };
+
+    // SAFETY: an answer that is OK is the procedure's output, a page version with its HTML.
+    const body = (yield* Effect.promise(() => response.json())) as {
+      readonly page: { readonly version: number; readonly html: string };
+    };
+
+    return { status: response.status, version: body.page.version, html: body.page.html };
   });
 
 it.layer(getTestDB())("the plan files route", (it) => {
@@ -97,6 +120,42 @@ it.layer(getTestDB())("the plan files route", (it) => {
           { workspaceId: task.workspaceId, tool: SERVER_AGENT_TOOL.ADD_TO_DESCRIPTION },
         ]);
         assert.deepEqual(countedFor(outsider), []);
+      }),
+  );
+
+  it.effect(
+    "a page read by its id alone answers its newest version, and not under another task or to an outsider",
+    () =>
+      Effect.gen(function* () {
+        const [starter, outsider] = [yield* openAccount, yield* openAccount];
+        const task = yield* startTask(starter, { name: "Teammate invitations" });
+        const other = yield* startTask(starter, { name: "Billing" });
+        const agentId = yield* openTaskAgent(starter, task.workspaceId, task.id);
+        const owner = taskPageOwner(task.id);
+        const shownBy = { kind: PAGE_SHOWER.AGENT, agentId } as const;
+
+        const first = Option.getOrThrow(
+          yield* writePage(starter, owner, { title: "Invites", html: "<h1>One</h1>" }, shownBy),
+        );
+
+        yield* writePage(
+          starter,
+          owner,
+          { pageId: first.id, title: "Invites", html: "<h1>Two</h1>" },
+          shownBy,
+        );
+
+        assert.deepEqual(yield* readNewestAs(starter, task.id, first.id), {
+          status: HOSTED_HTTP_STATUS.OK,
+          version: 2,
+          html: "<h1>Two</h1>",
+        });
+        assert.deepEqual(yield* readNewestAs(starter, other.id, first.id), {
+          status: HOSTED_HTTP_STATUS.NOT_FOUND,
+        });
+        assert.deepEqual(yield* readNewestAs(outsider, task.id, first.id), {
+          status: HOSTED_HTTP_STATUS.NOT_FOUND,
+        });
       }),
   );
 });

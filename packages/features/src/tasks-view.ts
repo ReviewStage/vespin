@@ -973,6 +973,13 @@ export const tasksPageParamsSchema = EffectSchema.Struct({
 
 export type TasksPageParams = typeof tasksPageParamsSchema.Type;
 
+/** One page of a task as a client drawing it whole asks for it: at the version it names, or at the newest where it names none, as a link opens a page. */
+export const tasksPageHtmlParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  pageId: EffectSchema.NonEmptyString,
+  version: EffectSchema.optionalKey(pageVersionNumberSchema),
+});
+
 /** A page frame's read of one version, as the window's process hears it: the version with its HTML, or that the service did not answer. */
 export const tasksPageAnswerSchema = EffectSchema.Union([
   taskPageVersionAnswerSchema,
