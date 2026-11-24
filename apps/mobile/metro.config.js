@@ -149,4 +149,13 @@ const sentryConfig = getSentryExpoConfig(__dirname, {
 
 sentryConfig.serializer.createModuleIdFactory = probeModuleIdFactory;
 
+// PROBE ONLY, never merged: every import evaluated at its first use (`inlineRequires`), Expo's other transform options kept.
+const baseTransformOptions = sentryConfig.transformer.getTransformOptions;
+
+sentryConfig.transformer.getTransformOptions = async (...args) => {
+  const options = await baseTransformOptions(...args);
+
+  return { ...options, transform: { ...options.transform, inlineRequires: true } };
+};
+
 module.exports = sentryConfig;
