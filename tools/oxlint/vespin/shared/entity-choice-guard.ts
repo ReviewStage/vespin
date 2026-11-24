@@ -6,7 +6,7 @@ import { repositoryPathOf } from "./repository-path.ts";
  * mark, as its rows draw it (a status's ring in its tone, a priority's bars,
  * a person's photo), so a screen builds that choice through `@repo/ui-native`'s
  * helpers (`statusChoice`, `priorityChoice`, `personChoice`,
- * `unassignedChoice`, `taskChoice`), which carry the mark every menu draws,
+ * `unassignedChoice`, `taskChoice`, `repositoryChoice`), which carry the mark every menu draws,
  * never a choice holding the entity's bare glyph, which every menu draws as
  * a gray template.
  */
@@ -21,8 +21,9 @@ export const ENTITY_GLYPH_TABLES: ReadonlySet<string> = new Set([
   "PRIORITY_MARK_SYMBOL",
 ]);
 
-/** `GLYPH`'s names for an entity's own mark: a status's ring, a priority's bars, a person, and no one. */
-export const ENTITY_GLYPH = /^(?:STATUS_[A-Z_]+|PRIORITY_(?!BARS$)[A-Z_]+|PERSON|UNASSIGNED)$/u;
+/** `GLYPH`'s names for an entity's own mark: a status's ring, a priority's bars, a person, no one, and a repository. */
+export const ENTITY_GLYPH =
+  /^(?:STATUS_[A-Z_]+|PRIORITY_(?!BARS$)[A-Z_]+|PERSON|UNASSIGNED|REPOSITORY)$/u;
 
 /** Whether a linted file is one of the iOS app's, which builds its menus' choices from the helpers. */
 export function isMobileSource(filename: string): boolean {

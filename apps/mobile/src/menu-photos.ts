@@ -1,6 +1,7 @@
-// menu-photos.ts -- a picture as a file in the app's caches, which a system menu draws round in a choice's glyph place: each member's sign-in picture, and a workspace's photo.
+// menu-photos.ts -- a picture as a file in the app's caches, which a system menu draws in a choice's glyph place: each member's sign-in picture, a workspace's photo, and a repository's owner's picture.
 
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
+import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
 import { MARK_SIZE, type MenuPhotoFile, menuPhotoFile } from "@repo/ui-native";
 import { File, Paths } from "expo-file-system";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -218,5 +219,46 @@ export function useMenuPhotos(
       return address === undefined ? undefined : fileOf(address);
     },
     [byUser, fileOf],
+  );
+}
+
+/**
+ * A repository's owner's picture, asked for at a menu photo's size in device
+ * pixels. Note that it is GitHub's own address for an account's picture
+ * (`repositoryOwnerPictureUrl`), which redirects to its avatar, so it is
+ * sized here rather than through `menuAddress`, which takes only a picture
+ * already on GitHub's avatar host and refused this one, drawing every
+ * repository as its glyph.
+ */
+function repositoryMenuAddress(repository: string): string {
+  const address = new URL(repositoryOwnerPictureUrl(repository));
+  address.searchParams.set("size", String(Math.round(MARK_SIZE.MENU_PHOTO * PixelRatio.get())));
+
+  return address.toString();
+}
+
+/** Each repository's owner's picture as a file on this device, by `owner/name`, for a menu that leads each repository with it, as `useMenuPictureFiles` holds them; none while it's on its way, or failed. */
+export function useMenuRepositoryPictures(
+  repositories: readonly string[],
+): (repository: string) => MenuPhotoFile | undefined {
+  const byRepository = useMemo(() => {
+    const addresses = new Map<string, string>();
+
+    for (const repository of repositories)
+      addresses.set(repository, repositoryMenuAddress(repository));
+
+    return addresses;
+  }, [repositories]);
+
+  const addresses = useMemo(() => [...byRepository.values()], [byRepository]);
+  const fileOf = useMenuPictureFiles(addresses);
+
+  return useCallback(
+    (repository: string) => {
+      const address = byRepository.get(repository);
+
+      return address === undefined ? undefined : fileOf(address);
+    },
+    [byRepository, fileOf],
   );
 }

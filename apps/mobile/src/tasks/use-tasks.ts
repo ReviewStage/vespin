@@ -126,7 +126,7 @@ import {
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
-import { useMenuPhotos } from "../menu-photos.js";
+import { useMenuPhotos, useMenuRepositoryPictures } from "../menu-photos.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useTreeView } from "./tree-view.js";
 import { useFollowWrite } from "./use-following.js";
@@ -350,6 +350,8 @@ export interface TaskPlacing {
   readonly placeStarted: (taskId: string, sectionId: string) => void;
   /** The repositories the workspace's GitHub reaches, which a task's repository is picked among. */
   readonly repositories: readonly string[];
+  /** A repository's owner's picture as a file on this device, which its choice in a menu leads with; none where it isn't read yet. */
+  readonly repositoryPictureOf: (repository: string) => MenuPhotoFile | undefined;
   /** Gives a task its repository, or takes it away under null, as the panel's Change repository does. */
   readonly setRepository: (taskId: string, repository: string | null) => void;
   /** Names one of the member's sections anew, keeping its icon, as the panel's Rename on a section's header does. */
@@ -379,6 +381,7 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
   });
 
   const { listed } = useWorkspaceRepositories(workspaceId);
+  const repositoryPictureOf = useMenuRepositoryPictures(listed);
 
   // Note that an Undo reads the sections as they stand when it is pressed, which a delete's own answer may have moved on since.
   const current = useRef(state);
@@ -471,11 +474,12 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
         move(taskId, sectionId, BUZZ.SUCCESS),
       placeStarted: (taskId: string, sectionId: string) => move(taskId, sectionId, undefined),
       repositories: listed,
+      repositoryPictureOf,
       setRepository,
       renameSection,
       deleteSection,
     };
-  }, [acts, write, notices, state, workspaceId, listed]);
+  }, [acts, write, notices, state, workspaceId, listed, repositoryPictureOf]);
 }
 
 /** What the Tasks tab draws: the tree, what a search finds, each row's look, and the acts on a row. */

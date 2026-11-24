@@ -135,7 +135,7 @@ const GUARDS = [
     sources: TYPESCRIPT_SOURCE,
     watches: (absolute: string) => isMobileSource(absolute),
     remedy:
-      "Build the choice with @repo/ui-native's statusChoice, priorityChoice, personChoice, unassignedChoice, or taskChoice, or add a helper there for a new kind",
+      "Build the choice with @repo/ui-native's statusChoice, priorityChoice, personChoice, unassignedChoice, taskChoice, or repositoryChoice, or add a helper there for a new kind",
   },
   {
     rule: SETTINGS_ROW_END_GUARD_RULE,

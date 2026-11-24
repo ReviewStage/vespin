@@ -259,10 +259,14 @@ patchedDependencies:
 # the Assignee menu leads each member with their face; and `emoji` with
 # `emojiSize`, which draws an emoji into a square image at a menu glyph's
 # size, its rendering kept original, so Move to leads an emoji section with
-# its emoji in the glyph's place and its name lines up; and `underAssetName`
+# its emoji in the glyph's place and its name lines up; `underAssetName`
 # with `underOpacity`, which draws a second catalog symbol faint under the
 # tinted one in the same image, so a priority's lit bars stand over its unlit
-# ones in a menu. And it lets `ContentUnavailableView` draw a symbol of the
+# ones in a menu; `photoCorner`, which rounds a photo's square instead, as a
+# repository's owner picture stands; and `assetSize`, which draws a catalog
+# image fit in a menu glyph's square, its rendering kept original, so a
+# model's harness mark leads its name at a glyph's width rather than its own
+# size. And it lets `ContentUnavailableView` draw a symbol of the
 # app's asset catalog (`image`) in `systemImage`'s place, leave out an empty
 # description, and take its primary and secondary inks (`primaryColor`,
 # `secondaryColor`), so an empty state wears the panel's glyph and words'

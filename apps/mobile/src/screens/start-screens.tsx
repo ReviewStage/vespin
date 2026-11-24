@@ -283,12 +283,14 @@ function choicesOf(
   picked: string | undefined,
   onPick: (id: string) => void,
 ): ChipMenuGroup["choices"] {
-  return options.map((option) => ({
-    label: option.label,
-    id: option.id,
-    on: option.id === picked,
-    onPress: () => onPick(option.id),
-  }));
+  return options.map((option) => {
+    const press = { id: option.id, on: option.id === picked, onPress: () => onPick(option.id) };
+
+    // Note that an option of an entity, such as a repository, leads with its own mark, as its rows draw it.
+    return option.lead === undefined
+      ? { label: option.label, ...press }
+      : { label: option.label, mark: option.lead, ...press };
+  });
 }
 
 /** What an option picked is called, where it is one of those offered. */

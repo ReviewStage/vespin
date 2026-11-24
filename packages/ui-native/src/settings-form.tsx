@@ -51,13 +51,14 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { addressWords } from "./address-words-model.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, GlyphImage } from "./glyph-label.js";
+import { actContent, GlyphImage, LookIcon } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
 import { actionButton, LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
-import { Avatar, FailedMark, HarnessMark, WorkingMark } from "./marks.js";
+import { Avatar, FailedMark, HarnessMark, RepositoryPicture, WorkingMark } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
-import { type BrandColors, useColors } from "./tokens/colors.js";
-import { PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { CHOICE_MARK, type ChoiceMark, markLook } from "./row-menu-model.js";
+import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { SYSTEM_COLOR, useSystemColors } from "./tokens/swipe-colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
@@ -834,6 +835,8 @@ export type PickOption = {
   readonly symbol?: Glyph | undefined;
   /** A mark of its own leading a row of `PickRows` in the glyph's place, such as a model's harness mark; none for none. */
   readonly mark?: ReactNode | undefined;
+  /** The entity's own mark leading it in a `MenuPickRow`'s menu in the glyph's place, as its rows draw it, such as a model's harness; none for none. */
+  readonly lead?: ChoiceMark | undefined;
 };
 
 type PickRowsProps = {
@@ -863,6 +866,21 @@ export function PickedCheck() {
       modifiers={[font({ size: markSize, weight: "semibold" })]}
     />
   );
+}
+
+/** An entity's mark leading a row of `PickRows`, as its rows elsewhere draw it, at a glyph's size scaled with the reader's text: a repository's owner's picture, a model's harness mark, or the mark a menu draws for any other. */
+function LeadMark({ lead }: { readonly lead: ChoiceMark }) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+
+  switch (lead.kind) {
+    case CHOICE_MARK.REPOSITORY:
+      return <RepositoryPicture repository={lead.repository} size={size} />;
+    case CHOICE_MARK.HARNESS:
+      return <HarnessMark provider={lead.provider} size={size} />;
+    default:
+      return <LookIcon look={markLook(lead)} toneInk={(tone) => toneColor(colors, tone)} />;
+  }
 }
 
 /**
@@ -901,6 +919,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
             {option.mark ??
+              (option.lead === undefined ? null : <LeadMark lead={option.lead} />) ??
               (option.symbol === undefined ? null : (
                 <Image {...glyphImage(option.symbol)} color={colors.TEXT_MUTED} />
               ))}

@@ -69,13 +69,14 @@ import {
   selectModels,
   selectRepositoryList,
 } from "@repo/host/app-state-reads";
-import { type Glyph, type PickOption, runsOnGlyph } from "@repo/ui-native";
+import { CHOICE_MARK, type Glyph, type PickOption, runsOnGlyph } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useListedTasks } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { useMenuRepositoryPictures } from "../menu-photos.js";
 import { useOfferedWorkspaceMachines } from "../workspace-machines.js";
 
 /** No models read yet. */
@@ -140,7 +141,13 @@ function retryRefused(what: string): (cause: unknown) => void {
 export function modelOptions(catalog: readonly CatalogModel[]): readonly PickOption[] {
   return catalog.flatMap((model) =>
     modelSpeedOf(model.id) === MODEL_SPEED.STANDARD
-      ? [{ id: model.id, label: modelLabel(model.id, catalog) }]
+      ? [
+          {
+            id: model.id,
+            label: modelLabel(model.id, catalog),
+            lead: { kind: CHOICE_MARK.HARNESS, provider: model.provider },
+          },
+        ]
       : [],
   );
 }
@@ -366,6 +373,7 @@ export function useRepositoryPick(
   drafted?: string | undefined,
 ): RepositoryPick {
   const { listed, read, failed, retry } = useWorkspaceRepositories(workspace?.id);
+  const pictureOf = useMenuRepositoryPictures(listed);
   const tasks = useListedTasks();
   const [picked, setPicked] = useState<string | undefined>(drafted);
   const recent = useMemo(() => recentRepositories(tasks), [tasks]);
@@ -380,7 +388,11 @@ export function useRepositoryPick(
   const kept = picked !== undefined && picked === drafted && !reached(picked) ? undefined : picked;
 
   return {
-    options: listed.map((repository) => ({ id: repository, label: repository })),
+    options: listed.map((repository) => ({
+      id: repository,
+      label: repository,
+      lead: { kind: CHOICE_MARK.REPOSITORY, repository, picture: pictureOf(repository) },
+    })),
     picked: kept ?? starting,
     pick: setPicked,
     read,

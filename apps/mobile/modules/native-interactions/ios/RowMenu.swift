@@ -28,6 +28,7 @@ private struct MenuIconData: Decodable {
   let photo: String?
   let size: Double?
   let emoji: String?
+  let corner: Double?
 
   struct UnderGlyph: Decodable {
     let asset: String
@@ -147,7 +148,9 @@ private func photoIcon(_ icon: MenuIconData) -> Image? {
   }
   let size = CGSize(width: side, height: side)
   let round = UIGraphicsImageRenderer(size: size).image { _ in
-    UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).addClip()
+    // Note that a photo with a corner stands on a rounded square, as a repository's owner picture does, and any other in its circle.
+    let frame = CGRect(origin: .zero, size: size)
+    (icon.corner.map { UIBezierPath(roundedRect: frame, cornerRadius: side * $0) } ?? UIBezierPath(ovalIn: frame)).addClip()
     // Note that the photo fills the circle, its longer side cropped about its center.
     let scale = max(side / photo.size.width, side / photo.size.height)
     let drawn = CGSize(width: photo.size.width * scale, height: photo.size.height * scale)
@@ -169,13 +172,28 @@ private func emojiIcon(_ icon: MenuIconData) -> Image? {
   return Image(uiImage: drawn.withRenderingMode(.alwaysOriginal))
 }
 
+/// A catalog mark, such as a model's harness, fit in a square of its size, as `@expo/ui`'s patched image draws one (`assetSize`), a template mark such as Cursor's cube staying a template so it takes the menu's ink; the mark as the catalog keeps it where it has no size.
+private func markIcon(_ icon: MenuIconData) -> Image? {
+  guard let name = icon.asset else { return nil }
+  guard let side = icon.size, side > 0, let asset = UIImage(named: name),
+        asset.size.width > 0, asset.size.height > 0 else {
+    return Image(name)
+  }
+  let scale = min(side / asset.size.width, side / asset.size.height)
+  let drawn = CGSize(width: asset.size.width * scale, height: asset.size.height * scale)
+  let fitted = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+    asset.draw(in: CGRect(origin: CGPoint(x: (side - drawn.width) / 2, y: (side - drawn.height) / 2), size: drawn))
+  }
+  return Image(uiImage: fitted.withRenderingMode(asset.renderingMode == .alwaysTemplate ? .alwaysTemplate : .alwaysOriginal))
+}
+
 /// A node's icon as an image, or nothing for a node of words alone.
 private func iconImage(_ icon: MenuIconData?) -> Image? {
   guard let icon else { return nil }
   switch icon.kind {
   case .glyph: return glyphIcon(icon)
   case .photo: return photoIcon(icon)
-  case .mark: return icon.asset.map { Image($0) }
+  case .mark: return markIcon(icon)
   case .emoji: return emojiIcon(icon)
   }
 }

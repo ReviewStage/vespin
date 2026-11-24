@@ -33,7 +33,7 @@ import { forgetField, noteFieldFocus } from "./field-focus.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { PickOption as PickedOption } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
-import { MENU_ICON } from "./row-menu-model.js";
+import { MENU_ICON, markLook } from "./row-menu-model.js";
 import type { PickOption } from "./settings-form.js";
 import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -270,9 +270,11 @@ export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
           label={option.label}
           value={option.id}
           look={
-            option.symbol === undefined
-              ? undefined
-              : { kind: MENU_ICON.GLYPH, glyph: option.symbol }
+            option.lead !== undefined
+              ? markLook(option.lead)
+              : option.symbol === undefined
+                ? undefined
+                : { kind: MENU_ICON.GLYPH, glyph: option.symbol }
           }
           toneInk={(tone) => toneColor(colors, tone)}
         />

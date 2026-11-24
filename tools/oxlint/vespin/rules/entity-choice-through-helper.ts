@@ -52,7 +52,7 @@ export const entityChoiceThroughHelperRule = defineRule({
     },
     messages: {
       bareEntityGlyph:
-        "A choice led by `{{glyph}}` draws the entity as a bare gray glyph. Build it with `@repo/ui-native`'s `statusChoice`, `priorityChoice`, `personChoice`, `unassignedChoice`, or `taskChoice`, which carry the mark its rows draw, or add a helper there for a new kind.",
+        "A choice led by `{{glyph}}` draws the entity as a bare gray glyph. Build it with `@repo/ui-native`'s `statusChoice`, `priorityChoice`, `personChoice`, `unassignedChoice`, `taskChoice`, or `repositoryChoice`, which carry the mark its rows draw, or add a helper there for a new kind.",
     },
   },
   createOnce(context) {
