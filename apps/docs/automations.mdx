@@ -41,8 +41,14 @@ The agent gets your prompt, then a note saying which automation started it and w
 
 Under **Runs land in**, choose **New agent each run**, or **Same agent** to send every run to one agent, on one task, as a new message.
 
+With **New agent each run**, **Mark finished runs Done** archives a run's agents and moves its task to Done once each agent finished well, with nothing open in your Inbox and no pull request open. It's on for a new automation. A run whose agent failed or was stopped stays where it is.
+
+With the Vespin bot connected to Slack, **Send the result to me on Slack** DMs you each run's final message, or that it failed or was stopped. See [Slack](/slack).
+
 **Run now** starts a run at any time, even when the automation is off.
 
 ## Sharing
 
 A new automation belongs to you: only you can change and run it, and your workspace's owners and admins can see it, turn it off, or delete it. Share it with the workspace, and every member can see it, run it, and turn it off.
+
+When a member leaves the workspace, their automations turn off, and each shows a failed run to owners and admins. An owner or admin can **Take over** one, which makes it theirs and leaves it off until they turn it on.
