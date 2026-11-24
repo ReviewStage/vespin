@@ -1,4 +1,4 @@
-// pill-field-screen.tsx -- the pill field's scratch page: the field laid in with a mention of every kind and a picture's and a file's marker, the acts that put a pill in, and the Markdown it writes, so a flow shoots the field and its value side by side; and under them a document's field drawn in its looks as it is written, and a description edited as rich text with the Markdown it saves.
+// pill-field-screen.tsx -- the pill field's scratch page: the field laid in with a mention of every kind and a picture's and a file's marker, the acts that put a pill in, and the Markdown it writes, so a flow shoots the field and its value side by side; and under them a description edited as rich text with the Markdown it saves.
 
 import { nextPictureName } from "@repo/features/file-marker";
 import { filePill, mentionPill } from "@repo/features/pill-words";
@@ -35,22 +35,6 @@ const LAID_IN = [
   "[@#42 Fix the refresh](https://github.com/ReviewStage/vespin/pull/42) by",
   "[@Nov 20, 2026](mention://date/2026-11-20). See [Picture 1] and [File: spec.pdf].",
 ].join(" ");
-
-/** The document the styled field opens on: a heading, bold and italic words, inline code, a mention, a list, a quote, and a fenced block, each drawn as the page draws it. */
-const DOCUMENT = [
-  "## Invites",
-  "",
-  "Ask [@Dean Stratakos](https://vespin.dev/stage/person/u-dean) whether an invite expires after **seven days** or *never*; run `pnpm test`.",
-  "",
-  "- Withdraw a pending invite",
-  "- Resend an expired one",
-  "",
-  "> Owners and admins may withdraw.",
-  "",
-  "```ts",
-  "const days = 7;",
-  "```",
-].join("\n");
 
 /** The description the rich field opens on: each block it draws with no syntax, and a table and a diagram it stands as cards. */
 const DESCRIPTION = [
@@ -141,7 +125,6 @@ export function PillFieldScreen() {
   const [value, setValue] = useState(LAID_IN);
   const [files, setFiles] = useState<ReadonlySet<string>>(() => new Set(["Picture 1", "spec.pdf"]));
   const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
-  const [writing, setWriting] = useState(DOCUMENT);
   const [description, setDescription] = useState(DESCRIPTION);
 
   const attach = () => {
@@ -199,17 +182,6 @@ export function PillFieldScreen() {
         </InlineHost>
       </View>
       <Markdown words={fenced(value)} repository={REPOSITORY} onOpenLink={openLink} />
-      <View style={[styles.field, { borderColor: colors.CHIP_EDGE }]}>
-        <PillField
-          value={writing}
-          onChange={setWriting}
-          repository={REPOSITORY}
-          placeholder={WORDS.PLACEHOLDER}
-          maxLines={16}
-          styled
-          testID="pill-field-styled"
-        />
-      </View>
       <View style={styles.acts}>
         <InlineHost matchContents>
           <Button
