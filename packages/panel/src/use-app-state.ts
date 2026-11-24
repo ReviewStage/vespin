@@ -18,6 +18,7 @@ import {
   loadedTasksFixture,
   loadTasksFixture,
 } from "./tasks/tasks-fixture-loader.js";
+import { IDLE_TIMEOUT_MS, runWhenIdle } from "./use-when-idle.js";
 
 /**
  * What a surface reads of the document is said once beneath the panel and
@@ -177,7 +178,12 @@ export interface AppStateFollowing {
 export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
   let staging: Promise<void> | undefined;
-  const taskList = taskListFollowing();
+
+  // Note that the task list's indexes are built once the window is idle after the first list lands, so its first paint never waits on them.
+  const taskList = taskListFollowing((run) => {
+    runWhenIdle(run, IDLE_TIMEOUT_MS.TASK_LIST_INDEXES);
+  });
+
   /** Whether the window draws a fixture run's list; unknown before the first read lands, while the pushes heard wait in `rowsHeard`. */
   let fixtureRun: boolean | undefined;
   let rowsHeard: TaskListDelivery[] = [];

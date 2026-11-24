@@ -63,7 +63,10 @@ export function followAppStateInto(
   bridge: AppStateBridgeReads,
   client: QueryClient,
 ): FollowedAppStateInto {
-  const taskList = taskListFollowing();
+  // Note that the task list's indexes are built once the JS thread is idle after the first list lands, so the launch's first frame never waits on them.
+  const taskList = taskListFollowing((run) => {
+    requestIdleCallback(() => run());
+  });
 
   const followed = followAppStateOver(
     bridge,

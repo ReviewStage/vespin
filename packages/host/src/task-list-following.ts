@@ -39,7 +39,7 @@ import type { ListedAgent } from "@repo/features/agent-wire";
 import type { ListedPullRequest, TaskPullRequests, TaskSummary } from "@repo/features/task-wire";
 import type { TaskListParts } from "@repo/features/tasks-view";
 import { keepIdentity } from "@repo/wire";
-import { type Collection, type CollectionConfig, createCollection } from "@tanstack/db";
+import { BasicIndex, type Collection, type CollectionConfig, createCollection } from "@tanstack/db";
 import type { TaskListDelivery, TaskListPartMoved } from "./app-state.js";
 
 /** One row a change writes, and whether the part held it before. */
@@ -279,10 +279,25 @@ export interface TaskListFollowing {
   readonly stop: () => void;
 }
 
-/** The collections of one client's task list, syncing from the moment they are made, and the feed its follow writes them through. */
-export function taskListFollowing(): TaskListFollowing {
+/** Runs `run` once the client's thread is next idle, as its page or app schedules work nobody waits on. */
+export type WhenIdle = (run: () => void) => void;
+
+/**
+ * The collections of one client's task list, syncing from the moment they
+ * are made, and the feed its follow writes them through. Once the first
+ * whole list is laid, the agents are indexed by their task and the tasks by
+ * their parent, when the client's thread is next idle (`whenIdle`), so a
+ * page's read of a task's agents or sub-tasks finds them by key rather than
+ * walking every row. Note that the indexes are built after the list lands
+ * rather than on the empty collections, because each row laid into an index
+ * cost the first lay, which the launch's first frame waits on, ~45% more at
+ * an account's size; none is built where no `whenIdle` is given.
+ */
+export function taskListFollowing(whenIdle?: WhenIdle): TaskListFollowing {
   let version = -1;
   let laid = false;
+  let indexing = false;
+  let stopped = false;
   /** The moved rows heard before any whole list was laid, in order. */
   let early: TaskListDelivery[] = [];
 
@@ -314,12 +329,24 @@ export function taskListFollowing(): TaskListFollowing {
     return true;
   };
 
+  // Asks for the indexes once, after the first whole list, built only if the follow still stands when the thread is idle.
+  const indexOnce = (): void => {
+    if (indexing || whenIdle === undefined) return;
+    indexing = true;
+    whenIdle(() => {
+      if (stopped) return;
+      collections.agents.createIndex((agent) => agent.taskId, { indexType: BasicIndex });
+      collections.tasks.createIndex((task) => task.parentTaskId, { indexType: BasicIndex });
+    });
+  };
+
   const lay = (view: TaskListParts): void => {
     laid = true;
     feeds.tasks.lay(view.tasks);
     feeds.taskAgents.lay(view.taskAgents ?? []);
     feeds.taskPullRequests.lay(view.taskPullRequests ?? []);
     feeds.agentPullRequests.lay(view.agentPullRequests ?? []);
+    indexOnce();
   };
 
   // Lays one moved part of the task list into the feed of the part it names.
@@ -372,6 +399,8 @@ export function taskListFollowing(): TaskListFollowing {
       for (const feed of Object.values(feeds)) feed.trouble(cause);
     },
     stop: () => {
+      stopped = true;
+
       // Note that the live queries reading the collections are cleaned up with them, since the follow stops only as the window, the app, or its account goes, and `cleanup()` alone rejects while one reads a collection (`@tanstack/db` 1.0's `Collection.cleanup` documents `dependents` for this).
       for (const collection of Object.values(collections))
         void collection.cleanup({ dependents: true });
