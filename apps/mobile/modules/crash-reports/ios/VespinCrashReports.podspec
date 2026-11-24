@@ -1,8 +1,8 @@
-# VespinCrashReports.podspec -- Sentry's native start as the app launches, held to this device's choice to share usage data (`CrashReportsModule.swift`), which Expo's autolinking finds under `modules/` and builds into the app.
+# VespinCrashReports.podspec -- whether this device shares usage data, kept where the AppDelegate's Sentry start reads it as the app launches (`CrashReportsModule.swift`), which Expo's autolinking finds under `modules/` and builds into the app.
 Pod::Spec.new do |s|
   s.name           = 'VespinCrashReports'
   s.version        = '0.1.0'
-  s.summary        = "Sentry's native start, held to whether this device shares usage data"
+  s.summary        = "Whether this device shares usage data, for Sentry's native start to read"
   s.license        = 'UNLICENSED'
   s.author         = 'Vespin'
   s.homepage       = 'https://vespin.dev'
@@ -12,7 +12,6 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
-  s.dependency 'RNSentry'
 
   s.source_files = '*.swift'
   s.pod_target_xcconfig = {

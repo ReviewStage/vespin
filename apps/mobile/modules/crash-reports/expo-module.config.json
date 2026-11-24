@@ -1,7 +1,6 @@
 {
   "platforms": ["apple"],
   "apple": {
-    "modules": ["CrashReportsModule"],
-    "appDelegateSubscribers": ["CrashReportsAppDelegate"]
+    "modules": ["CrashReportsModule"]
   }
 }
