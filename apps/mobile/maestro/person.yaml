@@ -1,4 +1,4 @@
-# person.yaml -- a person's chip in a thread's message and in an agent's transcript: held, it opens Open link and Copy link over the message's own menu; pressed, it opens the person's page, their name heading it and its ⋯ holding Copy link, Copy email and Manage in workspace settings; and a chip naming no member opens a page that says so.
+# person.yaml -- a person's chip in a thread's message and in an agent's transcript: held, it opens Open link and Copy link over the message's own menu; pressed, it opens the person's page, their name heading it and its ⋯ holding Copy link, Copy email and Manage in workspace settings; and a chip naming no member opens a page that says so; and the account's own page, opened by its link, leads with the Managers it started.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -110,3 +110,15 @@ env:
     timeout: 5000
 - takeScreenshot: person-chip-hold-transcript
 - tapOn: "Cancel"
+# The account's own page, opened by its link, leads with the Managers it
+# started: the fixture's Release manager, its face in the ring's place.
+- openLink: "vespin://tasks/person/user-ada"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Release manager"
+    timeout: 15000
+- assertVisible: "Managers.*"
+- waitForAnimationToEnd
+- takeScreenshot: person-managers
