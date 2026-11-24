@@ -717,50 +717,27 @@ private struct PreviewFace: View {
   }
 }
 
-/// The working mark, as `WorkingMark` drew it: two pixels chasing round a 3×3 grid on a 200 ms beat, each tailed by a fainter one, over the faint track; held on its resting frame where the reader reduces motion.
+/// The working mark, as `WorkingMark` draws it (`WorkingMark.swift`'s grid), held on its resting frame where the reader reduces motion.
 private struct PreviewWorkingMark: View {
   let node: PreviewNodeData
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-  /// How long a step of the beat lasts: the panel's 200 ms (`working-beat.ts`).
-  private static let beat: TimeInterval = 0.2
-
   var body: some View {
-    if reduceMotion {
-      grid(beat: 0)
-    } else {
-      TimelineView(.periodic(from: .now, by: Self.beat)) { context in
-        grid(beat: Int(context.date.timeIntervalSinceReferenceDate / Self.beat))
-      }
-    }
-  }
-
-  private func grid(beat: Int) -> some View {
-    let side = CGFloat(node.side ?? 0)
-    let track = node.track ?? []
-    let opacity = node.opacity
-    return ZStack(alignment: .topLeading) {
-      ForEach(Array(track.indices), id: \.self) { index in
-        square(index, shade: opacity?.track ?? 0)
-      }
-      ForEach(Array((node.dots ?? []).enumerated()), id: \.offset) { _, dot in
-        square(dot.restsOn + beat, shade: dot.tail ? opacity?.tail ?? 0 : opacity?.lead ?? 0)
-      }
-    }
-    .frame(width: side, height: side, alignment: .topLeading)
+    WorkingGrid(
+      ink: Color(vespinHex: node.ink ?? ""),
+      side: CGFloat(node.side ?? 0),
+      cell: CGFloat(node.cell ?? 0),
+      pitch: CGFloat(node.pitch ?? 0),
+      inset: CGFloat(node.inset ?? 0),
+      track: node.track ?? [],
+      dots: (node.dots ?? []).map { WorkingGridDot(restsOn: $0.restsOn, tail: $0.tail) },
+      shades: WorkingGridShades(
+        track: node.opacity?.track ?? 0,
+        tail: node.opacity?.tail ?? 0,
+        lead: node.opacity?.lead ?? 0
+      ),
+      still: reduceMotion
+    )
     .accessibilityHidden(true)
-  }
-
-  private func square(_ index: Int, shade: Double) -> some View {
-    let track = node.track ?? []
-    let cell = CGFloat(node.cell ?? 0)
-    let pitch = CGFloat(node.pitch ?? 0)
-    let inset = CGFloat(node.inset ?? 0)
-    let at = track.isEmpty ? [0, 0] : track[index % track.count]
-    return RoundedRectangle(cornerRadius: cell / 4)
-      .frame(width: cell, height: cell)
-      .foregroundStyle(Color(vespinHex: node.ink ?? ""))
-      .opacity(shade)
-      .offset(x: inset + CGFloat(at[0]) * pitch, y: inset + CGFloat(at[1]) * pitch)
   }
 }

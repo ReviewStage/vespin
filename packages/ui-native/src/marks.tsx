@@ -11,10 +11,8 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
-  Animation,
   accessibilityHidden,
   accessibilityLabel,
-  animation,
   fixedSize,
   font,
   foregroundStyle,
@@ -42,11 +40,12 @@ import {
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
 import { identityLetter } from "@repo/features/workspace-tile";
-import { memo, useState, useSyncExternalStore } from "react";
+import { memo, useState } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
+import { workingBob } from "./interactions.js";
 import { managerFaceAsset } from "./manager-face-look.js";
 import {
   HARNESS_MARK_ASSET,
@@ -73,7 +72,7 @@ import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
-import { readWorkingBeat, subscribeWorkingBeat } from "./working-beat.js";
+import { NativeWorkingMark } from "./working-mark-native.js";
 import { tileHue } from "./workspace-tile-model.js";
 
 /** How faint a done row's dot stands, as the panel fades a done row's unread column. */
@@ -467,29 +466,14 @@ const FACE_DISC_OUT = 2;
 const FACE_BOB = 0.08;
 const FACE_BOB_SECONDS = 0.8;
 
-/** How many of the working beat's steps a bob's rise or fall lasts, so a face and the mark beside it keep one time. */
-const FACE_BOB_STEPS = 4;
-
-/** Never bobs, for a face at rest or held still. */
-function holdBob(): () => void {
-  return () => undefined;
-}
-
-/** Whether a working face stands risen: half the working mark's lap up, half down, read off the one beat, so it draws again only as it turns; never where it rests or the reader reduces motion. */
-function useBobRisen(bobs: boolean): boolean {
-  return useSyncExternalStore(
-    bobs ? subscribeWorkingBeat : holdBob,
-    () => bobs && Math.floor(readWorkingBeat() / FACE_BOB_STEPS) % 2 === 0,
-  );
-}
-
 /**
  * A Manager's face, as the panel's `ManagerFace` draws it
  * (`@repo/features/manager-face`'s character and color): one vector picture
  * of the asset catalog (`managerFaceAsset`), drawn and cached by the system,
  * so a long list of them costs no more than its glyphs. At rest it smiles;
  * while the Manager works the same character turns excited, bobs gently
- * on the working beat, SwiftUI easing each rise and fall, and, as a mark
+ * in the working mark's time, SwiftUI keeping and easing each rise and fall
+ * (`workingBob`), and, as a mark
  * of its own, wears the working mark on a disc of the ground at its end
  * corner (`MANAGER_FACE_SEAT`), so working
  * changes how the face looks and never which face it is. Where the reader
@@ -511,7 +495,6 @@ export const ManagerFace = memo(function ManagerFace({
 }) {
   const colors = useColors();
   const reduceMotion = useReduceMotion();
-  const risen = useBobRisen(working && !reduceMotion);
   const disc = Math.max(FACE_DISC_LEAST, size * FACE_DISC_SCALE);
 
   return (
@@ -524,10 +507,7 @@ export const ManagerFace = memo(function ManagerFace({
         modifiers={[
           resizable(),
           frame({ width: size, height: size }),
-          offset({ y: risen ? -size * FACE_BOB : 0 }),
-          ...(working && !reduceMotion
-            ? [animation(Animation.easeInOut({ duration: FACE_BOB_SECONDS }), risen)]
-            : []),
+          ...(working && !reduceMotion ? [workingBob(size * FACE_BOB, FACE_BOB_SECONDS)] : []),
         ]}
       />
       {working && seat === MANAGER_FACE_SEAT.MARK ? (
@@ -624,29 +604,18 @@ export function FailedMark() {
   );
 }
 
-/** A beat that never moves, for a mark held still. */
-function holdBeat(): () => void {
-  return () => undefined;
-}
-
-/** The beat a mark steps on: the one shared beat, or its resting frame where the reader reduces motion. */
-function useBeat(still: boolean): number {
-  return useSyncExternalStore(still ? holdBeat : subscribeWorkingBeat, () =>
-    still ? 0 : readWorkingBeat(),
-  );
-}
-
 /**
  * The one mark an agent at work wears, the panel's own (`@repo/ui`'s
  * `WorkingMark`): two pixels chasing each other round the edge of a 3×3 grid
  * of 3 pt cells 2 pt apart, in the muted ink, each tailed by a fainter one,
- * stepping a cell on the one 200 ms beat every mark on screen shares
- * (`working-beat.ts`), so the eight cells lap in 1.6 s and every mark steps
- * together. Its 16 pt side grows with the reader's text size. Where the
- * reader reduces motion it holds its resting frame, chosen mid-lap so a
- * still mark lights four cells and reads as working. Note that only the
- * mark itself draws again on a step, never the row it stands in, since it
- * reads the beat alone. It is heard as Working.
+ * stepping a cell each 200 ms, so the eight cells lap in 1.6 s. SwiftUI
+ * draws and steps it (`working-mark-native.ts`), each mark reading its step
+ * off the system's clock, so every mark on screen steps together and no
+ * JavaScript timer or render keeps it moving: a list of working agents
+ * once re-rendered every mark five times a second, walking the whole tree.
+ * Its 16 pt side grows with the reader's text size. Where the reader
+ * reduces motion it holds its resting frame, chosen mid-lap so a still mark
+ * lights four cells and reads as working. It is heard as Working.
  */
 export function WorkingMark({
   side: given,
@@ -658,46 +627,24 @@ export function WorkingMark({
   const scaled = useScaledSize(WORKING_SIDE);
   const side = given ?? scaled;
   const scale = side / WORKING_SIDE;
-  const beat = useBeat(useReduceMotion());
-  const cell = WORKING_CELL * scale;
-
-  const square = (index: number, shade: number, key: string) => {
-    const [column, row] = WORKING_TRACK[index % WORKING_TRACK.length] ?? WORKING_TRACK[0];
-
-    return (
-      <RoundedRectangle
-        key={key}
-        cornerRadius={cell / 4}
-        modifiers={[
-          frame({ width: cell, height: cell }),
-          foregroundStyle(colors.TEXT_MUTED),
-          opacity(shade),
-          offset({
-            x: (WORKING_INSET + column * WORKING_PITCH) * scale,
-            y: (WORKING_INSET + row * WORKING_PITCH) * scale,
-          }),
-        ]}
-      />
-    );
-  };
 
   return (
-    <ZStack
-      alignment="topLeading"
-      modifiers={[
-        frame({ width: side, height: side, alignment: "topLeading" }),
-        accessibilityLabel(GLYPH_STATE_WORDS[GLYPH_STATE.WORKING]),
-      ]}
-    >
-      {WORKING_TRACK.map((_, index) => square(index, WORKING_OPACITY.TRACK, `track-${index}`))}
-      {WORKING_DOTS.map(({ restsOn, tail }) =>
-        square(
-          restsOn + beat,
-          tail ? WORKING_OPACITY.TAIL : WORKING_OPACITY.LEAD,
-          `dot-${restsOn}`,
-        ),
-      )}
-    </ZStack>
+    <NativeWorkingMark
+      ink={colors.TEXT_MUTED}
+      side={side}
+      cell={WORKING_CELL * scale}
+      pitch={WORKING_PITCH * scale}
+      inset={WORKING_INSET * scale}
+      track={WORKING_TRACK}
+      dots={WORKING_DOTS}
+      shades={{
+        track: WORKING_OPACITY.TRACK,
+        tail: WORKING_OPACITY.TAIL,
+        lead: WORKING_OPACITY.LEAD,
+      }}
+      still={useReduceMotion()}
+      modifiers={[accessibilityLabel(GLYPH_STATE_WORDS[GLYPH_STATE.WORKING])]}
+    />
   );
 }
 
