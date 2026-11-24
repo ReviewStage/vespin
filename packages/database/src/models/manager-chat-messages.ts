@@ -523,3 +523,332 @@ export function deleteDroppedManagerChat(
 
   return deleteDropped({ userId, agentId, ...dropped });
 }
+
+/**
+ * A message a one-time backfill plans for a Manager's chat, as its transcript
+ * holds it (`service/src/maintenance/manager-chat-backfill.ts`): its key, the
+ * id the transcript says a live write landed it under where it says one, and
+ * what it says, by whom, and when.
+ */
+export interface ManagerChatBackfillMessage {
+  readonly clientKey: string;
+  /** The id a send's answer named, which says the message was written live under it; null where the answer named none. */
+  readonly liveId: string | null;
+  readonly authorKind: ManagerChatMessage["authorKind"];
+  readonly authorUserId: string | null;
+  readonly authorName: string;
+  readonly text: string;
+  readonly attachments: readonly ManagerChatAttachment[];
+  readonly turnId: string | null;
+  readonly lineId: string | null;
+  readonly createdAt: Date;
+}
+
+/** What a backfill of one Manager's chat came to, or would come to on a dry run, in counts alone. */
+export interface ManagerChatBackfilled {
+  /** Planned messages a row already stood for. */
+  readonly standing: number;
+  /** Planned messages written as new rows. */
+  readonly written: number;
+  /** Rows already standing given a later place, so the chat reads in its transcript's order. */
+  readonly moved: number;
+}
+
+/** A Manager as a backfill reads it: its id, its starter, its conversation, and what names it. */
+export interface ManagerOfBackfill {
+  readonly id: string;
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly title: string | null;
+  readonly model: string;
+  readonly automationName: string | null;
+  /** The starter's name as it stands, which a line kept before senders were is theirs under; empty once their account is gone. */
+  readonly starterName: string;
+}
+
+const BackfillRowSchema = Schema.Struct({
+  id: Schema.String,
+  seq: Schema.Number,
+  clientKey: Schema.String,
+  authorKind: Schema.Literals(Object.values(MANAGER_CHAT_AUTHOR)),
+  text: Schema.String,
+  attachments: Schema.Array(managerChatAttachmentSchema),
+  turnId: Schema.NullOr(Schema.String),
+  lineId: Schema.NullOr(Schema.String),
+});
+
+type BackfillRow = typeof BackfillRowSchema.Type;
+
+/** A place in the backfilled chat: a row already standing, a planned message no row stands for, or both where one matched. */
+interface BackfillEntry {
+  readonly row: BackfillRow | undefined;
+  readonly planned: ManagerChatBackfillMessage | undefined;
+}
+
+const findEveryManager = SqlSchema.findAll({
+  Request: Schema.Struct({
+    after: Schema.NullOr(Schema.String),
+    agent: Schema.NullOr(Schema.String),
+    limit: Schema.Number,
+  }),
+  Result: Schema.Struct({
+    id: Schema.String,
+    userId: Schema.String,
+    conversationId: Schema.String,
+    title: Schema.NullOr(Schema.String),
+    model: Schema.String,
+    automationName: Schema.NullOr(Schema.String),
+    starterName: Schema.NullOr(Schema.String),
+  }),
+  execute: ({ after, agent, limit }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: agentTable.id,
+          userId: agentTable.userId,
+          conversationId: agentTable.conversationId,
+          title: agentTable.title,
+          model: agentTable.model,
+          automationName: agentAutomationNameSql(agentTable),
+          starterName: user.name,
+        })
+        .from(agentTable)
+        .leftJoin(user, eq(user.id, agentTable.userId))
+        .where(
+          and(
+            eq(agentTable.kind, AGENT_KIND.MANAGER),
+            after === null ? undefined : sql`${agentTable.id} > ${after}::uuid`,
+            agent === null ? undefined : eq(agentTable.id, agent),
+          ),
+        )
+        .orderBy(asc(agentTable.id))
+        .limit(limit),
+    ),
+});
+
+const lockManager = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: (agentId) =>
+    Database.use((db) =>
+      db
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(and(eq(agentTable.id, agentId), eq(agentTable.kind, AGENT_KIND.MANAGER)))
+        .limit(1)
+        .for("no key update", { of: agentTable }),
+    ),
+});
+
+const findBackfillRows = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: BackfillRowSchema,
+  execute: (agentId) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: managerChatMessage.id,
+          seq: managerChatMessage.seq,
+          clientKey: managerChatMessage.clientKey,
+          authorKind: managerChatMessage.authorKind,
+          text: managerChatMessage.text,
+          attachments: managerChatMessage.attachments,
+          turnId: managerChatMessage.turnId,
+          lineId: managerChatMessage.lineId,
+        })
+        .from(managerChatMessage)
+        .where(eq(managerChatMessage.agentId, agentId))
+        .orderBy(asc(managerChatMessage.seq)),
+    ),
+});
+
+/** The ids of a message's files, in order, which two sightings of one message share. */
+function attachmentIds(attachments: readonly ManagerChatAttachment[]): string {
+  return JSON.stringify(attachments.map((file) => file.id));
+}
+
+/** Whether a row says what a planned message says, by the same kind of author, in the same turn and on the same line where both name one. */
+function sameSaying(row: BackfillRow, planned: ManagerChatBackfillMessage): boolean {
+  return (
+    row.authorKind === planned.authorKind &&
+    row.text.trim() === planned.text.trim() &&
+    attachmentIds(row.attachments) === attachmentIds(planned.attachments) &&
+    (row.turnId === null || planned.turnId === null || row.turnId === planned.turnId) &&
+    (row.lineId === null || planned.lineId === null || row.lineId === planned.lineId)
+  );
+}
+
+/** The row a planned message is by name: the one under its key, which an earlier backfill wrote; the one under the id its send answered; or the one on its line. */
+function namedRowOf(
+  planned: ManagerChatBackfillMessage,
+  free: readonly BackfillRow[],
+): BackfillRow | undefined {
+  return (
+    free.find((row) => row.clientKey === planned.clientKey) ??
+    (planned.liveId === null ? undefined : free.find((row) => row.id === planned.liveId)) ??
+    (planned.lineId === null ? undefined : free.find((row) => row.lineId === planned.lineId))
+  );
+}
+
+/**
+ * The chat as it should stand: the planned messages in their transcript's
+ * order, each with the row it already stands as, and every row no planned
+ * message took kept just after the row before it in the chat's order, so a
+ * message written live and missing from the transcript read keeps its place.
+ * A message takes the row that names it first (`namedRowOf`), and only then,
+ * among the rows left, the oldest that says what it says, which a live
+ * write of a call's line, or of a send whose answer the transcript lacks,
+ * left; so an old message never takes the row a later one is by name.
+ */
+function backfilledChat(
+  rows: readonly BackfillRow[],
+  planned: readonly ManagerChatBackfillMessage[],
+): readonly BackfillEntry[] {
+  const free = [...rows];
+
+  const take = (row: BackfillRow | undefined) => {
+    if (row !== undefined) free.splice(free.indexOf(row), 1);
+
+    return row;
+  };
+
+  const named = planned.map((message) => take(namedRowOf(message, free)));
+
+  const entries: BackfillEntry[] = planned.map((message, index) => ({
+    row: named[index] ?? take(free.find((row) => sameSaying(row, message))),
+    planned: message,
+  }));
+
+  for (const row of free) {
+    const before = entries.findLastIndex(
+      (entry) => entry.row !== undefined && entry.row.seq < row.seq,
+    );
+
+    entries.splice(before + 1, 0, { row, planned: undefined });
+  }
+
+  return entries;
+}
+
+/** Where the chat first stands out of its order: the first entry no row stands for, or whose row stands before one above it; none where every entry stands in order. */
+function firstOutOfPlace(entries: readonly BackfillEntry[]): number | undefined {
+  let highest = Number.NEGATIVE_INFINITY;
+
+  for (const [index, { row }] of entries.entries()) {
+    if (row === undefined || row.seq <= highest) return index;
+    highest = row.seq;
+  }
+
+  return undefined;
+}
+
+/** A standing row given the chat's next place, its id, key, and words untouched. */
+const moveToEnd = (agentId: string, id: string) =>
+  Effect.flatMap(
+    SqlClient.SqlClient,
+    (client) =>
+      client`update manager_chat_message set seq = default where agent_id = ${agentId} and id = ${id}`,
+  );
+
+/** A planned message inserted under the first id of its key's digest no message holds; none where every one is held. */
+const insertedPlanned = Effect.fnUntraced(function* (
+  agentId: string,
+  planned: ManagerChatBackfillMessage,
+  held: Set<string>,
+) {
+  for (const id of managerChatIdsOf(planned.clientKey)) {
+    if (held.has(id)) continue;
+    const { clientKey, authorKind, authorUserId, authorName, text, attachments } = planned;
+
+    const [inserted] = yield* insertMessage({
+      agentId,
+      id,
+      clientKey,
+      authorKind,
+      authorUserId,
+      authorName,
+      text,
+      attachments,
+      threadRoot: null,
+      broadcast: false,
+      turnId: planned.turnId,
+      lineId: planned.lineId,
+      now: planned.createdAt,
+    });
+
+    if (inserted !== undefined) {
+      held.add(id);
+
+      return true;
+    }
+  }
+
+  return false;
+});
+
+/** Every Manager past the id given, or the one named, in the order of their ids, at most `limit`: a backfill's next batch, whatever account started each. */
+export function listManagersForBackfill(batch: {
+  readonly after: string | null;
+  readonly agent: string | null;
+  readonly limit: number;
+}): AgentStoreEffect<readonly ManagerOfBackfill[]> {
+  const { after, agent, limit } = batch;
+
+  return Effect.map(findEveryManager({ after, agent, limit }), (managers) =>
+    managers.map((manager) => ({ ...manager, starterName: manager.starterName ?? "" })),
+  );
+}
+
+/**
+ * The Manager's chat backfilled from the messages its transcript holds, in
+ * one transaction under the Manager's lock: each planned message a row
+ * already stands as is left (`rowOf`), each other written under its key,
+ * and, from the first place the chat stands out of its transcript's order,
+ * every row given the chat's next place in turn, so old messages read
+ * before those written live since. A dry run writes nothing and answers
+ * what a run would do. Run again, it finds every message standing in
+ * order, and writes nothing. None where the agent is no Manager.
+ *
+ * Note that it is no account's read: it is the one-time move of every
+ * Manager's chat, asked by hand under the deployment's secret.
+ */
+export function backfillManagerChat(
+  agentId: string,
+  planned: readonly ManagerChatBackfillMessage[],
+  options: { readonly dry: boolean },
+): AgentStoreEffect<Option.Option<ManagerChatBackfilled>> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        if (Option.isNone(yield* lockManager(agentId))) return Option.none();
+        const rows = yield* findBackfillRows(agentId);
+        const entries = backfilledChat(rows, planned);
+        const start = firstOutOfPlace(entries);
+        const from = start === undefined ? [] : entries.slice(start);
+
+        const standing = entries.filter(
+          (entry) => entry.row !== undefined && entry.planned !== undefined,
+        ).length;
+
+        const written = from.filter((entry) => entry.row === undefined).length;
+        const moved = from.length - written;
+
+        if (options.dry || start === undefined) return Option.some({ standing, written, moved });
+        const held = new Set(rows.map((row) => row.id));
+
+        for (const entry of from) {
+          if (entry.row !== undefined) {
+            yield* moveToEnd(agentId, entry.row.id);
+          } else if (
+            entry.planned !== undefined &&
+            !(yield* insertedPlanned(agentId, entry.planned, held))
+          ) {
+            return yield* Effect.die(new Error("no id of a backfilled message's key was free"));
+          }
+        }
+
+        return Option.some({ standing, written, moved });
+      }),
+    ),
+  );
+}
