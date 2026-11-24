@@ -1,7 +1,6 @@
 import type { AgentFork } from "@repo/features/agent-fork-model";
 import {
   AGENT_BOUNDS,
-  AGENT_KIND,
   AGENT_STATUS,
   type AgentAttachment,
   type AgentStatus,
@@ -992,6 +991,7 @@ export function MainTabContent({
   onContinue,
   onSuggest,
   threads,
+  chat = false,
 }: {
   tab: Exclude<MainTab, typeof MAIN_TAB.OVERVIEW>;
   agents: AgentsSource;
@@ -1015,6 +1015,8 @@ export function MainTabContent({
   onSuggest?: SuggestDoor | undefined;
   /** The threads the agent posted that wait on the developer, docked over its box; none where nothing waits. */
   threads?: AgentThreads | undefined;
+  /** Whether the agent's chat is drawn (`ManagerChatTab`) rather than its transcript, as a Manager's page's Messages tab asks; every other tab draws the transcript. */
+  chat?: boolean | undefined;
 }): React.JSX.Element {
   // Note that the tab's own agent's row is followed here, the others read as they stand, so a step of another agent's turn draws none of the tab.
   const agents = useTaskAgentsFor(
@@ -1066,8 +1068,8 @@ export function MainTabContent({
                 })
           }
         >
-          {agent?.kind === AGENT_KIND.MANAGER ? (
-            // A Manager's page is its chat, never its transcript, which the chat reads only for its work.
+          {chat && agent !== undefined ? (
+            // Note that the caller asks for the chat, never the agent's kind, so a Manager's page's Agent tab draws its transcript as any agent's tab does.
             <ManagerChatTab
               agent={agent}
               control={agents}
