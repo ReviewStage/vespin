@@ -353,7 +353,11 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         started = host;
         noteLaunchPhase(LAUNCH_PHASE.STARTED);
         const client = new QueryClient();
-        const following = followAppStateInto(host.bridge, client);
+
+        const following = followAppStateInto(host.bridge, client, (run) => {
+          requestIdleCallback(() => run());
+        });
+
         stopFollowing = following.stop;
 
         try {

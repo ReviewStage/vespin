@@ -25,7 +25,11 @@ import {
   followAppStateOver,
   shareAppState,
 } from "@repo/host/app-state-reads";
-import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
+import {
+  type TaskListCollections,
+  taskListFollowing,
+  type WhenIdle,
+} from "@repo/host/task-list-following";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { noteDelivered } from "../launch-phases.js";
 
@@ -57,16 +61,16 @@ export interface FollowedAppStateInto extends FollowedAppState {
  * the first whole read, then each delivery laid over what is held. The task
  * list's collections take the lists the whole read answers beside the
  * document, and the rows each delivery carries beside it, heard from before
- * the read is asked.
+ * the read is asked. `whenIdle` runs the build of the collections' indexes
+ * once the thread is idle after the first list lands, so the launch's first
+ * frame never waits on them; with none, no index is built.
  */
 export function followAppStateInto(
   bridge: AppStateBridgeReads,
   client: QueryClient,
+  whenIdle?: WhenIdle,
 ): FollowedAppStateInto {
-  // Note that the task list's indexes are built once the JS thread is idle after the first list lands, so the launch's first frame never waits on them.
-  const taskList = taskListFollowing((run) => {
-    requestIdleCallback(() => run());
-  });
+  const taskList = taskListFollowing(whenIdle);
 
   const followed = followAppStateOver(
     bridge,
