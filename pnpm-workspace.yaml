@@ -226,6 +226,16 @@ patchedDependencies:
 # queue there.
   expo-notifications@58.1.8: patches/expo-notifications@58.1.8.patch
 #
+# `expo-quick-actions` 6.0.2 takes a cold launch's quick action only from
+# `launchOptions` in `didFinishLaunching`, but under the scene life cycle
+# Expo 58's scene delegate forwards it to `performActionFor`, where the
+# library only posts an event JavaScript isn't listening for yet, so a Home
+# Screen quick action that woke the app was dropped. The patch also keeps
+# that first item as `QuickActions.initial`, which `useQuickActionRouting`
+# reads once the tabs mount. Delete it when a release reads a scene's
+# launch item.
+  expo-quick-actions@6.0.2: patches/expo-quick-actions@6.0.2.patch
+#
 # `expo-symbols` 58.0.4's `SymbolView` reads its name as an SF Symbol alone
 # (`UIImage(systemName:)`), so a custom symbol the app's asset catalog holds,
 # such as the Lucide glyphs `@repo/ui-native` draws, stays blank. The patch

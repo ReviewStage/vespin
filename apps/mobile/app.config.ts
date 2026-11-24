@@ -1068,6 +1068,32 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // in the foreground alone; the plugin writes the microphone's purpose
       // string, the same as every other plugin naming it.
       ["expo-audio", { microphonePermission: MICROPHONE_USAGE, enableBackgroundRecording: false }],
+      // The Home Screen's quick actions on the app's icon, written into the
+      // Info.plist so they stand from install: New task, Search, and the
+      // Inbox, each opening the route its `href` names once the tabs mount
+      // (`useQuickActionRouting` in `src/app/(tabs)/_layout.tsx`). Note that
+      // their glyphs are SF Symbols, since the Home Screen draws the menu as
+      // its own.
+      [
+        "expo-quick-actions",
+        {
+          iosActions: [
+            {
+              id: "new-task",
+              title: "New Task",
+              icon: "symbol:square.and.pencil",
+              params: { href: "/start-task" },
+            },
+            {
+              id: "search",
+              title: "Search",
+              icon: "symbol:magnifyingglass",
+              params: { href: "/search" },
+            },
+            { id: "inbox", title: "Inbox", icon: "symbol:tray", params: { href: "/inbox" } },
+          ],
+        },
+      ],
       [
         "@config-plugins/react-native-webrtc",
         { cameraPermission: CAMERA_USAGE, microphonePermission: MICROPHONE_USAGE },
