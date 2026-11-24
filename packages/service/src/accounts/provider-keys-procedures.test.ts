@@ -1123,6 +1123,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const { owner, ask } = yield* openAccounts({ ring: KEK.ONE, auth: device.auth });
         yield* TestClock.adjust("1 hour");
         yield* connectPlan(ask, owner);
+        const [plan] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+        assert.ok(plan, "the plan is connected");
         const now = new Date(yield* Clock.currentTimeMillis);
         const resetsAt = new Date(now.getTime() + 30 * 60_000);
         yield* setPlanStatus(
@@ -1133,6 +1135,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           resetsAt,
           now,
           now,
+          plan.id,
         );
 
         const standing = (read: Answer) =>
@@ -1163,6 +1166,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const { owner, ask } = yield* openAccounts({ ring: KEK.ONE, auth: device.auth });
         yield* TestClock.adjust("1 hour");
         yield* connectPlan(ask, owner);
+        const [plan] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+        assert.ok(plan, "the plan is connected");
         const now = new Date(yield* Clock.currentTimeMillis);
         const session = { usedPercent: 42, windowMins: 300, resetsAt: now.getTime() + 30 * 60_000 };
 
@@ -1180,6 +1185,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             window,
             now,
             now,
+            plan.id,
           );
         }
 
@@ -1328,6 +1334,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             });
 
             yield* connectPlan(ask, owner);
+            const [plan] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+            assert.ok(plan, "the plan is connected");
             yield* TestClock.adjust("5 minutes");
             const now = new Date(yield* Clock.currentTimeMillis);
             // A turn that met the limit before Codex reported a reset names none, so no reset lifts it.
@@ -1339,6 +1347,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
               undefined,
               now,
               now,
+              plan.id,
             );
 
             return keysOf(yield* ask(request(owner))).subscriptions?.[0]?.status;

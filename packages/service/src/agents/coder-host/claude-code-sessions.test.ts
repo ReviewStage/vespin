@@ -366,7 +366,7 @@ const savePlan = (userId: string) =>
       kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
     };
 
-    yield* saveProviderKey(
+    return yield* saveProviderKey(
       userId,
       owner.provider,
       owner.kind,
@@ -378,7 +378,9 @@ const savePlan = (userId: string) =>
   });
 
 /** An account with one agent on a task with no repository, on its Claude plan. */
-const openAgent = Effect.tap(openAgentWithoutPlan, ({ userId }) => savePlan(userId));
+const openAgent = Effect.flatMap(openAgentWithoutPlan, (opened) =>
+  Effect.map(savePlan(opened.userId), (plan) => ({ ...opened, plan })),
+);
 
 /** The sessions for the account, the next event number read from the counter given. */
 function sessionsFor(userId: string, sequence: { next: number }) {
@@ -1248,7 +1250,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const { userId, agent } = yield* openAgent;
+        const { userId, agent, plan } = yield* openAgent;
 
         const owner = {
           userId,
@@ -1262,7 +1264,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         ) =>
           Effect.gen(function* () {
             const now = yield* DateTime.nowAsDate;
-            yield* setPlanStatus(userId, owner.provider, owner.kind, status, resetsAt, now, now);
+            yield* setPlanStatus(
+              userId,
+              owner.provider,
+              owner.kind,
+              status,
+              resetsAt,
+              now,
+              now,
+              plan,
+            );
           });
 
         const openOn = (api: ReturnType<typeof runnerSandboxApi>) =>
@@ -1457,7 +1468,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(Option.isSome(started));
         const agent = started.value.agent;
         // The account keeps a plan too, refused, which has no room for a turn.
-        yield* savePlan(userId);
+        const plan = yield* savePlan(userId);
         const now = yield* DateTime.nowAsDate;
         yield* setPlanStatus(
           userId,
@@ -1467,6 +1478,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           undefined,
           now,
           now,
+          plan,
         );
         const ring = parseKeyRing(Redacted.make(RING));
         assert.ok(Result.isSuccess(ring));
@@ -1549,7 +1561,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const { userId, agent } = yield* openAgent;
+        const { userId, agent, plan } = yield* openAgent;
         const ring = parseKeyRing(Redacted.make(RING));
         assert.ok(Result.isSuccess(ring));
 
@@ -1582,6 +1594,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           new Date(now.getTime() + 30 * 60_000),
           now,
           now,
+          plan,
         );
 
         const sentOn = (on: Agent) =>

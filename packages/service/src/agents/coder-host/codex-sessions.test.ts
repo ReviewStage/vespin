@@ -261,7 +261,7 @@ const signIn = (userId: string, minutesLeft: number) =>
       accessExpiresAt,
     });
 
-    yield* saveProviderKey(
+    return yield* saveProviderKey(
       userId,
       PROVIDER_KEY_PROVIDER.OPENAI,
       PROVIDER_KEY_KIND.CHATGPT_OAUTH,
@@ -553,7 +553,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         yield* Effect.flatMap(Database, (db) =>
           db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
         );
-        yield* signIn(userId, 60);
+        const plan = yield* signIn(userId, 60);
 
         const owner = {
           userId,
@@ -659,6 +659,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           new Date(now.getTime() + 30 * 60_000),
           now,
           now,
+          plan,
         );
 
         // Each digest is the first 32 hex characters of the SHA-256 of
@@ -1090,7 +1091,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const { userId, agent } = yield* openAgent;
-        yield* signIn(userId, 60);
+        const plan = yield* signIn(userId, 60);
         const now = yield* DateTime.nowAsDate;
         const resetsAt = new Date(now.getTime() + 30 * 60_000);
         yield* setPlanStatus(
@@ -1101,6 +1102,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           resetsAt,
           now,
           now,
+          plan,
         );
         const limited = runnerSandboxApi();
         const limitedSessions = yield* sessionsFor(userId).pipe(Effect.provide(services(limited)));
@@ -1131,6 +1133,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           undefined,
           yield* DateTime.nowAsDate,
           yield* DateTime.nowAsDate,
+          plan,
         );
         const ineligible = runnerSandboxApi();
 
