@@ -14,6 +14,7 @@
 import { managerCreateRefusalWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_KIND, type AgentRunsOnRequest, type ListedAgent } from "@repo/features/agent-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
 import { placeIdOf } from "@repo/features/runs-on-places";
@@ -122,12 +123,13 @@ export function useManagerChatLooks(
   }, [acts, agentId, saidAt]);
 }
 
-/** What New Manager makes: its name, its repositories, the first its checkout, where it runs (`CLOUD` or a device's id), and its model and effort. */
+/** What New Manager makes: its name, its repositories, the first its checkout, where it runs (`CLOUD` or a device's id), its model and effort, and its face, the service's pick where none is named. */
 export interface ManagerAsk {
   readonly name: string;
   readonly repositories: readonly [string, ...string[]];
   readonly runsOn: AgentRunsOnRequest;
   readonly choice: ModelChoice;
+  readonly face?: ManagerFace | undefined;
 }
 
 /** What a New Manager's Create came to: the Manager made, or why it was not. */
@@ -141,6 +143,8 @@ function sameAsk(one: ManagerAsk, other: ManagerAsk): boolean {
     placeIdOf(one.runsOn) === placeIdOf(other.runsOn) &&
     one.choice.model === other.choice.model &&
     one.choice.effort === other.choice.effort &&
+    one.face?.character === other.face?.character &&
+    one.face?.color === other.face?.color &&
     one.repositories.length === other.repositories.length &&
     one.repositories.every((repository, at) => repository === other.repositories[at])
   );
@@ -148,7 +152,8 @@ function sameAsk(one: ManagerAsk, other: ManagerAsk): boolean {
 
 /**
  * New Manager's Create in `workspaceId` (`AGENTS_CREATE_MANAGER`), as the
- * desktop's card sends it, wearing the face the service picks: under one
+ * desktop's card sends it, wearing the face picked, or the service's pick
+ * where none is: under one
  * key while what it names stands, so a Create sent again after no answer
  * makes one Manager, and a new key once anything it names changed. A
  * refusal says why in the desktop's words for a Manager's Create, else a
@@ -177,6 +182,8 @@ export function useCreateManager(
       runsOn: ask.runsOn,
       model: ask.choice.model,
       effort: ask.choice.effort,
+      // Note that a face is sent only once picked, so one left alone is the service's pick, as the desktop's card sends it.
+      ...(ask.face === undefined ? undefined : { face: ask.face }),
     }).catch((cause: unknown) => {
       console.error("The Manager's Create did not go.", cause);
 

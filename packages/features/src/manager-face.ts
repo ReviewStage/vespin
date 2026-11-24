@@ -46,6 +46,26 @@ export const MANAGER_FACE_COLOR = {
 
 export type ManagerFaceColor = (typeof MANAGER_FACE_COLOR)[keyof typeof MANAGER_FACE_COLOR];
 
+/** What each character is called, as a face is named to a reader who cannot see it. */
+export const MANAGER_FACE_CHARACTER_NAME = {
+  [MANAGER_FACE_CHARACTER.GHOST]: "Ghost",
+  [MANAGER_FACE_CHARACTER.PLANET]: "Planet",
+  [MANAGER_FACE_CHARACTER.CAT]: "Cat",
+  [MANAGER_FACE_CHARACTER.BACKPACK]: "Backpack",
+  [MANAGER_FACE_CHARACTER.MUG]: "Mug",
+  [MANAGER_FACE_CHARACTER.SPEECH_BUBBLE]: "Speech bubble",
+} as const satisfies Record<ManagerFaceCharacter, string>;
+
+/** What each color is called, as a face is named. */
+export const MANAGER_FACE_COLOR_NAME = {
+  [MANAGER_FACE_COLOR.YELLOW]: "Yellow",
+  [MANAGER_FACE_COLOR.GREEN]: "Green",
+  [MANAGER_FACE_COLOR.BLUE]: "Blue",
+  [MANAGER_FACE_COLOR.PINK]: "Pink",
+  [MANAGER_FACE_COLOR.PURPLE]: "Purple",
+  [MANAGER_FACE_COLOR.PEACH]: "Peach",
+} as const satisfies Record<ManagerFaceColor, string>;
+
 /** A Manager's face: its character and the color it is drawn in. */
 export interface ManagerFace {
   readonly character: ManagerFaceCharacter;
@@ -66,3 +86,11 @@ export const managerFacePickSchema = EffectSchema.Struct({
   character: EffectSchema.Literals(Object.values(MANAGER_FACE_CHARACTER)),
   color: EffectSchema.Literals(Object.values(MANAGER_FACE_COLOR)),
 });
+
+/** What a face is called, its color then its character, "Purple cat", as every picker names it, since a face says nothing to a reader who cannot see it. */
+export function managerFaceName(face: ManagerFace): string {
+  return `${MANAGER_FACE_COLOR_NAME[face.color]} ${MANAGER_FACE_CHARACTER_NAME[face.character].toLowerCase()}`;
+}
+
+/** What a client says where a change of a Manager's face did not take. */
+export const MANAGER_FACE_FAILED = "Couldn't change the Manager's face.";

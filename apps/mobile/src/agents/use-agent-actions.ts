@@ -29,6 +29,7 @@ import {
   UNARCHIVE_FAILED,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import {
   archiveStopWords,
@@ -185,6 +186,8 @@ export interface AgentActions {
   readonly pinned: boolean;
   readonly copyLink: () => void;
   readonly rename: (title: string) => void;
+  /** Changes a Manager's face (`AGENTS_FACE`), the desktop's same write, a refusal said in its words. */
+  readonly changeFace: (face: ManagerFace) => void;
   readonly pin: () => void;
   /** What Archive asks first, by where the agent stands now, read afresh as it's raised. */
   readonly archiveAsk: ArchiveAsk;
@@ -249,6 +252,10 @@ export function useAgentActions(agentId: string, address: string | undefined): A
     rename: (title) => {
       if (title === "" || title === agent?.title) return;
       send(() => acts[ACT_KIND.AGENTS_RENAME]({ agentId, title }), ACT_FAILED.RENAME);
+    },
+    changeFace: (face) => {
+      if (agent?.face?.character === face.character && agent.face.color === face.color) return;
+      send(() => acts[ACT_KIND.AGENTS_FACE]({ agentId, face }), MANAGER_FACE_FAILED);
     },
     pin: () =>
       send(
