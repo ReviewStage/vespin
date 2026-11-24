@@ -2,6 +2,7 @@
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
@@ -68,6 +69,7 @@ import {
   type BarFootItem,
   type BarMenu,
   BUTTON_LOOK,
+  CHIP_MARK,
   EmptyState,
   GLYPH,
   GlassDock,
@@ -96,6 +98,7 @@ import {
   ThreadPage,
   threadPreview,
   type UndeliveredLine,
+  useChipMarkOf,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -747,6 +750,13 @@ function ThreadDetail({
   const openLink = useOpenLink(workspaceId);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
+  // Note that a Manager's face stands in its tile on each message it wrote, read as a chip naming it reads it (`useChipMarkOf`), so the writer line and the app's menus wear one face.
+  const agentMark = useChipMarkOf()({ kind: ENTITY_KIND.AGENT, agentId: item.agentId });
+
+  const writerManager =
+    agentMark?.kind === CHIP_MARK.MANAGER
+      ? { face: agentMark.face, working: agentMark.working }
+      : undefined;
 
   // Note that the reader's replies that did not go stand at the thread's foot as their own messages, marked Not delivered, as the panel keeps them.
   const undelivered = useUndeliveredShown(item);
@@ -930,6 +940,7 @@ function ThreadDetail({
       id: message.writer.agent ? undefined : message.writer.userId,
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
       harness: message.writer.agent ? harness : undefined,
+      manager: message.writer.agent ? writerManager : undefined,
     },
     stamp:
       message.stamp === undefined
