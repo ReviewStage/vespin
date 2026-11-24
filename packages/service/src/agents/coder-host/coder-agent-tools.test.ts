@@ -5707,7 +5707,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
   );
 });
 
-test("a Manager's create_automation in a turn a teammate opened makes the teammate's automation, aimed at the Manager", async () => {
+test("a Manager's create_automation in a turn a teammate opened makes the teammate's automation, aimed at the Manager, which update_automation then changes as theirs", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const { caller: manager, teammates } = agents;
   const agentSessions = await fakeCoderSessions(workspaceId);
@@ -5751,6 +5751,19 @@ test("a Manager's create_automation in a turn a teammate opened makes the teamma
   assert.deepEqual(
     Option.map(kept, (automation) => [automation.userId, automation.targetAgentId]),
     Option.some([teammates.userId, manager.id]),
+  );
+
+  const changed = await call(
+    AGENT_TOOL.UPDATE_AUTOMATION,
+    { automationId: id, name: "Evening sweep" },
+    "manager-change",
+  );
+
+  assert.equal(changed.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(changed));
+  const renamed = await database.run(readAutomation(teammates.userId, id));
+  assert.deepEqual(
+    Option.map(renamed, (automation) => automation.name),
+    Option.some("Evening sweep"),
   );
 });
 
