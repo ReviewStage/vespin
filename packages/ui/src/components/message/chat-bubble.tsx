@@ -7,7 +7,12 @@
  * tightened, so the run reads as one block that opens and closes round.
  * What stands beside a bubble (`beside`), such as its actions, stands on the
  * side toward the column's middle and adds nothing to the run's height, so
- * the run stays tight. A sender's picture (`avatar`), such as a Manager's
+ * the run stays tight, nor to its width: it hangs past the bubble's edge, as
+ * a chat app hangs its hover actions, so a bubble wraps where its words and
+ * its caller's width say, whatever stands beside it. The row spans what
+ * holds it, so a share of the column the caller caps the bubble at
+ * (`ui-chat-bubble-hold`) is a share of the column, never of the row's own
+ * words. A sender's picture (`avatar`), such as a Manager's
  * face, stands at the bubble's outer side, level with its foot, beside the
  * run's last bubble and a bubble alone, as a chat app stands it, and keeps
  * its room beside the run's others, so the run's bubbles line up, and the
@@ -18,11 +23,8 @@
  * code inside read as they do anywhere in a transcript. Where the bubble stands in the column,
  * and the line over or under it, is its caller's.
  *
- * A message that answers another, as a chat app's Reply does, opens on the
- * words it answers (`quote`): two lines at most, set off by a quote's rule
- * and ink, which a press brings the message answered into view from, as
- * iMessage's and Slack's do. A bubble may carry a menu a right-click or a
- * long press opens (`contextMenu`), as a chat app's message does.
+ * A bubble may carry a menu a right-click or a long press opens
+ * (`contextMenu`), as a chat app's message does.
  *
  * What stands with a message but outside its bubble, such as the work a
  * Manager's message came of, opened under it, stands at the bubble's own
@@ -31,7 +33,6 @@
  * It is drawn in the Tailwind theme's utilities.
  */
 
-import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import type { ReactNode } from "react";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { type MessageLineInset, OPENING_INSET } from "./message-line.js";
@@ -70,6 +71,18 @@ const RUN_CORNERS: Record<ChatSide, Record<ChatRun, string>> = {
   },
 };
 
+/** Which way a side's row runs: from the column's left for what the other side sent, from its right for what people sent. */
+const SIDE_FLOW: Record<ChatSide, string> = {
+  [CHAT_SIDE.SENT]: "flex-row-reverse",
+  [CHAT_SIDE.RECEIVED]: "",
+};
+
+/** Where what stands beside a bubble hangs: past its edge toward the column's middle, a gap off it. */
+const BESIDE_PLACE: Record<ChatSide, string> = {
+  [CHAT_SIDE.SENT]: "end-full me-ui-4",
+  [CHAT_SIDE.RECEIVED]: "start-full ms-ui-4",
+};
+
 /** Whether a bubble shows its sender's picture: the run's last and a bubble alone do, and the others keep its room. */
 const AVATAR_SHOWN: Record<ChatRun, boolean> = {
   [CHAT_RUN.ALONE]: true,
@@ -77,36 +90,6 @@ const AVATAR_SHOWN: Record<ChatRun, boolean> = {
   [CHAT_RUN.MIDDLE]: false,
   [CHAT_RUN.LAST]: true,
 };
-
-/** The words a bubble's message answers, which it opens on, and the press that brings the message answered into view; none where it cannot be found. */
-export interface ChatBubbleQuote {
-  readonly words: string;
-  /** What the press is called, which says what it brings into view. */
-  readonly label: string;
-  readonly onPress?: (() => void) | undefined;
-}
-
-/** A quote's face: its rule and ink, as a sent quote wears them (`markdown-quote`), cut short at its second line. */
-const QUOTE_FACE =
-  "ui-chat-bubble-quote mb-ui-4 block w-full min-w-0 border-0 border-s-[3px] border-solid border-border-strong bg-transparent ps-ui-8 pe-0 py-0 text-start text-caption text-muted-foreground [display:-webkit-box] overflow-hidden wrap-anywhere [-webkit-box-orient:vertical] [-webkit-line-clamp:2]";
-
-/** The words a message answers, opening its bubble: a press where it brings the message answered into view, else the words alone. */
-function BubbleQuote({ quote }: { quote: ChatBubbleQuote }): React.JSX.Element {
-  if (quote.onPress === undefined) {
-    return <span className={QUOTE_FACE}>{quote.words}</span>;
-  }
-
-  return (
-    <ButtonPrimitive
-      className={`${QUOTE_FACE} cursor-press [font-family:inherit] hover:text-foreground`}
-      aria-label={quote.label}
-      title={quote.label}
-      onClick={quote.onPress}
-    >
-      {quote.words}
-    </ButtonPrimitive>
-  );
-}
 
 /** Where a message stands in its run, from whether it opens the run and whether it closes it. */
 export function chatRunOf(opens: boolean, closes: boolean): ChatRun {
@@ -121,14 +104,11 @@ export function ChatBubble({
   run,
   avatar,
   beside,
-  quote,
   contextMenu,
   children,
 }: {
   side: ChatSide;
   run: ChatRun;
-  /** The words the message answers, which the bubble opens on; none for a message that answers none. */
-  quote?: ChatBubbleQuote | undefined;
   /** The menu a right-click or a long press on the bubble opens (`useMenu`'s `contextMenu`); none where it has none. */
   contextMenu?: ContextMenuProps | undefined;
   /** The sender's picture, drawn beside the run's last bubble and a bubble alone and its room kept beside the others; none where the chat draws none. */
@@ -139,7 +119,7 @@ export function ChatBubble({
 }): React.JSX.Element {
   return (
     <div
-      className={`ui-chat-bubble-row flex min-w-0 max-w-full items-center gap-ui-4 ${side === CHAT_SIDE.SENT ? "flex-row-reverse" : ""}`}
+      className={`ui-chat-bubble-row flex w-full min-w-0 items-center gap-ui-4 ${SIDE_FLOW[side]}`}
       data-side={side}
       data-run={run}
     >
@@ -150,15 +130,22 @@ export function ChatBubble({
           {avatar}
         </span>
       )}
-      {/* Note that it clips past the keyboard's ring rather than at its edge, so a fold, a chip, or a link it holds keeps its ring. */}
-      <div
-        className={`ui-chat-bubble min-w-0 max-w-full overflow-clip rounded-ui-14 px-list-inset py-row-inset text-body leading-reading text-foreground [overflow-clip-margin:var(--ui-focus-ring-room)] bg-fill-strong ${RUN_CORNERS[side][run]}`}
-        {...withContextMenu<HTMLDivElement>(contextMenu, {})}
-      >
-        {quote === undefined ? null : <BubbleQuote quote={quote} />}
-        {children}
+      <div className="ui-chat-bubble-hold relative flex min-w-0 max-w-full">
+        {/* Note that it clips past the keyboard's ring rather than at its edge, so a fold, a chip, or a link it holds keeps its ring. */}
+        <div
+          className={`ui-chat-bubble min-w-0 max-w-full overflow-clip rounded-ui-14 px-list-inset py-row-inset text-body leading-reading text-foreground [overflow-clip-margin:var(--ui-focus-ring-room)] bg-fill-strong ${RUN_CORNERS[side][run]}`}
+          {...withContextMenu<HTMLDivElement>(contextMenu, {})}
+        >
+          {children}
+        </div>
+        {beside === undefined || beside === null ? null : (
+          <div
+            className={`ui-chat-bubble-beside absolute top-1/2 flex w-max -translate-y-1/2 items-center gap-ui-4 ${SIDE_FLOW[side]} ${BESIDE_PLACE[side]}`}
+          >
+            {beside}
+          </div>
+        )}
       </div>
-      {beside}
     </div>
   );
 }

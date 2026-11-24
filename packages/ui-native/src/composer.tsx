@@ -94,7 +94,7 @@ function roundMark(round: number) {
   return [frame({ width: round - ROUND_EDGE, height: round - ROUND_EDGE })];
 }
 
-/** How much of Send's look stands while there is nothing to send, as Messages' gray arrow stands before a word is typed. */
+/** How much of Send's look stands while its words cannot go yet. */
 const IDLE_OPACITY = 0.2;
 
 /** How far the press frame stands past the round on each side at the default text size, which it keeps as the reader's text grows the round. */
@@ -127,8 +127,8 @@ function roundModifiers(colors: ReturnType<typeof useColors>, round: number) {
 }
 
 /**
- * Send with nothing to send: the same circle and mark, faint, so it reads as
- * one button waiting in either scheme. Note that we draw the circle
+ * Send with words its holder cannot send yet: the same circle and mark,
+ * faint, so it reads as one button waiting in either scheme. Note that we draw the circle
  * ourselves, because a disabled prominent button drops its tint for the
  * system's own fill, which in light vanished into the composer's ground and
  * in dark stood as a black disc that read as a live button.
@@ -185,6 +185,8 @@ export interface ComposerPills {
   readonly field: RefObject<PillFieldHandle | null>;
   readonly onAtWord: (word: CaretAtWord | undefined) => void;
   readonly files?: ReadonlySet<string> | undefined;
+  /** Told as the field takes and lets go of the keyboard, so what an `@` offers can be read before one is typed. */
+  readonly onFocusChange?: ((focused: boolean) => void) | undefined;
 }
 
 type ComposerProps = {
@@ -196,7 +198,7 @@ type ComposerProps = {
   readonly onWords?: ((words: string) => void) | undefined;
   /** Whether Send stands lit with no words typed, as it does once an ask's answer is picked. */
   readonly sendable?: boolean | undefined;
-  /** Called with the words typed once Send is pressed; Send stands disabled where none is given. */
+  /** Called with the words typed once Send is pressed; Send stands held under words where none is given, and is not drawn while the field is empty. */
   readonly onSend?: ((words: string) => void) | undefined;
   /** What Send stands for while the field is empty and `sendable`, where that is an act of its own rather than a message, such as a notice's Got it: its glyph on the same round and its name; Send's own once a word is typed. */
   readonly sendAs?: ComposerSendAs | undefined;
@@ -424,11 +426,15 @@ function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
 
 /**
  * The round button at the field's end, the system's own prominent circle as
- * Messages draws Send: Send in the ink once there is something to send and
- * the system's dimmed circle until then, or, while nothing is typed, Stop
- * while a turn runs, and the system's spinner once it is pressed, and else
- * Talk where the composer calls its agent, the waveform on the same circle,
- * as ChatGPT's composer offers voice, so the first word turns it into Send.
+ * Messages draws Send: Send in the ink once there is something to send, or,
+ * while nothing is typed, Stop while a turn runs, and the system's spinner
+ * once it is pressed, and else Talk where the composer calls its agent, the
+ * waveform on the same circle, as ChatGPT's composer offers voice, so the
+ * first word turns it into Send; and nothing at all while the field is empty
+ * and none of those stands, as Messages draws no Send before a word is typed.
+ * Words its holder cannot send yet, as a start's while what it starts in is
+ * still being read, stand Send faint and held (`idleRoundModifiers`), as the
+ * desktop's start box holds its Send then.
  * Where the empty field's Send stands for an act of its own (`sendAs`), such
  * as a notice's Got it, the round wears that act's glyph and name until a
  * word is typed.
@@ -492,7 +498,10 @@ function SendButton({
     );
   }
 
-  const sendable = !empty && onSend !== undefined;
+  // Note that an empty field with nothing for Send to stand for draws no Send, as Messages draws none before a word is typed, rather than a dimmed round that reads as a broken button; Dictate, where the composer offers it, then ends the row.
+  if (empty) return null;
+
+  const sendable = onSend !== undefined;
   const act = typed ? undefined : sendAs;
 
   return (
@@ -645,7 +654,13 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   const text = useNativeState(held ?? "");
   const field = useRef<TextFieldRef>(null);
   const { focusAsk, pills } = props;
-  const { field: pillDoor, files: pillFiles, onAtWord: onPillAtWord } = pills ?? {};
+
+  const {
+    field: pillDoor,
+    files: pillFiles,
+    onAtWord: onPillAtWord,
+    onFocusChange: onPillFocus,
+  } = pills ?? {};
 
   // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
   const [opened] = useState(() => (held ?? "").length);
@@ -730,6 +745,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
             placeholder={placeholder}
             maxLines={lines}
             onAtWord={onPillAtWord}
+            onFocusChange={onPillFocus}
             autoFocus={props.autoFocus === true}
             testID={testIds?.field ?? "composer-field"}
           />

@@ -102,6 +102,24 @@ export class PlatformRenewalWindow extends Context.Service<
   AccountRenewalWindow
 >()("@repo/host/PlatformRenewalWindow") {}
 
+/**
+ * How the platform downloads a response straight into a file, as the
+ * iPhone's native download does through `expo-file-system`: a client whose
+ * every request writes its body to the file at `path` rather than handing
+ * it back, answering the status and headers alone, so a picture's bytes
+ * never reach JavaScript as base64. The headers a request carries, the
+ * account's bearer among them, are handed to the native request alone and
+ * never to anything logged. The desktop and the web provide none, and draw
+ * a picture from its bytes.
+ */
+export interface FileDownloadSeam {
+  readonly into: (path: string) => HttpClient;
+}
+
+export class PlatformFileDownload extends Context.Service<PlatformFileDownload, FileDownloadSeam>()(
+  "@repo/host/PlatformFileDownload",
+) {}
+
 /** The ids the host mints for its own records. */
 export interface IdSourceSeam {
   readonly create: () => string;

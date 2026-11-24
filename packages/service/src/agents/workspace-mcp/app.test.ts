@@ -982,6 +982,58 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
+    "tools/list offers an agent a Manager started no send_slack_message where the workspace connected the Slack bot, and still reads Slack",
+    () =>
+      Effect.gen(function* () {
+        const fetch = yield* standing;
+        const agent = yield* agentStartedBy(AGENT_KIND.MANAGER);
+        yield* slackBotConnected(agent);
+        const client = yield* connected(fetch, agent.bearer);
+
+        const listed = yield* Effect.promise(() => client.listTools());
+        yield* Effect.promise(() => client.close());
+
+        const names = listed.tools.map((tool) => tool.name);
+        assert.deepEqual(
+          [names.includes("send_slack_message"), names.includes("read_slack")],
+          [false, true],
+        );
+      }),
+  );
+
+  it.effect(
+    "tools/list words a Manager's post_thread for a decision or a to-do alone, and a Manager with no Inbox is told of no thread by send_to_user",
+    () =>
+      Effect.gen(function* () {
+        const fetch = yield* standing;
+        const agent = yield* agentWithBearer;
+        yield* Database.use((db) =>
+          db
+            .update(agentTable)
+            .set({ kind: AGENT_KIND.MANAGER, taskId: null })
+            .where(eq(agentTable.id, agent.agentId)),
+        );
+
+        const described = (name: string) =>
+          Effect.gen(function* () {
+            const client = yield* connected(fetch, agent.bearer);
+            const listed = yield* Effect.promise(() => client.listTools());
+            yield* Effect.promise(() => client.close());
+
+            return listed.tools.find((tool) => tool.name === name)?.description ?? "";
+          });
+
+        const posting = yield* described("post_thread");
+        assert.ok(posting.includes("Use it only for a decision between options"), posting);
+        assert.ok(!posting.includes("whenever you need something"), posting);
+
+        yield* writeAccountPreferences(agent.userId, { inbox: false });
+        const sending = yield* described("send_to_user");
+        assert.ok(sending.length > 0 && !sending.includes("thread"), sending);
+      }),
+  );
+
+  it.effect(
     "edit_description holds a turn to its 40 notes across calls, refuses notes before the turn is recorded, and a new turn starts its count afresh",
     () =>
       Effect.gen(function* () {

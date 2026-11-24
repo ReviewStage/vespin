@@ -196,6 +196,15 @@ export const tasksViewSchema = EffectSchema.Struct({
    */
   listed: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
+   * Whether every row the list stood with is drawn: the tasks the local
+   * database kept and the agents that fill in behind them, true at once
+   * where it kept none, or once the list's follow answered. What a place
+   * that stands behind waits on before it reads the list whole, since an
+   * account's thousands of rows each moving through its reads as they land
+   * cost several times reading them once drawn. Absent until then.
+   */
+  listDrawn: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /**
    * The workspaces in which the account reaches any task, as the list's
    * last answer said, whatever the list holds of them: whether it has ever
    * had a task there. Absent before an answer says, as one drawn from disk
@@ -972,6 +981,13 @@ export const tasksPageParamsSchema = EffectSchema.Struct({
 });
 
 export type TasksPageParams = typeof tasksPageParamsSchema.Type;
+
+/** One page of a task as a client drawing it whole asks for it: at the version it names, or at the newest where it names none, as a link opens a page. */
+export const tasksPageHtmlParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  pageId: EffectSchema.NonEmptyString,
+  version: EffectSchema.optionalKey(pageVersionNumberSchema),
+});
 
 /** A page frame's read of one version, as the window's process hears it: the version with its HTML, or that the service did not answer. */
 export const tasksPageAnswerSchema = EffectSchema.Union([

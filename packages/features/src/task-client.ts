@@ -934,6 +934,17 @@ export class HostedTaskClient {
     );
   }
 
+  /** One page of one task at its newest version, with its HTML; nothing where the service did not answer it, or holds no such page. */
+  readNewestPage(
+    place: PagePlace,
+    pageId: string,
+  ): Effect.Effect<PageVersion | undefined, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(this.#hosted.taskFiles.newestPage, { id: place.taskId, page: pageId }),
+      (read) => ("failure" in read ? undefined : read.page),
+    );
+  }
+
   /** Puts one revision of a description back as its content, answering the task as it now stands and the transaction its revision was written in (none where it changed nothing), or nothing where the service did not restore it. */
   restore(
     taskId: string,

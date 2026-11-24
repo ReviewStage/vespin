@@ -165,7 +165,11 @@ import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
 import { sessionsRouter } from "../coder-host/runtime-sessions.js";
-import { runSendToUser, SEND_TO_USER_TOOL } from "../coder-host/send-to-user-tool.js";
+import {
+  runSendToUser,
+  SEND_TO_USER_TOOL,
+  sendToUserToolOf,
+} from "../coder-host/send-to-user-tool.js";
 import { SHOW_MEDIA_TOOL } from "../coder-host/show-media.js";
 import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-tool.js";
 import {
@@ -213,7 +217,14 @@ import {
 import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 import type { ExperimentsOn } from "../workspace-experiment-on.js";
 import { LIST_WORKSPACE_MEMBERS_TOOL, runListWorkspaceMembers } from "../workspace-member-tool.js";
-import { type AgentStanding, GATES, standingOf, TOOL_GATE, type ToolGate } from "./gates.js";
+import {
+  type AgentStanding,
+  GATES,
+  OWN_THREAD_GATES,
+  standingOf,
+  TOOL_GATE,
+  type ToolGate,
+} from "./gates.js";
 
 /** What a door answers: the tool's own result, the value the model is handed. */
 export type WorkspaceMcpToolResult = { readonly status?: string } & object;
@@ -550,7 +561,7 @@ const LOADED: Served = { alwaysLoad: true };
 const INBOX_LOADED: Served = { ...LOADED, gates: [TOOL_GATE.INBOX] };
 
 /** Loaded from the first turn, behind the starter's Inbox, and closed to an agent a Manager started, which reaches people through it. */
-const OWN_THREADS_LOADED: Served = { ...LOADED, gates: [TOOL_GATE.INBOX, TOOL_GATE.UNMANAGED] };
+const OWN_THREADS_LOADED: Served = { ...LOADED, gates: OWN_THREAD_GATES };
 
 /** Behind the workspace's Slack bot, which every Slack tool acts as. */
 const SLACK_BOT: Served = { gates: [TOOL_GATE.SLACK] };
@@ -564,7 +575,11 @@ const CATALOG = [
       runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox }),
     {
       ...OWN_THREADS_LOADED,
-      variant: (_experiments, open) => postThreadToolOf(open.has(TOOL_GATE.SLACK)),
+      variant: (_experiments, open) =>
+        postThreadToolOf({
+          manager: open.has(TOOL_GATE.MANAGER),
+          slackOn: open.has(TOOL_GATE.SLACK),
+        }),
     },
   ),
   served(
@@ -684,13 +699,20 @@ const CATALOG = [
   portTool(SHARE_PORT_TOOL, runSharePort),
   // Slack as the bot, where the workspace connected it: where the agent may act, a message, a read, and a reaction.
   agentTool(LIST_SLACK_CHANNELS_TOOL, runListSlackChannels, SLACK_BOT),
-  agentTool(SEND_SLACK_MESSAGE_TOOL, runSendSlackMessage, SLACK_BOT),
+  // Note that an agent a Manager started sends none, since it reaches people through that Manager alone.
+  agentTool(SEND_SLACK_MESSAGE_TOOL, runSendSlackMessage, {
+    gates: [TOOL_GATE.SLACK, TOOL_GATE.UNMANAGED],
+  }),
   agentTool(READ_SLACK_TOOL, runReadSlack, SLACK_BOT),
   agentTool(REACT_SLACK_TOOL, runReactSlack, SLACK_BOT),
   // A wakeup booked for later.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A Manager's message to its chat, the one way its words reach people.
-  agentTool(SEND_TO_USER_TOOL, runSendToUser, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
+  agentTool(SEND_TO_USER_TOOL, runSendToUser, {
+    ...LOADED,
+    gates: [TOOL_GATE.MANAGER],
+    variant: sendToUserToolOf,
+  }),
 ] as const;
 
 /** The name of a tool the catalog serves. */
@@ -724,7 +746,8 @@ export function offers(standing: AgentStanding, tool: ServedTool): boolean {
  * The words and input schema a tool is listed with to an agent: its
  * variant's, in the words of the agent's workspace's experiments and the
  * gates open to it, where it has one, so an agent is told nothing of an
- * experiment that is off or a tool it is not offered; its own otherwise.
+ * experiment that is off or a tool it is not offered, and a Manager its own
+ * rule for threads; its own otherwise.
  */
 export function listedTool(
   tool: CatalogTool,

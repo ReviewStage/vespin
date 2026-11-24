@@ -273,7 +273,17 @@ and to stand, each rounded down to a step (under 0.1 seconds, then every 0.1
 seconds to 1, every 0.25 seconds to 3, then 4, or 5 seconds or more), which of
 the three it was, whether it was the
 first of its kind since the app started, and the app's build number, never
-which thread, task, or agent it was. They go through the Service, as the Mac
+which thread, task, or agent it was, and, each time a page an agent showed
+opens, how long it took to read and to show, on those same steps, whether
+it opened at a version its opener named or at the newest, whether it was the
+first page since the app started, and the app's build number, never which
+page it was or what it held, and, each time a picture an agent showed
+reaches the screen, how long it took from being asked for to being in hand,
+on those same steps, whether it came from the copy the app kept on the phone
+or was read from the Service, and how, whose picture it was (an agent's, a thread's,
+a description's, or a comment's), its size rounded to a step (under 100 KB,
+500 KB, 1 MB, 3 MB, or larger), and the app's build number, never which
+picture it was or what it showed. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.
 
 While you are signed in, the Mac app and the web app record how you use

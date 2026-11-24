@@ -71,10 +71,12 @@ import { type EntityPool, entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { Duration, Effect, Exit, Predicate, Scope } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
 import { TestClock } from "effect/testing";
 import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
 import { type AgentClient, composeAgents, type PullRequestClient } from "../compose-agents.js";
+import type { FileDownloadSeam } from "../effect/seams.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
 import { type PolledLive, polledLive } from "./polled-live.js";
@@ -849,6 +851,19 @@ function fakeService() {
 
         return { contentType: INBOX_IMAGE_TYPE.PNG, base64: "iVBORw0KGgo=" };
       }),
+    // Note that the picture is carried by whatever client the read is handed, as the real one is, so a case sees which client carried it.
+    agentPictureFile: (agentId, pictureId, callId) =>
+      Effect.sync(() => asked.push(`picture-file:${agentId}:${pictureId}:${callId ?? ""}`)).pipe(
+        Effect.andThen(
+          HttpClient.get(`https://vespin.dev/api/agents/${agentId}/pictures/${pictureId}`),
+        ),
+        Effect.map((response) =>
+          response.headers["content-type"] === INBOX_IMAGE_TYPE.PNG
+            ? { contentType: INBOX_IMAGE_TYPE.PNG }
+            : { failure: AGENT_CALL_FAILURE.UNANSWERED },
+        ),
+        Effect.orElseSucceed(() => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })),
+      ),
     agentPart: (agentId, messageId, index, callId) =>
       Effect.sync(() => {
         asked.push(`part:${agentId}:${messageId}:${index}:${callId ?? ""}`);
@@ -1302,6 +1317,7 @@ export function subject(
     tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
+    fileDownload?: FileDownloadSeam;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1341,6 +1357,7 @@ export function subject(
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
       ...(options.tasksListed === undefined ? undefined : { tasksListed: options.tasksListed }),
+      ...(options.fileDownload === undefined ? undefined : { fileDownload: options.fileDownload }),
       pool,
     }).pipe(Effect.provide(noNetwork));
 

@@ -191,6 +191,8 @@ export interface MentionSources {
   readonly machines: readonly MentionCandidate[];
   /** The dates the words name; with none typed, the few a list narrowed to dates suggests. */
   readonly dates: (words: string) => readonly MentionCandidate[];
+  /** The kinds whose rows are still being read, which Browse lists as if they held some, so a kind's row never pops in under the reader's eye once its rows land. */
+  readonly pending?: ReadonlySet<MentionOfferFrom> | undefined;
 }
 
 /** A mention picked into the words: the name the field shows after the `@`, and the link it is sent as. */
@@ -432,10 +434,13 @@ function fromRows(sources: MentionSources, from: MentionOfferFrom, term: string)
   return from === MENTION_FROM.DATES ? sources.dates(term) : sources[FROM_SOURCE[from]];
 }
 
-/** The kinds the place offers, in the panel's order: each one it holds any of, and dates wherever it stands. */
+/** The kinds the place offers, in the panel's order: each one it holds any of or is still reading, and dates wherever it stands. */
 function offeredKinds(sources: MentionSources): readonly MentionOfferFrom[] {
   return OFFERED_FROM.filter(
-    (from) => from === MENTION_FROM.DATES || sources[FROM_SOURCE[from]].length > 0,
+    (from) =>
+      from === MENTION_FROM.DATES ||
+      sources.pending?.has(from) === true ||
+      sources[FROM_SOURCE[from]].length > 0,
   );
 }
 

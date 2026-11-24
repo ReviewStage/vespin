@@ -54,6 +54,7 @@ import {
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
+import { MANAGER_FACE_SIZE, ManagerFace, type ManagerFaceSize } from "@repo/ui/manager-face";
 import { HistoryIcon, type LucideIcon, UserRoundIcon, UserRoundXIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAutomation } from "./automation-directory.js";
@@ -197,6 +198,17 @@ const GLYPH_OF_STATE = {
 } as const satisfies Record<ActorState, GlyphState>;
 
 /** The disc a person's face is drawn at for each size an actor is. */
+/** The seat a Manager's face takes at each size: among words where a mark stands as tall as its line, else a row's or a message's, as wide as the disc beside it. */
+const MANAGER_FACE_OF_SIZE = {
+  [ACTOR_SIZE.MARK]: MANAGER_FACE_SIZE.WORDS,
+  [ACTOR_SIZE.INLINE]: MANAGER_FACE_SIZE.WORDS,
+  [ACTOR_SIZE.STACK]: MANAGER_FACE_SIZE.WORDS,
+  [ACTOR_SIZE.ROW]: MANAGER_FACE_SIZE.ROW,
+  [ACTOR_SIZE.ACCOUNT]: MANAGER_FACE_SIZE.ROW,
+  [ACTOR_SIZE.CARD]: MANAGER_FACE_SIZE.MESSAGE,
+  [ACTOR_SIZE.PAGE]: MANAGER_FACE_SIZE.MESSAGE,
+} as const satisfies Record<ActorSize, ManagerFaceSize>;
+
 const AVATAR_OF_SIZE = {
   [ACTOR_SIZE.MARK]: AVATAR_SIZE.MARK,
   [ACTOR_SIZE.INLINE]: AVATAR_SIZE.INLINE,
@@ -324,7 +336,10 @@ function Face({
         />
       );
     case ACTOR_KIND.AGENT:
-      return (
+      // A Manager wears its own face, as its row and its chat do, rather than its harness's mark.
+      return actor.face !== undefined ? (
+        <ManagerFace face={actor.face} size={MANAGER_FACE_OF_SIZE[size]} />
+      ) : (
         <GlyphSquare
           name={actorName(actor)}
           glyph={

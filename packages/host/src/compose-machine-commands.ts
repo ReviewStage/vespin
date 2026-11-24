@@ -1477,10 +1477,6 @@ export function composeMachineCommands(
         },
       );
 
-    /** Each app given as the helper names and draws it (`appNamed`). */
-    const appsNamed = (use: MacComputerUse, apps: readonly string[]) =>
-      Effect.forEach(apps, (bundleId) => Effect.map(appNamed(use, bundleId), ({ app }) => app));
-
     /**
      * The Mac joined as a device of the account signed in, where it has not
      * yet: under the id this install keeps for it, or a new one where the
@@ -1969,7 +1965,7 @@ export function composeMachineCommands(
       );
     };
 
-    /** macOS asked for the grants the Mac lacks, by its own prompts and the pane of the first missing; nothing where it has both. */
+    /** The pane of the first grant the Mac lacks opened, with the app to drag into its list; nothing where it has both. */
     const grantsAsked = Effect.flatMap(
       permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
       (granted) =>
@@ -1977,10 +1973,6 @@ export function composeMachineCommands(
           ? Effect.void
           : Effect.asVoid(permissionsRead(COMPUTER_HELPER_OP.REQUEST_PERMISSIONS)),
     );
-
-    /** Each app allowed without asking, named and drawn by the helper; one it no longer finds by its bundle id alone. */
-    const allowedAppsNamed = (use: MacComputerUse) =>
-      Effect.flatMap(use.allowedApps, (allowed) => appsNamed(use, allowed));
 
     /**
      * The apps the composer's @ list offers on this Mac: those running
@@ -2060,19 +2052,18 @@ export function composeMachineCommands(
 
           if (standing !== undefined) yield* Deferred.succeed(held.decided, answeredOf(standing));
         }),
-      /** Computer use as Settings shows it: the Mac's grants, and the apps agents use without asking. */
+      /** Computer use as Settings shows it: the Mac's grants, one request to the helper, since Settings reads it every second while shown. */
       COMPUTER_USE_STATUS: () =>
-        Effect.all({
-          permissions: permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
-          apps: computer === undefined ? Effect.succeed([]) : allowedAppsNamed(computer),
-        }),
+        Effect.map(permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS), (permissions) => ({
+          permissions,
+        })),
       /** The apps the composer's @ list offers on this Mac (`appsOnThisMac`). */
       COMPUTER_USE_APPS: () =>
         computer === undefined ? Effect.succeed({ apps: [] }) : appsOnThisMac(computer),
       /** One app's icon, for a row of the @ list that names an app installed but not running. */
       COMPUTER_USE_APP_ICON: ({ app }) =>
         computer === undefined ? Effect.succeed({}) : appIcon(computer, app),
-      /** macOS asked for the grants it lacks, by its own prompts, and the grants as they stand once it was asked; refused where it could not be asked. */
+      /** The pane of the first grant it lacks opened, with the app to drag into its list, and the grants as they stand then; refused where the helper could not open it. */
       COMPUTER_USE_ASK_PERMISSIONS: permissionsAsked,
     };
 

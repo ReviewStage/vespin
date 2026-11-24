@@ -5,22 +5,24 @@ import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { VERB } from "@repo/features/words";
+import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { BUTTON_LOOK, EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { usePageHtml } from "../agents/use-agent.js";
+import { PAGE_NEWEST, usePageHtml } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { openInSafari } from "../open-link.js";
+import { usePageShownCount } from "../page-shown.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useFoundTask } from "../tasks/use-found-task.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
 
-/** What stands in a page's place while it is read, and where it could not be. */
+/** What stands in a page's place where it could not be read. */
 const PAGE_WORDS = {
-  READING: "Reading the page",
   FAILED: "The page could not be read.",
   MORE: "More",
   TRY_AGAIN: "Try again",
@@ -50,6 +52,8 @@ type PageOpened = {
   readonly pageId: string;
   readonly version: number | undefined;
   readonly title: string;
+  /** Whether the page's task was found nowhere, so the page can never be read. */
+  readonly lost?: boolean;
 };
 
 /** A route's version as its screen opens it: the number it names, or none for a link, which names none. */
@@ -61,23 +65,28 @@ export function openedVersion(version: string): number | undefined {
  * The version a page opens at: the one its opener named, else the newest
  * the task's pages hold, as the panel opens a page's link, those pages
  * followed while the page stands; none until they are read, and `missing`
- * where they hold no such page.
+ * where they hold no such page or could not be read.
  */
 function useVersionOf(taskId: string | undefined, pageId: string, named: number | undefined) {
   const acts = useHostActs();
   const follows = named === undefined ? taskId : undefined;
   useLiveFollow(follows, (id) => acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }));
 
-  const { data: pages } = useQuery({
+  const { data: held } = useQuery({
     ...appStateQuery,
     select: (state) =>
-      follows === undefined ? undefined : state[LIVE_READ.PAGES][PAGE_OWNER.TASK][follows]?.rows,
+      follows === undefined ? undefined : state[LIVE_READ.PAGES][PAGE_OWNER.TASK][follows],
   });
 
   if (named !== undefined) return { version: named, missing: false };
+  const pages = held?.rows;
   const newest = pages?.find(({ id }) => id === pageId)?.version;
 
-  return { version: newest, missing: pages !== undefined && newest === undefined };
+  // Note that pages the service could not read count as missing until a later answer brings them, as the follow tries again on its own, rather than reading for good.
+  return {
+    version: newest,
+    missing: pages === undefined ? held?.failed === true : newest === undefined,
+  };
 }
 
 /**
@@ -86,25 +95,32 @@ function useVersionOf(taskId: string | undefined, pageId: string, named: number 
  * it, with a ⋯ that opens it in the browser. It reads until its task is
  * known.
  */
-export function PageScreen({ workspaceId, taskId, pageId, version: asked, title }: PageOpened) {
+export function PageScreen({
+  workspaceId,
+  taskId,
+  pageId,
+  version: asked,
+  title,
+  lost = false,
+}: PageOpened) {
   useSurfaceOpen(PRODUCT_SURFACE.PAGE, pageId);
   const { version, missing } = useVersionOf(taskId, pageId, asked);
-  const html = usePageHtml(taskId, pageId, version);
+  // Note that a link's page is read at its newest at once, beside the task's pages, which name a later version should one land while it stands.
+  const readAt = version ?? (taskId === undefined ? undefined : PAGE_NEWEST);
+  const html = usePageHtml(taskId, pageId, readAt);
   const { again } = html;
-  const read = missing ? { failed: true as const } : html.read;
+
+  // Note that a page read stands even where the task's pages could not be read.
+  const read = "html" in html.read || !(missing || lost) ? html.read : { failed: true as const };
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
+  const shown = usePageShownCount(asked !== undefined, "html" in read);
 
-  const empty = (
+  const failed = (
     <EmptyState
-      title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
-      symbol={"failed" in read ? GLYPH.FAILED : GLYPH.PAGE}
-      loading={!("failed" in read)}
-      action={
-        "failed" in read
-          ? { label: PAGE_WORDS.TRY_AGAIN, onPress: again, look: BUTTON_LOOK.BORDERED }
-          : undefined
-      }
+      title={PAGE_WORDS.FAILED}
+      symbol={GLYPH.FAILED}
+      action={{ label: PAGE_WORDS.TRY_AGAIN, onPress: again, look: BUTTON_LOOK.BORDERED }}
     />
   );
 
@@ -124,7 +140,12 @@ export function PageScreen({ workspaceId, taskId, pageId, version: asked, title 
         </Stack.Toolbar>
       )}
       {/* Note that the page stands as the screen's root, outside its SwiftUI host, since the web view sizes itself to the screen. */}
-      {"html" in read ? <SealedPage html={read.html} title={named} /> : <Screen>{empty}</Screen>}
+      {/* Note that the web view is drawn while the page is still read, its loading ground over it, so WebKit starts beside the read rather than after it. */}
+      {"failed" in read ? (
+        <Screen>{failed}</Screen>
+      ) : (
+        <SealedPage html={"html" in read ? read.html : undefined} title={named} onLoaded={shown} />
+      )}
     </>
   );
 }
@@ -156,12 +177,28 @@ export function TaskPageScreen() {
   );
 }
 
-/** A page a task's Overview lists, in its task's own workspace, or the one chosen where it names none. */
+/**
+ * A page a task's Overview lists or a link names, in the workspace its route
+ * names, by id or as a link's slug, or the one chosen where it names none.
+ * A task a link names by number is found first, as a task's link finds one
+ * (`useFoundTask`), and one found nowhere says the page could not be read.
+ */
 function TaskPage({
-  workspaceId,
+  workspaceId: named,
+  taskId,
   ...opened
 }: Omit<PageOpened, "taskId"> & { readonly taskId: string }) {
   const chosen = useTasksWorkspace();
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const workspace = named === undefined ? chosen : workspaceOfSlug(workspaces, named);
+  const found = useFoundTask(taskId, named ?? chosen?.id);
 
-  return <PageScreen {...opened} workspaceId={workspaceId ?? chosen?.id} />;
+  return (
+    <PageScreen
+      {...opened}
+      workspaceId={workspace?.id ?? chosen?.id}
+      taskId={found.taskId}
+      lost={found.taskId === undefined && !found.seeking}
+    />
+  );
 }

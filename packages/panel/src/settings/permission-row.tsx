@@ -7,7 +7,6 @@ import {
   moreLabel,
   SETTINGS_ROW_STATE,
   SettingsRow,
-  SettingsRowActSlot,
   SettingsRowMark,
   type SettingsRowState,
   SettingsRowStateLine,
@@ -179,13 +178,7 @@ export function PermissionRow({
         )
       }
       error={error}
-      end={() =>
-        menued ? (
-          <PermissionMenu thing={label} onOpenSettings={onOpenSettings} />
-        ) : (
-          <SettingsRowActSlot />
-        )
-      }
+      end={() => (menued ? <PermissionMenu thing={label} onOpenSettings={onOpenSettings} /> : null)}
     >
       {() => (
         <PermissionPress standing={standing} onAllow={onAllow} onOpenSettings={onOpenSettings} />

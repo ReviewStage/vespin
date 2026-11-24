@@ -199,6 +199,8 @@ export const CLOSE_WORDS = {
   UNKNOWN: `Could not read whether this pull request is in the merge queue. If it is, closing it takes it out, and reopening it does not queue it again. ${QUEUE_WARNING}`,
   RUNNING: "Closing",
   CLOSED: "Pull request closed",
+  /** What the toast says before the pull request it names as a pill: "Closed [#42]". */
+  CLOSED_NAMED: "Closed",
   REOPEN: "Reopen",
 } as const;
 

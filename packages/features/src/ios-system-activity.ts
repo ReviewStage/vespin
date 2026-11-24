@@ -19,7 +19,13 @@
  */
 
 import { Schema as EffectSchema } from "effect";
-import { type InboxListed, inboxMemberName, inboxPreview } from "./inbox-list-model.js";
+import {
+  holderWorkspaceId,
+  type InboxAnyHolder,
+  type InboxListed,
+  inboxMemberName,
+  inboxPreview,
+} from "./inbox-list-model.js";
 import { iosAppRouteOf, iosPullRequestRoute } from "./ios-app-links.js";
 import {
   LINK_DESTINATION,
@@ -86,10 +92,13 @@ function agentPlace(agentId: string, taskId: string | undefined): LinkDestinatio
     : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 }
 
-/** An Inbox thread's activity: its title and its page, under its task's workspace. */
-export function threadActivity(listed: InboxListed, workspaces: readonly Workspace[]): IosActivity {
+/** An Inbox thread's activity: its title and its page, under its task's workspace, or its agent's for a thread on no task, a Manager's. */
+export function threadActivity(
+  listed: InboxListed<InboxAnyHolder>,
+  workspaces: readonly Workspace[],
+): IosActivity {
   const { holder, item } = listed;
-  const step = linkWorkspaceStep(holder.task.workspaceId, workspaces);
+  const step = linkWorkspaceStep(holderWorkspaceId(holder), workspaces);
 
   return {
     title: cardTitle(item.title),
@@ -229,7 +238,7 @@ export type SpotlightTask = Pick<TaskSummary, "id" | "name" | "workspaceId"> & {
 export function spotlightItems(read: {
   readonly workspace: Workspace;
   readonly tasks: readonly SpotlightTask[];
-  readonly threads: readonly InboxListed[];
+  readonly threads: readonly InboxListed<InboxAnyHolder>[];
   readonly readerId: string | undefined;
 }): readonly SpotlightItem[] {
   const { workspace, readerId } = read;
@@ -249,7 +258,7 @@ export function spotlightItems(read: {
     });
 
   const threads = read.threads
-    .filter(({ holder }) => holder.task.workspaceId === workspace.id)
+    .filter(({ holder }) => holderWorkspaceId(holder) === workspace.id)
     .map((listed): SpotlightItem => {
       const activity = threadActivity(listed, workspaces);
 

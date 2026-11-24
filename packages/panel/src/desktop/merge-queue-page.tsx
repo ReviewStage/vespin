@@ -34,19 +34,19 @@
  * queue.
  */
 
-import { CHECK_SUMMARY, type CheckSummary, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import {
+  MERGE_QUEUE_PAGE_WORDS,
+  MERGE_QUEUE_READ_EVERY,
+  mergeQueueChecksStanding,
+  mergeQueueHeard,
+  mergeQueueNumberWords,
+} from "@repo/features/merge-queue-model";
 import type {
   MergeQueueAnswer,
-  MergeQueueChecks,
   MergeQueueEntry,
   MergeQueueRepository,
 } from "@repo/features/merge-queue-wire";
-import {
-  MERGE_QUEUE_STAGE,
-  MERGE_QUEUE_STAGE_LABEL,
-  type MergeQueueStage,
-  mergeQueueStage,
-} from "@repo/features/pull-request-model";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { repositoryLabel } from "@repo/features/task-list-model";
 import { TERM } from "@repo/features/words";
@@ -100,22 +100,6 @@ import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { MergeQueueSection, MergeQueueSkeleton, QUEUE_ROW_CELLS } from "./merge-queue-frame.js";
 
-const WORDS = {
-  EMPTY: "Nothing is queued.",
-  UNREAD: "The merge queues could not be read.",
-} as const;
-
-/** How often the queues are read again while the page stands. */
-const READ_EVERY = Duration.seconds(30);
-
-/** How the merge group's checks stand at each stage, as a pull request's checks are summed up, where GitHub has not yet counted them. */
-const STAGE_SUMMARY = {
-  [MERGE_QUEUE_STAGE.WAITING]: CHECK_SUMMARY.NONE,
-  [MERGE_QUEUE_STAGE.CHECKING]: CHECK_SUMMARY.PENDING,
-  [MERGE_QUEUE_STAGE.MERGING]: CHECK_SUMMARY.PASSING,
-  [MERGE_QUEUE_STAGE.FAILING]: CHECK_SUMMARY.FAILING,
-} as const satisfies Record<MergeQueueStage, CheckSummary>;
-
 /** The workspace's queues, read as the page opens and every half minute while it stands. */
 function mergeQueueQuery(workspaceId: string | undefined) {
   return queryOptions({
@@ -126,7 +110,7 @@ function mergeQueueQuery(workspaceId: string | undefined) {
         : askAct(ACT_KIND.WORKSPACE_MERGE_QUEUE_READ, { workspaceId }),
     enabled: workspaceId !== undefined,
     refetchOnMount: "always",
-    refetchInterval: Duration.toMillis(READ_EVERY),
+    refetchInterval: Duration.toMillis(MERGE_QUEUE_READ_EVERY),
     retry: false,
   });
 }
@@ -138,22 +122,6 @@ function authorActor(entry: MergeQueueEntry): Actor {
   return author === null
     ? DELETED_ACCOUNT_ACTOR
     : { ...githubLoginActor(author.login), avatarUrl: author.avatarUrl };
-}
-
-/** How the queue's checks stand on a pull request: the first named failure and how many more failed, or how many failed where none is named, else how many passed; none before it reports any. */
-function checksWords(checks: MergeQueueChecks | null | undefined): string | undefined {
-  if (checks === null || checks === undefined) return undefined;
-
-  const [first] = checks.failed;
-  const more = checks.failedCount - 1;
-
-  if (first !== undefined) return more > 0 ? `${first} failed +${more}` : `${first} failed`;
-
-  if (checks.failedCount > 0) {
-    return `${checks.failedCount} ${checks.failedCount === 1 ? "check" : "checks"} failed`;
-  }
-
-  return `${checks.passed} of ${checks.total} ${checks.total === 1 ? "check" : "checks"} passed`;
 }
 
 /** A queued pull request's mark in its row's status column (`TaskRowGlyph`), as the sidebar's and the composer's rows draw one the merge queue holds. */
@@ -172,11 +140,6 @@ function QueuedMark({ number }: { number: number }): React.JSX.Element {
   );
 }
 
-/** A pull request's number as its key column says it. */
-function numberWords(number: number): string {
-  return `#${number}`;
-}
-
 /** A pull request's number in its row's key column, as a task's key stands there. */
 function PullRequestKey({ number }: { number: number }): React.JSX.Element {
   return (
@@ -187,7 +150,7 @@ function PullRequestKey({ number }: { number: number }): React.JSX.Element {
       font={TEXT_FONT.MONO}
       aria-hidden
     >
-      {numberWords(number)}
+      {mergeQueueNumberWords(number)}
     </Text>
   );
 }
@@ -200,30 +163,17 @@ function PullRequestKey({ number }: { number: number }): React.JSX.Element {
  * GitHub has counted none yet, and nothing while it waits its turn.
  */
 function ChecksCount({ entry }: { entry: MergeQueueEntry }): React.JSX.Element | null {
-  const { checks } = entry;
-  const stage = mergeQueueStage(entry.state);
-
-  const counted =
-    checks === null || checks === undefined
-      ? checksCount(STAGE_SUMMARY[stage], undefined)
-      : checks.failedCount > 0
-        ? checksCount(CHECK_SUMMARY.FAILING, checks.failedCount)
-        : checks.passed < checks.total
-          ? checksCount(CHECK_SUMMARY.PENDING, checks.total - checks.passed)
-          : checksCount(CHECK_SUMMARY.PASSING, checks.total);
+  const { summary, count } = mergeQueueChecksStanding(entry);
+  const counted = checksCount(summary, count);
 
   return counted === undefined ? null : <CountParts parts={counted} />;
 }
 
 /** What a reader hears after a row's name that the eye reads in its cells: its number, its stage, how its checks stand, and who opened it. */
 function RowSaid({ entry, author }: { entry: MergeQueueEntry; author: Actor }): React.JSX.Element {
-  const stage = MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)];
-  const checks = checksWords(entry.checks);
-  const said = [`#${entry.pullRequest.number}`, stage, checks, actorName(author)];
-
   return (
     <VisuallyHidden>
-      <ReplayMask>{`, ${said.filter((part) => part !== undefined).join(", ")}`}</ReplayMask>
+      <ReplayMask>{`, ${mergeQueueHeard(entry, actorName(author)).join(", ")}`}</ReplayMask>
     </VisuallyHidden>
   );
 }
@@ -328,7 +278,7 @@ function QueuesRead({
         failure={failureShown({ surface: FAILURE_SURFACE.MERGE_QUEUE_READ, cause: read.error })}
         onRetry={() => void read.refetch()}
       >
-        {WORDS.UNREAD}
+        {MERGE_QUEUE_PAGE_WORDS.UNREAD}
       </ErrorState>
     );
   }
@@ -336,7 +286,7 @@ function QueuesRead({
   if (repositories === undefined) return <MergeQueueSkeleton />;
 
   if (repositories.length === 0) {
-    return <EmptyState icon={<GLYPH.QUEUED />}>{WORDS.EMPTY}</EmptyState>;
+    return <EmptyState icon={<GLYPH.QUEUED />}>{MERGE_QUEUE_PAGE_WORDS.EMPTY}</EmptyState>;
   }
 
   return <Queues repositories={repositories} marked={marked} onOpen={onOpen} />;
@@ -360,7 +310,7 @@ function Queues({
     () =>
       taskRowFit(
         repositories.flatMap((queue) =>
-          queue.entries.map((entry) => ({ key: numberWords(entry.pullRequest.number) })),
+          queue.entries.map((entry) => ({ key: mergeQueueNumberWords(entry.pullRequest.number) })),
         ),
       ),
     [repositories],

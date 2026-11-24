@@ -75,7 +75,6 @@ import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
 import {
-  type ChatReply,
   type ChatRunPlace,
   type ManagerChatRuns,
   type ManagerChatWork,
@@ -200,7 +199,6 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
-import { land } from "@repo/ui/landed";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
@@ -267,8 +265,11 @@ import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
-import { centerWithin, scrollerOf } from "../scroll-within.js";
-import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import {
+  useTaskListCollections,
+  useTaskListRow,
+  useTaskListRowAs,
+} from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
@@ -342,14 +343,7 @@ import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ArchivedComposerNote } from "./archived-note.js";
-import {
-  ChatReplyProvider,
-  ChatShowProvider,
-  ReplyChip,
-  ReplyMessageAction,
-  useChatMessageMenu,
-  useChatReplyQuote,
-} from "./chat-reply.js";
+import { ReplyMessageAction, useChatMessageMenu } from "./chat-reply.js";
 import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { ComputerDock } from "./computer-dock.js";
 import { ComputerPermissionNote } from "./computer-permission-note.js";
@@ -382,7 +376,6 @@ import {
   agentMessagePlace,
   MESSAGE_GONE,
   MessagePlaceProvider,
-  messageElement,
   useMessageReveal,
 } from "./message-links.js";
 import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
@@ -396,6 +389,7 @@ import { ShownPage } from "./shown-page.js";
 import { SentWords, useSkill } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
+import { useStartingAgent } from "./starting-agent.js";
 import { useSuggestionSender } from "./suggestion-send.js";
 import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
@@ -424,7 +418,6 @@ import {
   useUndeliveredLines,
   useUnsentLines,
 } from "./undelivered-mark.js";
-import type { ChatReplyTarget } from "./use-agent-composer.js";
 import {
   type HeldComposer,
   type MessageSender as MessageWriter,
@@ -692,42 +685,21 @@ interface ChatManagerLook {
 /** The Manager whose chat a transcript is; none for every other agent. */
 const ChatManager = createContext<ChatManagerLook | undefined>(undefined);
 
-/** A Manager's chat's doors: the Manager whose chat it is, the work it keeps a press away, and the press that brings one of its messages into view, as a reply's quote asks (`chat-reply.tsx`). */
+/** A Manager's chat's doors: the Manager whose chat it is, and the work it keeps a press away. */
 function ChatDoors({
   manager,
   work,
-  show,
   children,
 }: {
   manager: ChatManagerLook | undefined;
   /** The work the chat keeps a press away (`ChatWork`); none for every other agent. */
   work: ManagerChatWork | undefined;
-  show: (messageId: string) => void;
   children: ReactNode;
 }): React.JSX.Element {
   return (
     <ChatManager value={manager}>
-      <ChatWork value={work}>
-        <ChatShowProvider show={show}>{children}</ChatShowProvider>
-      </ChatWork>
+      <ChatWork value={work}>{children}</ChatWork>
     </ChatManager>
-  );
-}
-
-/** What a transcript's replies are laid into the box through: words selected in a message, laid in as a quote (`reply-to-selection.tsx`), and a Manager's message the next send answers (`chat-reply.tsx`); either none while the box takes none. */
-function ReplyDoors({
-  selection,
-  chat,
-  children,
-}: {
-  selection: ((words: string) => void) | undefined;
-  chat: ((target: ChatReplyTarget) => void) | undefined;
-  children: ReactNode;
-}): React.JSX.Element {
-  return (
-    <ReplyDoorProvider value={selection}>
-      <ChatReplyProvider replyTo={chat}>{children}</ChatReplyProvider>
-    </ReplyDoorProvider>
   );
 }
 
@@ -1635,10 +1607,13 @@ function TaskSender({
   task,
   onOpen,
   starter,
+  forWhom,
 }: {
   task: BriefTask | undefined;
   onOpen: (() => void) | undefined;
   starter: Actor | undefined;
+  /** Who the starter, an agent, started it for (`briefFor`); none for every other starter. */
+  forWhom: Actor | undefined;
 }): React.JSX.Element {
   // The window hands the task anew on every draw, so a transcript's sender reads it live (`LiveDoors`), and the description's card is not drawn again for it.
   const live = useContext(LiveDoors);
@@ -1650,7 +1625,13 @@ function TaskSender({
       {starter === undefined ? null : (
         <ActorLine>
           {named === undefined ? "Started by " : " · started by "}
-          <ActorRef actor={starter} sentence />
+          <MessageSender actor={starter} />
+          {forWhom === undefined ? null : (
+            <ActorLine>
+              {" · for "}
+              <ActorRef actor={forWhom} sentence />
+            </ActorLine>
+          )}
         </ActorLine>
       )}
     </ActorLine>
@@ -1832,6 +1813,28 @@ function AutomationSender({
 }
 
 /**
+ * Who an agent that another started was started for, as its brief names
+ * them after its author: the member its task is assigned to, which a
+ * Manager sets to whoever asked, else the member whose account it runs on;
+ * none where no agent started it. Note that it reads the task as it stands,
+ * since the brief keeps no member of its own.
+ */
+function useBriefFor(agent: AgentSummary, started: boolean): Actor | undefined {
+  const asked = started ? (agent.taskId ?? undefined) : undefined;
+
+  const assignee = useTaskListRowAs(
+    useTaskListCollections().tasks,
+    asked,
+    (task) => task?.assignee,
+  );
+
+  const member = assignee ?? agent.startedBy;
+  const person = usePerson(member);
+
+  return started && member !== undefined ? person : undefined;
+}
+
+/**
  * What an agent's transcript opens on: an automation's prompt, from the
  * automation, where an automation's run started it; the description, from its task
  * and the teammate who started the agent, where it was handed the description; and
@@ -1844,9 +1847,11 @@ function agentOrigin(input: {
   task: BriefTask | undefined;
   onOpenTask: (() => void) | undefined;
   starter: Actor | undefined;
+  /** Who the starter, an agent, started it for (`briefFor`); none for every other starter. */
+  forWhom: Actor | undefined;
   openGitHub: (url: string) => void;
 }): TranscriptOrigin | undefined {
-  const { agent, run, task, starter } = input;
+  const { agent, run, task, starter, forWhom } = input;
 
   if (agent.automationId !== undefined || agent.automationName !== undefined) {
     return {
@@ -1871,7 +1876,7 @@ function agentOrigin(input: {
   return {
     sender:
       task === undefined && starter === undefined ? undefined : (
-        <TaskSender task={task} onOpen={input.onOpenTask} starter={starter} />
+        <TaskSender task={task} onOpen={input.onOpenTask} starter={starter} forWhom={forWhom} />
       ),
   };
 }
@@ -2031,6 +2036,7 @@ export function AgentMessage({
   todos = NO_TODOS,
   briefTitle,
   sender,
+  senderFor,
   origin,
   arrived = NO_ARRIVED,
   wakeupDelay,
@@ -2061,6 +2067,8 @@ export function AgentMessage({
   todos?: TodosPlace;
   /** Who wrote or said the message, named over it: a teammate, the app, an automation, or the agent itself, for a wakeup it set; none for the reader's own, or where nobody is named. */
   sender?: Actor | undefined;
+  /** Who the sender wrote it for, named after it, as the agent that started this one wrote its brief for the member who asked; none for every other message. */
+  senderFor?: Actor | undefined;
   /** The developer's lines that reached this turn while it ran (`placedMessages`), each drawn where it arrived. */
   arrived?: readonly ArrivedLine[];
   /** How long the wakeup this line hands back waited, where it is one and the turn that set it says (`wakeupDelayOf`). */
@@ -2112,7 +2120,18 @@ export function AgentMessage({
 
   // A line the voice said on a call is the voice's, never the agent's words; in a Manager's chat it is one of the Manager's messages (`managerChatLines`), drawn as any.
   if (isVoiceLine(message) && chatRuns === undefined) return <VoiceLineRow message={message} />;
-  const named = sender === undefined ? null : <MessageSender actor={sender} />;
+
+  const named =
+    sender === undefined ? null : senderFor === undefined ? (
+      <MessageSender actor={sender} />
+    ) : (
+      <ActorLine>
+        <MessageSender actor={sender} />
+        {" · for "}
+        <ActorRef actor={senderFor} sentence />
+      </ActorLine>
+    );
+
   // What GitHub said on the pull request is drawn as its card, never as the prompt the agent read.
   const github = githubLineOf(message);
 
@@ -2128,21 +2147,16 @@ export function AgentMessage({
     // A line sent from a suggestion is headed by the agent that suggested it, its words without the lead that names that agent to the agent reading them.
     const suggested = suggestedByOf(message);
 
-    // A line in a Manager's chat that answers one of its messages draws the quote over its bubble, its words alone inside.
-    const reply = chatRuns?.replies.get(message.id);
-
     const shown =
-      reply !== undefined
-        ? reply.words
-        : comment !== undefined
-          ? commentLineWords(comment)
-          : slack !== undefined
-            ? slack.words
-            : suggested !== undefined
-              ? suggestionWords(words)
-              : thread === undefined
-                ? words
-                : threadLineWords(words, thread.event);
+      comment !== undefined
+        ? commentLineWords(comment)
+        : slack !== undefined
+          ? slack.words
+          : suggested !== undefined
+            ? suggestionWords(words)
+            : thread === undefined
+              ? words
+              : threadLineWords(words, thread.event);
 
     // A line open for writing again is written where it stands.
     if (drawnEditor !== undefined) {
@@ -2154,12 +2168,7 @@ export function AgentMessage({
             data-leaving={editing.leaving ? "" : undefined}
             inert={editing.leaving}
           >
-            {/* Note that a reply is written again with its quote, so the line sent in its place still answers the message. */}
-            <EditComposer
-              message={message}
-              words={reply === undefined ? shown : words}
-              edit={drawnEditor}
-            />
+            <EditComposer message={message} words={shown} edit={drawnEditor} />
           </div>
         </Message>
       );
@@ -2211,7 +2220,6 @@ export function AgentMessage({
         <ChatLine
           message={message}
           runs={chatRuns}
-          reply={reply}
           sender={sender}
           subject={subject}
           shown={shown}
@@ -2396,7 +2404,6 @@ function ManagerGreetingMessage({
 function ChatLine({
   message,
   runs,
-  reply,
   sender,
   subject,
   shown,
@@ -2408,8 +2415,6 @@ function ChatLine({
 }: {
   message: AgentTranscriptMessage;
   runs: ManagerChatRuns;
-  /** The Manager's message the line answers, whose quote its bubble opens on; none for a line that answers none. */
-  reply: ChatReply | undefined;
   /** Who sent it; none for the reader's own. */
   sender: Actor | undefined;
   /** What heads the line, such as the suggestion it was sent from; none where nothing does. */
@@ -2424,7 +2429,6 @@ function ChatLine({
 }): React.JSX.Element {
   const place = runs.places.get(message.id) ?? LONE_RUN;
   const received = sender !== undefined;
-  const quote = useChatReplyQuote(reply);
 
   const head =
     received && place.opens ? (
@@ -2452,7 +2456,6 @@ function ChatLine({
             side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
             run={chatRunOf(place.opens, place.closes)}
             avatar={received ? <ActorMark actor={sender} size={ACTOR_SIZE.CARD} /> : undefined}
-            quote={quote}
             beside={
               <>
                 {mark}
@@ -2505,9 +2508,9 @@ function ChatSent({
 }): React.JSX.Element {
   const manager = useContext(ChatManager);
   const face = manager?.face;
-  const target = { id: message.id, words: moving ? "" : words };
+  const quoted = moving ? "" : words;
   const toggle = useWorkToggle();
-  const menu = useChatMessageMenu(target, work === null ? undefined : toggle);
+  const menu = useChatMessageMenu(quoted, work === null ? undefined : toggle);
 
   return (
     <Message
@@ -2527,7 +2530,7 @@ function ChatSent({
               words={words}
               lead={
                 <>
-                  <ReplyMessageAction target={target} />
+                  <ReplyMessageAction words={quoted} />
                   {work === null ? null : <WorkMessageAction toggle={toggle} />}
                 </>
               }
@@ -2819,6 +2822,7 @@ function sameMessageDraw(a: AgentMessageProps, b: AgentMessageProps): boolean {
     message: (ours, theirs) => ours === theirs || sameHeldPiece(a, b),
     todos: sameTodosPlace,
     sender: sameFields,
+    senderFor: sameFields,
     arrived: sameArrived,
     delegation: sameDoors,
   });
@@ -3265,6 +3269,7 @@ function AgentTranscriptView({
   earlierOmitted = false,
   briefTitle,
   briefSender,
+  briefFor,
   origin,
   readerId,
   agentId,
@@ -3346,8 +3351,10 @@ function AgentTranscriptView({
   earlierOmitted?: boolean;
   /** The description's or task's card line, where it is named otherwise than by its first line, as a brain's worker is by its job. */
   briefTitle?: string | undefined;
-  /** The teammate who handed the agent its task, named over the task's message; none for the reader's own agent. */
+  /** Who handed the agent its task, named over the task's message: the agent that started it, else the teammate who did; none for the reader's own agent. */
   briefSender?: Actor | undefined;
+  /** Who the agent that started this one handed it its task for, named after it (`briefFor`); none where no agent started it. */
+  briefFor?: Actor | undefined;
   /** Who handed the agent what it opens on, which is then its card under their line, a prompt among them; none where only a description is, whose card names nobody. */
   origin?: TranscriptOrigin | undefined;
   /** The reader's own account id, whose messages are drawn with no name over them (`lineSender`). */
@@ -3515,27 +3522,6 @@ function AgentTranscriptView({
     bringIn.current = bringMessage;
   });
 
-  // A reply's quote brings the message it answers into view and lights it, as a link to a message does; one the log draws whole is scrolled to here.
-  const showMessage = useCallback(
-    (messageId: string) => {
-      const brought = bringMessage(messageId, (row) => land(messageElement(row, messageId) ?? row));
-
-      const element =
-        brought || log.current === null ? undefined : messageElement(log.current, messageId);
-
-      if (element === undefined) return;
-      const scroller = scrollerOf(element);
-
-      if (scroller !== undefined) {
-        centerWithin(scroller, element);
-        scroller.dispatchEvent(new Event("scroll"));
-      }
-
-      land(element);
-    },
-    [bringMessage],
-  );
-
   // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
   const railLines = useMemo(() => {
     const { description, task } = openingLinesOf(brief, drawnOrigin, firstLine);
@@ -3681,7 +3667,7 @@ function AgentTranscriptView({
       <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
           <ChatRuns value={chatRuns}>
-            <ChatDoors manager={manager} work={chatWork} show={showMessage}>
+            <ChatDoors manager={manager} work={chatWork}>
               <ConnectionNames needed={callsServer}>
                 <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
                   {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
@@ -3748,6 +3734,7 @@ function AgentTranscriptView({
                                 briefTitle={briefTitle}
                                 origin={message === description ? drawnOrigin : undefined}
                                 sender={sender}
+                                senderFor={message === task ? briefFor : undefined}
                                 wakeupDelay={
                                   isWakeupLine(message)
                                     ? wakeupDelayOf(placed[index - 1]?.message)
@@ -3775,6 +3762,7 @@ function AgentTranscriptView({
                                     moving={false}
                                     delegation={delegation}
                                     sender={briefSender}
+                                    senderFor={briefFor}
                                   />
                                 )}
                               </>
@@ -4249,22 +4237,15 @@ function AgentTabView({
   );
 
   const starterActor = usePerson(agent.startedBy);
+  // An agent another agent started, as a Manager does, opens on that agent's brief, named as its author, and on who it was written for, rather than on the account it runs on.
+  const startingAgent = useStartingAgent(agent.startedByAgentId, models ?? [])?.actor;
+  const forWhom = useBriefFor(agent, startingAgent !== undefined);
+  const briefSender = startingAgent ?? (starter === undefined ? undefined : starterActor);
   const wholeParts = useWholePartDoor(agent.id);
   const { members, former } = useMemberDirectory();
   // The door the box hands Reply, which lays a quote in at its caret.
   const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
   const replyThroughBox = useCallback((words: string) => replyDoor.current?.(words), []);
-  // The door the box hands a Manager's message's Reply, which puts the caret in it once the reply stands over it.
-  const focusDoor = useRef<(() => void) | undefined>(undefined);
-  const { replyTo } = composer;
-
-  const replyInChat = useCallback(
-    (target: ChatReplyTarget) => {
-      replyTo(target);
-      focusDoor.current?.();
-    },
-    [replyTo],
-  );
 
   // Note that Reply stands only while the box takes a change, as a file's + does.
   const replies =
@@ -4292,7 +4273,8 @@ function AgentTabView({
   // The task's line reads the task live (`TaskSender`), so whether there is one is all the card's sender hangs on here.
   const briefTask = cards?.task;
   const tasked = briefTask !== undefined;
-  const originStarter = useKept(starter === undefined ? undefined : starterActor, sameFields);
+  const originStarter = useKept(briefSender, sameFields);
+  const originFor = useKept(forWhom, sameFields);
 
   // The description's card is drawn again only when who handed it, or what, changed, not with each page.
   const origin = useMemo(
@@ -4303,10 +4285,21 @@ function AgentTabView({
         task: briefTask,
         onOpenTask: openTarget === undefined ? undefined : () => openTarget(TASK_TARGET),
         starter: originStarter,
+        forWhom: originFor,
         openGitHub: steadyGitHub,
       }),
     // Note that the agent is read for how it was briefed alone, which these name.
-    [automationId, automationName, brief, run, tasked, openTarget, originStarter, steadyGitHub],
+    [
+      automationId,
+      automationName,
+      brief,
+      run,
+      tasked,
+      openTarget,
+      originStarter,
+      originFor,
+      steadyGitHub,
+    ],
   );
 
   // An automation may send its runs to an agent it did not start, whose lines then name it all the same.
@@ -4329,10 +4322,7 @@ function AgentTabView({
                 <UndeliveredLines value={marks}>
                   <RewindProvider value={rewind}>
                     <TurnFilesOn value={turnLines}>
-                      <ReplyDoors
-                        selection={replies ? replyThroughBox : undefined}
-                        chat={chat && replies ? replyInChat : undefined}
-                      >
+                      <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
                         <AutomationsWanted wanted={automationLines}>
                           <ApprovalsProvider asks={approvals.asks}>
                             <GoalConditions value={conditions}>
@@ -4340,7 +4330,8 @@ function AgentTabView({
                                 messages={drawnLines}
                                 standingCalls={transcript.calls}
                                 brief={agent.brief}
-                                briefSender={starter === undefined ? undefined : starterActor}
+                                briefSender={briefSender}
+                                briefFor={forWhom}
                                 origin={origin}
                                 readerId={readerId}
                                 agentId={agent.id}
@@ -4422,7 +4413,7 @@ function AgentTabView({
                             </GoalConditions>
                           </ApprovalsProvider>
                         </AutomationsWanted>
-                      </ReplyDoors>
+                      </ReplyDoorProvider>
                     </TurnFilesOn>
                   </RewindProvider>
                 </UndeliveredLines>
@@ -4501,9 +4492,6 @@ function AgentTabView({
           continuedNote
         ) : (
           <>
-            {composer.replyingTo === undefined ? null : (
-              <ReplyChip target={composer.replyingTo} onDrop={composer.dropReply} />
-            )}
             {composer.suggestion === undefined ? null : (
               <SuggestionChip
                 suggestion={composer.suggestion}
@@ -4534,7 +4522,6 @@ function AgentTabView({
                     keywords={keywords}
                     skills={skills}
                     replyDoor={replyDoor}
-                    focusDoor={focusDoor}
                     closedRemedy={closedRemedy}
                     onContinueInCloud={onMoveToCloud}
                     // Note that a box filled in from a suggestion queues nothing, because its words go once, through the suggestion.

@@ -1,5 +1,6 @@
 import { WHOLE_PART } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { managerChatLines, managerChatWork } from "@repo/features/manager-chat";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
@@ -7,6 +8,7 @@ import {
   drawnCallIds,
   NO_TOGGLES,
   openCuts,
+  rowsNear,
   SHOWN_MEDIA,
   shownFiles,
   shownMediaIds,
@@ -138,7 +140,7 @@ describe("transcriptItems", () => {
     expect(shownMediaIds(items)).toContain("mail-icon");
   });
 
-  it("draws the pictures a line carried over its words, one kept apart read by its id, and its other files as chips under them", () => {
+  it("draws the pictures a line carried over its words, one its words name where they name it, one kept apart read by its id, and its other files as chips under them", () => {
     const shot = "data:image/png;base64,iVBORw0KGgo=";
 
     const items = transcriptItems(
@@ -147,7 +149,7 @@ describe("transcriptItems", () => {
           id: "sent",
           role: MESSAGE_ROLE.USER,
           parts: [
-            { type: "text", text: "The button is cut off." },
+            { type: "text", text: "The button is cut off in [Picture 1]." },
             { type: "file", mediaType: "image/png", filename: "bug.png", url: shot },
             {
               type: "file",
@@ -165,7 +167,7 @@ describe("transcriptItems", () => {
             {
               type: "file",
               mediaType: "image/png",
-              filename: "kept.png",
+              filename: "Picture 1",
               url: "data:image/png;base64,",
               providerMetadata: { app: { attachmentId: "picture-9" } },
             },
@@ -177,17 +179,18 @@ describe("transcriptItems", () => {
 
     expect(items[0]).toMatchObject({
       kind: TRANSCRIPT_ITEM.SAID,
-      words: "The button is cut off.",
-      pictures: [
-        { name: "bug.png", url: shot, pictureId: undefined },
-        { name: "kept.png", url: undefined, pictureId: "picture-9" },
-      ],
+      words: "The button is cut off in [Picture 1].",
+      pictures: [{ name: "bug.png", url: shot, pictureId: undefined }],
+      wordPictures: new Map([
+        ["Picture 1", { key: "4", name: "Picture 1", url: undefined, pictureId: "picture-9" }],
+      ]),
       files: [
         { name: "notes.md", base64: "YQpiCg==", size: "2 lines" },
         { name: "plan.pdf", base64: undefined, size: undefined },
         { name: "broken.txt", base64: "%%%" },
       ],
     });
+    expect(shownMediaIds(items)).toEqual(["picture-9"]);
   });
 
   it("keeps each line's files apart where two lines reach one turn while it runs", () => {
@@ -350,6 +353,121 @@ describe("transcriptItems", () => {
       ["f", false, false, "Morning triage", false, true],
       ["Ship it.", false, false, "Triage", false, true],
     ]);
+  });
+
+  it("draws a Manager's chat as bubbles: its greeting first, each message it sent a received bubble in the run it sent it in, with no turn's foot, and its working line a bubble", () => {
+    const minute = 60 * 1000;
+
+    const sent = (callId: string, text: string) => ({
+      type: "tool-send_to_user",
+      toolCallId: callId,
+      state: "output-available",
+      input: { text },
+      output: { status: "accepted" },
+    });
+
+    const lines = managerChatLines([
+      {
+        id: "ask",
+        role: MESSAGE_ROLE.USER,
+        parts: [{ type: "text", text: "Fix the login." }],
+        sentAt: 0,
+      },
+      {
+        id: "turn",
+        role: MESSAGE_ROLE.ASSISTANT,
+        parts: [
+          { type: "text", text: "Its own words, left out." },
+          sent("first", "On it."),
+          sent("second", "Started an agent."),
+        ],
+        startedAt: minute,
+        finishedAt: 2 * minute,
+      },
+      {
+        id: "thanks",
+        role: MESSAGE_ROLE.USER,
+        parts: [{ type: "text", text: "Thanks!" }],
+        sentAt: 3 * minute,
+      },
+    ]);
+
+    const items = transcriptItems(lines, {
+      writing: true,
+      readerId: "u1",
+      toggles: NO_TOGGLES,
+      now: 3 * minute,
+      pullRequests: [],
+      chat: true,
+      greeting: "Hi, I'm Pat.",
+    });
+
+    expect(
+      items.map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? [item.words, item.received, item.joinsAbove, item.joinsBelow]
+          : [item.kind, item.kind === TRANSCRIPT_ITEM.WORKING && item.chat],
+      ),
+    ).toEqual([
+      ["Hi, I'm Pat.", true, false, false],
+      ["Fix the login.", false, false, false],
+      ["On it.", true, false, true],
+      ["Started an agent.", true, true, false],
+      ["Thanks!", false, false, false],
+      [TRANSCRIPT_ITEM.WORKING, true],
+    ]);
+  });
+
+  it("opens the work a Manager's message came of under its bubble on Show work, and folds it away again", () => {
+    const transcript = [
+      {
+        id: "turn",
+        role: MESSAGE_ROLE.ASSISTANT,
+        parts: [
+          {
+            type: "tool-list_tasks",
+            toolCallId: "look",
+            state: "output-available",
+            input: {},
+            output: { tasks: [] },
+          },
+          {
+            type: "tool-send_to_user",
+            toolCallId: "send",
+            state: "output-available",
+            input: { text: "Nothing open." },
+            output: { status: "accepted" },
+          },
+        ],
+        startedAt: 0,
+        finishedAt: 1,
+      },
+    ];
+
+    const read = (toggles: typeof NO_TOGGLES) =>
+      transcriptItems(managerChatLines(transcript), {
+        writing: false,
+        readerId: "u1",
+        toggles,
+        now: 2,
+        pullRequests: [],
+        chat: true,
+        chatWork: managerChatWork(transcript, false),
+      });
+
+    const closed = read(NO_TOGGLES);
+    const bubble = closed[0];
+
+    expect(closed).toHaveLength(1);
+    expect(bubble).toMatchObject({ kind: TRANSCRIPT_ITEM.SAID, workShown: false });
+
+    const opened = read(bubble === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, bubble));
+
+    expect(opened.map((item) => [item.kind, item.depth])).toEqual([
+      [TRANSCRIPT_ITEM.SAID, 0],
+      [TRANSCRIPT_ITEM.CALL, 1],
+    ]);
+    expect(opened[0]).toMatchObject({ workShown: true });
   });
 
   it("names an app's line while the reader is not yet known", () => {
@@ -793,4 +911,40 @@ describe("a call whose answer its page carried cut", () => {
       expect(openCuts(items)).toEqual(asks ? [CUT] : []);
     },
   );
+});
+
+describe("rowsNear", () => {
+  it("reads the pictures of the rows on screen and of the few on each side of them", () => {
+    const shown = (index: number) => ({
+      id: `work-${index}`,
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        {
+          type: "tool-show_image",
+          toolCallId: `shots-${index}`,
+          state: "output-available",
+          input: { images: [{ path: `/shots/${index}.png`, caption: `Shot ${index}` }] },
+          output: { status: "accepted", pictures: [{ ...PICTURE, id: `picture-${index}` }] },
+        },
+      ],
+      finishedAt: 1,
+    });
+
+    const items = transcriptItems([0, 1, 2, 3, 4, 5, 6].map(shown), {
+      writing: false,
+      readerId: undefined,
+      toggles: NO_TOGGLES,
+      now: 2,
+      pullRequests: [],
+    });
+
+    const onScreen = items.filter((item) => item.kind === TRANSCRIPT_ITEM.MEDIA).slice(3, 4);
+
+    expect(shownMediaIds(rowsNear(items, onScreen, 1))).toEqual([
+      "picture-2",
+      "picture-3",
+      "picture-4",
+    ]);
+    expect(shownMediaIds(rowsNear(items, [], 1))).toEqual([]);
+  });
 });

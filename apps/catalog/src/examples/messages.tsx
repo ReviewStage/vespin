@@ -170,7 +170,7 @@ function Messages(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection
         id="chat-bubbles"
-        title="A chat's bubbles: the reader's at the right, the other side's at the left under its name and beside its face, what stands with a message outside its bubble at the bubble's inset, one sender's run close, its corners tightened, one time under its last, and a reply opening on the words it answers"
+        title="A chat's bubbles: the reader's at the right, the other side's at the left under its name and beside its face, what stands with a message outside its bubble at the bubble's inset, one sender's run close, its corners tightened, one time under its last"
       >
         <div className="catalog-frame">
           <div className="flex flex-col gap-ui-4">
@@ -213,21 +213,6 @@ function Messages(): React.JSX.Element {
                 ) : null}
               </MessageFrame>
             ))}
-            <MessageFrame revealActionsOnTap className="ml-auto flex flex-col items-end">
-              <ChatBubble
-                side={CHAT_SIDE.SENT}
-                run={CHAT_RUN.ALONE}
-                beside={COPY}
-                quote={{
-                  words: RUN[RUN.length - 1] ?? "",
-                  label: "Show the message this answers",
-                  onPress: () => {},
-                }}
-              >
-                <Text>Can it go out Friday instead?</Text>
-              </ChatBubble>
-              <MessageLine at={SENT_AT} />
-            </MessageFrame>
           </div>
         </div>
       </CatalogSection>

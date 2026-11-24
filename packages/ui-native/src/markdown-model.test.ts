@@ -144,6 +144,23 @@ describe("markdownBlocks", () => {
     ]);
   });
 
+  it("draws a marker of a picture the message carries as its chip, and any other marker, or one in code, as its words", () => {
+    const written = "See [Picture 1] beside [Picture 2], not `[Picture 1]`.";
+
+    expect(markdownBlocks(written, { ...READING, pictures: new Set(["Picture 1"]) })).toEqual([
+      {
+        kind: MARKDOWN_BLOCK.PARAGRAPH,
+        runs: [
+          words("See "),
+          { kind: MARKDOWN_RUN.PICTURE, name: "Picture 1" },
+          words(" beside [Picture 2], not "),
+          { kind: MARKDOWN_RUN.CODE, text: "[Picture 1]" },
+          words("."),
+        ],
+      },
+    ]);
+  });
+
   it("hides raw HTML where the words are drawn as GitHub's page draws a pull request body", () => {
     const body =
       "<!-- What changed and why? -->\n\nAdds a row.\n\n<details><summary>Log</summary></details>";

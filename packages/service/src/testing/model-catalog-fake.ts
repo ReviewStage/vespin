@@ -12,9 +12,7 @@
  * The entries are AI Gateway's own, as its `/v1/models` answered them on Nov
  * 22, 2026, with each `pricing.regional` table left out, since nothing reads
  * it: the default choice's model and one other Anthropic model, so a suite
- * can start a Claude Code agent and change its model. A nightly job holds
- * them against the live catalog, which is why they stand exported in one
- * place.
+ * can start a Claude Code agent and change its model.
  */
 
 import { fakeHttpClientLayer, jsonResponse } from "@repo/wire/testing";

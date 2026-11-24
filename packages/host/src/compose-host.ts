@@ -74,6 +74,7 @@ import {
   type Environment,
   LoopbackListener,
   MirrorPlatform,
+  PlatformFileDownload,
   Reporter,
   ShutdownSignal,
   TerminalSocket,
@@ -533,9 +534,13 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         }),
       );
 
+    // Note that a download straight into a file is the phone's alone, so a picture is read as bytes where this process offers none.
+    const fileDownload = yield* Effect.serviceOption(PlatformFileDownload);
+
     const agents = yield* served(
       composeAgents({
         kernel,
+        fileDownload: Option.getOrUndefined(fileDownload),
         account,
         accountId,
         kept,
@@ -671,10 +676,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           acts: {
             MACHINE_COMMAND_ANSWER: () => Effect.void,
             COMPUTER_USE_STATUS: () =>
-              Effect.succeed({
-                permissions: { screenRecording: false, accessibility: false },
-                apps: [],
-              }),
+              Effect.succeed({ permissions: { screenRecording: false, accessibility: false } }),
             COMPUTER_USE_APPS: () => Effect.succeed({ apps: [] }),
             COMPUTER_USE_APP_ICON: () => Effect.succeed({}),
             COMPUTER_USE_ASK_PERMISSIONS: () => Effect.fail(new ActRefused({})),

@@ -168,15 +168,33 @@ function cutTo(words: Element, range: Range): Range | undefined {
   return cut;
 }
 
+/** The overflow of a box that cuts what overflows it at its edge but never scrolls it. */
+const CUT_ONLY = new Set(["clip", "visible"]);
+
+/**
+ * Whether a box scrolls what it holds, as the log does, so words scrolled
+ * past its edge are out of sight. Note that a box that only clips, as a
+ * chat bubble or an agent's words clip past the keyboard's ring, holds its
+ * words whole, so it bounds nothing the reader can see, and Reply by words
+ * in it hangs past its edge rather than being cut there.
+ */
+function scrollsWords(box: HTMLElement): boolean {
+  const { overflowX, overflowY } = getComputedStyle(box);
+
+  return !CUT_ONLY.has(overflowX) || !CUT_ONLY.has(overflowY);
+}
+
 /**
  * What can be seen of the window around `element`: the visible viewport cut
- * to each box that clips it, the log that scrolls it say, which Reply by its
- * words keeps to.
+ * to each box that scrolls it, the log say, which Reply by its words keeps
+ * to.
  */
 export function roomAround(element: Element): ViewportBox {
   const seen = visibleViewport();
 
-  return element instanceof HTMLElement ? cutToClips(seen, clipsAround(element)) : seen;
+  return element instanceof HTMLElement
+    ? cutToClips(seen, clipsAround(element).filter(scrollsWords))
+    : seen;
 }
 
 /**

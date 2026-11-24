@@ -12,6 +12,7 @@
 import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { STATUS_TONE } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { appPlatform } from "./app-platform.js";
 import { useToast } from "./toast.js";
 
@@ -100,7 +101,7 @@ export function useImageCopyToast(): (url: string, label: string) => void {
   return (url, label) => copied(() => copyImageThroughShell(url), label);
 }
 
-/** A menu's copy, said in a toast reading `label` once the clipboard answers, or its failure; only the latest press's answer is said. */
+/** A menu's copy, said in a toast reading `label` once the clipboard answers, led by the link's glyph for a link and the copy's for the rest, or its failure; only the latest press's answer is said. */
 function useMenuCopy(): (copying: () => Promise<void>, label: string) => void {
   const show = useToast();
 
@@ -113,6 +114,7 @@ function useMenuCopy(): (copying: () => Promise<void>, label: string) => void {
         show({
           words: label,
           tone: STATUS_TONE.COMPLETE,
+          glyph: label === LINK_COPY.COPIED ? GLYPH.LINK : GLYPH.COPY,
           replayUnmasked: true,
         });
       },

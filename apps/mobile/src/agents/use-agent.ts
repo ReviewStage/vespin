@@ -30,9 +30,11 @@ import {
 import {
   type AgentPullRequest,
   type AgentStatus,
+  base64Bytes,
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
+import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
@@ -51,9 +53,17 @@ import {
   transcriptItems,
 } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { randomUUID } from "expo-crypto";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedFile, cachedPicture, cachedPlayed } from "../cached-media.js";
+import {
+  cachedFile,
+  cachedPicture,
+  cachedPlayed,
+  downloadedMedia,
+  KEPT_MEDIA,
+  keptMedia,
+} from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -61,6 +71,7 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "../host/host-provider.js";
+import { type PictureShown, usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
@@ -341,7 +352,32 @@ async function agentMediaSource(
   acts: ReturnType<typeof useHostActs>,
   agentId: string,
   pictureId: string,
+  shown: PictureShown,
 ): Promise<string> {
+  const askedAt = performance.now();
+  // Note that one shown before draws from the file its first read wrote, asking the host nothing.
+  const kept = keptMedia(AGENT_MEDIA_PREFIX, pictureId);
+
+  if (kept !== undefined) {
+    if (kept.kind === KEPT_MEDIA.PICTURE) shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
+
+    return kept.uri;
+  }
+
+  // Note that one read the first time is downloaded by the phone straight into its file, its bytes never crossing into JavaScript; a host that downloads none, or a download that read nothing, reads it as bytes below.
+  const downloaded = await downloadedMedia(AGENT_MEDIA_PREFIX, pictureId, randomUUID(), (path) =>
+    acts[ACT_KIND.AGENTS_PICTURE_FILE]({ agentId, pictureId, playable: MP4_TYPE, path }).then(
+      (answer) => ("contentType" in answer ? answer.contentType : undefined),
+    ),
+  );
+
+  if (downloaded !== undefined) {
+    if (downloaded.kind === KEPT_MEDIA.PICTURE)
+      shown(PRODUCT_PICTURE_FROM.DOWNLOADED, askedAt, downloaded.bytes);
+
+    return downloaded.uri;
+  }
+
   // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.
   const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
 
@@ -354,6 +390,8 @@ async function agentMediaSource(
   // Note that a picture is written to the app's caches and drawn from its file, so the page holds its address rather than its bytes, and the system's image cache holds what it decodes; a type no file can be named for keeps its `data:` address.
   const written = await cachedPicture(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64);
 
+  shown(PRODUCT_PICTURE_FROM.READ, askedAt, base64Bytes(read.base64));
+
   return written ?? `data:${read.contentType};base64,${read.base64}`;
 }
 
@@ -365,8 +403,11 @@ export interface AgentMedia {
 
 /**
  * What each picture, recording, and sound clip the agent showed is drawn
- * from, by its id, read once through the host as the panel reads one
- * (`ACT_KIND.AGENTS_PICTURE`): a picture as a `data:` address, and a
+ * from, by its id: the file an earlier read wrote under the app's caches,
+ * this launch's or one before it (`keptMedia`), or else read once through
+ * the host as the panel reads one (`ACT_KIND.AGENTS_PICTURE`): a picture
+ * written to a file of the caches, or a `data:` address where its type names
+ * none, and a
  * recording or a clip, its MP4 copy where the service kept one, as a file of
  * the app's caches, written whole before it is drawn, since the system's
  * player reads a file; one on its way is absent, and one whose every try
@@ -380,6 +421,7 @@ export interface AgentMedia {
  */
 export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMedia {
   const acts = useHostActs();
+  const pictureShown = usePictureShownCount(PRODUCT_PICTURE_KIND.AGENT);
 
   const [shown, setShown] = useState<{
     readonly agentId: string;
@@ -402,7 +444,7 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
   // Note that the agent's reads stand while its page does, and are let go as another agent's page stands or the page leaves, so none that lands after is drawn.
   useEffect(() => {
     const standing = mediaReads({
-      read: (pictureId) => agentMediaSource(acts, agentId, pictureId),
+      read: (pictureId) => agentMediaSource(acts, agentId, pictureId, pictureShown),
       landed: (pictureId, source) => stand(pictureId, source),
       // Note that a read whose every try failed stands failed, so it says so with Try again rather than spinning on.
       failed: (pictureId, cause, again) => {
@@ -416,7 +458,7 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
     setReads(standing);
 
     return () => standing.stop();
-  }, [acts, agentId]);
+  }, [acts, agentId, pictureShown]);
 
   useEffect(() => reads?.ask(ids), [reads, ids]);
 
@@ -623,31 +665,50 @@ export type PageRead =
   | { readonly html: string; readonly title: string }
   | { readonly failed: true };
 
+/** The version a page is read at where its opener named none, as a link opens it: the newest the service holds. */
+export const PAGE_NEWEST = "newest";
+
 /** A page's read as it stands, and the ask to read it again after it failed. */
 export interface PageHtml {
   readonly read: PageRead;
   readonly again: () => void;
 }
 
-/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known, and read again on `again` after a read that failed. */
+/**
+ * One version of a page the agent showed on its task, or its newest
+ * (`PAGE_NEWEST`), read whole once through the host
+ * (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading
+ * until the task is known, and read again on `again` after a read that
+ * failed. A version named after the newest was read is read only where it
+ * is not the one the newest read answered, so a link's page, read at once,
+ * is not read again when the task's pages name the same version.
+ */
 export function usePageHtml(
   taskId: string | undefined,
   pageId: string,
-  version: number | undefined,
+  version: number | typeof PAGE_NEWEST | undefined,
 ): PageHtml {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
+  // The version the page last read answered, which a version named after it is told apart from.
+  const standing = useRef<number | undefined>(undefined);
   // Note that each ask to read again counts up, which the read below depends on, so Try again reads the page anew rather than leaving the failure standing.
   const [asked, setAsked] = useState(0);
   const again = useCallback(() => setAsked((was) => was + 1), []);
   useEffect(() => {
     let current = true;
+
+    if (version !== PAGE_NEWEST && version !== undefined && version === standing.current) return;
     setRead({ reading: true });
+    standing.current = undefined;
 
     if (taskId === undefined || version === undefined) return;
-    acts[ACT_KIND.TASKS_PAGE_HTML]({ taskId, pageId, version }).then(
+    const named = version === PAGE_NEWEST ? {} : { version };
+    acts[ACT_KIND.TASKS_PAGE_HTML]({ taskId, pageId, ...named }).then(
       (answer) => {
         if (!current) return;
+
+        if ("page" in answer) standing.current = answer.page.version;
         setRead(
           "page" in answer
             ? { html: answer.page.html, title: answer.page.title }

@@ -15,6 +15,7 @@ import {
 } from "@repo/ui";
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import type { DescriptionCommentsControl } from "@repo/ui/description-comments";
+import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useSelector } from "@tanstack/react-store";
@@ -172,6 +173,7 @@ interface RemovedComment {
  */
 const COMMENT_REMOVAL = {
   words: PAGE_REVIEW_WORDS.REMOVED,
+  glyph: GLYPH.DELETE,
   unmasked: () => true,
   act: (lines, { clientKey }) =>
     lines.set((now) => now.filter((comment) => comment.clientKey !== clientKey)),

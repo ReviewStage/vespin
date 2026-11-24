@@ -257,7 +257,7 @@ test("View options' Sort by › Recent activity lists the Manager that moved las
   );
 });
 
-test("a Manager the reader pinned stands under Pinned as well as under Managers, and opens its page from there", async () => {
+test("a Manager the reader pinned stands under Pinned alone, leaving Managers, and opens its page from there", async () => {
   const opened: string[] = [];
   const sidebar = await mountSidebar(true, opened, undefined, [FRONTEND]);
   const pins = sidebar.querySelector('nav[aria-label="Pinned"]');
@@ -266,7 +266,8 @@ test("a Manager the reader pinned stands under Pinned as well as under Managers,
   assert.ok(pins, "Pinned is drawn");
   assert.ok(pins.textContent?.includes("Frontend Manager"));
   assert.ok(!pins.textContent?.includes("Billing Manager"), "an unpinned Manager stays out");
-  assert.ok(managers?.textContent?.includes("Frontend Manager"), "it stays under Managers too");
+  assert.ok(!managers?.textContent?.includes("Frontend Manager"), "it leaves Managers");
+  assert.ok(managers?.textContent?.includes("Billing Manager"), "an unpinned Manager stays");
 
   const row = [...pins.querySelectorAll("button")].find((button) =>
     button.textContent?.includes("Frontend Manager"),

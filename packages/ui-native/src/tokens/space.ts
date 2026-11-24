@@ -67,21 +67,36 @@ export const RADIUS = {
 } as const;
 
 /**
- * A row's layout across the screen: the unread dot in the margin, the
- * leading mark's column, and the words, where the row's hairline starts, so
- * every row's text and rule line up whatever its mark.
+ * The system's layout margins, in points: where a list row's content starts
+ * and ends, as UIKit's `systemMinimumLayoutMargins` stand them, 16 pt in an
+ * iPhone's narrow window and 20 pt in a Plus or Pro Max's, an iPhone on its
+ * side, and every iPad window, its split view's columns included. Apple's
+ * `contentMargins(for: .container)` reads them "from 16 to 20 points on
+ * iPhone"; `layout-margin.ts` picks between them by the window's width.
+ */
+export const LAYOUT_MARGIN = {
+  NARROW: 16,
+  WIDE: 20,
+  /** The least window width, in points, that takes the wide margin: the iPhone Plus's 414, where the 402 pt iPhone Pro keeps the narrow one. */
+  WIDE_MIN_WIDTH: 414,
+} as const;
+
+/**
+ * A row's layout across the screen, measured from Mail's Inbox (Apple's iOS
+ * 18 Mail screenshot, 393 pt wide): the unread dot in the margin, its
+ * trailing edge on the layout margin and its center 11.5 pt in, the leading
+ * mark past an 8 pt gutter after it (Mail's photo starts at 24 pt on a
+ * 16 pt margin), and the words, where the row's hairline starts, so every
+ * row's text and rule line up whatever its mark. Each is counted from the
+ * layout margin (`useRowInset`), never from the screen's edge.
  */
 export const ROW_INSET = {
-  /** The row's own leading inset, the dot's margin. */
-  LEADING: SPACE.EDGE - MARK_SIZE.UNREAD - SPACE.TIGHT,
-  /** A row that draws no unread dot, such as a task's: the list's own edge, so its lead mark stands where a dotted row's does. */
-  PLAIN: SPACE.EDGE,
-  /** Where the words, and the hairline under them, start from the screen's edge. */
-  TEXT: SPACE.EDGE + MARK_SIZE.LEAD + SPACE.ROW,
+  /** Between the unread dot, whose trailing edge stands on the layout margin, and the leading mark: Mail's gutter, UIKit's standard 8 pt between siblings. */
+  GUTTER: 8,
   /** A row's top and bottom, so a row of one line in the body style stands 44 pt tall, as iOS's own list rows stand. */
   VERTICAL: 11,
-  /** An Inbox thread's top and bottom, roomier than a task's, as Mail's message rows stand. */
-  THREAD_VERTICAL: 12,
+  /** An Inbox thread's top and bottom, as Mail's message rows stand: its sender, subject and preview (17, 15 and 15 pt, ours too) in a 78 pt row, 8 pt over and under their lines. */
+  THREAD_VERTICAL: 8,
   /** Between an Inbox thread's title and the line under it, as Mail's subject sits under its sender. */
   THREAD_LINE_GAP: 3,
   /** Between an Inbox thread's title and its preview where its task leads it, as the panel's description stands 2 px under its title, the task's line and the title standing flush. */
@@ -89,9 +104,9 @@ export const ROW_INSET = {
   /**
    * Between the column's edge and a selected row's rounded fill, so the fill
    * stands set in, as Mail's selected message does. Note that it stays under
-   * `LEADING`, the dot's margin, which the row pads by `LEADING - FILL` inside
-   * the fill, so the unread dot always stands inside it, whatever size the
-   * dot is drawn at.
+   * the dot's leading inset, the layout margin less the dot, which the row
+   * pads by that less `FILL` inside the fill, so the unread dot always stands
+   * inside it, whatever size the dot is drawn at.
    */
   FILL: SPACE.TIGHT / 2,
 } as const;

@@ -1,6 +1,6 @@
 // agent-stream.e2e.ts -- a member starts an agent on a task and watches its scripted turn stream into the transcript and end.
 
-import { expect, test } from "../support/signed-in.js";
+import { expect, test } from "../support/held-turn.js";
 
 const TASK_NAME = "Stream a turn";
 
@@ -13,16 +13,19 @@ test.use({ memberAsk: { taskName: TASK_NAME, credential: true, setupFinished: tr
  * is over. The member opens the seeded task from the list, writes a Start
  * prompt holding the stream script's cue (`[script:stream]`,
  * `scripted-agent-sessions.ts`), and sends it. The script plays two
- * sentences, a `Read` call, and two more, a beat apart, all of it written
- * by the service, so none of it is the page's own copy of the Start. Its
- * first sentence standing beside the reply's "Working…" says the turn
- * reached the panel while it ran; "Worked for" in its place says the turn
- * ended. The seeded credential is a placeholder Anthropic key, which lets
- * Start pass for the composer's default Claude model.
+ * sentences, then holds its turn running until the journey lets it go
+ * (`heldTurn`), then plays a `Read` call and two more, all of it written by
+ * the service, so none of it is the page's own copy of the Start. Its first
+ * sentences standing beside the reply's "Working…" while the turn is held
+ * say the turn reached the panel while it ran, however slow that delivery
+ * was; "Worked for" in its place once let go says the turn ended. The
+ * seeded credential is a placeholder Anthropic key, which lets Start pass
+ * for the composer's default Claude model.
  */
 test("a member starts an agent and watches its turn stream in and end", async ({
   page,
   signedIn,
+  heldTurn,
 }) => {
   expect(signedIn.taskId).toBeDefined();
 
@@ -44,8 +47,9 @@ test("a member starts an agent and watches its turn stream in and end", async ({
     .getByRole("listitem")
     .filter({ hasText: "Reading the repository first." });
 
-  // The first sentence beside the turn's "Working…" is the stream reaching the panel before the turn's end.
+  // The first sentences beside the held turn's "Working…" are the stream reaching the panel before the turn's end.
   await expect(reply).toContainText("Working…");
+  await heldTurn.letGo();
 
   await expect(reply.getByText(/^Worked for /)).toBeVisible();
   await expect(reply.getByRole("group").filter({ hasText: "Read README.md" })).toBeVisible();

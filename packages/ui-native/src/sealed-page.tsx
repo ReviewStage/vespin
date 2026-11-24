@@ -7,7 +7,7 @@ import {
   type PageThemeVariable,
 } from "@repo/features/page-theme";
 import { sealedPageDocument } from "@repo/features/sealed-page";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -41,6 +41,11 @@ const PAGE_INSET = "16px";
 
 /** How long the loading ground takes to give way to the page once it has loaded, as a cross-fade. */
 const REVEAL_MS = 200;
+
+/** The empty page WebKit starts on while the page's HTML is still read, named by `title` so its load is told from the page's own. */
+function startingDocument(title: string): string {
+  return `<title>${title}</title>`;
+}
 
 /** What the loading ground is heard as while it stands, as Safari's own page is heard while it loads. */
 const LOADING_HEARD = "Loading";
@@ -128,10 +133,12 @@ function staysSealed(request: WebViewNavigation): boolean {
 }
 
 type SealedPageProps = {
-  /** The page's HTML, as the agent wrote it. */
-  readonly html: string;
+  /** The page's HTML, as the agent wrote it; none while it is still read. */
+  readonly html: string | undefined;
   /** What the page is, heard in its place. */
   readonly title: string;
+  /** Told once the page has first loaded, as its loading ground starts to fade, so its opener can count how long it took. */
+  readonly onLoaded?: (() => void) | undefined;
 };
 
 /**
@@ -178,6 +185,7 @@ function PageLoading({
 function SealedPageAt({
   html,
   title,
+  onLoaded,
   fontScale,
 }: SealedPageProps & { readonly fontScale: number }) {
   const colors = useColors();
@@ -185,11 +193,23 @@ function SealedPageAt({
   const [loaded, setLoaded] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const reveal = useCallback(() => setRevealed(true), []);
+  const starting = `vespin-starting-${useId()}`;
+  // Note that the last HTML handed in stands while a later version is read, so a page followed to its newest never gives way to the empty page it started on.
+  const [drawn, setDrawn] = useState(html);
+
+  if (html !== undefined && html !== drawn) setDrawn(html);
 
   const document = useMemo(
-    () => sealedPageDocument(html, themeOf(colors, dark)),
-    [html, colors, dark],
+    () => sealedPageDocument(drawn ?? startingDocument(starting), themeOf(colors, dark)),
+    [drawn, starting, colors, dark],
   );
+
+  // Note that the empty page WebKit starts on ends its load too, maybe only once the page's HTML has landed, so it is told apart by its title and only the page itself ends the ground.
+  const loadEnded = (event: { readonly nativeEvent: { readonly title: string } }) => {
+    if (drawn === undefined || event.nativeEvent.title === starting) return;
+    setLoaded(true);
+    onLoaded?.();
+  };
 
   // Note that the web view is hidden from accessibility until the ground has gone, because WebKit hands its words to accessibility before they are drawn.
   // Note that a failed load ends the ground too, since react-native-webview calls `onLoadEnd` on an error, and so does WebKit's page process ending before it loaded, which calls neither, so the ground never stands for good.
@@ -200,7 +220,7 @@ function SealedPageAt({
         injectedJavaScriptBeforeContentLoaded={textScaleScript(fontScale)}
         originWhitelist={EVERY_ADDRESS}
         onShouldStartLoadWithRequest={staysSealed}
-        onLoadEnd={() => setLoaded(true)}
+        onLoadEnd={loadEnded}
         onContentProcessDidTerminate={() => setLoaded(true)}
         javaScriptEnabled
         domStorageEnabled={false}
@@ -229,10 +249,22 @@ function SealedPageAt({
  * brand's theme in the window's scheme at the reader's text size, and is
  * drawn anew as either changes. Until it first loads, the system's spinner
  * stands over it, heard as Loading in the page's place (`PageLoading`).
+ * Note that the web view is drawn before the HTML is read, on an empty page
+ * of its own, so that WebKit, which starts cold, starts while the page is
+ * still read rather than after it, and the page draws the sooner once it
+ * lands.
  */
-export function SealedPage({ html, title }: SealedPageProps) {
+export function SealedPage({ html, title, onLoaded }: SealedPageProps) {
   const { fontScale } = useWindowDimensions();
 
   // Note that the page is drawn anew at a new text size, since its script runs once, before the page, and so waits on its load again.
-  return <SealedPageAt key={fontScale} html={html} title={title} fontScale={fontScale} />;
+  return (
+    <SealedPageAt
+      key={fontScale}
+      html={html}
+      title={title}
+      onLoaded={onLoaded}
+      fontScale={fontScale}
+    />
+  );
 }

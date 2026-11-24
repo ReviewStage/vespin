@@ -40,7 +40,6 @@ beforeEach(() => {
         return Promise.resolve(
           done({
             permissions: { screenRecording: true, accessibility: false },
-            apps: [],
           }),
         );
       }

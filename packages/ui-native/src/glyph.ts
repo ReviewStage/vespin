@@ -108,6 +108,8 @@ export const GLYPH = {
   THREAD: lucide(LUCIDE_SYMBOL.MESSAGES_SQUARE),
   RELATIONS: lucide(LUCIDE_SYMBOL.NETWORK),
   SUB_TASK: lucide(LUCIDE_SYMBOL.LIST_TREE),
+  /** Show work under a Manager's message, as the panel's press beside it offers it. */
+  SHOW_WORK: lucide(LUCIDE_SYMBOL.LIST_TREE),
   PARENT_TASK: lucide(LUCIDE_SYMBOL.CORNER_LEFT_UP),
   BLOCKED_BY: lucide(LUCIDE_SYMBOL.OCTAGON_MINUS),
   BLOCKS: lucide(LUCIDE_SYMBOL.HAND),

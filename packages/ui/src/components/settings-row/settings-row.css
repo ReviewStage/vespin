@@ -74,6 +74,36 @@
     display: flex;
   }
 
+  /* A row that ends in a glyph-wide press, a ⋯, a fold's chevron, a link
+     row's ›, or the room of one it lacks, lets that box stand past the
+     row's padding by the glyph's inset in it, so the glyph's own ink ends
+     where a button, a switch, or a picker ends on the rows around it, while
+     the press keeps its whole box and its hover's fill. Note that the fill
+     still stands inside the row's padding, and a flush card draws its ring
+     inside the control, so neither is cut at the card's edge or corner; and
+     that the room of a ⋯ moves with it, so a value beside it stays in one
+     column with the values of the rows that end in a ⋯. */
+  .ui-settings-row-end:has(
+    > :last-child:is(
+        .ui-button[data-icon-only="true"],
+        .ui-settings-link-row-glyph,
+        .ui-settings-row-act-slot
+      )
+  ) {
+    margin-inline-end: calc((var(--ui-control-icon) - var(--ui-control-height)) / 2);
+  }
+
+  /* The room of a ⋯ a row lacks (`SettingsRowActSlot`) is kept only where
+     the row's controls are a value, a role or a sum, so its value stands in
+     one column with the values of the rows that end in a ⋯. Beside any
+     other control, a button, a switch, a picker, a ✓, it stands nowhere,
+     gap and all, so that control ends at the card's padding as every row's
+     last control does, whatever its neighbors end in. */
+  .ui-settings-row-line:not(:has(.ui-settings-row-controls .ui-settings-row-value))
+  > .ui-settings-row-end:not(:has(> :not(.ui-settings-row-act-slot))) {
+    display: none;
+  }
+
   /* Note that the gaps, the subject's share of the line, and the title's
      wrap stay here rather than in utilities, because the rules below undo
      them, and a rule in this layer cannot undo a utility. The line holds the

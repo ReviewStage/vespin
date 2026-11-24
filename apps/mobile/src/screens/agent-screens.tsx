@@ -36,8 +36,9 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { managerChatLines } from "@repo/features/manager-chat";
-import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
+import { managerChatLines, managerChatWork } from "@repo/features/manager-chat";
+import { managerGreeting } from "@repo/features/manager-greeting";
+import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -50,19 +51,14 @@ import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
 import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
-import {
-  agentRunsOnWords,
-  agentStillWriting,
-  RUNS_ON_WORDS,
-} from "@repo/features/task-agents-model";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
-import { MCP_SERVER_LABEL, PATH_OPENS, VERB } from "@repo/features/words";
+import { PATH_OPENS, VERB } from "@repo/features/words";
 import {
   type FollowedAgent,
   selectInboxReader,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
-import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   AgentTranscript,
@@ -70,6 +66,7 @@ import {
   AskNote,
   askForName,
   BAR_TITLE,
+  type BarMenu,
   type BarSubtitle,
   BUTTON_LOOK,
   CallCardRow,
@@ -89,19 +86,13 @@ import {
   type Glyph,
   glyphSymbol,
   ListSection,
-  MENU_CHIP_LOOK,
   MentionSuggestions,
-  MenuChip,
   MenuRow,
   type MenuRowAct,
-  ModelChoicePopover,
-  ModelChoiceSheet,
-  type ModelChoices,
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
-  PERMISSION_MODE_GLYPH,
-  runsOnGlyph,
+  rowsNear,
   Screen,
   SettingsForm,
   SkillSuggestions,
@@ -135,6 +126,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useAgentBox } from "../agents/agent-box.js";
 import {
   type AgentThreadsDock,
   type AppsDock,
@@ -161,15 +153,10 @@ import {
   undeliveredWhole,
   useAgentComposer,
 } from "../agents/use-agent-composer.js";
-import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
-import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
 import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
-import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
-import { type AgentServers, useAgentServers } from "../agents/use-agent-servers.js";
-import { type AgentCommandsPlace, useAgentCommandsPlace } from "../agents/use-agent-tools.js";
 import { useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
@@ -199,6 +186,9 @@ import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useDictation } from "../use-dictation.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
+
+/** How many rows on each side of those on screen a transcript reads the pictures of before they scroll in. */
+const MEDIA_REACH = 5;
 
 /** The agent's threads line over its box, and what a press on it opens. */
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -246,9 +236,6 @@ const RENAME_WORDS = {
   TITLE: "Rename agent",
   ACT: "Rename",
 } as const;
-
-/** The name a flow finds the composer's model chip by. */
-const MODEL_CHIP_ID = "agent-model-chip";
 
 /** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
@@ -555,7 +542,7 @@ function AgentComposerArea({
   undeliveredActs,
   approvals,
   onShowWaiting,
-  servers,
+  submenus,
   note,
   call,
   otherCall,
@@ -577,7 +564,8 @@ function AgentComposerArea({
   readonly undeliveredActs: RefObject<UndeliveredActs | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
-  readonly servers: AgentServers;
+  /** The + menu's MCP servers › (`useAgentBox`). */
+  readonly submenus: readonly BarMenu[];
   readonly note: string | undefined;
   readonly call: ComposerCall | undefined;
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
@@ -610,7 +598,7 @@ function AgentComposerArea({
         composer={composer}
         approvals={approvals}
         onShowWaiting={onShowWaiting}
-        addMenu={agentAddMenu(composer, servers, agent !== undefined)}
+        addMenu={agentAddMenu(composer, submenus)}
         note={said}
         call={call}
         otherCall={otherCall}
@@ -633,121 +621,15 @@ function AgentComposerArea({
 
 /**
  * What the composer's + opens, as the desktop composer's + does: Photos,
- * then MCP servers ›, each server the agent is handed led by its
- * provider's mark, checked while it is on, a press switching it, once they are read and where any is connected.
- * The model, its effort, Fast and the permission mode stand once, in the
- * model chip's sheet at the row's end, as the desktop's model chip holds
- * them.
+ * then the agent's MCP servers › (`useAgentBox`). The model, its effort,
+ * Fast and the permission mode stand once, in the model chip's choices at
+ * the row's end, as the desktop's model chip holds them.
  */
-function agentAddMenu(
-  composer: AgentComposer,
-  servers: AgentServers,
-  /** Whether the task list holds the agent, whose servers a switch changes; none are offered before, since a switch then changes nothing. */
-  listed: boolean,
-): ComposerMenu {
+function agentAddMenu(composer: AgentComposer, submenus: readonly BarMenu[]): ComposerMenu {
   return {
     actions: [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
-    submenus:
-      !listed || !servers.read || servers.servers.length === 0
-        ? []
-        : [
-            {
-              label: MCP_SERVER_LABEL.many,
-              symbol: GLYPH.MCP_SERVER,
-              choices: servers.servers.map((server) => ({
-                label: server.name,
-                mark: server.provider,
-                on: server.on,
-                onPress: () => servers.toggle(server.connection, !server.on),
-              })),
-              actions: [],
-            },
-          ],
+    submenus,
   };
-}
-
-/**
- * The model chip at the end of the composer's row, as the desktop's stands
- * at its box's foot: the model alone, "Opus 5.5", led by its harness's mark,
- * since a phone's row has no room for its effort too, as Claude's and
- * Cursor's chips name the model alone; a press opens the model sheet, where
- * the model, its effort, Fast and the permission mode are chosen; none
- * before the agent's model is known.
- */
-function AgentModelChip({
-  pick,
-  onOpen,
-}: {
-  readonly pick: AgentModelPick;
-  readonly onOpen: (() => void) | undefined;
-}) {
-  if (pick.model === undefined || onOpen === undefined) return null;
-
-  const model =
-    pick.models.find((option) => option.id === pick.model)?.label ?? modelLabel(pick.model);
-
-  const harness = providerOf(pick.model);
-
-  return (
-    <MenuChip
-      look={MENU_CHIP_LOOK.COMPOSER}
-      label={model}
-      {...(harness === undefined ? {} : { harness })}
-      onOpen={onOpen}
-      testId={MODEL_CHIP_ID}
-    />
-  );
-}
-
-/** What the Machine chip's menu heads where commands go, as the panel's place chip names its Default machine row. */
-const COMMANDS_WORDS = { LABEL: "Terminal and computer use" } as const;
-
-/** The name a flow finds the composer's Machine chip by. */
-const MACHINE_CHIP_ID = "agent-machine-chip";
-
-/**
- * Where the agent works, as the desktop's Machine chip stands after the +:
- * Cloud or its device's name, led by the panel's runs-on mark; its menu,
- * where the agent is offered `run_on_mac`, says where its terminal commands
- * and computer use go, each machine the agent may send them to, the one
- * they go to now checked, a pick setting it (`useAgentCommandsPlace`). A
- * chip with no machine to choose says where the agent works alone.
- */
-function AgentMachineChip({
-  agent,
-  commands,
-}: {
-  readonly agent: Pick<FollowedAgent, "machine" | "mac" | "workspaceId">;
-  readonly commands: AgentCommandsPlace | undefined;
-}) {
-  const symbol = useAgentPlaceGlyph(agent);
-
-  const menu =
-    commands === undefined || commands.machines.length === 0
-      ? undefined
-      : {
-          groups: [
-            {
-              title: COMMANDS_WORDS.LABEL,
-              choices: commands.machines.map((machine) => ({
-                label: machine.name,
-                symbol: runsOnGlyph({ cloud: false }),
-                on: machine.id === commands.machine?.id,
-                onPress: () => commands.choose(machine.id),
-              })),
-            },
-          ],
-        };
-
-  return (
-    <MenuChip
-      look={MENU_CHIP_LOOK.COMPOSER}
-      label={agentRunsOnWords(agent) || RUNS_ON_WORDS.LABEL}
-      symbol={symbol}
-      {...(menu === undefined ? {} : { menu })}
-      testId={MACHINE_CHIP_ID}
-    />
-  );
 }
 
 /**
@@ -992,6 +874,15 @@ const AgentConversation = memo(function AgentConversation({
     [pending],
   );
 
+  // Note that a Manager's work stays a press away from its chat, read from its whole transcript, the turn under way's under its working line.
+  const chatWork = useMemo(
+    () =>
+      chat && messages !== undefined
+        ? managerChatWork(messages, status !== undefined && agentStillWriting(status))
+        : undefined,
+    [chat, messages, status],
+  );
+
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const items = useMemo(
     () =>
@@ -1005,8 +896,18 @@ const AgentConversation = memo(function AgentConversation({
         origin,
         suggestionAddress,
         waitingCalls,
+        chat,
+        chatWork,
+        // Note that the greeting stands over the chat's first line, so it waits until no older page is left to read, as the panel draws it above its first message.
+        greeting:
+          chat && shown !== undefined && transcript?.before === undefined
+            ? managerGreeting(shown.title)
+            : undefined,
       }),
     [
+      shown,
+      transcript?.before,
+      chatWork,
       waitingCalls,
       messages,
       sending,
@@ -1034,10 +935,10 @@ const AgentConversation = memo(function AgentConversation({
     [messages, status],
   );
 
-  // Note that only the pictures and recordings of the rows on screen are read, so a transcript of hundreds of screenshots never holds them all as it opens.
+  // Note that only the pictures and recordings of the rows on screen and the few beside them are read, so a transcript of hundreds of screenshots never holds them all as it opens, and the next rows to scroll in are drawn as they land.
   const mediaIds = useMemo(
-    () => [...shownMediaIds(rowsShown), ...appsDockMediaIds(inUse)],
-    [rowsShown, inUse],
+    () => [...shownMediaIds(rowsNear(items, rowsShown, MEDIA_REACH)), ...appsDockMediaIds(inUse)],
+    [items, rowsShown, inUse],
   );
 
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
@@ -1121,10 +1022,6 @@ const AgentConversation = memo(function AgentConversation({
   );
   const failed = held?.failed === true || transcript?.failure !== undefined;
 
-  // Note that the model sheet stands as the page's own beside it, as its asks do, so the model chip and the bar's line open the one sheet.
-  const [modelsShown, setModelsShown] = useState(false);
-  const openModels = agent === undefined ? undefined : () => setModelsShown(true);
-
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
   const subtitle = agentSubtitle(
@@ -1135,8 +1032,6 @@ const AgentConversation = memo(function AgentConversation({
   // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the bar's line changes out of the reader's sight.
   useAnnounced(statusWords);
 
-  const mode = useAgentMode(id);
-  const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
   const transcriptCopy = useTranscriptCopy(id, title, shown?.brief);
 
@@ -1177,20 +1072,13 @@ const AgentConversation = memo(function AgentConversation({
     else router.replace("/tasks");
   };
 
-  const servers = useAgentServers(id);
-  const commands = useAgentCommandsPlace(id);
+  // What the composer reads off the agent, read as the Inbox thread's composer reads it, so the two stand alike.
+  const box = useAgentBox(id, agent);
 
   // Note that the newest refusal of the page's own acts stands over the field, so a server's switch refused after a Pin says its own words rather than the older one's.
   const move = useAgentMove(agent);
 
-  const note = useNewestNote([
-    actions.note,
-    move.note,
-    transcriptCopy.note,
-    servers.note,
-    mode?.note,
-    pick.note,
-  ]);
+  const note = useNewestNote([actions.note, move.note, transcriptCopy.note, ...box.notes]);
 
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
@@ -1229,8 +1117,6 @@ const AgentConversation = memo(function AgentConversation({
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
   const barActs = regular && agent !== undefined;
-  // Note that a regular window's model choices pop over from the model chip rather than rising as a sheet, whichever opens them, the chip or the bar's subtitle; with no chip standing they keep the sheet.
-  const modelPopover = regular && openModels !== undefined && pick.model !== undefined;
 
   // Archive asks first. Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
   const askArchive = () => {
@@ -1295,7 +1181,7 @@ const AgentConversation = memo(function AgentConversation({
       approvals={approvals}
       onShowWaiting={showWaiting}
       onOpenThread={openThread}
-      servers={servers}
+      submenus={box.submenus}
       note={note}
       call={talk.call}
       otherCall={otherCall}
@@ -1308,21 +1194,8 @@ const AgentConversation = memo(function AgentConversation({
           />
         )
       }
-      tools={
-        agent === undefined ? undefined : <AgentMachineChip agent={agent} commands={commands} />
-      }
-      trailing={
-        modelPopover ? (
-          <ModelChoicePopover
-            chip={<AgentModelChip pick={pick} onOpen={openModels} />}
-            presented={modelsShown}
-            onDismiss={() => setModelsShown(false)}
-            {...agentModelChoices(pick, mode)}
-          />
-        ) : (
-          <AgentModelChip pick={pick} onOpen={openModels} />
-        )
-      }
+      tools={box.tools}
+      trailing={box.trailing}
     />
   );
 
@@ -1370,14 +1243,7 @@ const AgentConversation = memo(function AgentConversation({
 
   const asks = (
     <>
-      {modelPopover ? null : (
-        <AgentModelSheet
-          pick={pick}
-          mode={mode}
-          presented={modelsShown}
-          onDismiss={() => setModelsShown(false)}
-        />
-      )}
+      {box.sheet}
       {merging === undefined || asked === undefined ? null : (
         <CardMergeAsk
           pullRequestKey={merging}
@@ -1669,75 +1535,6 @@ function AgentPage({
       pageId={pageId}
       version={version}
       title={title}
-    />
-  );
-}
-
-/**
- * The agent's model choices, as the desktop's model chip opens its menu,
- * each change sent at once and drawn on the agent as it is asked, one the
- * service refused reading back and saying why: its model, among the models
- * New agent offers that its harness runs, each under its harness's mark,
- * its effort right under it, and Fast where the model has a fast version,
- * which take effect from its next step; and last its permission mode, each
- * with its glyph and what it does, where its harness takes one, which takes
- * effect from its next turn. The page's own model and mode are handed in,
- * so a change clears the one refusal and counts as the one latest change.
- */
-function agentModelChoices(pick: AgentModelPick, mode: AgentMode | undefined): ModelChoices {
-  const models = pick.models.flatMap((option) => {
-    const provider = providerOf(option.id);
-
-    return provider === undefined ? [] : [{ ...option, provider }];
-  });
-
-  return {
-    models,
-    model: pick.model,
-    onModel: pick.pickModel,
-    efforts: pick.efforts,
-    effort: pick.effort,
-    onEffort: pick.pickEffort,
-    fast: pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle },
-    note: pick.note,
-    mode:
-      mode === undefined
-        ? undefined
-        : {
-            title: PERMISSION_MODE_WORDS.QUESTION,
-            options: mode.modes.map((option) => ({
-              ...option,
-              symbol: PERMISSION_MODE_GLYPH[option.id],
-            })),
-            picked: mode.mode,
-            onPick: (picked) => {
-              const chosen = mode.modes.find((option) => option.id === picked);
-
-              if (chosen !== undefined) mode.choose(chosen.id);
-            },
-            footer: PERMISSION_MODE_WORDS.APPLIES,
-            note: mode.note,
-          },
-  };
-}
-
-/** The agent's model choices as a sheet (`ModelChoiceSheet`), as a compact window opens them; Done closes it. */
-function AgentModelSheet({
-  pick,
-  mode,
-  presented,
-  onDismiss,
-}: {
-  readonly pick: AgentModelPick;
-  readonly mode: AgentMode | undefined;
-  readonly presented: boolean;
-  readonly onDismiss: () => void;
-}) {
-  return (
-    <ModelChoiceSheet
-      presented={presented}
-      onDismiss={onDismiss}
-      {...agentModelChoices(pick, mode)}
     />
   );
 }

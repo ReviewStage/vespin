@@ -568,8 +568,11 @@ export function SettingsRowValue({ children }: { children: ReactNode }): React.J
 
 /**
  * The room of a row's ⋯ on a row with none, so every row's value ends in one
- * column; where no row of its section ends in a glyph, it and the row's end
- * stand nowhere (`settings-section.css`), so no row keeps blank room.
+ * column. It is kept only beside a value (`SettingsRowValue`): beside any
+ * other control it stands nowhere (`settings-row.css`), so a button, a
+ * switch, or a ✓ ends at the card's padding whatever the rows around it end
+ * in; and where no row of its section ends in a glyph, it stands nowhere
+ * beside a value either (`settings-section.css`), so no row keeps blank room.
  */
 export function SettingsRowActSlot(): React.JSX.Element {
   return <span className="ui-settings-row-act-slot w-control flex-none" aria-hidden="true" />;

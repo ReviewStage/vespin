@@ -6,7 +6,12 @@ import { listRepositoryPins, setRepositoryPin } from "@repo/database/models/repo
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
 import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import {
+  getTestDB,
+  joinWorkspace,
+  openAgentOnOwnTask,
+  openWorkspace,
+} from "@repo/database/testing";
 import { SIDEBAR_READ, type SidebarRows, sidebarRowsOfLive } from "@repo/features/sidebar-live";
 import {
   TASK_SECTION_GLYPH,
@@ -95,7 +100,7 @@ const liveSidebarOf = (userId: string) =>
 
 it.layer(getTestDB())("the account's sidebar's live read", (it) => {
   it.effect(
-    "the live statements deliver the sections, their tasks, and the pins the held reads answer, to their maker, and none of them to a teammate or an outsider",
+    "the live statements deliver the sections, their tasks and agents, and the pins the held reads answer, to their maker, and none of them to a teammate or an outsider",
     () =>
       Effect.gen(function* () {
         const { dean, charles, workspace, first, second } = yield* openSharedWorkspace;
@@ -112,6 +117,13 @@ it.layer(getTestDB())("the account's sidebar's live read", (it) => {
         yield* written(dean, place(first, launch));
         yield* TestClock.adjust("1 minute");
         yield* written(dean, place(second, launch, "a1"));
+        const agent = yield* openAgentOnOwnTask(dean, workspace);
+        yield* written(dean, {
+          kind: TASK_SECTION_WRITE.PLACE_AGENT,
+          agentId: agent,
+          sectionId: later,
+          position: "a2",
+        });
         yield* setRepositoryPin(dean, "acme/relay", true);
         yield* TestClock.adjust("1 minute");
         yield* setRepositoryPin(dean, "acme/web", true);
@@ -127,7 +139,7 @@ it.layer(getTestDB())("the account's sidebar's live read", (it) => {
         const deans = yield* liveSidebarOf(dean);
         assert.deepEqual(
           [deans.sections.length, deans.entries.length, deans.agentEntries.length],
-          [2, 2, 0],
+          [2, 2, 1],
         );
         assert.deepEqual(
           deans.pins.map((pin) => pin.repository),

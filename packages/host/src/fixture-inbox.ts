@@ -131,6 +131,11 @@ import {
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
+  MERGE_QUEUE_ENTRY_STATE,
+  type MergeQueueAnswer,
+  type MergeQueueEntry,
+} from "@repo/features/merge-queue-wire";
+import {
   MODEL_PROVIDER,
   MODEL_SPEED,
   MODEL_SPEED_SUFFIX,
@@ -256,8 +261,12 @@ const ACCOUNT: AccountSnapshot = {
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
 
-/** The account's own experiments its screens stand behind: Skills', which a `/` typed in a composer offers skills by, and Move agents', which an agent's Move to › stands behind. Task descriptions' is its workspace's ({@link FIXTURE_WORKSPACE}). */
-const STAGED_EXPERIMENTS = { [EXPERIMENT.SKILLS]: true, [EXPERIMENT.MOVE_AGENTS]: true } as const;
+/** The account's own experiments its screens stand behind: Skills', which a `/` typed in a composer offers skills by, Move agents', which an agent's Move to › stands behind, and Merge queue's, whose page reads the fixture's queues ({@link MERGE_QUEUES}). Task descriptions' is its workspace's ({@link FIXTURE_WORKSPACE}). */
+const STAGED_EXPERIMENTS = {
+  [EXPERIMENT.SKILLS]: true,
+  [EXPERIMENT.MOVE_AGENTS]: true,
+  [EXPERIMENT.MERGE_QUEUE]: true,
+} as const;
 
 /** Main's settings with the staged experiments on, one object for each of main's, so a staging that moves nothing of them hands nothing new. */
 const STAGED_SETTINGS = new WeakMap<
@@ -792,6 +801,28 @@ const INBOXES: ReadonlyMap<string, readonly InboxItem[]> = new Map([
   [TASK.DIGEST, DIGEST_ITEMS],
   [TASK.ROUNDING, ROUNDING_ITEMS],
 ]);
+
+/**
+ * Each agent on no task's inbox, by the agent's id: the release Manager's one
+ * question, which the Inbox lists under the Manager rather than a task, as
+ * the account's feed carries it (`AppInboxItems`' `agents`).
+ */
+const AGENT_INBOXES = {
+  [AGENT.MANAGER]: [
+    item(60, AGENT.MANAGER, "cut-the-release", "Cut the release?", [
+      agentSaid(
+        600,
+        30 * MINUTE,
+        "Invites and the digest are merged and CI is green on main. Should I cut 0.25.0 now, or wait for the rounding fix?",
+        {
+          type: INBOX_ASK.DECIDE,
+          options: [{ label: "Cut it now" }, { label: "Wait for rounding" }],
+          ...OPEN,
+        },
+      ),
+    ]),
+  ],
+} satisfies Readonly<Record<string, readonly InboxItem[]>>;
 
 /** How many threads the large Inbox adds beside the staged ones, about as many as a busy real account holds (639 on the one that was timed). */
 const LARGE_THREADS = 600;
@@ -1740,6 +1771,7 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     ...list,
     tasks,
     listed: true,
+    listDrawn: true,
     listStatus: TASKS_READ.READY,
     taskAgents: [
       ...(list.taskAgents ?? []).filter(
@@ -2504,6 +2536,102 @@ const REPOSITORIES: GitHubRepositoriesAnswer = {
   installationUrl: "https://github.com/apps/vespin/installations/new",
 };
 
+/** One pull request of the fixture's merge queues, at `position`, joined `ago` before the run landed. */
+function queuedEntry(
+  position: number,
+  repository: string,
+  pullRequest: { readonly number: number; readonly title: string; readonly author: string | null },
+  standing: Pick<MergeQueueEntry, "state" | "checks" | "estimatedMergeAt">,
+  ago: number,
+): MergeQueueEntry {
+  return {
+    position,
+    ...standing,
+    enqueuedAt: LANDED - ago,
+    pullRequest: {
+      number: pullRequest.number,
+      title: pullRequest.title,
+      url: `https://github.com/${repository}/pull/${pullRequest.number}`,
+      // Note that an author's picture is left empty, so a run reads nothing from GitHub and draws their letter.
+      author: pullRequest.author === null ? null : { login: pullRequest.author, avatarUrl: "" },
+    },
+    task: null,
+  };
+}
+
+/** The fixture workspace's merge queues, as the Merge queue page reads them: relay's front merging, one checking, one failing, one waiting its turn by a deleted account, and ledger's one checking. */
+const MERGE_QUEUES: MergeQueueAnswer = {
+  repositories: [
+    {
+      repository: "ada/relay",
+      url: "https://github.com/ada/relay/queue/main",
+      entries: [
+        queuedEntry(
+          1,
+          "ada/relay",
+          { number: INVITES_PULL_REQUEST.number, title: INVITES_PULL_REQUEST.title, author: "ada" },
+          {
+            state: MERGE_QUEUE_ENTRY_STATE.MERGEABLE,
+            checks: { total: 12, passed: 12, failedCount: 0, failed: [] },
+            estimatedMergeAt: LANDED + 4 * MINUTE,
+          },
+          40 * MINUTE,
+        ),
+        queuedEntry(
+          2,
+          "ada/relay",
+          { number: 131, title: "Let an owner resend an invite that expired", author: "grace-h" },
+          {
+            state: MERGE_QUEUE_ENTRY_STATE.AWAITING_CHECKS,
+            checks: { total: 12, passed: 7, failedCount: 0, failed: [] },
+            estimatedMergeAt: LANDED + 18 * MINUTE,
+          },
+          25 * MINUTE,
+        ),
+        queuedEntry(
+          3,
+          "ada/relay",
+          { number: 133, title: "Retry the billing webhook on a 502", author: "linus-t" },
+          {
+            state: MERGE_QUEUE_ENTRY_STATE.UNMERGEABLE,
+            checks: { total: 12, passed: 10, failedCount: 2, failed: ["End-to-end"] },
+            estimatedMergeAt: null,
+          },
+          20 * MINUTE,
+        ),
+        queuedEntry(
+          4,
+          "ada/relay",
+          { number: 134, title: "Rename the audit job", author: null },
+          {
+            state: MERGE_QUEUE_ENTRY_STATE.QUEUED,
+            checks: null,
+            estimatedMergeAt: LANDED + 40 * MINUTE,
+          },
+          5 * MINUTE,
+        ),
+      ],
+    },
+    {
+      repository: "ada/ledger",
+      url: "https://github.com/ada/ledger/queue/main",
+      entries: [
+        queuedEntry(
+          1,
+          "ada/ledger",
+          { number: 57, title: "Close the books at month end", author: "ada" },
+          {
+            state: MERGE_QUEUE_ENTRY_STATE.AWAITING_CHECKS,
+            checks: null,
+            estimatedMergeAt: LANDED + 9 * MINUTE,
+          },
+          12 * MINUTE,
+        ),
+      ],
+    },
+  ],
+};
+
 /** Main's settings with the account's staged experiments on, the same object for the same settings. */
 function stagedSettings(
   settings: NonNullable<AppStateSnapshot["settings"]>,
@@ -2540,7 +2668,7 @@ export function inboxAppState(
     ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.TASK]: fed },
+      rows: { [INBOX_SCOPE_KIND.TASK]: fed, agents: AGENT_INBOXES },
     },
     [LIVE_READ.HELD_TASK]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
@@ -3279,6 +3407,7 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
 const DICTATED_WORDS = "Run the invite tests again.";
 
 const ANSWERS: StagedAnswers = {
+  [ACT_KIND.WORKSPACE_MERGE_QUEUE_READ]: () => MERGE_QUEUES,
   // Note that an automation's switch is taken as the service takes one, the automation answered turned, though nothing here moves; the iOS run lays it over the list itself (`inboxAutomationsAppState`).
   [ACT_KIND.AUTOMATIONS_CHANGE]: ({ automationId, change }) => {
     const automation = AUTOMATIONS.find((each) => each.id === automationId);

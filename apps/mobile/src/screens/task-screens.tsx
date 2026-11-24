@@ -29,6 +29,7 @@ import {
   taskLinkStep,
   taskNumberOf,
 } from "@repo/features/link-grammar";
+import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import {
@@ -199,11 +200,13 @@ import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
 import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useWholeListRead } from "../host/host-provider.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useKeeping } from "../keeping.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useMenuPhotos } from "../menu-photos.js";
+import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-on.js";
 import { useOpenDrawnCount } from "../open-drawn.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePushStood } from "../push-stood.js";
@@ -1380,7 +1383,9 @@ type TasksTreeProps = {
  */
 function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
   const { tree } = listing;
-  const read = useTasksReadStatus();
+  const status = useTasksReadStatus();
+  // Note that a list its tab has not yet read says it is reading, never that it holds no task, should the tab come forward before its rows are drawn.
+  const read = useWholeListRead() ? status : TASKS_READ.READING;
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const managers = useWorkspaceManagers(listing.workspace?.id);
@@ -3382,6 +3387,7 @@ function TasksStackList({
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
   const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
+  const mergeQueueOn = useMergeQueueOn();
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
 
@@ -3403,6 +3409,14 @@ function TasksStackList({
         <Stack.Toolbar.Menu icon={glyphSymbol(viewMenu.symbol)} accessibilityLabel={viewMenu.label}>
           {stackMenuItems(viewMenu)}
         </Stack.Toolbar.Menu>
+        {/* Note that Merge queue stands beside View options while the account has it on, as the desktop's sidebar offers its row, since a compact window has no sidebar; an iPad's sidebar offers its own row. */}
+        {mergeQueueOn ? (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.QUEUED)}
+            accessibilityLabel={MERGE_QUEUE_PAGE_WORDS.TITLE}
+            onPress={() => router.push(onOwnTab(MERGE_QUEUE_ROUTE))}
+          />
+        ) : null}
         {PLUS_TAB ? null : (
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}

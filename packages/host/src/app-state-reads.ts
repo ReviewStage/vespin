@@ -17,9 +17,20 @@ import {
 } from "@repo/features/agent-view";
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
-import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
+import {
+  agentHolder,
+  type InboxAgentHolder,
+  type InboxAnyHolder,
+  type InboxGroup,
+  type InboxHolderAgent,
+  type InboxReads,
+  inboxGroup,
+  inboxGroups,
+} from "@repo/features/inbox-list-model";
+import type { InboxItem } from "@repo/features/inbox-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { agentName } from "@repo/features/model-label";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { TaskSummary } from "@repo/features/task-wire";
@@ -294,6 +305,10 @@ export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.lis
 /** Whether the task list's lists have been drawn, so a reader of its agents or pull requests can tell none from none read yet. */
 export const selectTaskListListed = (state: AppStateSnapshot): boolean =>
   state.tasks.listed === true;
+
+/** Whether every row the task list stood with is drawn, its kept agents included, which a place standing behind waits on before it reads the list whole. */
+export const selectTaskListDrawn = (state: AppStateSnapshot): boolean =>
+  state.tasks.listDrawn === true;
 
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;
@@ -598,13 +613,19 @@ function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxR
  * each task's items by the task's id, the tasks holding items, the task
  * whose item changed latest first, and, while the task list is still read or
  * drawn, the tasks the phone kept beside its kept Inbox (`AppInboxRead`'s
- * `keptHolders`), which stand in for the list's own until it is drawn.
+ * `keptHolders`), which stand in for the list's own until it is drawn; and
+ * each agent on no task holding items, a Manager among them, its items by
+ * the agent's id (`AppInboxItems`' `agents`).
  */
 export interface InboxHoldings {
   readonly read: InboxReads;
   readonly tasks: readonly { readonly taskId: string }[];
   readonly keptHolders: readonly TaskSummary[];
+  readonly agents: Readonly<Record<string, readonly InboxItem[]>>;
 }
+
+/** No agent on no task holding items: the feed before it first answers, and a service's from before it carried them. */
+const NO_AGENT_ITEMS: Readonly<Record<string, readonly InboxItem[]>> = {};
 
 /** No task kept beside the Inbox: what the holdings name once the task list is drawn, or where nothing was kept. */
 const NO_KEPT_HOLDERS: readonly TaskSummary[] = [];
@@ -648,9 +669,57 @@ export const selectInboxHoldings = memoizedSelect(
       keptHolders: taskListPending(listStatus)
         ? (feed.keptHolders ?? NO_KEPT_HOLDERS)
         : NO_KEPT_HOLDERS,
+      agents: feed.rows?.agents ?? NO_AGENT_ITEMS,
     };
   },
 );
+
+/** Each listed agent as an Inbox names it, kept while its row stands, so its holder, and every group made of it, is the one made last (`agentHolder`). */
+const namedAgents = new WeakMap<ListedAgent, InboxHolderAgent>();
+
+/** An agent on no task as an Inbox names it, as the panel's Inbox does (`use-taskless-inbox-groups.ts`): by its name, wearing a Manager's face where it has one. */
+function holderAgentOf(agent: ListedAgent): InboxHolderAgent {
+  const kept = namedAgents.get(agent);
+
+  if (kept !== undefined) return kept;
+
+  const named: InboxHolderAgent = {
+    id: agent.id,
+    name: agentName(agent),
+    model: agent.model,
+    workspaceId: agent.workspaceId,
+    repository: agent.repository,
+    ...(agent.face === undefined ? undefined : { face: agent.face }),
+  };
+
+  namedAgents.set(agent, named);
+
+  return named;
+}
+
+/**
+ * Every agent on no task holding items in `workspaceId`, or in any while
+ * none is named, each with its items, under the agent as `listedAgents`
+ * names it. An agent the list holds none of yet groups nothing, as a task
+ * not listed yet groups nothing.
+ */
+function agentGroupsIn(
+  held: InboxHoldings["agents"],
+  listedAgents: readonly ListedAgent[],
+  workspaceId: string | undefined,
+): readonly InboxGroup<InboxAgentHolder>[] {
+  const byId = new Map(listedAgents.map((agent) => [agent.id, agent]));
+
+  return Object.entries(held).flatMap(([agentId, items]) => {
+    const agent = byId.get(agentId);
+
+    if (agent === undefined || items.length === 0) return [];
+
+    if (workspaceId !== undefined && agent.workspaceId !== workspaceId) return [];
+
+    return [inboxGroup(agentHolder(holderAgentOf(agent)), items)];
+  });
+}
 
 /**
  * Every holder of Inbox items in one workspace as the window's Inbox groups
@@ -659,25 +728,32 @@ export const selectInboxHoldings = memoizedSelect(
  * list as the window's collections hold it, holds, with every item of
  * theirs the account's feed holds, settled ones too, so a scope of the list
  * model reads them as the panel's Inbox, which lists the chosen workspace's
- * alone, does. No workspace named groups every workspace's. A task the
- * list holds none of yet, while it is still read or drawn, is grouped under
- * as the phone kept it (`keptHolders`), so a launch draws its kept Inbox
- * before the whole list.
+ * alone, does; then each agent on no task holding items, a Manager's
+ * threads, under the agent as `listedAgents`, the list's agents, names it,
+ * as the panel's Inbox lists them (`use-taskless-inbox-groups.ts`). No
+ * workspace named groups every workspace's. A task the list holds none of
+ * yet, while it is still read or drawn, is grouped under as the phone kept
+ * it (`keptHolders`), so a launch draws its kept Inbox before the whole list.
  */
 export function inboxGroupsIn(
   holdings: InboxHoldings,
   listed: readonly TaskSummary[],
   workspaceId: string | undefined,
-): readonly InboxGroup[] {
+  listedAgents: readonly ListedAgent[],
+): readonly InboxGroup<InboxAnyHolder>[] {
   const held = new Set(listed.map((task) => task.id));
   const kept = holdings.keptHolders.filter((task) => !held.has(task.id));
   const tasks = kept.length === 0 ? listed : [...listed, ...kept];
 
-  return inboxGroups(holdings.read, {
+  const onTasks = inboxGroups(holdings.read, {
     tasks: holdings.tasks,
     listed:
       workspaceId === undefined ? tasks : tasks.filter((task) => task.workspaceId === workspaceId),
   });
+
+  const onAgents = agentGroupsIn(holdings.agents, listedAgents, workspaceId);
+
+  return onAgents.length === 0 ? onTasks : [...onTasks, ...onAgents];
 }
 
 /** The signed-in account's id, whose own open items alone need them, as `inboxList` reads its reader; none while nobody is signed in. */

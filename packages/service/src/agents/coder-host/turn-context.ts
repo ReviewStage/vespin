@@ -185,9 +185,24 @@ export type TurnReply = (typeof TURN_REPLY)[keyof typeof TURN_REPLY];
  */
 const SPOKEN_CHAT = `For this turn only, your standing rule that only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people does not hold: do not call \`${AGENT_TOOL.SEND_TO_USER}\` this turn. Your final plain text is the reply the voice says, so end the turn with your answer as plain text.`;
 
-/** The line a turn opens with after a spoken one, whose call's words still stand in the history. */
-const TYPED_AFTER_CALL =
-  'This turn is typed (nothing you write is heard), so "This turn is spoken" above no longer holds: your words are read, and a question for the developer goes in a thread.';
+/** Where a question for the developer goes on an agent's typed turn: a thread where it posts them, the Manager that started it, which posts none, or its reply. */
+export const TURN_ASK = {
+  THREAD: "thread",
+  MANAGER: "manager",
+  REPLY: "reply",
+} as const;
+
+export type TurnAsk = (typeof TURN_ASK)[keyof typeof TURN_ASK];
+
+const TYPED_AFTER_CALL_LEAD =
+  'This turn is typed (nothing you write is heard), so "This turn is spoken" above no longer holds: your words are read, and a question for the developer goes';
+
+/** The line a turn opens with after a spoken one, whose call's words still stand in the history, by where the agent's questions go. */
+const TYPED_AFTER_CALL = {
+  [TURN_ASK.THREAD]: `${TYPED_AFTER_CALL_LEAD} in a thread.`,
+  [TURN_ASK.MANAGER]: `${TYPED_AFTER_CALL_LEAD} to the Manager that started you, with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
+  [TURN_ASK.REPLY]: `${TYPED_AFTER_CALL_LEAD} in your reply.`,
+} as const satisfies Record<TurnAsk, string>;
 
 /** The line a Manager's turn opens with after a spoken one: its standing `send_to_user` rule holds again. */
 const TYPED_AFTER_CALL_CHAT = `This turn is typed (nothing you write is heard), so "This turn is spoken" above no longer holds: only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people again, so answer there, since your plain text is never shown.`;
@@ -210,12 +225,13 @@ export function turnKindWords(
   handed: TurnHanded,
   spoken: boolean,
   reply: TurnReply,
+  ask: TurnAsk,
 ): string | undefined {
   if (spoken) return SPOKEN_BY_REPLY[reply];
 
   if (handed.spoken !== true) return undefined;
 
-  return reply === TURN_REPLY.SEND_TO_USER ? TYPED_AFTER_CALL_CHAT : TYPED_AFTER_CALL;
+  return reply === TURN_REPLY.SEND_TO_USER ? TYPED_AFTER_CALL_CHAT : TYPED_AFTER_CALL[ask];
 }
 
 /**

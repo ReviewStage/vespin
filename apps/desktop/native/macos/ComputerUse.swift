@@ -16,8 +16,9 @@ import UniformTypeIdentifiers
 /// line on stdout, each answer carrying its request's `id`:
 ///
 /// - `permissions`, `request_permissions`: whether it may capture windows and
-///   post input, the second raising macOS's own prompts first and opening the
-///   System Settings pane of the first grant still missing.
+///   post input, the second opening the System Settings pane of the first
+///   grant still missing, with a small panel beside it holding the app to
+///   drag into the pane's list.
 /// - `list_apps`: the running apps a person uses, each with its icon.
 /// - `list_installed_apps`: the apps installed in the usual folders, by name
 ///   and bundle id, without icons, which `describe_app` draws one at a time.
@@ -184,19 +185,286 @@ private func permissions() -> [String: Any] {
     ["screen_recording": CGPreflightScreenCaptureAccess(), "accessibility": AXIsProcessTrusted()]
 }
 
-/// The Privacy & Security panes of System Settings where each grant is switched on.
-private let SCREEN_RECORDING_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-private let ACCESSIBILITY_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+/// One grant: the Privacy & Security pane of System Settings where it is switched on, its name there, whether macOS
+/// asks to quit the app once it is switched on, and whether macOS holds it now.
+private struct Grant: Sendable {
+    let pane: String
+    let name: String
+    let asksToQuit: Bool
+    let held: @Sendable () -> Bool
+}
 
-/// Asks macOS for the grants the app lacks, by its own prompts, which also list the app in each pane, then opens the pane of the first still missing, since macOS prompts only once and the switch is the developer's to flip there.
-private func requestPermissions() -> [String: Any] {
-    if !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
-    let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-    _ = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
-    let missing = !CGPreflightScreenCaptureAccess() ? SCREEN_RECORDING_PANE : !AXIsProcessTrusted() ? ACCESSIBILITY_PANE : nil
-    if let pane = missing, let url = URL(string: pane) { NSWorkspace.shared.open(url) }
+// Note that macOS asks to quit an app it has just let record the screen, but this helper reads and uses the grant at
+// once without restarting, so the panel says to answer Later.
+private let SCREEN_RECORDING = Grant(
+    pane: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+    name: "Screen Recording", asksToQuit: true, held: { CGPreflightScreenCaptureAccess() })
+private let ACCESSIBILITY = Grant(
+    pane: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+    name: "Accessibility", asksToQuit: false, held: { AXIsProcessTrusted() })
+
+/// Opens the pane of the first grant the app lacks, with the app beside it to drag into the list, since the switch
+/// is the developer's to flip there. Note that macOS's own prompts are not raised as well, because each would stand
+/// over the pane beside the panel, saying the same thing.
+private func requestPermissions() async -> [String: Any] {
+    if let grant = [SCREEN_RECORDING, ACCESSIBILITY].first(where: { !$0.held() }), let url = URL(string: grant.pane) {
+        NSWorkspace.shared.open(url)
+        await MainActor.run { grantPanel.show(grant) }
+    }
     return permissions()
 }
+
+// MARK: - Grant panel
+
+/// A process's parent, by the kernel's record; nothing for one gone.
+private func parentPid(_ pid: pid_t) -> pid_t? {
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    var name = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+    guard sysctl(&name, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+    return info.kp_eproc.e_ppid
+}
+
+/// The app macOS holds the grants against, which the developer drags into the pane's list: the outermost app among
+/// this helper's ancestors. Note that a process started by another keeps that one's app responsible for it, so this
+/// is Vespin.app where it was opened as an app, and the terminal a development build was started from.
+private let responsibleAppURL: URL? = {
+    var found: URL?
+    var pid = getppid()
+    while pid > 1 {
+        if let url = NSRunningApplication(processIdentifier: pid)?.bundleURL { found = url }
+        guard let parent = parentPid(pid), parent != pid else { break }
+        pid = parent
+    }
+    return found
+}()
+
+private let SYSTEM_SETTINGS_BUNDLE_ID = "com.apple.systempreferences"
+/// The panel's measures, after the drag-to-grant panels of other Mac apps: a dark rounded card holding the app as a
+/// Finder row holds it, its icon and name in a light rounded row.
+private let GRANT_PANEL_WIDTH: CGFloat = 264
+private let GRANT_PANEL_RADIUS: CGFloat = 18
+private let GRANT_PANEL_GAP: CGFloat = 12
+private let GRANT_ROW_SIZE = NSSize(width: 190, height: 46)
+private let GRANT_ROW_RADIUS: CGFloat = 10
+private let GRANT_ICON_EDGE: CGFloat = 28
+/// How often the panel reads System Settings' window and the grant.
+private let GRANT_CHECK_NANOSECONDS: UInt64 = 100_000_000
+/// How many checks the panel waits for System Settings to come forward before it gives up.
+private let GRANT_WAIT_CHECKS = 50
+
+/// System Settings' window, on AppKit's points, its bottom left the main display's; nothing where it shows none.
+private func systemSettingsFrame() -> NSRect? {
+    guard
+        let settings = NSRunningApplication.runningApplications(withBundleIdentifier: SYSTEM_SETTINGS_BUNDLE_ID).first,
+        let listed = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[String: Any]]
+    else { return nil }
+    let frames = listed.compactMap { window -> CGRect? in
+        guard
+            window[kCGWindowOwnerPID as String] as? pid_t == settings.processIdentifier,
+            window[kCGWindowLayer as String] as? Int == 0,
+            let bounds = window[kCGWindowBounds as String] as? NSDictionary
+        else { return nil }
+        return CGRect(dictionaryRepresentation: bounds)
+    }
+    guard let frame = frames.max(by: { $0.width * $0.height < $1.width * $1.height }) else { return nil }
+    // Note that the window server's top left is the main display's, which AppKit's bottom left is under by that display's height.
+    let height = NSScreen.screens.first?.frame.height ?? 0
+    return NSRect(x: frame.minX, y: height - frame.maxY, width: frame.width, height: frame.height)
+}
+
+/// The panel's place beside a window: to its right, bottom edges level, or to its left where the right runs off its screen.
+private func grantPanelOrigin(_ size: NSSize, beside window: NSRect) -> NSPoint {
+    let screen = (NSScreen.screens.first { $0.frame.intersects(window) } ?? NSScreen.main)?.visibleFrame ?? window
+    let right = window.maxX + GRANT_PANEL_GAP
+    let x = right + size.width <= screen.maxX ? right : max(screen.minX, window.minX - GRANT_PANEL_GAP - size.width)
+    let y = min(max(window.minY, screen.minY), screen.maxY - size.height)
+    return NSPoint(x: x, y: y)
+}
+
+/// The app as a Finder row draws it, its icon and name on a light rounded row, which drags the bundle's file URL as
+/// Finder drags an app, so a Privacy & Security list takes it; it dims while it is dragged.
+private final class AppRowView: NSView, NSDraggingSource {
+    private let app: URL
+    private let icon: NSImage
+    private let name: String
+
+    init(app: URL, name: String) {
+        self.app = app
+        self.name = name
+        icon = NSWorkspace.shared.icon(forFile: app.path)
+        super.init(frame: NSRect(origin: .zero, size: GRANT_ROW_SIZE))
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var intrinsicContentSize: NSSize { GRANT_ROW_SIZE }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let row = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: GRANT_ROW_RADIUS, yRadius: GRANT_ROW_RADIUS)
+        NSColor(white: 0.97, alpha: 1).setFill()
+        row.fill()
+        NSColor(white: 0, alpha: 0.15).setStroke()
+        row.stroke()
+        let inset = (bounds.height - GRANT_ICON_EDGE) / 2
+        icon.draw(in: NSRect(x: 8, y: inset, width: GRANT_ICON_EDGE, height: GRANT_ICON_EDGE))
+        let words = NSAttributedString(string: name, attributes: [
+            .font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor(white: 0.16, alpha: 1),
+        ])
+        words.draw(at: NSPoint(x: 8 + GRANT_ICON_EDGE + 8, y: (bounds.height - words.size().height) / 2))
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    // Note that a press on the row drags the app, never the panel the rest of which moves it.
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
+
+    override func mouseDragged(with event: NSEvent) {
+        let item = NSDraggingItem(pasteboardWriter: app as NSURL)
+        let picture = NSImage(size: bounds.size, flipped: false) { [weak self] _ in
+            self?.draw(self?.bounds ?? .zero)
+            return true
+        }
+        item.setDraggingFrame(bounds, contents: picture)
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .outsideApplication ? .copy : []
+    }
+
+    func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
+        alphaValue = 0.35
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        alphaValue = 1
+    }
+}
+
+/// A small floating panel beside the pane a grant is switched on in, holding the app as a row to drag into its list.
+/// One stands at a time; it closes as the grant comes, as System Settings goes, or by its close button.
+@MainActor
+private final class GrantPanel: NSObject {
+    private var panel: NSPanel?
+    private var checking: Task<Void, Never>?
+    private let words = NSTextField(wrappingLabelWithString: "")
+
+    func show(_ grant: Grant) {
+        close()
+        guard let app = responsibleAppURL else { return }
+        let name = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
+        // Note that the words name the list and the grant, as Codex's do, so the panel says where the app goes.
+        words.stringValue =
+            grant.asksToQuit
+            ? "Drag \(name) to the list to allow \(grant.name), then choose Later if macOS asks to quit it"
+            : "Drag \(name) to the list to allow \(grant.name)"
+        let card = contents(app: app, name: name)
+        let made = NSPanel(
+            contentRect: NSRect(origin: .zero, size: card.fittingSize),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        made.isOpaque = false
+        made.backgroundColor = .clear
+        made.hasShadow = true
+        made.appearance = NSAppearance(named: .darkAqua)
+        made.isReleasedWhenClosed = false
+        made.hidesOnDeactivate = false
+        made.level = .floating
+        made.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        made.isMovableByWindowBackground = true
+        made.contentView = card
+        panel = made
+        checking = Task { @MainActor [weak self] in await self?.check(grant, panel: made) }
+    }
+
+    @objc func close() {
+        checking?.cancel()
+        checking = nil
+        panel?.close()
+        panel = nil
+    }
+
+    /// The card: a dark rounded material holding a close button, the words, and the app's row.
+    private func contents(app: URL, name: String) -> NSView {
+        words.font = .systemFont(ofSize: 17)
+        words.alignment = .center
+        words.preferredMaxLayoutWidth = GRANT_PANEL_WIDTH - 4 * GRANT_PANEL_GAP
+        let row = AppRowView(app: app, name: name)
+        let stack = NSStackView(views: [words, row])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 20
+        stack.edgeInsets = NSEdgeInsets(top: 36, left: GRANT_PANEL_GAP, bottom: 24, right: GRANT_PANEL_GAP)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let closer = NSButton(
+            image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") ?? NSImage(),
+            target: self, action: #selector(GrantPanel.close))
+        closer.isBordered = false
+        closer.contentTintColor = .secondaryLabelColor
+        closer.translatesAutoresizingMaskIntoConstraints = false
+
+        let card = NSVisualEffectView()
+        card.material = .hudWindow
+        card.blendingMode = .behindWindow
+        card.state = .active
+        card.wantsLayer = true
+        card.layer?.cornerRadius = GRANT_PANEL_RADIUS
+        card.layer?.masksToBounds = true
+        card.addSubview(stack)
+        card.addSubview(closer)
+        NSLayoutConstraint.activate([
+            card.widthAnchor.constraint(equalToConstant: GRANT_PANEL_WIDTH),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: card.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            closer.topAnchor.constraint(equalTo: card.topAnchor, constant: GRANT_PANEL_GAP),
+            closer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -GRANT_PANEL_GAP),
+        ])
+        return card
+    }
+
+    /// Stands the panel beside System Settings' window while System Settings is in front, and hides it while another
+    /// app is in front, as other Mac apps' panels do; closes it once the grant is held or System Settings has gone.
+    /// Note that it hides while the window moves and stands again beside it once it settles, rather than trailing
+    /// behind it, because without Accessibility the window's frame can only be read a few times a second; once the
+    /// developer moves the panel themselves, it stays where they put it.
+    private func check(_ grant: Grant, panel: NSPanel) async {
+        var placedAt: NSPoint?
+        var lastWindow: NSRect?
+        var moved = false
+        var checks = 0
+        while !Task.isCancelled, !grant.held() {
+            let settings = NSRunningApplication.runningApplications(withBundleIdentifier: SYSTEM_SETTINGS_BUNDLE_ID).first
+            if settings == nil, placedAt != nil || checks >= GRANT_WAIT_CHECKS { break }
+            let inFront = settings != nil && NSWorkspace.shared.frontmostApplication?.processIdentifier == settings?.processIdentifier
+            let window = inFront ? systemSettingsFrame() : nil
+            let settled = window != nil && window == lastWindow
+            lastWindow = window
+            if let placedAt, panel.isVisible, panel.frame.origin != placedAt { moved = true }
+            if let window, moved || settled {
+                if !moved {
+                    let origin = grantPanelOrigin(panel.frame.size, beside: window)
+                    panel.setFrameOrigin(origin)
+                    placedAt = origin
+                }
+                if !panel.isVisible { panel.orderFrontRegardless() }
+            } else if panel.isVisible, window == nil || !moved {
+                panel.orderOut(nil)
+            }
+            checks += 1
+            try? await Task.sleep(nanoseconds: GRANT_CHECK_NANOSECONDS)
+        }
+        guard !Task.isCancelled else { return }
+        if self.panel === panel { close() }
+    }
+}
+
+@MainActor private let grantPanel = GrantPanel()
 
 private func requireAccessibility() throws {
     guard AXIsProcessTrusted() else {
@@ -2099,7 +2367,7 @@ private func stopRecording(_ request: [String: Any]) async throws -> [String: An
 
 private let OPERATIONS: [String: ([String: Any]) async throws -> [String: Any]] = [
     "permissions": { _ in permissions() },
-    "request_permissions": { _ in requestPermissions() },
+    "request_permissions": { _ in await requestPermissions() },
     "list_apps": { _ in listApps() },
     "list_installed_apps": { _ in listInstalledApps() },
     "describe_app": describeApp,

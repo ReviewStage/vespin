@@ -1,0 +1,37 @@
+# merge-queue.yaml -- the Merge queue screen, opened from the Tasks list's bar in a compact window: each repository's queue under its header, its pull requests front first, each with its checks, its author, and when it should merge, and a row's long press holding Open on GitHub and Copy GitHub link.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, which turns the account's Merge queue
+# experiment on and answers its read with synthetic queues of ada/relay and
+# ada/ledger (`@repo/host/fixture-inbox`); nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+# Note that a regular window opens the screen from its sidebar instead, so only a window whose Tasks bar offers the button runs the rest.
+- runFlow:
+    when:
+      visible: "Merge queue"
+    commands:
+      - tapOn: "Merge queue"
+      - extendedWaitUntil:
+          visible: "Invite a teammate by email"
+          timeout: 15000
+      - assertVisible: "Retry the billing webhook on a 502"
+      - assertVisible: "Close the books at month end"
+      - waitForAnimationToEnd
+      - takeScreenshot: merge-queue
+      - longPressOn: "Retry the billing webhook on a 502"
+      - assertVisible: "Open on GitHub"
+      - assertVisible: "Copy GitHub link"
+      - waitForAnimationToEnd
+      - takeScreenshot: merge-queue-row-menu

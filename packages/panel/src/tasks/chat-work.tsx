@@ -10,26 +10,16 @@
  * turn under way, so a finished chat draws no more than its messages.
  */
 
+import { chatWorkWords } from "@repo/features/manager-chat";
 import { MessageActions } from "@repo/ui";
 import { ListTreeIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";
 import { MessageAction } from "../ai-elements/message.js";
 
-/** The words of the press, by whether the work stands open. */
-export const CHAT_WORK_WORDS = {
-  SHOW: "Show work",
-  HIDE: "Hide work",
-} as const;
-
 /** Whether a message's work stands open under it, and the press that opens or folds it. */
 export interface ChatWorkToggle {
   readonly shown: boolean;
   readonly onToggle: () => void;
-}
-
-/** What the press says, by whether the work stands open. */
-export function chatWorkWords(shown: boolean): string {
-  return shown ? CHAT_WORK_WORDS.HIDE : CHAT_WORK_WORDS.SHOW;
 }
 
 /** The press beside a message, or the working line, that opens the work under it, or folds it away. */

@@ -803,12 +803,12 @@ const DEVICE_BY_NAME = Schema.Struct({
 export const AUTOMATION_RUNS_ON = Schema.Union([...personalRunsOnSchema.members, DEVICE_BY_NAME]);
 
 /**
- * Where a started agent runs, as `start_agent` names it: as a start request
+ * Where a started agent may run, as a start names it: as a start request
  * does (`agentRunsOnRequestSchema`), or one of the member's own devices, or
  * a machine the workspace owns, by its name, which the call matches to its
  * id (`runsOnOfStart`) before the start is asked.
  */
-export const START_RUNS_ON = Schema.Union([
+const START_RUNS_ON = Schema.Union([
   ...agentRunsOnRequestSchema.members,
   DEVICE_BY_NAME,
   Schema.Struct({
@@ -816,6 +816,15 @@ export const START_RUNS_ON = Schema.Union([
     name: deviceAgentRegisterRequestSchema.fields.name,
   }),
 ]);
+
+/**
+ * Where `start_agent` offers to run an agent: the cloud or one of the
+ * member's own devices, by its id or its name, and no machine the workspace
+ * owns, since every launch on one is refused until a machine of ours runs
+ * it (`machine/agent-machines.ts`). Note that PR 8 of the workspace-hosts
+ * rollout (STAG-3712), which runs them, offers `START_RUNS_ON` here again.
+ */
+const OFFERED_START_RUNS_ON = Schema.Union([...personalRunsOnSchema.members, DEVICE_BY_NAME]);
 
 const START_FROM_AGENT_ID = describeWire(
   wireUuidSchema,
@@ -882,12 +891,9 @@ const START_RUNS_ON_WORDS =
   `Where the agent runs: ${IN_THE_CLOUD_WORDS} for the cloud, ` +
   `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, device: "<name>" })} for one of the ` +
   "member's own devices (a Mac or a host) by its name, or " +
-  `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id, or ` +
-  `${JSON.stringify({ machine: AGENT_MACHINE.WORKSPACE, name: "<name>" })} for one of the ` +
-  "workspace's own machines, which run every member's agents, each in its own VM, by its " +
-  `name, or ${JSON.stringify({ machine: AGENT_MACHINE.WORKSPACE, deviceId: "<id>" })} by ` +
-  "its id; it must be online, and a name matching none of those machines, or several, is " +
-  "refused with them listed. " +
+  `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id; it ` +
+  "must be online, and a name matching none of those devices, or several, is refused with " +
+  "them listed. " +
   `${AGENT_TOOL.LIST_MACHINES} lists each place with the runsOn to pass. `;
 
 /** How a start's permissionMode answers its tool calls, before what leaving it out means. */
@@ -933,7 +939,7 @@ const START_CHOICE_FIELDS = {
     ),
     runsOn: Schema.optionalKey(
       describeWire(
-        START_RUNS_ON,
+        OFFERED_START_RUNS_ON,
         START_RUNS_ON_WORDS +
           "Leave it out to run where you run, the runsOn your instructions' own values name, " +
           "or with from where the agent it starts from runs; naming another place moves it there.",
@@ -961,7 +967,7 @@ const START_CHOICE_FIELDS = {
     ),
     runsOn: Schema.optionalKey(
       describeWire(
-        START_RUNS_ON,
+        OFFERED_START_RUNS_ON,
         START_RUNS_ON_WORDS +
           "Every start names it but one with from, which runs where the agent it starts from " +
           "runs unless it names another place, which moves it there.",
@@ -1899,23 +1905,24 @@ function runOfCaller(calling: Agent) {
  * that its final message reaches that agent by itself once its turn ends
  * (`coder-host/starter-report.ts`), that it messages it before then with
  * `message_agent` by that agent's id, as every word between two agents goes
- * (`coder-host/agent-message.ts`), and that it posts its own threads and
- * sends that agent each one's mention, so the developer never hears of one
- * thing from both agents, or, where a Manager started it, which closes its
- * threads (`tool-catalog/gates.ts`'s `UNMANAGED`), that it reports to that
- * Manager alone, then the note it was given.
+ * (`coder-host/agent-message.ts`), and, where a Manager started it, which
+ * closes its threads (`tool-catalog/gates.ts`'s `UNMANAGED`), that it
+ * reports to that Manager alone, then the note it was given. Note that an
+ * agent another coder started hears of its own threads from its
+ * instructions instead (`coder-host/instructions.ts`), worded from its
+ * standing on every session, since whether it posts any follows its task's
+ * assignee, who may change after the start.
  */
 function startedByNote(starter: Agent, note: string | undefined): string {
   const lead =
     `You were started by another agent of your workspace, ${agentIntroduction(starter)}, ` +
     `not by the developer. Message it with ${AGENT_TOOL.MESSAGE_AGENT}, its agentId ${starter.id}, ` +
     "when you finish, with what you did, what you published, and what you need of it, and whenever " +
-    "you need something from it; if your turn fails, it is told. " +
+    "you need something from it; if your turn fails, it is told." +
     (starter.kind === AGENT_KIND.MANAGER
-      ? `It is a Manager, and you post no threads: send your questions and reports to it with ${AGENT_TOOL.MESSAGE_AGENT}, and it reaches people for you. ` +
+      ? ` It is a Manager, and you post no threads and send no Slack message: send your questions and reports to it with ${AGENT_TOOL.MESSAGE_AGENT}, and it reaches people for you. ` +
         `To hand it a picture, show the file with ${AGENT_TOOL.SHOW_MEDIA} and put the picture ids it answers in your message, never a sandbox path.`
-      : "Post your own threads to the developer, with their pictures, as your instructions say, and " +
-        "send that agent each thread's mention, so it posts none of its own on the same thing.");
+      : "");
 
   return note === undefined ? lead : `${lead}\n\n${note}`;
 }

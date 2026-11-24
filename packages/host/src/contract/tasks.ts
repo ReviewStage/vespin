@@ -59,6 +59,7 @@ import {
   tasksMoveAnswerSchema,
   tasksMoveParamsSchema,
   tasksPageAnswerSchema,
+  tasksPageHtmlParamsSchema,
   tasksPageParamsSchema,
   tasksPageSourceAnswerSchema,
   tasksPersonPageAnswerSchema,
@@ -479,7 +480,7 @@ export const TASKS_ACTS = declaredActs({
     unanswered: UNANSWERED,
   }),
   TASKS_PAGE_HTML: hostAct({
-    input: tasksPageParamsSchema,
+    input: tasksPageHtmlParamsSchema,
     output: tasksPageAnswerSchema,
     refusal: "Could not read that page on this system.",
     panelOnly: true,

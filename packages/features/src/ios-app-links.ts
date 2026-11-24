@@ -125,17 +125,19 @@ function taskRoute(taskId: string, workspace: string | undefined): string {
     : route;
 }
 
-/** The queries a page's route names its task by, or its page under an agent's route, and the version it opens at. */
-const IOS_PAGE_PARAM = { TASK: "task", PAGE: "page" } as const;
+/** The queries a page's route names its task by and the workspace its number counts in, or its page under an agent's route. */
+const IOS_PAGE_PARAM = { TASK: "task", WORKSPACE: "workspace", PAGE: "page" } as const;
 
 /**
  * The app's route for a page an agent showed, as a link names it: under its
- * task, or under its agent, as an older link does. Note that a link names
- * no version, so the page's screen opens at the newest the task's pages
- * hold.
+ * task, or under its agent, as an older link does. A task named by number
+ * carries the workspace the link names it under, as a task's route does, for
+ * the page's screen to find it. Note that a link names no version, so the
+ * page's screen opens at the newest the task's pages hold.
  */
 function iosPageRoute(
   place: Extract<LinkDestination, { readonly kind: typeof LINK_DESTINATION.PAGE }>,
+  workspace: string | undefined,
 ): string {
   if ("agentId" in place) {
     const query = new URLSearchParams({ [IOS_PAGE_PARAM.PAGE]: place.pageId });
@@ -143,7 +145,12 @@ function iosPageRoute(
     return `${iosAgentRoute(place.agentId)}/${IOS_ROUTE.AGENT_PAGE}?${query}`;
   }
 
+  const numbered =
+    taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: place.taskId }) !== undefined;
+
   const query = new URLSearchParams({ [IOS_PAGE_PARAM.TASK]: place.taskId });
+
+  if (numbered && workspace !== undefined) query.set(IOS_PAGE_PARAM.WORKSPACE, workspace);
 
   return `${IOS_ROUTE.PAGE}/${encodeURIComponent(place.pageId)}?${query}`;
 }
@@ -168,7 +175,7 @@ export function iosAppRouteOf(place: LinkDestination, workspace?: string): strin
     case LINK_DESTINATION.TASK:
       return taskRoute(place.taskId, workspace);
     case LINK_DESTINATION.PAGE:
-      return iosPageRoute(place);
+      return iosPageRoute(place, workspace);
     case LINK_DESTINATION.AGENT:
       return iosAgentRoute(place.agentId);
     case LINK_DESTINATION.PERSON:

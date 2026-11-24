@@ -26,7 +26,7 @@ import {
 } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
-import { STATUS_TONE } from "@repo/ui";
+import { STATUS_TONE, UnlinkIcon } from "@repo/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { type Unreached, unreachedAs } from "../act.js";
@@ -102,6 +102,7 @@ function blockStands(rows: TaskRows, { taskId, relation, otherId }: BlockRemoved
 const RELATION_WRITE = {
   BLOCK_REMOVAL: {
     words: BLOCK_REMOVED_NOTE,
+    glyph: UnlinkIcon,
     unmasked: () => true,
     kind: ACT_KIND.TASKS_BLOCK,
     read: (_rows, removed) => removed,
@@ -127,6 +128,7 @@ const RELATION_WRITE = {
   >,
   PARENT_REMOVAL: {
     words: PARENT_REMOVED_NOTE,
+    glyph: UnlinkIcon,
     unmasked: () => true,
     kind: ACT_KIND.TASKS_SET_PARENT,
     read: (rows, { taskId }) => {

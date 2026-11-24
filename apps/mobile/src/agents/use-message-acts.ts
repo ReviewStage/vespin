@@ -122,7 +122,8 @@ export function useMessageActs(input: {
       line !== undefined &&
       points.editable.has(id) &&
       editsInPlace(line, words.trim()) &&
-      (item.pictures ?? []).length + (item.files ?? []).length === 0;
+      (item.pictures ?? []).length + (item.wordPictures?.size ?? 0) + (item.files ?? []).length ===
+        0;
 
     return offered
       ? [

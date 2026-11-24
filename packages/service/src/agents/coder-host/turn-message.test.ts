@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { writeAccountTimeZone } from "@repo/database/models/account-time-zone";
 import { type Agent, createAgent, recordNativeHanded } from "@repo/database/models/agent-store";
 import type { DescriptionWriter } from "@repo/database/models/description-revisions";
@@ -144,7 +145,7 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
     "the turn after one spoken on a call says the call's words no longer hold, as it does after a compaction kept only that, and the turn after it says nothing of them",
     () =>
       Effect.gen(function* () {
-        const { agent, admitted } = yield* openAgent;
+        const { userId, agent, admitted } = yield* openAgent;
 
         const typedOn = (handed: TurnHanded) =>
           coderTurnMessage(
@@ -161,6 +162,13 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         assert.ok(!next.text?.includes("This turn is"), next.text ?? "");
         const compacted = yield* typedOn(handedAfterCompaction({ spoken: true }));
         assert.ok(compacted.text?.startsWith("This turn is typed"), compacted.text ?? "");
+        assert.ok(after.text?.includes("goes in a thread"), after.text ?? "");
+
+        // An agent whose starter keeps no Inbox posts no thread, so its questions go in its reply.
+        yield* writeAccountPreferences(userId, { inbox: false });
+        const unposted = (yield* typedOn({ spoken: true })).text ?? "";
+        assert.ok(unposted.includes("goes in your reply"), unposted);
+        assert.ok(!unposted.includes("thread"), unposted);
       }),
   );
 

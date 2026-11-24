@@ -142,3 +142,17 @@ export function startersFor(has: {
 
   return offered.map((task) => ({ task, runnable: met[task.needs] }));
 }
+
+/**
+ * The box's words once a starter is pressed: the starter's own where the
+ * box holds nothing or another starter's words untouched, so pressing one
+ * after another swaps them, and otherwise what the member typed with the
+ * starter's words after it, so a press never loses a draft.
+ */
+export function draftWithStarter(typed: string, task: StarterTask): string {
+  const kept = typed.trim();
+
+  if (kept === "" || STARTER_TASKS.some(({ prompt }) => prompt.trim() === kept)) return task.prompt;
+
+  return `${kept}\n\n${task.prompt}`;
+}

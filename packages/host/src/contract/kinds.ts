@@ -402,6 +402,8 @@ export const AGENT_INBOX_ACT_KIND = {
   /** One image of an inbox item, fetched by the host under the account, so the window holds no bearer and no address. */
   AGENTS_INBOX_ATTACHMENT: "agents.inboxAttachment",
   AGENTS_PICTURE: "agents.picture",
+  /** One picture a tool answered an agent, fetched by the host under the account straight into a file of the device, where the platform downloads to a file, so its bytes never reach the window's JavaScript. */
+  AGENTS_PICTURE_FILE: "agents.pictureFile",
 } as const;
 
 /**
@@ -629,7 +631,7 @@ export const TASKS_ACT_KIND = {
   TASKS_RESTORE: "tasks.restore",
   /** A page tab's source of one version of one of the plan's pages, read from the service as its frame's is and colored by main as HTML; answered to the tab, never on the document. */
   TASKS_PAGE_SOURCE: "tasks.pageSource",
-  /** One version of one of the plan's pages, or an agent's on no task, its HTML whole, read from the service as its frame's is, for a client that draws the page itself, the iPhone's sealed page; answered to the client, never on the document. */
+  /** One version of one of the plan's pages, or an agent's on no task, or its newest where none is named, its HTML whole, read from the service as its frame's is, for a client that draws the page itself, the iPhone's sealed page; answered to the client, never on the document. */
   TASKS_PAGE_HTML: "tasks.pageHtml",
   /**
    * One plan's pages, or one agent's on no task, held followed while the
@@ -1218,6 +1220,7 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_READ_ALL: ACT_USE.WRITE,
   AGENTS_INBOX_ATTACHMENT: ACT_USE.FETCH,
   AGENTS_PICTURE: ACT_USE.FETCH,
+  AGENTS_PICTURE_FILE: ACT_USE.FETCH,
 
   AUTOMATIONS_CREATE: ACT_USE.WRITE,
   AUTOMATIONS_CHANGE: ACT_USE.WRITE,

@@ -226,6 +226,7 @@ const TURN_DURATION_BOUNDS = [
 /** Which account a pull request was opened as. */
 export const SERVER_PULL_REQUEST_OPENER = {
   DEVELOPER: "developer",
+  ASSIGNEE: "assignee",
   APP: "app",
 } as const;
 

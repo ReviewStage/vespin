@@ -8,6 +8,7 @@ import {
 import { type AgentPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { saidWords } from "@repo/features/integration-health";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   CLOSE_WORDS,
@@ -82,6 +83,7 @@ import { confirmFailure, failureShown } from "../failure-report.js";
 import { useGitHubConnection } from "../github-connect.js";
 import { OPEN_SETTINGS_LABEL, useOpenSettings } from "../open-settings.js";
 import { useToast, useWithdrawToast } from "../toast.js";
+import { pullRequestChip } from "../toast-chip.js";
 import { PULL_REQUEST_TONE, PullRequestMark } from "./pull-request-mark.js";
 import { usePullRequestSource, writeScopeOf } from "./pull-request-source.js";
 import { useOpenWorkspaceGitHub } from "./repository-remedy.js";
@@ -425,7 +427,7 @@ const CLOSE_UNKNOWN_QUESTION: DialogQuestion = {
 };
 
 /** What the pill's menu offers to open the Merge queue page on a queued pull request. */
-const VIEW_QUEUE_WORDS = "View merge queue";
+const VIEW_QUEUE_WORDS = MERGE_QUEUE_PAGE_WORDS.VIEW;
 
 /**
  * The pill saying where the pull request stands, its mark in its tone; a press
@@ -531,8 +533,9 @@ export function PullRequestStateMenu({
         ? () =>
             toast({
               replayUnmasked: true,
-              words: CLOSE_WORDS.CLOSED,
+              words: CLOSE_WORDS.CLOSED_NAMED,
               tone: STATUS_TONE.COMPLETE,
+              chip: pullRequestChip(pullRequest.number),
               subject: toastSubject,
               action: {
                 label: CLOSE_WORDS.REOPEN,

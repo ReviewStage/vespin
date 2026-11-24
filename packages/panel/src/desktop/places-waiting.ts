@@ -1,6 +1,8 @@
 import {
   INBOX_SHOW,
   INBOX_SHOW_COUNT,
+  type InboxAnyHolder,
+  type InboxGroup,
   type InboxShow,
   inboxAtNow,
   inboxCounts,
@@ -9,6 +11,7 @@ import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
 import { type BarCount, type BarCountTone, STATUS_TONE, useMinute } from "@repo/ui";
 import { useMemo } from "react";
 import { useInboxTaskHoldings, useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
+import { useTasklessInboxGroups } from "../tasks/use-taskless-inbox-groups.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useListedInboxGroups } from "../tasks/use-waiting-items.js";
 import { useInboxViewChoices } from "./folded-groups.js";
@@ -78,19 +81,29 @@ const SHOW_TONE = {
  * the scope the Inbox shows lists, addressed to whom its Addressed to names
  * (`inboxCounts`), so Questions counts what waits on the developer and Open
  * what they are not done with, read with that scope's words and tone; it
- * follows the view as the Inbox's menu changes it. None while signed out.
+ * follows the view as the Inbox's menu changes it. A thread on no task, a
+ * Manager's, counts as a task's does, as the Inbox lists it beside them
+ * (`use-taskless-inbox-groups.ts`). None while signed out.
  */
 export function useInboxViewCount(tasks: SidebarTasksControl): BarCount {
   const now = useMinute();
   const { show, whose } = useInboxViewChoices();
   const { groups } = useListedInboxGroups(tasks);
+
+  const { groups: taskless } = useTasklessInboxGroups(
+    tasks.workspace?.id,
+    tasks.agentsCarried,
+    tasks.agents.models,
+  );
+
   const me = tasks.me;
 
   // Note that a reminder is weighed on the window's clock, as the Inbox weighs it, so an item comes back within the minute its reminder comes due.
-  const counts = useMemo(
-    () => inboxCounts(inboxAtNow(groups, now), me, whose),
-    [groups, now, me, whose],
-  );
+  const counts = useMemo(() => {
+    const held: readonly InboxGroup<InboxAnyHolder>[] = [...groups, ...taskless];
+
+    return inboxCounts(inboxAtNow(held, now), me, whose);
+  }, [groups, taskless, now, me, whose]);
 
   const value = tasks.signedIn ? counts[show] : 0;
 

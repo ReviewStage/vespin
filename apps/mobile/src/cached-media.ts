@@ -5,9 +5,14 @@
 import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
 import { AUDIO_TYPE } from "@repo/features/audio-signature";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import {
+  type ImageDimensions,
+  imageDimensions,
+  sniffImageType,
+} from "@repo/features/image-signature";
 import { MP4_TYPE } from "@repo/features/video-signature";
-import { pictureExtension } from "@repo/ui-native";
-import { Directory, File, Paths } from "expo-file-system";
+import { PICTURE_FILE_EXTENSIONS, pictureExtension } from "@repo/ui-native";
+import { Directory, File, FileMode, Paths } from "expo-file-system";
 
 /** What a video's file is named with while its bytes are still being written, so no read takes it for the whole file. */
 const WRITING_SUFFIX = ".writing";
@@ -22,6 +27,45 @@ const PLAYED_EXTENSION: ReadonlyMap<string, string> = new Map([
   [AUDIO_TYPE.AAC, "aac"],
   [AUDIO_TYPE.OGG, "ogg"],
 ]);
+
+/** Every extension a picture, a video, or a sound clip is written under, which a file already written is looked for by. */
+const KEPT_EXTENSIONS: readonly string[] = [
+  ...PICTURE_FILE_EXTENSIONS,
+  ...new Set(PLAYED_EXTENSION.values()),
+];
+
+/** What a file an earlier read wrote holds, by its extension: a picture, a video, or a sound clip. */
+export const KEPT_MEDIA = {
+  PICTURE: "picture",
+  VIDEO: "video",
+  AUDIO: "audio",
+} as const;
+
+export type KeptMediaKind = (typeof KEPT_MEDIA)[keyof typeof KEPT_MEDIA];
+
+/** What each extension a file is written under holds: a picture's a picture, and a played type's a video or a clip by its type. */
+const KEPT_KIND: ReadonlyMap<string, KeptMediaKind> = new Map([
+  ...PICTURE_FILE_EXTENSIONS.map((extension) => [extension, KEPT_MEDIA.PICTURE] as const),
+  ...[...PLAYED_EXTENSION].map(
+    ([type, extension]) =>
+      [extension, type.startsWith("video/") ? KEPT_MEDIA.VIDEO : KEPT_MEDIA.AUDIO] as const,
+  ),
+]);
+
+/** A file an earlier read wrote: its address, its size in bytes, and what it holds. */
+export interface KeptMedia {
+  readonly uri: string;
+  readonly bytes: number;
+  readonly kind: KeptMediaKind;
+}
+
+/** How much of a picture's head its size is read from: enough for a JPEG's frame header after a camera's EXIF segment, which runs to 64 KB. */
+const SIZE_HEAD_BYTES = 96 * 1024;
+
+/** A file written as `extension`, as a lookup answers it. */
+function keptOf(file: File, extension: string): KeptMedia {
+  return { uri: file.uri, bytes: file.size, kind: KEPT_KIND.get(extension) ?? KEPT_MEDIA.PICTURE };
+}
 
 /** Each write still under way, by the address of the file it writes, so a second read of one video, clip, or file waits on the first rather than writing over it. */
 const writing = new Map<string, Promise<string>>();
@@ -84,6 +128,91 @@ export async function cachedPlayed(
   const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
 
   return once(new File(Paths.cache, name), base64);
+}
+
+/**
+ * Where a picture, a video, or a sound clip of `id` already stands under the
+ * app's caches, as `cachedPicture` or `cachedPlayed` wrote it on an earlier
+ * read, this launch's or one before it; none where no file of it stands, as
+ * before its first read or once iOS has cleared the caches. Note that a page
+ * asks this before it reads through the host, because the id names bytes
+ * that never change, so a picture shown once draws from its file again with
+ * no request, no base64 on the JS thread, and no write; and that a file
+ * still being written stands under another name until it is whole, so one
+ * found here is always whole.
+ */
+export function keptMedia(prefix: string, id: string): KeptMedia | undefined {
+  for (const extension of KEPT_EXTENSIONS) {
+    const file = new File(Paths.cache, `${prefix}-${id}.${extension}`);
+
+    if (file.exists) return keptOf(file, extension);
+  }
+
+  return undefined;
+}
+
+/** What in a download's own name follows the file it becomes, so no lookup (`keptMedia`) takes it for a whole file. */
+const DOWNLOADING_SUFFIX = ".downloading";
+
+/**
+ * A picture, a video, or a clip of `id` downloaded straight into the app's
+ * caches by `download`, which writes its bytes to the file it is handed
+ * and answers the type they were served as, or none where it read nothing:
+ * the bytes never reach JavaScript. Written under a name of its own, then
+ * moved into place as `<prefix>-<id>.<extension>` for its type, as
+ * `cachedPicture` and `cachedPlayed` name one, so the next read finds it
+ * (`keptMedia`); none where the download read nothing or its type names no
+ * extension, its partial file deleted, so the caller reads it another way.
+ * Note that each download stands under a name of its own, so one that lands
+ * after its caller gave up on it, as a request past its deadline does,
+ * never writes over another's file.
+ */
+export async function downloadedMedia(
+  prefix: string,
+  id: string,
+  partName: string,
+  download: (path: string) => Promise<string | undefined>,
+): Promise<KeptMedia | undefined> {
+  const partial = new File(Paths.cache, `${prefix}-${id}.${partName}${DOWNLOADING_SUFFIX}`);
+  const contentType = await download(partial.uri).catch(() => undefined);
+
+  const extension =
+    contentType === undefined
+      ? undefined
+      : (pictureExtension(contentType) ?? PLAYED_EXTENSION.get(contentType));
+
+  if (extension === undefined || !partial.exists) {
+    if (partial.exists) partial.delete();
+
+    return undefined;
+  }
+
+  const file = new File(Paths.cache, `${prefix}-${id}.${extension}`);
+  await partial.move(file, { overwrite: true });
+
+  return keptOf(file, extension);
+}
+
+/**
+ * The size in pixels a picture written to a file states in its header, read
+ * from its head alone off the JS thread, so its bubble stands at its shape
+ * before it decodes, as one read as base64 does (`base64PictureSize`); none
+ * where its bytes are no PNG, JPEG, or WebP, state no size, or could not be
+ * read.
+ */
+export async function keptPictureSize(uri: string): Promise<ImageDimensions | undefined> {
+  const handle = new File(uri).open(FileMode.ReadOnly);
+
+  try {
+    const head = await handle.readBytes(SIZE_HEAD_BYTES);
+    const type = sniffImageType(head);
+
+    return type === undefined ? undefined : imageDimensions(head, type);
+  } catch {
+    return undefined;
+  } finally {
+    handle.close();
+  }
 }
 
 /**

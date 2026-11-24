@@ -6,6 +6,10 @@ import {
   PRODUCT_EXPERIMENT,
   PRODUCT_EXPERIMENT_SCOPE,
   PRODUCT_OPEN_ORDER,
+  PRODUCT_PAGE_VERSION,
+  PRODUCT_PICTURE_BYTES,
+  PRODUCT_PICTURE_FROM,
+  PRODUCT_PICTURE_KIND,
   PRODUCT_REPLY_KIND,
   PRODUCT_SETTING_VALUE,
   PRODUCT_SURFACE,
@@ -174,7 +178,7 @@ test("a launch travels its time to the first rows on a rung, never as the raw ti
   );
 });
 
-test("a launch may add when its bundle evaluated, its account was read, its local copy opened, its host was composed and stood, its screens first drew, its Inbox was first grouped and how many documents it took, which rows it first showed, its build number and what it waited from, each read strictly", () => {
+test("a launch may add when its bundle evaluated, its account was read, its local copy opened, its host was composed and stood, its screens first drew, its Inbox was first grouped, the app first came active, and how many documents it took, which rows it first showed, its build number and what it waited from, each read strictly", () => {
   const phases = {
     [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 8,
     [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: 5,
@@ -184,6 +188,7 @@ test("a launch may add when its bundle evaluated, its account was read, its loca
     [PRODUCT_EVENT_PROPERTY.STARTED_SECONDS]: 3,
     [PRODUCT_EVENT_PROPERTY.INBOX_SECONDS]: 5,
     [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: 0.4,
+    [PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS]: 13,
     [PRODUCT_EVENT_PROPERTY.DELIVERIES]: 5,
     [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "52",
     [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: "feed",
@@ -293,6 +298,54 @@ test("a page's open travels its waits on rungs with its kind and order, never wh
       },
     }),
     undefined,
+  );
+  // A page an agent showed travels its read and its draw on the same rungs, with where its version came from, never which page.
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.PAGE_SHOWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.READ_MS]: 300,
+        [PRODUCT_EVENT_PROPERTY.SHOWN_MS]: 1750,
+        [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: PRODUCT_PAGE_VERSION.NEWEST,
+        [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: PRODUCT_OPEN_ORDER.FIRST,
+        pageId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.PAGE_SHOWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.READ_MS]: 300,
+        [PRODUCT_EVENT_PROPERTY.SHOWN_MS]: 1750,
+        [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: PRODUCT_PAGE_VERSION.NEWEST,
+        [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: PRODUCT_OPEN_ORDER.FIRST,
+      },
+    },
+  );
+  // A picture drawn travels its wait on the same rungs, where it came from, its kind, and its size on a rung, never which picture.
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.PICTURE_SHOWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.READ_MS]: 900,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_FROM]: PRODUCT_PICTURE_FROM.READ,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: PRODUCT_PICTURE_KIND.AGENT,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: PRODUCT_PICTURE_BYTES.UNDER_3M,
+        pictureId: "9a0d2c1e-6f3b-4e8a-b2d4-1c7e5f9a3b6d",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.PICTURE_SHOWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.READ_MS]: 900,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_FROM]: PRODUCT_PICTURE_FROM.READ,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: PRODUCT_PICTURE_KIND.AGENT,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: PRODUCT_PICTURE_BYTES.UNDER_3M,
+      },
+    },
   );
 });
 

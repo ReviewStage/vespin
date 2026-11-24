@@ -11,6 +11,7 @@ import {
   closedNote,
   NOT_RESOLVED,
   RESOLVE_UNTAKEN,
+  RESOLVED_ONE,
   resolvedWords,
   TOOK_BACK,
   type TookBack,
@@ -28,6 +29,7 @@ import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import type { ShortcutSubject } from "../shortcut-target.js";
+import { inboxItemChip } from "../toast-chip.js";
 import { pressTakeBack, type TakeBackUndoRefusal, type TakeBackWrite } from "../undo-stack.js";
 
 /**
@@ -140,10 +142,10 @@ export function untakenSettles(
  * those alone.
  */
 const RESOLVE_WRITE = {
-  words: ({ items }) => resolvedWords(items),
-  glyph: () => <GLYPH.RESOLVED />,
-  // Note that one item's toast quotes its title, which a screen recording masks.
-  unmasked: ({ items }) => items.length > 1,
+  words: ({ items }) => (items.length === 1 ? RESOLVED_ONE : resolvedWords(items)),
+  chip: ({ items }) => inboxItemChip(items),
+  // Note that its words are the app's own, the one item's title standing in its chip, which a screen recording masks.
+  unmasked: () => true,
   act: ({ close }, { items, keys }) =>
     Promise.all(
       items.map((item, at) =>

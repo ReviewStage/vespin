@@ -58,6 +58,7 @@ const DECLARED_TABLES = [
   "agent_sandbox",
   "agent_sandbox_beat",
   "agent_sandbox_terminal",
+  "agent_section_entry",
   "agent_wakeup",
   "attachment",
   "automation",

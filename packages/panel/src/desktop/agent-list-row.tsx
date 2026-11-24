@@ -52,6 +52,7 @@ import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
+import { useRowPlace, withRowMoves } from "./row-moves.js";
 import { SIDEBAR_ROW_TIME } from "./task-card.js";
 import { WaitingCount } from "./task-row-parts.js";
 import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
@@ -86,7 +87,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  *
  * A press opens the agent, and its ⋯, a right-click, a long press, and the
  * menu key offer the agent's one menu over the doors a row has
- * (`agent-actions.tsx`), as a task's row offers the task's wherever it
+ * (`agent-actions.tsx`), its moves last where its list reorders it, as
+ * Pinned does (`row-moves.tsx`), as a task's row offers the task's wherever it
  * stands, led by Pin, or Unpin once the reader pinned it, the reader's own
  * pin of the agent, which stands it under the sidebar's Pinned (an archived
  * agent's row offers neither, as an archived agent stands under no pin): Copy link, Rename, which turns the row's name into its field
@@ -226,6 +228,7 @@ export function AgentListRow({
   const selectPinned = useMemo(() => selectAgentPinned(agent.id), [agent.id]);
   const pinned = useQuery({ ...appStateQuery, select: selectPinned }).data === true;
   const onPin = useAgentPinWrite();
+  const rowPlace = useRowPlace();
 
   // Note that the developer's machines' asks for the agent count as needing them beside its threads.
   const asked = machineAsksByAgent(useMachineAsks()).get(agent.id) ?? 0;
@@ -307,10 +310,13 @@ export function AgentListRow({
       ? chosenRowMenu(AGENT_THING, chosen, shown)
       : rowMenu(
           AGENT_THING,
-          [
-            ...pinGroups(agent, pinned, onPin, actions.subject),
-            ...agentMenuGroups(rowDoors(actions.doors)),
-          ],
+          withRowMoves(
+            [
+              ...pinGroups(agent, pinned, onPin, actions.subject),
+              ...agentMenuGroups(rowDoors(actions.doors)),
+            ],
+            rowPlace,
+          ),
           shown,
           true,
         );

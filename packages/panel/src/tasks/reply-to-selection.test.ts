@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
+  AGENT_KIND,
   AGENT_STATUS,
   type AgentSummary,
   type AgentTranscriptMessage,
@@ -26,6 +27,7 @@ import {
 } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
+import { pointerCross } from "../testing/pointer-cross.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AgentComposer } from "./agent-composer.js";
@@ -469,6 +471,27 @@ test("Reply keeps the side it was offered on as the log scrolls the words toward
   assert.equal(press()?.hasAttribute("data-below"), false, "still over the words");
 });
 
+test("Reply over words in a box that only clips them, as a chat bubble does, stands over them where the log has room, never cut at the box's edge", async () => {
+  const tab = await mounted();
+
+  const scope = [...tab.container.querySelectorAll("[data-reply-scope]")].find((each) =>
+    (each.textContent ?? "").includes(AGENT_WORDS),
+  );
+
+  const bubble = scope?.parentElement;
+  assert.ok(bubble, "the agent's words are drawn in a box");
+  // Note that jsdom computes each axis from its own property alone, never from the `overflow` shorthand.
+  bubble.style.overflowX = "clip";
+  bubble.style.overflowY = "clip";
+  vi.spyOn(bubble, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 295, 400, 40));
+  Range.prototype.getBoundingClientRect = () => new DOMRect(40, 300, 120, 20);
+
+  tab.select(AGENT_WORDS, "Option B", "review.");
+
+  const press = document.body.querySelector<HTMLElement>(".reply-to-selection");
+  assert.equal(press?.hasAttribute("data-below"), false, "over the words, past the box's top");
+});
+
 test("with a mouse, a selection resting is offered nothing until the pointer lets it go", async () => {
   const tab = await mounted();
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
@@ -496,25 +519,17 @@ const AGENT: AgentSummary = {
   brief: AGENT_BRIEF.PROMPT,
 };
 
-test("on the agent's tab, Reply quotes its words into the tab's own box, and stands while a message is out, since the box takes words", async () => {
+/** `agent`'s whole tab over `messages`, every message its box sends written down and never answered, so each stays out. */
+async function mountedTab(agent: AgentSummary, messages: readonly AgentTranscriptMessage[]) {
   const sent: string[] = [];
   pushedTranscripts(() => [
-    {
-      messages: [
-        { id: "task", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Plan it." }] },
-        TURN,
-      ],
-      cursor: "1:0",
-      status: AGENT.status,
-      title: null,
-    },
-    { messages: [], cursor: "2:0", status: AGENT.status, title: null },
+    { messages: [...messages], cursor: "1:0", status: agent.status, title: null },
+    // The transcript ends on a page with nothing on it, as an ended agent's does.
+    { messages: [], cursor: "2:0", status: agent.status, title: null },
   ]);
 
   const control = agentsControl({
-    agents: [AGENT],
-    // The transcript ends on a page with nothing on it, as an ended agent's does.
-    // The message never answers, so it stays out.
+    agents: [agent],
     onMessage: (_agentId, { text }) => {
       sent.push(text);
 
@@ -529,7 +544,7 @@ test("on the agent's tab, Reply quotes its words into the tab's own box, and sta
     root.render(
       withQueryClient(
         createElement(AgentTab, {
-          agent: AGENT,
+          agent,
           control,
           shown: true,
           onOpenSubagent: ignore,
@@ -539,6 +554,15 @@ test("on the agent's tab, Reply quotes its words into the tab's own box, and sta
     ),
   );
   await settle();
+
+  return { container, sent };
+}
+
+test("on the agent's tab, Reply quotes its words into the tab's own box, and stands while a message is out, since the box takes words", async () => {
+  const { container, sent } = await mountedTab(AGENT, [
+    { id: "task", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Plan it." }] },
+    TURN,
+  ]);
 
   const select = (from: string, to: string) => {
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
@@ -581,4 +605,42 @@ test("on the agent's tab, Reply quotes its words into the tab's own box, and sta
   act(() => again.click());
   await settle();
   assert.equal(composerEditor(container).textContent?.includes("Option B waits for review."), true);
+});
+
+test("Reply beside a Manager's message quotes the whole message into the box as Reply over words selected does, nothing cut and nothing over the box", async () => {
+  const told = `**Plan**: the invite flow ships first.\n\n${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}`;
+
+  const { container, sent } = await mountedTab({ ...AGENT, kind: AGENT_KIND.MANAGER }, [
+    { id: "ask", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "What first?" }] },
+    {
+      id: "turn",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        {
+          type: "tool-send_to_user",
+          toolCallId: "told",
+          state: "output-available",
+          input: { text: told },
+          output: { status: "accepted" },
+        },
+      ],
+    },
+  ]);
+
+  // The pointer comes onto the message, which draws its actions at once.
+  const message = container.querySelector('[data-message-id="turn"]');
+  assert.ok(message, "the Manager's message is drawn");
+  pointerCross(document.body, message);
+
+  const reply = container.querySelector<HTMLButtonElement>('button[aria-label="Reply"]');
+  assert.ok(reply, "Reply stands beside the Manager's message");
+  act(() => reply.click());
+  await settle();
+  typeInComposer(container, "Ship it");
+  pressInComposer(container, "Enter");
+  await settle();
+
+  assert.deepEqual(sent, [
+    `> **Plan**: the invite flow ships first.\n>\n> ${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}\n\nShip it`,
+  ]);
 });

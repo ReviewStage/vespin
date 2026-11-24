@@ -1,4 +1,5 @@
 import {
+  type AgentSectionEntry,
   TASK_SECTION_BOUNDS,
   TASK_SECTION_WRITE,
   type TaskSection,
@@ -13,12 +14,18 @@ import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
+import { agentTable } from "../schemas/agent.js";
 import { user } from "../schemas/auth.js";
 import { task } from "../schemas/task.js";
-import { taskSection, taskSectionEntry } from "../schemas/task-section.js";
+import { agentSectionEntry, taskSection, taskSectionEntry } from "../schemas/task-section.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { TaskStoreEffect } from "./task-store.js";
-import { isWorkspaceMember, taskReachableBy, workspaceReachableBy } from "./workspace-store.js";
+import {
+  agentVisibleTo,
+  isWorkspaceMember,
+  taskReachableBy,
+  workspaceReachableBy,
+} from "./workspace-store.js";
 
 /**
  * task-section-store.ts -- the sections an account made in its sidebars and the tasks it keeps in them, read and written for `/api/task-sections`.
@@ -28,9 +35,9 @@ import { isWorkspaceMember, taskReachableBy, workspaceReachableBy } from "./work
  * read only while the account is a member of its workspace, and an entry
  * only while the account still reaches its task in that same workspace, so
  * a task moved to another workspace leaves its section without a write.
- * Every agent stands on a task, so no agent is kept in a section: the
- * answer's `agentEntries`, which a released desktop requires, is empty, and
- * its write placing an agent changes nothing.
+ * An agent, a Manager as the sidebar draws it beside the tasks, is kept in
+ * a section the same way, read while the account may see the agent
+ * (`agentVisibleTo`) in its section's own workspace.
  * Every write runs under a lock on the account's own row, so two Macs
  * writing at once land one after the other and neither slips past the
  * bound, and answers the whole as it then stands, or nothing where it was
@@ -56,6 +63,24 @@ const EntryRowSchema = Schema.Struct({
 });
 
 type EntryRow = typeof EntryRowSchema.Type;
+
+const AgentEntryRowSchema = Schema.Struct({
+  agentId: Schema.String,
+  sectionId: Schema.String,
+  position: Schema.NullOr(Schema.String),
+  addedAt: InstantColumnSchema,
+});
+
+type AgentEntryRow = typeof AgentEntryRowSchema.Type;
+
+const AGENT_ENTRY_COLUMNS = {
+  agentId: agentSectionEntry.agentId,
+  sectionId: agentSectionEntry.sectionId,
+  position: agentSectionEntry.position,
+  addedAt: agentSectionEntry.addedAt,
+};
+
+const AgentKeySchema = Schema.Struct({ userId: Schema.String, agentId: Schema.String });
 
 const SECTION_COLUMNS = {
   id: taskSection.id,
@@ -113,6 +138,28 @@ const findEntries = SqlSchema.findAll({
           ),
         )
         .orderBy(asc(taskSectionEntry.addedAt), asc(taskSectionEntry.taskId)),
+    ),
+});
+
+/** The account's agent entries whose agent it may still see in its section's own workspace. */
+const findAgentEntries = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: AgentEntryRowSchema,
+  execute: (userId) =>
+    Database.use((db) =>
+      db
+        .select(AGENT_ENTRY_COLUMNS)
+        .from(agentSectionEntry)
+        .innerJoin(taskSection, eq(taskSection.id, agentSectionEntry.sectionId))
+        .innerJoin(agentTable, eq(agentTable.id, agentSectionEntry.agentId))
+        .where(
+          and(
+            eq(agentSectionEntry.userId, userId),
+            eq(agentTable.organizationId, taskSection.organizationId),
+            agentVisibleTo(userId),
+          ),
+        )
+        .orderBy(asc(agentSectionEntry.addedAt), asc(agentSectionEntry.agentId)),
     ),
 });
 
@@ -189,6 +236,40 @@ const findTaskIn = SqlSchema.findOneOption({
             taskReachableBy(userId),
           ),
         )
+        .limit(1),
+    ),
+});
+
+/** The agent under this id, where the account may see it in the workspace given; nothing otherwise. */
+const findAgentIn = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...AgentKeySchema.fields, organizationId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, agentId, organizationId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(
+          and(
+            eq(agentTable.id, agentId),
+            eq(agentTable.organizationId, organizationId),
+            agentVisibleTo(userId),
+          ),
+        )
+        .limit(1),
+    ),
+});
+
+/** The account's entry for an agent, whichever section it names. */
+const findAgentEntry = SqlSchema.findOneOption({
+  Request: AgentKeySchema,
+  Result: AgentEntryRowSchema,
+  execute: ({ userId, agentId }) =>
+    Database.use((db) =>
+      db
+        .select(AGENT_ENTRY_COLUMNS)
+        .from(agentSectionEntry)
+        .where(and(eq(agentSectionEntry.userId, userId), eq(agentSectionEntry.agentId, agentId)))
         .limit(1),
     ),
 });
@@ -353,6 +434,60 @@ const deleteEntry = SqlSchema.findAll({
     ),
 });
 
+/** The agent in a section from now, at the place given or by its instant; an entry standing elsewhere moves here. */
+const putAgentEntry = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...AgentKeySchema.fields,
+    sectionId: Schema.String,
+    position: Schema.NullOr(Schema.String),
+    now: Schema.Date,
+  }),
+  Result: TxidRowSchema,
+  execute: ({ userId, agentId, sectionId, position, now }) =>
+    Database.use((db) =>
+      db
+        .insert(agentSectionEntry)
+        .values({ userId, agentId, sectionId, position, addedAt: now })
+        .onConflictDoUpdate({
+          target: [agentSectionEntry.userId, agentSectionEntry.agentId],
+          set: { sectionId, position, addedAt: now },
+        })
+        .returning(TXID_RETURNING),
+    ),
+});
+
+/** The agent's entry given a new place in the section it already stands in, its instant kept; no row where it already stood there. */
+const placeAgentEntry = SqlSchema.findAll({
+  Request: Schema.Struct({ ...AgentKeySchema.fields, position: Schema.String }),
+  Result: TxidRowSchema,
+  execute: ({ userId, agentId, position }) =>
+    Database.use((db) =>
+      db
+        .update(agentSectionEntry)
+        .set({ position })
+        .where(
+          and(
+            eq(agentSectionEntry.userId, userId),
+            eq(agentSectionEntry.agentId, agentId),
+            sql`${agentSectionEntry.position} is distinct from ${position}`,
+          ),
+        )
+        .returning(TXID_RETURNING),
+    ),
+});
+
+const deleteAgentEntry = SqlSchema.findAll({
+  Request: AgentKeySchema,
+  Result: TxidRowSchema,
+  execute: ({ userId, agentId }) =>
+    Database.use((db) =>
+      db
+        .delete(agentSectionEntry)
+        .where(and(eq(agentSectionEntry.userId, userId), eq(agentSectionEntry.agentId, agentId)))
+        .returning(TXID_RETURNING),
+    ),
+});
+
 /** What one write did: refused, with nothing written, or done, in the transaction it changed rows in, none where it changed none. */
 type Applied = Option.Option<string | undefined>;
 
@@ -388,13 +523,28 @@ function entryOf(row: EntryRow): TaskSectionEntry {
   };
 }
 
-/** The account's sections, oldest made first, and the tasks it keeps in them; no agent, since every agent stands on a task. */
+/** An agent entry's row as the wire reads it. */
+function agentEntryOf(row: AgentEntryRow): AgentSectionEntry {
+  return {
+    agentId: row.agentId,
+    sectionId: row.sectionId,
+    ...(row.position === null ? undefined : { position: row.position }),
+    addedAt: row.addedAt.getTime(),
+  };
+}
+
+/** The account's sections, oldest made first, and the tasks and agents it keeps in them. */
 export function listTaskSections(userId: string): TaskStoreEffect<TaskSections> {
   return Effect.gen(function* () {
     const sections = yield* findSections(userId);
     const entries = yield* findEntries(userId);
+    const agentEntries = yield* findAgentEntries(userId);
 
-    return { sections: sections.map(sectionOf), entries: entries.map(entryOf), agentEntries: [] };
+    return {
+      sections: sections.map(sectionOf),
+      entries: entries.map(entryOf),
+      agentEntries: agentEntries.map(agentEntryOf),
+    };
   });
 }
 
@@ -457,6 +607,41 @@ function placeTask(
     const now = yield* DateTime.nowAsDate;
 
     return done(yield* putEntry({ userId, taskId, sectionId, position: position ?? null, now }));
+  });
+}
+
+/**
+ * Puts an agent in one of the account's sections, at the place given, or in
+ * none, as `placeTask` puts a task; nothing where the section is not the
+ * account's or the agent is not one it may see in the section's workspace.
+ */
+function placeAgent(
+  userId: string,
+  write: Extract<TaskSectionWrite, { kind: typeof TASK_SECTION_WRITE.PLACE_AGENT }>,
+): TaskStoreEffect<Applied> {
+  return Effect.gen(function* () {
+    const { agentId, sectionId, position } = write;
+
+    if (sectionId === null) return done(yield* deleteAgentEntry({ userId, agentId }));
+    const section = yield* findSection({ userId, id: sectionId });
+
+    if (Option.isNone(section)) return REFUSED;
+    const organizationId = section.value.organizationId;
+
+    if (Option.isNone(yield* findAgentIn({ userId, agentId, organizationId }))) return REFUSED;
+    const standing = yield* findAgentEntry({ userId, agentId });
+
+    if (Option.isSome(standing) && standing.value.sectionId === sectionId) {
+      if (position === undefined) return UNCHANGED;
+
+      return done(yield* placeAgentEntry({ userId, agentId, position }));
+    }
+
+    const now = yield* DateTime.nowAsDate;
+
+    return done(
+      yield* putAgentEntry({ userId, agentId, sectionId, position: position ?? null, now }),
+    );
   });
 }
 
@@ -525,8 +710,7 @@ function applyWrite(userId: string, write: TaskSectionWrite): TaskStoreEffect<Ap
     case TASK_SECTION_WRITE.PLACE:
       return placeTask(userId, write);
     case TASK_SECTION_WRITE.PLACE_AGENT:
-      // Note that a released desktop still sends this; every agent stands on a task, so it changes nothing, and is no refusal.
-      return Effect.succeed(UNCHANGED);
+      return placeAgent(userId, write);
   }
 }
 

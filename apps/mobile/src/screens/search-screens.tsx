@@ -1,6 +1,11 @@
 // search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, or those last opened before anything is typed, each row drawn by its own list's row.
 
-import { type InboxListed, READING_INBOX } from "@repo/features/inbox-list-model";
+import {
+  holderTask,
+  type InboxAnyHolder,
+  type InboxListed,
+  READING_INBOX,
+} from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { IOS_TAB, iosAgentRoute, iosAppRouteOf, iosTabOfGroup } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -85,11 +90,11 @@ function taskRoute(task: TaskSummary): string | undefined {
   return iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: task.id });
 }
 
-/** The screen a thread's row opens: the thread, under its task. */
-function threadRoute({ holder, item }: InboxListed): string | undefined {
+/** The screen a thread's row opens: the thread, under its task, or by its id alone where it stands on no task, a Manager's. */
+function threadRoute({ holder, item }: InboxListed<InboxAnyHolder>): string | undefined {
   return iosAppRouteOf({
     kind: LINK_DESTINATION.INBOX_ITEM,
-    taskId: holder.task.id,
+    taskId: holderTask(holder)?.id,
     itemId: item.id,
   });
 }

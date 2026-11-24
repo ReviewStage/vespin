@@ -6,10 +6,10 @@ import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { DIALOG_SIZE, Dialog, PictureTile, usePictureExpand } from "./index.js";
 
 /**
- * picture-expand.test.ts -- a picture opened from its tile is put away
- * only once its flight back into the tile ends. A tile gone by the close,
- * reduced motion, and a viewer opened from no tile close at once, as every
- * dialog does.
+ * picture-expand.test.ts -- a picture opened from its tile flies alone,
+ * the window-sized card never moved or scaled, and is put away only once its
+ * flight back into the tile ends. A tile gone by the close, reduced motion,
+ * and a viewer opened from no tile close at once, as every dialog does.
  */
 
 declare global {
@@ -154,12 +154,12 @@ function mountPage(closed: string[]) {
   };
 }
 
-/** The flights the card played. */
-function cardFlights(): Played[] {
-  return played.filter((each) => each.element.classList.contains("ui-dialog"));
+/** Whether a pose moves or scales what wears it. */
+function moves(frame: Keyframe): boolean {
+  return frame.transform !== undefined && frame.transform !== "none";
 }
 
-test("a picture opened from its tile is put away only once its flight back into the tile ends", () => {
+test("a picture opened from its tile flies alone, the card never moved, and is put away once it lands back in the tile", () => {
   const closed: string[] = [];
   const page = mountPage(closed);
 
@@ -167,8 +167,14 @@ test("a picture opened from its tile is put away only once its flight back into 
 
   page.escape();
   expect(closed).toEqual([]);
-  const shrink = cardFlights()[1];
-  act(() => shrink?.animation.onfinish?.());
+  const card = page.card();
+  const flights = played.filter((each) => each.frames.some(moves));
+
+  expect(flights.map((each) => [each.element.tagName, each.element === card])).toEqual([
+    ["IMG", false],
+    ["IMG", false],
+  ]);
+  act(() => flights[1]?.animation.onfinish?.());
 
   expect(closed).toEqual(["closed"]);
   expect(page.card()).toBeNull();

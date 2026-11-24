@@ -14,11 +14,14 @@ import {
   type AgentCallFailure,
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
+import { base64Bytes } from "@repo/features/agent-wire";
+import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { sizeLabel } from "@repo/features/attachment-model";
 import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
 import {
   INBOX_MEDIA,
   INBOX_SHOW,
+  type InboxAnyHolder,
   type InboxCounts,
   type InboxGroup,
   type InboxListed,
@@ -50,6 +53,7 @@ import {
 } from "@repo/features/inbox-write-words";
 import type { InboxHeldFile } from "@repo/features/inbox-writes";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { formatBytes } from "@repo/features/number-format";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -72,12 +76,21 @@ import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
-import { cachedFile, cachedPicture, cachedPlayed } from "../cached-media.js";
+import {
+  cachedFile,
+  cachedPicture,
+  cachedPlayed,
+  KEPT_MEDIA,
+  type KeptMedia,
+  keptMedia,
+  keptPictureSize,
+} from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
+import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsIn } from "./inbox-groups.js";
 import { useInboxShown } from "./inbox-shown.js";
@@ -110,7 +123,7 @@ const CLOSE_WENT = {
 } as const;
 
 type UseChosenInboxResult = {
-  readonly groups: readonly InboxGroup[];
+  readonly groups: readonly InboxGroup<InboxAnyHolder>[];
   readonly chosen: Workspace | undefined;
   readonly workspaces: number;
 };
@@ -132,7 +145,7 @@ export function useChosenInbox(): UseChosenInboxResult {
 }
 
 /** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`). */
-function useInboxGroups(): readonly InboxGroup[] {
+function useInboxGroups(): readonly InboxGroup<InboxAnyHolder>[] {
   return useChosenInbox().groups;
 }
 
@@ -162,7 +175,7 @@ export function useInboxScope(): UseInboxScopeResult {
 
 /** What the Inbox lists: its rows in the list's order, what each scope counts, whether any row is unread, the reader they were read for, and where the feed they come from stands. */
 export interface InboxListing {
-  readonly listed: readonly InboxListed[];
+  readonly listed: readonly InboxListed<InboxAnyHolder>[];
   readonly feed: InboxFeed;
   readonly counts: InboxCounts;
   readonly readerId: string | undefined;
@@ -292,7 +305,7 @@ export function useInboxBadge(): number {
 }
 
 type UseInboxThreadResult = {
-  readonly listed: InboxListed | undefined;
+  readonly listed: InboxListed<InboxAnyHolder> | undefined;
   readonly readerId: string | undefined;
   readonly feed: InboxFeed;
   /** Reads again what the thread waits on where it failed: where it stands, its task's own inbox, or the feed and the task list. */
@@ -389,11 +402,11 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 /** The thread `id` names among `groups`, with what holds it; none where none holds it. */
 function listedIn(
   groups: readonly {
-    readonly holder: InboxListed["holder"];
+    readonly holder: InboxListed<InboxAnyHolder>["holder"];
     readonly items: readonly InboxItem[];
   }[],
   id: string | undefined,
-): InboxListed | undefined {
+): InboxListed<InboxAnyHolder> | undefined {
   for (const { holder, items } of groups) {
     const item = items.find((each) => each.id === id);
 
@@ -462,13 +475,13 @@ function useItemHome(id: string | undefined, asked: boolean): ItemHome {
 
 /** A task's own inbox as one group, where its read stands, and how to read it again. */
 interface HomeGroups {
-  readonly groups: readonly InboxGroup[];
+  readonly groups: readonly InboxGroup<InboxAnyHolder>[];
   readonly read: InboxFeed;
   readonly again: () => void;
 }
 
 /** No group of a task's own inbox. */
-const NO_HOME_GROUPS: readonly InboxGroup[] = [];
+const NO_HOME_GROUPS: readonly InboxGroup<InboxAnyHolder>[] = [];
 
 /**
  * The inbox of the task `taskId` names, followed while it is named, as one
@@ -837,7 +850,7 @@ export function useInboxActs(): {
  * nothing. Its notifications still shown are removed as it opens, read or
  * not, since the thread is on screen.
  */
-export function useReadOnOpen(listed: InboxListed | undefined): void {
+export function useReadOnOpen(listed: InboxListed<InboxAnyHolder> | undefined): void {
   const acts = useHostActs();
   const id = listed?.item.id;
   const unread = listed !== undefined && isUnread(listed.item);
@@ -902,6 +915,16 @@ async function sourceOf(
   }
 }
 
+/** A kept picture's size in pixels, as its file's header states it; none for any other kind of file. */
+function keptPictureSizeOf(
+  each: InboxMessageMedia,
+  kept: KeptMedia,
+): Promise<ImageDimensions | undefined> {
+  return each.kind === INBOX_MEDIA.PICTURE && kept.kind === KEPT_MEDIA.PICTURE
+    ? keptPictureSize(kept.uri)
+    : Promise.resolve(undefined);
+}
+
 /** A picture's size in pixels, as its header states it, read from a file the service answered; none for any other kind of file. */
 function readPictureSize(each: InboxMessageMedia, base64: string): ImageDimensions | undefined {
   return each.kind === INBOX_MEDIA.PICTURE ? base64PictureSize(base64) : undefined;
@@ -912,12 +935,12 @@ function withRead(
   held: ThreadMediaRead,
   each: InboxMessageMedia,
   source: string,
-  base64: string,
+  size: string,
   pictureSize: ImageDimensions | undefined,
 ): ThreadMediaRead {
   return {
     sources: new Map(held.sources).set(each.attachmentId, source),
-    sizes: new Map(held.sizes).set(each.attachmentId, sizeLabel(base64)),
+    sizes: new Map(held.sizes).set(each.attachmentId, size),
     pictureSizes:
       pictureSize === undefined
         ? held.pictureSizes
@@ -949,6 +972,7 @@ export function useThreadMedia(
   pending?: (itemId: string, attachmentId: string) => InboxHeldFile | undefined,
 ): ThreadFiles {
   const acts = useHostActs();
+  const shown = usePictureShownCount(PRODUCT_PICTURE_KIND.INBOX);
   const [read, setRead] = useState<ThreadMediaRead>(NOTHING_READ);
   // How many times a file was read again, which asks the effect to read what was let go.
   const [retries, setRetries] = useState(0);
@@ -991,7 +1015,29 @@ export function useThreadMedia(
         void sourceOf(each, held)
           .then((source) => {
             if (asked.current.itemId !== itemId) return;
-            setRead((was) => withRead(was, each, source, held.base64, held.pictureSize));
+            setRead((was) => withRead(was, each, source, sizeLabel(held.base64), held.pictureSize));
+          })
+          .catch(failed);
+        continue;
+      }
+
+      const askedAt = performance.now();
+
+      // Note that a picture, a video, or a clip shown before draws from the file its first read wrote, asking the host nothing; a file such as a PDF stands under its own name, so it is read as before.
+      const kept =
+        each.kind === INBOX_MEDIA.FILE
+          ? undefined
+          : keptMedia(INBOX_MEDIA_PREFIX, each.attachmentId);
+
+      if (kept !== undefined) {
+        void keptPictureSizeOf(each, kept)
+          .then((pictureSize) => {
+            if (asked.current.itemId !== itemId) return;
+            setRead((was) => withRead(was, each, kept.uri, formatBytes(kept.bytes), pictureSize));
+
+            if (kept.kind === KEPT_MEDIA.PICTURE) {
+              shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
+            }
           })
           .catch(failed);
         continue;
@@ -1014,12 +1060,22 @@ export function useThreadMedia(
 
           if (asked.current.itemId !== itemId) return;
           setRead((held) =>
-            withRead(held, each, source, answer.base64, readPictureSize(each, answer.base64)),
+            withRead(
+              held,
+              each,
+              source,
+              sizeLabel(answer.base64),
+              readPictureSize(each, answer.base64),
+            ),
           );
+
+          if (each.kind === INBOX_MEDIA.PICTURE) {
+            shown(PRODUCT_PICTURE_FROM.READ, askedAt, base64Bytes(answer.base64));
+          }
         })
         .catch(failed);
     }
-  }, [acts, itemId, media, retries, pending]);
+  }, [acts, itemId, media, retries, pending, shown]);
 
   const retry = useCallback((attachmentId: string) => {
     asked.current.ids.delete(attachmentId);
@@ -1049,7 +1105,7 @@ export function useThreadMedia(
               was,
               each,
               `data:${bytes.contentType};base64,${bytes.base64}`,
-              bytes.base64,
+              sizeLabel(bytes.base64),
               bytes.pictureSize,
             );
       }, read),

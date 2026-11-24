@@ -4,6 +4,7 @@ import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
+import { chatWorkWords } from "@repo/features/manager-chat";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
@@ -26,6 +27,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
+import {
+  BUBBLE_PADDING,
+  BUBBLE_SHARE,
+  CHAT_RUN,
+  CHAT_SIDE,
+  ChatBubble,
+  chatRunOf,
+} from "./chat-bubble.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
 import { GitHubLineCard } from "./github-line-card.js";
@@ -35,6 +44,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import {
   CopyWordsMenu,
   type HeldAct,
+  HeldMenu,
   MessageMenu,
   MessageWords,
   PictureOriginProvider,
@@ -44,7 +54,7 @@ import {
 } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { ROW_ACTION_TONE } from "./list-row.js";
-import { Markdown, Picture } from "./markdown.js";
+import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
 import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
@@ -53,13 +63,14 @@ import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, ROLE_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
   type CallStanding,
   type OriginPart,
   type SaidFile,
+  type SaidPicture,
   SHOWN_MEDIA,
   type ShownMedia,
   TRANSCRIPT_ITEM,
@@ -69,20 +80,15 @@ import {
 import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
-/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
 /** Who the reader's own line is from, as a picture's viewer names it. */
 const SENT_BY_YOU = "You";
 
+/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart, and in a Manager's chat `CHAT_RUN_GAP` twice, as Messages' do. */
 const RUN_GAP = 1;
+const CHAT_RUN_GAP = SPACE.ROW / 2;
 
 /** How far a row a fold or a group holds stands in, for each step it is held. */
 const DEPTH_INSET = 18;
-
-/** The most of its row a sent line's bubble spans, as Messages leaves the far side open. */
-const BUBBLE_SHARE = 0.82;
-
-/** How far a bubble's words stand in from its sides. */
-const BUBBLE_PADDING = SPACE.ROW + 4;
 
 /** How near its newest row, as a share of the list's height, the reader stands for a row that lands to be scrolled into view, as FlashList's chat lists keep their end. */
 const AUTOSCROLL_SHARE = 0.1;
@@ -166,12 +172,6 @@ const styles = StyleSheet.create({
   turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
-  said: {
-    maxWidth: `${BUBBLE_SHARE * 100}%`,
-    borderRadius: RADIUS.BUBBLE,
-    paddingHorizontal: BUBBLE_PADDING,
-    paddingVertical: SPACE.ROW,
-  },
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
   wrapped: { flexWrap: "wrap" },
@@ -269,7 +269,7 @@ function rowWidth(column: number, depth = 0): number {
 
 /** The widest a sent line's words stand inside its bubble, in a column of `column` points. */
 function bubbleWordsWidth(column: number): number {
-  return Math.floor(rowWidth(column) * BUBBLE_SHARE) - BUBBLE_PADDING * 2;
+  return Math.floor(rowWidth(column) * BUBBLE_SHARE) - BUBBLE_PADDING.HORIZONTAL * 2;
 }
 
 /**
@@ -799,6 +799,19 @@ function sentFileRetry(
   return retry === undefined ? undefined : () => retry(message, file.key);
 }
 
+/** A picture a sent line's words name by its marker, as its chip draws it: read as the line's other pictures are, by its bytes or its id. */
+function wordPictureOf(
+  drawing: RowDrawing,
+  picture: SaidPicture | undefined,
+): MarkdownWordPicture | undefined {
+  if (picture === undefined) return undefined;
+
+  return {
+    source: picture.url ?? saidSource(drawing, picture.pictureId),
+    onRetry: picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+  };
+}
+
 /** What reads a picture or a recording again, by its id, where the transcript offers it. */
 function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
   const retry = drawing.onRetryMedia;
@@ -835,6 +848,25 @@ function ShownMediaView({
   }
 }
 
+/** Show work, or Hide work while it stands open, where a Manager's message or its working line came of work (`workShown`); none where it came of none. */
+function workActs(
+  item: Extract<
+    TranscriptItem,
+    { kind: typeof TRANSCRIPT_ITEM.SAID | typeof TRANSCRIPT_ITEM.WORKING }
+  >,
+  drawing: RowDrawing,
+): readonly HeldAct[] {
+  if (item.workShown === undefined) return [];
+
+  return [
+    {
+      label: chatWorkWords(item.workShown),
+      symbol: GLYPH.SHOW_WORK,
+      onPress: () => drawing.onToggle(item),
+    },
+  ];
+}
+
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -857,6 +889,7 @@ function TranscriptRow({
             styles.row,
             styles.saidRow,
             item.received ? styles.received : null,
+            item.chat === true ? { paddingVertical: CHAT_RUN_GAP } : null,
             item.joinsAbove ? { paddingTop: RUN_GAP } : null,
             item.joinsBelow ? { paddingBottom: RUN_GAP } : null,
           ]}
@@ -877,7 +910,7 @@ function TranscriptRow({
               {item.sender}
             </Text>
           )}
-          {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
+          {/* Note that the pictures a line carried that its words name none of stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side; a picture its words name stands where they name it, as its chip. */}
           {/* Note that a line's pictures name who sent it and when in their viewer's bar, the reader's own as theirs. */}
           <PictureOriginProvider origin={{ by: item.sender ?? SENT_BY_YOU, at: item.at }}>
             <PictureSet
@@ -910,24 +943,30 @@ function TranscriptRow({
             <MessageMenu
               words={item.words}
               at={item.at}
-              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id.
-              link={drawing.messageLink?.(item.place.row)}
-              more={drawing.messageMore?.(item)}
+              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id; a Manager's message offers no link or rewind, as the panel's offers none, since one after its turn's first stands under its call's id, which names no message.
+              link={item.manager === true ? undefined : drawing.messageLink?.(item.place.row)}
+              more={item.manager === true ? workActs(item, drawing) : drawing.messageMore?.(item)}
               width={rowWidth(drawing.column)}
             >
               <View style={[styles.saidHeld, item.received ? styles.received : null]}>
-                <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
+                <ChatBubble
+                  side={item.received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
+                  run={chatRunOf(item.joinsAbove, item.joinsBelow)}
+                  accent={item.chat === true}
+                >
                   {/* Note that Select text selects the words in the bubble itself, as Messages does (`MessageWords`). */}
                   <MessageWords>
                     <Markdown
                       words={item.words}
-                      typed
+                      typed={item.manager !== true}
                       repository={drawing.repository}
                       onOpenLink={drawing.onOpenLink}
                       width={bubbleWordsWidth(drawing.column)}
+                      wordPictures={item.wordPictures}
+                      wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
                     />
                   </MessageWords>
-                </View>
+                </ChatBubble>
               </View>
             </MessageMenu>
           )}
@@ -952,6 +991,29 @@ function TranscriptRow({
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:
+      // Note that a Manager's chat says it works in a bubble of the Manager's, as Messages shows the other side typing, and as the panel's chat draws its working line.
+      if (item.chat === true) {
+        return (
+          <View style={[styles.row, styles.received, { paddingVertical: CHAT_RUN_GAP * 2 }]}>
+            {/* Note that a long press offers the turn under way's work, as the press beside the panel's working line does. */}
+            <HeldMenu acts={workActs(item, drawing)}>
+              <View>
+                <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+                  <Text
+                    style={{
+                      fontSize: PROSE_SIZE,
+                      color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
+                    }}
+                  >
+                    {item.words}
+                  </Text>
+                </ChatBubble>
+              </View>
+            </HeldMenu>
+          </View>
+        );
+      }
+
       // Note that the line is words alone, as the panel's Working line is, its mark left to the rows of what runs; and that an agent held for an answer says so in the attention ink, since it waits on the reader rather than working.
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>

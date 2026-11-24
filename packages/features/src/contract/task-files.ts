@@ -82,6 +82,12 @@ const taskPageVersionSchema = EffectSchema.Struct({
   version: EffectSchema.String,
 });
 
+/** One page of the plan by its id alone, read at its newest version. */
+const taskPageNewestSchema = EffectSchema.Struct({
+  ...taskInputSchema.fields,
+  page: EffectSchema.String,
+});
+
 /** What keeping a picture answers: its status beside the wire's answer. */
 const pictureKeptSchema = EffectSchema.Struct({
   status: EffectSchema.Literals(Object.values(DESCRIPTION_ATTACHMENT_STATUS)),
@@ -136,6 +142,12 @@ export const taskFilesContract = {
       }),
     )
     .input(taskPageVersionSchema)
+    .output(EffectSchema.flip(taskPageVersionAnswerSchema)),
+  /** One page's newest version, with its HTML, as a link names the page with no version. */
+  newestPage: declaredProcedure
+    .errors(NOT_FOUND)
+    .meta(openapi({ method: HTTP_METHOD.GET, path: `${TASK_PATH}/pages/{page}` }))
+    .input(taskPageNewestSchema)
     .output(EffectSchema.flip(taskPageVersionAnswerSchema)),
   /** One version of one page as a browser's frame loads it: sent on to its short-lived link on the sandbox's own site, or to the page saying pages open in the Mac app where the deployment has no sandbox. */
   pageFrame: declaredProcedure

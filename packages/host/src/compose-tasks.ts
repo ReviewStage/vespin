@@ -155,7 +155,7 @@ import { type TASKS_ACTS, TASKS_FOLLOWS } from "./contract/index.js";
 import { commentSubjectOf, descriptionCommentReads } from "./description-comment-reads.js";
 import { descriptionCommentWrites } from "./description-comment-writes.js";
 import { lateService } from "./effect/kernel.js";
-import { fixturePage } from "./fixture-stage.js";
+import { fixtureNewestPage, fixturePage } from "./fixture-stage.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { heldFetch } from "./held-fetch.js";
 import { heldTaskReads } from "./held-task-reads.js";
@@ -403,6 +403,7 @@ export type TasksClient = Pick<
   | "readRevisions"
   | "readRevision"
   | "readPageVersion"
+  | "readNewestPage"
   | "readPicture"
   | "keepPicture"
   | "startComment"
@@ -1579,6 +1580,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           view = {
             ...view,
             listStatus: TASKS_READ.READY,
+            listDrawn: true,
             live: HOST_LIVE.LIVE,
             ...(taskWorkspaces === undefined ? undefined : { taskWorkspaces }),
           };
@@ -1741,12 +1743,21 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     if (view.listStatus !== TASKS_READ.READY) {
       yield* Scope.close(taskList.scope, Exit.void);
       taskList = yield* openTaskList;
-      const stored = taskList.collections.stored();
+      const { collections, scope } = taskList;
+      const stored = collections.stored();
+
+      // Note that a list drawn from disk is said drawn whole only once the agents filling in behind its tasks are drawn too, since a place standing behind waits on it to read the list whole; one that kept nothing is drawn whole at once.
+      yield* Effect.forkIn(
+        Effect.andThen(
+          collections.drawnWhole,
+          Effect.sync(() => write({ listDrawn: true })),
+        ),
+        scope,
+      );
 
       if (stored !== undefined) {
         const { kept } = stored;
         listKeptAt = kept?.at;
-        const { collections, scope } = taskList;
 
         // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands. It is said ready only once its kept rows are drawn, which is just after it stands, so no window reads an empty list as one with no tasks; where the follow answered first, its answer said so already.
         yield* Effect.forkIn(
@@ -2677,6 +2688,28 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       );
     });
 
+  /**
+   * A page at its newest version, as a link opens it with no version, read
+   * in one round trip rather than after the task's pages name the newest;
+   * the answer names the version it read. Note that nothing is kept for
+   * it, since the newest moves, and a read of the version it named keeps
+   * its own (`pageRead`).
+   */
+  const newestPageRead = (read: {
+    readonly taskId: string;
+    readonly pageId: string;
+  }): Effect.Effect<TasksPageAnswer> =>
+    Effect.gen(function* () {
+      // A run that sends nothing reads the page its fixture stages.
+      if (!kernel.runMode.sendsNetwork) return fixtureNewestPage(read.pageId);
+
+      if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+
+      const page = yield* served(client.readNewestPage({ taskId: read.taskId }, read.pageId));
+
+      return page === undefined ? { failure: TASK_CALL_FAILURE.UNANSWERED } : { page };
+    });
+
   /** The Tasks tab's plain asks, answered as the panel's port asks them (`TASKS_ACTS`), but GitHub's connection's and the admin dashboard's (`compose-workspaces.ts`). */
   const taskActs: Omit<HostActTable<typeof TASKS_ACTS>, WorkspacesTasksAct> = {
     // The list's Try again: what is followed already stands (`open`), so it
@@ -2937,7 +2970,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           "page" in answer ? { lines: pageSourceLines(answer.page.html) } : answer,
       ),
     // The version is read as its frame reads it (`pageRead`), its HTML whole, so it reaches the client that asked alone.
-    TASKS_PAGE_HTML: pageRead,
+    TASKS_PAGE_HTML: ({ version, ...read }) =>
+      version === undefined ? newestPageRead(read) : pageRead({ ...read, version }),
     // A picture's bytes are answered to the window that asked and kept by
     // its id, which no other upload is given, so they never enter the view
     // every window is told.

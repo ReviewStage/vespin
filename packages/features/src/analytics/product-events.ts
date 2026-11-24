@@ -56,6 +56,10 @@ export const PRODUCT_EVENT = {
   REPLY_DRAWN: "reply:drawn",
   /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand, each on a rung of `productOpenMilliseconds`, its kind, and whether it was the first of its kind since launch. */
   OPEN_DRAWN: "open:drawn",
+  /** A page an agent showed, opened on the iOS app, counted once an open by how long it took to read its HTML and to draw it, each on a rung of `productOpenMilliseconds`, whether its opener named its version or it waited on the task's pages for the newest, and whether it was the first page since launch. */
+  PAGE_SHOWN: "page:shown",
+  /** A picture an agent showed, drawn on the iOS app, counted once a read by how long it took from the page asking for it to its file in hand, on a rung of `productOpenMilliseconds`, whether it came from the phone's own copy or was read through the service, its kind, and its size on a rung. */
+  PICTURE_SHOWN: "picture:shown",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -79,6 +83,8 @@ export const PRODUCT_SURFACE_EVENT = {
   APP_READY: PRODUCT_EVENT.APP_READY,
   REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
   OPEN_DRAWN: PRODUCT_EVENT.OPEN_DRAWN,
+  PAGE_SHOWN: PRODUCT_EVENT.PAGE_SHOWN,
+  PICTURE_SHOWN: PRODUCT_EVENT.PICTURE_SHOWN,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -125,6 +131,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   STARTED_SECONDS: "started_seconds",
   INBOX_SECONDS: "inbox_seconds",
   SCREENS_SECONDS: "screens_seconds",
+  ACTIVE_SECONDS: "active_seconds",
   DELIVERIES: "deliveries",
   APP_BUILD: "app_build",
   FIRST_ROWS: "first_rows",
@@ -132,6 +139,12 @@ export const PRODUCT_EVENT_PROPERTY = {
   START_MS: "start_ms",
   STAND_MS: "stand_ms",
   OPEN_ORDER: "open_order",
+  READ_MS: "read_ms",
+  SHOWN_MS: "shown_ms",
+  PAGE_VERSION: "page_version",
+  PICTURE_FROM: "picture_from",
+  PICTURE_KIND: "picture_kind",
+  PICTURE_BYTES: "picture_bytes",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -610,6 +623,61 @@ export const PRODUCT_OPEN_ORDER = {
 
 export type ProductOpenOrder = (typeof PRODUCT_OPEN_ORDER)[keyof typeof PRODUCT_OPEN_ORDER];
 
+/** Where a page opened learned its version: named by its opener, as a transcript's card or a task's list names it, or read as the newest the task's pages hold, as a link opens it. */
+export const PRODUCT_PAGE_VERSION = {
+  NAMED: "named",
+  NEWEST: "newest",
+} as const;
+
+export type ProductPageVersion = (typeof PRODUCT_PAGE_VERSION)[keyof typeof PRODUCT_PAGE_VERSION];
+
+/** Where a picture drawn came from: the copy an earlier read left on the phone, a read through the service downloaded straight into a file, or one read as its bytes. */
+export const PRODUCT_PICTURE_FROM = {
+  KEPT: "kept",
+  DOWNLOADED: "downloaded",
+  READ: "read",
+} as const;
+
+export type ProductPictureFrom = (typeof PRODUCT_PICTURE_FROM)[keyof typeof PRODUCT_PICTURE_FROM];
+
+/** Whose picture was drawn: one an agent showed, an Inbox thread's, a description's, or a comment's. */
+export const PRODUCT_PICTURE_KIND = {
+  AGENT: "agent",
+  INBOX: "inbox",
+  DESCRIPTION: "description",
+  COMMENT: "comment",
+} as const;
+
+export type ProductPictureKind = (typeof PRODUCT_PICTURE_KIND)[keyof typeof PRODUCT_PICTURE_KIND];
+
+/** The rungs a picture's size travels on, each the largest it stays under, so a small screenshot and a full-screen one are told apart and no size itself travels. */
+export const PRODUCT_PICTURE_BYTES = {
+  UNDER_100K: "under_100k",
+  UNDER_500K: "under_500k",
+  UNDER_1M: "under_1m",
+  UNDER_3M: "under_3m",
+  AT_LEAST_3M: "at_least_3m",
+} as const;
+
+export type ProductPictureBytes =
+  (typeof PRODUCT_PICTURE_BYTES)[keyof typeof PRODUCT_PICTURE_BYTES];
+
+/** Each rung under its bound in bytes, the smallest first. */
+const PRODUCT_PICTURE_BYTES_LADDER: readonly (readonly [number, ProductPictureBytes])[] = [
+  [100 * 1024, PRODUCT_PICTURE_BYTES.UNDER_100K],
+  [500 * 1024, PRODUCT_PICTURE_BYTES.UNDER_500K],
+  [1024 * 1024, PRODUCT_PICTURE_BYTES.UNDER_1M],
+  [3 * 1024 * 1024, PRODUCT_PICTURE_BYTES.UNDER_3M],
+];
+
+/** The rung a picture of `bytes` stands on; one past the last bound, or a size that is no number, the last. */
+export function productPictureBytes(bytes: number): ProductPictureBytes {
+  return (
+    PRODUCT_PICTURE_BYTES_LADDER.find(([bound]) => bytes < bound)?.[1] ??
+    PRODUCT_PICTURE_BYTES.AT_LEAST_3M
+  );
+}
+
 interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: string;
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: ProductSessionCountBucket;
@@ -640,6 +708,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.STARTED_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.INBOX_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: ProductLaunchSeconds;
+  [PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.DELIVERIES]: ProductSessionCountBucket;
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
@@ -647,6 +716,12 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.START_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.STAND_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: ProductOpenOrder;
+  [PRODUCT_EVENT_PROPERTY.READ_MS]: ProductOpenMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.SHOWN_MS]: ProductOpenMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: ProductPageVersion;
+  [PRODUCT_EVENT_PROPERTY.PICTURE_FROM]: ProductPictureFrom;
+  [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: ProductPictureKind;
+  [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: ProductPictureBytes;
 }
 
 /**
@@ -666,6 +741,8 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.DRAWN_MS
   | typeof PRODUCT_EVENT_PROPERTY.START_MS
   | typeof PRODUCT_EVENT_PROPERTY.STAND_MS
+  | typeof PRODUCT_EVENT_PROPERTY.READ_MS
+  | typeof PRODUCT_EVENT_PROPERTY.SHOWN_MS
   | typeof PRODUCT_EVENT_PROPERTY.STANDING_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS
@@ -673,6 +750,7 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.STARTED_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.INBOX_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS
+  | typeof PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.DELIVERIES
   | typeof PRODUCT_EVENT_PROPERTY.APP_BUILD
 >;
@@ -697,6 +775,10 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
   [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: Object.values(PRODUCT_OPEN_ORDER),
+  [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: Object.values(PRODUCT_PAGE_VERSION),
+  [PRODUCT_EVENT_PROPERTY.PICTURE_FROM]: Object.values(PRODUCT_PICTURE_FROM),
+  [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: Object.values(PRODUCT_PICTURE_KIND),
+  [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: Object.values(PRODUCT_PICTURE_BYTES),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -749,6 +831,17 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.STAND_MS,
     PRODUCT_EVENT_PROPERTY.OPEN_ORDER,
   ],
+  [PRODUCT_EVENT.PAGE_SHOWN]: [
+    PRODUCT_EVENT_PROPERTY.READ_MS,
+    PRODUCT_EVENT_PROPERTY.SHOWN_MS,
+    PRODUCT_EVENT_PROPERTY.PAGE_VERSION,
+    PRODUCT_EVENT_PROPERTY.OPEN_ORDER,
+  ],
+  [PRODUCT_EVENT.PICTURE_SHOWN]: [
+    PRODUCT_EVENT_PROPERTY.READ_MS,
+    PRODUCT_EVENT_PROPERTY.PICTURE_FROM,
+    PRODUCT_EVENT_PROPERTY.PICTURE_KIND,
+  ],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 
 /**
@@ -767,12 +860,18 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.STARTED_SECONDS,
     PRODUCT_EVENT_PROPERTY.INBOX_SECONDS,
     PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS,
+    PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS,
     PRODUCT_EVENT_PROPERTY.DELIVERIES,
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
     PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
     PRODUCT_EVENT_PROPERTY.READY_AFTER,
   ],
   [PRODUCT_EVENT.OPEN_DRAWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
+  [PRODUCT_EVENT.PAGE_SHOWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
+  [PRODUCT_EVENT.PICTURE_SHOWN]: [
+    PRODUCT_EVENT_PROPERTY.PICTURE_BYTES,
+    PRODUCT_EVENT_PROPERTY.APP_BUILD,
+  ],
 } as const satisfies { readonly [Name in ProductEventName]?: readonly ProductEventProperty[] };
 
 /** The properties `Name` may leave off; none for an event with no entry. */
@@ -969,6 +1068,8 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: drawnReader,
   [PRODUCT_EVENT_PROPERTY.START_MS]: openReader,
   [PRODUCT_EVENT_PROPERTY.STAND_MS]: openReader,
+  [PRODUCT_EVENT_PROPERTY.READ_MS]: openReader,
+  [PRODUCT_EVENT_PROPERTY.SHOWN_MS]: openReader,
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS]: launchReader,
@@ -976,6 +1077,7 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.STARTED_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.INBOX_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: launchReader,
+  [PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.DELIVERIES]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: buildNumberReader,
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: experimentScopeReader,

@@ -1,7 +1,10 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { AGENT_KIND } from "@repo/features/agent-wire";
+import { holderName } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { taskSummaryOf } from "@repo/features/task-list-live";
+import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
+import { listedAgentOf, taskSummaryOf } from "@repo/features/task-list-live";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { Context } from "effect";
 import { describe, expect, it } from "vitest";
@@ -16,7 +19,7 @@ import {
 } from "./app-state-reads.js";
 import { AppStateStore, initialAppState } from "./client/app-state-store.js";
 import { runModeFor } from "./run-mode.js";
-import { planListRow } from "./testing/task-list-rows.js";
+import { agentListRow, planListRow } from "./testing/task-list-rows.js";
 
 describe("shareAppState", () => {
   it("answers a reader's changed slice with the document's own nodes, not copies of them", () => {
@@ -163,7 +166,9 @@ describe("selectInboxHoldings", () => {
 
   /** The tasks the Inbox groups `document`'s rows under, with none of the task list's own drawn. */
   const groupedUnder = (document: AppStateSnapshot) =>
-    inboxGroupsIn(selectInboxHoldings(document), [], undefined).map(({ holder }) => holder.task.id);
+    inboxGroupsIn(selectInboxHoldings(document), [], undefined, []).map(({ holder }) =>
+      "task" in holder ? holder.task.id : holder.agent.id,
+    );
 
   it("groups the kept rows under the tasks kept beside them while the task list is read, and under the list's own once it is drawn", () => {
     const kept = documentWith(byTask, true, [], ["older", "newer"]);
@@ -178,5 +183,45 @@ describe("selectInboxHoldings", () => {
 
     expect(feedOf(["older", "newer"])).toBe(INBOX_FEED.ANSWERED);
     expect(feedOf(["older"])).toBe(INBOX_FEED.READING);
+  });
+
+  it("groups a Manager's threads, which stand on no task, under the Manager as the list names it, in its workspace alone", () => {
+    const manager = listedAgentOf(
+      {
+        ...agentListRow("", 1),
+        taskId: null,
+        kind: AGENT_KIND.MANAGER,
+        title: "Release manager",
+        face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.BLUE },
+      },
+      true,
+      undefined,
+    );
+
+    const launched = documentWith(byTask, false, [{ taskId: "older" }]);
+
+    const document: AppStateSnapshot = {
+      ...launched,
+      [LIVE_READ.INBOX_ITEMS]: {
+        rows: {
+          [INBOX_SCOPE_KIND.TASK]: byTask,
+          agents: { [manager.id]: [thread("cut-the-release", 400)] },
+        },
+      },
+    };
+
+    const older = taskSummaryOf(planListRow("older", "Older"), undefined);
+
+    const grouped = (workspaceId: string | undefined) =>
+      inboxGroupsIn(selectInboxHoldings(document), [older], workspaceId, [manager]).map(
+        ({ holder, items }) => [holderName(holder), items.map(({ id }) => id)],
+      );
+
+    expect(grouped(undefined)).toEqual([
+      ["Older", ["a"]],
+      ["Release manager", ["cut-the-release"]],
+    ]);
+    expect(grouped(manager.workspaceId)).toContainEqual(["Release manager", ["cut-the-release"]]);
+    expect(grouped("another-workspace")).toEqual([]);
   });
 });

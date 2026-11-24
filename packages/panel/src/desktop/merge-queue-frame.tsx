@@ -11,6 +11,7 @@
  * loads draws through the same boxes.
  */
 
+import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import {
   GROUP_ACTIONS,
   GROUP_LOOK,
@@ -30,7 +31,7 @@ import {
 import type { ReactNode } from "react";
 
 /** What the page says while it reads the queues. */
-const READING = "Reading the merge queues…";
+const READING = MERGE_QUEUE_PAGE_WORDS.READING;
 
 /** The placeholder repository's picture, at a glyph's size. */
 const SKELETON_MARK = "16px";

@@ -14,18 +14,25 @@ import type { SettingRefusal } from "./row-write.js";
  *
  * The two grants macOS holds against the app, Screen Recording to see an
  * app's window and Accessibility to click and type in it, each say whether
- * they stand; one that does not offers Allow, which raises macOS's own
- * prompt, as only macOS may grant them. They are read again as the window
- * comes back to the front, since the developer grants them in System
- * Settings. The switch that lets agents use apps, and the apps they use
- * without asking, stand under this Mac on Settings › Machines.
+ * they stand; one that does not offers Allow, which opens its System
+ * Settings pane beside a panel holding the app to drag into the list, as only
+ * macOS may grant them. They are read every second while shown, since the
+ * developer grants and takes them back in System Settings. The switch that
+ * lets agents use apps, and the apps they use without asking, stand under
+ * this Mac on Settings › Machines.
  */
 
-/** Computer use on this Mac, read through the host's helper, read again as the window comes back. */
+/**
+ * Computer use on this Mac, read through the host's helper every second
+ * while it is shown. Note that it is polled rather than read again on focus,
+ * because the developer grants and takes back these in System Settings, and
+ * a desktop window that another app covers stays visible, so the focus
+ * refetch, which follows the document's visibility, never fires.
+ */
 const computerUseStatusQuery = queryOptions({
   queryKey: [QUERY_ROOT.COMPUTER_USE_STATUS],
   queryFn: () => askAct(ACT_KIND.COMPUTER_USE_STATUS, {}),
-  refetchOnWindowFocus: true,
+  refetchInterval: 1000,
 });
 
 /** What each grant lets agents do, and what they cannot do without it. */
@@ -51,10 +58,10 @@ const COMPUTER_USE_GRANTS = [
 
 /**
  * The two grants as This Mac's Permissions lists them, each as every
- * permission reads (`PermissionRow`): Allow… raises macOS's own prompt or
- * pane for the first one still missing, read again as it answers and as the
- * window comes back to the front, and an ask that never reached macOS says
- * why under that row.
+ * permission reads (`PermissionRow`): Allow… opens the pane, and the panel
+ * to drag the app from, for the first one still missing, read again as it
+ * answers and every second while shown, and an ask that never reached macOS
+ * says why under that row.
  */
 export function ComputerUsePermissionRows(): React.JSX.Element | null {
   const queries = useQueryClient();

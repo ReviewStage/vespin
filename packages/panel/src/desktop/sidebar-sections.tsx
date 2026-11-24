@@ -59,7 +59,7 @@ import {
   useLeaving,
   useMenu,
 } from "@repo/ui";
-import { FolderPlusIcon, MailOpenIcon, SmilePlusIcon } from "@repo/ui/icons";
+import { FolderPlusIcon, GLYPH, MailOpenIcon, SmilePlusIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
@@ -253,6 +253,7 @@ function sectionStands(sections: TaskSections, sectionId: string): boolean {
 const SECTION_UNDO = {
   DELETE: {
     words: SECTION_DELETED,
+    glyph: GLYPH.DELETE,
     unmasked: () => true,
     kind: ACT_KIND.TASKS_WRITE_SECTION,
     read: (before, section) => ({ section, before }),
@@ -273,6 +274,7 @@ const SECTION_UNDO = {
   >,
   MOVE: {
     words: ({ taskIds, title }) => movedNote(taskIds.length, title),
+    glyph: GLYPH.MOVE,
     // Note that a move out of every section names no section, so its words are all the app's own.
     unmasked: ({ title }) => title === null,
     kind: ACT_KIND.TASKS_WRITE_SECTION,

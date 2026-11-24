@@ -21,6 +21,7 @@ import { Clock, Effect, Predicate, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { type AgentCall, agentToolRejected, callerAgent } from "../agent-tools.js";
+import { MANAGER_THREAD_ASKS } from "./inbox.js";
 import { readNativeTurnHanded } from "./turn-message.js";
 
 /** The most characters one message may spell. */
@@ -44,21 +45,36 @@ const SEND_TO_USER_INPUT = Schema.Struct({
 
 const readInput = Schema.decodeUnknownResult(SEND_TO_USER_INPUT);
 
+/** What `send_to_user` says of the chat, whether or not the Manager posts threads. */
+const SEND_TO_USER_WORDS =
+  "Send a message to your chat, the only way your words reach people: your page shows people's " +
+  `messages, these, and the files you show with ${AGENT_TOOL.SHOW_MEDIA} alone, never your other text or tool calls. ` +
+  "Everyone who can open you sees " +
+  "the same chat, so write to all of them, and each of them sees your row marked unread until they " +
+  "open it. Call it to answer someone, to report what is done, or " +
+  "to say what you are waiting on; a turn that sends nothing shows nothing. Write as a coworker " +
+  "would on Slack: several short messages rather than one long one, one point to each, concise " +
+  "and straight to the point, with no greeting, filler, or recap, and no headers or long lists " +
+  "unless what you say needs them.";
+
 /** `send_to_user` as a Manager is offered it: its name, its words, and its input. */
 export const SEND_TO_USER_TOOL = {
   name: AGENT_TOOL.SEND_TO_USER,
-  description:
-    "Send a message to your chat, the only way your words reach people: your page shows people's " +
-    `messages, these, and the files you show with ${AGENT_TOOL.SHOW_MEDIA} alone, never your other text or tool calls. ` +
-    "Everyone who can open you sees " +
-    "the same chat, so write to all of them, and each of them sees your row marked unread until they " +
-    "open it. Call it to answer someone, to report what is done, or " +
-    "to say what you are waiting on; a turn that sends nothing shows nothing. Write as a coworker " +
-    "would on Slack: several short messages rather than one long one, one point to each, concise " +
-    "and straight to the point, with no greeting, filler, or recap, and no headers or long lists " +
-    "unless what you say needs them. For a decision with options or a to-do, post a thread instead.",
+  description: `${SEND_TO_USER_WORDS} For ${MANAGER_THREAD_ASKS}, post a thread instead.`,
   inputSchema: SEND_TO_USER_INPUT,
 } as const;
+
+/**
+ * `send_to_user` in the words of the Manager's standing: the thread it
+ * hands a decision or a to-do named only where the member its threads would
+ * land with keeps an Inbox, which offers it `post_thread`, so a Manager with
+ * none is told of no thread.
+ */
+export function sendToUserToolOf(on: { readonly inboxOn: boolean }) {
+  if (on.inboxOn) return SEND_TO_USER_TOOL;
+
+  return { ...SEND_TO_USER_TOOL, description: SEND_TO_USER_WORDS };
+}
 
 /** The call's input read, its refusal naming the one thing wrong. */
 function readSend(input: UnparsedWireValue): Result.Result<void, string> {

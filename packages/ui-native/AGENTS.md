@@ -42,7 +42,8 @@ builds a control of its own.
   the agent page's own `Composer`, docked on the keyboard, with the + and
   the `MenuChip` capsule menus in a row under its field inside the same
   glass, so the keyboard never covers them, each capsule led by the
-  panel's glyph or a model's harness mark),
+  panel's glyph, but the model's, which is its words alone, as the desktop's
+  model chip stands),
   `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike), `ScriptRow` (a script read whole in the monospaced
   face),
@@ -307,16 +308,22 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   so only the button under a finger or the pointer reacts, and no button
   is handed a hover effect: the system draws its own on each style, where
   an added highlight drew a second platter on iPadOS 26.
-- **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
-  unread dot in the margin, at 9 pt the strongest mark a row carries as
-  Mail's is, a 16 pt leading mark in a 20 pt column (the
-  status ring, or the ask's glyph on an agent's own thread), the words from
-  `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
-  words. An Inbox thread stands roomier, as Mail's message rows do
-  (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
-  its lines), while a task's row keeps the list's tighter inset and draws no
-  dot, its ring standing at the list's edge (`ROW_INSET.PLAIN`) where a
-  dotted row's ring stands past the dot's margin, so the two line up. A row a
+- **Rows** stand plain and edge to edge on `GROUND`, never as cards, laid
+  out as Mail's Inbox, measured from Apple's own screenshot of it, from the
+  system's layout margin (`useRowInset`: 16 pt in an iPhone's window, 20 pt
+  in a Plus or Pro Max's, on its side, and on an iPad, as UIKit's stand):
+  the unread dot in the leading margin, its trailing edge on it, at 9 pt the
+  strongest mark a row carries as Mail's is, then Mail's 8 pt gutter
+  (`ROW_INSET.GUTTER`), a 16 pt leading mark in a 20 pt column (the status
+  ring, or the ask's glyph on an agent's own thread), the words from
+  `inset.text`, a hairline in `CHIP_EDGE` that starts under the words, and
+  the row's end on the trailing margin; a section's header starts where the
+  marks do. An Inbox thread stands as Mail's message rows do, its three
+  lines in Mail's type 8 pt from its top and bottom
+  (`ROW_INSET.THREAD_VERTICAL`, `THREAD_LINE_GAP` between its lines), while
+  a task's row keeps one line 44 pt tall and draws no dot, its ring
+  standing where a dotted row's stands past the dot and the gutter
+  (`inset.lead`), so the two line up. A row a
   split view's list keeps selected stands on a rounded `SELECTED` fill set in
   from the column's edges (`ROW_INSET.FILL`), its hairlines stepping aside, as
   Mail's selected message does; its words don't move.
@@ -331,7 +338,10 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   count in the title's place with Done, and stands the acts in the bar at the
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
-  finished of all as `2/5` (`progress`); a `foldable` one folds in place on
+  finished of all as `2/5` (`progress`), and in a plain list pin under the
+  bar as the system's do, standing in the list's automatic top scroll edge
+  effect (the opaque edge iOS draws under a pinned header, attached to the
+  bar) on no ground of ours; a `foldable` one folds in place on
   a press, its chevron on the left, its rows easing away and back; one given a `glyph` leads its title
   with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
   owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,

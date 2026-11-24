@@ -38,6 +38,7 @@ export function useStartingAgent(
     ...agentActor(agent, agentName(agent, models)),
     agentId: agent.id,
     ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
+    ...(agent.face === undefined ? undefined : { face: agent.face }),
   };
 
   const onOpen =

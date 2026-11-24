@@ -18,7 +18,7 @@ import { RowFrame, RowHead } from "./list-row.js";
 import { UnreadDot } from "./marks.js";
 import { lineCount } from "./pull-request-card.js";
 import { STATUS_TONE, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The tone each letter is inked in: green for a file added, red for one deleted, purple for one moved, and the working blue for one changed in place, as GitHub and an editor's source control color them. */
@@ -104,7 +104,7 @@ export function ChangedFileRow({
     ) : (
       <VStack alignment="leading" spacing={2}>
         {head}
-        <HStack spacing={SPACE.TIGHT}>
+        <HStack spacing={ROW_INSET.GUTTER}>
           <UnreadDot unread={false} />
           <HStack spacing={SPACE.ROW}>
             <HStack modifiers={[frame({ width: leadWidth })]}>{null}</HStack>

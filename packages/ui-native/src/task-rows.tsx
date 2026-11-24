@@ -56,6 +56,7 @@ import type { RowQuestion } from "./asks.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { useRowInset } from "./layout-margin.js";
 import {
   FoldChevron,
   type FoldWords,
@@ -154,9 +155,9 @@ function RowLine({
 }) {
   const stacked = useAccessibilitySize();
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  // Note that the line starts where the title's words do: past the unread dot and the lead's column, each as it grows with the reader's text, and past whatever else leads the title.
+  // Note that the line starts where the title's words do: past the unread dot, its gutter, and the lead's column, each mark as it grows with the reader's text, and past whatever else leads the title.
   const dot = useScaledSize(MARK_SIZE.UNREAD);
-  const inset = padding({ leading: dot + SPACE.TIGHT + lead + SPACE.ROW + past });
+  const inset = padding({ leading: dot + ROW_INSET.GUTTER + lead + SPACE.ROW + past });
 
   if (stacked) {
     return (
@@ -549,6 +550,7 @@ export function RelationRow({
   question,
 }: RelationRowProps) {
   const colors = useColors();
+  const inset = useRowInset();
 
   const row: ReactElement = (
     <RowHead
@@ -558,7 +560,7 @@ export function RelationRow({
         status === undefined ? (
           <ToneGlyph glyph={GLYPH.TASK} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} />
         ) : (
-          <StatusRing status={status} menu={statusMenu} edge={ROW_INSET.PLAIN} />
+          <StatusRing status={status} menu={statusMenu} edge={inset.lead} />
         )
       }
       title={name}
@@ -628,9 +630,10 @@ export function LinkRow({
   menu,
 }: LinkRowProps) {
   const colors = useColors();
+  const inset = useRowInset();
   const ink = linkInk(colors, tone);
   // Note that a held row stands its place in the list on the frame around its menu, as `RowFrame` does, since the menu wraps the button.
-  const placed = menu === undefined ? rowPlacement(colors) : [];
+  const placed = menu === undefined ? rowPlacement(colors, inset) : [];
 
   const button = (
     <SwiftUIButton
@@ -661,7 +664,7 @@ export function LinkRow({
   if (menu === undefined) return button;
 
   return (
-    <HStack modifiers={rowPlacement(colors)}>
+    <HStack modifiers={rowPlacement(colors, inset)}>
       <LongPressMenu groups={menu}>{button}</LongPressMenu>
     </HStack>
   );
@@ -737,10 +740,11 @@ export function VersionRow({
   menu,
 }: VersionRowProps) {
   const colors = useColors();
+  const inset = useRowInset();
   const said = current ? `${VERSION_HISTORY_WORDS.CURRENT} · ${summary}` : summary;
 
   const placed = [
-    ...rowPlacement(colors),
+    ...rowPlacement(colors, inset),
     // Note that a headless plain list draws a hairline over its first row, which iOS's own plain lists leave out.
     ...(first ? [listRowSeparator("hidden", "top")] : []),
   ];
@@ -807,11 +811,12 @@ type FailedReadRowProps = {
  */
 export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
   const colors = useColors();
+  const inset = useRowInset();
 
   return (
-    <HStack spacing={SPACE.ROW} modifiers={rowPlacement(colors)}>
-      {/* Note that the line steps past the unread dot's margin, so its glyph stands where a row's lead mark does. */}
-      <HStack modifiers={[padding({ leading: MARK_SIZE.DOT + SPACE.TIGHT })]}>
+    <HStack spacing={SPACE.ROW} modifiers={rowPlacement(colors, inset)}>
+      {/* Note that the line steps past the unread dot and its gutter, so its glyph stands where a row's lead mark does. */}
+      <HStack modifiers={[padding({ leading: MARK_SIZE.UNREAD + ROW_INSET.GUTTER })]}>
         <ProblemLine text={label} />
       </HStack>
       <Spacer />

@@ -22,16 +22,9 @@ const computerPermissionsSchema = EffectSchema.Struct({
   accessibility: EffectSchema.Boolean,
 });
 
-/** Computer use on this Mac as Settings shows it: its grants, and each app allowed without asking by its bundle id, its name, and its icon as a 64px PNG. */
+/** Computer use on this Mac as Settings shows it: its grants, read every second while shown. */
 const computerUseStatusSchema = EffectSchema.Struct({
   permissions: computerPermissionsSchema,
-  apps: EffectSchema.Array(
-    EffectSchema.Struct({
-      bundleId: EffectSchema.String,
-      name: EffectSchema.String,
-      iconPng: EffectSchema.optionalKey(EffectSchema.String),
-    }),
-  ),
 });
 
 export type ComputerUseStatus = typeof computerUseStatusSchema.Type;

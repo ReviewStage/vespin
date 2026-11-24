@@ -12,7 +12,7 @@
  * into that list, so a finished or older task is found here too.
  */
 
-import { INBOX_SHOW, type InboxListed } from "@repo/features/inbox-list-model";
+import { INBOX_SHOW, type InboxAnyHolder, type InboxListed } from "@repo/features/inbox-list-model";
 import {
   agentSearchSubject,
   inboxSearchSubject,
@@ -34,6 +34,7 @@ import {
   useListedTasks,
   useTaskListCollections,
   useTaskListRows,
+  useWholeListRead,
 } from "../host/host-provider.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxListing } from "../inbox/use-inbox.js";
@@ -60,7 +61,7 @@ function selectListStatus(state: AppStateSnapshot): TasksRead {
 /** What a query finds: each kind's rows best first, the Tasks listing their rows are drawn and acted on through, and the reader the Inbox's rows are read for. */
 export interface SearchFound {
   readonly tasks: readonly TaskSummary[];
-  readonly inbox: readonly InboxListed[];
+  readonly inbox: readonly InboxListed<InboxAnyHolder>[];
   readonly agents: readonly TaskAgentLine[];
   readonly listing: ReadListing;
   readonly readerId: string | undefined;
@@ -68,7 +69,7 @@ export interface SearchFound {
   readonly current: boolean;
   /** Whether the Inbox's first read is still out, so an Inbox item it would find may not be held yet. */
   readonly inboxReading: boolean;
-  /** Whether the task list, which holds the tasks and the agents on them, is not yet read, or the service is still searched for the tasks past it, so a task or an agent it would find may not be held yet. */
+  /** Whether the task list, which holds the tasks and the agents on them, is not yet read, here or by the host, or the service is still searched for the tasks past it, so a task or an agent it would find may not be held yet. */
   readonly tasksReading: boolean;
   /** Every task the list holds, by its id, which an agent found is named by. */
   readonly tasksById: ReadonlyMap<string, TaskSummary>;
@@ -87,9 +88,10 @@ export function useSearchFound(typed: string): SearchFound {
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: query });
   const inboxShown = useInboxShown();
   const collections = useTaskListCollections();
-  const listedTasks = useListedTasks();
-  const listedAgents = useListedAgents();
-  const pullRequests = useTaskListRows(collections.agentPullRequests);
+  const reading = useWholeListRead();
+  const listedTasks = useListedTasks(reading);
+  const listedAgents = useListedAgents(reading);
+  const pullRequests = useTaskListRows(collections.agentPullRequests, reading);
   const { data: listStatus } = useQuery({ ...appStateQuery, select: selectListStatus });
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
@@ -137,7 +139,10 @@ export function useSearchFound(typed: string): SearchFound {
 
   // Note that a task or agent found past the list held comes only with the service's search, and one on a list not yet read with its first read.
   const tasksReading =
-    listStatus === undefined || TASKS_STILL_READING.has(listStatus) || listing.searching;
+    !reading ||
+    listStatus === undefined ||
+    TASKS_STILL_READING.has(listStatus) ||
+    listing.searching;
 
   // Note that what the rows are read through and whether the finding has caught up are joined after the ranking, so neither a key typed nor a search answered ranks again.
   return useMemo(
@@ -154,7 +159,7 @@ export function useSearchFound(typed: string): SearchFound {
 }
 
 /** A row Search's Recent lists: a task, an Inbox thread, or an agent's line. */
-export type SearchRecentRow = RecentRow<TaskSummary, InboxListed, TaskAgentLine>;
+export type SearchRecentRow = RecentRow<TaskSummary, InboxListed<InboxAnyHolder>, TaskAgentLine>;
 
 /** What Search lists before anything is typed: the chosen workspace's openings its lists still hold, newest first, and what their rows are drawn and acted on through. */
 export interface SearchRecent {
@@ -177,9 +182,10 @@ export function useSearchRecent(): SearchRecent {
   const listing = useTasksListing("");
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: "" });
   const inboxShown = useInboxShown();
-  const listedTasks = useListedTasks();
-  const listedAgents = useListedAgents();
-  const pullRequests = useTaskListRows(useTaskListCollections().agentPullRequests);
+  const reading = useWholeListRead();
+  const listedTasks = useListedTasks(reading);
+  const listedAgents = useListedAgents(reading);
+  const pullRequests = useTaskListRows(useTaskListCollections().agentPullRequests, reading);
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
 
