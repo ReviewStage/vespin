@@ -17,6 +17,7 @@ import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHidden,
+  accessibilityIdentifier,
   accessibilityLabel,
   accessibilityRemoveTraits,
   accessibilityValue,
@@ -136,6 +137,14 @@ const TITLE_LOOK = {
   PLAIN: "plain",
   MARKED: "marked",
 } as const;
+
+/** The ids a flow finds a row by, one for each kind of row, beside the row's own words. */
+const ROW_TEST_ID = {
+  THREAD: "inbox-row",
+  TASK: "task-row",
+} as const;
+
+type RowTestId = (typeof ROW_TEST_ID)[keyof typeof ROW_TEST_ID];
 
 /** What parts the pieces of what a row is heard as, as VoiceOver pauses between a label's phrases. */
 const HEARD_PART = ", ";
@@ -559,9 +568,12 @@ export function RowFrame({
   indent,
   dot,
   now,
+  testId,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
+  /** What a flow finds the row by, its kind's id (`ROW_TEST_ID`), beside its words, so it never matches the same words elsewhere on screen. */
+  readonly testId?: RowTestId | undefined;
   /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
   readonly vertical?: number | undefined;
   /** How far past the list's text column the row's words start, where it stands in deeper, a second mark leads it, or its lead grows, so its hairline starts under them. */
@@ -639,6 +651,7 @@ export function RowFrame({
   // Note that a heard row is one element whose children's own acts are left out, the swipes' and the menu's, which VoiceOver listed twice and each submenu's items with no verb; its Actions are read once from its menu's tree instead (`rowHeard`), and Select mode offers none, as it offers no long press.
   const frameModifiers = [
     tag(id),
+    ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
     ...rowPlacement(colors, inset, {
       selected,
       vertical,
@@ -1075,6 +1088,7 @@ export function ListRow(props: ListRowProps) {
     <RowFrame
       {...props}
       id={id}
+      testId={ROW_TEST_ID.THREAD}
       row={row}
       heard={props.heard ?? threadHeard(props, now)}
       vertical={ROW_INSET.THREAD_VERTICAL}
@@ -1580,6 +1594,7 @@ export function TaskRow(props: TaskRowProps) {
     <RowFrame
       {...props}
       id={id}
+      testId={ROW_TEST_ID.TASK}
       row={row}
       indent={indent}
       dot={false}
