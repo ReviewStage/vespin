@@ -1,0 +1,18 @@
+pinned to f7b899f4ee
+== bundle PJjland4 base f7b899f4ee
+  built f7b899f4ee base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-large-land-up: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+iphone-light-large-land-down: fails 0 shots 1 
+iphone-light-large-port-down: fails 0 shots 1 
+iphone-light-large-port-up: fails 0 shots 1 
+iphone-light-ax3: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-land-up: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+iphone-light-ax3-land-down: fails 0 shots 1 
+iphone-light-ax3-port-down: fails 0 shots 1 
+iphone-light-ax3-port-up: fails 0 shots 1 
+iphone-light-ax3-capsule-row: fails 1 shots 1 Assert that "ada/relay" is visible... FAILED
+iphone-light-ax3-mention-list: fails 1 shots 1 Assert that id: composer-field is visible... FAILED
