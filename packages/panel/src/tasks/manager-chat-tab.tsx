@@ -57,25 +57,21 @@ import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import {
   ChannelMessage,
-  ChannelSplit,
   Disclosure,
   DisclosureBody,
   DisclosureSummary,
   GlyphSlot,
-  TEXT_BUTTON_TONE,
-  TEXT_TONE,
-  TEXT_VARIANT,
-  Text,
-  TextButton,
+  ThreadRule,
   TIME_LOOK,
   Time,
 } from "@repo/ui";
 import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
+import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
-import { Fragment, type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
@@ -98,7 +94,8 @@ import {
   useAgentApprovals,
   useApprovingSend,
 } from "./agent-approvals.js";
-import { useAgentBox } from "./agent-box.js";
+import { type AgentBox, useAgentBox } from "./agent-box.js";
+import { BUTTON, type ComposerWords } from "./agent-composer.js";
 import { AgentComposerDock, boxTakesWords } from "./agent-composer-dock.js";
 import { AgentEndRow } from "./agent-end-row.js";
 import { useCallRoute } from "./agent-machines.js";
@@ -127,7 +124,12 @@ import { type ChatWorkToggle, WorkingWorkAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { EditComposer } from "./edit-composer.js";
 import { useManagerChatLooks } from "./manager-chat-looks.js";
-import { ManagerThreadPane, ThreadReplyAction, ThreadSummary } from "./manager-chat-threads.js";
+import {
+  THREAD_WORDS,
+  ThreadReplyAction,
+  ThreadSummary,
+  useThreadDoors,
+} from "./manager-chat-threads.js";
 import { useMoveToCloud } from "./move-agent.js";
 import { ReplyDoorProvider, ReplyToSelection, useBoxReplyDoor } from "./reply-to-selection.js";
 import { RewindProvider, useMessageEdit } from "./rewind-action.js";
@@ -160,19 +162,18 @@ interface ChatDoors {
   readonly delegation: DelegationDoors;
   /** The transcript's lines by their ids, which a person's message opens for writing again by its line (`lineId`). */
   readonly lines: ReadonlyMap<string, AgentTranscriptMessage>;
-  /** The chat's threads, which its rows open; none in a thread's own pane, whose rows open no thread. */
+  /** The chat's threads, which its rows open; none in a thread's own tab, whose rows open no thread, nor where nothing beside the chat shows a thread. */
   readonly thread?: ChatThreadDoors | undefined;
 }
 
-/** The chat's threads as its rows read them: each root's replies by the root's id, the thread open in the pane, and the press that opens one. */
+/** The chat's threads as its rows read them: each root's replies by the root's id, the thread its page's side panel shows, and the press that opens one there. */
 interface ChatThreadDoors {
   readonly replies: ReadonlyMap<string, readonly ManagerChatLine[]>;
   readonly open: string | undefined;
   readonly onOpen: (root: string) => void;
 }
 
-/** What a row offers of its thread: Reply in thread beside its Copy, and the summary of its replies under it; nothing in a thread's pane. A reply posted to the chat too opens the thread it stands in. */
-/** What a row draws of its thread: its press beside its Copy, and its summary under its words. */
+/** What a row offers of its thread: Reply in thread beside its Copy, and the summary of its replies under it; nothing in a thread's tab. A reply posted to the chat too opens the thread it stands in. */
 interface RowThread {
   readonly action: ReactNode;
   readonly summary: ReactNode;
@@ -447,12 +448,9 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
 function SendingLine({
   line,
   readerId,
-  recover,
 }: {
   line: SentLine;
   readerId: string | undefined;
-  /** A refused reply's own way back, where the box's marks hold none of it: a thread's, which its pane sends apart from the box. */
-  recover?: SendingRecovery | undefined;
 }): ReactNode {
   const refused = line.state !== SENT_LINE_STATE.PENDING;
   const { members } = useMemberDirectory();
@@ -469,23 +467,7 @@ function SendingLine({
         avatar={<ActorMark actor={reader} size={ACTOR_SIZE.CARD} />}
         name={name}
         at={refused ? sentTime(line.sentAt) : undefined}
-        under={
-          refused && recover !== undefined ? (
-            <span className="flex items-center gap-ui-8" data-thread-refused="">
-              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.DANGER}>
-                {NOT_SENT_WORDS}
-              </Text>
-              <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={recover.onRetry}>
-                {RETRY_WORDS}
-              </TextButton>
-              <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={recover.onDelete}>
-                {DELETE_WORDS}
-              </TextButton>
-            </span>
-          ) : refused ? (
-            <UndeliveredMark messageId={line.id} />
-          ) : undefined
-        }
+        under={refused ? <UndeliveredMark messageId={line.id} /> : undefined}
       >
         {files.length === 0 ? null : <KeptFileChips files={files} sending={!refused} />}
         <TranscriptWords text={line.text} />
@@ -570,21 +552,26 @@ function sendingLinesOf(
   });
 }
 
-/** What a row of the chat's log draws: the Manager's greeting, a message of the chat, or one of the reader's on its way. */
+/** What a row of the chat's log, or of a thread's, draws: the Manager's greeting, a message of the chat, the rule counting a thread's replies, or one of the reader's on its way. */
 const CHAT_ROW = {
   GREETING: "greeting",
   MESSAGE: "message",
+  RULE: "rule",
   SENDING: "sending",
 } as const;
 
-/** One row of the chat's log, under the key the log keeps it by. */
+/** One row of the chat's log, or of a thread's, under the key the log keeps it by. */
 type ChatRow =
   | { readonly kind: typeof CHAT_ROW.GREETING; readonly key: string; readonly words: string }
   | { readonly kind: typeof CHAT_ROW.MESSAGE; readonly key: string; readonly line: ManagerChatLine }
+  | { readonly kind: typeof CHAT_ROW.RULE; readonly key: string; readonly count: number }
   | { readonly kind: typeof CHAT_ROW.SENDING; readonly key: string; readonly line: SentLine };
 
 /** The key the greeting's row stands under, which no message's id is. */
 const GREETING_KEY = "greeting";
+
+/** The key a thread's rule stands under, which no message's id is. */
+const RULE_KEY = "rule";
 
 /** The height a row of the chat is taken to have before it is drawn and measured, in pixels: a short message's, with the step before it. */
 const CHAT_ROW_ESTIMATE_PX = 88;
@@ -604,9 +591,44 @@ function chatRowsOf(
   ];
 }
 
-/** A row as ⌘F reads it before it is drawn: its words. */
+/** A thread's log as rows: the message it stands on, the rule counting its replies, its replies oldest first, and the reader's on their way after them. */
+function threadRowsOf(
+  root: ManagerChatLine,
+  replies: readonly ManagerChatLine[],
+  sent: readonly SentLine[],
+): readonly ChatRow[] {
+  return [
+    { kind: CHAT_ROW.MESSAGE, key: root.message.id, line: root },
+    { kind: CHAT_ROW.RULE, key: RULE_KEY, count: replies.length },
+    ...replies.map((line): ChatRow => ({ kind: CHAT_ROW.MESSAGE, key: line.message.id, line })),
+    ...sent.map((line): ChatRow => ({ kind: CHAT_ROW.SENDING, key: line.id, line })),
+  ];
+}
+
+/**
+ * Each row's class in its log: a message going on its sender's run stands
+ * close under the one before it, as a chat app stands one sender's bubbles,
+ * and every other row a step from it (tasks.css).
+ */
+function useChatRowClass(rows: readonly ChatRow[]): (index: number) => string {
+  return useCallback(
+    (index: number) => {
+      if (index === 0) return LOG_ROW_CLASS;
+      const row = rows[index];
+
+      return row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens
+        ? `${LOG_ROW_CLASS} agent-log-row-run`
+        : `${LOG_ROW_CLASS} agent-log-row-next`;
+    },
+    [rows],
+  );
+}
+
+/** A row as ⌘F reads it before it is drawn: its words; a thread's rule has none. */
 function findRowOf(row: ChatRow): FindRow {
   if (row.kind === CHAT_ROW.GREETING) return { key: row.key, words: row.words };
+
+  if (row.kind === CHAT_ROW.RULE) return { key: row.key, words: "" };
 
   return {
     key: row.key,
@@ -634,23 +656,11 @@ const NONE_SHOWN: readonly ShownPicture[] = [];
 /** No message on its way. */
 const NONE_SENDING: readonly ManagerChatSending[] = [];
 
-/** What a refused thread reply says, and its presses. */
-const NOT_SENT_WORDS = "Not sent.";
+/** No row, while a thread's message is not read yet. */
+const NO_ROWS: readonly ChatRow[] = [];
 
-const RETRY_WORDS = "Retry";
-
-const DELETE_WORDS = "Delete";
-
-/** A refused thread reply's way back: sent again under its key, or let go. */
-interface SendingRecovery {
-  readonly onRetry: () => void;
-  readonly onDelete: () => void;
-}
-
-/** Whether a message on its way replies in a thread, where it stands on its way rather than at the chat's end. */
-function inThread(message: ManagerChatSending): boolean {
-  return message.threadRoot !== undefined;
-}
+/** No reply in a thread. */
+const NO_LINES: readonly ManagerChatLine[] = [];
 
 /** What a Manager's chat tab is handed beside the agent, as an agent's tab is. */
 interface ManagerChatTabDoors {
@@ -667,34 +677,38 @@ interface ManagerChatTabDoors {
 }
 
 /**
- * A Manager's page as its chat (see the file's header): its rows, read
- * newest first and drawn oldest first, the work under them a press away,
- * and its box, which sends to the chat.
+ * The box writing to a Manager's chat, the chat's own or one of its
+ * threads' (`thread`, by the message it stands on), and what both read: the
+ * transcript under the chat, the chat's rows, and the box itself, the
+ * composer of an agent's tab, which sends to the chat (`agents.chat.send`),
+ * in the thread where it is a thread's, and draws the reader's messages on
+ * their way there. Note that each box draws only its own messages on their
+ * way, the chat's those to the chat itself and a thread's those replying in
+ * it, so a refusal is said once, and a thread's box keeps a draft of its own.
  */
-export function ManagerChatTab({
+function useManagerChatBox({
   agent,
   control,
   shown,
   onOpenTarget,
   cards,
-  threads,
-}: ManagerChatTabDoors): ReactNode {
+  thread,
+}: {
+  agent: AgentSummary;
+  control: AgentsControl;
+  shown: boolean;
+  onOpenTarget: DelegationDoors["onOpenTarget"];
+  cards: DelegationDoors["cards"];
+  thread: string | undefined;
+}) {
   const transcript = useAgentTranscript({
     transcript: useMemo(() => ({ kind: TRANSCRIPT_KIND.AGENT, agentId: agent.id }), [agent.id]),
     shown,
   });
 
   const read = useQuery(managerChatQuery(agent.id));
-  const { mutate: retryChat } = useMutation(managerChatRetryMutation());
   const { mutateAsync: sendChat } = useMutation(actMutation(ACT_KIND.AGENTS_CHAT_SEND));
   const { mutate: unsendChat } = useMutation(actMutation(ACT_KIND.AGENTS_CHAT_UNSEND));
-  // Note that a thread's reply refused stands marked in its thread from the host's record, so its send answers nothing here.
-  const { mutate: replyInThread } = useMutation(actMutation(ACT_KIND.AGENTS_CHAT_SEND));
-
-  const { mutate: readOlder, isError: olderFailed } = useMutation(
-    actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_OLDER),
-  );
-
   const chat = read.data;
   const starter = teammateStarter(agent.startedBy, control.me);
   const approvals = useAgentApprovals({ agent, write: control.onAnswerApproval });
@@ -741,6 +755,7 @@ export function ManagerChatTab({
       clientKey: message.clientKey,
       ...(message.attachments === undefined ? undefined : { attachments: message.attachments }),
       ...(message.retry === undefined ? undefined : { retry: message.retry }),
+      ...(thread === undefined ? undefined : { threadRoot: thread }),
     } satisfies AgentChatSendParams).then((answer): AgentActAnswer => {
       if ("failure" in answer) return answer;
       // Note that the box reads the answer as a message's: its agent, its transaction, and whether the service queued it, the id the chat holds it under being the host's to draw it by.
@@ -759,57 +774,197 @@ export function ManagerChatTab({
   const composer = useAgentComposer({
     agentId: agent.id,
     taskId: agent.taskId,
+    thread,
     messages: transcript.messages,
     sending: useMemo(
       () =>
         sendingLinesOf(
-          (chat?.sending ?? NONE_SENDING).filter((message) => !inThread(message)),
+          (chat?.sending ?? NONE_SENDING).filter((message) => message.threadRoot === thread),
           (message) => filesOf(queryClient, agent.id, sentFiles.current, message),
         ),
-      [chat?.sending, queryClient, agent.id],
+      [chat?.sending, queryClient, agent.id, thread],
     ),
     running: agent.status === AGENT_STATUS.RUNNING,
     send,
     unsend,
-    rewind: control.onRewind,
+    // Note that a line is written again only where it stands in the chat itself, so a thread's box takes the Manager back nowhere.
+    rewind: thread === undefined ? control.onRewind : undefined,
     starter,
     shown,
   });
 
   const box = useAgentBox({ agentId: agent.id, agent, agents: control });
   const pictures = useAgentPictureDoor(agent.id);
-  const queue = useAgentQueue(agent.id, transcript.queue);
-  const queueEditing = useQueueEditing(composer, queue, pictures);
   const moveToCloud = useMoveToCloud(agent, control);
   const callRoute = useCallRoute(agent.id);
   const computerApps = useMemo(() => computerAppsOf(transcript.messages), [transcript.messages]);
   const { door: replyDoor, reply: replyThroughBox } = useBoxReplyDoor();
+
+  const ends = useAgentEndDoors({
+    agent,
+    control,
+    composer,
+    starter,
+    hostLost: transcript.hostLost,
+    moveToCloud,
+    onOpenTarget,
+    shown,
+  });
+
+  const marks = useSentLineMarks(composer, ends.unarchive !== undefined);
+
+  const boxOpen = boxTakesWords({
+    archived: ends.unarchive !== undefined,
+    continued: ends.continuedNote !== undefined,
+    closed: composer.closed,
+  });
+
+  const standing = tabTurnOf(agent, composer);
+  const running = standing.working ? (standing.turnId ?? agent.turnId ?? undefined) : undefined;
+  const name = agentName(agent, control.models);
+  const manager = useMemo(() => ({ name, face: agent.face }), [name, agent.face]);
+
+  const view = useMemo(
+    () => managerChatView(chat?.messages ?? [], transcript.messages, { running }),
+    [chat?.messages, transcript.messages, running],
+  );
+
+  const delegation = useMemo(
+    () => ({ models: control.models, onOpenTarget, cards }),
+    [control.models, onOpenTarget, cards],
+  );
+
+  const lines = useMemo(
+    () => new Map(transcript.messages.map((line) => [line.id, line])),
+    [transcript.messages],
+  );
+
+  // Note that these doors open no thread; the chat's own rows add theirs.
+  const doors: ChatDoors = useMemo(
+    () => ({ manager, readerId: control.me, delegation, lines }),
+    [manager, control.me, delegation, lines],
+  );
+
+  /** The rows of one turn's work, by the transcript line that opened it, folded over the Manager's first message of the turn. */
+  const workOf = (line: ManagerChatLine): TurnWork | null =>
+    line.work === undefined
+      ? null
+      : {
+          summary: turnWorkSummary(lines.get(line.work)),
+          rows: (
+            <TurnWorkRows
+              parts={view.work.get(line.work) ?? []}
+              moving={false}
+              delegation={delegation}
+            />
+          ),
+        };
+
+  /** One message of the chat, as its sender draws it, reading `drawn`'s doors: the chat's, or a thread's tab's. */
+  const drawLine = (line: ManagerChatLine, drawn: ChatDoors): ReactNode =>
+    line.message.authorKind === MANAGER_CHAT_AUTHOR.AGENT ? (
+      <ManagerMessage line={line} doors={drawn} work={workOf(line)} />
+    ) : (
+      <PersonMessage line={line} doors={drawn} />
+    );
+
+  // Note that the box, the chat's or a thread's, is the composer of an agent's tab, read off the Manager as every box writing to an agent reads it.
+  const dock = (wiring: {
+    readonly approvalsWaiting: number;
+    readonly queue: Parameters<typeof AgentComposerDock>[0]["queue"];
+    readonly box: AgentBox;
+    readonly transcript: Parameters<typeof AgentComposerDock>[0]["transcript"];
+    readonly wording?: ComposerWords | undefined;
+    readonly talks?: boolean | undefined;
+  }) => (
+    <AgentComposerDock
+      agent={agent}
+      box={wiring.box}
+      composer={composer}
+      transcript={wiring.transcript}
+      approvalsWaiting={wiring.approvalsWaiting}
+      onStop={() => control.onStop(agent.id)}
+      onUnarchive={ends.unarchive}
+      continuedNote={ends.continuedNote}
+      cards={cards}
+      keywords={control.keywords}
+      skills={control.readSkills}
+      replyDoor={replyDoor}
+      closedRemedy={ends.closedRemedy}
+      onMoveToCloud={moveToCloud}
+      queue={wiring.queue}
+      place={{ owner: undefined, route: callRoute, pictures, computerApps }}
+      wording={wiring.wording}
+      talks={wiring.talks}
+    />
+  );
+
+  return {
+    transcript,
+    read,
+    chat,
+    starter,
+    approvals,
+    composer,
+    box,
+    pictures,
+    replies: boxOpen && !composer.sending,
+    replyThroughBox,
+    ends,
+    marks,
+    boxOpen,
+    standing,
+    manager,
+    name,
+    view,
+    delegation,
+    doors,
+    drawLine,
+    dock,
+  };
+}
+
+/**
+ * A Manager's page as its chat (see the file's header): its rows, read
+ * newest first and drawn oldest first, the work under them a press away,
+ * and its box, which sends to the chat.
+ */
+export function ManagerChatTab({
+  agent,
+  control,
+  shown,
+  onOpenTarget,
+  cards,
+  threads,
+}: ManagerChatTabDoors): ReactNode {
+  const chatBox = useManagerChatBox({
+    agent,
+    control,
+    shown,
+    onOpenTarget,
+    cards,
+    thread: undefined,
+  });
+
+  const { transcript, read, chat, starter, approvals, composer, box, pictures, ends } = chatBox;
+  const { marks, standing, manager, name, view, delegation, drawLine } = chatBox;
+  const { mutate: retryChat } = useMutation(managerChatRetryMutation());
+
+  const { mutate: readOlder, isError: olderFailed } = useMutation(
+    actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_OLDER),
+  );
+
+  const queue = useAgentQueue(agent.id, transcript.queue);
+  const queueEditing = useQueueEditing(composer, queue, pictures);
   const tab = useRef<HTMLElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const rowsHandle = useRef<VirtualRowsHandle>(null);
   useManagerChatLooks(agent.id, agent.saidAt);
 
-  const { unarchive, endPress, endTrail, continuedNote, closedRemedy, continuable } =
-    useAgentEndDoors({
-      agent,
-      control,
-      composer,
-      starter,
-      hostLost: transcript.hostLost,
-      moveToCloud,
-      onOpenTarget,
-      shown,
-    });
-
-  const marks = useSentLineMarks(composer, unarchive !== undefined);
+  const { endPress, endTrail, continuable } = ends;
 
   // A rewind writes in the box, so it is offered only while the box takes words, and nothing is rewound under a call into the Manager.
-  const rewinds =
-    boxTakesWords({
-      archived: unarchive !== undefined,
-      continued: continuedNote !== undefined,
-      closed: composer.closed,
-    }) && transcript.calls.length === 0;
+  const rewinds = chatBox.boxOpen && transcript.calls.length === 0;
 
   const restores =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.REWIND_FILES) }).data === true;
@@ -846,49 +1001,19 @@ export function ManagerChatTab({
       }
     : undefined;
 
-  const standing = tabTurnOf(agent, composer);
-  const running = standing.working ? (standing.turnId ?? agent.turnId ?? undefined) : undefined;
-  const name = agentName(agent, control.models);
-  const manager = useMemo(() => ({ name, face: agent.face }), [name, agent.face]);
-
-  const view = useMemo(
-    () => managerChatView(chat?.messages ?? [], transcript.messages, { running }),
-    [chat?.messages, transcript.messages, running],
-  );
-
-  const delegation = useMemo(
-    () => ({ models: control.models, onOpenTarget, cards }),
-    [control.models, onOpenTarget, cards],
-  );
-
-  const lines = useMemo(
-    () => new Map(transcript.messages.map((line) => [line.id, line])),
-    [transcript.messages],
-  );
-
-  const [openThread, setOpenThread] = useState<string | undefined>(undefined);
-
-  // Note that the pane's own rows read the chat's doors with no thread, so a reply offers no thread of its own.
-  const paneDoors = useMemo(
-    () => ({ manager, readerId: control.me, delegation, lines }),
-    [manager, control.me, delegation, lines],
-  );
+  // Note that a message's thread opens in its page's side panel, where one stands beside the chat; elsewhere its messages offer none.
+  const opener = useThreadDoors();
 
   const doors = useMemo(
-    () => ({
-      ...paneDoors,
-      thread: { replies: view.threads, open: openThread, onOpen: setOpenThread },
-    }),
-    [paneDoors, view.threads, openThread],
+    () =>
+      opener === undefined
+        ? chatBox.doors
+        : {
+            ...chatBox.doors,
+            thread: { replies: view.threads, open: opener.open, onOpen: opener.onOpen },
+          },
+    [chatBox.doors, view.threads, opener],
   );
-
-  const boxOpen = boxTakesWords({
-    archived: unarchive !== undefined,
-    continued: continuedNote !== undefined,
-    closed: composer.closed,
-  });
-
-  const replies = boxOpen && !composer.sending;
 
   const ended =
     transcript.pages === 0 || standing.working
@@ -913,20 +1038,7 @@ export function ManagerChatTab({
   const finding = useFindOpen();
   const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
   useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });
-
-  // Note that a message going on its sender's run stands close under the one before it, as a chat app stands one sender's bubbles, and every other row a step from it (tasks.css).
-  const rowClassOf = useCallback(
-    (index: number) => {
-      if (index === 0) return LOG_ROW_CLASS;
-      const row = rows[index];
-
-      return row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens
-        ? `${LOG_ROW_CLASS} agent-log-row-run`
-        : `${LOG_ROW_CLASS} agent-log-row-next`;
-    },
-    [rows],
-  );
-
+  const rowClassOf = useChatRowClass(rows);
   const asks = approvals.asks;
 
   const workingWords =
@@ -984,34 +1096,6 @@ export function ManagerChatTab({
       </>
     );
 
-  /** One message of the chat, as its sender draws it, reading `drawn`'s doors: the chat's, or a thread pane's. */
-  const drawLine = (line: ManagerChatLine, drawn: ChatDoors): ReactNode => {
-    if (line.message.authorKind !== MANAGER_CHAT_AUTHOR.AGENT) {
-      return <PersonMessage line={line} doors={drawn} />;
-    }
-
-    return (
-      <ManagerMessage
-        line={line}
-        doors={drawn}
-        work={
-          line.work === undefined
-            ? null
-            : {
-                summary: turnWorkSummary(lines.get(line.work)),
-                rows: (
-                  <TurnWorkRows
-                    parts={view.work.get(line.work) ?? []}
-                    moving={false}
-                    delegation={delegation}
-                  />
-                ),
-              }
-        }
-      />
-    );
-  };
-
   /** One row of the log, as its kind draws it. */
   const drawRow = (row: ChatRow): ReactNode => {
     if (row.kind === CHAT_ROW.GREETING)
@@ -1019,84 +1103,10 @@ export function ManagerChatTab({
 
     if (row.kind === CHAT_ROW.SENDING) return <SendingLine line={row.line} readerId={control.me} />;
 
+    if (row.kind === CHAT_ROW.RULE) return <ThreadRule count={row.count} />;
+
     return drawLine(row.line, doors);
   };
-
-  // The open thread, where its root stands among the messages read: its root, its replies, and the reader's replies on their way.
-  const rootLine =
-    openThread === undefined
-      ? undefined
-      : view.top.find((line) => line.message.id === openThread && line.message.threadRoot === null);
-
-  // Note that a thread's box sends words alone, so a reply on its way stands as its words, marked where it did not go.
-  const threadSending = useMemo(
-    () =>
-      (chat?.sending ?? NONE_SENDING)
-        .filter((message) => message.threadRoot === openThread)
-        .map(
-          (message): SentLine => ({
-            id: message.clientKey,
-            clientKey: message.clientKey,
-            text: message.text,
-            attachments: [],
-            steers: false,
-            sentAt: message.sentAt,
-            state:
-              message.refused === undefined ? SENT_LINE_STATE.PENDING : SENT_LINE_STATE.UNDELIVERED,
-          }),
-        ),
-    [chat?.sending, openThread],
-  );
-
-  /** Sends the reader's words to the chat as a reply in the open thread. */
-  const sendInThread = (root: string) => (text: string) => {
-    replyInThread({
-      agentId: agent.id,
-      text,
-      clientKey: crypto.randomUUID(),
-      threadRoot: root,
-    } satisfies AgentChatSendParams);
-  };
-
-  const threadReplies = rootLine === undefined ? [] : (view.threads.get(rootLine.message.id) ?? []);
-
-  const threadPane =
-    rootLine === undefined ? null : (
-      <ManagerThreadPane
-        rootKey={rootLine.message.id}
-        // Note that the root stands alone in the pane, under its sender's name.
-        root={drawLine({ ...rootLine, place: { opens: true, closes: true } }, paneDoors)}
-        count={threadReplies.length}
-        replies={
-          <>
-            {threadReplies.map((line) => (
-              <Fragment key={line.message.id}>{drawLine(line, paneDoors)}</Fragment>
-            ))}
-            {threadSending.map((line) => (
-              <SendingLine
-                key={line.id}
-                line={line}
-                readerId={control.me}
-                recover={{
-                  // Note that a retry goes under the reply's own key, so a send whose answer was lost lands once.
-                  onRetry: () =>
-                    replyInThread({
-                      agentId: agent.id,
-                      text: line.text,
-                      clientKey: line.clientKey,
-                      threadRoot: rootLine.message.id,
-                      retry: true,
-                    } satisfies AgentChatSendParams),
-                  onDelete: () => unsendChat({ agentId: agent.id, clientKey: line.clientKey }),
-                }}
-              />
-            ))}
-          </>
-        }
-        onSend={boxOpen ? sendInThread(rootLine.message.id) : undefined}
-        onClose={() => setOpenThread(undefined)}
-      />
-    );
 
   const log = (() => {
     if (read.isError) {
@@ -1148,36 +1158,159 @@ export function ManagerChatTab({
       <AgentPicturesProvider value={pictures}>
         <UndeliveredLines value={marks}>
           <RewindProvider value={rewind}>
-            <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
-              <ChannelSplit pane={threadPane}>
-                {log}
-                <AgentTabFoot>
-                  <ThreadsDock threads={threads} />
-                  <AgentComposerDock
-                    agent={agent}
-                    box={box}
-                    composer={composer}
-                    transcript={transcript}
-                    approvalsWaiting={approvals.waiting}
-                    onStop={() => control.onStop(agent.id)}
-                    onUnarchive={unarchive}
-                    continuedNote={continuedNote}
-                    cards={cards}
-                    keywords={control.keywords}
-                    skills={control.readSkills}
-                    replyDoor={replyDoor}
-                    closedRemedy={closedRemedy}
-                    onMoveToCloud={moveToCloud}
-                    queue={{ controls: true, working: standing.working, editing: queueEditing }}
-                    place={{ owner: undefined, route: callRoute, pictures, computerApps }}
-                  />
-                </AgentTabFoot>
-              </ChannelSplit>
+            <ReplyDoorProvider value={chatBox.replies ? chatBox.replyThroughBox : undefined}>
+              {log}
+              <AgentTabFoot>
+                <ThreadsDock threads={threads} />
+                {chatBox.dock({
+                  box,
+                  approvalsWaiting: approvals.waiting,
+                  transcript,
+                  queue: { controls: true, working: standing.working, editing: queueEditing },
+                })}
+              </AgentTabFoot>
             </ReplyDoorProvider>
           </RewindProvider>
         </UndeliveredLines>
       </AgentPicturesProvider>
-      {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
+      {chatBox.replies ? <ReplyToSelection scope={tab} onReply={chatBox.replyThroughBox} /> : null}
+    </AgentTabFrame>
+  );
+}
+
+/** What a thread's box draws of what the Manager has cost and what its model holds: nothing, since a reply is no turn of its own. */
+const THREAD_USAGE = {
+  usage: undefined,
+  payer: undefined,
+  payerSubscriptionId: undefined,
+  context: undefined,
+} as const;
+
+/** What a thread's box asks for and calls its field. */
+const THREAD_BOX_WORDS: ComposerWords = {
+  placeholder: THREAD_WORDS.BOX,
+  label: THREAD_WORDS.BOX,
+  send: BUTTON.SEND,
+};
+
+/**
+ * One thread of a Manager's chat, as its tab in the page's side panel
+ * draws it: the message it stands on (`root`), the replies under a rule
+ * that counts them, the reader's on their way after them, and the chat's
+ * own composer at its foot, which sends the reader's words and files to the
+ * chat as a reply in the thread. Note that the box leaves out what is the
+ * Manager's own turn's rather than the reply's: Stop, the queue, the model
+ * chip with its cost and permission mode, and `/clear`; and Talk, since a
+ * call's lines land in the chat rather than the thread.
+ */
+export function ManagerThreadTab({
+  agent,
+  control,
+  shown,
+  root,
+  onOpenTarget,
+  cards,
+}: Omit<ManagerChatTabDoors, "threads"> & {
+  /** The message the thread stands on, by its id. */
+  root: string;
+}): ReactNode {
+  const chatBox = useManagerChatBox({ agent, control, shown, onOpenTarget, cards, thread: root });
+  const { read, chat, composer, box, pictures, marks, view, drawLine, doors } = chatBox;
+  const tab = useRef<HTMLElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const rowsHandle = useRef<VirtualRowsHandle>(null);
+
+  // The message the thread stands on, among the chat's messages read: a reply's root never stands among its replies.
+  const rootLine = view.top.find(
+    (line) => line.message.id === root && line.message.threadRoot === null,
+  );
+
+  const rows = useMemo(
+    () =>
+      rootLine === undefined
+        ? NO_ROWS
+        : threadRowsOf(
+            // Note that the root stands alone in the tab, under its sender's name.
+            { ...rootLine, place: { opens: true, closes: true } },
+            view.threads.get(root) ?? NO_LINES,
+            composer.sent,
+          ),
+    [rootLine, view.threads, root, composer.sent],
+  );
+
+  const keys = useMemo(() => rows.map((row) => row.key), [rows]);
+  const ownLast = ownLastOf(rows, control.me);
+  const finding = useFindOpen();
+  const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
+  useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });
+  const rowClassOf = useChatRowClass(rows);
+
+  /** One row of the thread, as its kind draws it. */
+  const drawRow = (row: ChatRow): ReactNode => {
+    if (row.kind === CHAT_ROW.SENDING) return <SendingLine line={row.line} readerId={control.me} />;
+
+    if (row.kind === CHAT_ROW.RULE) return <ThreadRule count={row.count} />;
+
+    if (row.kind === CHAT_ROW.GREETING) return null;
+
+    return drawLine(row.line, doors);
+  };
+
+  // Note that the thread is read off the chat's own read, so it stands as the chat does, and a root not read yet stands as reading.
+  const log =
+    chat === undefined || (rootLine === undefined && read.isError) ? (
+      <TranscriptSkeleton />
+    ) : rootLine === undefined ? (
+      <TranscriptSkeleton />
+    ) : (
+      <Conversation list={list}>
+        <ConversationContent>
+          <ConversationRows
+            keys={keys}
+            estimate={CHAT_ROW_ESTIMATE_PX}
+            gap={0}
+            rowClassName={rowClassOf}
+            handle={rowsHandle}
+            ownLast={ownLast}
+          >
+            {(at) => {
+              const row = rows[at];
+
+              return row === undefined ? null : drawRow(row);
+            }}
+          </ConversationRows>
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+    );
+
+  return (
+    <AgentTabFrame ref={tab} label={TAB_WORDS.THREAD}>
+      <AgentPicturesProvider value={pictures}>
+        <UndeliveredLines value={marks}>
+          <ReplyDoorProvider value={chatBox.replies ? chatBox.replyThroughBox : undefined}>
+            {log}
+            <AgentTabFoot>
+              {chatBox.dock({
+                // Note that a reply steers whatever turn runs, so Stop, the model chip, and `/clear` stand in the chat's own box alone.
+                box: {
+                  ...box,
+                  stoppable: false,
+                  model: undefined,
+                  mode: undefined,
+                  onClear: undefined,
+                },
+                approvalsWaiting: chatBox.approvals.waiting,
+                transcript: THREAD_USAGE,
+                queue: undefined,
+                wording: THREAD_BOX_WORDS,
+                talks: false,
+              })}
+            </AgentTabFoot>
+          </ReplyDoorProvider>
+        </UndeliveredLines>
+      </AgentPicturesProvider>
+      {chatBox.replies ? <ReplyToSelection scope={tab} onReply={chatBox.replyThroughBox} /> : null}
     </AgentTabFrame>
   );
 }

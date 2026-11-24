@@ -17,7 +17,7 @@ import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-w
 import { ACT_KIND } from "@repo/host/acts";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
-import { act, createElement } from "react";
+import { act, createElement, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { MemberDirectory } from "../member-directory.js";
@@ -34,7 +34,8 @@ import { menuItem } from "../testing/desktop-inbox.js";
 import { pointerCross } from "../testing/pointer-cross.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
-import { ManagerChatTab } from "./manager-chat-tab.js";
+import { ManagerChatTab, ManagerThreadTab } from "./manager-chat-tab.js";
+import { ThreadDoorsProvider } from "./manager-chat-threads.js";
 
 /**
  * manager-chat-tab.test.ts -- a Manager's page as its own chat, drawn from
@@ -43,8 +44,9 @@ import { ManagerChatTab } from "./manager-chat-tab.js";
  * over the Manager's first message of the turn; Reply beside any message,
  * the Manager's or a person's, quoting it whole into the box, which sends it
  * to the chat; a call the Manager holds for an answer standing at the chat's
- * foot with its answers; and Retry sending a refused message again with its
- * files. Synthetic words.
+ * foot with its answers; Retry sending a refused message again with its
+ * files; and a thread opening beside the chat, as the page's side panel
+ * opens it, its box the chat's own composer replying in it. Synthetic words.
  */
 
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
@@ -108,6 +110,33 @@ afterEach(() => {
   window.localStorage.clear();
   vi.restoreAllMocks();
 });
+
+/**
+ * The chat with the thread it opens drawn beside it, as the page's side
+ * panel draws a Thread tab (`desktop-agent-page.tsx`), in its own box.
+ */
+function ChatBesideThread({
+  agent,
+  control,
+}: {
+  agent: AgentSummary;
+  control: ReturnType<typeof agentsControl>;
+}): ReactNode {
+  const [open, setOpen] = useState<string | undefined>(undefined);
+
+  return createElement(
+    ThreadDoorsProvider,
+    { value: { open, onOpen: setOpen } },
+    createElement(ManagerChatTab, { agent, control, shown: true }),
+    open === undefined
+      ? null
+      : createElement(
+          "div",
+          { "data-thread-tab": "" },
+          createElement(ManagerThreadTab, { agent, control, shown: true, root: open }),
+        ),
+  );
+}
 
 /** The Manager's page as Dean sees it, its chat's rows (oldest first here) and the messages on their way held on the app state, over its transcript; every message the box sends to the chat, by its words and its files' names, and every answer to an ask. */
 async function drawChat(
@@ -180,7 +209,7 @@ async function drawChat(
         createElement(MemberDirectory, {
           workspace: { id: "workspace-acme", memberCount: 2 },
           readerId: DEAN.userId,
-          children: createElement(ManagerChatTab, { agent: manager, control, shown: true }),
+          children: createElement(ChatBesideThread, { agent: manager, control }),
         }),
       ),
     ),
@@ -193,7 +222,7 @@ async function drawChat(
   return { container, sent, carried, answered, threads, keys };
 }
 
-test("each message is a row under its sender's name where their run opens, a thread's replies stand under its message as a count that opens the thread, and the thread's box replies in it", async () => {
+test("each message is a row under its sender's name where their run opens, a thread's replies stand under its message as a count that opens the thread beside the chat, and the thread's box replies in it", async () => {
   const { container, sent, threads } = await drawChat([
     row("dean", 1, "Ship the invite flow.", DEAN),
     row("charles", 2, "Seven days.", CHARLES),
@@ -231,25 +260,37 @@ test("each message is a row under its sender's name where their run opens, a thr
   act(() => count.click());
   await settleQueries();
 
-  const pane =
-    container.querySelector('aside[aria-label="Thread"]') ?? assert.fail("the thread's pane opens");
+  const thread =
+    container.querySelector("[data-thread-tab]") ?? assert.fail("the thread opens beside the chat");
 
-  assert.deepEqual(rowsIn(pane), [
+  assert.deepEqual(rowsIn(thread), [
     ["Iris", "On it."],
     [CHARLES.name, "Which repo?"],
     ["Iris", "The web app's."],
   ]);
 
-  typeInComposer(pane, "And the nightly?");
-  pressInComposer(pane, "Enter");
+  /** The presses a box offers beside its field, by their names. */
+  const pressesIn = (scope: Element) =>
+    [...(scope.querySelector(".agent-tab-foot")?.querySelectorAll("button") ?? [])].map(
+      (button) => button.getAttribute("aria-label") ?? button.textContent ?? "",
+    );
+
+  // Note that a reply is no turn of its own, and a call's lines land in the chat, so the thread's box leaves out the Manager's own presses.
+  const chatPresses = pressesIn(container.querySelector(".agent-tab") ?? container);
+  assert.ok(chatPresses.includes("Talk"), "the chat's own box offers Talk");
+  assert.ok(!pressesIn(thread).includes("Talk"), "the thread's box offers no Talk");
+  assert.ok(pressesIn(thread).includes("Add files and more"), "the thread's box takes files");
+
+  typeInComposer(thread, "And the nightly?");
+  pressInComposer(thread, "Enter");
   await settleQueries();
 
   assert.deepEqual(sent, ["And the nightly?"]);
   assert.deepEqual(threads, ["first"]);
 });
 
-test("a thread's reply the service refused says so in the thread's pane, and Retry sends it again there under its own key", async () => {
-  const { container, threads, keys } = await drawChat(
+test("a thread's reply the service refused stands marked in its thread, and Retry sends it again there under its own key, with its files", async () => {
+  const { container, threads, keys, carried } = await drawChat(
     [
       row("first", 1, "On it."),
       { ...row("asked", 2, "Which repo?", CHARLES), threadRoot: "first" },
@@ -259,6 +300,7 @@ test("a thread's reply the service refused says so in the thread's pane, and Ret
         {
           clientKey: "c4d1e7a2-5b3f-4e9a-8c60-1f2e3d4c5b6a",
           text: "And the nightly?",
+          attachments: [{ name: "nightly.png", mediaType: "image/png", data: "bmlnaHRseQ==" }],
           sentAt: 3_000,
           sentBy: DEAN.userId,
           threadRoot: "first",
@@ -266,6 +308,12 @@ test("a thread's reply the service refused says so in the thread's pane, and Ret
         },
       ],
     },
+  );
+
+  assert.equal(
+    container.querySelector('button[aria-label="Not delivered"]'),
+    null,
+    "a reply refused in a thread stands in its thread, not at the chat's end",
   );
 
   const count = [...container.querySelectorAll("button")].find(
@@ -276,22 +324,20 @@ test("a thread's reply the service refused says so in the thread's pane, and Ret
   act(() => count.click());
   await settleQueries();
 
-  const pane =
-    container.querySelector('aside[aria-label="Thread"]') ?? assert.fail("the thread's pane opens");
+  const thread =
+    container.querySelector("[data-thread-tab]") ?? assert.fail("the thread opens beside the chat");
 
-  const refused = pane.querySelector("[data-thread-refused]");
-  assert.match(refused?.textContent ?? "", /Not sent\./u);
+  const mark =
+    thread.querySelector<HTMLButtonElement>('button[aria-label="Not delivered"]') ??
+    assert.fail("the refused reply wears its alert");
 
-  const retry = [...pane.querySelectorAll("button")].find(
-    (button) => button.textContent === "Retry",
-  );
-
-  assert.ok(retry, "the refused reply offers Retry");
-  act(() => retry.click());
+  await act(async () => mark.click());
+  await act(async () => menuItem("Retry").click());
   await settleQueries();
 
   assert.deepEqual(threads, ["first"]);
-  assert.deepEqual(keys, [["c4d1e7a2-5b3f-4e9a-8c60-1f2e3d4c5b6a", true]]);
+  assert.deepEqual(keys, [["c4d1e7a2-5b3f-4e9a-8c60-1f2e3d4c5b6a", false]]);
+  assert.deepEqual(carried, [["nightly.png"]]);
 });
 
 test("an ended turn's work stands folded over the Manager's first message of the turn, saying how long the turn worked, and opens onto its calls", async () => {

@@ -199,8 +199,9 @@ function surfaceOf(surface: ProductSurface) {
 
 /**
  * Each kind's answers, a missing kind failing to compile. A transcript's tab
- * looks as a draft's does and has no link, and a Local tab and a cloud
- * Browser tab have no link, as no place answered otherwise before this table.
+ * looks as a draft's does and has no link, and a Local tab, a cloud Browser
+ * tab, and a Manager's chat's thread have no link, as no place answered
+ * otherwise before this table.
  */
 const STRIP_TAB_KINDS = {
   [STRIP_TAB_KIND.WORD]: {
@@ -418,6 +419,21 @@ const STRIP_TAB_KINDS = {
     kept: KEPT_NOWHERE,
     // Its page is drawn on a canvas, which no find of the window reaches.
     takesFind: false,
+    stays: NEVER,
+  },
+  [STRIP_TAB_KIND.THREAD]: {
+    title: () => TAB_WORDS.THREAD,
+    untitled: () => TAB_WORDS.THREAD,
+    look: () => ({ kind: TAB_KIND.THREAD }),
+    surface: surfaceOf(PRODUCT_SURFACE.MANAGER),
+    link: NO_LINK,
+    drawsAgain: ALWAYS,
+    reopens: true,
+    endsSession: false,
+    closesIdle: true,
+    pin: UNPINNED,
+    kept: KEPT_NOWHERE,
+    takesFind: true,
     stays: NEVER,
   },
 } as const satisfies { readonly [K in StripTabKind]: StripTabKindDeclaration<K> };
