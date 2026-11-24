@@ -2256,6 +2256,54 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
+    "every file of a person's message to a Manager lands in the chat's message under its name, by the reference its line keeps it under: a pasted text file by its bytes, a picture by the id it was kept as",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, agent, ask, target } = yield* messagedAgent(agentSessions, {
+          running: false,
+        });
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        readAnswer(
+          agentMessageAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            messageAs(owner, agent.id, {
+              text: "Read this.",
+              clientKey: randomUUID(),
+              attachments: [
+                // "hello" in base64.
+                { name: "notes.txt", mediaType: AGENT_ATTACHMENT_TYPE.TEXT, data: "aGVsbG8=" },
+                {
+                  name: "flow.png",
+                  mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+                  data: Buffer.from(SIZED_PNG).toString("base64"),
+                },
+              ],
+            }),
+          ),
+        );
+
+        const [written] = yield* readManagerChatPage(owner, agent.id, { limit: 10 });
+        const kept = yield* db
+          .select({ id: attachment.id })
+          .from(attachment)
+          .where(eq(attachment.conversationId, target.conversationId));
+
+        assert.deepEqual(written?.attachments, [
+          { name: "notes.txt", mediaType: "text/plain", url: "data:text/plain;base64,aGVsbG8=" },
+          { id: kept[0]?.id, mediaType: "image/png", name: "flow.png" },
+        ]);
+      }),
+  );
+
+  it.effect(
     "no Manager's chat is written by an account outside its workspace, nor through an agent that is no Manager",
     () =>
       Effect.gen(function* () {
