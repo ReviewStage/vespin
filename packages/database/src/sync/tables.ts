@@ -67,7 +67,7 @@ import { taskFollower } from "../schemas/task-follower.js";
 import { taskPageVersion } from "../schemas/task-page.js";
 import { taskPin } from "../schemas/task-pin.js";
 import { taskRead } from "../schemas/task-read.js";
-import { taskSection, taskSectionEntry } from "../schemas/task-section.js";
+import { agentSectionEntry, taskSection, taskSectionEntry } from "../schemas/task-section.js";
 import { voiceCallTable } from "../schemas/voice-call.js";
 import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
@@ -419,6 +419,11 @@ export const taskSectionSync = defineSyncTable(taskSection, {
 /** A task an account keeps in one of its sections, on the account's topic. */
 export const taskSectionEntrySync = defineSyncTable(taskSectionEntry, {
   topics: [{ kind: TOPIC.ACCOUNT, column: taskSectionEntry.userId }],
+});
+
+/** An agent an account keeps in one of its sections, on the account's topic. */
+export const agentSectionEntrySync = defineSyncTable(agentSectionEntry, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: agentSectionEntry.userId }],
 });
 
 /** A repository an account pinned to its sidebar, on the account's topic. */
@@ -950,6 +955,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   githubRepositoryReadSync,
   taskSectionSync,
   taskSectionEntrySync,
+  agentSectionEntrySync,
   repositoryPinSync,
   taskPinSync,
   agentPinSync,

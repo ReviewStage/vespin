@@ -7,6 +7,7 @@
  */
 
 import {
+  type AgentSectionEntry,
   TASK_SECTION_WRITE,
   type TaskSection,
   type TaskSectionEntry,
@@ -49,12 +50,39 @@ function placed(
   };
 }
 
+/** An agent put in a section, or moved within it, as the service would keep it. */
+function placedAgent(
+  state: TaskSections,
+  agentId: string,
+  write: { readonly sectionId: string | null; readonly position?: string },
+  now: number,
+): TaskSections {
+  const { sectionId, position } = write;
+  const others = state.agentEntries.filter((entry) => entry.agentId !== agentId);
+
+  if (sectionId === null) return { ...state, agentEntries: others };
+
+  if (!state.sections.some((section) => section.id === sectionId)) return state;
+  const standing = state.agentEntries.find((entry) => entry.agentId === agentId);
+  const kept = standing?.sectionId === sectionId ? standing : undefined;
+  const where = position ?? kept?.position;
+
+  const entry: AgentSectionEntry = {
+    agentId,
+    sectionId,
+    addedAt: kept?.addedAt ?? now,
+    ...(where === undefined ? undefined : { position: where }),
+  };
+
+  return { ...state, agentEntries: [...others, entry] };
+}
+
 /**
  * The sections as the service will answer them once it has taken `write`,
  * made at `now`: a section made, edited, moved, or deleted with its
- * entries, or a task put in a section or in none. A write naming a section
- * the state does not hold changes nothing, as the service refuses it, and
- * so does one placing an agent with no task, which no client sends any more.
+ * entries, or a task or an agent put in a section or in none. A write
+ * naming a section the state does not hold changes nothing, as the service
+ * refuses it.
  */
 export function applySectionWrite(
   state: TaskSections,
@@ -103,10 +131,11 @@ export function applySectionWrite(
         ...state,
         sections: state.sections.filter((section) => section.id !== write.id),
         entries: state.entries.filter((entry) => entry.sectionId !== write.id),
+        agentEntries: state.agentEntries.filter((entry) => entry.sectionId !== write.id),
       };
     case TASK_SECTION_WRITE.PLACE:
       return placed(state, write.taskId, write, now);
     case TASK_SECTION_WRITE.PLACE_AGENT:
-      return state;
+      return placedAgent(state, write.agentId, write, now);
   }
 }

@@ -5,9 +5,9 @@
  * repositories: the same rows and rule of who may read them as
  * `listTaskSections` and `listRepositoryPins` (`SIDEBAR_READ`). A section
  * reads while its account reaches its workspace, an entry while its task is
- * one the account reaches in its section's own workspace. The agents kept
- * in sections answer no rows, since every agent stands on a task, and stand
- * because a released desktop requires the part.
+ * one the account reaches in its section's own workspace, and an agent's
+ * entry, a Manager's as the sidebar draws it, while the account may see its
+ * agent in that workspace (`agentVisibleTo`).
  *
  * It is woken by a write to any of them or to what admits the account to a
  * workspace or a repository, all of which name the account. Note that a
@@ -19,12 +19,23 @@
  */
 
 import { queryBuilder } from "@repo/database/core/query";
-import { taskReachableBy, workspaceReachableBy } from "@repo/database/models/workspace-store";
+import {
+  agentVisibleTo,
+  taskReachableBy,
+  workspaceReachableBy,
+} from "@repo/database/models/workspace-store";
+import { agentTable } from "@repo/database/schemas/agent";
 import { repositoryPin } from "@repo/database/schemas/repository-pin";
 import { task } from "@repo/database/schemas/task";
-import { taskSection, taskSectionEntry } from "@repo/database/schemas/task-section";
+import {
+  agentSectionEntry,
+  taskSection,
+  taskSectionEntry,
+} from "@repo/database/schemas/task-section";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
+  agentSectionEntrySync,
+  agentSync,
   githubPersonalTokenSync,
   githubRepositoryReadSync,
   memberSync,
@@ -34,15 +45,17 @@ import {
   taskSync,
 } from "@repo/database/sync/tables";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { bindLiveRead, liveRowsStatement } from "../live-read-binding.js";
 
 export const sidebarRead = bindLiveRead(SIDEBAR_READ, {
   reads: [
     taskSectionSync,
     taskSectionEntrySync,
+    agentSectionEntrySync,
     repositoryPinSync,
     taskSync,
+    agentSync,
     memberSync,
     githubPersonalTokenSync,
     githubRepositoryReadSync,
@@ -98,20 +111,30 @@ export const sidebarRead = bindLiveRead(SIDEBAR_READ, {
             ),
           ),
     ),
-    // Note that no agent is kept in a section, since every agent stands on a task; a released desktop
-    // still follows the part and decodes its rows, so it stands, answering none, typed by a task's entry.
     agentEntries: liveRowsStatement(
       SIDEBAR_READ.parts.agentEntries,
       {
         ordered: false,
         columns: {
-          agentId: taskSectionEntry.taskId,
-          sectionId: taskSectionEntry.sectionId,
-          position: taskSectionEntry.position,
+          agentId: agentSectionEntry.agentId,
+          sectionId: agentSectionEntry.sectionId,
+          position: agentSectionEntry.position,
         },
-        instants: { addedAt: taskSectionEntry.addedAt },
+        instants: { addedAt: agentSectionEntry.addedAt },
       },
-      (selection) => queryBuilder.select(selection).from(taskSectionEntry).where(sql`false`),
+      (selection) =>
+        queryBuilder
+          .select(selection)
+          .from(agentSectionEntry)
+          .innerJoin(taskSection, eq(taskSection.id, agentSectionEntry.sectionId))
+          .innerJoin(agentTable, eq(agentTable.id, agentSectionEntry.agentId))
+          .where(
+            and(
+              eq(agentSectionEntry.userId, userId),
+              eq(agentTable.organizationId, taskSection.organizationId),
+              agentVisibleTo(userId),
+            ),
+          ),
     ),
     pins: liveRowsStatement(
       SIDEBAR_READ.parts.pins,

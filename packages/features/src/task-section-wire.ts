@@ -13,8 +13,9 @@ import { workspaceIdSchema } from "./task-wire.js";
  * the text's own, which a color this build does not know reads as, and a place among the account's sections once dragged there
  * (`pin-order.ts`'s keys; with none, it stands by when it was made). A task
  * stands in at most one of the account's sections, an entry with a place
- * of its own among the section's tasks, and so does a coding agent with no
- * task, its entry ordered among the tasks' in the one key space. Deleting
+ * of its own among the section's tasks, and so does an agent, a Manager as
+ * the sidebar draws it, its entry ordered among the tasks' in the one key
+ * space. Deleting
  * a section deletes its entries and none of its tasks or agents, which go
  * back under Tasks.
  *
@@ -214,7 +215,7 @@ export const taskSectionEntrySchema = EffectSchema.Struct({
 
 export type TaskSectionEntry = typeof taskSectionEntrySchema.Type;
 
-/** A coding agent with no task the account kept in one of its sections, which a released desktop still decodes; the service answers none, since every agent stands on a task. */
+/** An agent, a Manager as the sidebar draws it, the account keeps in one of its sections. */
 export const agentSectionEntrySchema = EffectSchema.Struct({
   agentId: wireUuidSchema,
   sectionId: wireUuidSchema,
@@ -251,8 +252,8 @@ export type TaskSectionsWritten = typeof taskSectionsWrittenSchema.Type;
  * One write (PUT): make a section under the id given, in a workspace the
  * account is a member of; give one a new title and icon, null for none;
  * stand one at a place among the others; delete one, which puts its tasks
- * back under Tasks with its agents; or put a task, or an agent with no
- * task, in a section at a place, or, under null, in none.
+ * back under Tasks with its agents; or put a task, or an agent, in a
+ * section at a place, or, under null, in none.
  */
 export const taskSectionWriteSchema = EffectSchema.Union([
   EffectSchema.Struct({
