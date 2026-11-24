@@ -5,9 +5,11 @@ import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
 import {
   type ManagerChatMessage,
+  type ManagerChatWrite,
   readManagerChatPage,
   writeManagerChatMessage,
 } from "@repo/database/models/manager-chat-messages";
+import { nativeCallKeyOf } from "@repo/database/models/native-call-keys";
 import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -17,6 +19,7 @@ import { AGENT_KIND } from "@repo/features/agent-wire";
 import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { Effect, Option, Redacted } from "effect";
+import { NATIVE_CALL_KEY_WINDOW_MS, nativeCallDigest } from "../agents/workspace-mcp/call-key.js";
 import { ACTION_RESULT_STATUS, MESSAGE_ROLE } from "../core.js";
 import { MAINTENANCE_MANAGER_CHAT_BACKFILL_PATH } from "./maintenance-bounds.js";
 import { handleManagerChatBackfill } from "./manager-chat-backfill.js";
@@ -282,7 +285,7 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
   );
 
   it.effect(
-    "a row written live is found by what names it, so two lines that say the same stay two",
+    "a row written live is found by what names it, so two messages that say the same stay two",
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
@@ -291,16 +294,56 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
         const [first, second, spoken] = [randomUUID(), randomUUID(), randomUUID()];
         const callKey = randomUUID();
 
-        yield* db
-          .insert(messages)
-          .values([
-            memberLine(target, { id: first, seq: 101, text: "ok" }),
-            memberLine(target, { id: second, seq: 102, text: "ok" }),
-            memberLine(target, { id: spoken, seq: 103, text: "ok", callKey }),
-          ]);
+        const [turn] = yield* db
+          .insert(turns)
+          .values({
+            ...target,
+            origin: TURN_ORIGIN.TYPED,
+            status: TURN_STATUS.FAILED,
+            queuedAt: TURN_AT,
+            startedAt: TURN_AT,
+            settledAt: TURN_END,
+          })
+          .returning({ id: turns.id });
 
-        /** A member's "ok" as its live write left it: on its line, or under its call line's key. */
-        const live = (rest: { readonly lineId: string | null; readonly clientKey: string }) =>
+        assert.ok(turn !== undefined);
+        // The turn failed after its send's row was written and before its answer was journaled, so the call stands unanswered.
+        const unanswered = { text: "ok" };
+
+        yield* db.insert(messages).values([
+          memberLine(target, { id: first, seq: 101, text: "ok" }),
+          memberLine(target, { id: second, seq: 102, text: "ok" }),
+          memberLine(target, { id: spoken, seq: 103, text: "ok", callKey }),
+          {
+            ...target,
+            seq: 104,
+            turnId: turn.id,
+            clientId: turn.id,
+            role: MESSAGE_ROLE.ASSISTANT,
+            metadata: { author: MESSAGE_AUTHOR.MODEL },
+            // SAFETY: the part is the stored vocabulary's, spelled as the relay writes a call it never answered.
+            parts: [
+              {
+                type: `tool-${AGENT_TOOL.SEND_TO_USER}`,
+                toolCallId: "call-1",
+                state: "input-available",
+                input: unanswered,
+              },
+            ] as never,
+            placedAt: TURN_AT,
+            finishedAt: TURN_END,
+          },
+        ]);
+
+        const sendKey = yield* nativeCallKeyOf(
+          owner,
+          agent.conversationId,
+          nativeCallDigest(AGENT_TOOL.SEND_TO_USER, unanswered),
+          NATIVE_CALL_KEY_WINDOW_MS,
+        );
+
+        /** An "ok" as its live write left it: a member's on its line or under its call line's key, or the Manager's under its call's. */
+        const live = (rest: Partial<ManagerChatWrite> & { readonly clientKey: string }) =>
           writeManagerChatMessage(owner, {
             agentId: agent.id,
             id: randomUUID().slice(0, 8),
@@ -312,26 +355,40 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
             inReplyTo: null,
             broadcast: false,
             turnId: null,
+            lineId: null,
             now: LINE_AT,
             ...rest,
           });
 
         yield* live({ lineId: second, clientKey: randomUUID() });
-        yield* live({ lineId: null, clientKey: callKey });
+        yield* live({ clientKey: callKey });
+
+        yield* live({
+          clientKey: sendKey,
+          authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+          authorUserId: null,
+          authorName: "Manager",
+          turnId: turn.id,
+        });
 
         const run = yield* backfill(agent.id, false);
 
         assert.deepEqual(
           { written: run.written, standing: run.standing },
-          { written: 1, standing: 2 },
+          { written: 1, standing: 3 },
         );
 
         assert.deepEqual(
-          (yield* chatOf(owner, agent.id)).map(({ text, lineId }) => ({ text, lineId })),
+          (yield* chatOf(owner, agent.id)).map(({ authorKind, text, lineId }) => ({
+            authorKind,
+            text,
+            lineId,
+          })),
           [
-            { text: "ok", lineId: first },
-            { text: "ok", lineId: second },
-            { text: "ok", lineId: null },
+            { authorKind: MANAGER_CHAT_AUTHOR.PERSON, text: "ok", lineId: first },
+            { authorKind: MANAGER_CHAT_AUTHOR.PERSON, text: "ok", lineId: second },
+            { authorKind: MANAGER_CHAT_AUTHOR.PERSON, text: "ok", lineId: null },
+            { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "ok", lineId: null },
           ],
         );
       }),

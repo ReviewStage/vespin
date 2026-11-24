@@ -34,8 +34,9 @@ import {
   type ManagerOfBackfill,
 } from "@repo/database/models/manager-chat-messages";
 import { listMessagesFrom, type StoredMessageRecord } from "@repo/database/models/message-reads";
+import { readNativeCallKeys } from "@repo/database/models/native-call-keys";
 import { AGENT_PART, type AgentPart, agentParts, messageWords } from "@repo/features/agent-parts";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import { AGENT_SENDER, type AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { managerChatLines } from "@repo/features/manager-chat";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
@@ -46,6 +47,7 @@ import { isRecord, isWireString, MESSAGE_ROLE, type WireValue } from "@repo/wire
 import { Effect, Option, type Redacted } from "effect";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { type TranscriptMessage, transcriptMessagesOf } from "../agents/coder-host/transcript.js";
+import { nativeCallDigest } from "../agents/workspace-mcp/call-key.js";
 import {
   bearerMatchesSecret,
   errorResponse,
@@ -292,6 +294,7 @@ function personMessage(
   return {
     clientKey: lineKeyOf(line),
     liveId: null,
+    callKey: null,
     authorKind: MANAGER_CHAT_AUTHOR.PERSON,
     authorUserId: former ? null : (sentBy?.userId ?? manager.userId),
     authorName: sentBy?.name ?? manager.starterName,
@@ -313,6 +316,7 @@ function voiceMessage(
   return {
     clientKey: lineKeyOf(line),
     liveId: null,
+    callKey: null,
     authorKind: MANAGER_CHAT_AUTHOR.AGENT,
     authorUserId: null,
     authorName: agentName(manager),
@@ -334,6 +338,7 @@ function turnMessage(
   manager: ManagerOfBackfill,
   said: AgentTranscriptMessage,
   index: TranscriptIndex,
+  callKeys: ReadonlyMap<string, string>,
 ): ManagerChatBackfillMessage | undefined {
   // Note that a turn's first message stands under the turn's own id, and each after it under its call's.
   const journalId = index.messages.has(said.id) ? said.id : index.callJournals.get(said.id);
@@ -353,6 +358,7 @@ function turnMessage(
   return {
     clientKey: call.callId,
     liveId: answeredId(call),
+    callKey: callKeys.get(call.callId) ?? null,
     authorKind: MANAGER_CHAT_AUTHOR.AGENT,
     authorUserId: null,
     authorName: agentName(manager),
@@ -379,11 +385,33 @@ function inOrder(
   });
 }
 
+/**
+ * The digest each call that may stand in the chat was keyed by, by its id:
+ * every `send_to_user` and `show_media` call, digested as the workspace's MCP
+ * server digests a call it is handed (`nativeCallDigest`), whose key the
+ * store kept for the call's live write.
+ */
+function chatCallDigests(messages: readonly AgentTranscriptMessage[]): ReadonlyMap<string, string> {
+  return new Map(
+    messages.flatMap((message) =>
+      message.role === MESSAGE_ROLE.ASSISTANT
+        ? agentParts(message).flatMap((part) =>
+            part.kind === AGENT_PART.TOOL &&
+            (part.tool === AGENT_TOOL.SEND_TO_USER || isShowMediaTool(part.tool))
+              ? [[part.callId, nativeCallDigest(part.tool, part.input ?? {})] as const]
+              : [],
+          )
+        : [],
+    ),
+  );
+}
+
 /** The Manager's chat as its transcript holds it, in order, cut by today's derivation (`managerChatLines`). */
 export function plannedChatOf(
   manager: ManagerOfBackfill,
   records: readonly StoredMessageRecord[],
   messages: readonly AgentTranscriptMessage[],
+  callKeys: ReadonlyMap<string, string>,
 ): readonly ManagerChatBackfillMessage[] {
   const index = indexOf(records, messages);
 
@@ -392,7 +420,7 @@ export function plannedChatOf(
 
     if (isVoiceLine(said)) return [voiceMessage(manager, said, index)];
 
-    return turnMessage(manager, said, index) ?? [];
+    return turnMessage(manager, said, index, callKeys) ?? [];
   });
 
   // Note that a line with no words and no files says nothing, as its live write would write nothing.
@@ -415,7 +443,21 @@ const backfillOne = (manager: ManagerOfBackfill, dry: boolean) =>
       ),
     );
 
-    const planned = plannedChatOf(manager, records.value, messages);
+    const digests = chatCallDigests(messages);
+
+    const keys = yield* readNativeCallKeys(manager.userId, manager.conversationId, [
+      ...new Set(digests.values()),
+    ]);
+
+    const callKeys = new Map(
+      [...digests].flatMap(([callId, digest]) => {
+        const key = keys.get(digest);
+
+        return key === undefined ? [] : [[callId, key] as const];
+      }),
+    );
+
+    const planned = plannedChatOf(manager, records.value, messages, callKeys);
     const backfilled = yield* backfillManagerChat(manager.id, planned, { dry });
 
     // Note that a Manager deleted since the batch was listed has no chat left to write.

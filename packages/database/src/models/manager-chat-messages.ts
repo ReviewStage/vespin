@@ -558,6 +558,8 @@ export interface ManagerChatBackfillMessage {
   readonly clientKey: string;
   /** The id a send's answer named, which says the message was written live under it; null where the answer named none. */
   readonly liveId: string | null;
+  /** The key a send's call ran under as the store keyed it (`native-call-keys.ts`), which its live write keyed its row by; null for a line, or a call no key was kept for. */
+  readonly callKey: string | null;
   readonly authorKind: ManagerChatMessage["authorKind"];
   readonly authorUserId: string | null;
   readonly authorName: string;
@@ -710,17 +712,23 @@ function backfilledChat(
 ): readonly BackfillEntry[] {
   const free = [...rows];
 
-  const entries: BackfillEntry[] = planned.map((message) => {
-    const row = rowOf(message, free);
+  const take = (row: BackfillRow | undefined) => {
+    if (row !== undefined) free.splice(free.indexOf(row), 1);
 
-    if (row !== undefined)
-      free.splice(
-        free.findIndex((each) => each.id === row.id),
-        1,
-      );
+    return row;
+  };
 
-    return { row, planned: message };
-  });
+  const named = planned.map((message) => take(rowOf(message, free)));
+
+  // Note that a call's key is the newest call's of the same input, so it is read only once every message named by its own has taken its row.
+  const entries: BackfillEntry[] = planned.map((message, index) => ({
+    row:
+      named[index] ??
+      (message.callKey === null
+        ? undefined
+        : take(free.find((row) => row.clientKey === message.callKey))),
+    planned: message,
+  }));
 
   for (const row of free) {
     const before = entries.findLastIndex(
