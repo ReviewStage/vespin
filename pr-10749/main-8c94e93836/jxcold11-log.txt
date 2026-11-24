@@ -1,0 +1,40 @@
+pinned to 4b39a4b03e
+== bundle PJjxcold11 base 4b39a4b03ed
+  built 4b39a4b03ed base app Vmain13.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(336,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(340,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(360,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(393,185): error TS18048: 'item.thread' is possibly 'undefined'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+t1 (8c94e93836) bundle 25276 KB over Vmain13.app
+seed (holders, t1 4b39a4b03e): 28108 KB
+source maps: index-a82db2a0a55f3ccd7ceb08171e6a53d7.hbc.map (67204 KB); hbc DIFFERS from the installed main.jsbundle
+sign-in: fails 0 shots 3 
+touch-1: pid 68639, probe ok, watch ok, profile 608 KB, touch lines 0, maestro ok
+  touch-1 cpu peak 108.3% (at 60 s: 0.7%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy MISSING
+touch-1: 
+idle-1: pid 70069, probe ok, watch ok, profile 976 KB
+  idle-1 cpu peak 68.1% (at 60 s: 8.9%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+idle-1: 
+touch-2: pid 70966, probe ok, watch ok, profile 520 KB, touch lines 0, maestro ok
+  touch-2 cpu peak 152.8% (at 60 s: 0.6%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy at 30 s: task-row 0, on screen 0
+touch-2: 
+idle-2: pid 72356, probe ok, watch ok, profile 768 KB
+  idle-2 cpu peak 100.5% (at 60 s: 2.7%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+idle-2: 
+touch-3: pid 73268, probe ok, watch ok, profile 768 KB, touch lines 0, maestro ok
+  touch-3 cpu peak 87.3% (at 60 s: 0.6%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy at 30 s: task-row 0, on screen 0
+touch-3: 
+touch-4: pid 74667, probe ok, watch ok, profile 584 KB, touch lines 0, maestro ok
+  touch-4 cpu peak 101.6% (at 60 s: 1.6%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy MISSING
+touch-4: 
+idle-3: pid 76010, probe ok, watch ok, profile 696 KB
+  idle-3 cpu peak 89.6% (at 60 s: 6.8%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+idle-3: 
+touch-5: pid 76978, probe ok, watch ok, profile 696 KB, touch lines 0, maestro ok
+  touch-5 cpu peak 52.6% (at 60 s: 1.1%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json , hierarchy at 30 s: task-row 0, on screen 0
+touch-5: 
