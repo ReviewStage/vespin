@@ -35,7 +35,7 @@ import { useState } from "react";
 import { openInSafari } from "../open-link.js";
 import type { PullRequestKey } from "../pull-requests/use-pull-request.js";
 import { usePullRequestChanges } from "../pull-requests/use-pull-request-changes.js";
-import { usePullRequestViewed } from "../pull-requests/use-pull-request-viewed.js";
+import { useFileViewed, usePullRequestViewed } from "../pull-requests/use-pull-request-viewed.js";
 import { useOnOwnTab } from "../tab-route.js";
 
 /** What the screen says in the panel's words, beyond the changes' own (`CHANGES_WORDS`). */
@@ -220,7 +220,7 @@ export function PullRequestFilesScreen() {
  * ink, its folder under it, and the diff filling the screen
  * (`DiffView`), drawn natively and wrapped unless Wrap lines in the ⋯ says
  * not. Viewed in the ⋯ marks the file viewed on GitHub, or unmarks it, as
- * the desktop's box does (`usePullRequestViewed`). The arrows beside the ⋯ step to the file before or after it in the
+ * the desktop's box does (`useFileViewed`). The arrows beside the ⋯ step to the file before or after it in the
  * list's order, in place, as Mail steps between messages, an arrow at the
  * list's end standing dimmed; the ⋯ also opens the file's diff on GitHub.
  * A file with no diff to draw says why, in the panel's words
@@ -237,7 +237,7 @@ export function PullRequestFileScreen() {
   const colors = useColors();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const changes = usePullRequestChanges(key);
-  const viewed = usePullRequestViewed(key);
+  const viewed = useFileViewed(key, path);
   const [wrap, setWrap] = useState(true);
   // The files whose folded diff was asked for by Show diff, by path, held while the screen stands.
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
@@ -280,9 +280,9 @@ export function PullRequestFileScreen() {
         <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={FILE_WORDS.MORE}>
           <Stack.Toolbar.Label>{FILE_WORDS.MORE}</Stack.Toolbar.Label>
           <Stack.Toolbar.MenuAction
-            isOn={viewed.viewed(path)}
+            isOn={viewed.viewed}
             disabled={viewed.toggle === undefined || file === undefined}
-            onPress={() => viewed.toggle?.(path)}
+            onPress={() => viewed.toggle?.()}
           >
             {FILE_WORDS.VIEWED}
           </Stack.Toolbar.MenuAction>
