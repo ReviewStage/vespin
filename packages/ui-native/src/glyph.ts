@@ -282,9 +282,8 @@ export const GLYPH = {
   // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
   EXPAND: system("arrow.up.left.and.arrow.down.right"),
   COLLAPSE: system("arrow.down.right.and.arrow.up.left"),
-  // A list's filter, Mail's own button over its list, filled while the list stands narrowed from its default.
-  FILTER: system("line.3.horizontal.decrease.circle"),
-  FILTERED: system("line.3.horizontal.decrease.circle.fill"),
+  // A list's View options, the system's bare filter lines (the developer, Nov 24, 2026), never the circled one.
+  FILTER: system("line.3.horizontal.decrease"),
   DISCLOSURE: system("chevron.forward"),
   // A sheet's step back to the step before it, the back chevron iOS draws in a navigation bar.
   BACK: system("chevron.backward"),

@@ -119,13 +119,13 @@ function lastRunWhen(automation: AutomationSummary, now: number): string | undef
   return sinceText(run.firedAt, now);
 }
 
-/** View options: Order by, its choice checked, then Reset view while the order is not the one the list starts in; its glyph fills while it is changed. */
+/** View options: Order by, its choice checked, then Reset view while the order is not the one the list starts in. */
 function viewMenu(order: AutomationsOrder, setOrder: (next: AutomationsOrder) => void): BarMenu {
   const changed = order !== DEFAULT_AUTOMATIONS_ORDER;
 
   return {
     label: VIEW_OPTIONS,
-    symbol: changed ? GLYPH.FILTERED : GLYPH.FILTER,
+    symbol: GLYPH.FILTER,
     choices: [],
     actions: [],
     groups: [
