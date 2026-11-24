@@ -4,7 +4,6 @@ import { IOS_TAB, type IosTab, iosTabOfGroup } from "@repo/features/ios-app-link
 import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import {
   AccountBarItem,
-  AccountMenuItem,
   type BarAction,
   type ColumnBar,
   GLYPH,
@@ -15,7 +14,6 @@ import {
   RowList,
   SidebarColumn,
   SWITCHER_LOOK,
-  sidebarAction,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
   WorkspaceSwitcherItem,
@@ -27,7 +25,7 @@ import { useWindowDimensions } from "react-native";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxBadge } from "../inbox/use-inbox.js";
 import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-on.js";
-import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "../settings-button.js";
+import { useOpenSettings, useSettingsAccount } from "../settings-button.js";
 import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
 import { useSidebarTasks } from "../sidebar-tasks.js";
 import { SPLIT_TAB, showSplitList, useSplitPicked } from "../split-route.js";
@@ -58,7 +56,7 @@ const PLACE_WORDS = {
 } as const satisfies Record<SidebarPlace, string>;
 
 /** What the sidebar's foot says, as the panel's foot says it. */
-const FOOT_WORDS = {
+const _FOOT_WORDS = {
   SETTINGS: "Settings",
   FEEDBACK: "Send feedback",
 } as const;
@@ -179,14 +177,13 @@ export function useSidebarShowAction(): BarAction | undefined {
  */
 export function AppSidebarPane() {
   const router = useRouter();
-  const openSettings = useOpenSettings();
-  const account = useSettingsAccount();
+  const _openSettings = useOpenSettings();
+  const _account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const inboxShown = useInboxShown();
   const waiting = useInboxBadge();
   const tasks = useSidebarTasks();
   const here = useSidebarHere();
-  const { toggle } = useAppSidebarShown();
   const mergeQueueOn = useMergeQueueOn();
   const onTab = useOnTab();
   const compose = useComposeAction();
