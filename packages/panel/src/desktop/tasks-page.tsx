@@ -46,9 +46,9 @@ import {
   TasksFilterButton,
   TasksFilterChips,
   TasksViewOptions,
-  VIEW_OPTIONS,
 } from "./tasks-page-options.js";
 import { useSettledPages } from "./use-settled-pages.js";
+import { VIEW_OPTIONS } from "./view-options.js";
 
 /**
  * tasks-page.tsx -- the window's Tasks page: the listed workspace's tasks as a List or as the Board, chosen by a switch beside its title, narrowed by its Filter and laid out by its View options.

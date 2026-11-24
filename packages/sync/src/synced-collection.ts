@@ -71,11 +71,18 @@ export function rowOf<Row extends object, Stored extends object>(stored: Stored)
   let read = readRows.get(stored);
 
   if (read === undefined) {
-    read = Object.fromEntries(
-      Object.entries(stored).filter(
-        ([name, value]) => !name.startsWith("$") && value !== undefined,
-      ),
-    );
+    // Note that the row is copied field by field rather than through `Object.entries`, because a launch reads every kept row through here, thousands of them, and the entries' arrays were most of its cost.
+    // SAFETY: a stored row holds the row's own fields, each one of its values, beside TanStack's virtual fields, which are left out here.
+    const fields = stored as Readonly<Partial<Record<string, Row[keyof Row]>>>;
+    const copy: Partial<Record<string, Row[keyof Row]>> = {};
+
+    for (const name of Object.keys(fields)) {
+      const value = fields[name];
+
+      if (value !== undefined && !name.startsWith("$")) copy[name] = value;
+    }
+
+    read = copy;
     readRows.set(stored, read);
   }
 

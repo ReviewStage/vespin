@@ -17,7 +17,11 @@ import {
   type ButtonVariant,
   CHOICE_BAR_LOOK,
   ChoiceBar,
+  ICON_PICKER_ASIDE,
   IconButton,
+  IconPicker,
+  IconPickerChoice,
+  IconPickerGroup,
   NOTE_LINE_LOOK,
   NoteLine,
   POPOVER_ALIGN,
@@ -26,13 +30,7 @@ import {
   PopoverIconButton,
   PopoverPanel,
   ROVING_ORIENTATION,
-  ScrollArea,
-  SearchField,
-  TEXT_ELEMENT,
-  TEXT_VARIANT,
-  Text,
   useRovingKeys,
-  VisuallyHidden,
 } from "@repo/ui";
 import { drawnDark } from "@repo/ui/appearance";
 import { SmilePlusIcon } from "@repo/ui/icons";
@@ -180,17 +178,6 @@ const ALL_ICONS = "All icons";
 
 /** What the glyphs a search found are offered under. */
 const FOUND_ICONS = "Icons";
-
-/** How many choices stand in one row of the grid, which `.section-icon-grid` lays out alike; the arrows step a row by it. */
-const GRID_COLUMNS = 10;
-
-/** The arrow keys that move through the grid, and by how many choices. */
-const GRID_STEPS = new Map([
-  ["ArrowLeft", -1],
-  ["ArrowRight", 1],
-  ["ArrowUp", -GRID_COLUMNS],
-  ["ArrowDown", GRID_COLUMNS],
-]);
 
 /** What the picker says where a set could not be loaded. */
 const LOAD_FAILED = {
@@ -360,42 +347,6 @@ function iconLabel(icon: TaskSectionIcon): string {
   return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : glyphLabel(icon.glyph);
 }
 
-/**
- * One choice in a grid: a button pressed while it is the icon chosen, the
- * grid's tab stop where `stop`, and, for a glyph, the opener of the colors
- * it hangs (`popup`). Note that the opener says it hangs them but not
- * whether they stand open, because flipping `aria-expanded` restyles every
- * box a `:has([aria-expanded])` rule reaches, some two thousand cells
- * among them, for a quarter of a second; the colors take the focus as they
- * open, which says it instead.
- */
-function GridChoice({
-  label,
-  pressed,
-  stop,
-  face,
-  popup = false,
-  onPress,
-}: {
-  label: string;
-  pressed: boolean;
-  stop: boolean;
-  face: React.ReactNode;
-  popup?: boolean | undefined;
-  onPress: () => void;
-}): React.JSX.Element {
-  return (
-    <IconButton
-      icon={face}
-      label={label}
-      pressed={pressed}
-      tabbable={stop}
-      aria-haspopup={popup ? "dialog" : undefined}
-      onClick={onPress}
-    />
-  );
-}
-
 /** A glyph whose colors stand open over the grid: the group it was pressed in, and the color they start on. */
 interface OpenedGlyph {
   readonly group: string;
@@ -466,7 +417,7 @@ function GlyphColors({
         data-roving={roving["data-roving"]}
         role="toolbar"
         aria-label={`${label} color`}
-        className="section-icon-colors grid grid-cols-5 gap-tight-gap p-tight-gap"
+        className={`section-icon-colors ${ICON_PICKER_ASIDE} grid grid-cols-5 gap-tight-gap p-tight-gap`}
         onKeyDown={roving.onKeyDown}
         onFocus={roving.onFocus}
       >
@@ -487,31 +438,6 @@ function GlyphColors({
         ))}
       </div>
     </PopoverPanel>
-  );
-}
-
-/** A group of choices under its name. */
-function ChoiceGroup({
-  name,
-  choices,
-}: {
-  name: string;
-  choices: readonly React.ReactNode[];
-}): React.JSX.Element {
-  return (
-    <section
-      className="section-icon-group [.section-icon-group+&]:mt-control-gap"
-      aria-label={name}
-    >
-      <Text
-        as={TEXT_ELEMENT.H3}
-        variant={TEXT_VARIANT.GROUP}
-        className="section-icon-group-name m-0 mb-tight-gap"
-      >
-        {name}
-      </Text>
-      <div className="section-icon-grid grid grid-cols-section-icons gap-tight-gap">{choices}</div>
-    </section>
   );
 }
 
@@ -588,7 +514,7 @@ const GlyphCell = memo(function GlyphCell({
 }): React.JSX.Element {
   return (
     <span className="section-icon-cell relative grid">
-      <GridChoice
+      <IconPickerChoice
         label={label}
         pressed={pressed}
         stop={stop}
@@ -651,9 +577,8 @@ const GlyphGroup = memo(function GlyphGroup({
   onClose: (byKey: boolean) => void;
 }): React.JSX.Element {
   return (
-    <ChoiceGroup
-      name={name}
-      choices={choices.map((choice) => {
+    <IconPickerGroup name={name}>
+      {choices.map((choice) => {
         const pressed = chosenGlyph(icon, choice.glyph);
 
         return (
@@ -675,7 +600,7 @@ const GlyphGroup = memo(function GlyphGroup({
           />
         );
       })}
-    />
+    </IconPickerGroup>
   );
 });
 
@@ -703,7 +628,7 @@ function emojiChoice(
   stop: boolean,
 ): React.JSX.Element {
   return (
-    <GridChoice
+    <IconPickerChoice
       key={one.emoji}
       label={one.name}
       pressed={chosenEmoji(props.icon, one.emoji)}
@@ -781,12 +706,11 @@ const GlyphPanel = memo(function GlyphPanel(
   return (
     <>
       {props.recent.length === 0 ? null : (
-        <ChoiceGroup
-          name={RECENT}
-          choices={props.recent.map((one) =>
+        <IconPickerGroup name={RECENT}>
+          {props.recent.map((one) =>
             recentChoice(icons, one, props, stopAt(chosenIcon(props.icon, one), one === first)),
           )}
-        />
+        </IconPickerGroup>
       )}
       <GlyphGroup
         name={SUGGESTED}
@@ -834,11 +758,9 @@ const EmojiPanel = memo(function EmojiPanel(props: GridProps): React.JSX.Element
   return (
     <>
       {groups.map((group) => (
-        <ChoiceGroup
-          key={group.name}
-          name={group.name}
-          choices={group.emojis.map((one) => emojiChoice(one, props, one === stop))}
-        />
+        <IconPickerGroup key={group.name} name={group.name}>
+          {group.emojis.map((one) => emojiChoice(one, props, one === stop))}
+        </IconPickerGroup>
       ))}
     </>
   );
@@ -885,7 +807,9 @@ const FoundPanel = memo(function FoundPanel(
   return (
     <>
       {firstEmoji ? (
-        <ChoiceGroup name="Emoji" choices={typedOne.map((one) => emojiChoice(one, props, true))} />
+        <IconPickerGroup name="Emoji">
+          {typedOne.map((one) => emojiChoice(one, props, true))}
+        </IconPickerGroup>
       ) : null}
       {icons === undefined || glyphs.length === 0 ? null : (
         <GlyphGroup
@@ -901,59 +825,17 @@ const FoundPanel = memo(function FoundPanel(
         />
       )}
       {found.length === typedOne.length ? null : (
-        <ChoiceGroup
-          name={firstEmoji ? "More emoji" : "Emoji"}
-          choices={found
+        <IconPickerGroup name={firstEmoji ? "More emoji" : "Emoji"}>
+          {found
             .slice(typedOne.length)
             .map((one, at) =>
               emojiChoice(one, props, !firstEmoji && glyphs.length === 0 && at === 0),
             )}
-        />
+        </IconPickerGroup>
       )}
     </>
   );
 });
-
-/** The grid's choices under `root`, in order; a glyph's colors standing among them are no choices of the grid's, so they neither take its tab stop nor count in its rows. */
-function gridChoices(root: Element, selector = "button"): HTMLButtonElement[] {
-  return [...root.querySelectorAll<HTMLButtonElement>(selector)].filter(
-    (choice) => choice.closest(".section-icon-colors") === null,
-  );
-}
-
-/** Moves focus through the choices with the arrows, from whichever holds it, a row's width up and down. */
-function stepGrid(event: React.KeyboardEvent<HTMLFieldSetElement>): void {
-  const step = GRID_STEPS.get(event.key);
-
-  if (step === undefined) return;
-  const choices = gridChoices(event.currentTarget);
-  const from = event.target instanceof HTMLButtonElement ? choices.indexOf(event.target) : -1;
-
-  if (from === -1) return;
-  event.preventDefault();
-  choices[Math.min(Math.max(from + step, 0), choices.length - 1)]?.focus();
-}
-
-/**
- * Makes the choice that took focus its set's one tab stop, so Tab out and
- * Shift+Tab back lands where the arrows left it. Note that this is written
- * on the buttons themselves rather than drawn, because drawing it would
- * draw every one of some two thousand buttons again on each arrow press;
- * the next choice made draws the stop again as the icon chosen.
- */
-function standTabStop(event: React.FocusEvent<HTMLFieldSetElement>): void {
-  const focused = event.target;
-
-  if (!(focused instanceof HTMLButtonElement) || focused.closest(".section-icon-colors") !== null) {
-    return;
-  }
-
-  for (const stop of gridChoices(event.currentTarget, 'button:not([tabindex="-1"])')) {
-    stop.tabIndex = -1;
-  }
-
-  focused.tabIndex = 0;
-}
 
 /**
  * The picker a section's icon well hangs: its search, which `search` names
@@ -981,7 +863,6 @@ function SectionIconPicker({
   const [opened, setOpened] = useState<OpenedGlyph | undefined>(undefined);
   const opener = useRef<Element | null>(null);
   const refocus = useRef(false);
-  const grid = useRef<HTMLDivElement | null>(null);
   const panelId = useId();
 
   const tabIds = {
@@ -1025,19 +906,6 @@ function SectionIconPicker({
     setOpened(undefined);
   }, []);
 
-  // Enter, shifted or not, presses the first thing found: an emoji is chosen, a glyph's colors open.
-  const chooseFirst = () => {
-    if (grid.current !== null) gridChoices(grid.current)[0]?.click();
-  };
-
-  // Note that the search's own keys stop at Enter and Escape, so the arrow down into the grid is heard around it.
-  const toGrid = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key !== "ArrowDown" || !(event.target instanceof HTMLInputElement)) return;
-    event.preventDefault();
-
-    if (grid.current !== null) gridChoices(grid.current, 'button:not([tabindex="-1"])')[0]?.focus();
-  };
-
   const searching = query.trim() !== "";
 
   const props: GridProps = {
@@ -1050,27 +918,16 @@ function SectionIconPicker({
   };
 
   return (
-    <div className="section-icon-picker flex w-section-icon-picker flex-col">
-      <ReplayUnmask>
-        <div className="section-icon-head flex flex-col gap-control-gap p-card-inset-snug pb-0">
-          <search onKeyDown={toGrid}>
-            <SearchField
-              ref={search}
-              label="Search icons and emoji"
-              placeholder="Search icons and emoji"
-              value={query}
-              onChange={(next) => {
-                setOpened(undefined);
-                setQuery(next);
-              }}
-              onClear={() => {
-                setOpened(undefined);
-                setQuery("");
-              }}
-              onEnter={chooseFirst}
-              onShiftEnter={chooseFirst}
-            />
-          </search>
+    <ReplayUnmask>
+      <IconPicker
+        searchLabel="Search icons and emoji"
+        search={search}
+        query={query}
+        onQuery={(next) => {
+          setOpened(undefined);
+          setQuery(next);
+        }}
+        bar={
           <div className="section-icon-bar flex items-center justify-between gap-control-gap">
             <ChoiceBar<IconTab>
               label="Icon kind"
@@ -1092,30 +949,19 @@ function SectionIconPicker({
               </Button>
             )}
           </div>
-        </div>
-        <fieldset
-          className="section-icon-choices m-0 min-w-0 border-0 p-card-inset-snug pt-control-gap"
-          role="tabpanel"
-          id={panelId}
-          aria-labelledby={tabIds[tab]}
-          onKeyDown={stepGrid}
-          onFocus={standTabStop}
-        >
-          <VisuallyHidden as="legend">{tab === ICON_TAB.ICONS ? "Icons" : "Emoji"}</VisuallyHidden>
-          <div className="section-icon-scroll flex h-section-icon-scroll flex-col">
-            <ScrollArea ref={grid}>
-              {searching ? (
-                <FoundPanel {...props} query={query} />
-              ) : tab === ICON_TAB.ICONS ? (
-                <GlyphPanel {...props} recent={recent} />
-              ) : (
-                <EmojiPanel {...props} />
-              )}
-            </ScrollArea>
-          </div>
-        </fieldset>
-      </ReplayUnmask>
-    </div>
+        }
+        legend={tab === ICON_TAB.ICONS ? "Icons" : "Emoji"}
+        panel={{ id: panelId, labelledBy: tabIds[tab] }}
+      >
+        {searching ? (
+          <FoundPanel {...props} query={query} />
+        ) : tab === ICON_TAB.ICONS ? (
+          <GlyphPanel {...props} recent={recent} />
+        ) : (
+          <EmojiPanel {...props} />
+        )}
+      </IconPicker>
+    </ReplayUnmask>
   );
 }
 

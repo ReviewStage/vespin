@@ -246,6 +246,7 @@ import {
   LIST_AGENTS_TOOL,
   LIST_MODELS_REFUSAL,
   LIST_TASKS_TOOL,
+  MEMBER_START_CHOICE_FIELDS,
   orStoreRefusal,
   queueRecord,
   READ_PAGE_CHARS,
@@ -1865,10 +1866,7 @@ const StartAgentInputSchema = Schema.Struct({
   note: START_AGENT_TOOL.inputSchema.fields.note,
   title: START_AGENT_TOOL.inputSchema.fields.title,
   branch: START_AGENT_TOOL.inputSchema.fields.branch,
-  model: START_AGENT_TOOL.inputSchema.fields.model,
-  effort: START_AGENT_TOOL.inputSchema.fields.effort,
-  permissionMode: START_AGENT_TOOL.inputSchema.fields.permissionMode,
-  runsOn: START_AGENT_TOOL.inputSchema.fields.runsOn,
+  ...MEMBER_START_CHOICE_FIELDS,
   from: START_AGENT_TOOL.inputSchema.fields.from,
 });
 

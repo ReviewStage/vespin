@@ -201,7 +201,6 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         const spoken = yield* turnOn(true, {});
         const spokenText = spoken.text ?? "";
         assert.ok(spokenText.includes("do not call `send_to_user` this turn"), spokenText);
-        assert.ok(!spokenText.includes("end_turn"), spokenText);
         assert.deepEqual(yield* sentOn(spoken.handed), {
           status: ACTION_RESULT_STATUS.REJECTED,
           reason: "You're on a call: answer in plain text; the voice will say it.",

@@ -36,7 +36,10 @@ import { andList, orList } from "./words.js";
  *
  * Who owns an automation is the one thing the list must never leave in
  * doubt, so the list falls into the workspace's automations, then the
- * account's personal ones, and each row names its owner besides. A schedule
+ * account's personal ones, and each row names its owner besides. Inside
+ * each, the automations stand in the order the reader chose, by when each
+ * was made, its name, its latest run, or its next, the newest made first
+ * until they choose, and a tie falls to the newest made. A schedule
  * is said in words where its cron is one the picker writes, and as its cron
  * otherwise, a one-time one as the date and time it runs on, read off its
  * own spelling, its year named only where it is not this one, with its
@@ -163,6 +166,31 @@ export const AGENT_STATUS_WORDS = {
 /** The order the owners' groups stand in: the workspace's first, as the ones every member shares. */
 const OWNER_ORDER = [AUTOMATION_SCOPE.WORKSPACE, AUTOMATION_SCOPE.PERSONAL] as const;
 
+/** How the list orders each owner's automations, and the finished ones under them. */
+export const AUTOMATIONS_ORDER = {
+  /** The newest made first, as the service lists them. */
+  CREATED: "created",
+  /** By name, A to Z. */
+  NAME: "name",
+  /** The one that ran latest first, one that never ran last. */
+  LAST_RUN: "last-run",
+  /** The one due soonest first, one with no instant due last. */
+  NEXT_RUN: "next-run",
+} as const;
+
+export type AutomationsOrder = (typeof AUTOMATIONS_ORDER)[keyof typeof AUTOMATIONS_ORDER];
+
+/** The order the list stands in until its reader chooses another: the newest made first. */
+export const DEFAULT_AUTOMATIONS_ORDER: AutomationsOrder = AUTOMATIONS_ORDER.CREATED;
+
+/** What each order is called, on View options' Order by. */
+export const AUTOMATIONS_ORDER_WORDS = {
+  [AUTOMATIONS_ORDER.CREATED]: "Created",
+  [AUTOMATIONS_ORDER.NAME]: "Name",
+  [AUTOMATIONS_ORDER.LAST_RUN]: "Last run",
+  [AUTOMATIONS_ORDER.NEXT_RUN]: "Next run",
+} as const satisfies Record<AutomationsOrder, string>;
+
 /** Where an automation's newest run stands, as its row's glyph wears it. */
 export const AUTOMATION_RUN_STANDING = {
   /** Its agent is at work. */
@@ -197,7 +225,7 @@ export type AutomationNext =
   | { readonly kind: typeof AUTOMATION_NEXT.RAN }
   | { readonly kind: typeof AUTOMATION_NEXT.AT; readonly at: number };
 
-/** One owner's automations, in the order the service listed them. */
+/** One owner's automations, in the order the list was asked for. */
 export interface AutomationGroup {
   readonly owner: AutomationScope;
   readonly automations: readonly AutomationSummary[];
@@ -336,12 +364,48 @@ function automationFinished(automation: AutomationSummary): boolean {
   return automationNext(automation).kind === AUTOMATION_NEXT.RAN;
 }
 
-/** The list grouped by owner, the workspace's first, an owner with none left out, and a finished one-time automation in none (`finishedAutomations`). */
+/** Two instants, the earlier first, or the later where `latest`; none stands after any. */
+function byInstant(a: number | undefined, b: number | undefined, latest: boolean): number {
+  if (a === undefined || b === undefined) return Number(a === undefined) - Number(b === undefined);
+
+  return latest ? b - a : a - b;
+}
+
+/** When an automation is next due, where an instant is: none for one off, fired by events, or with no run left. */
+function dueAt(automation: AutomationSummary): number | undefined {
+  const next = automationNext(automation);
+
+  return next.kind === AUTOMATION_NEXT.AT ? next.at : undefined;
+}
+
+/** Two automations the newest made first. */
+function byNewest(a: AutomationSummary, b: AutomationSummary): number {
+  return b.createdAt - a.createdAt;
+}
+
+/** Two automations in the order chosen; a tie falls to the newest made. */
+function byOrder(order: AutomationsOrder): (a: AutomationSummary, b: AutomationSummary) => number {
+  switch (order) {
+    case AUTOMATIONS_ORDER.CREATED:
+      return byNewest;
+    case AUTOMATIONS_ORDER.NAME:
+      return (a, b) => a.name.localeCompare(b.name) || byNewest(a, b);
+    case AUTOMATIONS_ORDER.LAST_RUN:
+      return (a, b) => byInstant(a.lastRun?.firedAt, b.lastRun?.firedAt, true) || byNewest(a, b);
+    case AUTOMATIONS_ORDER.NEXT_RUN:
+      return (a, b) => byInstant(dueAt(a), dueAt(b), false) || byNewest(a, b);
+  }
+}
+
+/** The list grouped by owner, the workspace's first, an owner with none left out, and a finished one-time automation in none (`finishedAutomations`); each group in `order`. */
 export function automationGroups(
   automations: readonly AutomationSummary[],
+  order: AutomationsOrder = DEFAULT_AUTOMATIONS_ORDER,
 ): readonly AutomationGroup[] {
+  const ordered = automations.toSorted(byOrder(order));
+
   return OWNER_ORDER.flatMap((owner) => {
-    const owned = automations.filter(
+    const owned = ordered.filter(
       (automation) => automationOwner(automation) === owner && !automationFinished(automation),
     );
 
@@ -349,11 +413,12 @@ export function automationGroups(
   });
 }
 
-/** The one-time automations that ran and stand paused for it, in the order the service listed them, which the list folds away under Finished. */
+/** The one-time automations that ran and stand paused for it, in `order`, which the list folds away under Finished. */
 export function finishedAutomations(
   automations: readonly AutomationSummary[],
+  order: AutomationsOrder = DEFAULT_AUTOMATIONS_ORDER,
 ): readonly AutomationSummary[] {
-  return automations.filter(automationFinished);
+  return automations.filter(automationFinished).toSorted(byOrder(order));
 }
 
 /**

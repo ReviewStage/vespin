@@ -432,7 +432,7 @@ function savedEdit(
     }
 
     if (save.status !== DESCRIPTION_SAVE_STATUS.SAVED) {
-      return yield* new EditRefused({ refusal: refused(save.reason) });
+      return yield* new EditRefused({ refusal: refused(save.detail ?? save.reason) });
     }
 
     return {

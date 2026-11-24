@@ -9,7 +9,7 @@ import {
   launchStoppedWords,
   mendedByNewAgent,
 } from "@repo/features/agent-failure-words";
-import { AGENT_PART, agentParts, endTurnOf, endTurnSummary } from "@repo/features/agent-parts";
+import { AGENT_PART, agentParts, endTurnSummary } from "@repo/features/agent-parts";
 import {
   ACTION,
   billingRequiredWords,
@@ -101,7 +101,7 @@ import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task
 import { dayAndTimeText, dueText } from "@repo/features/time-format";
 import { TOOL_STATE, type ToolState } from "@repo/features/tool-call-block";
 import { githubLineOf } from "@repo/features/transcript-lines";
-import { isAgentTurn, isVoiceLine, opensTurn } from "@repo/features/voice-call-lines";
+import { isAgentTurn, opensTurn } from "@repo/features/voice-call-lines";
 import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
@@ -1684,7 +1684,7 @@ const SENTENCE_END = /[.!?](?=\s|$)/u;
  * What a turn that finished replied, as a reader hears it: its newest
  * reply's last stretch of words, after the turn's last call, cut to its
  * first sentence, or to its first words where that runs on; the summary of
- * its `end_turn`, where it ended with one. Nothing where
+ * its retired `end_turn`, where it ended with one. Nothing where
  * there is no reply, or no words follow its last call, as a turn that ended
  * on a call.
  */
@@ -1698,7 +1698,7 @@ export function finishedReplyLead(
   const parts = agentParts(reply);
   const lastCall = parts.findLastIndex((part) => part.kind === AGENT_PART.TOOL);
   const last = parts.slice(lastCall + 1).findLast((part) => part.kind === AGENT_PART.TEXT);
-  // Note that a turn ended with `end_turn` replied in its summary, whatever it wrote around the call.
+  // Note that a turn ended with the retired `end_turn` replied in its summary, whatever it wrote around the call.
   const said = endTurnSummary(parts) ?? (last?.kind === AGENT_PART.TEXT ? last.text : "");
   const words = plainWords(said);
 
@@ -1711,26 +1711,6 @@ export function finishedReplyLead(
     cut.length <= REPLY_LEAD_WORDS ? sentence : `${cut.slice(0, REPLY_LEAD_WORDS).join(" ")}…`;
 
   return { messageId: reply.id, lead };
-}
-
-/**
- * The follow-ups of the newest turn, where it ended with an `end_turn` that
- * was taken: the turn's message, which ticks are kept against so a later
- * turn starts with none ticked, and what it offered; none where the newest
- * turn ended another way.
- */
-export function lastTurnEnding(
-  messages: readonly AgentTranscriptMessage[],
-): { readonly messageId: string; readonly followUps: readonly string[] } | undefined {
-  // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next; the voice retelling the turn on a call waits on nothing.
-  const last = messages.findLast(
-    (message) => message.arrivedIn === undefined && !isVoiceLine(message),
-  );
-
-  if (last?.role !== MESSAGE_ROLE.ASSISTANT) return undefined;
-  const ending = endTurnOf(agentParts(last));
-
-  return ending === undefined ? undefined : { messageId: last.id, followUps: ending.followUps };
 }
 
 /** Where a line the developer sent stands, before the service's row for it lands. */

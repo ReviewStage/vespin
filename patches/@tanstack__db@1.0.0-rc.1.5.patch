@@ -1,0 +1,26 @@
+diff --git a/dist/cjs/query/compiler/index.cjs b/dist/cjs/query/compiler/index.cjs
+index 2bb456a5c03de3318cc91578ee738ca947aeacdc..f4ae8773c6828c1c1063de1b57ea18a085b4dce7 100644
+--- a/dist/cjs/query/compiler/index.cjs
++++ b/dist/cjs/query/compiler/index.cjs
+@@ -362,7 +362,7 @@ function compileQueryInternal([rawQuery, inputs, collections, subscriptions, cal
+ 	if (query.fnSelect) pipeline = pipeline.pipe((0, _tanstack_db_ivm.map)(([key, namespacedRow]) => {
+ 		const callbackRow = require_route_metadata.stripInternalCallbackMetadata(namespacedRow);
+ 		const selectResults = query.fnSelect(callbackRow);
+-		validateFnSelectResult(selectResults);
++		if (require_error_message.devBuild()) validateFnSelectResult(selectResults);
+ 		let selected = selectResults;
+ 		const routing = namespacedRow[require_route_metadata.INCLUDES_ROUTING];
+ 		if (routing && require_route_metadata.isPublicContainer(selectResults)) {
+diff --git a/dist/esm/query/compiler/index.js b/dist/esm/query/compiler/index.js
+index c4d4a4974fb1bf54b9aaa5c1f2b6304bfea906c8..49785a341d45b998bd17cbac8ca85ec48daa15c9 100644
+--- a/dist/esm/query/compiler/index.js
++++ b/dist/esm/query/compiler/index.js
+@@ -362,7 +362,7 @@ function compileQueryInternal([rawQuery, inputs, collections, subscriptions, cal
+ 	if (query.fnSelect) pipeline = pipeline.pipe(map(([key, namespacedRow]) => {
+ 		const callbackRow = stripInternalCallbackMetadata(namespacedRow);
+ 		const selectResults = query.fnSelect(callbackRow);
+-		validateFnSelectResult(selectResults);
++		if (devBuild()) validateFnSelectResult(selectResults);
+ 		let selected = selectResults;
+ 		const routing = namespacedRow[INCLUDES_ROUTING];
+ 		if (routing && isPublicContainer(selectResults)) {

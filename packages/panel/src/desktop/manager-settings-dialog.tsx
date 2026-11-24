@@ -1,8 +1,9 @@
 /**
  * manager-settings-dialog.tsx -- a Manager's Settings: New Manager's card in its edit look, which its menu's Settings… opens wherever its menu stands, to change the Manager as it stands.
  *
- * A Manager is configured in one place, so its menu offers Settings… where
- * a coder's offers Rename (`agent-actions.tsx`). The card is New Manager's
+ * A Manager's menu offers Settings… beside Rename and Change face ›, which
+ * change its name and face in place (`agent-actions.tsx`), as the one card
+ * that changes all of it together. The card is New Manager's
  * own (`ManagerCard`), filled from the Manager: its Name, the agent's title;
  * its Face, which any face may be picked for, another Manager's too; its Model and effort; and its Repositories and Machine, held as it was
  * made, saying so, since neither changes after. Of those the client holds
@@ -39,8 +40,8 @@ import { useFormDialog } from "./use-form-dialog.js";
 /** What the card says where Save is pressed with no name. */
 const NAME_ASKED = "Name the Manager.";
 
-/** What the card says where the face was not saved. */
-const FACE_FAILED = "Couldn't change the Manager's face.";
+/** What the card, and a toast from a Manager's menu, say where the face was not saved. */
+export const FACE_FAILED = "Couldn't change the Manager's face.";
 
 /** No device, while the member's devices are not read. */
 const NO_DEVICES: readonly MacOffer[] = [];

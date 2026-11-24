@@ -175,6 +175,7 @@ import {
   taskPreview,
   UNASSIGNED_UNDER,
   useColors,
+  useDockRoom,
   useMinute,
   useRowAsker,
   useWindowSizeClass,
@@ -3104,6 +3105,8 @@ function InlineDescriptionSection({
   const { task } = overview;
   const inline = useInlineDescription(task.id, overview.workspace?.id, body, chrome);
   const { field } = inline;
+  // Note that what an `@` offers docks over the keyboard on a pushed page, so the caret's line keeps clear of it as of the keyboard; a split view's column ends over the offer at its foot, which the field clears on its own, and no dock stands around it there.
+  const room = useDockRoom();
 
   const start: SectionEdit = {
     label: WORDS.EDIT,
@@ -3128,6 +3131,7 @@ function InlineDescriptionSection({
             editable={inline.editable}
             onAtWord={inline.onAtWord}
             fitsWords
+            keepClear={inline.mentions === undefined ? undefined : room}
             opensAt={inline.opensAt}
             testID={DESCRIPTION_FIELD_ID}
           />

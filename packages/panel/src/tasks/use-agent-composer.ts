@@ -346,10 +346,6 @@ export function useAgentComposer(input: {
   shown?: boolean | undefined;
   /** Opens the agent's tab, which that toast offers; none offers nothing. */
   onOpen?: (() => void) | undefined;
-  /** Words a send carries under the box's own, such as the follow-ups ticked in the bar over it, which a send with the box empty still sends; none where nothing is held. */
-  lead?: string | undefined;
-  /** Told once a send has carried the lead, so its holder lets it go. */
-  onLeadSent?: (() => void) | undefined;
   /** Sends the box's words through the suggestion it was filled in from, once (`suggestion-send.ts`); none where the box takes none. */
   sendSuggestion?:
     | ((
@@ -533,11 +529,7 @@ export function useAgentComposer(input: {
   };
 
   const sendDraft = (clientKey: string = crypto.randomUUID()) => {
-    const { lead, onLeadSent } = latest.current;
-
-    const words = [kept.draft.text.trim(), lead?.trim() ?? ""]
-      .filter((each) => each !== "")
-      .join("\n\n");
+    const words = kept.draft.text.trim();
 
     const { attachments, suggestion } = kept.draft;
 
@@ -549,15 +541,13 @@ export function useAgentComposer(input: {
     if (replying !== undefined) setHeld((was) => ({ ...was, replying: undefined }));
 
     if (suggestion !== undefined) {
-      sendThroughSuggestion(suggestion, text, kept.draft, lead);
+      sendThroughSuggestion(suggestion, text, kept.draft);
 
       return;
     }
 
     update(() => EMPTY_DRAFT);
     deliver({ clientKey, text, attachments, steers: input.running === true });
-
-    if (lead !== undefined) onLeadSent?.();
   };
 
   // Whether a suggestion's send is out, which holds the box.
@@ -572,12 +562,7 @@ export function useAgentComposer(input: {
    * host sends it behind the agent's messages still on their way, as every
    * send to the agent goes, so the agent takes them in the order they were sent.
    */
-  const sendThroughSuggestion = (
-    suggestion: DraftSuggestion,
-    text: string,
-    sent: Draft,
-    sentLead: string | undefined,
-  ) => {
+  const sendThroughSuggestion = (suggestion: DraftSuggestion, text: string, sent: Draft) => {
     const sendSuggestion = latest.current.sendSuggestion;
 
     if (sendSuggestion === undefined || suggesting) return;
@@ -595,11 +580,6 @@ export function useAgentComposer(input: {
                 ? { ...was, suggestion: undefined }
                 : was,
           );
-
-          // Note that the follow-ups the send carried go once it lands, as a line's do, so no later send carries them again,
-          // but only while they are still the ones ticked: one ticked while the send was out stays, with those it joined.
-          if (sentLead !== undefined && latest.current.lead === sentLead)
-            latest.current.onLeadSent?.();
 
           return;
         }

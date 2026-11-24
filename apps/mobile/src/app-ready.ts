@@ -1,4 +1,4 @@
-// app-ready.ts -- counts how long a launch, a sign-in's return, or a launch woken in the background once it came to the front, took to show the Inbox, once each, on a rung, as `app:ready`.
+// app-ready.ts -- counts how long a launch, a sign-in's return, or a launch woken in the background once it came to the front, took to show the Inbox, once each, on a rung, as `app:ready`, and ends a launch's trace there.
 
 import {
   PRODUCT_FIRST_ROWS,
@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
+import { finishLaunchTrace } from "./crash-reports.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostCount } from "./host/host-provider.js";
 import {
@@ -156,7 +157,11 @@ export function useAppReadyCount(shown: boolean): void {
     const account = phase(LAUNCH_PHASE.ACCOUNT);
     const local = phase(LAUNCH_PHASE.LOCAL);
     const started = phase(LAUNCH_PHASE.STARTED);
+    const screens = phase(LAUNCH_PHASE.SCREENS);
     const inbox = phase(LAUNCH_PHASE.INBOX);
+
+    // Note that only a launch that waited in front ends its trace, since one timed from the front or a sign-in waited from elsewhere.
+    if (after === PRODUCT_READY_AFTER.LAUNCH) finishLaunchTrace(elapsed);
 
     count(PRODUCT_SURFACE_EVENT.APP_READY, {
       launch_seconds: productLaunchSeconds(elapsed),
@@ -166,6 +171,7 @@ export function useAppReadyCount(shown: boolean): void {
       ...(account === undefined ? undefined : { account_seconds: productLaunchSeconds(account) }),
       ...(local === undefined ? undefined : { local_seconds: productLaunchSeconds(local) }),
       ...(started === undefined ? undefined : { started_seconds: productLaunchSeconds(started) }),
+      ...(screens === undefined ? undefined : { screens_seconds: productLaunchSeconds(screens) }),
       ...(inbox === undefined ? undefined : { inbox_seconds: productLaunchSeconds(inbox) }),
       ...(after === PRODUCT_READY_AFTER.SIGN_IN
         ? undefined

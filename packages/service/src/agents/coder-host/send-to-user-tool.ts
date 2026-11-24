@@ -4,7 +4,7 @@
  * A Manager's page draws no transcript: it is a chat between the people who
  * can open the Manager and the Manager itself, in which their lines stand as
  * they sent them and the Manager's words are the input of its `send_to_user`
- * calls alone. The call stores nothing of its own: its input stays in the
+ * calls alone, beside the sets its `show_media` calls showed. The call stores nothing of its own: its input stays in the
  * transcript as every call's does, where the panel reads it as the
  * Manager's message. So this door only holds the input to its bound and
  * refuses what is not one, a caller that is no Manager, or a send on a
@@ -49,7 +49,8 @@ export const SEND_TO_USER_TOOL = {
   name: AGENT_TOOL.SEND_TO_USER,
   description:
     "Send a message to your chat, the only way your words reach people: your page shows people's " +
-    "messages and these alone, never your other text or tool calls. Everyone who can open you sees " +
+    `messages, these, and the files you show with ${AGENT_TOOL.SHOW_MEDIA} alone, never your other text or tool calls. ` +
+    "Everyone who can open you sees " +
     "the same chat, so write to all of them, and each of them sees your row marked unread until they " +
     "open it. Call it to answer someone, to report what is done, or " +
     "to say what you are waiting on; a turn that sends nothing shows nothing. Write as a coworker " +

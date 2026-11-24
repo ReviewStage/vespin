@@ -1,11 +1,14 @@
 /**
- * manager-chat.ts -- a Manager's transcript as the chat its page draws: people's lines, and the Manager's `send_to_user` messages alone, one message to each call, in runs by sender.
+ * manager-chat.ts -- a Manager's transcript as the chat its page draws: people's lines, and the Manager's `send_to_user` messages and `show_media` sets alone, one message to each call, in runs by sender.
  *
  * A Manager's page is a direct-message chat between the people who can open
  * it and the Manager, never its transcript: a person's line stands as they
  * sent it (`isPersonLine`), and each `send_to_user` call a turn made stands
  * as a message of its own, in the order it was sent, so a turn that sent
- * three short messages draws three bubbles. On a call, each line the voice
+ * three short messages draws three bubbles. Each `show_media` call that
+ * showed its pictures, recordings, or clips stands the same way, as a
+ * message of the set it showed, so what the Manager shows reaches the
+ * people it is shown to (`chatParts`). On a call, each line the voice
  * said stands as the Manager's own message, as an ordinary agent's
  * transcript draws it as the agent's reply (`isVoiceLine`), since it is what
  * the caller heard the Manager say. A person's line that reached a
@@ -52,6 +55,7 @@ import {
   type AgentPart,
   agentParts,
   arrivedParts,
+  isShownSet,
   messageWords,
 } from "./agent-parts.js";
 import { AGENT_TOOL } from "./agent-tools.js";
@@ -97,6 +101,31 @@ function sentWords(part: AgentPart): string | undefined {
   return isWireString(text) && text.trim() !== "" ? text.trim() : undefined;
 }
 
+/**
+ * The parts a part of a turn stands in the chat as, a message of its own:
+ * a `send_to_user` call's words, or a `show_media` call that showed its set,
+ * as the call itself, which every client already draws as the set it
+ * showed; none for any other part.
+ */
+function chatParts(part: AgentPart): readonly WireValue[] | undefined {
+  const text = sentWords(part);
+
+  if (text !== undefined) return [{ type: AGENT_PART.TEXT, text }];
+
+  if (!isShownSet(part)) return undefined;
+
+  // Note that a part read whole always carries its input and answer, so null stands only for one a stored row lacked.
+  return [
+    {
+      type: `tool-${part.tool}`,
+      toolCallId: part.callId,
+      state: part.state,
+      input: part.input ?? null,
+      output: part.output ?? null,
+    },
+  ];
+}
+
 /** A person's line as the chat stands it where it arrived, out of the turn that took it in, so no later read moves it back into the turn's first message. */
 function standingLine(line: AgentTranscriptMessage): AgentTranscriptMessage {
   const { arrivedIn: _arrived, ...kept } = line;
@@ -110,8 +139,8 @@ function sentId(message: AgentTranscriptMessage, sends: number, callId: string):
 }
 
 /**
- * A turn as its chat messages: one to each `send_to_user` call it made, in
- * the order sent, the first under the turn's own id and each after it under
+ * A turn as its chat messages: one to each `send_to_user` call it made and
+ * each set it showed (`chatParts`), in the order sent, the first under the turn's own id and each after it under
  * its call's, with the people's lines that reached the turn while it ran
  * (`arrived`) between the messages they arrived between. Each keeps the
  * turn's start, and only the last the turn's end, since that is when the
@@ -133,11 +162,10 @@ function turnChat(
       continue;
     }
 
-    const text = sentWords(part);
+    const parts = chatParts(part);
 
-    if (text === undefined || part.kind !== AGENT_PART.TOOL) continue;
+    if (parts === undefined || part.kind !== AGENT_PART.TOOL) continue;
     const id = sentId(message, sends, part.callId);
-    const parts: readonly WireValue[] = [{ type: AGENT_PART.TEXT, text }];
 
     lastAt = chat.push({ ...kept, id, parts }) - 1;
     sends += 1;
@@ -167,7 +195,7 @@ function voiceChat(line: AgentTranscriptMessage): readonly AgentTranscriptMessag
   return [{ ...kept, parts, ...at }];
 }
 
-/** A Manager's transcript as its chat: people's lines, each `send_to_user` call as a message of its own, the lines that reached a turn standing between its messages where they arrived, and the voice's lines on a call. */
+/** A Manager's transcript as its chat: people's lines, each `send_to_user` call and each set shown as a message of its own, the lines that reached a turn standing between its messages where they arrived, and the voice's lines on a call. */
 export function managerChatLines(
   messages: readonly AgentTranscriptMessage[],
 ): readonly AgentTranscriptMessage[] {
@@ -213,7 +241,7 @@ function isWork(part: AgentPart): boolean {
   return (
     part.kind !== AGENT_PART.STEP_START &&
     part.kind !== AGENT_PART.ARRIVED &&
-    sentWords(part) === undefined
+    chatParts(part) === undefined
   );
 }
 
@@ -239,7 +267,7 @@ export function managerChatWork(
     let sends = 0;
 
     for (const part of agentParts(message)) {
-      if (part.kind === AGENT_PART.TOOL && sentWords(part) !== undefined) {
+      if (part.kind === AGENT_PART.TOOL && chatParts(part) !== undefined) {
         last = sentId(message, sends, part.callId);
         work.set(last, pending);
         pending = [];

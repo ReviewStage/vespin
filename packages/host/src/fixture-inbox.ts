@@ -196,15 +196,19 @@ import {
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
+import { fixtureChanges } from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
 export {
   FIXTURE_PULL_REQUEST,
   PULL_REQUEST_MOVE,
   type PullRequestMove,
+  type PullRequestMoved,
   type PullRequestMoves,
-  pullRequestMoveOf,
+  pullRequestMovedBy,
   pullRequestPartsAppState,
+  type ThreadResolves,
+  threadResolveOf,
 } from "./fixture-pull-requests.js";
 
 /**
@@ -3446,6 +3450,8 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
   [ACT_KIND.PULL_REQUESTS_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
+  // The files the invitations agent's ready pull request changes, so Files changed lists them and opens their diffs.
+  [ACT_KIND.PULL_REQUESTS_CHANGES]: ({ number }) => fixtureChanges(number),
   // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
   [ACT_KIND.AGENTS_PORTS]: () => ({
     running: true,

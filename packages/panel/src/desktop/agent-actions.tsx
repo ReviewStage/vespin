@@ -8,7 +8,9 @@ import {
   type AgentSummary,
   agentMachineOf,
 } from "@repo/features/agent-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelChoice } from "@repo/features/models-wire";
+import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DraftSuggestion } from "@repo/features/suggestion-model";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
 import {
@@ -19,7 +21,9 @@ import {
 } from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { GLYPH } from "@repo/ui/icons";
+import { POPOVER_WIDTH, STATUS_TONE } from "@repo/ui";
+import { GLYPH, SmileIcon } from "@repo/ui/icons";
+import { ManagerFaceMenuPanel } from "@repo/ui/manager-face-picker";
 import { type InlineRename, useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { pressMutation } from "../act-mutations.js";
@@ -43,11 +47,13 @@ import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
+import { useToast } from "../toast.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import type { MenuAction, MenuEntry, MenuSubmenu } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { useAgentDelete } from "./agent-delete.js";
 import {
+  FACE_FAILED,
   type ManagerSettingsSubject,
   useManagerSettingsDialog,
 } from "./manager-settings-dialog.js";
@@ -62,8 +68,10 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * last and alone: Copy link and Copy transcript ›, Concise or Full, read
  * whole from the service; Rename, which opens its name's field where the
  * surface draws its name, while neither it nor what it stands under is
- * archived (its tab keeps Pin tab among its tab's keeping), or for a
- * Manager, Settings…, its one card to configure it, on the same terms
+ * archived (its tab keeps Pin tab among its tab's keeping), and for a
+ * Manager beside it, on the same terms, Change face ›, the app's icon
+ * picker over every face beside the item, a pick saved at once, and
+ * Settings…, its card that changes its model and effort too
  * (`manager-settings-dialog.tsx`); Show terminal,
  * where the platform runs one, and none for an archived agent, whose sandbox
  * takes no shell, which for a local agent opens the Mac's own Terminal in
@@ -82,6 +90,9 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * messages or a continue of it as a draft (`useAgentDraftDoors`): the
  * task's draft tab, started through the same control.
  */
+
+/** What a Manager's menu calls the panel its face is picked in. */
+const CHANGE_FACE = "Change face";
 
 /** What the agent menu's one copy of its words is called, and the two ways it copies them. */
 const COPY_TRANSCRIPT = "Copy transcript";
@@ -102,7 +113,9 @@ export interface AgentMenuDoors {
   onCopy?: ((copy: TranscriptCopy) => void) | undefined;
   /** Opens the agent's name's field where the surface draws its name. */
   onRename?: (() => void) | undefined;
-  /** Opens the agent's Settings card, a Manager's, which names it in Rename's place (`manager-settings-dialog.tsx`). */
+  /** Change face ›, a Manager's face picked in a panel beside its item, a pick saved at once (`@repo/ui`'s `ManagerFaceMenuPanel`). */
+  changeFace?: MenuEntry | undefined;
+  /** Opens the agent's Settings card, a Manager's, where its model and effort are changed too (`manager-settings-dialog.tsx`). */
   onSettings?: (() => void) | undefined;
   /** Opens the agent's own Terminal tab in the side panel, adding no shell. */
   onOpenTerminal?: (() => void) | undefined;
@@ -128,7 +141,7 @@ export interface AgentMenuDoors {
  * The agent's menu, built once for every surface that draws it, in the
  * groups every menu of the window keeps: Copy link, Open in new tab in a
  * browser, and the transcript's two
- * copies; Rename, or Settings… for a Manager; Show terminal,
+ * copies; Rename, and Change face › and Settings… for a Manager; Show terminal,
  * Show browser and Run › where a phone offers them, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
  * Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
@@ -139,7 +152,7 @@ export interface AgentMenuDoors {
  * order.
  */
 export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
-  const { links, onCopy, onRename, onSettings, onOpenTerminal, onOpenLocal } = doors;
+  const { links, onCopy, onRename, changeFace, onSettings, onOpenTerminal, onOpenLocal } = doors;
   const { onOpenInTask } = doors;
   const { onOpenBrowser, onOpenInSlack, run } = doors;
   const { moveTo, archive, deletion, subject } = doors;
@@ -177,6 +190,7 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
 
   const named: MenuEntry[] = [
     ...(onRename === undefined ? [] : [commandAction(PANEL_COMMAND.RENAME, onRename, subject)]),
+    ...(changeFace === undefined ? [] : [changeFace]),
     ...(onSettings === undefined
       ? []
       : [commandAction(PANEL_COMMAND.SETTINGS, onSettings, subject)]),
@@ -216,6 +230,7 @@ export type AgentDoors = Pick<
   AgentMenuDoors,
   | "onCopy"
   | "onRename"
+  | "changeFace"
   | "onSettings"
   | "onOpenTerminal"
   | "onOpenLocal"
@@ -422,10 +437,10 @@ export function useAgentActions(
   const moveTo = useMoveToEntry(agent, agents);
   // Note that an Unarchive stands while what the agent stands under is archived, and it is not
   // renamed then; an archived agent's tab on its task is renamed as a live one's is.
-  // Note that a Manager is named from its Settings card, its one place to configure it, so it offers no Rename.
   const manager = agent.kind === AGENT_KIND.MANAGER;
-  const renamable = agents.onUnarchive === undefined && !manager;
+  const renamable = agents.onUnarchive === undefined;
   const settings = useManagerSettingsDialog(agent, agents, shown);
+  const toast = useToast();
   const { onOpenTerminal, onOpenLocal } = terminals;
 
   const macTerminal =
@@ -454,6 +469,24 @@ export function useAgentActions(
     }
   }
 
+  // Note that the host draws the face at once and takes it back should the service refuse it, so a refusal is said in a toast, the menu being gone.
+  const changeFace = (face: ManagerFace) => {
+    void agents.onFace(agent.id, face).then((answer) => {
+      if (!("failure" in answer)) return;
+
+      toast({
+        replayUnmasked: true,
+        words: FACE_FAILED,
+        tone: STATUS_TONE.DANGER,
+        failure: {
+          surface: FAILURE_SURFACE.MANAGER_FACE,
+          cause: answer,
+          about: { agentId: agent.id },
+        },
+      });
+    });
+  };
+
   const read = agentTranscriptRead(agents.readTranscript, agent.id, label, agent.brief);
   const slackUrl = agent.source?.kind === AGENT_SOURCE.SLACK ? agent.source.url : undefined;
 
@@ -461,6 +494,23 @@ export function useAgentActions(
     doors: {
       onCopy: copied(read),
       onRename: renamable ? rename.begin : undefined,
+      changeFace:
+        manager && agents.onUnarchive === undefined
+          ? {
+              label: CHANGE_FACE,
+              icon: <SmileIcon />,
+              width: POPOVER_WIDTH.FIT,
+              panel: ({ close }) => (
+                <ManagerFaceMenuPanel
+                  face={agent.face}
+                  onChange={(face) => {
+                    changeFace(face);
+                    close();
+                  }}
+                />
+              ),
+            }
+          : undefined,
       onSettings: manager && agents.onUnarchive === undefined ? settings.ask : undefined,
       // Note that an archived agent's sandbox takes no shell, so it offers no terminal.
       onOpenTerminal: agent.archivedAt !== undefined ? undefined : terminal,

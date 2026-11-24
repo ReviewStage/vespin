@@ -1702,7 +1702,8 @@ export const runnerSessions = <
         return (
           opened.descriptionsOn !== standing.descriptionsOn ||
           opened.memoryOn !== standing.memoryOn ||
-          (opened.turnEndOn ?? false) !== standing.turnEndOn ||
+          // Note that a session opened while Done and follow-ups stood was told to end its turns with the removed `end_turn`.
+          opened.turnEndOn === true ||
           (opened.replyButtonsOn ?? false) !== standing.replyButtonsOn ||
           (opened.computerUseOn ?? false) !== standing.computerUseOn ||
           (opened.inboxOn ?? true) !== standing.inboxOn

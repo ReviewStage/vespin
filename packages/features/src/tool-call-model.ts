@@ -1712,8 +1712,6 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.SLACK_READ, input, output, undefined),
   [AGENT_TOOL.REACT_SLACK]: ({ input, output }) =>
     namedCall(CALL_KIND.SLACK_REACT, input, output, "emoji"),
-  [AGENT_TOOL.END_TURN]: ({ input, output }) =>
-    namedCall(CALL_KIND.END_TURN, input, output, undefined),
   [AGENT_TOOL.SEND_TO_USER]: ({ input, output }) =>
     namedCall(CALL_KIND.SEND_TO_USER, input, output, "text"),
 } as const satisfies Record<AgentTool, ToolReader>;
@@ -1787,6 +1785,8 @@ const RETIRED_TOOL_VIEWS = {
     namedCall(CALL_KIND.RESOLVE_THREAD, input, output, undefined),
   [RETIRED_TOOL.REOPEN_THREAD]: ({ input, output }) =>
     namedCall(CALL_KIND.REOPEN_THREAD, input, output, undefined),
+  [RETIRED_TOOL.END_TURN]: ({ input, output }) =>
+    namedCall(CALL_KIND.END_TURN, input, output, undefined),
 } as const satisfies Record<RetiredTool, ToolReader>;
 
 /** The tools the retired runtime gave a session and a native harness's subagent, a message to one and a stop of what runs in Claude Code's background, which a transcript carries beside the agent's own, and the retired runtime's connection tools: a connection's search and its run, each naming the server its input does. */

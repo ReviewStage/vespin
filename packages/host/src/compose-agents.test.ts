@@ -28,6 +28,8 @@ import {
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_SIGNED_OUT, type TranscriptNowAnswer } from "@repo/features/live-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { taskSummaryOf } from "@repo/features/task-list-live";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { entityPool } from "@repo/sync";
@@ -42,6 +44,7 @@ import {
   Layer,
   Predicate,
   Scope,
+  Stream,
   SubscriptionRef,
 } from "effect";
 import { TestClock } from "effect/testing";
@@ -75,7 +78,7 @@ import {
   WORKSPACE_ID,
 } from "./testing/agents-subject.js";
 import type { PolledLive } from "./testing/polled-live.js";
-import { agentListRow } from "./testing/task-list-rows.js";
+import { agentListRow, planListRow } from "./testing/task-list-rows.js";
 import { HELD_TRANSCRIPTS } from "./transcript-follow.js";
 
 it.effect("each method asks the service once and answers what it said, whole", () =>
@@ -2148,6 +2151,63 @@ it.effect(
       const [first, second] = accountItems();
       assert.equal(otherPlanOf(second), otherPlanOf(first));
     }),
+);
+
+it.effect(
+  "the Inbox kept on the local database is told at the next launch beside the tasks its items stand on, as the task list summed them up when they were kept, before the service answers",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-kept-inbox-");
+      const holder = taskSummaryOf(planListRow(TASK_ID, "Teammate invitations"), undefined);
+
+      /** One launch as the host makes it: the pool on the local copy, the agents on the pool, then the database opened. */
+      const launched = (tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[]) =>
+        Effect.gen(function* () {
+          const local = yield* localCopy(root);
+
+          const pool = yield* entityPool({
+            mintKey: () => "key",
+            replayRefused: Effect.void,
+            store: local.store,
+          });
+
+          const launch = yield* subject({
+            pool,
+            ...(tasksListed === undefined ? undefined : { tasksListed }),
+          });
+
+          yield* local.open("user-dana", {
+            kept: () => [],
+            moves: Stream.empty,
+            restored: () => Effect.void,
+          });
+
+          return launch;
+        });
+
+      const quit = yield* Scope.make();
+
+      const first = yield* Scope.provide(quit)(
+        launched((taskIds) => (taskIds.includes(TASK_ID) ? [holder] : [])),
+      );
+
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+      deliverItems(first.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      const next = yield* launched();
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(next.accountItems()[0], {
+        ...byPlan({ [TASK_ID]: [HELD_ITEM] }),
+        kept: true,
+        keptHolders: [holder],
+      });
+    }).pipe(Effect.provide(localPlatform)),
 );
 
 it.effect(
