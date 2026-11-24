@@ -190,6 +190,7 @@ import {
   runAgentRemember,
   SAVE_MEMORY_TOOL,
   SEARCH_MEMORY_TOOL,
+  saveMemoryToolOf,
 } from "../memory-tools.js";
 import {
   LIST_PORTS_TOOL,
@@ -666,7 +667,11 @@ const CATALOG = [
   agentTool(DELETE_AUTOMATION_TOOL, runDeleteAutomation),
   agentTool(RUN_AUTOMATION_TOOL, runRunAutomation),
   // The workspace's shared memory.
-  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { ...LOADED, gates: [TOOL_GATE.MEMORY] }),
+  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, {
+    ...LOADED,
+    gates: [TOOL_GATE.MEMORY],
+    variant: (_experiments, open) => saveMemoryToolOf(open.has(TOOL_GATE.MANAGER)),
+  }),
   agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { ...LOADED, gates: [TOOL_GATE.MEMORY] }),
   agentTool(LIST_MEMORIES_TOOL, runAgentListMemories, { gates: [TOOL_GATE.MEMORY] }),
   agentTool(FORGET_MEMORY_TOOL, runAgentForget, { gates: [TOOL_GATE.MEMORY] }),

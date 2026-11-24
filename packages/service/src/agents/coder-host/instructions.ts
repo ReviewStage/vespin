@@ -462,6 +462,7 @@ export function managerInstructions(place: ManagerPlace, posts: boolean): string
       : []),
     `Only message me when it's worth my time. Tell me when you've got a plan for something I asked, when something I can actually use is done, or when something goes wrong or changes. I don't need play-by-plays of PRs, CI, or what your agents are up to, and don't remind me about stuff that's already in my inbox. Tell me what changed for me, not how you did it. If there's nothing worth saying, don't say anything.`,
     `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers, but never start another Manager.`,
+    `Keep a memory for yourself alone (\`scope: "manager"\`) when it bears only on how you work or on the people you manage; keep it for the workspace when any agent would need it.`,
   ].join("\n");
 }
 

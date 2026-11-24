@@ -11,7 +11,7 @@ import {
   orderedLiveRows,
 } from "./live-read.js";
 import { LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js";
-import { type MemorySummary, memoryIdSchema } from "./memory-wire.js";
+import { MEMORY_QUERY, type MemorySummary, memoryIdSchema } from "./memory-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
 
@@ -34,8 +34,11 @@ import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
  * line, and task its words came from, each null where the reader may not
  * open that task or none stands, and its recalls since `recalledSince`,
  * which the service serves from its clock, most recently kept or corrected
- * first, then the newest kept, then by id. The service answers `not-found`
- * for a workspace the account is no member of.
+ * first, then the newest kept, then by id. The memories are the workspace's
+ * own, or, where the reader names a Manager (`managerId`), that Manager's
+ * own alone, for its Settings › Memory. The service answers `not-found`
+ * for a workspace the account is no member of, and for a `managerId` that
+ * spells no id.
  */
 export const WORKSPACE_MEMORIES_READ = liveRead({
   name: LIVE_READ.MEMORIES,
@@ -43,6 +46,7 @@ export const WORKSPACE_MEMORIES_READ = liveRead({
   params: {
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
     workspaceId: LIVE_PARAM.TEXT,
+    [MEMORY_QUERY.MANAGER_ID]: LIVE_PARAM.OPTIONAL_ID,
     recalledSince: LIVE_PARAM.SERVED,
   },
   mode: LIVE_MODE.SNAPSHOT,

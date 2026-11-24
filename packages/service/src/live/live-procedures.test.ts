@@ -23,7 +23,7 @@ import {
 } from "@repo/database/models/integration-installation-store";
 import { queueMachineCommand } from "@repo/database/models/machine-command-store";
 import { writeManagerChatMessage } from "@repo/database/models/manager-chat-messages";
-import { rememberMemory } from "@repo/database/models/memory-store";
+import { MEMORY_SCOPE, rememberMemory } from "@repo/database/models/memory-store";
 import { claimChapterGeneration } from "@repo/database/models/pull-request-chapters-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import {
@@ -2001,6 +2001,69 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
           }),
           { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
         );
+      }),
+  );
+
+  it.effect(
+    "a read naming a Manager answers that Manager's own memories alone, and the workspace's read none of them",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const [owner, teammate] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
+        for (const id of [owner, teammate]) {
+          yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+        }
+
+        const workspaceId = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspaceId, teammate);
+
+        const managerId = Option.getOrThrow(
+          yield* createAgent(owner, {
+            taskId: null,
+            workspaceId,
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            descriptionSnapshot: null,
+            prompt: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
+          }),
+        ).agent.id;
+
+        yield* rememberMemory(workspaceId, owner, "Deployments go out from main.", undefined);
+        yield* rememberMemory(
+          workspaceId,
+          owner,
+          "Dana wants a digest each Friday.",
+          undefined,
+          undefined,
+          { kind: MEMORY_SCOPE.MANAGER, managerId },
+        );
+
+        const read = (query: string) =>
+          Effect.gen(function* () {
+            const polled = yield* ask({
+              bearer: teammate,
+              path: `/api/live/workspace-memories?workspaceId=${workspaceId}${query}`,
+            });
+
+            assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
+            const answer = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.answer)(polled.body);
+
+            const { memories } = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.rows)({
+              memories: answer.queries.memories.rows,
+            });
+
+            return memoriesOfLiveRows(memories).map((memory) => memory.text);
+          });
+
+        assert.deepEqual(yield* read(""), ["Deployments go out from main."]);
+        assert.deepEqual(yield* read(`&managerId=${managerId}`), [
+          "Dana wants a digest each Friday.",
+        ]);
       }),
   );
 
