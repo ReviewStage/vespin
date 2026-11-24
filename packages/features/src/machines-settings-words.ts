@@ -47,7 +47,7 @@ export const MACHINE_SETTINGS_WORDS = {
   appsAllowed: (count: number) => `${count} ${count === 1 ? "app" : "apps"} always allowed`,
   CHANGE_FAILED: "Could not change this machine. Try again.",
   /** The row that picks the member's default machine, atop the list. */
-  DEFAULT: "Terminal and computer use",
+  DEFAULT: "Commands run on",
   DEFAULT_DETAIL: "Agents use this machine unless you point them at another.",
   DEFAULT_FAILED: "Could not change your default machine. Try again.",
 } as const;
@@ -56,7 +56,7 @@ export const MACHINE_SETTINGS_WORDS = {
 export function removeCommandMachineQuestion(label: string) {
   return {
     title: `Remove ${label}?`,
-    body: `Agents' terminal commands and computer use stop going to it. If ${PRODUCT_NAME} still runs on it, it's added back the next time it starts.`,
+    body: `Agents' commands stop going to it. If ${PRODUCT_NAME} still runs on it, it's added back the next time it starts.`,
     verb: "Remove machine",
     running: "Removing",
   } as const;

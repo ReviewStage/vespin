@@ -1,4 +1,5 @@
 import { machineName } from "@repo/features/machine-name";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DefaultMachine, WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -57,8 +58,10 @@ const DEFAULT_MACHINE_ROW = "default-machine";
 
 /** What the Default machine row and its submenu say. */
 const DEFAULT_MACHINE_WORDS = {
-  LABEL: "Terminal and computer use",
-  HEADING: "Terminal commands and computer use go here",
+  LABEL: "Commands run on",
+  /** What the row says under its label of an agent that runs apart from the machine, as a cloud agent does; computer use only on a Mac, since only the desktop app ships its helper. */
+  APART: `${PRODUCT_NAME} there runs its terminal commands, and on a Mac its computer use too. If that machine goes offline, the agent keeps running.`,
+  HEADING: "Commands run here",
   NONE: "None",
   REFUSED: "The default machine could not be changed.",
 } as const;
@@ -202,7 +205,11 @@ export function MachineValue({
  * the owner's from before machines were named, is named as the answer
  * names it.
  */
-export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
+export function useDefaultMachineRow(
+  agentId: string,
+  /** Whether the agent runs apart from the machine its commands go to, as a cloud agent does, so it keeps running while that machine is offline. */
+  apart = false,
+): MenuRow | undefined {
   const tools = useAgentTools(agentId);
   const { mutate: setDefault } = useMutation(defaultMachineMutation(agentId));
   const pickedId = usePickedMachine(agentId);
@@ -244,6 +251,9 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
         face={chosen === undefined ? undefined : faceOf(owner)}
       />
     ),
+    // Note that the line under the label stands only for a cloud agent, which keeps running without the machine.
+    detail: apart && chosen !== undefined ? DEFAULT_MACHINE_WORDS.APART : undefined,
+    detailUnder: true,
     submenu:
       machines.length === 0
         ? undefined

@@ -292,19 +292,22 @@ test("the Default machine row names the agent's default with its dot, offline as
     ?.getAttribute("aria-label");
 
   act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click());
-  const machines = optionsOf("Terminal commands and computer use go here");
+  const machines = optionsOf("Commands run here");
 
   act(() =>
     [
       ...document.querySelectorAll<HTMLElement>(
-        '[role="listbox"][aria-label="Terminal commands and computer use go here"] [role="option"]',
+        '[role="listbox"][aria-label="Commands run here"] [role="option"]',
       ),
     ][1]?.click(),
   );
   await settle();
 
-  // Note that the machines are a teammate's, Ada's, so each wears her face, "A", before its name.
-  assert.deepEqual(rows, ["Agent runs inCloud", "Terminal and computer useALaptop"]);
+  // Note that the machines are a teammate's, Ada's, so each wears her face, "A", before its name, and a cloud agent's row says the agent keeps running without the machine.
+  assert.deepEqual(rows, [
+    "Agent runs inCloud",
+    "Commands run onVespin there runs its terminal commands, and on a Mac its computer use too. If that machine goes offline, the agent keeps running.ALaptop",
+  ]);
   assert.equal(standing, "Offline");
   assert.equal(machines.length, 2);
   assert.deepEqual(sent, [{ agentId: AGENT_ID, machineId: "studio" }]);
@@ -320,7 +323,7 @@ test("the Default machine row names the agent's default with its dot, offline as
   act(() => placeChip().click());
   assert.deepEqual(optionsOf("Where this agent works"), [
     "Agent runs inMini",
-    "Terminal and computer useAStudio",
+    "Commands run onAStudio",
   ]);
 
   // Note that the laptop is picked back while the studio's pick is still out, and its answer comes first; the service's default stands then, never the older pick.
@@ -328,7 +331,7 @@ test("the Default machine row names the agent's default with its dot, offline as
   act(() =>
     [
       ...document.querySelectorAll<HTMLElement>(
-        '[role="listbox"][aria-label="Terminal commands and computer use go here"] [role="option"]',
+        '[role="listbox"][aria-label="Commands run here"] [role="option"]',
       ),
     ][0]?.click(),
   );
@@ -342,7 +345,7 @@ test("the Default machine row names the agent's default with its dot, offline as
   act(() => placeChip().click());
   assert.deepEqual(optionsOf("Where this agent works"), [
     "Agent runs inMini",
-    "Terminal and computer useALaptop",
+    "Commands run onALaptop",
   ]);
 });
 

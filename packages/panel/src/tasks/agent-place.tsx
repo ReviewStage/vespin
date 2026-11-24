@@ -22,6 +22,7 @@ import {
   HoverCardNote,
   Inline,
   type MenuRow,
+  POPOVER_WIDTH,
   STATUS_TONE,
   StaticChip,
   SUBMENU_WIDTH,
@@ -225,9 +226,13 @@ function useRunsInRow({
  * the sandbox's Status, CPU, and Memory, then two rows, each drawn as the
  * place it names is drawn in its submenu, its glyph wearing its dot and its
  * name at the row's end, and a chevron where it opens a submenu: Agent runs in, where the agent itself runs and
- * the places to move it to (`useRunsInRow`), and Default machine, where its
+ * the places to move it to (`useRunsInRow`), and Commands run on, where its
  * terminal commands and computer use go when a call names none
- * (`agent-machines.tsx`), for an agent offered them.
+ * (`agent-machines.tsx`), for an agent offered them. Note that the
+ * Commands run on row says under its label that the app on that machine runs
+ * them, computer use on a Mac alone, and the agent keeps running without it, since a cloud agent's
+ * reader otherwise takes the machine for where the agent runs, and the
+ * popover stands wide to give that line room.
  */
 function CloudChip({
   agentId,
@@ -261,7 +266,7 @@ function CloudChip({
     }),
   });
 
-  const defaultMachine = useDefaultMachineRow(agentId);
+  const defaultMachine = useDefaultMachineRow(agentId, true);
 
   return (
     <ChipPopover
@@ -275,6 +280,7 @@ function CloudChip({
       menu={{
         rows: defaultMachine === undefined ? [runsIn] : [runsIn, defaultMachine],
         noMatch: RUNS_ON_WORDS.NO_MATCH,
+        width: defaultMachine === undefined ? undefined : POPOVER_WIDTH.WIDE,
       }}
     />
   );
