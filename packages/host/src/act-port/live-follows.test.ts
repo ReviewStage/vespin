@@ -88,6 +88,16 @@ const FOLLOWS = [
     at: [AGENT_ID],
   },
   {
+    follow: AGENT_ACT_KIND.AGENTS_MANAGER_CHAT_FOLLOW,
+    followRefusal: "Could not follow the Manager's chat on this system.",
+    retry: AGENT_ACT_KIND.AGENTS_MANAGER_CHAT_RETRY,
+    retryRefusal: "Could not read the Manager's chat again on this system.",
+    key: { agentId: AGENT_ID },
+    path: HOSTED_SERVICE_PATH.LIVE_MANAGER_CHAT,
+    slice: LIVE_READ.MANAGER_CHAT,
+    at: [AGENT_ID],
+  },
+  {
     follow: CHAPTERS_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW,
     followRefusal: "Could not follow the pull request's chapters on this system.",
     retry: CHAPTERS_ACT_KIND.CHAPTERS_REPOSITORY_RETRY,

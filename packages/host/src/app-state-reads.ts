@@ -57,6 +57,7 @@ import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHistories,
   type AppHostRead,
+  type AppManagerChat,
   type AppMemories,
   type AppStateDelivery,
   type AppStateRead,
@@ -890,6 +891,13 @@ export function selectTaskHistory(
   taskId: string,
 ): (state: AppStateSnapshot) => AppHistories[string] | undefined {
   return (state) => state[LIVE_READ.HISTORY][taskId];
+}
+
+/** One Manager's chat as the host follows it (`ACT_KIND.AGENTS_MANAGER_CHAT_FOLLOW`): its newest page, then each older page read, newest first, as a `select`; none before it is read. */
+export function selectManagerChat(
+  agentId: string,
+): (state: AppStateSnapshot) => AppHostRead<AppManagerChat> | undefined {
+  return (state) => state[LIVE_READ.MANAGER_CHAT][agentId];
 }
 
 /** The models the account may start an agent on, and the devices that may run one, as the host holds their read (`ACT_KIND.AGENTS_MODELS_FOLLOW`); none before it is read or while no one is signed in. */

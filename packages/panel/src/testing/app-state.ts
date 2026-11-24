@@ -265,6 +265,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.AUTOMATION_RUNS]: NO_KEYS_HELD,
     [LIVE_READ.DESCRIPTION_COMMENTS]: NO_DESCRIPTION_COMMENTS,
     [LIVE_READ.HISTORY]: NO_KEYS_HELD,
+    [LIVE_READ.MANAGER_CHAT]: NO_KEYS_HELD,
     [LIVE_READ.HELD_TASK]: NO_KEYS_HELD,
     machineCommands: { asks: [] },
     notifications: { status: NOTIFICATIONS_STATUS.UNKNOWN },

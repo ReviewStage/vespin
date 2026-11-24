@@ -61,6 +61,7 @@ import {
 import { WRITE_UNTAKEN, writeUntakenOf } from "@repo/features/keyed-write";
 import { commitShaSchema } from "@repo/features/link-grammar";
 import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
+import { MANAGER_CHAT_READ } from "@repo/features/manager-chat-live";
 import type { ModelsAnswer } from "@repo/features/models-wire";
 import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
 import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
@@ -151,6 +152,7 @@ import {
   type HeldSlice,
   heldSlice,
 } from "./live-collection.js";
+import { type HeldManagerChats, heldManagerChats } from "./manager-chat-follow.js";
 import { heldAgentOrigins } from "./origin-follow.js";
 import {
   agentPullRequests,
@@ -579,6 +581,25 @@ export function composeAgents(
       tell: liveTold(dependencies.kernel.emit, AGENT_FOLLOWS.AGENTS_ORIGIN_FOLLOW),
     });
 
+    const managerChats = yield* heldManagerChats({
+      seal: ({ agentId, userId, before }, poll, after) =>
+        asked(
+          client.liveRead(
+            MANAGER_CHAT_READ,
+            {
+              id: agentId,
+              userId,
+              ...(before === undefined ? undefined : { before: String(before) }),
+            },
+            poll ? { after } : undefined,
+          ),
+        ),
+      accountId: dependencies.accountId,
+      gate,
+      now: dependencies.kernel.now,
+      tell: liveTold(dependencies.kernel.emit, AGENT_FOLLOWS.AGENTS_MANAGER_CHAT_FOLLOW),
+    });
+
     // Note that a session's reads close before the window is told it holds none, so nothing the last account drew lands after.
     const sessionReads = yield* accountReads<LiveRead>(
       () => (gate() ? dependencies.accountId() : undefined),
@@ -671,7 +692,7 @@ export function composeAgents(
       { inboxes, holders, accountWide },
       { accounts, followed: accountFollow },
       { reads: sessionReads, followItems, preferences, holdPreferences },
-      { repositoryChapters, origins },
+      { repositoryChapters, origins, managerChats },
       fetched,
       { parts, repositoryParts },
     );
@@ -715,6 +736,8 @@ interface LiveFollows {
   readonly repositoryChapters: HeldSlice<RepositoryPullRequestKey>;
   /** Every agent's origin, by the agent. */
   readonly origins: HeldSlice<string>;
+  /** Every Manager's chat, its newest page and the older pages read past it, by the agent. */
+  readonly managerChats: HeldManagerChats;
 }
 
 /** The pull requests the windows hold: what each agent published, and every Pull request tab's parts by the repository and number. */
@@ -790,8 +813,8 @@ function composed(
   { accounts, followed: accountFollow }: AccountFollow,
   /** The session's account reads, every item the account reaches and its preferences among them. */
   { reads: sessionReads, followItems, preferences, holdPreferences }: SessionReads,
-  /** The pull requests' chapters and the agents' origins the windows hold. */
-  { repositoryChapters, origins }: LiveFollows,
+  /** The pull requests' chapters, the agents' origins, and the Managers' chats the windows hold. */
+  { repositoryChapters, origins, managerChats }: LiveFollows,
   { tools, models, modelsHold }: FetchedReads,
   /** The parts of the pull requests the windows' Pull request tabs hold. */
   { parts, repositoryParts }: PartsHeld,
@@ -883,8 +906,9 @@ function composed(
   /**
    * An archive, drawn on the agent's row at once, stamped now by the member,
    * a dialog's that asked first among them. Note that an agent archived
-   * closes its transcript and its workers' that no window holds any longer,
-   * and lets go of their content kept; one a window holds stays drawn.
+   * closes its transcript and its workers', and a Manager's chat, that no
+   * window holds any longer, and lets go of their content kept; one a window
+   * holds stays drawn.
    */
   const archived = agentWrite<AgentArchiveParams>(
     ({ archived: archive }) => {
@@ -907,7 +931,10 @@ function composed(
       Effect.tap(asked(client.archive(agentId, request)), (answer) =>
         "agent" in answer
           ? Effect.andThen(
-              transcriptSlice.drop((key) => key.agentId === agentId),
+              Effect.andThen(
+                transcriptSlice.drop((key) => key.agentId === agentId),
+                managerChats.drop((key) => key === agentId),
+              ),
               kept.forget(keptOfAgent(agentId)),
             )
           : Effect.void,
@@ -1269,6 +1296,7 @@ function composed(
 
         return { landed: laid !== undefined };
       }),
+    AGENTS_MANAGER_CHAT_OLDER: ({ agentId, before }) => managerChats.older(agentId, before),
     // Note that a send answers as the service does, while the line stands drawn on its way until its row lands.
     AGENTS_MESSAGE: declaredWrite(dependencies.pool, sent, {
       read: (read) =>
@@ -1278,7 +1306,9 @@ function composed(
           sentBy: dependencies.accountId(),
         })),
     }),
-    AGENTS_CHAT_SEND: declaredWrite(dependencies.pool, chatSent),
+    // Note that a message to a Manager's chat stands drawn on the chat on its way, until its row lands there.
+    AGENTS_CHAT_SEND: managerChats.sending(declaredWrite(dependencies.pool, chatSent)),
+    AGENTS_CHAT_UNSEND: managerChats.unsend,
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),
@@ -1381,6 +1411,11 @@ function composed(
         ),
       );
     },
+    // A Manager's chat is held for a window while its page shows it.
+    AGENTS_MANAGER_CHAT_FOLLOW: {
+      hold: ({ agentId }) => managerChats.hold(agentId),
+      retry: ({ agentId }) => managerChats.retry(agentId),
+    },
     // An agent's origin is held for a window while its page shows it.
     AGENTS_ORIGIN_FOLLOW: {
       hold: ({ agentId }) => origins.hold(agentId),
@@ -1470,6 +1505,7 @@ function composed(
     yield* holders.end;
     yield* repositoryChapters.end;
     yield* origins.end;
+    yield* managerChats.end;
     yield* FiberHandle.clear(accountFollow);
 
     for (const key of yield* RcMap.keys(transcripts)) yield* RcMap.invalidate(transcripts, key);
@@ -1494,6 +1530,7 @@ function composed(
     yield* holders.open;
     yield* repositoryChapters.open;
     yield* origins.open;
+    yield* managerChats.open;
     yield* modelsHold.open;
     yield* tools.open;
     yield* parts.open;

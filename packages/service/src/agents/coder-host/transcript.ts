@@ -155,7 +155,7 @@ export function cursorToWire(cursor: MessageCursor): string {
 export const CURSOR_START: MessageCursor = cursorOfWire(AGENT_CURSOR_START);
 
 /** One row of the transcript as the route answers it: its message as the store holds it, for a turn's journal when the turn began and closed and what it ran on and spent, and for a developer's line what sent it, which is the wire's `AgentTranscriptMessage` once serialized. */
-type TranscriptMessage = StoredUIMessage &
+export type TranscriptMessage = StoredUIMessage &
   TurnRecord & {
     readonly startedAt?: number;
     readonly finishedAt?: number;
@@ -651,7 +651,7 @@ const withUsage = (
   });
 
 /** The rows as a page carries them, with what each needs read beside it: its turn's journal, and what sent each of the developer's lines and where it arrived. */
-const transcriptMessagesOf = (
+export const transcriptMessagesOf = (
   target: ConversationTarget,
   records: readonly StoredMessageRecord[],
 ): TranscriptEffect<readonly TranscriptMessage[]> =>

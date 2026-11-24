@@ -159,6 +159,7 @@
     "./member-mcp/client-consents": "./src/member-mcp/client-consents.js",
     "./member-mcp/resource": "./src/member-mcp/resource.js",
     "./maintenance/maintenance-bounds": "./src/maintenance/maintenance-bounds.js",
+    "./maintenance/manager-chat-backfill-app": "./src/maintenance/manager-chat-backfill-app.js",
     "./maintenance/maintenance-sweep": "./src/maintenance/maintenance-sweep.js",
     "./billing/metronome-webhook-app": "./src/billing/metronome-webhook-app.js",
     "./billing/stripe-webhook-app": "./src/billing/stripe-webhook-app.js",

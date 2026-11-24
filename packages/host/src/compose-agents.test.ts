@@ -49,7 +49,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import { TestClock } from "effect/testing";
-import type { AppTranscript } from "./app-state.js";
+import type { AppManagerChats, AppTranscript } from "./app-state.js";
 import { localCopy } from "./local-copy.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
@@ -1987,6 +1987,123 @@ it.effect(
       yield* reset;
       yield* settled;
       assert.deepEqual(origins().at(-1), {});
+    }),
+);
+
+/** A Manager's chat's message as its row is delivered, by its `seq`: the Manager's words, sent at the instant its `seq` names. */
+function chatRow(seq: number) {
+  return {
+    id: `m${seq}`,
+    seq,
+    authorKind: "agent",
+    authorUserId: null,
+    authorName: "Manager",
+    text: `Message ${seq}.`,
+    attachments: [],
+    threadRoot: null,
+    broadcast: false,
+    turnId: null,
+    lineId: null,
+    createdAt: seq,
+    editedAt: null,
+  };
+}
+
+/** The `seq`s from `newest` down to `oldest`, newest first. */
+function seqs(newest: number, oldest: number): readonly number[] {
+  return Array.from({ length: newest - oldest + 1 }, (_, at) => newest - at);
+}
+
+/** The rows a page of a chat's statement delivers: from `newest` down to `oldest`, newest first. */
+function chatRows(newest: number, oldest: number) {
+  return seqs(newest, oldest).map(chatRow);
+}
+
+it.effect(
+  "a Manager's chat lays an older page past its newest and keeps it as a message lands, lays none asked before a place it no longer ends at, and draws a newest page alone once it stands past every message held",
+  () =>
+    Effect.gen(function* () {
+      const { acts, asked, live, managerChats } = yield* subject();
+
+      // The page's `seq`s, newest first, and where the next older page is read before, as the chat held stands.
+      const held = () => {
+        const chat = managerChats().at(-1)?.[AGENT_ID]?.rows;
+
+        return chat === undefined
+          ? undefined
+          : { seqs: chat.messages.map((message) => message.seq), before: chat.before };
+      };
+
+      // Note that the statement reads one row past a page of 50, which says an older page stands.
+      live.managerChat.set({ messages: chatRows(200, 150) });
+      yield* acts.AGENTS_MANAGER_CHAT_FOLLOW.hold({ agentId: AGENT_ID });
+      yield* settled;
+      assert.deepEqual(held(), { seqs: seqs(200, 151), before: 151 });
+
+      live.managerChatOlder.set({ messages: chatRows(150, 121) });
+      assert.deepEqual(yield* acts.AGENTS_MANAGER_CHAT_OLDER({ agentId: AGENT_ID, before: 151 }), {
+        landed: true,
+      });
+      assert.deepEqual(held(), { seqs: seqs(200, 121), before: undefined });
+
+      // A message lands: the newest page moves up one, and the older pages read stay past it.
+      live.managerChat.set({ messages: chatRows(201, 151) });
+      yield* nextPoll;
+      assert.deepEqual(held(), { seqs: seqs(201, 121), before: undefined });
+
+      // The chat held ends at its start now, so a page read before 151 would repeat what it holds.
+      assert.deepEqual(yield* acts.AGENTS_MANAGER_CHAT_OLDER({ agentId: AGENT_ID, before: 151 }), {
+        landed: false,
+      });
+      assert.deepEqual(held(), { seqs: seqs(201, 121), before: undefined });
+
+      // A page standing past every message held may stand past messages neither holds, so it is drawn alone.
+      live.managerChat.set({ messages: chatRows(400, 350) });
+      yield* nextPoll;
+      assert.deepEqual(held(), { seqs: seqs(400, 351), before: 351 });
+      assert.deepEqual(
+        asked.filter((ask) => ask.startsWith("manager-chat")),
+        [
+          `manager-chat-live:${AGENT_ID}`,
+          `manager-chat-older:${AGENT_ID}:151`,
+          `manager-chat-older:${AGENT_ID}:151`,
+        ],
+      );
+    }),
+);
+
+it.effect(
+  "a message sent to a Manager's chat stands drawn on it from its send, under the id answered, until its row lands, and one refused stands marked until it is let go",
+  () =>
+    Effect.gen(function* () {
+      const { acts, live, managerChats, answerChat } = yield* subject();
+      const sendingOf = (told: AppManagerChats | undefined) => told?.[AGENT_ID]?.rows?.sending;
+      const sent = { clientKey: "send-1", text: "Ship it.", sentAt: NOW, sentBy: "user-dana" };
+
+      live.managerChat.set({ messages: chatRows(3, 1) });
+      yield* acts.AGENTS_MANAGER_CHAT_FOLLOW.hold({ agentId: AGENT_ID });
+      yield* settled;
+      const told = managerChats().length;
+
+      yield* acts.AGENTS_CHAT_SEND({ agentId: AGENT_ID, text: "Ship it.", clientKey: "send-1" });
+      assert.deepEqual(managerChats().slice(told).map(sendingOf), [
+        [sent],
+        [{ ...sent, messageId: "a1b2c3d4" }],
+      ]);
+
+      live.managerChat.set({ messages: [{ ...chatRow(4), id: "a1b2c3d4" }, ...chatRows(3, 1)] });
+      yield* nextPoll;
+      assert.equal(sendingOf(managerChats().at(-1)), undefined);
+
+      const refused = { failure: AGENT_CALL_FAILURE.UNANSWERED };
+      answerChat(refused);
+      yield* acts.AGENTS_CHAT_SEND({ agentId: AGENT_ID, text: "Again.", clientKey: "send-2" });
+      assert.deepEqual(sendingOf(managerChats().at(-1)), [
+        { clientKey: "send-2", text: "Again.", sentAt: NOW, sentBy: "user-dana", refused },
+      ]);
+
+      yield* acts.AGENTS_CHAT_UNSEND({ agentId: AGENT_ID, clientKey: "send-2" });
+      assert.equal(sendingOf(managerChats().at(-1)), undefined);
     }),
 );
 

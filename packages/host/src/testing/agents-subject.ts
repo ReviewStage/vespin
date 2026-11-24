@@ -11,6 +11,7 @@ import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import {
   AGENT_CALL_FAILURE,
   type AgentAgentAnswer,
+  type AgentChatSendAnswerView,
   type AgentMessageAnswerView,
   type AgentQueueAnswerView,
   type DevicePresenceAnswerView,
@@ -51,6 +52,7 @@ import {
   type SealedLiveQueryWire,
   type TranscriptNowAnswer,
 } from "@repo/features/live-wire";
+import { MANAGER_CHAT_READ } from "@repo/features/manager-chat-live";
 import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -73,7 +75,12 @@ import { noNetwork } from "@repo/wire/testing";
 import { Duration, Effect, Exit, Predicate, Scope } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { TestClock } from "effect/testing";
-import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
+import {
+  type AppManagerChats,
+  type AppTranscript,
+  type AppTranscripts,
+  OWN_TRANSCRIPT,
+} from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
 import { type AgentClient, composeAgents, type PullRequestClient } from "../compose-agents.js";
 import type { FileDownloadSeam } from "../effect/seams.js";
@@ -271,6 +278,9 @@ function fakeService() {
     items: polledLive(ITEMS_PARTS),
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
+    // A Manager's chat: its newest page, followed; and the older page a read before a `seq` is answered at once, whatever `seq` it names.
+    managerChat: polledLive(["messages"]),
+    managerChatOlder: polledLive(["messages"]),
     hosts: polledLive(["hosts"]),
     // Note that the account stored no preferences and keeps no clip until a test sets a row, as a new account has none.
     preferences: polledLive(["preferences", "sounds", "soundChoices"], () => ({
@@ -308,6 +318,8 @@ function fakeService() {
   // What a message sent answers once its gate lets it; none answers the agent as it stands.
   let messageAnswer: AgentMessageAnswerView | undefined;
   let messageSendGate: Effect.Effect<void> = Effect.void;
+  // What a message sent to a Manager's chat answers; none answers it taken, under one id.
+  let chatAnswer: AgentChatSendAnswerView | undefined;
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -437,6 +449,7 @@ function fakeService() {
         readonly call?: string;
         readonly userId?: string;
         readonly sync?: string;
+        readonly before?: string;
       },
       poll?: { readonly after?: string | undefined },
     ) =>
@@ -458,6 +471,16 @@ function fakeService() {
             if (poll === undefined) asked.push(`agent-origin-live:${params.id}`);
 
             return answered(live.origin);
+          case MANAGER_CHAT_READ.name:
+            if (params.before !== undefined) {
+              asked.push(`manager-chat-older:${params.id}:${params.before}`);
+
+              return answered(live.managerChatOlder);
+            }
+
+            if (poll === undefined) asked.push(`manager-chat-live:${params.id}`);
+
+            return answered(live.managerChat);
           case WORKSPACE_MEMORIES_READ.name:
             if (poll === undefined) asked.push(`memories-live:${params.workspaceId}`);
 
@@ -584,7 +607,7 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`chatSend:${agentId}:${request.clientKey}:${request.text}`);
 
-        return { agent: AGENT, messageId: "a1b2c3d4" };
+        return chatAnswer ?? { agent: AGENT, messageId: "a1b2c3d4" };
       }),
     message: (agentId, request) =>
       Effect.andThen(
@@ -1043,6 +1066,10 @@ function fakeService() {
       messageAnswer = answer;
       messageSendGate = gate;
     },
+    /** What a message sent to a Manager's chat answers from now on. */
+    answerChat: (answer: AgentChatSendAnswerView) => {
+      chatAnswer = answer;
+    },
     /** What a change of an agent's queue answers from now on, once `gate` lets it. */
     answerQueue: (answer: AgentQueueAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       queueAnswer = answer;
@@ -1453,6 +1480,7 @@ export function subject(
       holdMessages: service.holdMessages,
       answerQueue: service.answerQueue,
       answerMessage: service.answerMessage,
+      answerChat: service.answerChat,
       sealScope: service.sealScope,
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,
@@ -1493,6 +1521,10 @@ export function subject(
       told: () => toldLive(LIVE_READ.HOLDER_INBOX),
       /** Every telling of the agents' origins the host holds for the windows, whole, in order. */
       origins: () => toldLive(LIVE_READ.AGENT_ORIGINS),
+      /** Every telling of the Managers' chats the host holds for the windows, whole, in order. */
+      managerChats: () =>
+        // SAFETY: the held chats are the host's own, told as built.
+        toldLive(LIVE_READ.MANAGER_CHAT).map((held) => held as AppManagerChats),
       /** The account gate opening, as the host opens it. */
       open: Effect.andThen(composer.open, accountAsks.open),
       /** The account gate closing, as the host closes it. */

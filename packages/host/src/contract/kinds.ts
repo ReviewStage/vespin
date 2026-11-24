@@ -277,6 +277,17 @@ export const AGENT_ACT_KIND = {
   AGENTS_PART: "agents.part",
   /** The page of a held transcript below the oldest message it holds, as its newest or last older page named it, laid before them on app state: whether it landed, or why it was not read. */
   AGENTS_TRANSCRIPT_OLDER: "agents.transcriptOlder",
+  /**
+   * One Manager's chat, its newest page held followed while the window holds
+   * the stream open, and paused a while after among those let go lately:
+   * what it holds reaches the panel on app state (`LIVE_READ.MANAGER_CHAT`),
+   * so the stream carries nothing.
+   */
+  AGENTS_MANAGER_CHAT_FOLLOW: "agents.managerChatFollow",
+  /** A held Manager's chat, which the panel reads on app state, read again at once, as Try again asks. */
+  AGENTS_MANAGER_CHAT_RETRY: "agents.managerChatRetry",
+  /** The page of a held Manager's chat older than the oldest message it holds, as the held chat names it, laid past them on app state: whether it landed, or why it was not read. */
+  AGENTS_MANAGER_CHAT_OLDER: "agents.managerChatOlder",
   AGENTS_MESSAGE: "agents.message",
   /** A person's message to a Manager's chat, written to the chat beside the line the Manager reads it as: the agent and the message's id, or why it was not sent. */
   AGENTS_CHAT_SEND: "agents.chat.send",
@@ -302,6 +313,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_WARM: "agents.warm",
   /** A message of the member's the service refused let go, from its Delete or its Edit, which took its words back into the box (`agent-queue-writes.ts`). */
   AGENTS_UNSEND: "agents.unsend",
+  /** A person's message to a Manager's chat the service refused let go, from its Delete or its Edit, by the key it went under (`manager-chat-follow.ts`). */
+  AGENTS_CHAT_UNSEND: "agents.chatUnsend",
   /** A button in an agent's reply as the transcript draws it, asked of the service as it is drawn (`reply-button-wire.ts`). */
   AGENTS_REPLY_BUTTON: "agents.replyButton",
   /** A suggestion in an agent's reply sent by the member from its draft, which the service runs once. */
@@ -1089,9 +1102,9 @@ export type ActUse = (typeof ACT_USE)[keyof typeof ACT_USE];
  * `TERMINAL_LIST`, and `MAC_SHELL_ACTIONS` are FETCHes, though each answers
  * what stands now, because each is asked again
  * whenever it is shown and nothing keeps it, as is `AGENTS_MESSAGES`, Copy
- * transcript's read on its press; `AGENTS_TRANSCRIPT_OLDER` is a WRITE,
- * because it lays an older page on the held transcript and answers only
- * whether it landed, or why it was not read; and `HOSTS_PAIRING_READ` is a FETCH, read once as a
+ * transcript's read on its press; `AGENTS_TRANSCRIPT_OLDER` and
+ * `AGENTS_MANAGER_CHAT_OLDER` are WRITEs, because each lays an older page on
+ * its held read and answers only whether it landed, or why it was not read; and `HOSTS_PAIRING_READ` is a FETCH, read once as a
  * pairing's link opens, and again on its Retry.
  */
 export const PORT_ACT_USE = {
@@ -1173,6 +1186,9 @@ export const PORT_ACT_USE = {
   AGENTS_TRANSCRIPT_RETRY: ACT_USE.READ,
   AGENTS_PART: ACT_USE.FETCH,
   AGENTS_TRANSCRIPT_OLDER: ACT_USE.WRITE,
+  AGENTS_MANAGER_CHAT_FOLLOW: ACT_USE.READ,
+  AGENTS_MANAGER_CHAT_RETRY: ACT_USE.READ,
+  AGENTS_MANAGER_CHAT_OLDER: ACT_USE.WRITE,
   AGENTS_MESSAGE: ACT_USE.WRITE,
   AGENTS_CHAT_SEND: ACT_USE.WRITE,
   AGENTS_CHOOSE: ACT_USE.WRITE,
@@ -1189,6 +1205,7 @@ export const PORT_ACT_USE = {
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
   AGENTS_UNSEND: ACT_USE.WRITE,
+  AGENTS_CHAT_UNSEND: ACT_USE.WRITE,
   AGENTS_REPLY_BUTTON: ACT_USE.FETCH,
   AGENTS_REPLY_BUTTON_PRESS: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,

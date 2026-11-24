@@ -389,6 +389,14 @@ A flow is written one way throughout:
   `glass` button style, through `@repo/ui-native`), is `@expo/ui`.
   Never a tab bar or header drawn in JavaScript, never a hand-drawn copy of
   glass, and never a DOM component (`'use dom'`).
+- **Standard first.** Build every screen and behavior from the platform's
+  own components first: SwiftUI and UIKit through `@expo/ui`, the Expo SDK,
+  then a widely used React Native library. Never hand-build a lookalike of
+  what the system already ships (a sidebar, panel, toggle, cache, or
+  pipeline that imitates it). A custom piece is allowed only where the
+  standard one measurably can't do the job, and its PR says which standard
+  component it replaces and why. If no standard component does what was
+  asked, ask before building one.
 - **SwiftUI first.** A screen is drawn by SwiftUI through `@expo/ui` (`Host`,
   `List`, `Section`, `Form`, `NavigationSplitView`, and the rest), the
   developer's choice of Nov 8, 2026. A React Native view draws only what
