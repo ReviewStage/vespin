@@ -543,6 +543,7 @@ export const PRODUCT_READ_STATE = {
 } as const;
 
 export type ProductReadState = (typeof PRODUCT_READ_STATE)[keyof typeof PRODUCT_READ_STATE];
+
 /** Which rows of a followed read a count of dropped rows names: the task list's tasks or agents, or one part of the account's Inbox items read. */
 export const PRODUCT_ROW_KIND = {
   TASK_LIST_TASKS: "task_list_tasks",
