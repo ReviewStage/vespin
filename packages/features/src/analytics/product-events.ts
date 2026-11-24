@@ -52,6 +52,8 @@ export const PRODUCT_EVENT = {
   MIRROR_READY: "mirror:ready",
   /** A launch drew its first Inbox rows, counted once a launch by how long that took from the app's start, on a rung. */
   APP_READY: "app:ready",
+  /** A launch whose Inbox had drawn no rows 10 s after the app's start, counted once a launch by the phases it had reached, each on a rung, and where each of its first reads stood. */
+  APP_NOT_READY: "app:not_ready",
   /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
   REPLY_DRAWN: "reply:drawn",
   /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was busy before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew. */
@@ -81,6 +83,7 @@ export const PRODUCT_SURFACE_EVENT = {
   SEARCH_OPEN: PRODUCT_EVENT.SEARCH_OPEN,
   SURFACE_OPEN: PRODUCT_EVENT.SURFACE_OPEN,
   APP_READY: PRODUCT_EVENT.APP_READY,
+  APP_NOT_READY: PRODUCT_EVENT.APP_NOT_READY,
   REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
   OPEN_DRAWN: PRODUCT_EVENT.OPEN_DRAWN,
   PAGE_SHOWN: PRODUCT_EVENT.PAGE_SHOWN,
@@ -136,6 +139,9 @@ export const PRODUCT_EVENT_PROPERTY = {
   APP_BUILD: "app_build",
   FIRST_ROWS: "first_rows",
   READY_AFTER: "ready_after",
+  INBOX_READ: "inbox_read",
+  TASKS_READ: "tasks_read",
+  WORKSPACES_READ: "workspaces_read",
   START_MS: "start_ms",
   STAND_MS: "stand_ms",
   OPEN_ORDER: "open_order",
@@ -524,6 +530,16 @@ export const PRODUCT_READY_AFTER = {
 
 export type ProductReadyAfter = (typeof PRODUCT_READY_AFTER)[keyof typeof PRODUCT_READY_AFTER];
 
+/** Where one of a launch's first reads stood: not yet drawn, drawn from the rows the phone kept, the service's answer drawn, or failed. */
+export const PRODUCT_READ_STATE = {
+  OUT: "out",
+  KEPT: "kept",
+  ANSWERED: "answered",
+  FAILED: "failed",
+} as const;
+
+export type ProductReadState = (typeof PRODUCT_READ_STATE)[keyof typeof PRODUCT_READ_STATE];
+
 const PRODUCT_LAUNCH_LADDER: readonly ProductLaunchSeconds[] = Object.values(
   PRODUCT_LAUNCH_SECONDS,
 ).sort((left, right) => right - left);
@@ -730,6 +746,9 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: ProductReadyAfter;
+  [PRODUCT_EVENT_PROPERTY.INBOX_READ]: ProductReadState;
+  [PRODUCT_EVENT_PROPERTY.TASKS_READ]: ProductReadState;
+  [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: ProductReadState;
   [PRODUCT_EVENT_PROPERTY.START_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.STAND_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: ProductOpenOrder;
@@ -794,6 +813,9 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
+  [PRODUCT_EVENT_PROPERTY.INBOX_READ]: Object.values(PRODUCT_READ_STATE),
+  [PRODUCT_EVENT_PROPERTY.TASKS_READ]: Object.values(PRODUCT_READ_STATE),
+  [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: Object.values(PRODUCT_READ_STATE),
   [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: Object.values(PRODUCT_OPEN_ORDER),
   [PRODUCT_EVENT_PROPERTY.PAGE_DATA]: Object.values(PRODUCT_PAGE_DATA),
   [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: Object.values(PRODUCT_PAGE_VERSION),
@@ -845,6 +867,12 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS,
   ],
   [PRODUCT_EVENT.APP_READY]: [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS],
+  [PRODUCT_EVENT.APP_NOT_READY]: [
+    PRODUCT_EVENT_PROPERTY.READY_AFTER,
+    PRODUCT_EVENT_PROPERTY.INBOX_READ,
+    PRODUCT_EVENT_PROPERTY.TASKS_READ,
+    PRODUCT_EVENT_PROPERTY.WORKSPACES_READ,
+  ],
   [PRODUCT_EVENT.REPLY_DRAWN]: [PRODUCT_EVENT_PROPERTY.DRAWN_MS, PRODUCT_EVENT_PROPERTY.REPLY_KIND],
   [PRODUCT_EVENT.OPEN_DRAWN]: [
     PRODUCT_EVENT_PROPERTY.SURFACE,
@@ -886,6 +914,18 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
     PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
     PRODUCT_EVENT_PROPERTY.READY_AFTER,
+  ],
+  [PRODUCT_EVENT.APP_NOT_READY]: [
+    PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
+    PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS,
+    PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS,
+    PRODUCT_EVENT_PROPERTY.LOCAL_SECONDS,
+    PRODUCT_EVENT_PROPERTY.STARTED_SECONDS,
+    PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS,
+    PRODUCT_EVENT_PROPERTY.INBOX_SECONDS,
+    PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS,
+    PRODUCT_EVENT_PROPERTY.DELIVERIES,
+    PRODUCT_EVENT_PROPERTY.APP_BUILD,
   ],
   [PRODUCT_EVENT.OPEN_DRAWN]: [
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
