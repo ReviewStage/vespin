@@ -53,9 +53,7 @@ import {
  * blocked by a rule or behind its base with nothing else to offer, for a
  * member GitHub lets merge past the base's rules as it lets an admin
  * (`canBypassRules`, read on their own sign-in), Bypass rules and merge…,
- * which asks first, naming what it bypasses (`bypassSentence`); for an admin
- * of the repository it says may not (`isRepositoryAdmin`), Merge on
- * GitHub, which opens the pull request's page.
+ * which asks first, naming what it bypasses (`bypassSentence`).
  */
 
 /** Where a pull request stands, in the word its pill and its row say. */
@@ -225,7 +223,6 @@ export const MERGE_ACTION = {
   DISABLE_AUTO_MERGE: "disable-auto-merge",
   DEQUEUE: "dequeue",
   BYPASS: "bypass",
-  MERGE_ON_GITHUB: "merge-on-github",
 } as const;
 
 export type MergeAction = (typeof MERGE_ACTION)[keyof typeof MERGE_ACTION];
@@ -264,8 +261,6 @@ export const MERGE_WORDS = {
   BYPASS: "Bypass rules and merge",
   /** What Bypass rules and merge asks first. */
   BYPASS_QUESTION: "Merge without waiting for requirements?",
-  /** What a repository admin GitHub won't let bypass here is offered: its page, where GitHub's own bypass is. */
-  MERGE_ON_GITHUB: "Merge on GitHub",
   CHOOSE_METHOD: "Choose how to merge",
   autoMerge: (method: MergeMethod | null) =>
     method === null ? "Auto-merge is on" : `Auto-merge is on (${METHOD_NOUNS[method]})`,
@@ -292,25 +287,16 @@ const MERGEABLE: ReadonlySet<MergeState> = new Set([MERGE_STATE.CLEAN, MERGE_STA
 /** The states a member GitHub lets bypass the base's rules may merge in past them: held by a required review or check, or behind a base that must be merged in first. */
 const BYPASSABLE: ReadonlySet<MergeState> = new Set([MERGE_STATE.BLOCKED, MERGE_STATE.BEHIND]);
 
-/** What the member reading may do past the base's rules: bypass them here, and whether they administer the repository. */
-interface MergeRights {
-  readonly canBypassRules: boolean;
-  readonly isRepositoryAdmin: boolean;
-}
-
 /**
  * The one thing the control offers from where the pull request stands, or
  * nothing. Note that the bypass is offered only where nothing else would be,
  * so a member who may bypass still turns auto-merge on while checks run, and
- * a base merged through a queue still queues. Where GitHub answers that a
- * member may not bypass here though they administer the repository, as a
- * GitHub App's user token can for a real admin, it offers Merge on GitHub,
- * whose page carries GitHub's own bypass.
+ * a base merged through a queue still queues.
  */
 function mergeActionOf(
   merge: MergeState,
   merging: PullRequestMerging,
-  rights: MergeRights,
+  canBypassRules: boolean,
 ): MergeAction | undefined {
   if (merging.queued !== null) return MERGE_ACTION.DEQUEUE;
 
@@ -327,11 +313,7 @@ function mergeActionOf(
 
   if (merging.autoMergeAllowed && waiting) return MERGE_ACTION.ENABLE_AUTO_MERGE;
 
-  if (!BYPASSABLE.has(merge)) return undefined;
-
-  if (rights.canBypassRules) return MERGE_ACTION.BYPASS;
-
-  return rights.isRepositoryAdmin ? MERGE_ACTION.MERGE_ON_GITHUB : undefined;
+  return canBypassRules && BYPASSABLE.has(merge) ? MERGE_ACTION.BYPASS : undefined;
 }
 
 /** The press a pull request offers as it stands: none for one not open, or whose merge read has not landed. */
@@ -340,10 +322,7 @@ export function mergeActionFor(pullRequest: AgentOverviewPullRequest): MergeActi
 
   if (merging === undefined || pullRequest.state !== PULL_REQUEST_STATE.OPEN) return undefined;
 
-  return mergeActionOf(pullRequest.merge, merging, {
-    canBypassRules: pullRequest.canBypassRules === true,
-    isRepositoryAdmin: pullRequest.isRepositoryAdmin === true,
-  });
+  return mergeActionOf(pullRequest.merge, merging, pullRequest.canBypassRules === true);
 }
 
 /** Whether a pull request may still merge: open, or a draft. */

@@ -892,30 +892,23 @@ export const MERGING: PullRequestMerging = {
   checks: CHECK_SUMMARY.PASSING,
 };
 
-/** The plan's agents, its pull request standing as given and merged as given, the member reading it able to bypass its base's rules, and an admin of its repository, where said. */
+/** The plan's agents, its pull request standing as given and merged as given, the member reading it able to bypass its base's rules where said. */
 export function merging(
   merge: MergeState,
   merged: Partial<PullRequestMerging> = {},
   canBypassRules = false,
-  isRepositoryAdmin = false,
 ): AgentsControl {
   return controlAnswering({
     pullRequest: () =>
       Promise.resolve({
-        pullRequest: {
-          ...PULL_REQUEST,
-          merge,
-          canBypassRules,
-          isRepositoryAdmin,
-          merging: { ...MERGING, ...merged },
-        },
+        pullRequest: { ...PULL_REQUEST, merge, canBypassRules, merging: { ...MERGING, ...merged } },
       }),
   });
 }
 
-/** The merge control's presses, its links among them, the chevron's left out, in order. */
-export function mergePresses(tab: HTMLElement): HTMLElement[] {
-  return [...(mergeControl(tab)?.querySelectorAll<HTMLElement>("button, a") ?? [])].filter(
+/** The merge control's presses, the chevron's left out, in order. */
+export function mergePresses(tab: HTMLElement): HTMLButtonElement[] {
+  return [...(mergeControl(tab)?.querySelectorAll<HTMLButtonElement>("button") ?? [])].filter(
     (each) => each.getAttribute("aria-label") !== "Choose how to merge",
   );
 }

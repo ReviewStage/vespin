@@ -2868,10 +2868,16 @@ export function viewerPendingReviewOf(
     );
 }
 
-/** What the member reading may do to the pull request, as GitHub answers on their own token: edit it, and merge it past its base's rules. */
+/** What the member reading may do to the pull request, as GitHub answers on their own token: edit it, and merge it past its base's rules; and what holds its merge up, which the rules are weighed against. */
 const VIEWER_RIGHTS_QUERY = `query ViewerRights($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) { viewerCanUpdate viewerCanMergeAsAdmin }
+    pullRequest(number: $number) {
+      viewerCanUpdate
+      viewerCanMergeAsAdmin
+      baseRefName
+      reviewDecision
+      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+    }
   }
 }`;
 
@@ -2882,47 +2888,150 @@ const ViewerRightsAnswerSchema = Schema.Struct({
         Schema.Struct({
           viewerCanUpdate: Schema.Boolean,
           viewerCanMergeAsAdmin: Schema.Boolean,
+          baseRefName: Schema.String,
+          reviewDecision: Schema.NullOr(Schema.String),
+          commits: Schema.Struct({
+            nodes: Schema.Array(
+              Schema.Struct({
+                commit: Schema.Struct({
+                  statusCheckRollup: Schema.NullOr(Schema.Struct({ state: Schema.String })),
+                }),
+              }),
+            ),
+          }),
         }),
       ),
     }),
   ),
 });
 
+type ViewerRightsPull = NonNullable<
+  NonNullable<(typeof ViewerRightsAnswerSchema.Type)["repository"]>["pullRequest"]
+>;
+
 /** Whether the member reading administers the repository, as REST's own `permissions` answers on their token. */
 const RepositoryRoleSchema = Schema.Struct({
   permissions: Schema.optionalKey(Schema.Struct({ admin: Schema.Boolean })),
 });
 
-/** What the member reading may do to a pull request: edit its description, merge it without waiting for its base's rules, and whether they administer its repository. */
+/** The rules standing on a branch, each by the ruleset it comes from. */
+const BranchRulesSchema = Schema.Array(
+  Schema.Struct({ type: Schema.String, ruleset_id: Schema.Number }),
+);
+
+/** Whether the member reading may bypass a ruleset, as GitHub answers on their token. */
+const RulesetBypassSchema = Schema.Struct({
+  current_user_can_bypass: Schema.optionalKey(Schema.String),
+});
+
+/** The kinds of ruleset rule whose hold on a merge the pull request's own read can tell. */
+const HOLDING_RULE = {
+  PULL_REQUEST: "pull_request",
+  REQUIRED_STATUS_CHECKS: "required_status_checks",
+} as const;
+
+/** What a ruleset answers for a member it never lets past. */
+const NEVER_BYPASSES = "never";
+
+/** The reviews' sums that hold a merge up. */
+const REVIEW_HELD: ReadonlySet<string> = new Set(["REVIEW_REQUIRED", "CHANGES_REQUESTED"]);
+
+/** What the member reading may do to a pull request: edit its description, and merge it without waiting for its base's rules. */
 export interface ViewerRights {
   readonly canEditDescription: boolean;
   readonly canBypassRules: boolean;
-  readonly isRepositoryAdmin: boolean;
 }
 
 /** What a member may do where GitHub would not say: nothing. */
-export const NO_VIEWER_RIGHTS: ViewerRights = {
-  canEditDescription: false,
-  canBypassRules: false,
-  isRepositoryAdmin: false,
-};
+export const NO_VIEWER_RIGHTS: ViewerRights = { canEditDescription: false, canBypassRules: false };
+
+/** The kinds of rule the pull request still falls short of, as its own read says: its reviews, and its head's checks. */
+function heldRuleTypes(pull: ViewerRightsPull): ReadonlySet<string> {
+  const rollup = pull.commits.nodes[0]?.commit.statusCheckRollup?.state;
+
+  return new Set([
+    ...(REVIEW_HELD.has(pull.reviewDecision ?? "") ? [HOLDING_RULE.PULL_REQUEST] : []),
+    ...(rollup === "SUCCESS" ? [] : [HOLDING_RULE.REQUIRED_STATUS_CHECKS]),
+  ]);
+}
 
 /**
- * Whether the member administers the repository, read on their own token.
- * Note that we read REST's role rather than trust `viewerCanMergeAsAdmin`
- * alone, because a GitHub App user token may answer that false for a real
- * admin where the App holds no Administration permission, while the role
- * still says admin. False where GitHub would not answer, said in the log.
+ * Whether a ruleset on the base that holds the merge up never lets the
+ * member past, each read on their token: the branch's rules of a kind the
+ * pull request falls short of, then each of their rulesets. Note that an
+ * admin's role passes classic branch protection but no ruleset that leaves
+ * them off its bypass list, as GitHub's own bypass does.
  */
-function viewerAdministers(bearer: GitHubBearer, fullName: string): Effect.Effect<boolean> {
+function rulesetHolds(
+  bearer: GitHubBearer,
+  fullName: string,
+  pull: ViewerRightsPull,
+): Effect.Effect<boolean, GitHubFailure> {
+  const held = heldRuleTypes(pull);
+  const parts = repositoryParts(fullName);
+
+  if (held.size === 0) return Effect.succeed(false);
+
+  return Effect.flatMap(
+    githubRead(
+      bearer.client.request("GET /repos/{owner}/{repo}/rules/branches/{branch}", {
+        ...parts,
+        branch: pull.baseRefName,
+      }),
+      BranchRulesSchema,
+    ),
+    (rules) => {
+      const rulesets = new Set(
+        rules.filter((rule) => held.has(rule.type)).map((rule) => rule.ruleset_id),
+      );
+
+      return Effect.map(
+        Effect.forEach(
+          [...rulesets],
+          (rulesetId) =>
+            githubRead(
+              bearer.client.request("GET /repos/{owner}/{repo}/rulesets/{ruleset_id}", {
+                ...parts,
+                ruleset_id: rulesetId,
+              }),
+              RulesetBypassSchema,
+            ),
+          { concurrency: "unbounded" },
+        ),
+        (answers) => answers.some((answer) => answer.current_user_can_bypass === NEVER_BYPASSES),
+      );
+    },
+  );
+}
+
+/**
+ * Whether an admin of the repository may merge the pull request past its
+ * base's rules where `viewerCanMergeAsAdmin` said not: their REST role says
+ * admin, and no ruleset holding the merge up leaves them off its bypass
+ * list. Note that we read the role, because a GitHub App's user token
+ * answers `viewerCanMergeAsAdmin` false for a real admin where the App holds
+ * no Administration permission, though GitHub takes the admin's merge on
+ * that same token. False where GitHub would not answer, said in the log.
+ */
+function adminMayBypass(
+  bearer: GitHubBearer,
+  fullName: string,
+  pull: ViewerRightsPull,
+): Effect.Effect<boolean> {
   return githubRead(
     bearer.client.request("GET /repos/{owner}/{repo}", repositoryParts(fullName)),
     RepositoryRoleSchema,
   ).pipe(
-    Effect.map((repository) => repository.permissions?.admin === true),
+    Effect.flatMap((repository) =>
+      repository.permissions?.admin === true
+        ? Effect.map(rulesetHolds(bearer, fullName, pull), (holds) => !holds)
+        : Effect.succeed(false),
+    ),
     Effect.catch((failure) =>
       Effect.as(
-        Effect.logWarning(`the member's role in ${fullName} was not read: ${failure._tag}`),
+        Effect.logWarning(
+          `whether the member may bypass ${fullName}'s rules was not read: ${failure._tag}`,
+        ),
         false,
       ),
     ),
@@ -2932,10 +3041,11 @@ function viewerAdministers(bearer: GitHubBearer, fullName: string): Effect.Effec
 /**
  * What the member may do to the pull request, read on their own token,
  * since a read on the App's token answers for the App's bot: edit its
- * description, merge it past its base's rules, as GitHub's own bypass
- * offers an admin, and whether they administer its repository. Nothing where GitHub would not answer them, which
- * leaves the description unedited and the rules standing rather than
- * failing the read, said once in the log.
+ * description, and merge it past its base's rules, as GitHub's own bypass
+ * offers an admin, by GitHub's word or by their role (`adminMayBypass`).
+ * Nothing where GitHub would not answer them, which leaves the description
+ * unedited and the rules standing rather than failing the read, said once
+ * in the log.
  */
 export function viewerRightsOf(
   bearer: GitHubBearer,
@@ -2944,31 +3054,32 @@ export function viewerRightsOf(
 ): Effect.Effect<ViewerRights> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const rights = bearer.client
+  return bearer.client
     .graphql(VIEWER_RIGHTS_QUERY, { owner, name, number }, ViewerRightsAnswerSchema)
     .pipe(
-      Effect.map((answer) => {
-        const pull = answer.repository?.pullRequest;
-
-        return {
-          canEditDescription: pull?.viewerCanUpdate === true,
-          canBypassRules: pull?.viewerCanMergeAsAdmin === true,
-        };
-      }),
       Effect.catch((failure) =>
         Effect.as(
           Effect.logWarning(
             `what the member may do to pull request ${number} was not read: ${failure._tag}`,
           ),
-          NO_VIEWER_RIGHTS,
+          { repository: null },
         ),
       ),
-    );
+      Effect.flatMap((answer) => {
+        const pull = answer.repository?.pullRequest;
 
-  return Effect.map(
-    Effect.all([rights, viewerAdministers(bearer, fullName)], { concurrency: "unbounded" }),
-    ([read, isRepositoryAdmin]) => ({ ...read, isRepositoryAdmin }),
-  );
+        if (pull === null || pull === undefined) return Effect.succeed(NO_VIEWER_RIGHTS);
+        const canEditDescription = pull.viewerCanUpdate;
+
+        if (pull.viewerCanMergeAsAdmin)
+          return Effect.succeed({ canEditDescription, canBypassRules: true });
+
+        return Effect.map(adminMayBypass(bearer, fullName, pull), (canBypassRules) => ({
+          canEditDescription,
+          canBypassRules,
+        }));
+      }),
+    );
 }
 
 /** The repository's labels, as its pickers list them. */

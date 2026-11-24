@@ -2288,23 +2288,6 @@ function mergeCases() {
         "A required review is missing, so it can't be merged yet",
       ),
     ],
-    [
-      "review required, for a repository admin GitHub won't let bypass here",
-      merging(
-        MERGE_STATE.BLOCKED,
-        { review: REVIEW_DECISION.REVIEW_REQUIRED, autoMergeAllowed: false },
-        false,
-        true,
-      ),
-      {
-        chip: "Review required",
-        tone: "attention",
-        sentence: "A required review is missing",
-        press: "Merge on GitHub",
-        look: "outline",
-        chevron: false,
-      },
-    ],
     ["checks failing", merging(MERGE_STATE.BLOCKED, { checks: CHECK_SUMMARY.FAILING }), undefined],
     [
       "checks failing and a review required",
@@ -2447,7 +2430,12 @@ test("auto-merge is offered while checks run, and turned off once on; a merge qu
         answer: "Bypass rules and merge",
         says: /A required review is missing\. This merges it into main now by squash/u,
       },
-      { action: PULL_REQUEST_ACTION.MERGE, method: MERGE_METHOD.SQUASH, headSha: "c0ffee1" },
+      {
+        action: PULL_REQUEST_ACTION.MERGE,
+        method: MERGE_METHOD.SQUASH,
+        headSha: "c0ffee1",
+        bypass: true,
+      },
     ],
   ];
 

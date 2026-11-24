@@ -1664,9 +1664,10 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
   );
 
   it.effect(
-    "the pull request's header says whether the member reading may edit its description and merge it past its base's rules, as GitHub answers on their own token, and not where they hold no sign-in or GitHub would not answer",
+    "the pull request's header says whether the member reading may edit its description and merge it past its base's rules, as GitHub answers on their own token or, for an admin it says may not, as their role and the base's rulesets do, and not where they hold no sign-in or GitHub would not answer",
     () =>
       Effect.gen(function* () {
+        // Note that the admins' pull request waits on a required review with its checks green, as an admin GitHub would let past it does.
         const canUpdate = (call: GraphqlCall) => {
           if (!call.query.includes("ViewerRights")) return Response.json({ data: null });
 
@@ -1679,8 +1680,42 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
           const viewerCanMergeAsAdmin = call.authorization === "Bearer ghu_standing";
 
           return Response.json({
-            data: { repository: { pullRequest: { viewerCanUpdate, viewerCanMergeAsAdmin } } },
+            data: {
+              repository: {
+                pullRequest: {
+                  viewerCanUpdate,
+                  viewerCanMergeAsAdmin,
+                  baseRefName: "main",
+                  reviewDecision: "REVIEW_REQUIRED",
+                  commits: { nodes: [{ commit: { statusCheckRollup: { state: "SUCCESS" } } }] },
+                },
+              },
+            },
           });
+        };
+
+        // An admin's role, read on their own token, and the base's one ruleset, holding a review, which lets one of them past and never the other.
+        const repository = `/repos/${RELAY.owner}/${RELAY.name}`;
+        const ruleset = 7;
+
+        const roles: RepositoryScript = (sent) => {
+          const bearer = sent.headers.get("authorization");
+          const admin = bearer === "Bearer ghu_admin" || bearer === "Bearer ghu_ruled";
+
+          if (!admin) return publishedPullRequest(sent);
+
+          switch (decodeURIComponent(new URL(sent.url).pathname)) {
+            case repository:
+              return Response.json({ permissions: { admin: true } });
+            case `${repository}/rules/branches/main`:
+              return Response.json([{ type: "pull_request", ruleset_id: ruleset }]);
+            case `${repository}/rulesets/${ruleset}`:
+              return Response.json({
+                current_user_can_bypass: bearer === "Bearer ghu_ruled" ? "never" : "always",
+              });
+            default:
+              return publishedPullRequest(sent);
+          }
         };
 
         const header = (
@@ -1699,6 +1734,18 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         const unsigned = yield* published({ otherToken: null, answer: canUpdate });
         const broken = yield* published({ otherToken: "ghu_broken", answer: canUpdate });
 
+        const admin = yield* published({
+          otherToken: "ghu_admin",
+          answer: canUpdate,
+          repository: roles,
+        });
+
+        const ruled = yield* published({
+          otherToken: "ghu_ruled",
+          answer: canUpdate,
+          repository: roles,
+        });
+
         const teammate = yield* header(two, two.other, two.agent.id);
         const rights = (read: typeof teammate) => [read?.canEditDescription, read?.canBypassRules];
         assert.deepEqual(rights(teammate), [true, false]);
@@ -1712,6 +1759,9 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
           false,
           false,
         ]);
+        // Note that GitHub answers `viewerCanMergeAsAdmin` false for both admins, as it did for a real one on a GitHub App's user token.
+        assert.deepEqual(rights(yield* header(admin, admin.other, admin.agent.id)), [false, true]);
+        assert.deepEqual(rights(yield* header(ruled, ruled.other, ruled.agent.id)), [false, false]);
         assert.deepEqual(
           two.calls
             .filter((call) => call.query.includes("ViewerRights"))

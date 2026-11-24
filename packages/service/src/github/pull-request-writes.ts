@@ -420,6 +420,32 @@ export const mergePullRequest = /* @__PURE__ */ Effect.fn("web/mergePullRequest"
   );
 });
 
+/**
+ * The pull request merged now past its base's rules, as an admin GitHub
+ * lets bypass them, by the method given, on the member's token, against
+ * the head they were asked about. Note that it is REST's merge rather than
+ * the GraphQL mutation, because GitHub takes an admin's bypass by REST on a
+ * GitHub App's user token whose App holds no Administration permission.
+ */
+export const mergePullRequestPastRules = /* @__PURE__ */ Effect.fn("web/mergePullRequestPastRules")(
+  function* (
+    bearer: GitHubBearer,
+    fullName: string,
+    number: number,
+    method: MergeMethod,
+    headSha: string,
+  ): Effect.fn.Return<void, GitHubWriteFailure> {
+    yield* githubRestWrite(
+      bearer.client.request("PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge", {
+        ...repositoryParts(fullName),
+        pull_number: number,
+        merge_method: method,
+        sha: headSha,
+      }),
+    );
+  },
+);
+
 const ENABLE_AUTO_MERGE_MUTATION = `mutation($id: ID!, $mergeMethod: PullRequestMergeMethod, $head: GitObjectID!) {
   enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $mergeMethod, expectedHeadOid: $head }) {
     clientMutationId
