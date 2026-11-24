@@ -260,7 +260,8 @@ The Service counts work done through it (such as tasks created and agents
 started) under your account's name and email. Those counts are grouped by
 workspace, with each workspace's name and creation date.
 
-The Vespin iOS app sends the same kind of counts while you are signed in:
+The Vespin iOS app sends the same kind of counts while you are signed in and
+share usage data:
 when it opens, each day you use it, sign-ins and sign-outs, and the kind of
 screen you open (the Inbox, a thread, a task, an agent, a page, a pull
 request, or Settings) and whether the window showed one column or two, never
@@ -366,7 +367,9 @@ trace of its start: how long each of its startup steps took, from iOS
 starting it to your Inbox's first rows, and a processor profile of which of
 the app's own functions ran and for how long, never the values they handled.
 It sends no other performance traces, and no screenshots or recordings of the
-screen.
+screen. It sends Sentry nothing while Settings › Account › "Share usage data"
+is off on that iPhone or iPad, a crash as the app starts included, and starts
+again when you turn it back on.
 
 ### Feedback
 
@@ -739,11 +742,11 @@ can also act directly in the app:
 
 - **Usage data:** turn off Settings › Account › "Share usage data". It stops
   the Mac app's or the web app's feature counts, screen recordings, and
-  Sentry error, crash, and performance reports, at once. It is set per Mac
-  and per browser, is on by default in the Vespin you download, and does not
+  Sentry error, crash, and performance reports, at once, and the iOS app's
+  feature counts and Sentry reports. It is set per Mac, per browser, and per
+  iPhone or iPad, is on by default in the Vespin you download, and does not
   stop the counts the Service makes of work done through it, or the Sentry
-  reports the Service and a host machine send of their own work. The iOS app
-  has no such switch yet, and counts while you are signed in.
+  reports the Service and a host machine send of their own work.
 - **Commands on your Mac:** set Settings › This Mac › "Let agents run commands
   on this Mac" to Never.
 - **Integrations:** switch one off for a single agent in its message box's MCP

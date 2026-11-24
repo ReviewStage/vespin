@@ -23,6 +23,7 @@ import { type ReactElement, type ReactNode, useMemo } from "react";
 import { useColorScheme } from "react-native";
 import { MachineAsks } from "../agents/machine-asks.js";
 import { useAppNotReadyCount } from "../app-ready.js";
+import { useCrashReports } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
@@ -197,6 +198,7 @@ function GuardedScreens() {
   useSystemActivity(signedIn);
   useRecentOpenedSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
+  useCrashReports();
   useOfflineNotice();
   useNoticeForAccount();
   useShareSheet(updateNeeded);

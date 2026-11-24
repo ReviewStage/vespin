@@ -65,6 +65,9 @@ const SHARE_KEYCHAIN_GROUP = `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}.share`;
 const SHARE_KEYCHAIN_GROUP_PLIST_KEY = "VespinShareKeychainGroup";
 const KEYCHAIN_GROUPS_ENTITLEMENT = "keychain-access-groups";
 
+/** The Info.plist key saying whether the build names a DSN for Sentry's native start, spelled again in Swift (`modules/crash-reports/`). */
+const SENTRY_LAUNCH_PLIST_KEY = "VespinSentryLaunch";
+
 const ACCENT_COLOR_NAME = "AccentColor";
 
 // The app's icon: the Icon Composer bundle iOS 26 and later draw, and the
@@ -429,9 +432,10 @@ const SENTRY = {
 const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "production" : "test";
 
 // What the SDK's native half starts on as the app launches, before React
-// Native loads: the plugin writes `RNSentrySDK.start()` into the AppDelegate,
-// which reads these options from the `sentry.options.json` it copies into the
-// bundle. So a crash before the JavaScript bundle runs, or in the first native
+// Native loads: the app's own module (`modules/crash-reports/`) calls
+// `RNSentrySDK.start()` as the app finishes launching, where the device
+// shares usage data, which reads these options from the `sentry.options.json`
+// the plugin copies into the bundle. So a crash before the JavaScript bundle runs, or in the first native
 // draw, is reported on the next launch, where a start from JavaScript alone
 // never saw it. They name the DSN, environment, release and build number
 // `src/crash-reports.ts` starts the SDK under once the bundle runs, which
@@ -439,7 +443,8 @@ const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "producti
 // Note that the JavaScript filters cannot reach this window, so it sends only
 // what a native crash report holds, with no request breadcrumbs. A build
 // without a DSN, a local or simulator one, gets no native start at all
-// (`useNativeInit` off), since the SDK's start faults on an empty DSN.
+// (`SENTRY_LAUNCH_PLIST_KEY` false), since the SDK's start faults on an
+// empty DSN, and neither does a device that turned usage data off.
 const SENTRY_LAUNCH_OPTIONS = {
   dsn: SENTRY.DSN,
   enabled: SENTRY.DSN !== "",
@@ -1048,6 +1053,9 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
           "Vespin saves the pictures and recordings you choose to your library.",
         [APP_GROUP_PLIST_KEY]: APP_GROUP,
         [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP,
+        // Whether the build names a DSN for Sentry's native start to start
+        // on as the app launches (`modules/crash-reports/`).
+        [SENTRY_LAUNCH_PLIST_KEY]: SENTRY.DSN !== "",
       },
     },
     plugins: [
@@ -1126,7 +1134,8 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
           project: SENTRY.PROJECT,
           url: SENTRY.URL,
           disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
-          useNativeInit: SENTRY.DSN !== "",
+          // Note that the native start is the app's own (`modules/crash-reports/`) rather than the plugin's, so it is held to whether the device shares usage data.
+          useNativeInit: false,
           options: SENTRY_LAUNCH_OPTIONS,
         },
       ],
