@@ -16,7 +16,7 @@ The agent's [integrations](/integrations) are its starter's own accounts, so you
 To keep going on your own plan, start your own agent from theirs:
 
 - **Fork to new agent**, on any of its messages, starts your agent with the conversation up to that message. Their agent keeps running.
-- **Continue in new agent**, offered once a turn fails or the agent's session ends, starts your agent with the whole conversation and its work, and stops theirs.
+- **Continue in new agent**, offered once the agent's session ends or its context runs out, starts your agent with the whole conversation and its work, and stops theirs.
 
 Either way the new agent is yours. It runs and bills on your plan, uses your integrations, and is listed with you as its starter. To take over a teammate's agent, fork it from its newest message.
 
@@ -27,4 +27,4 @@ An agent's terminal commands go to the machine picked for that agent, if there i
 ## Limits
 
 - An agent that pushes with its starter's own GitHub token takes messages only from its starter, and only they can continue or fork it.
-- An agent that runs on its starter's machine takes messages only from its starter. You can still continue or fork it: pick **Cloud** or one of your own machines under **Runs on** in the new agent's box.
+- An agent that runs on its starter's machine takes messages only from its starter. You can still continue or fork it: pick **Cloud** or one of your own machines under **Machine** in the new agent's box.

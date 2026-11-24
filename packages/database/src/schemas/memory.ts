@@ -27,6 +27,12 @@ import { organization, user } from "./auth.js";
  * keep, through their client or the member MCP server, names neither, and
  * neither does a memory kept before they were. The agent is set null when it
  * goes, with its task; the memory stays.
+ *
+ * `manager_id` is whose the memory is: null for the workspace's, which
+ * every agent recalls, or the one Manager it was kept for alone, which only
+ * that Manager recalls and the workspace's reads never answer. It is apart
+ * from `agent_id`, which says who kept the words, not who may recall them.
+ * A Manager's memories go with it.
  */
 export const memory = pgTable(
   "memory",
@@ -48,6 +54,8 @@ export const memory = pgTable(
      * would have every such delete look through every memory for its own.
      */
     messageId: uuid("message_id"),
+    /** The Manager the memory is kept for alone; null for the workspace's own, which every agent recalls. */
+    managerId: uuid("manager_id").references(() => agentTable.id, { onDelete: "cascade" }),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
@@ -55,6 +63,8 @@ export const memory = pgTable(
     index("memory_organization_updated").on(table.organizationId, table.updatedAt),
     // The foreign key's set null on every agent deleted, with its task, finds the memories it kept, which a scan of the table would read through to the last.
     index("memory_agent").on(table.agentId).where(sql`${table.agentId} is not null`),
+    // A Manager's own memories, read alone or beside the workspace's, and the foreign key's cascade when the Manager goes.
+    index("memory_manager").on(table.managerId).where(sql`${table.managerId} is not null`),
   ],
 );
 

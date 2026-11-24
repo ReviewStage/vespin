@@ -26,6 +26,7 @@ struct AgentsWidgets: WidgetBundle {
     AgentsLiveActivity()
     CallLiveActivity()
     InboxWidget()
+    NewTaskControl()
   }
 }
 

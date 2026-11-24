@@ -14,6 +14,8 @@ export * from "./agent-boot.js";
 
 export * from "./agent-browser-tab.js";
 
+export * from "./agent-follower.js";
+
 export * from "./agent-pin.js";
 
 export * from "./agent-pull-request.js";
@@ -89,6 +91,8 @@ export * from "./live-activity.js";
 export * from "./machine-command.js";
 
 export * from "./machine-command-ask.js";
+
+export * from "./manager-chat-backfill.js";
 
 export * from "./manager-chat-message.js";
 

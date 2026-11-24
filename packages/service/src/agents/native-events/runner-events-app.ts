@@ -4,7 +4,7 @@ import {
   RUNNER_EVENTS_MAX_BYTES,
   type RunnerEnd,
 } from "@repo/agent-runner/protocol";
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { RUNNER_LOST_DETAIL, settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import {
   type Agent,
@@ -18,6 +18,7 @@ import {
 } from "@repo/database/models/agent-store";
 import { markSessionBroken } from "@repo/database/models/claude-session-entries";
 import {
+  type NativeProjectionApplied,
   type NativeProjectionRow,
   withNativeProjection,
 } from "@repo/database/models/native-projection-store";
@@ -89,6 +90,7 @@ import {
   parseJsonBytes,
   readBodyBytesEffect,
 } from "../../http/http-effect.js";
+import { isDataException, storeFailureWords } from "../../http/store-failure.js";
 import { providerModelOf } from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
@@ -125,7 +127,7 @@ import {
   withTurnServers,
 } from "./native-projection.js";
 import { isApprovalEvent, landApprovalEvent } from "./runner-approvals.js";
-import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
+import { redactKeepingPlanCodes, storableValue } from "./runner-moments.js";
 
 /**
  * runner-events-app.ts -- where a native harness's runner posts its events, which land in the agent's transcript.
@@ -146,8 +148,16 @@ import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
  * already applied is passed over: a batch posted again, or two posts
  * racing, write nothing twice. A write the writer refuses is said in the
  * log and passed over, since the runner
- * posting the batch again would be refused again. The answer names the last
- * event applied, which a relaunch numbers its events after. A post while a
+ * posting the batch again would be refused again. So is an event the store
+ * refuses as a data exception (a SQLSTATE of class 22, such as half a
+ * character in a JSON value): the batch is landed again event by event, each
+ * in its own transaction, the event the store cannot keep is passed over by
+ * its number and reported by its number, type, and the store's code, never
+ * its body, and those around it land, so one value the boundary's cleaning
+ * did not foresee cannot hold back the transcript behind it. A failure a
+ * later try may get past, a connection lost or a statement timed out, still
+ * answers unavailable, which the runner posts again. The answer names the
+ * last event applied or passed over, which a relaunch numbers its events after. A post while a
  * turn runs touches the runner's sandbox (`@repo/sandbox`'s `touch`), at
  * most every `SANDBOX_TOUCH_EVERY`, stamped in the projection under the same
  * lock, unless it ends the launch, whose runner uses the sandbox no more; a
@@ -207,12 +217,12 @@ type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
 
-/** A batch as the store can keep it: every NUL its events carry replaced (`withoutNul`). */
+/** A batch as the store can keep it: every NUL and half character its events carry replaced (`storableValue`). */
 function storable(batch: RunnerEventBatch): RunnerEventBatch {
   return {
     events: batch.events.map(({ sequence, message }) => ({
       sequence,
-      message: withoutNul(message),
+      message: storableValue(message),
     })),
   };
 }
@@ -1001,6 +1011,238 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
   });
 }
 
+/** What applying a batch answers once its transaction commits. */
+type BatchResult = Effect.Success<ReturnType<typeof applyBatch>>["result"];
+
+/** What a batch landed, and the turns its transaction started, settled, and queued, heard once it commits. */
+interface Landed {
+  readonly result: BatchResult;
+  readonly started: readonly StartedAgentTurn[];
+  readonly settled: readonly SettledAgentTurn[];
+  readonly queued: readonly QueuedAgentTurn[];
+}
+
+/** A runner's message's `type` as a log line may carry it: one identifier, never a value. */
+const MESSAGE_TYPE_PATTERN = /^[A-Za-z_]{1,64}$/;
+
+/** What a passed over event's type reads where it has none of that shape. */
+const UNKNOWN_MESSAGE_TYPE = "unknown";
+
+/** An event the store refused to keep, as its issue names it: its ids, number, type and the store's code its attributes. */
+class UnkeptRunnerEvent extends Data.TaggedError("UnkeptRunnerEvent")<{
+  readonly message: string;
+  readonly [ErrorReporter.attributes]: Readonly<Record<string, string>>;
+}> {}
+
+/** A batch's answer that lands nothing past the number given. */
+function landedNothing(sequence: number | null): BatchResult {
+  return {
+    applied: { applied: 0, sequence },
+    ends: [],
+    idle: undefined,
+    turns: { started: false, ended: false },
+    failed: [],
+    retried: [],
+    carriedOn: [],
+    keepsAlive: false,
+  };
+}
+
+/**
+ * `apply` run over the conversation's projection in one transaction, with
+ * the turns its writer heard it move. Note that each try hears into its
+ * own lists, so a try rolled back tells nobody of a turn it moved.
+ */
+function landInOne<R>(
+  applying: Applying,
+  bearerDigest: string,
+  launch: number | undefined,
+  apply: (
+    held: NativeProjectionRow,
+  ) => Effect.Effect<NativeProjectionApplied<BatchResult>, StoreFailure, R>,
+) {
+  return Effect.gen(function* () {
+    const started: StartedAgentTurn[] = [];
+    const settled: SettledAgentTurn[] = [];
+    const queued: QueuedAgentTurn[] = [];
+
+    const hearing = Layer.mergeAll(
+      Layer.succeed(StartedTurnListener, {
+        heard: (turn) => Effect.sync(() => void started.push(turn)),
+      }),
+      Layer.succeed(SettledTurnListener, {
+        heard: (turn) => Effect.sync(() => void settled.push(turn)),
+      }),
+      Layer.succeed(QueuedTurnListener, {
+        heard: (turn) => Effect.sync(() => void queued.push(turn)),
+      }),
+    );
+
+    const applied = yield* withNativeProjection(applying.target, bearerDigest, apply, launch).pipe(
+      Effect.provide(hearing),
+    );
+
+    return Option.map(applied, (result): Landed => ({ result, started, settled, queued }));
+  });
+}
+
+/** Two landings of one post's events, one after the other, as the one landing they tell of. */
+function joined(before: Landed, after: Landed): Landed {
+  const ends = [...before.result.ends, ...after.result.ends];
+
+  return {
+    result: {
+      applied: {
+        applied: before.result.applied.applied + after.result.applied.applied,
+        sequence: after.result.applied.sequence,
+      },
+      ends,
+      // Only the last IDLE is told, and none where the launch ended in the same post.
+      idle: ends.length === 0 ? (after.result.idle ?? before.result.idle) : undefined,
+      turns: {
+        started: before.result.turns.started || after.result.turns.started,
+        ended: before.result.turns.ended || after.result.turns.ended,
+      },
+      failed: [...before.result.failed, ...after.result.failed],
+      retried: [...before.result.retried, ...after.result.retried],
+      carriedOn: [...before.result.carriedOn, ...after.result.carriedOn],
+      keepsAlive: before.result.keepsAlive || after.result.keepsAlive,
+    },
+    started: [...before.started, ...after.started],
+    settled: [...before.settled, ...after.settled],
+    queued: [...before.queued, ...after.queued],
+  };
+}
+
+/**
+ * Says an event passed over in the log, and reports it as an issue, by its
+ * ids, number, type, and the store's failure in kinds and code alone, never
+ * the event's body, which may quote a tool's output.
+ */
+function sayPassedOver(
+  applying: Applying,
+  event: RunnerEventBatch["events"][number],
+  failure: StoreFailure,
+) {
+  const { message } = event;
+  const type = Predicate.isObject(message) && "type" in message ? message.type : undefined;
+
+  const attributes = {
+    agentId: applying.agentId,
+    conversationId: applying.target.conversationId,
+    sequence: String(event.sequence),
+    type: Predicate.isString(type) && MESSAGE_TYPE_PATTERN.test(type) ? type : UNKNOWN_MESSAGE_TYPE,
+    failure: storeFailureWords(failure),
+  };
+
+  return Effect.andThen(
+    Effect.logError("runner-events: an event the store cannot keep was passed over").pipe(
+      Effect.annotateLogs(attributes),
+    ),
+    ErrorReporter.report(
+      Cause.fail(
+        new UnkeptRunnerEvent({
+          message: "a runner's event the store cannot keep was passed over",
+          [ErrorReporter.attributes]: attributes,
+        }),
+      ),
+    ),
+  );
+}
+
+/**
+ * An event the store refused as a data exception, passed over: the
+ * conversation's place moved past it, its projection as it stood, so a
+ * batch posted again passes over it too, and said once it is. Nothing is
+ * said for an event another post applied first.
+ */
+function passOver(
+  applying: Applying,
+  bearerDigest: string,
+  launch: number | undefined,
+  event: RunnerEventBatch["events"][number],
+  failure: StoreFailure,
+) {
+  return Effect.gen(function* () {
+    let moved = false;
+
+    const passed = yield* landInOne(applying, bearerDigest, launch, (held) =>
+      Effect.sync(() => {
+        if (held.sequence !== null && event.sequence <= held.sequence) {
+          return { result: landedNothing(held.sequence) };
+        }
+
+        moved = true;
+
+        return {
+          result: landedNothing(event.sequence),
+          saved: { sequence: event.sequence, projection: heldProjection(held.projection) },
+        };
+      }),
+    );
+
+    if (moved) yield* sayPassedOver(applying, event, failure);
+
+    return passed;
+  });
+}
+
+/**
+ * The batch's events landed one by one, each in its own transaction, an
+ * event the store refuses as a data exception passed over, so those around
+ * it land; nothing where the conversation was cleared or its bearer retired
+ * along the way.
+ */
+function landEventByEvent(
+  applying: Applying,
+  batch: RunnerEventBatch,
+  bearerDigest: string,
+  launch: number | undefined,
+) {
+  return Effect.gen(function* () {
+    let landed: Landed | undefined;
+
+    for (const event of unapplied(batch, null)) {
+      const each = yield* landInOne(applying, bearerDigest, launch, (held) =>
+        applyBatch(applying, { events: [event] }, held),
+      ).pipe(
+        Effect.catchIf(isDataException, (failure) =>
+          passOver(applying, bearerDigest, launch, event, failure),
+        ),
+      );
+
+      if (Option.isNone(each)) return Option.none<Landed>();
+      landed = landed === undefined ? each.value : joined(landed, each.value);
+    }
+
+    return Option.fromNullishOr(landed);
+  });
+}
+
+/**
+ * The batch landed in one transaction, or, where the store refused it as a
+ * data exception, which it would refuse again however often the runner
+ * posted it, event by event (`landEventByEvent`), so one event it cannot
+ * keep is passed over rather than holding back every event behind it. A
+ * failure a later try may get past, such as a connection lost, fails the
+ * post, which the runner posts again.
+ */
+function landBatch(
+  applying: Applying,
+  batch: RunnerEventBatch,
+  bearerDigest: string,
+  launch: number | undefined,
+) {
+  return landInOne(applying, bearerDigest, launch, (held) =>
+    applyBatch(applying, batch, held),
+  ).pipe(
+    Effect.catchIf(
+      (failure) => batch.events.length > 0 && isDataException(failure),
+      () => landEventByEvent(applying, batch, bearerDigest, launch),
+    ),
+  );
+}
+
 /** How many events a batch that would not decode says it holds, where it holds an array of them. */
 function eventCountOf(parsed: UnparsedWireValue): number | undefined {
   if (!Predicate.isObject(parsed) || !("events" in parsed)) return undefined;
@@ -1102,35 +1344,18 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     brief: agent.value.prompt ?? agent.value.descriptionSnapshot ?? "",
   };
 
+  const landed = yield* hostedStoreOrUnavailable(
+    landBatch(applying, storable(batch.value), runnerTokenDigest(bearer), runner.launch),
+  );
+
+  // Note that a conversation cleared, or a bearer retired, since the bearer was read takes nothing more.
+  if (Option.isNone(landed)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+  const { started, settled, queued, result: applied } = landed.value;
+
   // Note that the turns the batch settles are heard once its transaction commits, not as the
   // writer's savepoint inside it ends, so what a listener reads of a turn (its final words, for
   // the Slack thread and the agent's starter) is what the batch wrote, and a rolled back batch
   // tells nobody.
-  const started: StartedAgentTurn[] = [];
-  const settled: SettledAgentTurn[] = [];
-  const queued: QueuedAgentTurn[] = [];
-
-  const collecting = Layer.mergeAll(
-    Layer.succeed(StartedTurnListener, {
-      heard: (turn) => Effect.sync(() => void started.push(turn)),
-    }),
-    Layer.succeed(SettledTurnListener, {
-      heard: (turn) => Effect.sync(() => void settled.push(turn)),
-    }),
-    Layer.succeed(QueuedTurnListener, {
-      heard: (turn) => Effect.sync(() => void queued.push(turn)),
-    }),
-  );
-
-  const applied = yield* hostedStoreOrUnavailable(
-    withNativeProjection(
-      target,
-      runnerTokenDigest(bearer),
-      (held) => applyBatch(applying, storable(batch.value), held),
-      runner.launch,
-    ).pipe(Effect.provide(collecting)),
-  );
-
   const starting = yield* Effect.serviceOption(StartedTurnListener);
 
   if (Option.isSome(starting)) {
@@ -1150,13 +1375,11 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     yield* Effect.forEach(queued, queuing.value.heard, { discard: true });
   }
 
-  // Note that a conversation cleared, or a bearer retired, since the bearer was read takes nothing more.
-  if (Option.isNone(applied)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   // Note that an agent on no task has none to name, take up, or settle.
   const { taskId } = agent.value;
   const { runtimeSessionId } = runner;
 
-  for (const failed of applied.value.failed) {
+  for (const failed of applied.failed) {
     yield* sayTurnFailed(failed, harness, applying.payer, {
       agentId: agent.value.id,
       conversationId: target.conversationId,
@@ -1167,7 +1390,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 
   // A turn kept open on its plan's limit goes on in a launch on the next payer, once the limit is written;
   // one whose session the harness could not resume, in a fresh session handed the agent's steps.
-  for (const { turnId, replay } of applied.value.retried) {
+  for (const { turnId, replay } of applied.retried) {
     const what = replay === true ? "a turn whose session was lost" : "a limited turn";
     yield* afterResponse(
       `${what}'s retry`,
@@ -1188,7 +1411,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   }
 
   // A turn whose runner waited for the model's provider goes on by a carry-on line, once the wait's end is written.
-  for (const { turnId, lostSequence } of applied.value.carriedOn) {
+  for (const { turnId, lostSequence } of applied.carriedOn) {
     yield* afterResponse(
       "a reconnected turn's carry-on",
       carriedOn(
@@ -1210,25 +1433,25 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
   // it up, and a turn's end archives the agent with a task moved to Done while it worked
   // (`tasks/task-finish.ts`).
-  if (applied.value.turns.started && taskId !== null) {
+  if (applied.turns.started && taskId !== null) {
     yield* reopenTaskForWork(target.userId, taskId);
   }
 
-  if (applied.value.turns.ended && taskId !== null) {
+  if (applied.turns.ended && taskId !== null) {
     yield* settleTaskAfterTurn(target.userId, taskId, agent.value.id);
   }
 
   // Note that the title runs after the answer, kept awake past it, because the runner need not wait on a model.
-  if (title !== undefined && (applied.value.turns.started || applied.value.turns.ended)) {
+  if (title !== undefined && (applied.turns.started || applied.turns.ended)) {
     yield* afterResponse("a coding agent's title", title(target, agent.value));
   }
 
-  if (alive !== undefined && applied.value.keepsAlive) {
+  if (alive !== undefined && applied.keepsAlive) {
     yield* alive({ target, sessionId: runner.runtimeSessionId });
   }
 
   if (ended !== undefined) {
-    for (const { sequence, reason } of applied.value.ends) {
+    for (const { sequence, reason } of applied.ends) {
       yield* ended({
         target,
         sessionId: runner.runtimeSessionId,
@@ -1239,15 +1462,15 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     }
   }
 
-  if (idled !== undefined && applied.value.idle !== undefined) {
+  if (idled !== undefined && applied.idle !== undefined) {
     yield* idled({
       target,
       sessionId: runner.runtimeSessionId,
-      sequence: applied.value.idle,
+      sequence: applied.idle,
     });
   }
 
-  return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, applied.value.applied);
+  return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, applied.applied);
 });
 
 /** The group: the one events path, read as the conversation's harness's unless told otherwise, and the hosted vocabulary's own refusal for any other. Note that a carry-on line is a message to the agent (`carriedOn`), which reaches what any message does. */

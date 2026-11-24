@@ -58,6 +58,9 @@
  * `GET /api/live/manager-chat?id=` answers one page of a Manager's chat,
  * its newest messages or with `&before=` those older than a `seq`, as one
  * statement, woken by a write that names the agent (`managerChatRead`).
+ * `GET /api/live/agent-followers?id=` answers a Manager's followers, its
+ * owner and the rest with their machines switch, as two statements, woken
+ * by a write that names the agent (`agentFollowersRead`).
  * `GET /api/live/task-browser-tabs?id=` answers its Browser tabs as one
  * statement, the agent's pointer on each among them, woken by a write that
  * names the task, so a window draws the pointer moving within a moment of
@@ -241,6 +244,7 @@ import { type BoundLiveRead, type PartOf, WATCHED_LOOK } from "./live-read-bindi
 import { type LiveSealer, NO_ROWS_DIGEST, pollSealer } from "./poll-sealer.js";
 import { accountInboxRead } from "./reads/account-inbox.js";
 import { accountPreferencesRead } from "./reads/account-preferences.js";
+import { agentFollowersRead } from "./reads/agent-followers.js";
 import { agentOriginRead } from "./reads/agent-origin.js";
 import { agentTranscriptRead } from "./reads/agent-transcript.js";
 import {
@@ -989,6 +993,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     taskHistory: signedIn.taskHistory.effect(answerBoundRead(taskHistoryRead)),
     taskComments: signedIn.taskComments.effect(answerBoundRead(taskCommentsRead)),
     managerChat: signedIn.managerChat.effect(answerBoundRead(managerChatRead)),
+    agentFollowers: signedIn.agentFollowers.effect(answerBoundRead(agentFollowersRead)),
     taskBrowserTabs: signedIn.taskBrowserTabs.effect(answerBoundRead(taskBrowserTabsRead)),
     agentBrowserTabs: signedIn.agentBrowserTabs.effect(answerBoundRead(agentBrowserTabsRead)),
     macCommands: signedIn.macCommands.effect(answerBoundRead(machineCommandsRead)),

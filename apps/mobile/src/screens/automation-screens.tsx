@@ -46,6 +46,7 @@ import {
   RowForEach,
   RowList,
   Screen,
+  StackBarMenu,
   useMinute,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -77,7 +78,6 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
-import { stackMenuItems } from "../stack-bar-menu.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
@@ -119,19 +119,18 @@ function lastRunWhen(automation: AutomationSummary, now: number): string | undef
   return sinceText(run.firedAt, now);
 }
 
-/** View options: Order by, its choice checked, then Reset view while the order is not the one the list starts in; its glyph fills while it is changed. */
+/** View options: Order by, its choice checked, then Reset view while the order is not the one the list starts in. */
 function viewMenu(order: AutomationsOrder, setOrder: (next: AutomationsOrder) => void): BarMenu {
   const changed = order !== DEFAULT_AUTOMATIONS_ORDER;
 
   return {
     label: VIEW_OPTIONS,
-    symbol: changed ? GLYPH.FILTERED : GLYPH.FILTER,
+    symbol: GLYPH.FILTER,
     choices: [],
     actions: [],
     groups: [
       {
-        actions: [],
-        submenus: [
+        items: [
           {
             label: TASKS_VIEW_WORDS.ORDER_BY,
             symbol: GLYPH.TIME,
@@ -146,7 +145,7 @@ function viewMenu(order: AutomationsOrder, setOrder: (next: AutomationsOrder) =>
         ],
       },
       {
-        actions: [
+        items: [
           {
             label: TASKS_VIEW_WORDS.RESET_VIEW,
             symbol: GLYPH.RESTORE,
@@ -200,9 +199,9 @@ export function AutomationsScreen() {
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-          {stackMenuItems(menu)}
-        </Stack.Toolbar.Menu>
+        <Stack.Toolbar.View>
+          <StackBarMenu menu={menu} />
+        </Stack.Toolbar.View>
         {/* Note that Runs stands beside View options, as the desktop's page stands its Runs tab beside the list, since every run's agent is found there. */}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.HISTORY)}

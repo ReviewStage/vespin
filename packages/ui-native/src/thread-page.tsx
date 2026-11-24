@@ -128,10 +128,12 @@ export type ThreadMedia =
 export type ThreadMessage = {
   readonly id: string;
   /** Who wrote it: a member by their face, their picture where one is known, or the agent by its tile. */
-  /** Who wrote it: a member's face, or the agent, whose tile wears its harness's mark where it is known. */
+  /** Who wrote it: a member's face, or the agent, whose tile wears its harness's mark where it is known, or a Manager's face in the tile's place. */
   readonly writer: Face & {
     readonly agent: boolean;
     readonly harness?: ModelProvider | undefined;
+    /** The Manager's face, and whether it works, which stands in the agent's tile; none for any other agent. */
+    readonly manager?: { readonly face: ManagerFaceValue; readonly working: boolean } | undefined;
   };
   /** When it was written, in epoch milliseconds. */
   readonly at: number;
@@ -524,7 +526,12 @@ function MessageView({
             ]}
           >
             {writer.agent ? (
-              <AgentTile harness={writer.harness} size={MARK_SIZE.WRITER} />
+              <AgentTile
+                harness={writer.harness}
+                face={writer.manager?.face}
+                working={writer.manager?.working}
+                size={MARK_SIZE.WRITER}
+              />
             ) : (
               <Avatar
                 name={writer.name}

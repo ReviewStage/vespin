@@ -155,7 +155,7 @@ export const TRANSCRIPT_PIECE = {
   WORKING: "working",
 } as const;
 
-export type TranscriptPiece = (typeof TRANSCRIPT_PIECE)[keyof typeof TRANSCRIPT_PIECE];
+type TranscriptPiece = (typeof TRANSCRIPT_PIECE)[keyof typeof TRANSCRIPT_PIECE];
 
 /** Where an item stands among the list's: its turn's message, its row in that turn, the block within a group where it is one, and the piece of it drawn. */
 export interface TranscriptPlace {

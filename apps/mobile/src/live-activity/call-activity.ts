@@ -24,7 +24,7 @@ import { useEffect, useRef } from "react";
 import { liveActivityModule } from "./live-activity-module.js";
 
 /** What a press on the activity sets, as `CallPressIntent.Press` names it in Swift. */
-export const CALL_PRESS = {
+const CALL_PRESS = {
   MUTE_MICROPHONE: "mute-microphone",
   UNMUTE_MICROPHONE: "unmute-microphone",
   MUTE_SPEAKER: "mute-speaker",

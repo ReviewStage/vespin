@@ -1,10 +1,16 @@
+import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { TASK_STATUS } from "@repo/features/task-wire";
 import { describe, expect, it } from "vitest";
 import { GLYPH, glyphImage } from "./glyph.js";
 import {
+  CHOICE_MARK,
   type LongPressGroup,
   MENU_ICON,
   MENU_NODE,
   type MenuInks,
+  markLook,
+  menuPhotoFile,
   menuPressAt,
   menuTree,
   ROW_ACTION_TONE,
@@ -44,8 +50,7 @@ describe("menuTree", () => {
           choices: [
             {
               label: "Backlog",
-              symbol: GLYPH.STATUS_BACKLOG,
-              tone: "neutral",
+              mark: { kind: CHOICE_MARK.STATUS, status: TASK_STATUS.BACKLOG },
               on: true,
               onPress: () => pressed.push("Backlog"),
               heard: "Set status: Backlog",
@@ -66,7 +71,7 @@ describe("menuTree", () => {
           choices: [
             {
               label: "Garden",
-              emoji: "🌱",
+              mark: { kind: CHOICE_MARK.EMOJI, emoji: "🌱" },
               detail: "3 tasks",
               on: false,
               onPress: () => pressed.push("Garden"),
@@ -187,5 +192,47 @@ describe("menuTree", () => {
       "Garden",
       "Permanently delete",
     ]);
+  });
+});
+
+describe("markLook", () => {
+  // Note that a repository's owner stands on a tile's rounded square, a quarter of its side, as the panel draws it, never a person's circle, a harness's mark is fit to a glyph's square, and a Manager stands as its face at rest.
+  it.each([
+    {
+      mark: {
+        kind: CHOICE_MARK.REPOSITORY,
+        repository: "acme/web",
+        picture: menuPhotoFile("file:///acme.png"),
+      } as const,
+      look: {
+        kind: MENU_ICON.PHOTO,
+        photo: "file:///acme.png",
+        corner: 0.25,
+        fallback: GLYPH.REPOSITORY,
+      },
+    },
+    {
+      mark: { kind: CHOICE_MARK.HARNESS, provider: MODEL_PROVIDER.ANTHROPIC } as const,
+      look: { kind: MENU_ICON.MARK, asset: "ClawdMark", sized: true },
+    },
+    {
+      mark: {
+        kind: CHOICE_MARK.MANAGER,
+        face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.BLUE },
+      } as const,
+      look: { kind: MENU_ICON.MARK, asset: "ManagerFaces/planet-rest-blue", sized: false },
+    },
+  ])("draws a $mark.kind as its rows do", ({ mark, look }) => {
+    expect(markLook(mark)).toStrictEqual(look);
+  });
+});
+
+describe("menuPhotoFile", () => {
+  // Note that a system menu reads a photo only from a file on this device, so a picture's web address drew no icon at all.
+  it.each([
+    { address: "file:///caches/menu-photo-1a2b", photo: "file:///caches/menu-photo-1a2b" },
+    { address: "https://avatars.githubusercontent.com/u/1?s=60", photo: undefined },
+  ])("takes $address as $photo", ({ address, photo }) => {
+    expect(menuPhotoFile(address)).toBe(photo);
   });
 });

@@ -1,4 +1,4 @@
-// manager-face-look.test.ts -- Change face › checks the face a Manager wears and picks the face pressed, under the character it is.
+// manager-face-menu.test.ts -- Change face › checks the face a Manager wears and picks the face pressed, under the character it is.
 
 import {
   MANAGER_FACE_CHARACTER,
@@ -6,7 +6,7 @@ import {
   type ManagerFace,
 } from "@repo/features/manager-face";
 import { describe, expect, it } from "vitest";
-import { managerFaceMenu } from "./manager-face-look.js";
+import { managerFaceMenu } from "./manager-face-menu.js";
 
 const WORN = { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.BLUE };
 

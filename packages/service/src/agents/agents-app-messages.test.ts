@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
+import { listAgentFollowers } from "@repo/database/models/agent-follower-store";
 import {
   latestTurnsOfReached,
   pinAgent,
@@ -142,6 +143,12 @@ import { SESSION_SEND_OUTCOME, SESSION_TURN } from "./sessions/agent-sessions.js
 
 /** What every case runs over: the store, and sandboxes kept in memory. */
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
+
+/** What a Manager is handed ahead of Ada's chat message, its starter's as much as a teammate's: the label naming her by her link, then the chat's header. */
+const adaHeading = (workspaceId: string, userId: string, id: string) =>
+  text(
+    `[sender: [@Ada Lovelace](https://vespin.dev/workspace-${workspaceId}/person/${userId}), a teammate]\nAda Lovelace, message ${id}:`,
+  );
 
 it.layer(SUITE)("messaging a coding agent", (it) => {
   it.effect(
@@ -2062,11 +2069,15 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a person's message to a Manager's chat lands in the chat on the line it is written beside, the line keeping their plain words while the Manager is handed them under a header naming them and the message; a send again under its key answers the same message and hands nothing",
+    "a person's message to a Manager's chat lands in the chat on the line it is written beside, the line keeping their plain words while the Manager is handed them under the label naming them, its starter as much as a teammate, and a header naming them and the message; a send again under its key answers the same message and hands nothing",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
-        const { owner, agent, ask } = yield* messagedAgent(agentSessions, { running: false });
+
+        const { owner, agent, ask, task } = yield* messagedAgent(agentSessions, {
+          running: false,
+        });
+
         const db = yield* Database;
         yield* db.update(user).set({ name: "Ada Lovelace" }).where(eq(user.id, owner));
 
@@ -2090,7 +2101,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.equal(again.messageId, sent.messageId);
         assert.deepEqual(
           agentSessions.sent.map((each) => each.message.message),
-          [[text(`Ada Lovelace, message ${sent.messageId}:`), text("Ship the invites.")]],
+          [[adaHeading(task.workspaceId, owner, sent.messageId), text("Ship the invites.")]],
         );
 
         const page = readAnswer(
@@ -2130,13 +2141,44 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
       }),
   );
 
+  it.effect("a member who messages a teammate's Manager follows it with their machines on", () =>
+    Effect.gen(function* () {
+      const agentSessions = fakeAgentSessions();
+
+      const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
+        running: false,
+      });
+
+      yield* joinWorkspace(task.workspaceId, other);
+
+      yield* (yield* Database)
+        .update(agentTable)
+        .set({ kind: AGENT_KIND.MANAGER, taskId: null })
+        .where(eq(agentTable.id, agent.id));
+
+      const body = { text: "Check my Mac's checkout.", clientKey: randomUUID() };
+
+      const sent = yield* ask(
+        request(AGENT_CHAT_MESSAGES, other, { method: "POST", id: agent.id, body }),
+      );
+
+      assert.equal(sent.status, HOSTED_HTTP_STATUS.ACCEPTED, JSON.stringify(sent.body));
+      const followers = Option.getOrThrow(yield* listAgentFollowers(owner, agent.id));
+
+      assert.deepEqual(
+        Object.fromEntries(followers.map((follower) => [follower.userId, follower.machines])),
+        { [owner]: true, [other]: true },
+      );
+    }),
+  );
+
   it.effect(
     "a person's chat message to a Manager whose turn was lost is handed again under the same header, read from the chat, when Try again resends it",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
 
-        const { owner, agent, ask, target, writer } = yield* messagedAgent(agentSessions, {
+        const { owner, agent, ask, target, writer, task } = yield* messagedAgent(agentSessions, {
           running: false,
         });
 
@@ -2179,7 +2221,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
 
         const handed = [
-          text(`Ada Lovelace, message ${sent.messageId}:`),
+          adaHeading(task.workspaceId, owner, sent.messageId),
           text("Ship the invites."),
         ];
 
@@ -2240,7 +2282,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.deepEqual(
           agentSessions.sent.slice(sends).map((each) => each.message.message),
           [
-            [text(`Ada Lovelace, message ${written.id}:`), text("Ship the invites.")],
+            [adaHeading(opened.task.workspaceId, owner, written.id), text("Ship the invites.")],
             "Ship the invites.",
           ],
         );

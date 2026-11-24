@@ -57,6 +57,8 @@ export interface CommentAuthor {
   readonly outline?: AvatarOutline | undefined;
   /** What stands on a square in place of the letter: an agent's or an app's glyph. */
   readonly glyph?: ReactNode;
+  /** What stands in the face's place whole, at a row's size, in place of the avatar: a Manager's own face. A pin, too small for it, still wears the avatar. */
+  readonly face?: ReactNode;
 }
 
 /** The comment's frame: a face column beside the name's, the head on the first line and the words under it. */
@@ -156,16 +158,18 @@ export function Comment({
   return (
     <Frame as={Element} ref={ref} {...attributes}>
       <FaceCell>
-        <Avatar
-          name={author.name}
-          {...(author.id === undefined ? {} : { id: author.id })}
-          src={author.picture}
-          outline={author.outline ?? AVATAR_OUTLINE.CIRCLE}
-          glyph={glyph}
-          tiled={glyph !== undefined}
-          size={AVATAR_SIZE.ROW}
-          decorative
-        />
+        {author.face ?? (
+          <Avatar
+            name={author.name}
+            {...(author.id === undefined ? {} : { id: author.id })}
+            src={author.picture}
+            outline={author.outline ?? AVATAR_OUTLINE.CIRCLE}
+            glyph={glyph}
+            tiled={glyph !== undefined}
+            size={AVATAR_SIZE.ROW}
+            decorative
+          />
+        )}
       </FaceCell>
       <HeadLine>
         {said === undefined ? (

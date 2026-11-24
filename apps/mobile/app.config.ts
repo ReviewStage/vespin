@@ -286,6 +286,14 @@ const STOP_AGENT_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "StopAge
 const CALL_PRESS_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "CallPressIntent.swift" };
 const LIVE_ACTIVITY_INTENTS = [STOP_AGENT_INTENT, CALL_PRESS_INTENT] as const;
 
+// The intents the app alone runs: Start a task and Dictate a task, and the
+// App Shortcuts that offer them to Siri, Spotlight, and Shortcuts, which iOS
+// reads from the app's own target.
+const START_TASK_INTENT: ExtensionFile = { FROM: "app-intents", NAME: "StartTaskIntent.swift" };
+
+// Every intent built into the app's own target.
+const APP_TARGET_INTENTS = [...LIVE_ACTIVITY_INTENTS, START_TASK_INTENT] as const;
+
 // The widget extension that draws the member's running agents as a Live
 // Activity, a voice call as one of its own, and the Inbox widget from the
 // snapshot the app keeps in the App Group. Each activity's attributes are
@@ -306,6 +314,8 @@ const LIVE_ACTIVITY: AppExtension = {
     { FROM: "modules/live-activity/ios", NAME: "CallActivityAttributes.swift" },
     { FROM: "live-activity", NAME: "InboxWidget.swift" },
     INBOX_WIDGET_SNAPSHOT,
+    { FROM: "live-activity", NAME: "NewTaskControl.swift" },
+    START_TASK_INTENT,
   ],
   EXTENSION_POINT: "com.apple.widgetkit-extension",
   COLORS: {
@@ -329,6 +339,7 @@ const LIVE_ACTIVITY: AppExtension = {
     "Volume2",
     "VolumeOff",
     "PhoneOff",
+    "SquarePen",
   ],
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
@@ -746,16 +757,17 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
   });
 };
 
-// The Live Activities' intents built into the app's own target as well,
-// since iOS runs a Live Activity's intent in the app's process: copied
-// beside the app's sources and added to its target.
+// The intents built into the app's own target: the Live Activities' as
+// well as their widget's, since iOS runs a Live Activity's intent in the
+// app's process, and the app's own (`APP_TARGET_INTENTS`): copied beside
+// the app's sources and added to its target.
 const withLiveActivityIntents = (config: ExpoConfig): ExpoConfig => {
   const written = withDangerousMod(config, [
     "ios",
     (modConfig) => {
       const { projectRoot } = modConfig.modRequest;
 
-      for (const intent of LIVE_ACTIVITY_INTENTS) {
+      for (const intent of APP_TARGET_INTENTS) {
         copyFileSync(
           join(projectRoot, intent.FROM, intent.NAME),
           join(IOSConfig.Paths.getSourceRoot(projectRoot), intent.NAME),
@@ -769,7 +781,7 @@ const withLiveActivityIntents = (config: ExpoConfig): ExpoConfig => {
   return withXcodeProject(written, (modConfig) => {
     const projectName = IOSConfig.XcodeUtils.getProjectName(modConfig.modRequest.projectRoot);
 
-    for (const intent of LIVE_ACTIVITY_INTENTS) {
+    for (const intent of APP_TARGET_INTENTS) {
       const project = modConfig.modResults;
       const app = IOSConfig.XcodeUtils.getApplicationNativeTarget({ project, projectName });
       modConfig.modResults = IOSConfig.XcodeUtils.addBuildSourceFileToGroup({
@@ -1068,6 +1080,32 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // in the foreground alone; the plugin writes the microphone's purpose
       // string, the same as every other plugin naming it.
       ["expo-audio", { microphonePermission: MICROPHONE_USAGE, enableBackgroundRecording: false }],
+      // The Home Screen's quick actions on the app's icon, written into the
+      // Info.plist so they stand from install: New task, Search, and the
+      // Inbox, each opening the route its `href` names once the tabs mount
+      // (`useQuickActionRouting` in `src/app/(tabs)/_layout.tsx`). Note that
+      // their glyphs are SF Symbols, since the Home Screen draws the menu as
+      // its own.
+      [
+        "expo-quick-actions",
+        {
+          iosActions: [
+            {
+              id: "new-task",
+              title: "New Task",
+              icon: "symbol:square.and.pencil",
+              params: { href: "/start-task" },
+            },
+            {
+              id: "search",
+              title: "Search",
+              icon: "symbol:magnifyingglass",
+              params: { href: "/search" },
+            },
+            { id: "inbox", title: "Inbox", icon: "symbol:tray", params: { href: "/inbox" } },
+          ],
+        },
+      ],
       [
         "@config-plugins/react-native-webrtc",
         { cameraPermission: CAMERA_USAGE, microphonePermission: MICROPHONE_USAGE },

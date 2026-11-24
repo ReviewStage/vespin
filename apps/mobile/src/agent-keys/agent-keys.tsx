@@ -59,7 +59,7 @@ const WORDS = {
 } as const;
 
 /** The routes a credential's adding opens, each a sheet over the screen it was asked from. */
-export const AGENT_KEY_ROUTE = {
+const AGENT_KEY_ROUTE = {
   /** A Claude token or an API key pasted, by `provider` and `kind`. */
   PASTE: "/agent-key",
   /** A Codex plan connected through ChatGPT's device-code sign-in. */

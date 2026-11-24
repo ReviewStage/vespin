@@ -17,7 +17,7 @@ import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/de
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
-import { storeWriter } from "@repo/database/models/writer";
+import { storeWriter, turnWaitingLines } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB } from "@repo/database/testing";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
@@ -50,6 +50,7 @@ import {
 } from "./carry-on.js";
 import { reconcileAgent } from "./reconcile.js";
 import { hostAwayDetail } from "./status.js";
+import { steerAgentWritten } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
 /** The sessions a carry-on is sent through: the account's, over its Macs alone, under the deployment's environment. */
@@ -65,11 +66,11 @@ const cutOff = (at: number): CarryOnTurn => ({
   settledAt: new Date(at),
 });
 
-/** The decision's input as it reads where everything holds: a Mac's agent, its turn just cut off, opened by the developer's own line, nothing queued. */
+/** The decision's input as it reads where everything holds: a Mac's agent, its turn just cut off, no carry-on among its lines, nothing queued. */
 const resumable = (now: number): CarryOnInput => ({
   agent: { archivedAt: null, machine: AGENT_MACHINE.DEVICE },
   turn: cutOff(now),
-  openerChannel: MESSAGE_CHANNEL.TYPED,
+  carriedOn: false,
   queued: false,
   now,
 });
@@ -161,10 +162,9 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
 
-        assert.deepEqual(
-          carryOnDecision({ ...resumable(now), openerChannel: MESSAGE_CHANNEL.CARRY_ON }),
-          { outcome: CARRY_ON_OUTCOME.NONE },
-        );
+        assert.deepEqual(carryOnDecision({ ...resumable(now), carriedOn: true }), {
+          outcome: CARRY_ON_OUTCOME.NONE,
+        });
       }),
   );
 
@@ -226,6 +226,27 @@ const turnRunning = (warm: WarmLocalAgent, text: string) =>
     return turnId;
   });
 
+/** The developer's line steered into the agent's running turn after its runner went, so no runner takes it. */
+const steeredUntaken = (warm: WarmLocalAgent, text: string) =>
+  Effect.gen(function* () {
+    const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+    yield* writer.writeAwaitingLine(
+      { userId: warm.userId, conversationId: warm.agent.conversationId },
+      { text, clientKey: text, sender: { kind: MESSAGE_SENDER.MEMBER, userId: warm.userId } },
+      Effect.succeed(true),
+    );
+  });
+
+/** The client ids of the lines the agent's newest turn awaits and has not taken, oldest first. */
+const newestTurnAwaits = (warm: WarmLocalAgent) =>
+  Effect.gen(function* () {
+    const { userId, agent } = warm;
+    const newest = (yield* latestTurnsOf(userId, [agent.conversationId])).get(agent.conversationId);
+    const target = { userId, conversationId: agent.conversationId };
+
+    return (yield* turnWaitingLines(target, newest?.id ?? "")).map((line) => line.clientId);
+  });
+
 /** The newest launch line waiting for the agent's Mac, claimed as the Mac claims one; none where none waits. */
 const launchClaimed = (warm: WarmLocalAgent) =>
   Effect.gen(function* () {
@@ -252,9 +273,13 @@ const carriedOnStands = (warm: WarmLocalAgent, turnId: string) =>
 it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
   "a local agent's turn cut off",
   (it) => {
-    it.effect(
-      "a runner its Mac settled mid-turn is carried on once: a carry-on line queues a launch for the Mac, and the carry-on's own turn cut off the same way fails as before",
-      () =>
+    // Note that a launch can end before it takes any line, its carry-on's among them, as one that fails on a line it was handed ahead of it does.
+    it.effect.each([
+      ["its runner took the carry-on's line", true],
+      ["its runner took no line", false],
+    ] as const)(
+      "a runner its Mac settled mid-turn is carried on once: a carry-on line queues a launch for the Mac, and the carry-on's own turn cut off the same way, where %s, fails as before",
+      ([, takesLine]) =>
         Effect.gen(function* () {
           const warm = yield* warmLocalAgent;
           const { userId, agent } = warm;
@@ -292,10 +317,14 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
             trigger: TURN_TRIGGER.ASK,
             at: yield* Clock.currentTimeMillis,
           });
-          yield* writer.takeAwaitingLine(target, {
-            clientId: sentLineId(carryOnKey(lost)),
-            turnId: resumed?.id ?? "",
-          });
+
+          if (takesLine) {
+            yield* writer.takeAwaitingLine(target, {
+              clientId: sentLineId(carryOnKey(lost)),
+              turnId: resumed?.id ?? "",
+            });
+          }
+
           yield* TestClock.adjust("1 second");
           yield* settledDeviceAgentLine(ownDeviceHost(userId, warm.deviceId), relaunch, 1);
           yield* turnEnded(warm);
@@ -311,6 +340,96 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
             yield* deviceAgentLinesWaiting(ownDeviceHost(userId, warm.deviceId)),
             [],
           );
+        }),
+    );
+
+    it.effect(
+      "a line sent to the turn that its lost runner never took follows the carry-on into the carry-on's turn",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const lost = yield* turnRunning(warm, "Now the emails.");
+          yield* steeredUntaken(warm, "Also plan the settings.");
+          yield* TestClock.adjust("1 second");
+          yield* settledDeviceAgentLine(
+            ownDeviceHost(warm.userId, warm.deviceId),
+            warm.launchId,
+            1,
+          );
+
+          yield* turnEnded(warm);
+
+          assert.deepEqual(
+            yield* newestTurnAwaits(warm),
+            [sentLineId(carryOnKey(lost)), sentLineId("Also plan the settings.")],
+            "the carry-on's turn awaits the carry-on, then the line the lost turn never took",
+          );
+        }),
+    );
+
+    it.effect(
+      "a line sent to the turn that its lost runner never took goes ahead of the message queued behind the turn, which carries the agent on in the carry-on's place",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          yield* turnRunning(warm, "Now the emails.");
+          yield* steeredUntaken(warm, "Also plan the settings.");
+          const queued = randomUUID();
+          yield* queueAgentMessage(warm.userId, warm.agent.id, {
+            id: queued,
+            text: "Then open the pull request.",
+          });
+          yield* TestClock.adjust("1 second");
+          yield* settledDeviceAgentLine(
+            ownDeviceHost(warm.userId, warm.deviceId),
+            warm.launchId,
+            1,
+          );
+
+          yield* turnEnded(warm);
+
+          assert.deepEqual(yield* newestTurnAwaits(warm), [
+            sentLineId("Also plan the settings."),
+            sentLineId(queued),
+          ]);
+        }),
+    );
+
+    it.effect(
+      "a line a failed turn never took goes ahead of another agent's message, which opens the next turn",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const { userId } = warm;
+          yield* turnRunning(warm, "Now the emails.");
+          yield* steeredUntaken(warm, "Also plan the settings.");
+          yield* TestClock.adjust("1 second");
+          // The turn fails and nothing carries it on, as one whose Mac came back past the hour.
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, warm.deviceId), warm.launchId, 1);
+          const agent = Option.getOrThrow(yield* readAgent(userId, warm.agent.id));
+
+          yield* steerAgentWritten(
+            yield* sessionsFor(userId),
+            storeWriter({ tools: CODER_TOOL_SET }),
+            userId,
+            agent,
+            {
+              text: "The worker's report.",
+              clientKey: "The worker's report.",
+              sender: {
+                kind: MESSAGE_SENDER.AGENT,
+                agentId: randomUUID(),
+                name: "Worker",
+                model: agent.model,
+              },
+              metadata: { channel: MESSAGE_CHANNEL.AGENT_MESSAGE },
+            },
+          );
+
+          assert.deepEqual(yield* newestTurnAwaits(warm), [
+            sentLineId("Also plan the settings."),
+            sentLineId("The worker's report."),
+          ]);
         }),
     );
 

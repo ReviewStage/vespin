@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { ARCHIVE_WRITE_GUARD_RULE, namesArchiveWrite } from "./shared/archive-write-guard.ts";
 import { ARROW_KEY_GUARD_RULE, NAMES_ARROW_KEY } from "./shared/arrow-key-guard.ts";
 import { BUSY_GUARD_RULE } from "./shared/busy-guard.ts";
+import { ENTITY_CHOICE_GUARD_RULE, isMobileSource } from "./shared/entity-choice-guard.ts";
 import { GITHUB_MODULE_GUARD_RULE, namesGitHubBypass } from "./shared/github-module-guard.ts";
 import { HEADING_GUARD_RULE } from "./shared/heading-guard.ts";
 import { HOST_READ_GUARD_RULE, isWatchedSource } from "./shared/host-read-guard.ts";
@@ -47,7 +48,9 @@ import { WRITE_MUTATION_GUARD_RULE } from "./shared/write-mutation-guard.ts";
  * after it. It fails on a JSX-capable file outside `@repo/ui` holding a
  * directive that would silence `no-raw-press-outside-ui`, on one outside
  * `@repo/ui-native` holding one that would silence
- * `no-raw-press-outside-ui-native`, on any JSX-capable
+ * `no-raw-press-outside-ui-native`, on any of the iOS app's TypeScript files
+ * holding one that would silence `entity-choice-through-helper`, which has no
+ * way past it, on any JSX-capable
  * file holding one that would silence `skeleton-through-components`,
  * `settings-row-end`, `row-behavior-in-row`, whose list of row components
  * is the only way past it, on a Settings page's file holding one that would
@@ -126,6 +129,13 @@ const GUARDS = [
     sources: JSX_SOURCE,
     watches: (absolute: string) => isOutsideUiNative(absolute),
     remedy: "Move the press onto a @repo/ui-native component or variant instead",
+  },
+  {
+    rule: ENTITY_CHOICE_GUARD_RULE,
+    sources: TYPESCRIPT_SOURCE,
+    watches: (absolute: string) => isMobileSource(absolute),
+    remedy:
+      "Build the choice with @repo/ui-native's statusChoice, priorityChoice, personChoice, unassignedChoice, taskChoice, or repositoryChoice, or add a helper there for a new kind",
   },
   {
     rule: SETTINGS_ROW_END_GUARD_RULE,

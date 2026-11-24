@@ -6,13 +6,11 @@
  * Group by and Order by; then Show sub-tasks and Show completed; then Reset
  * view while the view is not the one the list starts as. Status keeps
  * several at once, each toggled where it stands; every other choice is one
- * of its kind. Its glyph fills while the view is changed, so a narrowed list
- * never passes for the whole of it. Each choice is kept for the workspace
+ * of its kind. Each choice is kept for the workspace
  * on this device (`tree-view.ts`) and redraws the list at once.
  */
 
 import { ASSIGNED_TO, ASSIGNED_TO_WORDS, type AssignedTo } from "@repo/features/task-list-model";
-import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   DEFAULT_TASK_TREE_VIEW,
   sameTreeView,
@@ -28,7 +26,14 @@ import {
   TASKS_ORDER_WORDS,
   TASKS_VIEW_WORDS,
 } from "@repo/features/tasks-page-model";
-import { type BarMenu, GLYPH, STATUS_MARK_SYMBOL } from "@repo/ui-native";
+import {
+  type BarMenu,
+  GLYPH,
+  type Glyph,
+  type MenuPhotoFile,
+  personChoice,
+  statusChoice,
+} from "@repo/ui-native";
 import type { ListedMember } from "../member-pictures.js";
 
 /** One choice a menu checks. */
@@ -55,7 +60,7 @@ export interface TasksViewMenuInput {
   readonly setView: (view: TaskTreeView) => void;
   readonly shared: boolean;
   readonly members: readonly ListedMember[];
-  readonly photoOf: (userId: string) => string | undefined;
+  readonly photoOf: (userId: string) => MenuPhotoFile | undefined;
 }
 
 /** Whether two Assigned to's name the same tasks. */
@@ -70,36 +75,31 @@ function assignedToChoices(input: TasksViewMenuInput): readonly MenuChoice[] {
   const { view, members, photoOf } = input;
   const reader = members.find((member) => member.you);
 
-  const choice = (
-    assignedTo: AssignedTo,
-    label: string,
-    more: Partial<MenuChoice>,
-  ): MenuChoice => ({
-    label,
+  const press = (assignedTo: AssignedTo) => ({
     on: sameAssignedTo(view.assignedTo, assignedTo),
     onPress: () => input.setView({ ...view, assignedTo }),
-    ...more,
   });
 
+  const glyphChoice = (
+    kind: typeof ASSIGNED_TO.FOLLOWING | typeof ASSIGNED_TO.ANYONE,
+    symbol: Glyph,
+  ): MenuChoice => ({ label: ASSIGNED_TO_WORDS[kind], symbol, ...press({ kind }) });
+
   return [
-    choice({ kind: ASSIGNED_TO.ME }, ASSIGNED_TO_WORDS[ASSIGNED_TO.ME], {
-      symbol: GLYPH.PERSON,
-      photo: reader === undefined ? undefined : photoOf(reader.userId),
-    }),
-    choice({ kind: ASSIGNED_TO.FOLLOWING }, ASSIGNED_TO_WORDS[ASSIGNED_TO.FOLLOWING], {
-      symbol: GLYPH.FOLLOW,
-    }),
-    choice({ kind: ASSIGNED_TO.ANYONE }, ASSIGNED_TO_WORDS[ASSIGNED_TO.ANYONE], {
-      symbol: GLYPH.PEOPLE,
-    }),
+    personChoice(
+      ASSIGNED_TO_WORDS[ASSIGNED_TO.ME],
+      reader === undefined ? undefined : photoOf(reader.userId),
+      press({ kind: ASSIGNED_TO.ME }),
+    ),
+    glyphChoice(ASSIGNED_TO.FOLLOWING, GLYPH.FOLLOW),
+    glyphChoice(ASSIGNED_TO.ANYONE, GLYPH.PEOPLE),
     ...members
       .filter((member) => !member.you)
       .map((member) =>
-        choice({ kind: ASSIGNED_TO.MEMBER, userId: member.userId }, member.name, {
+        personChoice(member.name, photoOf(member.userId), {
           id: member.userId,
-          symbol: GLYPH.PERSON,
-          photo: photoOf(member.userId),
           detail: member.email,
+          ...press({ kind: ASSIGNED_TO.MEMBER, userId: member.userId }),
         }),
       ),
   ];
@@ -121,13 +121,12 @@ export function tasksViewMenu(input: TasksViewMenuInput): BarMenu {
   const status: BarMenu = {
     label: STATUS,
     symbol: GLYPH.STATUS,
-    choices: STATUSES.map((each) => ({
-      label: TASK_STATUS_WORDS[each],
-      symbol: STATUS_MARK_SYMBOL[each],
-      tone: TASK_STATUS_TONE[each],
-      on: view.statuses.includes(each),
-      onPress: () => change({ statuses: toggledStatus(view.statuses, each) }),
-    })),
+    choices: STATUSES.map((each) =>
+      statusChoice(each, {
+        on: view.statuses.includes(each),
+        onPress: () => change({ statuses: toggledStatus(view.statuses, each) }),
+      }),
+    ),
     actions: [],
   };
 
@@ -173,12 +172,12 @@ export function tasksViewMenu(input: TasksViewMenuInput): BarMenu {
 
   return {
     label: VIEW_OPTIONS,
-    symbol: changed ? GLYPH.FILTERED : GLYPH.FILTER,
+    symbol: GLYPH.FILTER,
     choices: [],
     actions: [],
     submenus: shared ? [status, assignedTo] : [status],
     groups: [
-      { actions: [], submenus: [groupBy, orderBy] },
+      { items: [groupBy, orderBy] },
       {
         choices: [
           {
@@ -188,11 +187,10 @@ export function tasksViewMenu(input: TasksViewMenuInput): BarMenu {
             onPress: () => change({ subTasks: !view.subTasks }),
           },
         ],
-        actions: [],
-        submenus: [completed],
+        items: [completed],
       },
       {
-        actions: [
+        items: [
           {
             label: TASKS_VIEW_WORDS.RESET_VIEW,
             symbol: GLYPH.RESTORE,

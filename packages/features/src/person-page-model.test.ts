@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { AGENT_STATUS, type ListedAgent } from "./agent-wire.js";
+import { AGENT_KIND, AGENT_STATUS, type ListedAgent } from "./agent-wire.js";
 import {
   agentStarter,
   personCounts,
@@ -19,6 +19,7 @@ import type { TaskSummary } from "./task-wire.js";
  * accounts.
  */
 
+const ACME = "workspace-acme";
 const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 const DANA = { userId: "user-dana", name: "Dana Reyes" };
 
@@ -88,7 +89,7 @@ const DANAS_REVIEW = agent(7, RETRIES, DANA, AGENT_STATUS.COMPLETED, 600);
 const AGENTS = [RUNNING, DANAS, DANAS_REVIEW, OLDER, STARTING, DONE, UNNAMED];
 
 test("a person's agents at work and their other agents are theirs alone, newest first, wherever the task is", () => {
-  const page = personPage(CHARLES.userId, TASKS, AGENTS);
+  const page = personPage(CHARLES.userId, TASKS, AGENTS, ACME);
 
   assert.deepEqual(
     page.working.map(({ task: summary, agent }) => [summary.name, agent.title]),
@@ -103,13 +104,55 @@ test("a person's agents at work and their other agents are theirs alone, newest 
   );
 });
 
+test("a person's Managers are the unarchived ones they started in the listed workspace, newest first, apart from their agents on tasks", () => {
+  /** A Manager, an agent on no task, started by `startedBy` at `n` in `workspaceId`. */
+  const manager = (
+    n: number,
+    startedBy: typeof CHARLES,
+    workspaceId: string,
+    archived = false,
+  ): ListedAgent => ({
+    ...agent(n, RETRIES, startedBy, AGENT_STATUS.RUNNING, 900),
+    kind: AGENT_KIND.MANAGER,
+    taskId: null,
+    workspaceId,
+    title: `Manager ${n}`,
+    ...(archived ? { archivedAt: 1000 } : undefined),
+  });
+
+  const agents = [
+    ...AGENTS,
+    manager(10, CHARLES, ACME),
+    manager(11, CHARLES, ACME),
+    manager(12, DANA, ACME),
+    manager(13, CHARLES, "workspace-other"),
+    manager(14, CHARLES, ACME, true),
+  ];
+
+  const page = personPage(CHARLES.userId, TASKS, agents, ACME);
+
+  assert.deepEqual(
+    page.managers.map(({ title }) => title),
+    ["Manager 11", "Manager 10"],
+  );
+  assert.deepEqual(
+    page.working.map(({ agent }) => agent.title),
+    ["Agent 2", "Agent 1"],
+  );
+  // Someone with nothing in the list but a Manager has a page.
+  assert.equal(
+    personPageEmpty(personPage(CHARLES.userId, [], [manager(10, CHARLES, ACME)], ACME)),
+    false,
+  );
+});
+
 test("a person's tasks are those they created, the latest updated first", () => {
   assert.deepEqual(
-    personPage(CHARLES.userId, TASKS, AGENTS).created.map((summary) => summary.name),
+    personPage(CHARLES.userId, TASKS, AGENTS, ACME).created.map((summary) => summary.name),
     ["Relay retries", "Retry dashboard"],
   );
   assert.deepEqual(
-    personPage(DANA.userId, TASKS, AGENTS).created.map((summary) => summary.name),
+    personPage(DANA.userId, TASKS, AGENTS, ACME).created.map((summary) => summary.name),
     ["Cache keys"],
   );
 });
@@ -121,7 +164,7 @@ test("a person's tasks assigned to them come apart from those they created, the 
   const handedToCharles = task(6, "Dashboard copy", 600, DANA, CHARLES);
   const tasks = [...TASKS, handedToDana, ownedByCharles, handedToCharles];
 
-  const charles = personPage(CHARLES.userId, tasks, AGENTS);
+  const charles = personPage(CHARLES.userId, tasks, AGENTS, ACME);
   assert.deepEqual(
     charles.assigned.map((summary) => summary.name),
     ["Dashboard copy", "Relay timeouts"],
@@ -131,7 +174,7 @@ test("a person's tasks assigned to them come apart from those they created, the 
     ["Cache eviction", "Relay retries", "Retry dashboard"],
   );
   // Someone the list names only as an assignee has a page of what they are on, and is named by it.
-  const sams = personPage(SAM.userId, [task(7, "Flaky test", 50, DANA, SAM)], []);
+  const sams = personPage(SAM.userId, [task(7, "Flaky test", 50, DANA, SAM)], [], ACME);
   assert.deepEqual(
     sams.assigned.map((summary) => summary.name),
     ["Flaky test"],
@@ -141,8 +184,8 @@ test("a person's tasks assigned to them come apart from those they created, the 
 });
 
 test("someone with nothing in the list has an empty page, and someone with anything does not", () => {
-  assert.equal(personPageEmpty(personPage("user-sam", TASKS, AGENTS)), true);
-  assert.equal(personPageEmpty(personPage(DANA.userId, TASKS, AGENTS)), false);
+  assert.equal(personPageEmpty(personPage("user-sam", TASKS, AGENTS, ACME)), true);
+  assert.equal(personPageEmpty(personPage(DANA.userId, TASKS, AGENTS, ACME)), false);
 });
 
 test("an item's agent is matched to whoever started it, the fourth agent of a task among them, and to nobody where none is named", () => {
@@ -157,7 +200,7 @@ test("a person is named as the list names them, by a task they created or an age
 });
 
 test("each section counts what it lists and what the service counted past what the list held, never fewer than it lists", () => {
-  const page = personPage(CHARLES.userId, TASKS, AGENTS);
+  const page = personPage(CHARLES.userId, TASKS, AGENTS, ACME);
   const held = personHeld(page);
 
   assert.deepEqual(personCounts(page, undefined), { assigned: 0, created: 2, agents: 2 });

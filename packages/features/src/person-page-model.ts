@@ -3,6 +3,7 @@ import { agentLastMovedAt } from "./task-agents-model.js";
 import { PERSON_PAGE_TASKS } from "./task-list-live.js";
 import { createdByOnly, TASK_ORDER, taskTime } from "./task-list-model.js";
 import type { TaskSummary } from "./task-wire.js";
+import { workspaceManagersOf } from "./workspace-managers-model.js";
 
 /**
  * person-page-model.ts -- a person's page in the listed workspace: what of theirs the window already holds, grouped as the page lists it.
@@ -19,7 +20,11 @@ import type { TaskSummary } from "./task-wire.js";
  * is theirs by its `startedBy`, an archived one left out, as a task leaves
  * it out of its agents. Until the list follows live it carries none, and
  * the page lists none. Their agents' open Inbox items are matched to them
- * by the same agents (`agentStarter`), every agent of the task. Nothing here
+ * by the same agents (`agentStarter`), every agent of the task. Their
+ * Managers, the workspace's agents on no task that they started, are read
+ * from the same agents (`workspaceManagersOf`), the archived left out,
+ * newest started first, and stand apart from their agents on tasks, which
+ * never count them. Nothing here
  * is read of another workspace, nor of anyone's personal one, since the list
  * is the listed workspace's.
  *
@@ -66,6 +71,8 @@ export interface PersonPage {
   /** Every task they created that is not assigned to them, newest first; the page draws the first `PERSON_TASKS_SHOWN`. */
   readonly created: readonly TaskSummary[];
   readonly agents: readonly PersonAgent[];
+  /** The listed workspace's Managers they started, none archived, newest started first. */
+  readonly managers: readonly ListedAgent[];
 }
 
 /** The statuses of an agent that may still write: starting, or running. */
@@ -95,12 +102,14 @@ function agentsOf(
 
 /**
  * The person's page from the listed workspace's tasks, the archived left out
- * by the list itself, and the agents it follows live, none while it does not.
+ * by the list itself, and the agents it follows live, none while it does not;
+ * their Managers are those of `workspaceId`, none while no workspace is listed.
  */
 export function personPage(
   userId: string,
   tasks: readonly TaskSummary[],
   agents: readonly ListedAgent[] | undefined,
+  workspaceId: string | undefined,
 ): PersonPage {
   const theirs = agentsOf(userId, tasks, agents ?? []);
   const newest = (a: PersonAgent, b: PersonAgent) => b.at - a.at;
@@ -118,6 +127,12 @@ export function personPage(
       .filter((task) => !assignedToThem(task))
       .toSorted(latest),
     agents: theirs.filter(({ agent }) => !AT_WORK.has(agent.status)).toSorted(newest),
+    managers:
+      workspaceId === undefined
+        ? []
+        : workspaceManagersOf(agents ?? [], workspaceId).filter(
+            (agent) => agent.startedBy?.userId === userId,
+          ),
   };
 }
 
@@ -186,6 +201,7 @@ export function personPageEmpty(page: PersonPage): boolean {
     page.working.length === 0 &&
     page.assigned.length === 0 &&
     page.created.length === 0 &&
-    page.agents.length === 0
+    page.agents.length === 0 &&
+    page.managers.length === 0
   );
 }

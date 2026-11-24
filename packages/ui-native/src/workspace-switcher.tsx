@@ -29,6 +29,7 @@ import { useColorScheme } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, letterTileGlyph } from "./glyph.js";
 import { actContent, menuActContent } from "./glyph-label.js";
+import type { MenuPhotoFile } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -62,7 +63,7 @@ export type SwitcherAccount = {
   /** The account's sign-in picture, which the landscape iPad's sidebar draws; its letters where it has none. */
   readonly picture?: string | undefined;
   /** That picture as a file on this device, which its row in the menu leads with; the gear while it has none. */
-  readonly menuPhoto?: string | undefined;
+  readonly menuPhoto?: MenuPhotoFile | undefined;
   readonly onPress: () => void;
 };
 

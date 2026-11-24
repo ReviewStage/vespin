@@ -22,6 +22,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useIsFocused } from "exp
 import { type ReactElement, type ReactNode, useMemo } from "react";
 import { useColorScheme } from "react-native";
 import { MachineAsks } from "../agents/machine-asks.js";
+import { useAppNotReadyCount } from "../app-ready.js";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -189,6 +190,7 @@ function GuardedScreens() {
     select: (state) => state.network.updateNeeded === true,
   });
 
+  useAppNotReadyCount(signedIn && !updateNeeded);
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);

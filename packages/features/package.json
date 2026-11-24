@@ -240,6 +240,8 @@
     "./description-comment-live": "./src/description-comment-live.js",
     "./manager-chat-live": "./src/manager-chat-live.js",
     "./manager-chat-view": "./src/manager-chat-view.js",
+    "./agent-followers-live": "./src/agent-followers-live.js",
+    "./agent-followers-wire": "./src/agent-followers-wire.js",
     "./description-comment-wire": "./src/description-comment-wire.js",
     "./description-sections": "./src/description-sections.js",
     "./description-version-diff": "./src/description-version-diff.js",

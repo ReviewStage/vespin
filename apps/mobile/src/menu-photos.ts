@@ -1,9 +1,10 @@
-// menu-photos.ts -- a picture as a file in the app's caches, which a system menu draws round in a choice's glyph place: each member's sign-in picture, and a workspace's photo.
+// menu-photos.ts -- a picture as a file in the app's caches, which a system menu draws in a choice's glyph place: each member's sign-in picture, a workspace's photo, and a repository's owner's picture.
 
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
-import { MARK_SIZE } from "@repo/ui-native";
+import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
+import { MARK_SIZE, type MenuPhotoFile, menuPhotoFile } from "@repo/ui-native";
 import { File, Paths } from "expo-file-system";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppState, PixelRatio } from "react-native";
 import type { PictureOf } from "./member-pictures.js";
 
@@ -113,7 +114,7 @@ export function menuAddress(
 
 /** A menu's pictures as files on this device: each address's file once written, and whether it is still on its way rather than failed. */
 export interface MenuPictures {
-  readonly fileOf: (address: string) => string | undefined;
+  readonly fileOf: (address: string) => MenuPhotoFile | undefined;
   /** Whether the address's file is still being downloaded or written, so its choice shows nothing rather than its fallback meanwhile. */
   readonly coming: (address: string) => boolean;
 }
@@ -172,7 +173,11 @@ export function useMenuPictures(addresses: readonly string[]): MenuPictures {
   // Note that the readers stand still while nothing landed, so a memo drawn from them does too.
   return useMemo(
     () => ({
-      fileOf: (address: string) => files.get(address)?.uri,
+      fileOf: (address: string) => {
+        const uri = files.get(address)?.uri;
+
+        return uri === undefined ? undefined : menuPhotoFile(uri);
+      },
       coming: (address: string) => !files.has(address) && !missed.has(address),
     }),
     [files, missed],
@@ -182,7 +187,7 @@ export function useMenuPictures(addresses: readonly string[]): MenuPictures {
 /** Each picture address's file on this device, for a menu that draws them; none while one is still on its way, or failed (`useMenuPictures`). */
 export function useMenuPictureFiles(
   addresses: readonly string[],
-): (address: string) => string | undefined {
+): (address: string) => MenuPhotoFile | undefined {
   return useMenuPictures(addresses).fileOf;
 }
 
@@ -190,7 +195,7 @@ export function useMenuPictureFiles(
 export function useMenuPhotos(
   pictureOf: PictureOf,
   userIds: readonly string[],
-): (userId: string) => string | undefined {
+): (userId: string) => MenuPhotoFile | undefined {
   const byUser = useMemo(() => {
     const addresses = new Map<string, string>();
 
@@ -206,9 +211,54 @@ export function useMenuPhotos(
   const addresses = useMemo(() => [...byUser.values()], [byUser]);
   const fileOf = useMenuPictureFiles(addresses);
 
-  return (userId) => {
-    const address = byUser.get(userId);
+  // Note that the reader stands still while no photo landed, so a list memoized on it isn't built anew on every draw.
+  return useCallback(
+    (userId: string) => {
+      const address = byUser.get(userId);
 
-    return address === undefined ? undefined : fileOf(address);
-  };
+      return address === undefined ? undefined : fileOf(address);
+    },
+    [byUser, fileOf],
+  );
+}
+
+/**
+ * A repository's owner's picture, asked for at a menu photo's size in device
+ * pixels. Note that it is GitHub's own address for an account's picture
+ * (`repositoryOwnerPictureUrl`), which redirects to its avatar, so it is
+ * sized here rather than through `menuAddress`, which takes only a picture
+ * already on GitHub's avatar host and refused this one, drawing every
+ * repository as its glyph.
+ */
+function repositoryMenuAddress(repository: string): string {
+  const address = new URL(repositoryOwnerPictureUrl(repository));
+  address.searchParams.set("size", String(Math.round(MARK_SIZE.MENU_PHOTO * PixelRatio.get())));
+
+  return address.toString();
+}
+
+/** Each repository's owner's picture as a file on this device, by `owner/name`, for a menu that leads each repository with it, as `useMenuPictureFiles` holds them; none while it's on its way, or failed. */
+export function useMenuRepositoryPictures(
+  repositories: readonly string[],
+): (repository: string) => MenuPhotoFile | undefined {
+  const byRepository = useMemo(() => {
+    const addresses = new Map<string, string>();
+
+    for (const repository of repositories)
+      addresses.set(repository, repositoryMenuAddress(repository));
+
+    return addresses;
+  }, [repositories]);
+
+  const addresses = useMemo(() => [...byRepository.values()], [byRepository]);
+  const fileOf = useMenuPictureFiles(addresses);
+
+  return useCallback(
+    (repository: string) => {
+      const address = byRepository.get(repository);
+
+      return address === undefined ? undefined : fileOf(address);
+    },
+    [byRepository, fileOf],
+  );
 }

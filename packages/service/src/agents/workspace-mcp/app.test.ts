@@ -301,6 +301,7 @@ const agentWithBearer = Effect.gen(function* () {
     taskId: task.id,
     agentId: agent.id,
     organizationId: agent.organizationId,
+    conversationId: agent.conversationId,
     bearer,
   };
 });

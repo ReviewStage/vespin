@@ -9,7 +9,8 @@
  * their transaction.
  *
  * A member follows by hand with their machines off, and by messaging one of
- * the task's agents with them on where they did not follow it yet; a follower
+ * the task's agents with them on where they did not follow it yet, or the
+ * agent itself where it stands on no task, a Manager (`agent-following.ts`); a follower
  * keeps their switch otherwise, which only they flip. Mentioning someone,
  * and anything an agent, an automation, GitHub, or a webhook sends, makes no
  * one follow: none of those reaches this module.
@@ -29,6 +30,7 @@ import type { TaskFollowersAnswer } from "@repo/features/task-wire";
 import type { TaskMachinesAnswer } from "@repo/features/workspace-tools-wire";
 import type { TaskFollowerWire } from "@repo/wire";
 import { Effect, Option, Result } from "effect";
+import { followAgentAsMessaged } from "../agents/agent-following.js";
 import { followerMachinesOf } from "../agents/machine-routing.js";
 import {
   HOSTED_REFUSAL,
@@ -149,15 +151,18 @@ export function setFollowerMachinesAsked(
 /**
  * A member's own words to one of the task's agents make them follow it, with
  * their machines on, where they did not follow it yet; a follower's row
- * stands as it is. It never fails the message it follows: a write the store
- * could not make is logged for the operator and the message goes on. An
- * agent on no task has no task to follow, so its message follows nothing.
+ * stands as it is. An agent on no task, a Manager, is followed itself
+ * instead (`followAgentAsMessaged`). It never fails the message it follows:
+ * a write the store could not make is logged for the operator and the
+ * message goes on.
  */
 export function followAsMessaged(
   userId: string,
-  taskId: string | null,
+  agent: { readonly id: string; readonly taskId: string | null },
 ): Effect.Effect<void, never, DatabaseServices> {
-  if (taskId === null) return Effect.void;
+  const { taskId } = agent;
+
+  if (taskId === null) return followAgentAsMessaged(userId, agent.id);
 
   return followTask(userId, { taskId, followerId: userId, machines: true }).pipe(
     Effect.tapError(logStoreFailure),

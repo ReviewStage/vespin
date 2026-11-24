@@ -220,6 +220,61 @@ test("a launch may add when its bundle evaluated, its account was read, its loca
   );
 });
 
+test("a launch with no Inbox 10 s in travels the phases it reached and where each first read stood, each from its set, and refuses any other word", () => {
+  const stood = {
+    [PRODUCT_EVENT_PROPERTY.READY_AFTER]: "launch",
+    [PRODUCT_EVENT_PROPERTY.INBOX_READ]: "out",
+    [PRODUCT_EVENT_PROPERTY.TASKS_READ]: "kept",
+    [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: "answered",
+    [PRODUCT_EVENT_PROPERTY.STARTED_SECONDS]: 1,
+    [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: 2,
+    [PRODUCT_EVENT_PROPERTY.DELIVERIES]: 5,
+    [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "79",
+  };
+
+  assert.deepEqual(
+    productEventFromWire({ name: PRODUCT_EVENT.APP_NOT_READY, at: AT, properties: stood }),
+    { name: PRODUCT_EVENT.APP_NOT_READY, at: AT, properties: stood },
+  );
+  // A read's state is one of its four words, so a failure's own words refuse the event rather than travel.
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.APP_NOT_READY,
+      at: AT,
+      properties: { ...stood, [PRODUCT_EVENT_PROPERTY.INBOX_READ]: "failed: 503 from /api/inbox" },
+    }),
+    undefined,
+  );
+});
+
+test("rows a read dropped travel as their kind and a count on a rung, never a raw count or another word", () => {
+  const dropped = {
+    [PRODUCT_EVENT_PROPERTY.ROW_KIND]: "task_list_agents",
+    [PRODUCT_EVENT_PROPERTY.DROPPED]: 5,
+  };
+
+  assert.deepEqual(
+    productEventFromWire({ name: PRODUCT_EVENT.ROWS_DROPPED, at: AT, properties: dropped }),
+    { name: PRODUCT_EVENT.ROWS_DROPPED, at: AT, properties: dropped },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.ROWS_DROPPED,
+      at: AT,
+      properties: { ...dropped, [PRODUCT_EVENT_PROPERTY.DROPPED]: 4391 },
+    }),
+    undefined,
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.ROWS_DROPPED,
+      at: AT,
+      properties: { ...dropped, [PRODUCT_EVENT_PROPERTY.ROW_KIND]: "agents of task-1" },
+    }),
+    undefined,
+  );
+});
+
 test("a reply's wait to stand in its thread travels on a rung, with what it carried, never its words or the raw time", () => {
   assert.equal(productDrawnMilliseconds(640), 500);
   assert.equal(productDrawnMilliseconds(40), 0);

@@ -531,8 +531,12 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     }
   }
 
+  // Note that a new most of lines measures the words again, since a field already scrolling at the same width otherwise kept the height of its old most.
   var maxLines = defaultMaxLines {
-    didSet { setNeedsLayout() }
+    didSet {
+      if maxLines != oldValue { measured = nil }
+      setNeedsLayout()
+    }
   }
 
   var editable = true {

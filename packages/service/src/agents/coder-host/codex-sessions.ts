@@ -374,6 +374,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     name: "Codex",
     runtime: SERVER_AGENT_HARNESS.CODEX,
     sessionPrefix: NATIVE_SESSION_PREFIX[CONVERSATION_RUNTIME.CODEX],
+    sessionsOnDisk: true,
     launch,
     config,
     ahead,

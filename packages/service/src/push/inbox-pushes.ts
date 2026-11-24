@@ -8,9 +8,11 @@
  * waits on one member (`inboxItemWaitsOn`: the member its agent addressed
  * it to, else its task's assignee, else the agent's starter), as its Slack
  * DM does (`../slack/thread-dms.ts`), and only that member's phones are
- * pushed. A turn that failed pushes its starter. One that finished well
- * pushes them only where they keep no Inbox (`@repo/settings`'s `inbox`
- * off): their agents then ask in their reply rather than on a thread, so
+ * pushed. A turn that failed pushes its starter, or for a Manager, which
+ * many members talk to, the member who asked for the turn (`turnAsker`,
+ * read as it settles), its starter standing in for a turn no member asked
+ * for. One that finished well pushes that member only where they keep no
+ * Inbox (`@repo/settings`'s `inbox` off, their own setting): their agents then ask in their reply rather than on a thread, so
  * the turn's end is the news a post would have been, and its alert says the
  * reply's opening words. Where the Inbox is on, a finished turn pushes
  * nothing, since what needs the member comes as a post. A turn the member
@@ -81,8 +83,10 @@ import {
 import { latestTurnsOf, readMessageByClientId } from "@repo/database/models/message-reads";
 import { readLastActive } from "@repo/database/models/presence-store";
 import { listPushDevices, type PushDevice } from "@repo/database/models/push-device-store";
+import { turnAsker } from "@repo/database/models/turn-asker";
 import type { SettledAgentTurn } from "@repo/database/models/writer";
 import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { PUSH_CATEGORY, PUSH_KIND } from "@repo/features/inbox-push-wire";
 import {
   INBOX_ASK,
@@ -412,14 +416,22 @@ function replyWords(agent: Agent, turnId: string) {
   );
 }
 
+/** The member a turn of the agent that ended is pushed to: for a Manager, whoever asked for it, as the module says; else its starter. */
+function turnRecipient(agent: Agent) {
+  return agent.kind === AGENT_KIND.MANAGER
+    ? turnAsker({ userId: agent.userId, conversationId: agent.conversationId })
+    : Effect.succeed(agent.userId);
+}
+
 /**
- * The alert about the agent's turn as it ended: a failed one says why, as
- * the desktop's notification does, and one that finished well says its
- * reply's opening words where its member keeps no Inbox; none for any
- * other end.
+ * The alert to the member given about the agent's turn as it ended: a
+ * failed one says why, as the desktop's notification does, and one that
+ * finished well says its reply's opening words where that member keeps no
+ * Inbox; none for any other end.
  */
 function turnNotification(
   agent: Agent,
+  recipient: string,
   turn: { readonly id: string; readonly status: string; readonly failure: string | null },
 ) {
   return Effect.gen(function* () {
@@ -430,7 +442,7 @@ function turnNotification(
       return Option.some(agentTurnNotification(agent, turn.id, body));
     }
 
-    if (turn.status !== TURN_STATUS.SETTLED || !(yield* inboxOff(agent.userId))) {
+    if (turn.status !== TURN_STATUS.SETTLED || !(yield* inboxOff(recipient))) {
       return Option.none<(badge: number) => MemberNotification>();
     }
 
@@ -482,9 +494,9 @@ export function pushThreadSettled(
 }
 
 /**
- * Pushes the member who started the agent that its turn ended, saying the
- * agent's name: one that failed, and one that finished well where the
- * member keeps no Inbox, over its reply's opening words; nothing for a turn
+ * Pushes the member who started the agent, or who asked a Manager for the
+ * turn, that its turn ended, saying the agent's name: one that failed, and
+ * one that finished well where that member keeps no Inbox, over its reply's opening words; nothing for a turn
  * a Stop ended, which is the member's own, a finished one where they keep
  * an Inbox, or an agent that is gone. A later turn of the same agent
  * replaces the one before it on the lock screen.
@@ -502,14 +514,16 @@ export function pushSettledTurn(
     if (Option.isNone(found)) return;
     const agent = found.value;
 
-    const compose = yield* turnNotification(agent, {
+    const recipient = yield* turnRecipient(agent);
+
+    const compose = yield* turnNotification(agent, recipient, {
       id: turn.turnId,
       status: turn.status,
       failure: turn.failure,
     });
 
     if (Option.isNone(compose)) return;
-    yield* pushToMember(agent.userId, compose.value, { agentId: agent.id, turnId: turn.turnId });
+    yield* pushToMember(recipient, compose.value, { agentId: agent.id, turnId: turn.turnId });
   });
 }
 
@@ -542,19 +556,20 @@ function stillWaitingPost(userId: string, itemId: string) {
   });
 }
 
-/** The alert a held turn tells of, composed afresh where its agent still stands on that turn and it still pushes; none where a later turn followed it or the agent is gone. */
+/** The alert a held turn tells of, composed afresh for the member it was held for where its agent still stands on that turn and it still pushes; none where a later turn followed it or the agent is gone. */
 function stillStandingTurn(userId: string, agentId: string, turnId: string) {
   return Effect.gen(function* () {
     const agent = yield* readAgent(userId, agentId);
 
     if (Option.isNone(agent)) return Option.none<(badge: number) => MemberNotification>();
 
-    const latest = (yield* latestTurnsOf(userId, [agent.value.conversationId])).get(
+    // Note that the turns are read as the agent's starter's, since a Manager's alert may be held for another member who asked.
+    const latest = (yield* latestTurnsOf(agent.value.userId, [agent.value.conversationId])).get(
       agent.value.conversationId,
     );
 
     return latest?.id === turnId
-      ? yield* turnNotification(agent.value, latest)
+      ? yield* turnNotification(agent.value, userId, latest)
       : Option.none<(badge: number) => MemberNotification>();
   });
 }

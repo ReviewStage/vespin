@@ -21,6 +21,7 @@ import {
   type UsageLimitAgent,
   type UsageLimitAnswer,
 } from "@repo/wire/ui-messages";
+import { wellFormedText } from "@repo/wire/well-formed";
 import { Option, Schema } from "effect";
 import { NATIVE_ENDING, NATIVE_MOMENT, type NativeMoment } from "./native-moments.js";
 
@@ -56,26 +57,30 @@ const PLAN_CODE_SPLIT = /((?<![^\s"'])(?:subscription_sharing|chatpass_v2)_[a-z_
 /** What a NUL a runner's event carries is kept as, since no Postgres text or jsonb value holds one. */
 const NUL_KEPT_AS = "\uFFFD";
 
-/**
- * A value with every NUL in its strings, keys included, kept as the
- * replacement character: a runner's event as it arrives, and our own tool's
- * answer once read as JSON, whose `\u0000` its reading makes a NUL. Note that
- * a NUL is replaced rather than refused, because the store refuses it on every
- * post of its batch, which the runner posts again for as long as it runs, so
- * every event behind it would never land and its turn would stand frozen.
- */
-export function withoutNul(value: WireValue): WireValue {
-  if (isWireString(value)) return value.replaceAll("\u0000", NUL_KEPT_AS);
+/** A string as the store can keep it: every NUL and every half character (a lone surrogate) kept as the replacement character. */
+function storableText(text: string): string {
+  return wellFormedText(text).replaceAll("\u0000", NUL_KEPT_AS);
+}
 
-  if (Array.isArray(value)) return value.map(withoutNul);
+/**
+ * A value with every string, keys included, as the store can keep it
+ * (`storableText`): a runner's event as it arrives, and our own tool's answer
+ * once read as JSON, whose `\u0000` or `\ud83d` its reading makes a NUL or
+ * half a character, as a cut of words that split an emoji leaves (STAG-3994).
+ * Note that such a character is replaced rather than refused, because the
+ * store refuses it on every post of its batch, which the runner posts again
+ * for as long as it runs, so every event behind it would never land and its
+ * turn would stand frozen.
+ */
+export function storableValue(value: WireValue): WireValue {
+  if (isWireString(value)) return storableText(value);
+
+  if (Array.isArray(value)) return value.map(storableValue);
 
   if (!isRecord(value)) return value;
 
   return Object.fromEntries(
-    Object.entries(value).map(([key, each]) => [
-      key.replaceAll("\u0000", NUL_KEPT_AS),
-      withoutNul(each),
-    ]),
+    Object.entries(value).map(([key, each]) => [storableText(key), storableValue(each)]),
   );
 }
 
@@ -334,13 +339,13 @@ export function toolAnswerSettlement(
   isError: boolean,
 ): ToolCallSettlement {
   const read: UnparsedWireValue = answer.workspaceTool
-    ? withoutNul(valueFromJsonText(answer.text))
+    ? storableValue(valueFromJsonText(answer.text))
     : answer.output;
 
   const watched = answer.workspaceTool ? answer.watched : undefined;
 
   const output: UnparsedWireValue =
-    isRecord(read) && watched !== undefined ? withoutNul({ ...watched, ...read }) : read;
+    isRecord(read) && watched !== undefined ? storableValue({ ...watched, ...read }) : read;
 
   const status = isRecord(output) && isWireString(output.status) ? output.status : undefined;
 

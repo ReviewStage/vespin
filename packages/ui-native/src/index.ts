@@ -231,7 +231,7 @@ export {
 
 export { MachineAskSheet } from "./machine-ask-sheet.js";
 
-export { managerFaceMenu } from "./manager-face-look.js";
+export { managerFaceMenu } from "./manager-face-menu.js";
 
 export { ManagerFaceRow, ManagerFaceSheet } from "./manager-face-picker.js";
 
@@ -330,6 +330,27 @@ export {
 } from "./row-list.js";
 
 export {
+  agentLead,
+  CHOICE_MARK,
+  type ChoiceLook,
+  type ChoiceMark,
+  choiceLook,
+  MENU_ICON,
+  type MenuChoice,
+  type MenuLead,
+  type MenuPhotoFile,
+  markLook,
+  menuPhotoFile,
+  personChoice,
+  priorityChoice,
+  repositoryChoice,
+  statusChoice,
+  taskChoice,
+  taskLead,
+  unassignedChoice,
+} from "./row-menu-model.js";
+
+export {
   agentPreview,
   latestStep,
   type PreviewAgent,
@@ -388,15 +409,19 @@ export {
   type BarFootItem,
   type BarMenu,
   type BarMenuAction,
+  type BarMenuEntry,
   type BarMenuGroup,
   type BarPath,
   type BarSearch,
   type ColumnBar,
   groupKey,
   isBarMenu,
+  isMenuEntry,
+  menuOfGroups,
   menuWithout,
   PATH_PART,
   SplitView,
+  StackBarMenu,
 } from "./split-view.js";
 
 export {

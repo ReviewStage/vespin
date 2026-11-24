@@ -1662,14 +1662,14 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
   launch.state = IDLE;
   yield* mirrored(launch);
 
-  // A stopped turn's own messages end with it; those sent since the stop start the next turn.
+  // A stopped turn's own messages end with it; those still waiting for a turn, whenever they were sent, start the next.
   if (state.stopping) {
-    const since = launch.waiting;
+    const waiting = launch.waiting;
     launch.sent.clear();
     launch.waiting = [];
 
-    if (since.length === 0) return ended(RUNNER_END.STOPPED);
-    yield* startTurn(launch, since);
+    if (waiting.length === 0) return ended(RUNNER_END.STOPPED);
+    yield* startTurn(launch, waiting);
 
     return undefined;
   }

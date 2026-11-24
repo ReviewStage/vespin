@@ -62,9 +62,7 @@ import type { TaskSectionIcon } from "@repo/features/task-section-wire";
 import { MOVE_TO_SECTION, REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
-  TASK_PRIORITY_WORDS,
   TASK_RELATION_WORDS,
-  TASK_STATUS_TONE,
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
@@ -125,6 +123,8 @@ import {
   BUTTON_LOOK,
   BUZZ,
   buzz,
+  CHOICE_MARK,
+  type ChoiceMark,
   type ColumnBar,
   ConfirmAsk,
   DocumentField,
@@ -144,14 +144,16 @@ import {
   type LongPressGroup,
   MentionDock,
   MentionFoot,
+  type MenuChoice,
+  type MenuPhotoFile,
   managerFaceMenu,
   menuWithout,
   NoSelection,
   PATH_PART,
   PRIORITY_MARK_SYMBOL,
-  PRIORITY_MARK_TONE,
   ProblemLine,
-  priorityMarkUnder,
+  personChoice,
+  priorityChoice,
   QUIET_ROW_QUESTION,
   RelationRow,
   ROW_ACTION_TONE,
@@ -164,18 +166,20 @@ import {
   type RowQuestion,
   type RowSubmenu,
   type RowSwipe,
+  repositoryChoice,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
-  STATUS_TONE,
+  StackBarMenu,
   type StandingMenus,
   sectionEmoji,
   sectionGlyph,
   sectionGlyphColor,
+  statusChoice,
   TaskHead,
   TaskRow,
   taskPreview,
-  UNASSIGNED_UNDER,
+  unassignedChoice,
   useColors,
   useDockRoom,
   useMinute,
@@ -215,7 +219,6 @@ import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
-import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 
@@ -398,14 +401,13 @@ function statusSubmenu(
   return {
     label: WORDS.STATUS,
     symbol: GLYPH.STATUS,
-    choices: STATUS_ORDER.map((status) => ({
-      label: TASK_STATUS_WORDS[status],
-      heard: `${WORDS.SET_STATUS}: ${TASK_STATUS_WORDS[status]}`,
-      symbol: STATUS_MARK_SYMBOL[status],
-      tone: TASK_STATUS_TONE[status],
-      on: task.status === status,
-      onPress: () => setStatus(task.id, status),
-    })),
+    choices: STATUS_ORDER.map((status) =>
+      statusChoice(status, {
+        heard: `${WORDS.SET_STATUS}: ${TASK_STATUS_WORDS[status]}`,
+        on: task.status === status,
+        onPress: () => setStatus(task.id, status),
+      }),
+    ),
   };
 }
 
@@ -441,12 +443,14 @@ function settleSwipes(
 function sectionChoiceLead(
   title: string,
   icon: TaskSectionIcon | undefined,
-): { readonly label: string; readonly symbol?: Glyph | undefined; readonly emoji?: string } {
+):
+  | { readonly label: string; readonly symbol: Glyph }
+  | { readonly label: string; readonly mark: ChoiceMark } {
   const emoji = sectionEmoji(icon);
 
   return emoji === undefined
     ? { label: title, symbol: sectionGlyph(icon) }
-    : { label: title, emoji };
+    : { label: title, mark: { kind: CHOICE_MARK.EMOJI, emoji } };
 }
 
 /**
@@ -505,13 +509,14 @@ function repositorySubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu 
   return {
     label: current === null ? CHOOSE_REPOSITORY : CHANGE_REPOSITORY,
     symbol: GLYPH.REPOSITORY,
-    choices: listed.map((repository) => ({
-      label: repository,
-      on: repository === current,
-      onPress: () => {
-        if (repository !== current) placing.setRepository(task.id, repository);
-      },
-    })),
+    choices: listed.map((repository) =>
+      repositoryChoice(repository, placing.repositoryPictureOf(repository), {
+        on: repository === current,
+        onPress: () => {
+          if (repository !== current) placing.setRepository(task.id, repository);
+        },
+      }),
+    ),
     actions:
       current === null
         ? []
@@ -737,6 +742,7 @@ type RowListing = Pick<
   | "setAssignee"
   | "members"
   | "pictureOf"
+  | "menuPhotoOf"
   | "relations"
   | "placing"
   | "follow"
@@ -802,7 +808,7 @@ function rowActs(
         {
           label: WORDS.ASSIGNEE,
           symbol: GLYPH.PERSON,
-          choices: assigneeChoices(task, listing.members, listing.pictureOf, listing.setAssignee),
+          choices: assigneeChoices(task, listing.members, listing.menuPhotoOf, listing.setAssignee),
         },
       ],
       [{ ...pin, tone: ROW_ACTION_TONE.NEUTRAL }, moreSubmenu(task, listing, openRelation)],
@@ -1625,7 +1631,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
     ],
     groups: [
       {
-        actions: [
+        items: [
           {
             label: WORDS.RENAME,
             symbol: GLYPH.RENAME,
@@ -1637,7 +1643,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         ],
       },
       {
-        actions: [
+        items: [
           {
             label: WORDS.NEW_SUB_TASK,
             symbol: GLYPH.ADD,
@@ -1648,14 +1654,14 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
             symbol: action.symbol,
             onPress: action.onPress,
           })),
+          ...[
+            relationSubmenu(task, doors.openRelation),
+            ...placingSubmenus(task, overview.placing),
+          ].map(barSubmenu),
         ],
-        submenus: [
-          relationSubmenu(task, doors.openRelation),
-          ...placingSubmenus(task, overview.placing),
-        ].map(barSubmenu),
       },
       {
-        actions: [
+        items: [
           {
             label: WORDS.DELETE,
             symbol: GLYPH.DELETE,
@@ -1770,7 +1776,7 @@ function agentState(status: AgentStatus): AgentRowState {
 function standingMenus(
   overview: TaskOverview,
   members: readonly ListedMember[],
-  photoOf: (userId: string) => string | undefined,
+  photoOf: (userId: string) => MenuPhotoFile | undefined,
 ): StandingMenus {
   const { task } = overview;
 
@@ -1785,15 +1791,16 @@ function standingMenus(
 }
 
 /** A task's priorities as its Priority menu offers them, the most pressing first, the one it holds checked. */
-function priorityChoices(task: TaskSummary, setPriority: TaskWrites["setPriority"]) {
-  return TASK_PRIORITY_ORDER.map((priority) => ({
-    label: TASK_PRIORITY_WORDS[priority],
-    symbol: PRIORITY_MARK_SYMBOL[priority],
-    tone: PRIORITY_MARK_TONE[priority],
-    under: priorityMarkUnder(priority),
-    on: task.priority === priority,
-    onPress: () => setPriority(task.id, priority),
-  }));
+function priorityChoices(
+  task: TaskSummary,
+  setPriority: TaskWrites["setPriority"],
+): readonly MenuChoice[] {
+  return TASK_PRIORITY_ORDER.map((priority) =>
+    priorityChoice(priority, {
+      on: task.priority === priority,
+      onPress: () => setPriority(task.id, priority),
+    }),
+  );
 }
 
 /**
@@ -1805,29 +1812,23 @@ function priorityChoices(task: TaskSummary, setPriority: TaskWrites["setPriority
 function assigneeChoices(
   task: TaskSummary,
   members: readonly ListedMember[],
-  photoOf: (userId: string) => string | undefined,
+  photoOf: (userId: string) => MenuPhotoFile | undefined,
   setAssignee: TaskWrites["setAssignee"],
-) {
+): readonly MenuChoice[] {
   const assigneeId = task.assignee?.userId;
 
   return [
-    {
-      label: NO_ASSIGNEE_WORDS,
-      symbol: GLYPH.UNASSIGNED,
-      // Note that the tone puts the ring in the muted ink the chip draws it in, and the patch composes the faint seat only under a glyph given its own color.
-      tone: STATUS_TONE.NEUTRAL,
-      under: UNASSIGNED_UNDER,
+    unassignedChoice(NO_ASSIGNEE_WORDS, {
       on: assigneeId === undefined,
       onPress: () => setAssignee(task.id, null),
-    },
-    ...members.map((member) => ({
-      label: member.name,
-      detail: member.you ? FOLLOWING_WORDS.YOU : member.email,
-      symbol: GLYPH.PERSON,
-      photo: photoOf(member.userId),
-      on: member.userId === assigneeId,
-      onPress: () => setAssignee(task.id, member),
-    })),
+    }),
+    ...members.map((member) =>
+      personChoice(member.name, photoOf(member.userId), {
+        detail: member.you ? FOLLOWING_WORDS.YOU : member.email,
+        on: member.userId === assigneeId,
+        onPress: () => setAssignee(task.id, member),
+      }),
+    ),
   ];
 }
 
@@ -1997,6 +1998,12 @@ function useRelatedRowsListing(
   const follow = useFollowWrite();
   const members = useListedMembers(workspace?.id);
   const pictureOf = useMemberPictures();
+
+  const menuPhotoOf = useMenuPhotos(
+    pictureOf,
+    useMemo(() => members.map(({ userId }) => userId), [members]),
+  );
+
   const placing = useTaskPlacing(workspace?.id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const { setStatus, workingAgents, rename, setPriority, setAssignee, relations } = overview;
@@ -2010,6 +2017,7 @@ function useRelatedRowsListing(
       readerId,
       members,
       pictureOf,
+      menuPhotoOf,
       placing,
       setStatus,
       workingAgents,
@@ -2026,6 +2034,7 @@ function useRelatedRowsListing(
       readerId,
       members,
       pictureOf,
+      menuPhotoOf,
       placing,
       setStatus,
       workingAgents,
@@ -3416,9 +3425,9 @@ function TasksStackList({
       <SettingsBarButton switcher={switcher} />
       {/* Note that View options stands at the bar's edge, as Mail's filter stands by its list, and New task's compose ends the bar, as Messages' and Mail's stand. */}
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={glyphSymbol(viewMenu.symbol)} accessibilityLabel={viewMenu.label}>
-          {stackMenuItems(viewMenu)}
-        </Stack.Toolbar.Menu>
+        <Stack.Toolbar.View>
+          <StackBarMenu menu={viewMenu} />
+        </Stack.Toolbar.View>
         {/* Note that Merge queue stands beside View options while the account has it on, as the desktop's sidebar offers its row, since a compact window has no sidebar; an iPad's sidebar offers its own row. */}
         {mergeQueueOn ? (
           <Stack.Toolbar.Button
@@ -3722,9 +3731,9 @@ export function TaskScreen() {
       <InlineBar chrome={chrome}>
         {menu === undefined || overview === undefined ? null : (
           <Stack.Toolbar placement="right">
-            <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-              {stackMenuItems(menu)}
-            </Stack.Toolbar.Menu>
+            <Stack.Toolbar.View>
+              <StackBarMenu menu={menu} />
+            </Stack.Toolbar.View>
             {/* Note that New agent stands as a glyph before ⋯, as a split view's detail bar stands a page's main act; it is written after ⋯ because a right bar's first item stands at its edge. */}
             <Stack.Toolbar.Button
               icon={glyphSymbol(GLYPH.AGENT)}

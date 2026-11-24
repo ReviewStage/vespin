@@ -51,7 +51,9 @@ export interface CursorService {
   /**
    * The runner's own environment changed as given, a variable set to none
    * taken out: the one the agent's shell inherits, since the SDK runs it
-   * from this process.
+   * from this process. Note that it changes what a command inherits, never
+   * `/proc/<pid>/environ`, which keeps the environment the process started
+   * with.
    */
   readonly setEnvironment: (changes: Readonly<Record<string, string | undefined>>) => void;
 }

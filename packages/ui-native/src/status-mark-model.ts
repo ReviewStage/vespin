@@ -37,7 +37,7 @@ export const PRIORITY_MARK_SYMBOL = {
 } as const satisfies Record<TaskPriority, Glyph>;
 
 /** The priorities drawn as bars, whose bars the priority doesn't reach stand faint beneath its lit ones, as `task-marks.css` draws them. */
-export const PRIORITY_MARK_BARRED: ReadonlySet<TaskPriority> = new Set([
+const PRIORITY_MARK_BARRED: ReadonlySet<TaskPriority> = new Set([
   TASK_PRIORITY.HIGH,
   TASK_PRIORITY.MEDIUM,
   TASK_PRIORITY.LOW,

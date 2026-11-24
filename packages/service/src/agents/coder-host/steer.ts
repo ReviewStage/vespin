@@ -100,7 +100,10 @@ import { TURN_PUBLISH, TurnQueue } from "./turn-delivery.js";
  *
  * The words are handed to the session the agent runs in, where they steer
  * the turn under way or open one, and written as a line awaiting its turn
- * once the harness has taken them. The hand-over runs inside the conversation's
+ * once the harness has taken them. A line a failed turn never took is
+ * handed on, never dropped: whoever sends next, those lines go ahead of the
+ * words (`resendLostLines`), since a turn the words opened would leave them
+ * awaiting a turn no runner will take up again. The hand-over runs inside the conversation's
  * lock, so the turn the harness opens on the line finds the row standing when its
  * own first write takes the lock, and a harness that did not take the message
  * leaves the row withdrawn, read nowhere unless a turn the harness hands it to
@@ -132,7 +135,9 @@ import { TURN_PUBLISH, TurnQueue } from "./turn-delivery.js";
  * A teammate's words, a member's other than the starter, are handed to the harness
  * behind a label naming them by their mention link (`attached-files.ts`'s
  * `senderLabel`), which the row leaves out, since its sender is its own
- * column, so the model never reads a teammate's words as the developer's.
+ * column, so the model never reads a teammate's words as the developer's;
+ * a Manager's starter's words are labeled as well, so a Manager shared by
+ * several members reads every person's line under their name.
  * Who reaches the agent is the caller's; the agent's harness answers the
  * message (`runtime-sessions.ts`). An archived agent takes
  * no message, and is refused as one that names nothing, since every list
@@ -324,12 +329,18 @@ const chatAuthorOf = (sender: LineSender, chat: SteerChat | undefined) => {
 };
 
 /**
- * The label naming the teammate who sent the line, by their mention link
- * under the agent's workspace; nothing for the starter's own words or any
- * other sender's, whose line already says who sent it.
+ * The label naming the member who sent the line, by their mention link
+ * under the agent's workspace: a teammate's on any agent, and on a Manager
+ * its starter's too, since a Manager is a coworker several members talk to,
+ * and a line left unnamed reads as whoever spoke last. Nothing for a coding
+ * agent's starter, the developer it is told it works for, or any other
+ * sender, whose line already says who sent it.
  */
 const teammateLabel = (agent: Agent, sender: LineSender) => {
-  if (sender.kind !== MESSAGE_SENDER.MEMBER || sender.userId === agent.userId) {
+  if (
+    sender.kind !== MESSAGE_SENDER.MEMBER ||
+    (sender.userId === agent.userId && agent.kind !== AGENT_KIND.MANAGER)
+  ) {
     return Effect.succeed(undefined);
   }
 
@@ -644,6 +655,13 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     const queued = yield* heldWhileBooting(userId, agent, steered);
 
     if (queued !== undefined) return queued;
+  }
+
+  // The lines the agent's failed turn never took go ahead of the words, whoever sends them, because a line that
+  // opens a newer turn would bury them from every later resend (`resendLostLines`). Note that a carry-on's own line
+  // opens its turn first and hands them on after itself (`carry-on.ts`), so a turn cut off at every resume never loops.
+  if (line.metadata?.channel !== MESSAGE_CHANNEL.CARRY_ON) {
+    yield* resendLostLines(agentSessions, writer, userId, agent);
   }
 
   // What the words mention goes with them: of the task this send read as its sender, and of the agent's workspace.
@@ -1058,13 +1076,16 @@ export const handWaitedTurnsOn = /* @__PURE__ */ Effect.fnUntraced(function* (
  * as a send is, read as it runs, and only where a line was lost, so a send
  * to an agent that lost none reads nothing past the one read of its lines.
  * Answers how many went; fails with the refusal that stopped one, or as an
- * outage where none was said.
+ * outage where none was said. A carry-on names the turn it carries on
+ * (`cutOff`), whose lines go after its own line, though its line opened a
+ * newer turn (`carry-on.ts`).
  */
-const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(function* (
+export const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(function* (
   agentSessions: AgentSessions<TypedTurn>,
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   agent: Agent,
+  cutOff?: string,
 ): Effect.fn.Return<number, HostedRefusal, DatabaseServices> {
   // The member who may not steer the agent resends nothing, and their own words are refused as they go.
   if (!controlsAgent(userId, agent)) return 0;
@@ -1107,7 +1128,7 @@ const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(functio
     );
 
   const resent = yield* hostedStoreOrUnavailable(
-    Effect.flatMap(writer, (write) => write.resendLostLines(target, dispatch)),
+    Effect.flatMap(writer, (write) => write.resendLostLines(target, dispatch, cutOff)),
   );
 
   if (Result.isFailure(resent)) {
@@ -1130,10 +1151,10 @@ const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(functio
  * their label, and counted under them once the line is written; a repeat
  * under its key is not counted again. The member MCP server's
  * `message_agent` sends the same way. The lines the agent's failed turn
- * never took go ahead of the words (`resendLostLines`), so the agent reads
- * them in the order they were sent; a retry, the failed turn's Try again,
- * sends its own words only where none was lost, since the lines are what it
- * asks to send again.
+ * never took go ahead of the words, as they do ahead of every sender's
+ * (`steerAgentWritten`), so the agent reads them in the order they were
+ * sent; a retry, the failed turn's Try again, sends its own words only where
+ * none was lost, since the lines are what it asks to send again.
  */
 export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords")(function* (
   writer: Effect.Effect<StoreWriter>,
@@ -1143,9 +1164,9 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
   retry = false,
 ) {
   const agentSessions = yield* routedSessions<TypedTurn>(userId);
-  const resent = yield* resendLostLines(agentSessions, writer, userId, agent);
 
-  if (retry && resent > 0) {
+  // A retry asks for the lost lines alone, and sends its own words only where none was lost; every other send hands them on ahead of its words (`steerAgentWritten`).
+  if (retry && (yield* resendLostLines(agentSessions, writer, userId, agent)) > 0) {
     const sent: SteerWritten = { outcome: STEER_OUTCOME.SENT };
 
     return sent;
@@ -1156,8 +1177,8 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
     sender: { kind: MESSAGE_SENDER.MEMBER, userId },
   });
 
-  // A member who messages one of the task's agents follows the task, with their machines on where they did not yet; a repeat wrote nothing new.
-  if (written.outcome !== STEER_OUTCOME.REPEATED) yield* followAsMessaged(userId, agent.taskId);
+  // A member who messages one of the task's agents follows the task, or a Manager itself, with their machines on where they did not yet; a repeat wrote nothing new.
+  if (written.outcome !== STEER_OUTCOME.REPEATED) yield* followAsMessaged(userId, agent);
 
   if (written.sent !== undefined) {
     yield* recordServerEvent(

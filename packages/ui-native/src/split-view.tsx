@@ -2,10 +2,12 @@
 
 import {
   Divider,
+  Host,
   HStack,
   Image,
   Menu,
   NavigationSplitView,
+  Section,
   Button as SwiftUIButton,
   Text,
   Toggle,
@@ -14,6 +16,7 @@ import {
   useNativeState,
   ZStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
   accessibilityLabel,
@@ -24,6 +27,7 @@ import {
   foregroundStyle,
   frame,
   ignoreSafeArea,
+  labelStyle,
   lineLimit,
   type ModifierConfig,
   menuIndicator,
@@ -44,6 +48,7 @@ import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { MANAGER_FACE_SEAT, ManagerFace, TaskStatusMark } from "./marks.js";
+import type { MenuLead } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -77,11 +82,9 @@ export type BarAction = {
   readonly onPress: () => void;
 };
 
-/** An act a menu holds, by its words and its glyph. */
-export type BarMenuAction = {
+/** An act a menu holds, by its words and what leads it: its glyph, or the mark of the entity it opens, such as Open task's status ring; none for an act that stands as words alone, such as a reminder's time. */
+export type BarMenuAction = MenuLead & {
   readonly label: string;
-  /** Its glyph; none for an act that stands as words alone, such as a reminder's time. */
-  readonly symbol?: Glyph | undefined;
   /** What the menu says under its words, such as when a reminder's time comes due. */
   readonly detail?: string | undefined;
   readonly disabled?: boolean | undefined;
@@ -90,11 +93,26 @@ export type BarMenuAction = {
   readonly onPress: () => void;
 };
 
-/** One group of a menu's acts, set apart from the rest by the system's rule, as Mail's ⋯ groups Reply apart from Move: its switches, such as a list's Show sub-tasks, checked as the system checks them, then its acts, then the menus within it. */
+/** One entry of a menu's group: an act, or a menu within it, such as Move to. */
+export type BarMenuEntry = BarMenuAction | BarMenu;
+
+/** Whether a group's entry is a menu within it rather than one act. */
+export function isMenuEntry(entry: BarMenuEntry): entry is BarMenu {
+  return "actions" in entry;
+}
+
+/**
+ * One group of a menu, set apart from the rest by the system's rule, as
+ * Mail's ⋯ groups Reply apart from Move: its switches, such as a list's Show
+ * sub-tasks, checked as the system checks them, then its entries, acts and
+ * menus within it, in the order they stand, as SwiftUI's menu takes its
+ * children, such as an agent's Move to before its Archive.
+ */
 export type BarMenuGroup = {
+  /** What heads the group, as a compact thread's ⋯ heads its task and agent with the thread's path; a rule alone where none is given. */
+  readonly title?: string | undefined;
   readonly choices?: readonly MenuChoice[] | undefined;
-  readonly actions: readonly BarMenuAction[];
-  readonly submenus?: readonly BarMenu[] | undefined;
+  readonly items: readonly BarMenuEntry[];
 };
 
 /**
@@ -115,6 +133,32 @@ export type BarMenu = {
   /** Groups after its acts and menus, each set apart by a rule, such as a task's ⋯ setting Permanently delete apart. */
   readonly groups?: readonly BarMenuGroup[] | undefined;
 };
+
+/** Whether a group holds anything to draw: an entry or a switch. */
+function holds(group: BarMenuGroup): boolean {
+  return group.items.length > 0 || (group.choices ?? []).length > 0;
+}
+
+/** Whether a menu holds anything over its groups: a choice, an act, or a menu within it. */
+function headHolds(menu: BarMenu): boolean {
+  return menu.choices.length > 0 || menu.actions.length > 0 || (menu.submenus ?? []).length > 0;
+}
+
+/**
+ * A menu of groups, each set apart by the system's rule, as a page's ⋯ groups
+ * its acts in the panel's order: the groups that hold anything, the first at
+ * the menu's head and each after it behind a rule; none where no group holds
+ * anything.
+ */
+export function menuOfGroups(
+  label: string,
+  symbol: Glyph,
+  groups: readonly BarMenuGroup[],
+): BarMenu | undefined {
+  const held = groups.filter(holds);
+
+  return held.length === 0 ? undefined : { label, symbol, choices: [], actions: [], groups: held };
+}
 
 /** A list's search, the system's field over its column: what it says before anything is typed, what is typed now, and what is called with each change. */
 export type BarSearch = {
@@ -175,9 +219,9 @@ type SplitViewProps = {
   readonly onSidebarShownChange: (shown: boolean) => void;
 };
 
-/** What a group is told apart by, since it has no name of its own: the words of its first act, of its first menu, or of its first switch. */
+/** What a group is told apart by, since it has no name of its own: the words of its first entry, or of its first switch. */
 export function groupKey(group: BarMenuGroup): string {
-  return group.actions[0]?.label ?? group.submenus?.[0]?.label ?? group.choices?.[0]?.label ?? "";
+  return group.items[0]?.label ?? group.choices?.[0]?.label ?? "";
 }
 
 /** A menu's switches, acts, and the menus within it, as SwiftUI's toggles, buttons, and menus. */
@@ -194,18 +238,21 @@ function MenuActs({ group }: { readonly group: BarMenuGroup }) {
           onIsOnChange={() => choice.onPress()}
         />
       ))}
-      {group.actions.map((action) => (
-        <SwiftUIButton
-          key={action.label}
-          {...menuActContent(action.label, action.symbol, action.detail)}
-          onPress={action.onPress}
-          modifiers={[disabled(action.disabled === true)]}
-          {...(action.destructive === true ? { role: "destructive" } : {})}
-        />
-      ))}
-      {(group.submenus ?? []).map((submenu) => (
-        <BarMenuButton key={submenu.label} menu={submenu} />
-      ))}
+      {group.items.map((entry) =>
+        isMenuEntry(entry) ? (
+          <BarMenuButton key={entry.label} menu={entry} />
+        ) : (
+          <SwiftUIButton
+            key={entry.label}
+            {...(entry.mark === undefined
+              ? menuActContent(entry.label, entry.symbol, entry.detail)
+              : choiceContent(entry, colors))}
+            onPress={entry.onPress}
+            modifiers={[disabled(entry.disabled === true)]}
+            {...(entry.destructive === true ? { role: "destructive" } : {})}
+          />
+        ),
+      )}
     </>
   );
 }
@@ -244,13 +291,20 @@ export const BarMenuButton = memo(function BarMenuButton({
         />
       ))}
       {menu.actions.length === 0 ? null : <Divider />}
-      <MenuActs group={{ actions: menu.actions, submenus: menu.submenus }} />
-      {(menu.groups ?? []).map((group) => (
-        <Fragment key={groupKey(group)}>
-          <Divider />
-          <MenuActs group={group} />
-        </Fragment>
-      ))}
+      <MenuActs group={{ items: [...menu.actions, ...(menu.submenus ?? [])] }} />
+      {(menu.groups ?? []).map((group, at) =>
+        group.title === undefined ? (
+          <Fragment key={groupKey(group)}>
+            {/* Note that a menu led by its first group, with nothing over it, draws no rule at its head. */}
+            {at === 0 && !headHolds(menu) ? null : <Divider />}
+            <MenuActs group={group} />
+          </Fragment>
+        ) : (
+          <Section key={groupKey(group)} title={group.title}>
+            <MenuActs group={group} />
+          </Section>
+        ),
+      )}
     </Menu>
   );
 });
@@ -258,6 +312,33 @@ export const BarMenuButton = memo(function BarMenuButton({
 /** A bar's menu standing in its bar, such as a column's ⋯, its glyph alone in the bar's glass. */
 export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
   return <BarMenuButton menu={menu} modifiers={BAR_ITEM_MENU} />;
+}
+
+/**
+ * A bar's menu standing in a compact window's stack bar, such as the Tasks
+ * list's View options or a page's ⋯: SwiftUI's own menu, as a split view's
+ * bar stands it (`BarMenuButton`), hosted as the bar's item, as the
+ * workspace switcher stands beside it, so every choice leads with its own
+ * mark, a status's ring in its tone or a person's photo, which the stack
+ * bar's own menu, building UIKit's menu from a glyph's name alone, drew as
+ * a gray template. Its trigger is its glyph alone, at the bar face's size,
+ * in the bar's round glass, heard by its name.
+ */
+export function StackBarMenu({ menu }: { readonly menu: BarMenu }) {
+  return (
+    <Host matchContents>
+      <BarMenuButton
+        menu={menu}
+        modifiers={[
+          ...BAR_ITEM_MENU,
+          labelStyle("iconOnly"),
+          frame({ width: MARK_SIZE.BAR_FACE, height: MARK_SIZE.BAR_FACE }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          accessibilityLabel(menu.label),
+        ]}
+      />
+    </Host>
+  );
 }
 
 /** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol or stands `worded`, dimmed while it can't act. */
@@ -295,24 +376,16 @@ export function barActItems(acts: readonly BarFootItem[]): ReactElement[] {
 export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMenu {
   const barred = new Set(acts.map((act) => act.label));
 
-  const kept = (group: BarMenuGroup): BarMenuGroup => ({
-    choices: group.choices,
-    actions: group.actions.filter((action) => !barred.has(action.label)),
-    submenus: group.submenus?.filter((submenu) => !barred.has(submenu.label)),
-  });
-
   const groups = menu.groups
-    ?.map(kept)
-    .filter(
-      (group) =>
-        group.actions.length > 0 ||
-        (group.submenus ?? []).length > 0 ||
-        (group.choices ?? []).length > 0,
-    );
+    ?.map((group) => ({ ...group, items: group.items.filter((entry) => !barred.has(entry.label)) }))
+    .filter(holds);
 
-  const { actions, submenus } = kept(menu);
-
-  return { ...menu, actions, submenus, groups };
+  return {
+    ...menu,
+    actions: menu.actions.filter((action) => !barred.has(action.label)),
+    submenus: menu.submenus?.filter((submenu) => !barred.has(submenu.label)),
+    groups,
+  };
 }
 
 /**
@@ -408,7 +481,9 @@ export function PathTitle({
       {actions.map((action) => (
         <SwiftUIButton
           key={action.label}
-          {...actContent(action.label, action.symbol)}
+          {...(action.mark === undefined
+            ? actContent(action.label, action.symbol)
+            : choiceContent(action, colors))}
           onPress={action.onPress}
           modifiers={[disabled(action.disabled === true)]}
         />

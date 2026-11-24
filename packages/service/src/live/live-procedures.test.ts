@@ -6,6 +6,7 @@ import { addSound } from "@repo/database/models/account-sounds";
 import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { beginAgentBoot } from "@repo/database/models/agent-boot-store";
 import { pointBrowserTab, upsertBrowserTab } from "@repo/database/models/agent-browser-tabs";
+import { followAgent } from "@repo/database/models/agent-follower-store";
 import { recordAgentSandboxBooting } from "@repo/database/models/agent-sandboxes";
 import { createAgent, pinAgent } from "@repo/database/models/agent-store";
 import { startDescriptionCommentThread } from "@repo/database/models/description-comments";
@@ -59,6 +60,7 @@ import {
   accountSoundsOfLiveRows,
 } from "@repo/features/account-preferences-live";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
+import { AGENT_FOLLOWERS_READ } from "@repo/features/agent-followers-live";
 import { AGENT_ORIGIN_READ, agentOriginOfLive } from "@repo/features/agent-origin-live";
 import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
@@ -903,6 +905,66 @@ it.layer(getTestDB())("a task's live reads", (it) => {
             (message) => message.text,
           ),
           ["Ship the table?"],
+        );
+
+        for (const refused of [
+          { bearer: eli, taskId: manager, path },
+          { bearer: dana, taskId: coder, path },
+        ]) {
+          assert.deepEqual(yield* askTask(refused), {
+            status: HOSTED_HTTP_STATUS.NOT_FOUND,
+            body: { error: HOSTED_API_ERROR.NOT_FOUND },
+          });
+        }
+      }),
+  );
+
+  it.effect(
+    "a Manager's followers are answered polled to a member of its workspace, its owner and each other follower with their switch, and not found for one of another workspace or for an agent on a task",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const ben = yield* openUser;
+        const eli = yield* openUser;
+        const workspaceId = yield* openWorkspace(dana);
+        yield* joinWorkspace(workspaceId, ben);
+        yield* openWorkspace(eli);
+
+        const manager = Option.getOrThrow(
+          yield* createAgent(dana, {
+            taskId: null,
+            workspaceId,
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            descriptionSnapshot: null,
+            prompt: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
+          }),
+        ).agent.id;
+
+        yield* followAgent(dana, { agentId: manager, followerId: ben, machines: true });
+        const started = yield* startTask(dana, { name: "Teammate invitations" });
+        const coder = yield* openTaskAgent(dana, started.workspaceId, started.id);
+        const path = "/api/live/agent-followers";
+        const answered = yield* askTask({ bearer: ben, taskId: manager, path });
+        assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
+
+        const { queries } = Schema.decodeUnknownSync(AGENT_FOLLOWERS_READ.answer)(answered.body);
+
+        const rows = Schema.decodeUnknownSync(AGENT_FOLLOWERS_READ.rows)({
+          owner: queries.owner.rows,
+          followers: queries.followers.rows,
+        });
+
+        assert.deepEqual(
+          {
+            owner: rows.owner.map((row) => row.userId),
+            followers: rows.followers.map(({ userId, machines }) => ({ userId, machines })),
+          },
+          { owner: [dana], followers: [{ userId: ben, machines: true }] },
         );
 
         for (const refused of [

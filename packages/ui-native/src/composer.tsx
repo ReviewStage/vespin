@@ -24,9 +24,7 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
-  background,
   buttonStyle,
-  disabled,
   fixedSize,
   font,
   foregroundStyle,
@@ -34,7 +32,6 @@ import {
   layoutPriority,
   lineLimit,
   onGeometryChange,
-  opacity,
   padding,
   tint,
   useScrollGeometryChange,
@@ -94,9 +91,6 @@ function roundMark(round: number) {
   return [frame({ width: round - ROUND_EDGE, height: round - ROUND_EDGE })];
 }
 
-/** How much of Send's look stands while its words cannot go yet. */
-const IDLE_OPACITY = 0.2;
-
 /** How far the press frame stands past the round on each side at the default text size, which it keeps as the reader's text grows the round. */
 const ROUND_MARGIN = (PRESS_SIZE - SEND_SIZE) / 2;
 
@@ -126,22 +120,24 @@ function roundModifiers(colors: ReturnType<typeof useColors>, round: number) {
   ];
 }
 
-/**
- * Send with words its holder cannot send yet: the same circle and mark,
- * faint, so it reads as one button waiting in either scheme. Note that we draw the circle
- * ourselves, because a disabled prominent button drops its tint for the
- * system's own fill, which in light vanished into the composer's ground and
- * in dark stood as a black disc that read as a live button.
- */
-function idleRoundModifiers(colors: ReturnType<typeof useColors>, round: number) {
-  return [
-    buttonStyle("plain"),
-    foregroundStyle(colors.GROUND),
-    frame({ width: round, height: round }),
-    background(colors.TEXT, SwiftModifiers.shapes.circle()),
-    opacity(IDLE_OPACITY),
-    ...roundFrame(round),
-  ];
+/** What VoiceOver hears the round's spinner as: a Stop out, or words waiting on their holder. */
+const SPINNER_WORDS = { STOPPING: "Stopping", WAITING: "Waiting" } as const;
+
+/** The system's spinner in the round's place, at the round's size inside its press frame, while what the round stands for is under way. */
+function RoundSpinner({ label }: { readonly label: string }) {
+  const colors = useColors();
+  const round = useScaledSize(SEND_SIZE);
+
+  return (
+    <ProgressView
+      modifiers={[
+        frame({ width: round, height: round }),
+        ...roundFrame(round),
+        tint(colors.TEXT_MUTED),
+        accessibilityLabel(label),
+      ]}
+    />
+  );
 }
 
 /** How far the field's words stand from the bar's edge above and below, its own room inside the thin edge. */
@@ -198,7 +194,7 @@ type ComposerProps = {
   readonly onWords?: ((words: string) => void) | undefined;
   /** Whether Send stands lit with no words typed, as it does once an ask's answer is picked. */
   readonly sendable?: boolean | undefined;
-  /** Called with the words typed once Send is pressed; Send stands held under words where none is given, and is not drawn while the field is empty. */
+  /** Called with the words typed once Send is pressed; where none is given, the system's spinner stands in Send's place under words, as while a start is out, and nothing while the field is empty. */
   readonly onSend?: ((words: string) => void) | undefined;
   /** What Send stands for while the field is empty and `sendable`, where that is an act of its own rather than a message, such as a notice's Got it: its glyph on the same round and its name; Send's own once a word is typed. */
   readonly sendAs?: ComposerSendAs | undefined;
@@ -271,37 +267,30 @@ const DICTATION_WORDS = {
 /** How far the row under the field stands in from the glass on each side, so Send's round at its end keeps the room the + keeps at its start, rather than meeting the glass's edge once the reader's text grows it past its press frame. */
 const ROW_SIDES = padding({ horizontal: SPACE.TIGHT });
 
-/** How often the strip's clock counts on, in milliseconds. */
-const CLOCK_TICK_MS = 1_000;
+/** How far ahead a recording's clock may count, which no dictation reaches: a day. */
+const CLOCK_REACH_MS = 86_400_000;
 
-/** How long a recording has run, as the strip says it: minutes and seconds, "0:07". */
-function clockWords(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1_000));
-
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-/** The strip's clock: how long the recording has run, counting on each second while it stands. */
+/**
+ * The strip's clock: how long the recording has run, as the system's own
+ * timer text counts it on ("0:07"), so it ticks with no render of ours; it
+ * stands at 0:00 until the recording has started.
+ */
 function DictationClock({ startedAt }: { readonly startedAt: number | undefined }) {
   const colors = useColors();
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
-
-    return () => clearInterval(tick);
-  }, []);
+  const [opened] = useState(() => Date.now());
+  const lower = new Date(startedAt ?? opened);
 
   return (
     <Text
+      timerInterval={{ lower, upper: new Date(lower.getTime() + CLOCK_REACH_MS) }}
+      countsDown={false}
+      {...(startedAt === undefined ? { pauseTime: lower } : {})}
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_LINE }),
         SwiftModifiers.monospacedDigit(),
         foregroundStyle(colors.TEXT_MUTED),
       ]}
-    >
-      {clockWords(startedAt === undefined ? 0 : now - startedAt)}
-    </Text>
+    />
   );
 }
 
@@ -433,8 +422,9 @@ function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
  * first word turns it into Send; and nothing at all while the field is empty
  * and none of those stands, as Messages draws no Send before a word is typed.
  * Words its holder cannot send yet, as a start's while what it starts in is
- * still being read, stand Send faint and held (`idleRoundModifiers`), as the
- * desktop's start box holds its Send then.
+ * still being read or while a start is out, stand the system's spinner in
+ * Send's place, as the desktop's start box shows one while a start is out,
+ * rather than a dimmed round that reads as a broken button.
  * Where the empty field's Send stands for an act of its own (`sendAs`), such
  * as a notice's Got it, the round wears that act's glyph and name until a
  * word is typed.
@@ -463,18 +453,8 @@ function SendButton({
   const stopSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const sendSize = useScaledSize(MARK_SIZE.GLYPH);
 
-  if (empty && onStop !== undefined && stopping) {
-    return (
-      <ProgressView
-        modifiers={[
-          frame({ width: round, height: round }),
-          ...roundFrame(round),
-          tint(colors.TEXT_MUTED),
-          accessibilityLabel("Stopping"),
-        ]}
-      />
-    );
-  }
+  if (empty && onStop !== undefined && stopping)
+    return <RoundSpinner label={SPINNER_WORDS.STOPPING} />;
 
   if (empty && onStop !== undefined) {
     return (
@@ -501,17 +481,14 @@ function SendButton({
   // Note that an empty field with nothing for Send to stand for draws no Send, as Messages draws none before a word is typed, rather than a dimmed round that reads as a broken button; Dictate, where the composer offers it, then ends the row.
   if (empty) return null;
 
-  const sendable = onSend !== undefined;
+  if (onSend === undefined) return <RoundSpinner label={SPINNER_WORDS.WAITING} />;
+
   const act = typed ? undefined : sendAs;
 
   return (
     <Button
-      onPress={() => onSend?.()}
-      modifiers={[
-        ...(sendable ? roundModifiers(colors, round) : idleRoundModifiers(colors, round)),
-        disabled(!sendable),
-        accessibilityLabel(act?.label ?? "Send"),
-      ]}
+      onPress={onSend}
+      modifiers={[...roundModifiers(colors, round), accessibilityLabel(act?.label ?? "Send")]}
     >
       <Image
         {...glyphImage(act?.symbol ?? GLYPH.SEND)}

@@ -89,6 +89,7 @@ import {
   MentionSuggestions,
   MenuRow,
   type MenuRowAct,
+  menuOfGroups,
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
@@ -96,6 +97,7 @@ import {
   Screen,
   SettingsForm,
   SkillSuggestions,
+  StackBarMenu,
   StackSubtitle,
   shownFiles,
   shownMediaIds,
@@ -103,6 +105,7 @@ import {
   type TranscriptItem,
   type TranscriptReveal,
   type TranscriptToggles,
+  taskLead,
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
@@ -1091,6 +1094,8 @@ const AgentConversation = memo(function AgentConversation({
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
   const taskId = shown?.taskId ?? undefined;
+  // Note that Open task leads with the task's status ring, as its rows do, read from the listed tasks.
+  const taskStatus = useTaskListRow(useTaskListCollections().tasks, taskId)?.status;
 
   // Note that the agent's task opens as a page pushed over it on the stack the reader stands in, as a thread's path opens its task and the panel's crumbs do. A compact stack's title holds no menu, so Open task leads the ⋯ menu.
   const openTask =
@@ -1291,6 +1296,162 @@ const AgentConversation = memo(function AgentConversation({
     </>
   );
 
+  // Note that the ⋯ is SwiftUI's own menu, as every bar's menu stands (`StackBarMenu`), its groups in the panel's order (`agentMenuGroups`): where it opens its task and its Manager's overview, the copies, then the name, then where it opens, then going on, then moving and archiving, and Permanently delete last and alone.
+  const moreMenu =
+    copyable || openable || openTask !== undefined
+      ? menuOfGroups(MENU_WORDS.MORE, GLYPH.MORE, [
+          {
+            items:
+              openTask === undefined
+                ? []
+                : [{ label: PATH_OPENS.TASK, ...taskLead(taskStatus), onPress: openTask }],
+          },
+          {
+            items:
+              openOverview === undefined
+                ? []
+                : [{ label: MENU_WORDS.OVERVIEW, symbol: GLYPH.LIST, onPress: openOverview }],
+          },
+          {
+            items: [
+              ...(copyable && address !== undefined
+                ? [{ label: MENU_WORDS.COPY_LINK, symbol: GLYPH.LINK, onPress: actions.copyLink }]
+                : []),
+              ...(copyable && copiable
+                ? [
+                    {
+                      label: COPY_TRANSCRIPT_WORDS.COPY,
+                      symbol: GLYPH.COPY,
+                      choices: [],
+                      actions: [
+                        {
+                          label: COPY_TRANSCRIPT_WORDS.CONCISE,
+                          onPress: () => copyTranscript(TRANSCRIPT_COPY.CONCISE),
+                        },
+                        {
+                          label: COPY_TRANSCRIPT_WORDS.FULL,
+                          onPress: () => copyTranscript(TRANSCRIPT_COPY.FULL),
+                        },
+                        {
+                          label: COPY_TRANSCRIPT_WORDS.SHARE,
+                          symbol: GLYPH.SHARE,
+                          onPress: () => shareTranscript(TRANSCRIPT_COPY.FULL),
+                        },
+                      ],
+                    },
+                  ]
+                : []),
+            ],
+          },
+          {
+            items:
+              agent === undefined
+                ? []
+                : [
+                    // Note that a Manager is named from its Settings, its one place to configure it, as the desktop's menu offers Settings… in Rename's place.
+                    chat
+                      ? { label: MENU_WORDS.SETTINGS, symbol: GLYPH.OPTIONS, onPress: openSettings }
+                      : { label: MENU_WORDS.RENAME, symbol: GLYPH.RENAME, onPress: askRename },
+                    ...(barActs
+                      ? []
+                      : [
+                          {
+                            label: actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN,
+                            symbol: actions.pinned ? GLYPH.UNPIN : GLYPH.PIN,
+                            onPress: actions.pin,
+                          },
+                        ]),
+                  ],
+          },
+          {
+            items: openable
+              ? [
+                  ...(address === undefined
+                    ? []
+                    : [
+                        {
+                          label: VERB.OPEN_IN_BROWSER,
+                          symbol: GLYPH.OPEN_EXTERNALLY,
+                          onPress: () => openInSafari(address),
+                        },
+                      ]),
+                  ...(agent !== undefined && hasPorts
+                    ? [{ label: AGENT_PORTS_WORDS.PORTS, symbol: GLYPH.PLUG, onPress: openPorts }]
+                    : []),
+                ]
+              : [],
+          },
+          {
+            items:
+              openable && agent !== undefined && runActions.length > 0
+                ? [
+                    {
+                      label: RUN_ACTION_WORDS.SUBMENU,
+                      symbol: GLYPH.RUN,
+                      choices: [],
+                      actions: runActions.map((offered) => ({
+                        label: runActionMenuLabel(offered.action, offered.runs),
+                        symbol: offered.runs ? GLYPH.STOP : GLYPH.RUN,
+                        detail: offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command,
+                        onPress: offered.onPress,
+                      })),
+                    },
+                  ]
+                : [],
+          },
+          {
+            items:
+              continueOf === undefined
+                ? []
+                : [{ label: continueOf.label, symbol: GLYPH.CONTINUE, onPress: continueAgent }],
+          },
+          {
+            // Note that Move to stands before Archive, as the panel's menu stands them.
+            items: [
+              ...(agent === undefined || move.places === undefined
+                ? []
+                : [
+                    {
+                      label: MENU_WORDS.MOVE_TO,
+                      symbol: GLYPH.MOVE,
+                      choices: [],
+                      actions: move.places.map((place) => ({
+                        label: place.label,
+                        symbol: place.glyph,
+                        detail: place.detail,
+                        onPress: place.onPress,
+                      })),
+                    },
+                  ]),
+              ...(agent === undefined || barActs
+                ? []
+                : [
+                    archived
+                      ? {
+                          label: MENU_WORDS.UNARCHIVE,
+                          symbol: GLYPH.UNARCHIVE,
+                          onPress: actions.unarchive,
+                        }
+                      : { label: MENU_WORDS.ARCHIVE, symbol: GLYPH.ARCHIVE, onPress: askArchive },
+                  ]),
+            ],
+          },
+          {
+            items:
+              agent === undefined
+                ? []
+                : [
+                    {
+                      label: MENU_WORDS.DELETE,
+                      symbol: GLYPH.DELETE,
+                      destructive: true,
+                      onPress: () => setDeleting(true),
+                    },
+                  ],
+          },
+        ])
+      : undefined;
+
   const barOptions = { title, headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT } };
 
   return (
@@ -1313,168 +1474,11 @@ const AgentConversation = memo(function AgentConversation({
         }
       />
       <Stack.Toolbar placement="right">
-        {copyable || openable || openTask !== undefined ? (
-          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
-            {openTask === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.TASK)} onPress={openTask}>
-                  {PATH_OPENS.TASK}
-                </Stack.Toolbar.MenuAction>
-              </Stack.Toolbar.Menu>
-            )}
-            {openOverview === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LIST)} onPress={openOverview}>
-                  {MENU_WORDS.OVERVIEW}
-                </Stack.Toolbar.MenuAction>
-              </Stack.Toolbar.Menu>
-            )}
-            {/* Note that the groups keep the panel's order (`agentMenuGroups`): the copies, then the name, then where it opens, then archiving, and Permanently delete last and alone. */}
-            {copyable ? (
-              <Stack.Toolbar.Menu inline>
-                {address === undefined ? null : (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(GLYPH.LINK)}
-                    onPress={actions.copyLink}
-                  >
-                    {MENU_WORDS.COPY_LINK}
-                  </Stack.Toolbar.MenuAction>
-                )}
-                {copiable ? (
-                  <Stack.Toolbar.Menu
-                    icon={glyphSymbol(GLYPH.COPY)}
-                    title={COPY_TRANSCRIPT_WORDS.COPY}
-                  >
-                    <Stack.Toolbar.MenuAction
-                      onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}
-                    >
-                      {COPY_TRANSCRIPT_WORDS.CONCISE}
-                    </Stack.Toolbar.MenuAction>
-                    <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.FULL)}>
-                      {COPY_TRANSCRIPT_WORDS.FULL}
-                    </Stack.Toolbar.MenuAction>
-                    <Stack.Toolbar.MenuAction
-                      icon={glyphSymbol(GLYPH.SHARE)}
-                      onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
-                    >
-                      {COPY_TRANSCRIPT_WORDS.SHARE}
-                    </Stack.Toolbar.MenuAction>
-                  </Stack.Toolbar.Menu>
-                ) : null}
-              </Stack.Toolbar.Menu>
-            ) : null}
-            {agent === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                {/* Note that a Manager is named from its Settings, its one place to configure it, as the desktop's menu offers Settings… in Rename's place. */}
-                {chat ? (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(GLYPH.OPTIONS)}
-                    onPress={openSettings}
-                  >
-                    {MENU_WORDS.SETTINGS}
-                  </Stack.Toolbar.MenuAction>
-                ) : (
-                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
-                    {MENU_WORDS.RENAME}
-                  </Stack.Toolbar.MenuAction>
-                )}
-                {barActs ? null : (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
-                    onPress={actions.pin}
-                  >
-                    {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
-                  </Stack.Toolbar.MenuAction>
-                )}
-              </Stack.Toolbar.Menu>
-            )}
-            {openable ? (
-              <Stack.Toolbar.Menu inline>
-                {address === undefined ? null : (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
-                    onPress={() => openInSafari(address)}
-                  >
-                    {VERB.OPEN_IN_BROWSER}
-                  </Stack.Toolbar.MenuAction>
-                )}
-                {agent !== undefined && hasPorts ? (
-                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
-                    {AGENT_PORTS_WORDS.PORTS}
-                  </Stack.Toolbar.MenuAction>
-                ) : null}
-                {agent === undefined || runActions.length === 0 ? null : (
-                  <Stack.Toolbar.Menu
-                    icon={glyphSymbol(GLYPH.RUN)}
-                    title={RUN_ACTION_WORDS.SUBMENU}
-                  >
-                    {runActions.map((offered) => (
-                      <Stack.Toolbar.MenuAction
-                        key={offered.action.id}
-                        icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
-                        subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
-                        onPress={offered.onPress}
-                      >
-                        {runActionMenuLabel(offered.action, offered.runs)}
-                      </Stack.Toolbar.MenuAction>
-                    ))}
-                  </Stack.Toolbar.Menu>
-                )}
-              </Stack.Toolbar.Menu>
-            ) : null}
-            {continueOf === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction
-                  icon={glyphSymbol(GLYPH.CONTINUE)}
-                  onPress={continueAgent}
-                >
-                  {continueOf.label}
-                </Stack.Toolbar.MenuAction>
-              </Stack.Toolbar.Menu>
-            )}
-            {agent === undefined || (barActs && move.places === undefined) ? null : (
-              <Stack.Toolbar.Menu inline>
-                {move.places === undefined ? null : (
-                  <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MOVE)} title={MENU_WORDS.MOVE_TO}>
-                    {move.places.map((place) => (
-                      <Stack.Toolbar.MenuAction
-                        key={place.key}
-                        icon={glyphSymbol(place.glyph)}
-                        {...(place.detail === undefined ? undefined : { subtitle: place.detail })}
-                        onPress={place.onPress}
-                      >
-                        {place.label}
-                      </Stack.Toolbar.MenuAction>
-                    ))}
-                  </Stack.Toolbar.Menu>
-                )}
-                {barActs ? null : archived ? (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(GLYPH.UNARCHIVE)}
-                    onPress={actions.unarchive}
-                  >
-                    {MENU_WORDS.UNARCHIVE}
-                  </Stack.Toolbar.MenuAction>
-                ) : (
-                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
-                    {MENU_WORDS.ARCHIVE}
-                  </Stack.Toolbar.MenuAction>
-                )}
-              </Stack.Toolbar.Menu>
-            )}
-            {agent === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction
-                  icon={glyphSymbol(GLYPH.DELETE)}
-                  destructive
-                  onPress={() => setDeleting(true)}
-                >
-                  {MENU_WORDS.DELETE}
-                </Stack.Toolbar.MenuAction>
-              </Stack.Toolbar.Menu>
-            )}
-          </Stack.Toolbar.Menu>
-        ) : null}
+        {moreMenu === undefined ? null : (
+          <Stack.Toolbar.View>
+            <StackBarMenu menu={moreMenu} />
+          </Stack.Toolbar.View>
+        )}
         {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
         {/* Note that a Manager's Overview stands as a glyph in every window, nearest the ⋯, since on the desktop it is never hidden beside the chat. */}
         {openOverview === undefined ? null : (

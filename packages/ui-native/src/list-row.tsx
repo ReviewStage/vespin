@@ -5,6 +5,7 @@ import {
   DisclosureGroup,
   HStack,
   Image,
+  Label,
   Menu,
   Spacer,
   Text,
@@ -60,7 +61,7 @@ import { PixelRatio, useColorScheme } from "react-native";
 import { useAccessibilitySize, useScaledSize, useVoiceOver } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, glyphImage } from "./glyph.js";
-import { actContent, emojiContent, markContent, menuActContent } from "./glyph-label.js";
+import { LookIcon, menuActContent } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink, rowHeard, rowMenu, rowSwipes } from "./interactions.js";
 import { type RowInset, useRowInset } from "./layout-margin.js";
@@ -80,10 +81,13 @@ import {
 } from "./marks.js";
 import { useMinute } from "./minute.js";
 import {
+  choiceLook,
   filledGroups,
   type LongPressGroup,
+  MENU_ICON,
   type MenuChoice,
   type MenuInks,
+  type MenuLead,
   menuPressAt,
   menuTree,
   pressAt,
@@ -93,6 +97,7 @@ import {
   type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
+  saysUnder,
   swipeTree,
 } from "./row-menu-model.js";
 import {
@@ -106,6 +111,7 @@ import { searchedTitleMarkdown } from "./searched-title-model.js";
 import { sparedMarksDropped } from "./task-row-fit-model.js";
 import { type BrandColors, STATUS_TONE, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, ROW_INSET, SPACE } from "./tokens/space.js";
+import type { StatusTone } from "./tokens/status-tone.js";
 import { SYSTEM_COLOR, type SystemColor, useSystemColors } from "./tokens/swipe-colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -333,35 +339,44 @@ export function actionButton(
   );
 }
 
-/** A menu choice's glyph's color: its tone's ink, where it has a tone. */
-export function choiceColor(choice: MenuChoice, colors: BrandColors): string | undefined {
-  return choice.tone === undefined ? undefined : toneColor(colors, choice.tone);
-}
+/**
+ * What a menu's choice holds, as every system menu draws it: its words beside
+ * its head (`choiceLook`, `LookIcon`), or its words alone; one saying more
+ * under its words, such as a member's email, stands as the menu's title and
+ * subtitle beside its head, its glyph then drawn alone, with no faint glyph
+ * under it, but for one led by an integration's mark or an emoji, which says
+ * nothing under its words.
+ */
+export function choiceContent(
+  choice: MenuLead & { readonly label: string; readonly detail?: string | undefined },
+  colors: BrandColors,
+) {
+  const look = choiceLook(choice);
+  const toneInk = (tone: StatusTone) => toneColor(colors, tone);
 
-/** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
-export function choiceContent(choice: MenuChoice, colors: BrandColors) {
-  if (choice.mark !== undefined) return markContent(choice.label, choice.mark);
+  if (look === undefined && choice.detail === undefined) return { label: choice.label };
 
-  if (choice.emoji !== undefined) return emojiContent(choice.label, choice.emoji);
+  if (choice.detail === undefined || !saysUnder(choice))
+    return {
+      children: (
+        <Label
+          title={choice.label}
+          icon={look === undefined ? undefined : <LookIcon look={look} toneInk={toneInk} />}
+        />
+      ),
+    };
 
-  // Note that a choice saying more under its words, such as a member's email, stands as a menu's title and subtitle.
-  if (choice.detail !== undefined)
-    return menuActContent(
-      choice.label,
-      choice.symbol,
-      choice.detail,
-      choiceColor(choice, colors),
-      choice.photo,
-    );
+  const head = look?.kind === MENU_ICON.GLYPH ? { ...look, under: undefined } : look;
 
-  return actContent(
-    choice.label,
-    choice.symbol,
-    undefined,
-    choiceColor(choice, colors),
-    choice.photo,
-    choice.under,
-  );
+  return {
+    children: (
+      <>
+        <Text>{choice.label}</Text>
+        <Text>{choice.detail}</Text>
+        {head === undefined ? null : <LookIcon look={head} toneInk={toneInk} />}
+      </>
+    ),
+  };
 }
 
 /** A row's time, in the time's style, in the muted ink and tabular figures, as the panel's rows end. Note that it keeps its whole width, so a long title is what cuts short, as Mail's date stands whole beside a sender. */

@@ -226,6 +226,16 @@ patchedDependencies:
 # queue there.
   expo-notifications@58.1.8: patches/expo-notifications@58.1.8.patch
 #
+# `expo-quick-actions` 6.0.2 takes a cold launch's quick action only from
+# `launchOptions` in `didFinishLaunching`, but under the scene life cycle
+# Expo 58's scene delegate forwards it to `performActionFor`, where the
+# library only posts an event JavaScript isn't listening for yet, so a Home
+# Screen quick action that woke the app was dropped. The patch also keeps
+# that first item as `QuickActions.initial`, which `useQuickActionRouting`
+# reads once the tabs mount. Delete it when a release reads a scene's
+# launch item.
+  expo-quick-actions@6.0.2: patches/expo-quick-actions@6.0.2.patch
+#
 # `expo-symbols` 58.0.4's `SymbolView` reads its name as an SF Symbol alone
 # (`UIImage(systemName:)`), so a custom symbol the app's asset catalog holds,
 # such as the Lucide glyphs `@repo/ui-native` draws, stays blank. The patch
@@ -259,10 +269,14 @@ patchedDependencies:
 # the Assignee menu leads each member with their face; and `emoji` with
 # `emojiSize`, which draws an emoji into a square image at a menu glyph's
 # size, its rendering kept original, so Move to leads an emoji section with
-# its emoji in the glyph's place and its name lines up; and `underAssetName`
+# its emoji in the glyph's place and its name lines up; `underAssetName`
 # with `underOpacity`, which draws a second catalog symbol faint under the
 # tinted one in the same image, so a priority's lit bars stand over its unlit
-# ones in a menu. And it lets `ContentUnavailableView` draw a symbol of the
+# ones in a menu; `photoCorner`, which rounds a photo's square instead, as a
+# repository's owner picture stands; and `assetSize`, which draws a catalog
+# image fit in a menu glyph's square, its rendering kept original, so a
+# model's harness mark leads its name at a glyph's width rather than its own
+# size. And it lets `ContentUnavailableView` draw a symbol of the
 # app's asset catalog (`image`) in `systemImage`'s place, leave out an empty
 # description, and take its primary and secondary inks (`primaryColor`,
 # `secondaryColor`), so an empty state wears the panel's glyph and words'

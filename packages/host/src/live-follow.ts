@@ -429,6 +429,26 @@ function rowsOf<Part extends string>(
   return Object.fromEntries(rows) as Readonly<Record<Part, readonly unknown[]>>;
 }
 
+/**
+ * Each of `parts` whose `decoded` rows hold fewer than `read` carried, and
+ * how many fewer: rows of a shape this build does not read, which the
+ * reading drops rather than failing the answer
+ * (`@repo/features/live-read`'s `rowsReading`), so no screen would
+ * otherwise say they went missing.
+ */
+export function droppedParts<Part extends string>(
+  parts: readonly Part[],
+  read: SealedRead<Part>,
+  decoded: { readonly [Name in Part]: readonly object[] },
+): ReadonlyArray<readonly [Part, number]> {
+  return parts.flatMap((part) => {
+    const carried = read.queries[part].rows?.length ?? 0;
+    const kept = decoded[part].length;
+
+    return carried > kept ? [[part, carried - kept] as const] : [];
+  });
+}
+
 /** An answer's rows, undecoded, and whether its cursor parts are only what moved past the reader's cursor, for the caller to join onto the rows it holds. */
 interface LiveAnswer<Part extends string> {
   readonly rows: Readonly<Record<Part, readonly unknown[]>>;

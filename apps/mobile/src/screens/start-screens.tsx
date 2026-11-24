@@ -25,11 +25,7 @@ import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/
 import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relation-model";
-import {
-  TASK_CREATE_RELATION_WORDS,
-  TASK_STATUS_TONE,
-  TASK_STATUS_WORDS,
-} from "@repo/features/task-standing-words";
+import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   TASK_CREATE_RELATION_KIND,
   TASK_SETTLED,
@@ -59,8 +55,8 @@ import {
   type ModelChoices,
   type PickOption,
   runsOnGlyph,
-  STATUS_MARK_SYMBOL,
   StartPage,
+  taskChoice,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -287,12 +283,14 @@ function choicesOf(
   picked: string | undefined,
   onPick: (id: string) => void,
 ): ChipMenuGroup["choices"] {
-  return options.map((option) => ({
-    label: option.label,
-    id: option.id,
-    on: option.id === picked,
-    onPress: () => onPick(option.id),
-  }));
+  return options.map((option) => {
+    const press = { id: option.id, on: option.id === picked, onPress: () => onPick(option.id) };
+
+    // Note that an option of an entity, such as a repository, leads with its own mark, as its rows draw it.
+    return option.lead === undefined
+      ? { label: option.label, ...press }
+      : { label: option.label, mark: option.lead, ...press };
+  });
 }
 
 /** What an option picked is called, where it is one of those offered. */
@@ -1086,14 +1084,13 @@ function taskChoices(
   pick: RelationChoices,
   kind: TaskCreateRelationKind,
 ): ChipMenuGroup["choices"] {
-  return pick.tasks.map((task) => ({
-    label: task.name,
-    id: task.id,
-    symbol: STATUS_MARK_SYMBOL[task.status ?? TASK_STATUS.TODO],
-    tone: TASK_STATUS_TONE[task.status ?? TASK_STATUS.TODO],
-    on: pick.relation?.kind === kind && pick.relation.taskId === task.id,
-    onPress: () => pick.pick({ kind, taskId: task.id }),
-  }));
+  return pick.tasks.map((task) =>
+    taskChoice(task.name, task.status, {
+      id: task.id,
+      on: pick.relation?.kind === kind && pick.relation.taskId === task.id,
+      onPress: () => pick.pick({ kind, taskId: task.id }),
+    }),
+  );
 }
 
 /** The + menu's Task relation, as the panel's + offers it: each kind, then the task it names; none while no task may be named. */

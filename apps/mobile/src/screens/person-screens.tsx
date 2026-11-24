@@ -38,12 +38,12 @@ import {
   buzz,
   EmptyState,
   GLYPH,
-  glyphSymbol,
   LIST_LOOK,
   ListSection,
   PersonHead,
   RowList,
   Screen,
+  StackBarMenu,
   useColors,
   useMinute,
 } from "@repo/ui-native";
@@ -65,7 +65,6 @@ import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { SETTINGS_ROUTE } from "../settings-button.js";
-import { stackMenuItems } from "../stack-bar-menu.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
   agentLine,
@@ -153,7 +152,7 @@ function personMenu({
   const manages =
     manage === undefined
       ? []
-      : [{ actions: [{ label: PERSON_PAGE_WORDS.MANAGE, symbol: GLYPH.PEOPLE, onPress: manage }] }];
+      : [{ items: [{ label: PERSON_PAGE_WORDS.MANAGE, symbol: GLYPH.PEOPLE, onPress: manage }] }];
 
   if (copies.length === 0 && manages.length === 0) return undefined;
 
@@ -241,8 +240,9 @@ function PersonPage({
     [listedTasks, workspaceId],
   );
 
+  // Note that the app lists no person's Managers yet, so it reads none.
   const page = useMemo(
-    () => personPage(userId, tasks, listedAgents),
+    () => personPage(userId, tasks, listedAgents, undefined),
     [userId, tasks, listedAgents],
   );
 
@@ -351,9 +351,9 @@ function PersonPage({
       />
       {menu === undefined || name === undefined ? null : (
         <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-            {stackMenuItems(menu)}
-          </Stack.Toolbar.Menu>
+          <Stack.Toolbar.View>
+            <StackBarMenu menu={menu} />
+          </Stack.Toolbar.View>
         </Stack.Toolbar>
       )}
     </>

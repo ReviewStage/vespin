@@ -227,6 +227,7 @@ const TURN_DURATION_BOUNDS = [
 export const SERVER_PULL_REQUEST_OPENER = {
   DEVELOPER: "developer",
   ASSIGNEE: "assignee",
+  ASKER: "asker",
   APP: "app",
 } as const;
 

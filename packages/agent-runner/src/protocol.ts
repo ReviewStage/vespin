@@ -711,6 +711,9 @@ const CursorPermissionModeSchema = Schema.Literals([
   PERMISSION_MODE.AUTO,
 ]);
 
+/** What the id of a Cursor agent we mint begins with, as the SDK's own local ids do. */
+export const CURSOR_AGENT_PREFIX = "agent-";
+
 /**
  * The first stdin line of a Cursor launch, which runs Cursor's agent in the
  * runner's own process through `@cursor/sdk` (`cursor.ts`). `sdk` is the
@@ -719,9 +722,6 @@ const CursorPermissionModeSchema = Schema.Literals([
  * Cursor's id for the agent, which the service mints: the launch resumes it
  * where the store holds it and makes it under that id otherwise.
  */
-/** What the id of a Cursor agent we mint begins with, as the SDK's own local ids do. */
-export const CURSOR_AGENT_PREFIX = "agent-";
-
 export const CursorConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CURSOR),
   cwd: Schema.String,

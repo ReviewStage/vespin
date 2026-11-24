@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { posix } from "node:path";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readPageById } from "@repo/database/models/task-pages";
+import { turnAsker } from "@repo/database/models/turn-asker";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import {
@@ -160,6 +161,13 @@ function postThreadWhen(manager: boolean): string {
     : "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. ";
 }
 
+/** Whom a first post under a key waits on where it names no `to`: for a Manager, whoever asked for its turn (`turnAsker`); a coder's must name one. */
+function firstPostTo(manager: boolean): string {
+  return manager
+    ? "the first post under a key without it waits on whoever asked for your turn"
+    : "the first post under a key must name it";
+}
+
 /** What an agent's `post_thread` names beside its own rule: whether it is a Manager, and whether its workspace connected the Slack bot. */
 export interface PostThreadStanding {
   readonly manager: boolean;
@@ -172,7 +180,7 @@ const postThreadWords = ({ manager, slackOn }: PostThreadStanding) =>
   postThreadWhen(manager) +
   "key is your own short lowercase slug, such as branch-protection: the first post under a key opens its thread and must name its title, " +
   "and a later one adds a message to that thread, a title it names renaming it. " +
-  `to is the member the thread waits on, by their [@Name](link) mention as ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers it: the first post under a key must name it, and a later one without it keeps the thread's. ` +
+  `to is the member the thread waits on, by their [@Name](link) mention as ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers it: ${firstPostTo(manager)}, and a later one without it keeps the thread's. ` +
   `body is Markdown, at most ${INBOX_BOUNDS.MAX_MESSAGE_CHARS} characters. ` +
   `Write a file, a pull request, or an issue in it as a mention, such as [@store.ts](https://github.com/<owner>/<name>/blob/HEAD/<path>), so ${PRODUCT_NAME} draws it as a chip, ` +
   "and put a link alone on its own line to show it as a card, its mention never followed by its bare address. " +
@@ -289,9 +297,10 @@ interface AgentInboxLine {
   readonly closedReason?: string;
 }
 
-/** The agent a post is made as: its account, task, and id, and the workspace whose members the post names. */
+/** The agent a post is made as: its account, task, id, and own conversation, and the workspace whose members the post names. */
 export interface ThreadPoster extends InboxAgent {
   readonly organizationId: string;
+  readonly conversationId: string;
 }
 
 /** One thread as a list names it, one line: what to read it by, where it stands, and what waits on it or came of it. */
@@ -1035,13 +1044,16 @@ function addresseeOf(to: string): string | undefined {
 /**
  * Whom a post waits on, or why it is refused: the member its mention link
  * names, refused where it names no person; or, where it names none, the
- * member the thread under its key was addressed to, kept as it stands, and
- * refused where no thread stands under the key, since a first post names
- * whom it waits on. Note that whether that person is of the workspace is the
- * store's to say, under the lock it writes the post under (`postInboxThread`).
+ * member the thread under its key was addressed to, kept as it stands. A
+ * first post under a key that names none waits, from a Manager, on whoever
+ * asked for its turn (`turnAsker`), its owner where no member did, since a
+ * Manager is shared and its ask is theirs; a coder's is refused, since its
+ * first post names whom it waits on. Note that whether that person is of
+ * the workspace and may see the thread is the store's to say, under the
+ * lock it writes the post under (`postInboxThread`).
  */
 function placeOf(
-  agent: InboxAgent,
+  agent: ThreadPoster,
   post: InboxThreadPostInput,
 ): InboxStoreEffect<Result.Result<ThreadPlace, string>> {
   if (post.to !== undefined) {
@@ -1054,14 +1066,26 @@ function placeOf(
     );
   }
 
-  return Effect.map(agentInboxItemOfKey(agent, post.key), (standing) => {
-    if (Option.isNone(standing)) return Result.fail(INBOX_REFUSAL.NO_ADDRESSEE_NAMED);
-    const { addressed, waitsOn } = standing.value;
+  return Effect.flatMap(
+    agentInboxItemOfKey(agent, post.key),
+    (standing): InboxStoreEffect<Result.Result<ThreadPlace, string>> => {
+      if (Option.isSome(standing)) {
+        const { addressed, waitsOn } = standing.value;
 
-    return Result.succeed(
-      addressed === true && waitsOn !== undefined ? { addresseeId: waitsOn.userId } : {},
-    );
-  });
+        return Effect.succeed(
+          Result.succeed(
+            addressed === true && waitsOn !== undefined ? { addresseeId: waitsOn.userId } : {},
+          ),
+        );
+      }
+
+      if (agent.taskId !== null)
+        return Effect.succeed(Result.fail(INBOX_REFUSAL.NO_ADDRESSEE_NAMED));
+      const target = { userId: agent.userId, conversationId: agent.conversationId };
+
+      return Effect.map(turnAsker(target), (addresseeId) => Result.succeed({ addresseeId }));
+    },
+  );
 }
 
 /** Runs one post: whom it waits on, its pictures and PDFs read from the sandbox, the message written on the thread under its key, and the agent's threads answered, or why not. */

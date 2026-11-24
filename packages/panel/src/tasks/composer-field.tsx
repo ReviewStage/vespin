@@ -334,6 +334,12 @@ export function ComposerField({
     };
   }, [module, editor, maxLength, label]);
 
+  // Note that the files are told before the draft, so words laid in with their files, as Edit or Retry lays them, find the files their markers name.
+  const fileNames = files?.names;
+  useLayoutEffect(() => {
+    if (fileNames !== undefined) editor.current?.setFiles(fileNames);
+  }, [fileNames, editor, module]);
+
   // A draft that moved from outside is told to the editor once; its own words handed back are not.
   useLayoutEffect(() => {
     const mounted = editor.current;
@@ -347,10 +353,6 @@ export function ComposerField({
   useLayoutEffect(() => editor.current?.setInput(input), [input, editor, module]);
   useLayoutEffect(() => editor.current?.setSkills(skills), [skills, editor, module]);
   useLayoutEffect(() => editor.current?.setCommands(commands), [commands, editor, module]);
-  const fileNames = files?.names;
-  useLayoutEffect(() => {
-    if (fileNames !== undefined) editor.current?.setFiles(fileNames);
-  }, [fileNames, editor, module]);
   useLayoutEffect(() => editor.current?.setAria(aria));
 
   return (

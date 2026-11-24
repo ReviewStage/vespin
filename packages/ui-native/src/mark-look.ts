@@ -32,6 +32,9 @@ export const HARNESS_MARK_ASSET = {
   [MODEL_PROVIDER.CURSOR]: "CursorMark",
 } as const satisfies Record<ModelProvider, string>;
 
+/** How round a repository's picture stands, of its size: a tile's, as the panel draws a repository's owner, not a person's circle. */
+export const REPOSITORY_CORNER = 0.25;
+
 /** One cell of the working mark's grid, its side, in points: the panel's 3 px. */
 export const WORKING_CELL = 3;
 

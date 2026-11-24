@@ -93,6 +93,7 @@ import {
   BUZZ,
   type Buzz,
   heldValue,
+  type MenuPhotoFile,
   NOTICE_KIND,
   QUIET_ROW_QUESTION,
   type RowAsker,
@@ -125,6 +126,7 @@ import {
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
+import { useMenuPhotos, useMenuRepositoryPictures } from "../menu-photos.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useTreeView } from "./tree-view.js";
 import { useFollowWrite } from "./use-following.js";
@@ -269,7 +271,7 @@ function useStatusWrites(tasks: readonly TaskSummary[]): UseStatusWritesResult {
 }
 
 /** A member a task is assigned to: their account id, and the name the host draws them by until the list carries them. */
-export interface Assignee {
+interface Assignee {
   readonly userId: string;
   readonly name: string;
 }
@@ -348,6 +350,8 @@ export interface TaskPlacing {
   readonly placeStarted: (taskId: string, sectionId: string) => void;
   /** The repositories the workspace's GitHub reaches, which a task's repository is picked among. */
   readonly repositories: readonly string[];
+  /** A repository's owner's picture as a file on this device, which its choice in a menu leads with; none where it isn't read yet. */
+  readonly repositoryPictureOf: (repository: string) => MenuPhotoFile | undefined;
   /** Gives a task its repository, or takes it away under null, as the panel's Change repository does. */
   readonly setRepository: (taskId: string, repository: string | null) => void;
   /** Names one of the member's sections anew, keeping its icon, as the panel's Rename on a section's header does. */
@@ -377,6 +381,7 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
   });
 
   const { listed } = useWorkspaceRepositories(workspaceId);
+  const repositoryPictureOf = useMenuRepositoryPictures(listed);
 
   // Note that an Undo reads the sections as they stand when it is pressed, which a delete's own answer may have moved on since.
   const current = useRef(state);
@@ -469,11 +474,12 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
         move(taskId, sectionId, BUZZ.SUCCESS),
       placeStarted: (taskId: string, sectionId: string) => move(taskId, sectionId, undefined),
       repositories: listed,
+      repositoryPictureOf,
       setRepository,
       renameSection,
       deleteSection,
     };
-  }, [acts, write, notices, state, workspaceId, listed]);
+  }, [acts, write, notices, state, workspaceId, listed, repositoryPictureOf]);
 }
 
 /** What the Tasks tab draws: the tree, what a search finds, each row's look, and the acts on a row. */
@@ -497,6 +503,8 @@ export interface TasksListing {
   readonly faceOf: (task: TaskSummary) => TaskRowFace | undefined;
   /** A member's sign-in picture by their id, which a row's face draws; none where they have none. */
   readonly pictureOf: (userId: string) => string | undefined;
+  /** A member's picture as a file on this device by their id, which a row's Assignee menu draws; none where they have none, or it isn't read yet. */
+  readonly menuPhotoOf: (userId: string) => MenuPhotoFile | undefined;
   /** The signed-in reader's account id, which a row's Follow reads its followers against; none before it is read. */
   readonly readerId: string | undefined;
   /** The workspace's members, the reader first, as a row's Assignee lists them. */
@@ -541,7 +549,7 @@ export interface TaskRowDoors {
 }
 
 /** A task at a glance: how many of its threads wait on the reader, and its agents not archived, in its Overview's order. */
-export interface TaskGlance {
+interface TaskGlance {
   readonly waiting: number;
   readonly agents: readonly ListedAgent[];
 }
@@ -748,6 +756,12 @@ export function useTasksListing(search: string): ReadListing {
   const { markRead, pin } = useTaskRowWrites();
   const pictureOf = useMemberPictures();
   const members = useListedMembers(workspace?.id);
+
+  const menuPhotoOf = useMenuPhotos(
+    pictureOf,
+    useMemo(() => members.map(({ userId }) => userId), [members]),
+  );
+
   const { view: treeView, setView: setTreeView } = useTreeView(workspace?.id);
   const searching = useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
   // Note that the last tree is kept where the new one draws the same rows, because a group's new array resets every row it holds (`RowForEach`), and every delivery to the task list built the tree anew.
@@ -824,6 +838,7 @@ export function useTasksListing(search: string): ReadListing {
       subTasksOf: (taskId: string) => counts.get(taskId),
       faceOf: (task: TaskSummary) => taskRowFace(task, readerId, soleMember),
       pictureOf: (userId: string) => pictureOf(userId),
+      menuPhotoOf,
       readerId,
       members,
       setPriority,
@@ -855,6 +870,7 @@ export function useTasksListing(search: string): ReadListing {
     placing,
     relations,
     pictureOf,
+    menuPhotoOf,
     members,
     setPriority,
     setAssignee,

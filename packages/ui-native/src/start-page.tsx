@@ -54,10 +54,11 @@ import {
 import { GlassDock } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, PickOption } from "./glyph-label.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
+import type { MenuChoice } from "./list-row.js";
 import { RepositoryPicture } from "./marks.js";
+import { choiceLook } from "./row-menu-model.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
-import { useColors } from "./tokens/colors.js";
+import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -262,9 +263,8 @@ function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
           key={at}
           label={choice.label}
           value={String(at)}
-          glyph={choice.symbol}
-          color={choiceColor(choice, colors)}
-          photo={choice.photo}
+          look={choiceLook(choice)}
+          toneInk={(tone) => toneColor(colors, tone)}
         />
       ))}
     </Picker>
