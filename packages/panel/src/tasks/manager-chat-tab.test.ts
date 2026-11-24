@@ -8,12 +8,14 @@ import {
   AGENT_KIND,
   AGENT_STATUS,
   type AgentSummary,
+  type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -37,7 +39,8 @@ import { ManagerChatTab } from "./manager-chat-tab.js";
 /**
  * manager-chat-tab.test.ts -- a Manager's page as its own chat, drawn from
  * the chat's rows: the reader's messages at the right and everyone else's at
- * the left, each sender named over their run; Reply beside any message,
+ * the left, each sender named over their run; an ended turn's work folded
+ * over the Manager's first message of the turn; Reply beside any message,
  * the Manager's or a person's, quoting it whole into the box, which sends it
  * to the chat; a call the Manager holds for an answer standing at the chat's
  * foot with its answers; and Retry sending a refused message again with its
@@ -106,10 +109,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The Manager's page as Dean sees it, its chat's rows (oldest first here) and the messages on their way held on the app state; every message the box sends to the chat, by its words and its files' names, and every answer to an ask. */
+/** The Manager's page as Dean sees it, its chat's rows (oldest first here) and the messages on their way held on the app state, over its transcript; every message the box sends to the chat, by its words and its files' names, and every answer to an ask. */
 async function drawChat(
   rows: readonly ManagerChatLiveMessage[],
-  held: { readonly manager?: AgentSummary; readonly sending?: readonly ManagerChatSending[] } = {},
+  held: {
+    readonly manager?: AgentSummary;
+    readonly sending?: readonly ManagerChatSending[];
+    readonly transcript?: readonly AgentTranscriptMessage[];
+  } = {},
 ) {
   const manager = held.manager ?? MANAGER;
   const sent: string[] = [];
@@ -140,7 +147,12 @@ async function drawChat(
 
   handMembers(() => ({ rows: { members: MEMBERS } }));
   pushedTranscripts(() => [
-    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+    {
+      messages: [...(held.transcript ?? [])],
+      cursor: "1:0",
+      status: AGENT_STATUS.COMPLETED,
+      title: null,
+    },
   ]);
 
   const control = agentsControl({
@@ -197,6 +209,58 @@ test("the reader's message stands at the right, and a teammate's and the Manager
     ["left", "On it.", "Iris"],
     ["left", "Seven days it is.", null],
   ]);
+});
+
+test("an ended turn's work stands folded over the Manager's first message of the turn, saying how long the turn worked, and opens onto its calls", async () => {
+  const { container } = await drawChat(
+    [
+      row("ask", 1, "What first?", DEAN),
+      { ...row("told", 2, "The invite flow."), turnId: "turn-1" },
+      { ...row("then", 3, "Then the reminders."), turnId: "turn-1" },
+    ],
+    {
+      transcript: [
+        {
+          id: "turn-1",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            { type: "step-start" },
+            {
+              type: "tool-list_tasks",
+              toolCallId: "list-1",
+              state: "output-available",
+              input: {},
+              output: { tasks: [] },
+            },
+          ],
+          startedAt: 1_000,
+          finishedAt: 79_000,
+        },
+      ],
+    },
+  );
+
+  const first =
+    container.querySelector('[data-message-id="told"]') ?? assert.fail("the turn's first message");
+
+  const words = first.textContent ?? "";
+  const fold = words.indexOf("Worked for 1m 18s");
+  assert.ok(
+    fold >= 0 && fold < words.indexOf("The invite flow."),
+    "the fold stands over the words",
+  );
+  assert.equal(
+    container.querySelector('[data-message-id="then"]')?.textContent?.includes("Worked for"),
+    false,
+    "and over the turn's first message alone",
+  );
+  assert.equal(first.querySelector('[data-call-id="list-1"]'), null, "folded");
+
+  const line = first.querySelector("summary") ?? assert.fail("the fold's line");
+  await act(async () => line.click());
+  await settleQueries();
+
+  assert.ok(first.querySelector('[data-call-id="list-1"]'), "the fold opens onto the turn's call");
 });
 
 test.each([
