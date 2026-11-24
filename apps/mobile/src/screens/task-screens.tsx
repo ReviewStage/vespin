@@ -189,7 +189,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter, useIsFocused } from "expo-router";
 import {
   type ComponentProps,
   type ReactElement,
@@ -280,6 +280,7 @@ import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
 import { tasksViewMenu } from "./tasks-view-menu.js";
+import { probe, probeOnce } from "../launch-probe.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
@@ -3408,6 +3409,13 @@ function TasksStackList({
   const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
+  // PROBE ONLY: when the Tasks list first stands in front, and each of its first renders.
+  const probeFocused = useIsFocused();
+  probeRenders += 1;
+
+  if (probeRenders <= 30) probe("tasks:render", { n: probeRenders, focused: probeFocused });
+
+  if (probeFocused) probeOnce("tasks:focus");
 
   return (
     <>
@@ -3439,15 +3447,19 @@ function TasksStackList({
           hold={hold}
           look={LIST_LOOK.PLAIN}
           search={search}
-          onSelect={(id) =>
-            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })))
-          }
+          onSelect={(id) => {
+            probe("tasks:select");
+            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })));
+          }}
           onRefresh={refreshTasks}
         />
       </Screen>
     </>
   );
 }
+
+/** PROBE ONLY: how many times the iPhone's Tasks list has rendered this launch. */
+let probeRenders = 0;
 
 /** What a task's page in a split view's detail sets through its list's own asks, so a list beside it asks once for both. */
 type TaskDetailDoors = Pick<TasksListing, "setStatus" | "askDelete">;

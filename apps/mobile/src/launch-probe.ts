@@ -13,7 +13,7 @@ const perfAtLoad = performance.now();
 /** A gap between ticks longer than this is the JS thread held by work. */
 const STALL_MS = 34;
 const TICK_MS = 8;
-const WATCH_MS = 16_000;
+const WATCH_MS = 24_000;
 
 /** Notes a mark, every time it is called. */
 export function probe(n: string, d?: unknown): void {
@@ -105,4 +105,4 @@ export function probeFlush(reason: string): void {
 }
 
 probe("probe-loaded");
-setTimeout(() => probeFlush("t16"), WATCH_MS + 200);
+setTimeout(() => probeFlush("t24"), WATCH_MS + 200);
