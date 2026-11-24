@@ -15,12 +15,14 @@
  * (`drawnPerTick`), since every draw pushes the list to every window; a
  * write, a whole answer, and an edge draw at once.
  *
- * Everything the list derives is a TanStack DB live query: its plans and
- * agents with their pins (`task-list-tasks.ts`), the agents' pull requests
- * (`task-list-pull-requests.ts`), the agents started from each
+ * What the list derives row by row is a TanStack DB live query: its plans
+ * and agents with their pins (`task-list-tasks.ts`), each agent's pull
+ * request (`task-list-pull-requests.ts`), the agents started from each
  * (`task-list-continuations.ts`), and the agents whose status waits on a
- * grace (`waiting`). Each stands on the plans and agents as the list draws
- * them (`drawn-rows.ts`), which take only the keys the pool names as moved:
+ * grace (`waiting`). What a plan's agents derive together, their tally and
+ * the plan's pull requests, is held by plan outside the queries
+ * (`task-list-tallies.ts`). Each stands on the plans and agents as the list
+ * draws them (`drawn-rows.ts`), which take only the keys the pool names as moved:
  * those an answer moved, took up, or let go, and those a write drew again.
  * So each drawing builds again only the plans and agents a moved row or an
  * ended grace reaches, and every other is the object drawn before, whatever
@@ -102,6 +104,7 @@ import { archivedAgents, heldApart, mergedByStart } from "./task-list-archived.j
 import { taskListContinuations } from "./task-list-continuations.js";
 import { taskListPullRequests } from "./task-list-pull-requests.js";
 import type { AgentRow, PastGrace, PlanRow } from "./task-list-rows.js";
+import { planTallies } from "./task-list-tallies.js";
 import { apartPlans, taskListTasks } from "./task-list-tasks.js";
 import { timeOrdered } from "./time-ordered.js";
 
@@ -287,9 +290,6 @@ export function taskListCollections(
     const mayAge = timeOrdered();
     const agentsOfTask = new Map<string, Set<string>>();
     const taskOfAgent = new Map<string, string>();
-    /** The agents of each plan that stand in the live queries, every agent but those held apart, by the plan's id; a plan it names none of is held apart from the queries. */
-    const liveAgentsOfTask = new Map<string, Set<string>>();
-    const liveTaskOfAgent = new Map<string, string>();
     /** How many answers the follow gave, and the answer each id it let go was let go at. */
     let answers = 0;
     const letGoAt = new Map<string, number>();
@@ -322,6 +322,8 @@ export function taskListCollections(
     /** The agents started from each agent, by its id, as the continuations last changed. */
     const continuedBy = new Map<string, ContinuedBy>();
     const archived = archivedAgents((agentId) => continuedBy.get(agentId));
+    // The agents that stand in the live queries, every agent but those held apart, by plan, with what each plan's derive together; a plan holding none is held apart from the queries.
+    const tallies = planTallies((agentId) => pastGrace.get(agentId));
 
     const continuedMoves = continuations.subscribeChanges((changes) => {
       const moved = new Set<string>();
@@ -354,51 +356,8 @@ export function taskListCollections(
 
       // Note that a plan stands in the live queries only while one of its agents does, and is held apart from them otherwise, since they would tally it from nothing.
       const rowOf = (key: string) => plans.row(key) ?? coldPlans.row(key);
-      drawnPlans.drawn(keys, (key) => (liveAgentsOfTask.has(key) ? rowOf(key) : undefined));
-      apart.drawn(keys, (key) => (liveAgentsOfTask.has(key) ? undefined : rowOf(key)));
-    };
-
-    /**
-     * Notes which plan each of `keys` stands in the live queries under, as
-     * `rowOf` draws it, none for an agent held apart or on no plan, and
-     * draws again each plan that came to hold its first such agent or let
-     * go of its last, so it moves into or out of the queries.
-     */
-    const liveAgentsDrawn = (
-      keys: readonly string[],
-      rowOf: (key: string) => AgentRow | undefined,
-    ) => {
-      const moved: string[] = [];
-
-      for (const key of keys) {
-        const row = rowOf(key);
-        const taskId = row === undefined || heldApart(row) ? undefined : (row.taskId ?? undefined);
-        const was = liveTaskOfAgent.get(key);
-
-        if (was === taskId) continue;
-        const left = was === undefined ? undefined : liveAgentsOfTask.get(was);
-        left?.delete(key);
-
-        if (was !== undefined && left?.size === 0) {
-          liveAgentsOfTask.delete(was);
-          moved.push(was);
-        }
-
-        if (taskId === undefined) {
-          liveTaskOfAgent.delete(key);
-          continue;
-        }
-
-        liveTaskOfAgent.set(key, taskId);
-        const joined = liveAgentsOfTask.get(taskId);
-
-        if (joined === undefined) {
-          liveAgentsOfTask.set(taskId, new Set([key]));
-          moved.push(taskId);
-        } else joined.add(key);
-      }
-
-      if (moved.length > 0) plansDrawn(moved);
+      drawnPlans.drawn(keys, (key) => (tallies.holds(key) ? rowOf(key) : undefined));
+      apart.drawn(keys, (key) => (tallies.holds(key) ? undefined : rowOf(key)));
     };
 
     const plansRedraw: PoolRead<PlanRow>["redraw"] = (keys) =>
@@ -440,18 +399,23 @@ export function taskListCollections(
       }
 
       // Note that an agent moving into or out of its archive moves between the live queries and the agents held apart, which each draw it where it now stands.
-      drawnAgents.drawn(keys, (key) => {
+      const liveOf = (key: string) => {
         const row = rows.get(key);
 
         return row === undefined || heldApart(row) ? undefined : row;
-      });
+      };
+
+      drawnAgents.drawn(keys, liveOf);
       drawnStarted.drawn(keys, (key) => {
         const row = rows.get(key);
 
         return row?.startedFrom == null ? undefined : row;
       });
       archived.drawn(keys, (key) => rows.get(key));
-      liveAgentsDrawn(keys, (key) => rows.get(key));
+      // Note that a plan that came to hold its first agent standing in the queries, or let go of its last, moves into or out of them.
+      const turned = tallies.drawn(keys, liveOf);
+
+      if (turned.length > 0) plansDrawn(turned);
     };
 
     const agentsRedraw: PoolRead<AgentRow>["redraw"] = (keys) =>
@@ -507,6 +471,19 @@ export function taskListCollections(
       ),
     );
 
+    // Note that a grace marked or let go moves its plan's tally, under the plan it stood under and the one it stands under now.
+    const gracedMoves = pastGrace.subscribeChanges((changes) => {
+      tallies.graced(
+        changes.flatMap((change) =>
+          change.previousValue === undefined
+            ? [change.value]
+            : [change.value, change.previousValue],
+        ),
+      );
+    });
+
+    yield* Effect.addFinalizer(() => Effect.sync(() => gracedMoves.unsubscribe()));
+
     // The agents whose status waits on a grace, and when each grace ends, derived again only as an agent's row moves.
     const waiting = yield* scopedCollection(() =>
       createLiveQueryCollection({
@@ -531,10 +508,9 @@ export function taskListCollections(
       apart,
       agents: drawnAgents.collection,
       pastGrace,
-      pullRequests: pullRequests.byTask,
-      agentsByTask: pullRequests.agentsByTask,
       continuations,
       archived: { activityOf: archived.activityOf, moved: archived.activityMoved },
+      tallies: { tallyOf: tallies.tallyOf, moved: tallies.moved },
     });
 
     /**
@@ -585,7 +561,7 @@ export function taskListCollections(
         list,
         taskAgents: taskAgents(tasks.taskAgents(), archived.taskAgents()),
         taskAgentPins: tasks.taskAgentPins(),
-        taskPullRequests: pullRequests.taskPullRequests(),
+        taskPullRequests: tallies.taskPullRequests(),
         agentPullRequests: agentPullRequests(
           pullRequests.agentPullRequests(),
           archived.agentPullRequests(),
