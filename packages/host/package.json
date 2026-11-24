@@ -37,7 +37,8 @@
     "./local-database": "./src/local-database.js",
     "./local-queues": "./src/local-queues.js",
     "./local-rows": "./src/local-rows.js",
-    "./task-list-following": "./src/task-list-following.js"
+    "./task-list-following": "./src/task-list-following.js",
+    "./task-list-row-readers": "./src/task-list-row-readers.js"
   },
   "types": "./src/index.ts",
   "scripts": {
