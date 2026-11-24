@@ -671,10 +671,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           acts: {
             MACHINE_COMMAND_ANSWER: () => Effect.void,
             COMPUTER_USE_STATUS: () =>
-              Effect.succeed({
-                permissions: { screenRecording: false, accessibility: false },
-                apps: [],
-              }),
+              Effect.succeed({ permissions: { screenRecording: false, accessibility: false } }),
             COMPUTER_USE_APPS: () => Effect.succeed({ apps: [] }),
             COMPUTER_USE_APP_ICON: () => Effect.succeed({}),
             COMPUTER_USE_ASK_PERMISSIONS: () => Effect.fail(new ActRefused({})),

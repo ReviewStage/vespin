@@ -1924,39 +1924,31 @@ it.effect(
     }),
 );
 
-it.effect(
-  "Settings reads the Mac's grants and names each app allowed without asking as the helper does, one it no longer finds by its bundle id",
-  () =>
-    Effect.gen(function* () {
-      const scripted = scriptedHelper([SIMULATOR], {
-        screenRecording: true,
-        accessibility: false,
-      });
+it.effect("Settings reads the Mac's grants as the helper does", () =>
+  Effect.gen(function* () {
+    const scripted = scriptedHelper([SIMULATOR], {
+      screenRecording: true,
+      accessibility: false,
+    });
 
-      const { composer } = yield* subject(
-        scriptedService(),
-        scriptedSpawner(() => ({ exitCode: 0 })),
-        {
-          mode: MACHINE_COMMAND_MODE.ASK,
-          signedIn: true,
-          computer: {
-            helper: scripted.helper,
-            enabled: true,
-            allowed: ["com.apple.iphonesimulator", "com.example.Gone"],
-          },
+    const { composer } = yield* subject(
+      scriptedService(),
+      scriptedSpawner(() => ({ exitCode: 0 })),
+      {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        computer: {
+          helper: scripted.helper,
+          enabled: true,
+          allowed: ["com.apple.iphonesimulator", "com.example.Gone"],
         },
-      );
+      },
+    );
 
-      const status = yield* composer.acts.COMPUTER_USE_STATUS({});
+    const status = yield* composer.acts.COMPUTER_USE_STATUS({});
 
-      assert.deepEqual(status, {
-        permissions: { screenRecording: true, accessibility: false },
-        apps: [
-          { bundleId: "com.apple.iphonesimulator", name: "Simulator", iconPng: "iVBORw0KGgo=" },
-          { bundleId: "com.example.Gone", name: "com.example.Gone" },
-        ],
-      });
-    }),
+    assert.deepEqual(status, { permissions: { screenRecording: true, accessibility: false } });
+  }),
 );
 
 it.effect(

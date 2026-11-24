@@ -1477,10 +1477,6 @@ export function composeMachineCommands(
         },
       );
 
-    /** Each app given as the helper names and draws it (`appNamed`). */
-    const appsNamed = (use: MacComputerUse, apps: readonly string[]) =>
-      Effect.forEach(apps, (bundleId) => Effect.map(appNamed(use, bundleId), ({ app }) => app));
-
     /**
      * The Mac joined as a device of the account signed in, where it has not
      * yet: under the id this install keeps for it, or a new one where the
@@ -1978,10 +1974,6 @@ export function composeMachineCommands(
           : Effect.asVoid(permissionsRead(COMPUTER_HELPER_OP.REQUEST_PERMISSIONS)),
     );
 
-    /** Each app allowed without asking, named and drawn by the helper; one it no longer finds by its bundle id alone. */
-    const allowedAppsNamed = (use: MacComputerUse) =>
-      Effect.flatMap(use.allowedApps, (allowed) => appsNamed(use, allowed));
-
     /**
      * The apps the composer's @ list offers on this Mac: those running
      * first, each with its icon, then those installed, each once by its
@@ -2060,12 +2052,11 @@ export function composeMachineCommands(
 
           if (standing !== undefined) yield* Deferred.succeed(held.decided, answeredOf(standing));
         }),
-      /** Computer use as Settings shows it: the Mac's grants, and the apps agents use without asking. */
+      /** Computer use as Settings shows it: the Mac's grants, one request to the helper, since Settings reads it every second while shown. */
       COMPUTER_USE_STATUS: () =>
-        Effect.all({
-          permissions: permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
-          apps: computer === undefined ? Effect.succeed([]) : allowedAppsNamed(computer),
-        }),
+        Effect.map(permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS), (permissions) => ({
+          permissions,
+        })),
       /** The apps the composer's @ list offers on this Mac (`appsOnThisMac`). */
       COMPUTER_USE_APPS: () =>
         computer === undefined ? Effect.succeed({ apps: [] }) : appsOnThisMac(computer),

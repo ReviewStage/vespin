@@ -851,10 +851,9 @@ const ANSWERS: StagedAnswers = {
       },
     ],
   }),
-  // This Mac's computer use as its helper reads it: Screen Recording allowed, Accessibility still to allow, and the apps it always allows.
+  // This Mac's computer use as its helper reads it: Screen Recording allowed, Accessibility still to allow.
   [ACT_KIND.COMPUTER_USE_STATUS]: () => ({
     permissions: { screenRecording: true, accessibility: false },
-    apps: STAGED_ALLOWED_APPS.map((app) => ({ ...app })),
   }),
   // A box waiting on its code, as a pairing's link opened over Settings › Hosts reads it.
   [ACT_KIND.HOSTS_PAIRING_READ]: () => ({
