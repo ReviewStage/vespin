@@ -806,8 +806,9 @@ function keptHoldersHoldAll(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]
 }
 
 /**
- * Whether the account's feed holds a thread on any task: true for one the
- * feed read before the task list that holds it, which `inboxGroups` cannot
+ * Whether the account's feed holds a thread on any task, or on no task
+ * under its agent, a Manager's: true for one the feed read before the task
+ * list that holds its task or lists its agent, which `inboxGroups` cannot
  * group until that list is read (`selectTaskListStatus`).
  */
 export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefined): boolean {
@@ -815,8 +816,8 @@ export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefin
 
   if (rows === undefined || itemId === undefined) return false;
 
-  return Object.values(rows[INBOX_SCOPE_KIND.TASK]).some((items) =>
-    items.some((item) => item.id === itemId),
+  return [...Object.values(rows[INBOX_SCOPE_KIND.TASK]), ...Object.values(rows.agents ?? {})].some(
+    (items) => items.some((item) => item.id === itemId),
   );
 }
 
