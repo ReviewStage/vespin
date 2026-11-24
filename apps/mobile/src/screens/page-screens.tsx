@@ -11,7 +11,7 @@ import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { BUTTON_LOOK, EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { usePageHtml } from "../agents/use-agent.js";
+import { PAGE_NEWEST, usePageHtml } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -105,9 +105,13 @@ export function PageScreen({
 }: PageOpened) {
   useSurfaceOpen(PRODUCT_SURFACE.PAGE, pageId);
   const { version, missing } = useVersionOf(taskId, pageId, asked);
-  const html = usePageHtml(taskId, pageId, version);
+  // Note that a link's page is read at its newest at once, beside the task's pages, which name a later version should one land while it stands.
+  const readAt = version ?? (taskId === undefined ? undefined : PAGE_NEWEST);
+  const html = usePageHtml(taskId, pageId, readAt);
   const { again } = html;
-  const read = missing || lost ? { failed: true as const } : html.read;
+
+  // Note that a page read stands even where the task's pages could not be read.
+  const read = "html" in html.read || !(missing || lost) ? html.read : { failed: true as const };
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
   const shown = usePageShownCount(asked !== undefined, "html" in read);
