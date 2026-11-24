@@ -132,6 +132,7 @@
     "./agent-status": "./src/agent-status.js",
     "./turn-deadline": "./src/turn-deadline.js",
     "./agent-view": "./src/agent-view.js",
+    "./picture-source-wire": "./src/picture-source-wire.js",
     "./agent-queue-wire": "./src/agent-queue-wire.js",
     "./agent-boot": "./src/agent-boot.js",
     "./agent-boot-words": "./src/agent-boot-words.js",

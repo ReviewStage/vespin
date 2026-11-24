@@ -4,6 +4,10 @@ import {
   signInAnswerSchema,
 } from "@repo/credentials/snapshot";
 import { supportAccessAnswerSchema } from "@repo/features/account-wire";
+import {
+  pictureSourceParamsSchema,
+  pictureSourceViewSchema,
+} from "@repo/features/picture-source-wire";
 import { ACT } from "@repo/sync";
 import { Schema as EffectSchema } from "effect";
 import { contractOf, declaredActs, hostAct } from "./declared-act.js";
@@ -73,6 +77,14 @@ export const ACCOUNT_ACTS = declaredActs({
     refusal: "Couldn't change support access.",
     panelOnly: false,
     door: ACT.REMOTE_WORK,
+  }),
+  // Where the iOS app's image loader reads a picture: answered only where the screens run in the host's own process (`PlatformScreensInProcess`), since the address carries the account's header.
+  ACCOUNT_PICTURE_SOURCE: hostAct({
+    input: pictureSourceParamsSchema,
+    output: EffectSchema.toType(pictureSourceViewSchema),
+    refusal: "Could not read where that picture stands on this system.",
+    panelOnly: true,
+    door: ACT.READ,
   }),
 });
 

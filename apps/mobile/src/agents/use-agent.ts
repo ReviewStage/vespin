@@ -37,6 +37,7 @@ import {
 import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -72,6 +73,7 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "../host/host-provider.js";
+import { pictureFile } from "../picture-files.js";
 import { type PictureShown, usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
@@ -80,6 +82,9 @@ const AGENT_MEDIA_PREFIX = "agent";
 
 /** No media read yet, held as one value so a page that holds none reads the same each time. */
 const NO_SOURCES: ReadonlyMap<string, string | null> = new Map();
+
+/** No picture read as a file, held as one value so a page that reads none passes the same each time. */
+const NO_FILES: readonly string[] = [];
 
 /** The most pictures and recordings an agent's page keeps drawn from, those its rows on screen ask for among them; the oldest beyond it are let go. */
 const MEDIA_KEPT = 24;
@@ -430,7 +435,11 @@ export interface AgentMedia {
  * transcript's next change; and that each failure is written to the
  * device's log.
  */
-export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMedia {
+export function useAgentMedia(
+  agentId: string,
+  ids: readonly string[],
+  files: readonly string[] = NO_FILES,
+): AgentMedia {
   const acts = useHostActs();
   const pictureShown = usePictureShownCount(PRODUCT_PICTURE_KIND.AGENT);
 
@@ -451,11 +460,20 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
     });
 
   const [reads, setReads] = useState<MediaReads | undefined>(undefined);
+  // The pictures read as files, read by the reads as each begins, kept current before the page asks for any.
+  const filesRef = useRef<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    filesRef.current = new Set(files);
+  }, [files]);
 
   // Note that the agent's reads stand while its page does, and are let go as another agent's page stands or the page leaves, so none that lands after is drawn.
   useEffect(() => {
     const standing = mediaReads({
-      read: (pictureId) => agentMediaSource(acts, agentId, pictureId, pictureShown),
+      // Note that a picture SwiftUI or the viewer draws, such as an app's capsule's icon or window, is read as the file the image loader keeps it in.
+      read: (pictureId) =>
+        filesRef.current.has(pictureId)
+          ? pictureFile(acts, { owner: PICTURE_OWNER.AGENT, agentId, pictureId }, pictureShown)
+          : agentMediaSource(acts, agentId, pictureId, pictureShown),
       landed: (pictureId, source) => stand(pictureId, source),
       // Note that a read whose every try failed stands failed, so it says so with Try again rather than spinning on.
       failed: (pictureId, cause, again) => {

@@ -142,6 +142,12 @@ import {
   type ModelsAnswer,
 } from "@repo/features/models-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
+import {
+  PICTURE_OWNER,
+  PICTURE_SOURCE_FAILURE,
+  type PictureSourceParams,
+  type PictureSourceView,
+} from "@repo/features/picture-source-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import { TASK_SECTION_GLYPH, TASK_SECTION_ICON_KIND } from "@repo/features/task-section-wire";
@@ -3421,6 +3427,35 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
 /** What a dictated clip is heard as in a fixture run, whatever it held, so a flow sees the words land in the field. */
 const DICTATED_WORDS = "Run the invite tests again.";
 
+/** A picture's bytes as this fixture answers them, by whose it is: an agent's, an Inbox item's, or a description's or a comment's. */
+function fixturePictureRead(picture: PictureSourceParams) {
+  switch (picture.owner) {
+    case PICTURE_OWNER.AGENT:
+      return fixtureAgentPicture(picture.pictureId, undefined);
+    case PICTURE_OWNER.INBOX:
+      return ANSWERS[ACT_KIND.AGENTS_INBOX_ATTACHMENT]?.({
+        itemId: picture.itemId,
+        attachmentId: picture.attachmentId,
+      });
+    case PICTURE_OWNER.TASK:
+      return ANSWERS[ACT_KIND.TASKS_PICTURE_READ]?.({
+        taskId: picture.taskId,
+        attachmentId: picture.attachmentId,
+      });
+  }
+}
+
+/** Where the loader reads a picture in a fixture run: its own `data:` address, or none where the fixture holds no such picture. */
+function fixturePictureSource(picture: PictureSourceParams): PictureSourceView {
+  const read = fixturePictureRead(picture);
+
+  if (read === undefined || !("base64" in read)) {
+    return { failure: PICTURE_SOURCE_FAILURE.UNOFFERED };
+  }
+
+  return { uri: `data:${read.contentType};base64,${read.base64}` };
+}
+
 const ANSWERS: StagedAnswers = {
   [ACT_KIND.WORKSPACE_MERGE_QUEUE_READ]: () => MERGE_QUEUES,
   // Note that an automation's switch is taken as the service takes one, the automation answered turned, though nothing here moves; the iOS run lays it over the list itself (`inboxAutomationsAppState`).
@@ -3554,6 +3589,8 @@ const ANSWERS: StagedAnswers = {
   },
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
+  // Note that a picture's source is its own `data:` address, read as its bytes are read above, since a fixture run has no service for the loader to read.
+  [ACT_KIND.ACCOUNT_PICTURE_SOURCE]: (picture) => fixturePictureSource(picture),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
   // Note that an answer to the invitations agent's held call is taken as the service takes one, the call settled as answered, though its row still holds it, so the window draws its own answer.
   [ACT_KIND.AGENTS_ANSWER_APPROVAL]: ({ approvalId, answer }) => ({

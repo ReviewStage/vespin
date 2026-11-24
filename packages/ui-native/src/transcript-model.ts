@@ -1460,6 +1460,28 @@ export function rowsNear(
   return items.slice(Math.max(0, Math.min(...places) - reach), Math.max(...places) + reach + 1);
 }
 
+/** The ids of the pictures alone among those the items show (`shownMediaIds`): a call's app icon, a sent line's pictures, and each shown piece that is a picture, never a recording or a sound clip. */
+export function shownPictureIds(items: readonly TranscriptItem[]): readonly string[] {
+  const pictures = (media: readonly ShownMedia[]) =>
+    media.flatMap(({ id, kind }) => (kind === SHOWN_MEDIA.PICTURE ? [id] : []));
+
+  return items.flatMap((item) => {
+    if (item.kind === TRANSCRIPT_ITEM.MEDIA) return pictures(item.media);
+
+    if (item.kind === TRANSCRIPT_ITEM.CALL) {
+      return [...(item.appIcon === undefined ? [] : [item.appIcon]), ...pictures(item.answered)];
+    }
+
+    if (item.kind === TRANSCRIPT_ITEM.SAID) {
+      return [...(item.pictures ?? []), ...(item.wordPictures?.values() ?? [])].flatMap(
+        ({ pictureId }) => (pictureId === undefined ? [] : [pictureId]),
+      );
+    }
+
+    return [];
+  });
+}
+
 /** The ids of every picture and recording the items show, an open call's body's among them, which the list reads the bytes of. */
 export function shownMediaIds(items: readonly TranscriptItem[]): readonly string[] {
   return items.flatMap((item) => {

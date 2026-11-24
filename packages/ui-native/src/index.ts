@@ -277,6 +277,19 @@ export { PersonHead } from "./person-head.js";
 
 export { PictureSet, type SetPicture } from "./picture-set.js";
 
+export {
+  LoaderImage,
+  PICTURE_CACHE,
+  PICTURE_FIT,
+  type PictureCache,
+  type PictureEvents,
+  PictureEventsProvider,
+  type PictureFit,
+  type PictureSource,
+  pictureUri,
+  type RemotePicture,
+} from "./picture-source.js";
+
 export { PillField, type PillFieldHandle } from "./pill-field.js";
 
 export { ProblemLine } from "./problem-line.js";
@@ -491,6 +504,7 @@ export {
   type ShownFile,
   shownFiles,
   shownMediaIds,
+  shownPictureIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptToggles,

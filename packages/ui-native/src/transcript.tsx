@@ -9,13 +9,13 @@ import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-fac
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
+import { Predicate } from "effect";
 import { SymbolView } from "expo-symbols";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
   AccessibilityInfo,
   ActivityIndicator,
-  Image as AppIcon,
   type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -59,6 +59,7 @@ import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
 import { IntegrationMark, ManagerFace, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
+import { LoaderImage, PICTURE_FIT, type PictureSource } from "./picture-source.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -404,8 +405,8 @@ function CallGlyph({
 }: {
   readonly callKind: CallKind;
   readonly provider: IntegrationProvider | undefined;
-  /** The address its app's icon is drawn from, once read; none while it is on its way, where it could not be read, or where its app kept none, when its kind's glyph stands in. */
-  readonly icon: string | undefined;
+  /** What its app's icon is drawn from, once read; none while it is on its way, where it could not be read, or where its app kept none, when its kind's glyph stands in. */
+  readonly icon: PictureSource | undefined;
 }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
@@ -413,12 +414,13 @@ function CallGlyph({
   // Note that an app's icon is its own picture, drawn at the glyph's size in its place, as the panel's row wears it; its row's words name the app, so it is hidden from VoiceOver.
   if (icon !== undefined) {
     return (
-      <AppIcon
-        source={{ uri: icon }}
-        style={{ width: size, height: size }}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      />
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <LoaderImage
+          source={icon}
+          fit={PICTURE_FIT.CONTAIN}
+          style={{ width: size, height: size }}
+        />
+      </View>
     );
   }
 
@@ -778,8 +780,8 @@ interface RowDrawing {
   readonly onOpenPage: (
     item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>,
   ) => void;
-  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way, and `null` where they could not be read. */
-  readonly mediaSource: (id: string) => string | null | undefined;
+  /** What a picture or a recording is drawn from, by its id: a picture the service's address and its read's headers, or a file; none while it is on its way, and `null` where it could not be read. */
+  readonly mediaSource: (id: string) => PictureSource | null | undefined;
   /** Reads a picture or a recording whose bytes could not be read again, by its id. */
   readonly onRetryMedia?: ((id: string) => void) | undefined;
   /** Where a file a sent line carried was written for its chip to open, by the line's message and the file's place on it; none while it is written, and `null` where it could not be. A file the line kept no bytes of is drawn by its name and kind alone. */
@@ -824,7 +826,10 @@ export type MessageItem = Extract<
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
 /** What a picture a sent line kept by its id is drawn from, read as the agent's shown ones are; `null` for one the line names no way to, which stands as could not be read. */
-function saidSource(drawing: RowDrawing, pictureId: string | undefined): string | null | undefined {
+function saidSource(
+  drawing: RowDrawing,
+  pictureId: string | undefined,
+): PictureSource | null | undefined {
   return pictureId === undefined ? null : drawing.mediaSource(pictureId);
 }
 
@@ -876,22 +881,25 @@ function ShownMediaView({
   onRetry,
 }: {
   readonly shown: ShownMedia;
-  readonly source: string | null | undefined;
+  readonly source: PictureSource | null | undefined;
   readonly onOpenElsewhere: (() => void) | undefined;
   readonly onRetry: (() => void) | undefined;
 }) {
+  // Note that a recording or a clip plays from a file alone, so one held any other way stands as one that could not be read.
+  const played = source == null || Predicate.isString(source) ? source : null;
+
   switch (shown.kind) {
     case SHOWN_MEDIA.VIDEO:
       return (
         <Video
-          source={source}
+          source={played}
           label={shown.label}
           onOpenElsewhere={onOpenElsewhere}
           onRetry={onRetry}
         />
       );
     case SHOWN_MEDIA.AUDIO:
-      return <AudioClip source={source} label={shown.label} onRetry={onRetry} />;
+      return <AudioClip source={played} label={shown.label} onRetry={onRetry} />;
     case SHOWN_MEDIA.PICTURE:
       return <Picture source={source} alt={shown.label} onRetry={onRetry} />;
   }
