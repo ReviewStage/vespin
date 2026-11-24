@@ -1,0 +1,14 @@
+10675: Vespin icon at NOT FOUND
+  still i1-spotlight
+  NOT REACHED: no Start a Task/Start a task in Vespin/Start a Task in Vespin (Spotlight's App Shortcut)
+  NOT REACHED: no Continue (Shortcuts' What's New)
+  still i3-shortcuts
+  NOT REACHED: no Vespin (Vespin's section in Shortcuts)
+  still s1-control-center
+  still s2-cc-edit
+  NOT REACHED: no Add a Control/Add Control/Add/plus/Add a control (Control Center edit mode's add button)
+  still s6-home-edit
+  still s7-widget-gallery
+  NOT REACHED: no Search Widgets (the gallery's search)
+  still s8-gallery-search-vespin
+  NOT REACHED: no Vespin (Vespin in the widget gallery)
