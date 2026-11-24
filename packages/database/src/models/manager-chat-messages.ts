@@ -686,9 +686,9 @@ const findBackfillRows = SqlSchema.findAll({
     ),
 });
 
-/** The ids of a message's files, in order, which two sightings of one message share. */
+/** The references of a message's files, in order, a kept one's id and any other's URL, which two sightings of one message share. */
 function attachmentIds(attachments: readonly ManagerChatAttachment[]): string {
-  return JSON.stringify(attachments.map((file) => file.id));
+  return JSON.stringify(attachments.map((file) => ("id" in file ? file.id : file.url)));
 }
 
 /** Whether a row says what a planned message says, by the same kind of author, in the same turn and on the same line where both name one. */

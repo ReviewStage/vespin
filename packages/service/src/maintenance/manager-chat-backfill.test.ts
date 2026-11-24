@@ -135,7 +135,16 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
             seq: 101,
             clientId: randomUUID(),
             role: MESSAGE_ROLE.USER,
-            parts: [{ type: "text", text: "Ship the table?" }],
+            parts: [
+              { type: "text", text: "Ship the table?" },
+              // A pasted text file, its bytes ("hello") on the line as the journal keeps them.
+              {
+                type: "file",
+                mediaType: "text/plain",
+                filename: "notes.txt",
+                url: "data:text/plain;base64,aGVsbG8=",
+              },
+            ],
             metadata: { channel: MESSAGE_CHANNEL.TYPED },
             sender: MESSAGE_SENDER.MEMBER,
             senderUserId: owner,
@@ -220,7 +229,13 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
               authorKind: MANAGER_CHAT_AUTHOR.PERSON,
               authorUserId: owner,
               text: "Ship the table?",
-              attachments: [],
+              attachments: [
+                {
+                  name: "notes.txt",
+                  mediaType: "text/plain",
+                  url: "data:text/plain;base64,aGVsbG8=",
+                },
+              ],
               turnId: turn.id,
               lineId,
             },
