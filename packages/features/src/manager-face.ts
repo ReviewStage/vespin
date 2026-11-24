@@ -92,5 +92,24 @@ export function managerFaceName(face: ManagerFace): string {
   return `${MANAGER_FACE_COLOR_NAME[face.color]} ${MANAGER_FACE_CHARACTER_NAME[face.character].toLowerCase()}`;
 }
 
+/** Every face a Manager may wear, character by character, each in every color, in the order every picker lists them. */
+export const MANAGER_FACES: readonly ManagerFace[] = Object.values(MANAGER_FACE_CHARACTER).flatMap(
+  (character) => Object.values(MANAGER_FACE_COLOR).map((color) => ({ character, color })),
+);
+
+/** The faces whose name holds every word of `query`, whatever its case, in the pickers' order: "purple", "cat", "purple cat". */
+export function managerFacesFound(query: string): readonly ManagerFace[] {
+  const words = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word !== "");
+
+  return MANAGER_FACES.filter((face) => {
+    const name = managerFaceName(face).toLowerCase();
+
+    return words.every((word) => name.includes(word));
+  });
+}
+
 /** What a client says where a change of a Manager's face did not take. */
 export const MANAGER_FACE_FAILED = "Couldn't change the Manager's face.";

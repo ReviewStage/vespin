@@ -2,8 +2,10 @@ import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_CHARACTER_NAME,
   MANAGER_FACE_COLOR,
+  MANAGER_FACES,
   type ManagerFace as ManagerFaceValue,
   managerFaceName,
+  managerFacesFound,
 } from "@repo/features/manager-face";
 import { type RefObject, useRef, useState } from "react";
 import { SmilePlusIcon } from "../../icons/icons.js";
@@ -59,25 +61,6 @@ function sameFace(one: ManagerFaceValue | undefined, other: ManagerFaceValue): b
   return one?.character === other.character && one.color === other.color;
 }
 
-/** Every face, character by character, each in every color. */
-const FACES: readonly ManagerFaceValue[] = CHARACTERS.flatMap((character) =>
-  COLORS.map((color) => ({ character, color })),
-);
-
-/** The faces whose name holds every word of `query`, in the picker's order. */
-function foundFaces(query: string): readonly ManagerFaceValue[] {
-  const words = query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((word) => word !== "");
-
-  return FACES.filter((face) => {
-    const name = managerFaceName(face).toLowerCase();
-
-    return words.every((word) => name.includes(word));
-  });
-}
-
 /** The picker; see the module's head. A pick hands the face to `onChange`. */
 export function ManagerFacePicker({
   face,
@@ -92,7 +75,7 @@ export function ManagerFacePicker({
 }): React.JSX.Element {
   const [query, setQuery] = useState("");
   const searching = query.trim() !== "";
-  const found = searching ? foundFaces(query) : FACES;
+  const found = searching ? managerFacesFound(query) : MANAGER_FACES;
   const stop = found.find((one) => sameFace(face, one)) ?? found[0];
 
   const choice = (one: ManagerFaceValue) => (

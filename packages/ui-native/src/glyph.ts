@@ -48,6 +48,15 @@ export type LucideSymbol = (typeof LUCIDE_SYMBOL)[keyof typeof LUCIDE_SYMBOL];
 // SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
 const lucide = (name: LucideSymbol): Glyph => name as Glyph;
 
+/** A glyph from every Lucide glyph the catalog holds (`EVERY_LUCIDE_SYMBOL`), for one the app's own table names none of; a name the catalog lacks fails as the app loads. */
+function catalogLucide(name: string): Glyph {
+  if (!EVERY_LUCIDE_SYMBOL.includes(name))
+    throw new Error(`The asset catalog holds no Lucide glyph "${name}".`);
+
+  // SAFETY: a name the catalog holds a symbol set of is a glyph's name, minted here as `lucide` mints the table's.
+  return name as Glyph;
+}
+
 /** A task's status as the panel marks it, cut from `@repo/brand`'s one table into the asset catalog. */
 // SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
 const statusMark = (name: (typeof TASK_STATUS_SYMBOL)[keyof typeof TASK_STATUS_SYMBOL]): Glyph =>
@@ -191,6 +200,8 @@ export const GLYPH = {
   REMOVE: lucide(LUCIDE_SYMBOL.X),
   DELETE: lucide(LUCIDE_SYMBOL.TRASH),
   RENAME: lucide(LUCIDE_SYMBOL.PENCIL),
+  // Note that the panel's smile, Lucide's FaceSlightlySmiling, is among every glyph the catalog holds rather than the table the app names, so it is minted from that list.
+  CHANGE_FACE: catalogLucide("FaceSlightlySmiling"),
   EDIT: lucide(LUCIDE_SYMBOL.PENCIL_LINE),
   WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
   COPY: lucide(LUCIDE_SYMBOL.COPY),

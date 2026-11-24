@@ -510,6 +510,64 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
   );
 }
 
+/** The side of the picture at a `PictureRow`'s end, as a row's lead mark stands, before Dynamic Type scales it. */
+const ROW_PICTURE_SIDE = 28;
+
+/**
+ * A row a press opens a picker from, as the panel's well opens its icon
+ * picker: its words, then at its end what stands picked as its picture of
+ * the asset catalog, such as a Manager's face, or `detail`'s muted words
+ * while nothing does, and the chevron. It is heard as its words, then what
+ * stands.
+ */
+export function PictureRow({
+  label,
+  picture,
+  heard,
+  detail,
+  onPress,
+  testId,
+}: {
+  readonly label: string;
+  /** The picture of what stands picked; none while nothing does. */
+  readonly picture?: string | undefined;
+  /** What stands picked, in words, such as "Blue planet". */
+  readonly heard?: string | undefined;
+  /** What the row says at its end while nothing stands picked. */
+  readonly detail?: string | undefined;
+  readonly onPress: () => void;
+  readonly testId?: string | undefined;
+}) {
+  const colors = useColors();
+  const side = useScaledSize(ROW_PICTURE_SIDE);
+
+  return (
+    <PressedRow label={label} value={[heard ?? detail]} onPress={onPress} testId={testId}>
+      <HStack
+        spacing={SPACE.ROW}
+        modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+      >
+        <WordsAndEnd
+          words={<Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>}
+          end={
+            picture === undefined ? (
+              detail === undefined ? null : (
+                <Text modifiers={[foregroundStyle(VALUE_INK)]}>{detail}</Text>
+              )
+            ) : (
+              <Image
+                assetName={picture}
+                modifiers={[resizable(), frame({ width: side, height: side })]}
+              />
+            )
+          }
+        />
+        <GoesMark goes={PUSH_ROW_GOES.PAGE} />
+      </HStack>
+    </PressedRow>
+  );
+}
+
 type ToggleRowProps = {
   readonly label: string;
   /** A quiet line under the label, saying what the switch does. */

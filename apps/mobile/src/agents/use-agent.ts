@@ -36,6 +36,7 @@ import {
 } from "@repo/features/agent-wire";
 import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { isPlayedType } from "@repo/features/conversation-picture-wire";
+import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -219,10 +220,11 @@ export function useHeldAgentStep(agentId: string, status: AgentStatus): string |
   }, [messages, status]);
 }
 
-/** An agent row's acts, as the panel's row menu offers them: Stop while it works, Rename, Archive and Permanently delete, each once asked, and Pin or Unpin, each buzzing as it lands or is refused. */
+/** An agent row's acts, as the panel's row menu offers them: Stop while it works, Rename, a Manager's Change face, Archive and Permanently delete, each once asked, and Pin or Unpin, each buzzing as it lands or is refused. */
 export function useAgentRowActs(): {
   readonly stop: (agentId: string) => void;
   readonly rename: (agentId: string, title: string) => void;
+  readonly changeFace: (agentId: string, face: ManagerFace) => void;
   readonly archive: (agentId: string) => void;
   readonly unarchive: (agentId: string) => void;
   readonly remove: (agentId: string) => void;
@@ -247,6 +249,15 @@ export function useAgentRowActs(): {
           unanswered: RENAME_FAILED,
           // Note that the name is its agent's subject, so a later Rename holds off a stale Try again.
           subject: { kind: WRITE_SUBJECT.AGENT_NAME, id: agentId },
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+      // Note that the host draws the face at once and takes it back should the service refuse it, so a refusal is said in the failure notice, the menu being gone, as the panel says it in a toast.
+      changeFace: (agentId, face) => {
+        write(() => acts[ACT_KIND.AGENTS_FACE]({ agentId, face }), {
+          refused: (answer) => ("failure" in answer ? MANAGER_FACE_FAILED : undefined),
+          unanswered: MANAGER_FACE_FAILED,
           retry: true,
           went: BUZZ.SUCCESS,
         });

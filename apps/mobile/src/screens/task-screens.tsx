@@ -144,6 +144,7 @@ import {
   type LongPressGroup,
   MentionDock,
   MentionFoot,
+  managerFaceMenu,
   menuWithout,
   NoSelection,
   PATH_PART,
@@ -2262,11 +2263,21 @@ function agentMenu({
 
   const archived = agent.archivedAt !== undefined;
 
-  if (asking === undefined) return [links, [rename], archived ? [unarchiveAct(agent, acts)] : stop];
+  // Note that a Manager offers Change face › beside Rename, as the panel's Manager menu does, its face changed at once as picked; none while it is archived, as Rename's place stands for a live agent.
+  const face = agent.face;
+
+  const named: LongPressGroup = [
+    rename,
+    ...(face === undefined || archived
+      ? []
+      : [managerFaceMenu(face, (picked) => acts.changeFace(agent.id, picked))]),
+  ];
+
+  if (asking === undefined) return [links, named, archived ? [unarchiveAct(agent, acts)] : stop];
 
   return [
     links,
-    [rename],
+    named,
     archived
       ? [unarchiveAct(agent, acts)]
       : [

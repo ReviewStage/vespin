@@ -224,7 +224,9 @@ export {
 
 export { MachineAskSheet } from "./machine-ask-sheet.js";
 
-export { ManagerFacePicker } from "./manager-face-picker.js";
+export { managerFaceMenu } from "./manager-face-look.js";
+
+export { ManagerFaceRow, ManagerFaceSheet } from "./manager-face-picker.js";
 
 export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
 

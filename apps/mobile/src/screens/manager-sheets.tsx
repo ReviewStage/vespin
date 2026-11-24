@@ -13,7 +13,8 @@ import {
   glyphSymbol,
   ListSection,
   LoadingRow,
-  ManagerFacePicker,
+  ManagerFaceRow,
+  ManagerFaceSheet,
   MenuPickRow,
   PickRows,
   Screen,
@@ -47,6 +48,7 @@ const WORDS = {
   NAME: "Name",
   NAME_PLACEHOLDER: "Release captain",
   FACE: "Face",
+  FACE_UNPICKED: "Picked for you",
   FACE_PICKED_FOR_YOU: "One no other Manager here wears is picked for you, unless you choose one.",
   REPOSITORIES: "Repositories",
   REPOSITORIES_HINT: "The first picked is its checkout.",
@@ -114,6 +116,28 @@ function SheetBar({
   );
 }
 
+/** What a flow finds the Face row by. */
+const FACE_ROW_ID = "manager-face";
+
+/** The sheet's Face row, the panel's face well: the face standing, or that one is picked for you while none is, its press opening the face picker. */
+function FaceRow({
+  face,
+  onPress,
+}: {
+  readonly face: ManagerFace | undefined;
+  readonly onPress: () => void;
+}) {
+  return (
+    <ManagerFaceRow
+      label={WORDS.FACE}
+      face={face}
+      unpicked={WORDS.FACE_UNPICKED}
+      onPress={onPress}
+      testId={FACE_ROW_ID}
+    />
+  );
+}
+
 /**
  * New Manager, as a sheet over the tabs, as the desktop's card makes one:
  * its name, kept as typed; the repositories it works in, one or more, the
@@ -143,6 +167,7 @@ export function NewManagerScreen() {
   const [picks, setPicks] = useState<readonly string[] | undefined>(undefined);
   const [runsOn, setRunsOn] = useState(IN_THE_CLOUD);
   const [face, setFace] = useState<ManagerFace | undefined>(undefined);
+  const [facePicking, setFacePicking] = useState(false);
 
   const chosen = picks ?? (repositories.picked === undefined ? [] : [repositories.picked]);
 
@@ -205,17 +230,8 @@ export function NewManagerScreen() {
               testId={NAME_FIELD_ID}
             />
           </ListSection>
-          <ListSection
-            title={WORDS.FACE}
-            footer={face === undefined ? WORDS.FACE_PICKED_FOR_YOU : undefined}
-          >
-            <ManagerFacePicker
-              face={face}
-              onPick={(picked) => {
-                setFace(picked);
-                changed();
-              }}
-            />
+          <ListSection footer={face === undefined ? WORDS.FACE_PICKED_FOR_YOU : undefined}>
+            <FaceRow face={face} onPress={() => setFacePicking(true)} />
           </ListSection>
           <ListSection
             title={WORDS.REPOSITORIES}
@@ -275,6 +291,15 @@ export function NewManagerScreen() {
           </ListSection>
         </SettingsForm>
       </Screen>
+      <ManagerFaceSheet
+        face={face}
+        presented={facePicking}
+        onDismiss={() => setFacePicking(false)}
+        onPick={(picked) => {
+          setFace(picked);
+          changed();
+        }}
+      />
     </>
   );
 }
@@ -297,6 +322,7 @@ export function ManagerSettingsScreen() {
   const actions = useAgentActions(agentId, undefined);
   const model = useAgentModelPick(agentId);
   const [name, setName] = useState<string | undefined>(undefined);
+  const [facePicking, setFacePicking] = useState(false);
   const named = agent === undefined ? "" : agentName(agent);
   const typed = (name ?? named).trim();
 
@@ -330,12 +356,8 @@ export function ManagerSettingsScreen() {
                   testId={NAME_FIELD_ID}
                 />
               </ListSection>
-              <ListSection
-                title={WORDS.FACE}
-                footer={actions.note}
-                footerTone={FOOTER_TONE.FAILURE}
-              >
-                <ManagerFacePicker face={agent.face} onPick={actions.changeFace} />
+              <ListSection footer={actions.note} footerTone={FOOTER_TONE.FAILURE}>
+                <FaceRow face={agent.face} onPress={() => setFacePicking(true)} />
               </ListSection>
               <ListSection title={WORDS.MODEL} footer={model.note} footerTone={FOOTER_TONE.FAILURE}>
                 <MenuPickRow
@@ -359,6 +381,12 @@ export function ManagerSettingsScreen() {
           )}
         </SettingsForm>
       </Screen>
+      <ManagerFaceSheet
+        face={agent?.face}
+        presented={facePicking}
+        onDismiss={() => setFacePicking(false)}
+        onPick={actions.changeFace}
+      />
     </>
   );
 }
