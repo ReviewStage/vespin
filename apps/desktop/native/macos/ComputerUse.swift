@@ -237,9 +237,14 @@ private let responsibleAppURL: URL? = {
 }()
 
 private let SYSTEM_SETTINGS_BUNDLE_ID = "com.apple.systempreferences"
-private let GRANT_PANEL_SIZE = NSSize(width: 260, height: 168)
+/// The panel's measures, after the drag-to-grant panels of other Mac apps: a dark rounded card holding the app as a
+/// Finder row holds it, its icon and name in a light rounded row.
+private let GRANT_PANEL_WIDTH: CGFloat = 264
+private let GRANT_PANEL_RADIUS: CGFloat = 18
 private let GRANT_PANEL_GAP: CGFloat = 12
-private let GRANT_ICON_EDGE: CGFloat = 64
+private let GRANT_ROW_SIZE = NSSize(width: 190, height: 46)
+private let GRANT_ROW_RADIUS: CGFloat = 10
+private let GRANT_ICON_EDGE: CGFloat = 28
 private let GRANT_CHECK_NANOSECONDS: UInt64 = 500_000_000
 /// How long the panel waits for System Settings' window to show before it stands where it is.
 private let GRANT_PLACE_CHECKS = 10
@@ -266,31 +271,47 @@ private func systemSettingsFrame() -> NSRect? {
 }
 
 /// The panel's place beside a window: to its right, bottom edges level, or to its left where the right runs off its screen.
-private func grantPanelOrigin(beside window: NSRect) -> NSPoint {
+private func grantPanelOrigin(_ size: NSSize, beside window: NSRect) -> NSPoint {
     let screen = (NSScreen.screens.first { $0.frame.intersects(window) } ?? NSScreen.main)?.visibleFrame ?? window
-    let size = GRANT_PANEL_SIZE
     let right = window.maxX + GRANT_PANEL_GAP
     let x = right + size.width <= screen.maxX ? right : max(screen.minX, window.minX - GRANT_PANEL_GAP - size.width)
     let y = min(max(window.minY, screen.minY), screen.maxY - size.height)
     return NSPoint(x: x, y: y)
 }
 
-/// The app's icon, which drags its bundle's file URL as Finder drags an app, so a Privacy & Security list takes it.
-private final class AppDragView: NSView, NSDraggingSource {
+/// The app as a Finder row draws it, its icon and name on a light rounded row, which drags the bundle's file URL as
+/// Finder drags an app, so a Privacy & Security list takes it; it tells when a drag begins and ends.
+private final class AppRowView: NSView, NSDraggingSource {
     private let app: URL
     private let icon: NSImage
+    private let name: String
+    private let onDragging: (Bool) -> Void
 
-    init(app: URL) {
+    init(app: URL, name: String, onDragging: @escaping (Bool) -> Void) {
         self.app = app
+        self.name = name
+        self.onDragging = onDragging
         icon = NSWorkspace.shared.icon(forFile: app.path)
-        super.init(frame: NSRect(x: 0, y: 0, width: GRANT_ICON_EDGE, height: GRANT_ICON_EDGE))
+        super.init(frame: NSRect(origin: .zero, size: GRANT_ROW_SIZE))
     }
 
     required init?(coder: NSCoder) { nil }
 
-    override var intrinsicContentSize: NSSize { NSSize(width: GRANT_ICON_EDGE, height: GRANT_ICON_EDGE) }
+    override var intrinsicContentSize: NSSize { GRANT_ROW_SIZE }
 
-    override func draw(_ dirtyRect: NSRect) { icon.draw(in: bounds) }
+    override func draw(_ dirtyRect: NSRect) {
+        let row = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: GRANT_ROW_RADIUS, yRadius: GRANT_ROW_RADIUS)
+        NSColor(white: 0.97, alpha: 1).setFill()
+        row.fill()
+        NSColor(white: 0, alpha: 0.15).setStroke()
+        row.stroke()
+        let inset = (bounds.height - GRANT_ICON_EDGE) / 2
+        icon.draw(in: NSRect(x: 8, y: inset, width: GRANT_ICON_EDGE, height: GRANT_ICON_EDGE))
+        let words = NSAttributedString(string: name, attributes: [
+            .font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor(white: 0.16, alpha: 1),
+        ])
+        words.draw(at: NSPoint(x: 8 + GRANT_ICON_EDGE + 8, y: (bounds.height - words.size().height) / 2))
+    }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -298,66 +319,128 @@ private final class AppDragView: NSView, NSDraggingSource {
 
     override func mouseDragged(with event: NSEvent) {
         let item = NSDraggingItem(pasteboardWriter: app as NSURL)
-        item.setDraggingFrame(bounds, contents: icon)
+        let picture = NSImage(size: bounds.size, flipped: false) { [weak self] _ in
+            self?.draw(self?.bounds ?? .zero)
+            return true
+        }
+        item.setDraggingFrame(bounds, contents: picture)
         beginDraggingSession(with: [item], event: event, source: self)
     }
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
         context == .outsideApplication ? .copy : []
     }
+
+    func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
+        alphaValue = 0.35
+        onDragging(true)
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        alphaValue = 1
+        onDragging(false)
+    }
 }
 
-/// A small floating panel beside the pane a grant is switched on in, holding the app's icon to drag into its list. One
-/// stands at a time; it closes as the grant comes, as System Settings goes, or by its close button.
+/// A small floating panel beside the pane a grant is switched on in, holding the app as a row to drag into its list.
+/// One stands at a time; it closes as the grant comes, as System Settings goes, or by its close button.
 @MainActor
-private final class GrantPanel {
+private final class GrantPanel: NSObject {
     private var panel: NSPanel?
     private var checking: Task<Void, Never>?
+    /// The grant the panel stands for while it shows.
+    private var grant: Grant?
+    private let title = NSTextField(labelWithString: "")
+    private let body = NSTextField(wrappingLabelWithString: "")
 
     func show(_ grant: Grant) {
         close()
         guard let app = responsibleAppURL else { return }
+        let name = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
+        let card = contents(app: app, name: name)
+        self.grant = grant
+        say(grant, name: name, dragging: false)
         let made = NSPanel(
-            contentRect: NSRect(origin: .zero, size: GRANT_PANEL_SIZE),
-            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
-            backing: .buffered, defer: false)
-        made.titleVisibility = .hidden
-        made.titlebarAppearsTransparent = true
+            contentRect: NSRect(origin: .zero, size: card.fittingSize),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        made.isOpaque = false
+        made.backgroundColor = .clear
+        made.hasShadow = true
+        made.appearance = NSAppearance(named: .darkAqua)
         made.isReleasedWhenClosed = false
         made.hidesOnDeactivate = false
         made.level = .floating
         made.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        made.contentView = contents(grant, app: app)
+        made.contentView = card
         if let screen = NSScreen.main?.visibleFrame {
             made.setFrameOrigin(NSPoint(
-                x: screen.maxX - GRANT_PANEL_SIZE.width - GRANT_PANEL_GAP, y: screen.minY + GRANT_PANEL_GAP))
+                x: screen.maxX - made.frame.width - GRANT_PANEL_GAP, y: screen.minY + GRANT_PANEL_GAP))
         }
         made.orderFrontRegardless()
         panel = made
         checking = Task { @MainActor [weak self] in await self?.check(grant, panel: made) }
     }
 
-    func close() {
+    @objc func close() {
         checking?.cancel()
         checking = nil
+        grant = nil
         panel?.close()
         panel = nil
     }
 
-    private func contents(_ grant: Grant, app: URL) -> NSView {
-        let name = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
-        let headline = NSTextField(labelWithString: "Drag \(name) into the list")
-        headline.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
-        let detail = NSTextField(wrappingLabelWithString: "to allow \(grant.name), or turn it on where it's listed.")
-        detail.alignment = .center
-        detail.textColor = .secondaryLabelColor
-        detail.preferredMaxLayoutWidth = GRANT_PANEL_SIZE.width - 2 * GRANT_PANEL_GAP
-        let stack = NSStackView(views: [AppDragView(app: app), headline, detail])
+    /// What the panel says: where to drag the app, then, while it is dragged, where to let it go.
+    private func say(_ grant: Grant, name: String, dragging: Bool) {
+        title.stringValue = dragging ? "Now drop it here" : "Drag \(name) into Settings"
+        body.stringValue = dragging ? "Then turn it on." : "To allow \(grant.name)."
+    }
+
+    /// The card: a dark rounded material holding a close button, the words, and the app's row.
+    private func contents(app: URL, name: String) -> NSView {
+        title.font = .systemFont(ofSize: 20)
+        title.alignment = .center
+        body.font = .systemFont(ofSize: 13)
+        body.alignment = .center
+        body.textColor = .secondaryLabelColor
+        body.preferredMaxLayoutWidth = GRANT_PANEL_WIDTH - 4 * GRANT_PANEL_GAP
+        let row = AppRowView(app: app, name: name) { [weak self] dragging in
+            guard let self, let grant = self.grant else { return }
+            self.say(grant, name: name, dragging: dragging)
+        }
+        let stack = NSStackView(views: [title, body, row])
         stack.orientation = .vertical
         stack.alignment = .centerX
-        stack.spacing = 6
-        stack.edgeInsets = NSEdgeInsets(top: 28, left: GRANT_PANEL_GAP, bottom: GRANT_PANEL_GAP, right: GRANT_PANEL_GAP)
-        return stack
+        stack.spacing = 8
+        stack.setCustomSpacing(20, after: body)
+        stack.edgeInsets = NSEdgeInsets(top: 36, left: GRANT_PANEL_GAP, bottom: 24, right: GRANT_PANEL_GAP)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let closer = NSButton(
+            image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") ?? NSImage(),
+            target: self, action: #selector(GrantPanel.close))
+        closer.isBordered = false
+        closer.contentTintColor = .secondaryLabelColor
+        closer.translatesAutoresizingMaskIntoConstraints = false
+
+        let card = NSVisualEffectView()
+        card.material = .hudWindow
+        card.blendingMode = .behindWindow
+        card.state = .active
+        card.wantsLayer = true
+        card.layer?.cornerRadius = GRANT_PANEL_RADIUS
+        card.layer?.masksToBounds = true
+        card.addSubview(stack)
+        card.addSubview(closer)
+        NSLayoutConstraint.activate([
+            card.widthAnchor.constraint(equalToConstant: GRANT_PANEL_WIDTH),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: card.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            closer.topAnchor.constraint(equalTo: card.topAnchor, constant: GRANT_PANEL_GAP),
+            closer.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -GRANT_PANEL_GAP),
+        ])
+        return card
     }
 
     /// Places the panel once beside System Settings' window as it shows, then closes it once the grant is held, System Settings has gone, or the developer closed it.
@@ -366,7 +449,7 @@ private final class GrantPanel {
         var placed = false
         while !Task.isCancelled, panel.isVisible, !grant.held() {
             if !placed, let window = systemSettingsFrame() {
-                panel.setFrameOrigin(grantPanelOrigin(beside: window))
+                panel.setFrameOrigin(grantPanelOrigin(panel.frame.size, beside: window))
                 placed = true
             } else if placed || checks >= GRANT_PLACE_CHECKS,
                 NSRunningApplication.runningApplications(withBundleIdentifier: SYSTEM_SETTINGS_BUNDLE_ID).isEmpty
