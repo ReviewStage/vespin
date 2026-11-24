@@ -101,13 +101,14 @@ function downloaded(address: string): Promise<HeldPhoto | undefined> {
   return download;
 }
 
-/** A sign-in picture, asked for at a menu photo's size in device pixels; none for someone with no picture the app may draw. */
-export function menuAddress(picture: string | undefined): string | undefined {
+/** A sign-in picture, asked for at `size` points in device pixels, a menu photo's where none is given; none for someone with no picture the app may draw. */
+export function menuAddress(
+  picture: string | undefined,
+  size: number = MARK_SIZE.MENU_PHOTO,
+): string | undefined {
   const pinned = pinnedPictureUrl(picture);
 
-  return pinned === undefined
-    ? undefined
-    : accountPictureAt(pinned, MARK_SIZE.MENU_PHOTO * PixelRatio.get());
+  return pinned === undefined ? undefined : accountPictureAt(pinned, size * PixelRatio.get());
 }
 
 /** A menu's pictures as files on this device: each address's file once written, and whether it is still on its way rather than failed. */

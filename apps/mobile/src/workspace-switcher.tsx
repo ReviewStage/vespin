@@ -6,6 +6,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  MARK_SIZE,
   newWorkspaceAction,
   type SwitcherWorkspace,
   type WorkspaceSwitcher,
@@ -53,21 +54,25 @@ export function switcherWorkspace(
 
   const picture = workspace.photoVersion === undefined ? workspace.pictureUrl : undefined;
   const address = menuPictureAddress(photo, picture);
+  const menuPhoto = address === undefined ? undefined : pictures?.fileOf(address);
+  const menuPhotoComing = address !== undefined && pictures?.coming(address) === true;
+  // Note that a picture whose file could not be kept stands as the letter, because the tile in a SwiftUI bar draws only a kept file, and a picture that could not be fetched as a file would not draw as an address either.
+  const missed = pictures !== undefined && menuPhoto === undefined && !menuPhotoComing;
 
   return {
     id: workspace.id,
     name: workspace.name,
     line: workspaceSharedWords(workspace.memberCount, first),
-    photo,
-    picture,
-    menuPhoto: address === undefined ? undefined : pictures?.fileOf(address),
-    menuPhotoComing: address !== undefined && pictures?.coming(address) === true,
+    photo: missed ? undefined : photo,
+    picture: missed ? undefined : picture,
+    menuPhoto,
+    menuPhotoComing,
   };
 }
 
-/** What a workspace's picture is asked for at in a system menu: its photo as held, else its owner's picture at a menu photo's size; none for a workspace that draws its letter. */
+/** What a workspace's picture is kept as a file from, which its menu row and its bar's tile draw: its photo as held, else its owner's picture at the bar tile's size; none for a workspace that draws its letter. */
 function menuPictureAddress(photo: string | undefined, picture: string | undefined) {
-  return photo ?? menuAddress(picture);
+  return photo ?? menuAddress(picture, MARK_SIZE.BAR_FACE);
 }
 
 /**

@@ -1,7 +1,15 @@
 // workspace-tile.tsx -- a workspace's tile, as the panel's is: its photo, its owner's picture on a personal one, or its letter on its hue.
 
-import { RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
-import { accessibilityHidden, font, foregroundStyle, frame } from "@expo/ui/swift-ui/modifiers";
+import { Image, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
+import {
+  accessibilityHidden,
+  aspectRatio,
+  font,
+  foregroundStyle,
+  frame,
+  resizable,
+} from "@expo/ui/swift-ui/modifiers";
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { identityLetter } from "@repo/features/workspace-tile";
 import { useState } from "react";
@@ -25,7 +33,7 @@ export type SwitcherWorkspace = {
   readonly photo?: string | undefined;
   /** Its owner's sign-in picture, which a personal workspace with no photo stands. */
   readonly picture?: string | undefined;
-  /** What it stands as in a system menu, its photo or its owner's picture as a file on this device; its letter in its hue while it has none. */
+  /** Its photo or its owner's picture as a file on this device, which a system menu draws and its tile draws in SwiftUI's own image; its letter in its hue while it has none. */
   readonly menuPhoto?: string | undefined;
   /** Whether that file is still on its way, so its menu row stands with no image meanwhile rather than its letter. */
   readonly menuPhotoComing?: boolean | undefined;
@@ -58,30 +66,49 @@ export function WorkspaceTile({
   readonly size?: number | undefined;
 }) {
   const dark = useColorScheme() === "dark";
-  const picture = tilePicture(workspace, size);
-  const [failed, setFailed] = useState<string | undefined>(undefined);
-  const pictured = picture !== undefined && picture !== failed;
   const corner = size * TILE_ROUNDING;
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+
+  // Note that a photo kept as a file draws in SwiftUI's own image, because a React Native image draws nothing inside a SwiftUI toolbar item, as an iPad's list column bar holds the switcher.
+  if (workspace.menuPhoto !== undefined) {
+    return (
+      <Image
+        uiImage={workspace.menuPhoto}
+        modifiers={[
+          resizable(),
+          aspectRatio({ contentMode: "fill" }),
+          frame({ width: size, height: size }),
+          SwiftModifiers.clipShape("roundedRectangle", corner),
+          accessibilityHidden(),
+        ]}
+      />
+    );
+  }
+
+  const picture = tilePicture(workspace, size);
+  const pictured = picture !== undefined && picture !== failed;
+  // Note that a photo whose file is still on its way stands as its hue alone, so the tile is never an empty glass and the letter never shows before the photo.
+  const coming = workspace.menuPhotoComing === true;
 
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
-      {pictured ? null : (
-        <>
-          <RoundedRectangle
-            cornerRadius={corner}
-            modifiers={[foregroundStyle(tileHue(workspace.id, dark))]}
-          />
-          <Text
-            modifiers={[
-              font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
-              foregroundStyle(ON_IDENTITY),
-            ]}
-          >
-            {identityLetter(workspace.name)}
-          </Text>
-        </>
+      {pictured && !coming ? null : (
+        <RoundedRectangle
+          cornerRadius={corner}
+          modifiers={[foregroundStyle(tileHue(workspace.id, dark))]}
+        />
       )}
-      {pictured ? (
+      {pictured ? null : (
+        <Text
+          modifiers={[
+            font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
+            foregroundStyle(ON_IDENTITY),
+          ]}
+        >
+          {identityLetter(workspace.name)}
+        </Text>
+      )}
+      {pictured && !coming ? (
         <AvatarPhoto
           address={picture}
           size={size}
