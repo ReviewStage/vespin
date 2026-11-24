@@ -1136,14 +1136,10 @@ export function postToInbox(
 
     if (Result.isFailure(posted)) return inboxRejected(storeRefusal(posted.failure));
     const { taskId } = agent;
-
-    // Note that a thread on no task is not pushed, since a released iPhone opens an alert on its task.
-    if (taskId !== null) {
-      yield* afterResponse(
-        "a thread's push",
-        pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId }),
-      );
-    }
+    yield* afterResponse(
+      "a thread's push",
+      pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId }),
+    );
 
     return yield* written(agent, posted.success);
   }).pipe(
