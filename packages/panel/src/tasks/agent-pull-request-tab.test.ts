@@ -2430,7 +2430,12 @@ test("auto-merge is offered while checks run, and turned off once on; a merge qu
         answer: "Bypass rules and merge",
         says: /A required review is missing\. This merges it into main now by squash/u,
       },
-      { action: PULL_REQUEST_ACTION.MERGE, method: MERGE_METHOD.SQUASH, headSha: "c0ffee1" },
+      {
+        action: PULL_REQUEST_ACTION.MERGE,
+        method: MERGE_METHOD.SQUASH,
+        headSha: "c0ffee1",
+        bypass: true,
+      },
     ],
   ];
 

@@ -229,146 +229,163 @@ const reviewCommentIdSchema = EffectSchema.NonEmptyString.check(
   EffectSchema.isMaxLength(PULL_REQUEST_WRITE_BOUNDS.MAX_NODE_ID_CHARS),
 );
 
-/** One change, as the tab asks the service to make it (POST). */
-export const pullRequestActionRequestSchema = EffectSchema.Union([
-  EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.READY_FOR_REVIEW) }),
-  EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.CONVERT_TO_DRAFT) }),
+/** A merge's own fields: the method, and the head it was asked about. */
+const mergeFields = {
+  action: EffectSchema.Literal(PULL_REQUEST_ACTION.MERGE),
+  method: mergeMethodSchema,
+  headSha: headShaSchema,
+};
+
+/** The changes, the merge as given, one schema for a member's tab and an agent's tool alike. */
+const actionRequestSchemaOf = <Merge extends EffectSchema.Top>(merge: Merge) =>
+  EffectSchema.Union([
+    EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.READY_FOR_REVIEW) }),
+    EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.CONVERT_TO_DRAFT) }),
+    merge,
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE),
+      method: EffectSchema.optionalKey(mergeMethodSchema),
+      headSha: headShaSchema,
+    }),
+    EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.DISABLE_AUTO_MERGE) }),
+    EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.DEQUEUE) }),
+    EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.CLOSE) }),
+    EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.REOPEN) }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.EDIT_TITLE),
+      title: EffectSchema.Trim.check(
+        EffectSchema.isNonEmpty(),
+        EffectSchema.isMaxLength(PULL_REQUEST_WRITE_BOUNDS.MAX_TITLE_CHARS),
+      ),
+    }),
+    /**
+     * The description as the member wrote it (`body`), and as it stood when
+     * they began (`expectedBody`), which the service holds GitHub's to before
+     * it writes, so an edit made on GitHub meanwhile is never written over.
+     */
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.EDIT_DESCRIPTION),
+      body: reviewBodySchema,
+      expectedBody: reviewBodySchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.SUBMIT_REVIEW),
+      event: EffectSchema.Literals(Object.values(REVIEW_EVENT)),
+      body: reviewBodySchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.REQUEST_REVIEW),
+      reviewer: reviewerSchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.REMOVE_REVIEW_REQUEST),
+      reviewer: reviewerSchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.ADD_LABEL),
+      label: writeName,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.REMOVE_LABEL),
+      label: writeName,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.REPLY_TO_THREAD),
+      threadId: threadIdSchema,
+      body: replyBodySchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.RESOLVE_THREAD),
+      threadId: threadIdSchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.UNRESOLVE_THREAD),
+      threadId: threadIdSchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.COMMENT),
+      body: replyBodySchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literals([
+        PULL_REQUEST_ACTION.ADD_REACTION,
+        PULL_REQUEST_ACTION.REMOVE_REACTION,
+      ]),
+      subject: subjectIdSchema,
+      content: EffectSchema.Literals(Object.values(REACTION)),
+    }),
+    /**
+     * A comment on the lines from `startLine` on `startSide` to `line` on
+     * `side` of the file at `path`, as the diff read at `headSha` counts them;
+     * one line where no start is named.
+     */
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.ADD_REVIEW_COMMENT),
+      mode: EffectSchema.Literals(Object.values(REVIEW_COMMENT_MODE)),
+      path: EffectSchema.NonEmptyString.check(
+        EffectSchema.isMaxLength(PULL_REQUEST_WRITE_BOUNDS.MAX_PATH_CHARS),
+      ),
+      line: fileLineSchema,
+      side: reviewCommentSideSchema,
+      startLine: EffectSchema.optionalKey(fileLineSchema),
+      startSide: EffectSchema.optionalKey(reviewCommentSideSchema),
+      body: replyBodySchema,
+      headSha: headShaSchema,
+    }),
+    EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.DISCARD_REVIEW) }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.EDIT_REVIEW_COMMENT),
+      commentId: reviewCommentIdSchema,
+      body: replyBodySchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.DELETE_REVIEW_COMMENT),
+      commentId: reviewCommentIdSchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.MARK_FILE_VIEWED),
+      path: filePathSchema,
+    }),
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.UNMARK_FILE_VIEWED),
+      path: filePathSchema,
+    }),
+    /**
+     * The task item at `index` among the words' task items, the first 0, as
+     * GitHub renders them in order, of the `count` the reader saw, ticked
+     * where `checked` asks or cleared, on what `subject` names by GitHub's id
+     * for it: the pull request itself, whose description it is, or one of its
+     * comments, reviews, or review comments, as a reaction names it. The
+     * service refuses it, writing nothing, where the words' items no longer
+     * number `count`, so a tick never lands on another item.
+     */
+    EffectSchema.Struct({
+      action: EffectSchema.Literal(PULL_REQUEST_ACTION.TICK_TASK),
+      subject: subjectIdSchema,
+      index: EffectSchema.Int.check(
+        EffectSchema.isGreaterThanOrEqualTo(0),
+        EffectSchema.isLessThan(PULL_REQUEST_WRITE_BOUNDS.MAX_TASK_ITEMS),
+      ),
+      count: EffectSchema.Int.check(
+        EffectSchema.isGreaterThanOrEqualTo(1),
+        EffectSchema.isLessThanOrEqualTo(PULL_REQUEST_WRITE_BOUNDS.MAX_TASK_ITEMS),
+      ),
+      checked: EffectSchema.Boolean,
+    }),
+  ]);
+
+/** One change, as the tab asks the service to make it (POST); a merge past the base's rules (`bypass`, Bypass rules and merge…) is a member's own, absent from a client before it. */
+export const pullRequestActionRequestSchema = actionRequestSchemaOf(
   EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.MERGE),
-    method: mergeMethodSchema,
-    headSha: headShaSchema,
+    ...mergeFields,
+    bypass: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE),
-    method: EffectSchema.optionalKey(mergeMethodSchema),
-    headSha: headShaSchema,
-  }),
-  EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.DISABLE_AUTO_MERGE) }),
-  EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.DEQUEUE) }),
-  EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.CLOSE) }),
-  EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.REOPEN) }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.EDIT_TITLE),
-    title: EffectSchema.Trim.check(
-      EffectSchema.isNonEmpty(),
-      EffectSchema.isMaxLength(PULL_REQUEST_WRITE_BOUNDS.MAX_TITLE_CHARS),
-    ),
-  }),
-  /**
-   * The description as the member wrote it (`body`), and as it stood when
-   * they began (`expectedBody`), which the service holds GitHub's to before
-   * it writes, so an edit made on GitHub meanwhile is never written over.
-   */
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.EDIT_DESCRIPTION),
-    body: reviewBodySchema,
-    expectedBody: reviewBodySchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.SUBMIT_REVIEW),
-    event: EffectSchema.Literals(Object.values(REVIEW_EVENT)),
-    body: reviewBodySchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.REQUEST_REVIEW),
-    reviewer: reviewerSchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.REMOVE_REVIEW_REQUEST),
-    reviewer: reviewerSchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.ADD_LABEL),
-    label: writeName,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.REMOVE_LABEL),
-    label: writeName,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.REPLY_TO_THREAD),
-    threadId: threadIdSchema,
-    body: replyBodySchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.RESOLVE_THREAD),
-    threadId: threadIdSchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.UNRESOLVE_THREAD),
-    threadId: threadIdSchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.COMMENT),
-    body: replyBodySchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literals([
-      PULL_REQUEST_ACTION.ADD_REACTION,
-      PULL_REQUEST_ACTION.REMOVE_REACTION,
-    ]),
-    subject: subjectIdSchema,
-    content: EffectSchema.Literals(Object.values(REACTION)),
-  }),
-  /**
-   * A comment on the lines from `startLine` on `startSide` to `line` on
-   * `side` of the file at `path`, as the diff read at `headSha` counts them;
-   * one line where no start is named.
-   */
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.ADD_REVIEW_COMMENT),
-    mode: EffectSchema.Literals(Object.values(REVIEW_COMMENT_MODE)),
-    path: EffectSchema.NonEmptyString.check(
-      EffectSchema.isMaxLength(PULL_REQUEST_WRITE_BOUNDS.MAX_PATH_CHARS),
-    ),
-    line: fileLineSchema,
-    side: reviewCommentSideSchema,
-    startLine: EffectSchema.optionalKey(fileLineSchema),
-    startSide: EffectSchema.optionalKey(reviewCommentSideSchema),
-    body: replyBodySchema,
-    headSha: headShaSchema,
-  }),
-  EffectSchema.Struct({ action: EffectSchema.Literal(PULL_REQUEST_ACTION.DISCARD_REVIEW) }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.EDIT_REVIEW_COMMENT),
-    commentId: reviewCommentIdSchema,
-    body: replyBodySchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.DELETE_REVIEW_COMMENT),
-    commentId: reviewCommentIdSchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.MARK_FILE_VIEWED),
-    path: filePathSchema,
-  }),
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.UNMARK_FILE_VIEWED),
-    path: filePathSchema,
-  }),
-  /**
-   * The task item at `index` among the words' task items, the first 0, as
-   * GitHub renders them in order, of the `count` the reader saw, ticked
-   * where `checked` asks or cleared, on what `subject` names by GitHub's id
-   * for it: the pull request itself, whose description it is, or one of its
-   * comments, reviews, or review comments, as a reaction names it. The
-   * service refuses it, writing nothing, where the words' items no longer
-   * number `count`, so a tick never lands on another item.
-   */
-  EffectSchema.Struct({
-    action: EffectSchema.Literal(PULL_REQUEST_ACTION.TICK_TASK),
-    subject: subjectIdSchema,
-    index: EffectSchema.Int.check(
-      EffectSchema.isGreaterThanOrEqualTo(0),
-      EffectSchema.isLessThan(PULL_REQUEST_WRITE_BOUNDS.MAX_TASK_ITEMS),
-    ),
-    count: EffectSchema.Int.check(
-      EffectSchema.isGreaterThanOrEqualTo(1),
-      EffectSchema.isLessThanOrEqualTo(PULL_REQUEST_WRITE_BOUNDS.MAX_TASK_ITEMS),
-    ),
-    checked: EffectSchema.Boolean,
-  }),
-]);
+);
+
+/** One change, as an agent's tool asks it: the same, but no merge past the base's rules, which only a member's own press makes, asked first. */
+export const agentPullRequestActionRequestSchema = actionRequestSchemaOf(
+  EffectSchema.Struct(mergeFields),
+);
 
 export type PullRequestActionRequest = typeof pullRequestActionRequestSchema.Type;
 

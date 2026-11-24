@@ -377,6 +377,7 @@ function BypassPress({
       action: PULL_REQUEST_ACTION.MERGE,
       method,
       headSha: asked?.head ?? headSha,
+      bypass: true,
     }),
     confirmFailure(FAILURE_SURFACE.PULL_REQUEST_WRITE),
   );

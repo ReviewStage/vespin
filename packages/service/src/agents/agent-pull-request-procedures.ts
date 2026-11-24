@@ -66,6 +66,7 @@ import {
   editPendingComment,
   type GitHubWriteFailure,
   mergePullRequest,
+  mergePullRequestPastRules,
   pullRequestNodeId,
   pullRequestViewedStates,
   reactOnPullRequest,
@@ -444,6 +445,20 @@ export function actionWrite(
           number,
           request.label,
           request.action === PULL_REQUEST_ACTION.ADD_LABEL,
+        );
+      case PULL_REQUEST_ACTION.MERGE:
+        if (request.bypass === true) {
+          return mergePullRequestPastRules(
+            bearer,
+            repository,
+            number,
+            request.method,
+            request.headSha,
+          );
+        }
+
+        return Effect.flatMap(pullRequestNodeId(bearer, repository, number), (id) =>
+          writeOf(request, bearer, id),
         );
       default:
         return Effect.flatMap(pullRequestNodeId(bearer, repository, number), (id) =>

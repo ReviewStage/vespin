@@ -129,10 +129,10 @@ import {
   type PullRequestChaptersAnswer,
 } from "@repo/features/pull-request-chapters-wire";
 import {
+  agentPullRequestActionRequestSchema,
   PULL_REQUEST_ACTION,
   PULL_REQUEST_WRITE_OUTCOME,
   type PullRequestWriteAnswer,
-  pullRequestActionRequestSchema,
 } from "@repo/features/pull-request-write-wire";
 import { workspaceSentryDisconnectRequestSchema } from "@repo/features/sentry-install-wire";
 import {
@@ -3720,7 +3720,7 @@ const AgentPullRequestActionInputSchema = Schema.Struct({
       `which ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers, or another, such as one stacked on it.`,
   ),
   change: describeWire(
-    pullRequestActionRequestSchema,
+    agentPullRequestActionRequestSchema,
     "The change, named by its action, with the fields that action takes.",
   ),
 });
