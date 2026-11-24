@@ -1,0 +1,42 @@
+pinned to 551cf812a0
+== bundle PJj10537a base 551cf812a0b
+  built 551cf812a0b base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-large-agent-empty: fails 0 shots 1 
+iphone-light-large-agent-lines: fails 0 shots 1 
+iphone-light-large-newtask: fails 1 shots 3 Hide Keyboard... FAILED
+ipad27-light-large-agent-empty: fails 0 shots 1 
+ipad27-light-large-agent-lines: fails 0 shots 1 
+ipad27-light-large-newtask: fails 0 shots 3 
+ipad27-light-large-ipadsplit: fails 0 shots 1 
+iphone-light-ax3-agent-empty: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-agent-empty: fails 0 shots 1 
+iphone-light-ax3-agent-lines: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-agent-lines: fails 0 shots 1 
+iphone-light-ax3-newtask: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-newtask: fails 0 shots 3 
+ipad27-light-ax3-agent-empty: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-agent-empty: fails 0 shots 1 
+ipad27-light-ax3-agent-lines: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-agent-lines: fails 0 shots 1 
+ipad27-light-ax3-newtask: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-newtask: fails 1 shots 3 Hide Keyboard... FAILED
+ipad27-light-ax3-ipadsplit: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-ipadsplit: fails 1 shots 1 Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 1500
+ipad27-light-ax3-agent-empty: gap: field bottom 1098; + top 1118 (gap 20 pt); Send/Talk n/a; words bottom 1097.8 (to + 20.2 pt)
+ipad27-light-ax3-agent-lines: gap: field bottom 1098; + top 1118 (gap 20 pt); Send top 1102 (gap 4 pt); words bottom 1097.8 (to + 20.2 pt)
+ipad27-light-ax3-ipadsplit: gap n/a: no composer-field or new-task-words in the tree
+ipad27-light-ax3-newtask: gap: field bottom 617; + top 623 (gap 6 pt); Talk top 677 (gap 60 pt); words bottom n/a
+ipad27-light-large-agent-empty: gap: field bottom 1122; + top 1134 (gap 12 pt); Send/Talk n/a; words bottom 1119.5 (to + 14.5 pt)
+ipad27-light-large-agent-lines: gap: field bottom 1130; + top 1134 (gap 4 pt); Send top 1134 (gap 4 pt); words bottom 1125.0 (to + 9.0 pt)
+ipad27-light-large-ipadsplit: gap: field bottom 1122; + top 1134 (gap 12 pt); Send/Talk n/a; words bottom 1119.5 (to + 14.5 pt)
+ipad27-light-large-newtask: gap: field bottom 867; + top 879 (gap 12 pt); Talk top 879 (gap 12 pt); words bottom 867.0 (to + 12.0 pt)
+iphone-light-ax3-agent-empty: gap: field bottom 636; + top 642 (gap 6 pt); Send/Talk n/a; words bottom 612.1 (to + 29.9 pt)
+iphone-light-ax3-agent-lines: gap: field bottom 342; + top 348 (gap 6 pt); Send top 458 (gap 116 pt); words bottom 341.7 (to + 6.3 pt)
+iphone-light-ax3-newtask: gap n/a: no composer-field or new-task-words in the tree
+iphone-light-large-agent-empty: gap: field bottom 772; + top 784 (gap 12 pt); Send/Talk n/a; words bottom 771.9 (to + 12.1 pt)
+iphone-light-large-agent-lines: gap: field bottom 780; + top 784 (gap 4 pt); Send top 784 (gap 4 pt); words bottom 778.4 (to + 5.6 pt)
+iphone-light-large-newtask: gap: field bottom 426; + top 438 (gap 12 pt); Talk top 490 (gap 64 pt); words bottom n/a
