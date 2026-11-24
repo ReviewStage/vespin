@@ -271,37 +271,30 @@ const DICTATION_WORDS = {
 /** How far the row under the field stands in from the glass on each side, so Send's round at its end keeps the room the + keeps at its start, rather than meeting the glass's edge once the reader's text grows it past its press frame. */
 const ROW_SIDES = padding({ horizontal: SPACE.TIGHT });
 
-/** How often the strip's clock counts on, in milliseconds. */
-const CLOCK_TICK_MS = 1_000;
+/** How far ahead a recording's clock may count, which no dictation reaches: a day. */
+const CLOCK_REACH_MS = 86_400_000;
 
-/** How long a recording has run, as the strip says it: minutes and seconds, "0:07". */
-function clockWords(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1_000));
-
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-/** The strip's clock: how long the recording has run, counting on each second while it stands. */
+/**
+ * The strip's clock: how long the recording has run, as the system's own
+ * timer text counts it on ("0:07"), so it ticks with no render of ours; it
+ * stands at 0:00 until the recording has started.
+ */
 function DictationClock({ startedAt }: { readonly startedAt: number | undefined }) {
   const colors = useColors();
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
-
-    return () => clearInterval(tick);
-  }, []);
+  const [opened] = useState(() => Date.now());
+  const lower = new Date(startedAt ?? opened);
 
   return (
     <Text
+      timerInterval={{ lower, upper: new Date(lower.getTime() + CLOCK_REACH_MS) }}
+      countsDown={false}
+      {...(startedAt === undefined ? { pauseTime: lower } : {})}
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_LINE }),
         SwiftModifiers.monospacedDigit(),
         foregroundStyle(colors.TEXT_MUTED),
       ]}
-    >
-      {clockWords(startedAt === undefined ? 0 : now - startedAt)}
-    </Text>
+    />
   );
 }
 
