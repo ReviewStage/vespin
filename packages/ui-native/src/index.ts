@@ -246,6 +246,8 @@ export {
 
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
+export { MergeQueueRow } from "./merge-queue-row.js";
+
 export { useMinute, useToday } from "./minute.js";
 
 export {
