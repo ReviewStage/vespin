@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import type { ApprovalAnswerRequest } from "@repo/features/agent-approval-wire";
+import { AGENT_CALL_FAILURE, type ManagerChatSending } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_KIND,
@@ -26,6 +28,7 @@ import {
   typeInComposer,
 } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { menuItem } from "../testing/desktop-inbox.js";
 import { pointerCross } from "../testing/pointer-cross.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
@@ -34,9 +37,11 @@ import { ManagerChatTab } from "./manager-chat-tab.js";
 /**
  * manager-chat-tab.test.ts -- a Manager's page as its own chat, drawn from
  * the chat's rows: the reader's messages at the right and everyone else's at
- * the left, each sender named over their run, and Reply beside any message,
+ * the left, each sender named over their run; Reply beside any message,
  * the Manager's or a person's, quoting it whole into the box, which sends it
- * to the chat. Synthetic words.
+ * to the chat; a call the Manager holds for an answer standing at the chat's
+ * foot with its answers; and Retry sending a refused message again with its
+ * files. Synthetic words.
  */
 
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
@@ -101,13 +106,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The Manager's page as Dean sees it, its chat's rows (oldest first here) held on the app state, and every message the box sends to the chat, by its words. */
-async function drawChat(rows: readonly ManagerChatLiveMessage[]) {
+/** The Manager's page as Dean sees it, its chat's rows (oldest first here) and the messages on their way held on the app state; every message the box sends to the chat, by its words and its files' names, and every answer to an ask. */
+async function drawChat(
+  rows: readonly ManagerChatLiveMessage[],
+  held: { readonly manager?: AgentSummary; readonly sending?: readonly ManagerChatSending[] } = {},
+) {
+  const manager = held.manager ?? MANAGER;
   const sent: string[] = [];
+  // Each message's files as the box sent them to the chat, by their names.
+  const carried: (readonly string[])[] = [];
+  const answered: ApprovalAnswerRequest[] = [];
 
   fakeActs({
     act: (request) => {
-      if (request.kind === ACT_KIND.AGENTS_CHAT_SEND) sent.push(request.payload.text);
+      if (request.kind === ACT_KIND.AGENTS_CHAT_SEND) {
+        sent.push(request.payload.text);
+        carried.push((request.payload.attachments ?? []).map((file) => file.name));
+      }
 
       return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." });
     },
@@ -117,7 +132,9 @@ async function drawChat(rows: readonly ManagerChatLiveMessage[]) {
     {},
     {
       tasks: IDLE_TASKS_VIEW,
-      [LIVE_READ.MANAGER_CHAT]: { [MANAGER.id]: { rows: { messages: rows.toReversed() } } },
+      [LIVE_READ.MANAGER_CHAT]: {
+        [manager.id]: { rows: { messages: rows.toReversed(), sending: held.sending ?? [] } },
+      },
     },
   );
 
@@ -125,7 +142,17 @@ async function drawChat(rows: readonly ManagerChatLiveMessage[]) {
   pushedTranscripts(() => [
     { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
   ]);
-  const control = agentsControl({ agents: [MANAGER], me: DEAN.userId });
+
+  const control = agentsControl({
+    agents: [manager],
+    me: DEAN.userId,
+    onAnswerApproval: (_agentId, approvalId, request) => {
+      answered.push(request);
+
+      return Promise.resolve({ approval: { id: approvalId, status: "allowed" } });
+    },
+  });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -135,7 +162,7 @@ async function drawChat(rows: readonly ManagerChatLiveMessage[]) {
         createElement(MemberDirectory, {
           workspace: { id: "workspace-acme", memberCount: 2 },
           readerId: DEAN.userId,
-          children: createElement(ManagerChatTab, { agent: MANAGER, control, shown: true }),
+          children: createElement(ManagerChatTab, { agent: manager, control, shown: true }),
         }),
       ),
     ),
@@ -145,7 +172,7 @@ async function drawChat(rows: readonly ManagerChatLiveMessage[]) {
   });
   await settleQueries();
 
-  return { container, sent };
+  return { container, sent, carried, answered };
 }
 
 test("the reader's message stands at the right, and a teammate's and the Manager's at the left, each named over their run, each message on a bubble of its own", async () => {
@@ -204,3 +231,64 @@ test.each([
     ]);
   },
 );
+
+test("a call the Manager holds for an answer stands at the chat's foot, whose Allow sends the answer", async () => {
+  const { container, answered } = await drawChat([row("told", 1, "Running the invite tests.")], {
+    manager: {
+      ...MANAGER,
+      status: AGENT_STATUS.RUNNING,
+      turnId: "turn-1",
+      pendingApprovals: [
+        {
+          id: "0b1c4a39-3b5e-4f7c-9a52-8d4f0e7c2a11",
+          toolUseId: "toolu_01InviteTests",
+          toolName: "Bash",
+          title: "Iris wants to run a command",
+          input: { command: "pnpm test src/invites" },
+          askedAt: 3_000,
+        },
+      ],
+    },
+  });
+
+  const call =
+    container.querySelector('[data-call-id="toolu_01InviteTests"]') ?? assert.fail("the held call");
+
+  assert.ok(call.textContent?.includes("Waiting for approval"));
+
+  const allow =
+    [...container.querySelectorAll("button")].find((each) => each.textContent === "Allow") ??
+    assert.fail("Allow");
+
+  await act(async () => allow.click());
+  await settleQueries();
+
+  assert.deepEqual(answered, [{ answer: "allow" }]);
+});
+
+test("Retry on a refused message whose file ids this window no longer keeps sends it again with its files, from the host's record", async () => {
+  // Note that the host still holds the refused message with its file, as it does once the tab that sent it closed and opened again.
+  const { container, sent, carried } = await drawChat([row("ask", 1, "What first?", DEAN)], {
+    sending: [
+      {
+        clientKey: "a3c5e1f0-6b2d-4e8a-9c71-2f4d8b6a0e93",
+        text: "Here is the invite mock.",
+        attachments: [{ name: "invite.png", mediaType: "image/png", data: "aW52aXRl" }],
+        sentAt: 2_000,
+        sentBy: DEAN.userId,
+        refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+      },
+    ],
+  });
+
+  const mark =
+    container.querySelector<HTMLButtonElement>('button[aria-label="Not delivered"]') ??
+    assert.fail("the refused message wears its alert");
+
+  await act(async () => mark.click());
+  await act(async () => menuItem("Retry").click());
+  await settleQueries();
+
+  assert.deepEqual(sent, ["Here is the invite mock."]);
+  assert.deepEqual(carried, [["invite.png"]]);
+});
