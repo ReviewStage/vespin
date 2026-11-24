@@ -163,7 +163,7 @@ it.layer(getTestDB())("server events", (it) => {
   );
 
   it.effect(
-    "posts a survey response as PostHog's survey SDKs do, under the account's person, keyed by each answered question",
+    "posts a survey response as PostHog's survey SDKs do, under no person, keyed by each answered question",
     () => {
       vi.stubEnv(DEPLOYMENT_VARIABLE, "production");
       const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
@@ -193,7 +193,7 @@ it.layer(getTestDB())("server events", (it) => {
         expect(itemsOf(processor.posted)).toEqual([
           {
             event: "survey sent",
-            distinct_id: userId,
+            distinct_id: expect.not.stringContaining(userId),
             timestamp: "2026-08-19T12:00:00.000Z",
             properties: {
               $survey_id: "survey-onboarding",
@@ -204,7 +204,7 @@ it.layer(getTestDB())("server events", (it) => {
                 { id: "q-why", question: "Why?", response: null },
               ],
               "$survey_response_q-where": "A meetup",
-              $set: { name: "Test User", email: `${userId}@app.test` },
+              $process_person_profile: false,
               $geoip_disable: true,
               platform: "server",
               environment: "production",
