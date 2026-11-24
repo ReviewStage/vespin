@@ -1,5 +1,5 @@
 /**
- * manager-chat-messages.ts -- a Manager's chat: write a message, read one by its id, a page of the chat, a thread, or what matches words, and delete what a rewind dropped.
+ * manager-chat-messages.ts -- a Manager's chat: write a message, grow a call's line in place, read one by its id, a page of the chat, a thread, or what matches words, and delete what a rewind dropped.
  *
  * Every read and write is made as an account that reaches the Manager
  * (`agentReachableBy`), a Manager standing on no task, so no account reads
@@ -12,19 +12,29 @@
  * the caller to write again under the next. A reply names a message of the
  * chat, kept as that message's thread root, so a reply to a reply stands in
  * the same thread.
+ *
+ * A line of a voice call is written once under its key and grown in place
+ * after, as more of its words arrive (`growManagerChatLine`): the words
+ * given are the line's whole words as they now stand, so a record that
+ * arrives after a later one of the same line, its words a start of those
+ * standing, is a repeat, and the line is never cut back.
  */
 
+import { createHash } from "node:crypto";
 import { AGENT_KIND } from "@repo/features/agent-wire";
+import { agentName } from "@repo/features/model-label";
 import { and, asc, desc, eq, exists, inArray, isNull, lt, or, type SQL, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, queryBuilder } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
+import { user } from "../schemas/auth.js";
 import {
   MANAGER_CHAT_AUTHOR,
   type ManagerChatAttachment,
   managerChatMessage,
 } from "../schemas/manager-chat-message.js";
+import { agentAutomationNameSql } from "./agent-name.js";
 import { type AgentStoreEffect, containing } from "./agent-store.js";
 import { InstantColumnSchema } from "./columns.js";
 import { agentReachableBy } from "./workspace-store.js";
@@ -36,6 +46,9 @@ export const MANAGER_CHAT_OUTCOME = {
   NO_THREAD: "no-thread",
   ID_TAKEN: "id-taken",
 } as const;
+
+/** How many hex digits a message's id holds: few enough for the model to repeat, enough that a chat's messages seldom share one. */
+const MESSAGE_ID_DIGITS = 8;
 
 const AttachmentSchema = Schema.Struct({
   id: Schema.String,
@@ -90,6 +103,16 @@ export type ManagerChatOutcome =
   | { readonly status: typeof MANAGER_CHAT_OUTCOME.NO_CHAT }
   | { readonly status: typeof MANAGER_CHAT_OUTCOME.NO_THREAD }
   | { readonly status: typeof MANAGER_CHAT_OUTCOME.ID_TAKEN };
+
+/** A line of a voice call to write to the chat of the Manager whose conversation it was said in, or to grow there: its key, who said it, and its whole words as they now stand. */
+export interface ManagerChatLineWrite {
+  readonly conversationId: string;
+  readonly clientKey: string;
+  /** The caller who said it, whose message it is; null for the voice's line, which is the Manager's own. */
+  readonly callerId: string | null;
+  readonly text: string;
+  readonly now: Date;
+}
 
 /** Which page of a chat a read takes: the newest messages before a `seq`, or the newest of all, at most `limit`. */
 export interface ManagerChatPage {
@@ -149,6 +172,48 @@ const lockChat = SqlSchema.findOneOption({
         )
         .limit(1)
         .for("no key update", { of: agentTable }),
+    ),
+});
+
+const ChatOfConversationSchema = Schema.Struct({
+  id: Schema.String,
+  title: Schema.NullOr(Schema.String),
+  model: Schema.String,
+  automationName: Schema.NullOr(Schema.String),
+});
+
+/** The Manager standing on the conversation, under its row's lock, as the account reaches it, with what names it; none where no Manager the account reaches stands on it. */
+const lockChatOfConversation = SqlSchema.findOneOption({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Result: ChatOfConversationSchema,
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: agentTable.id,
+          title: agentTable.title,
+          model: agentTable.model,
+          automationName: agentAutomationNameSql(agentTable),
+        })
+        .from(agentTable)
+        .where(
+          and(
+            eq(agentTable.conversationId, conversationId),
+            eq(agentTable.kind, AGENT_KIND.MANAGER),
+            agentReachableBy(userId),
+          ),
+        )
+        .limit(1)
+        .for("no key update", { of: agentTable }),
+    ),
+});
+
+const findUserName = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: Schema.Struct({ name: Schema.String }),
+  execute: (userId) =>
+    Database.use((db) =>
+      db.select({ name: user.name }).from(user).where(eq(user.id, userId)).limit(1),
     ),
 });
 
@@ -221,6 +286,19 @@ const insertMessage = SqlSchema.findAll({
     ),
 });
 
+const growMessageText = SqlSchema.findAll({
+  Request: Schema.Struct({ agentId: Schema.String, id: Schema.String, text: Schema.String }),
+  Result: ManagerChatMessageSchema,
+  execute: ({ agentId, id, text }) =>
+    Database.use((db) =>
+      db
+        .update(managerChatMessage)
+        .set({ text })
+        .where(and(eq(managerChatMessage.agentId, agentId), eq(managerChatMessage.id, id)))
+        .returning(MESSAGE_COLUMNS),
+    ),
+});
+
 const deleteDropped = SqlSchema.void({
   Request: Schema.Struct({
     ...ChatKeySchema.fields,
@@ -251,6 +329,52 @@ const deleteDropped = SqlSchema.void({
         ),
       ),
     ),
+});
+
+/** Whether words given for a line are a repeat of its standing words: those words, or a start of them, which a record arriving late or run again carries. */
+function repeatOf(standing: string, given: string): boolean {
+  return standing.startsWith(given);
+}
+
+/** A line of a call inserted in the Manager's chat on first sight, its author named as they now stand, under the first id of its key's digest no message holds; none free is refused. */
+const insertedLine = Effect.fnUntraced(function* (
+  manager: typeof ChatOfConversationSchema.Type,
+  line: ManagerChatLineWrite,
+) {
+  const { clientKey, callerId, text, now } = line;
+
+  const authorName =
+    callerId === null
+      ? agentName(manager)
+      : Option.match(yield* findUserName(callerId), {
+          onNone: () => "",
+          onSome: (found) => found.name,
+        });
+
+  for (const id of managerChatIdsOf(clientKey)) {
+    const [inserted] = yield* insertMessage({
+      agentId: manager.id,
+      id,
+      clientKey,
+      authorKind: callerId === null ? MANAGER_CHAT_AUTHOR.AGENT : MANAGER_CHAT_AUTHOR.PERSON,
+      authorUserId: callerId,
+      authorName,
+      text,
+      attachments: [],
+      threadRoot: null,
+      broadcast: false,
+      turnId: null,
+      lineId: null,
+      now,
+    });
+
+    // Note that the key was read under the lock, so a conflict here is the id's alone, and the next is tried.
+    if (inserted !== undefined) {
+      return { status: MANAGER_CHAT_OUTCOME.DONE, message: inserted } as const;
+    }
+  }
+
+  return { status: MANAGER_CHAT_OUTCOME.ID_TAKEN } as const;
 });
 
 /**
@@ -293,6 +417,59 @@ export function writeManagerChatMessage(
         return inserted === undefined
           ? ({ status: MANAGER_CHAT_OUTCOME.ID_TAKEN } as const)
           : ({ status: MANAGER_CHAT_OUTCOME.DONE, message: inserted } as const);
+      }),
+    ),
+  );
+}
+
+/** The ids a message keyed so may go by, in the order tried: the key's digest cut into runs of the id's digits, so a write run again under its key tries the same ids. */
+export function managerChatIdsOf(clientKey: string): readonly string[] {
+  const digest = createHash("sha256").update(clientKey).digest("hex");
+
+  return Array.from({ length: digest.length / MESSAGE_ID_DIGITS }, (_, index) =>
+    digest.slice(index * MESSAGE_ID_DIGITS, (index + 1) * MESSAGE_ID_DIGITS),
+  );
+}
+
+/**
+ * The line of a call written to the chat of the Manager whose conversation
+ * it was said in, as the account reaches the chat, under the Manager's
+ * lock: inserted under its key on first sight, under the first free id of
+ * the key's digest, its author named as they now stand; grown in place
+ * after, keeping its place in the chat; and found as it stood where the
+ * words given are its words or a start of them. Answers that no chat
+ * stands for a conversation no Manager the account reaches stands on.
+ */
+export function growManagerChatLine(
+  userId: string,
+  line: ManagerChatLineWrite,
+): AgentStoreEffect<ManagerChatOutcome> {
+  const { conversationId, clientKey, text } = line;
+
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        const chat = yield* lockChatOfConversation({ userId, conversationId });
+
+        if (Option.isNone(chat)) return { status: MANAGER_CHAT_OUTCOME.NO_CHAT } as const;
+        const manager = chat.value;
+        const [standing] = yield* findMessages({ userId, agentId: manager.id, clientKey });
+
+        if (standing !== undefined) {
+          if (repeatOf(standing.text, text)) {
+            return {
+              status: MANAGER_CHAT_OUTCOME.DONE,
+              message: standing,
+              repeated: true,
+            } as const;
+          }
+
+          const [grown] = yield* growMessageText({ agentId: manager.id, id: standing.id, text });
+
+          return { status: MANAGER_CHAT_OUTCOME.DONE, message: grown ?? standing } as const;
+        }
+
+        return yield* insertedLine(manager, line);
       }),
     ),
   );
