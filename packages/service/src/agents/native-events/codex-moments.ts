@@ -1,5 +1,5 @@
 import { CODEX_ERROR_INFO, codexErrorKind } from "@repo/agent-runner/protocol";
-import { CODEX_TOOL, WORKSPACE_MCP_SERVER_NAMES } from "@repo/features/agent-tools";
+import { CODEX_TOOL, storedToolName, WORKSPACE_MCP_SERVER_NAMES } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
 import { USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
@@ -336,13 +336,16 @@ function mcpAnswerText(content: readonly WireValue[], workspaceTool: boolean): s
 type StoredMcpCallResult = { readonly name: string; readonly input: UnparsedWireValue };
 
 /**
- * The name and input a call to an MCP server is stored under: our tool's own
- * for our own server; for an integration's own server, its integration's
- * fixed name and envelope, as the retired runtime's nested call of the tool is stored
+ * The name and input a call to an MCP server is stored under: our tool's
+ * stored name (`storedToolName`) for our own server; for an integration's
+ * own server, its integration's fixed name and envelope, as the retired
+ * runtime's nested call of the tool is stored
  * (`storedServerCall`); `mcpToolCall` naming the server and tool otherwise.
  */
 function storedMcpCall(call: typeof McpToolCallSchema.Type, args: WireValue): StoredMcpCallResult {
-  if (WORKSPACE_MCP_SERVER_NAMES.has(call.server)) return { name: call.tool, input: args };
+  if (WORKSPACE_MCP_SERVER_NAMES.has(call.server)) {
+    return { name: storedToolName(call.tool), input: args };
+  }
 
   return (
     storedServerCall(call.server, call.tool, args, call.id) ?? {

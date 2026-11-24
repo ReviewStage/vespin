@@ -35,7 +35,7 @@ import {
   storeWriter,
 } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, storedToolName } from "@repo/features/agent-tools";
 import { AGENT_MACHINE, type AgentMachineKind, MESSAGE_SENDER } from "@repo/features/agent-wire";
 import {
   DESCRIPTION_COMMENT_ACTION,
@@ -609,7 +609,7 @@ function toolCallOf(call: DemoCall, seeded: SeedWritten): DemoToolCall {
     const { key, title, body, ask } = call.posts;
 
     return {
-      name: AGENT_TOOL.POST_THREAD,
+      name: storedToolName(AGENT_TOOL.POST_THREAD),
       input: { key, title, body, ...(ask === undefined ? undefined : { ask }) },
       output: accepted,
     };

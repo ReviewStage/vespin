@@ -29,6 +29,7 @@
 import {
   CURSOR_TOOL,
   claudeCodeWorkspaceTool,
+  storedToolName,
   WORKSPACE_MCP_SERVER_NAMES,
 } from "@repo/features/agent-tools";
 import type { ToolCallSettlement } from "@repo/features/turn-run";
@@ -198,10 +199,10 @@ interface StoredCall {
 }
 
 /**
- * A call to an MCP server as it is stored: our tool's own name for our own
- * server, reached as a custom tool or as a server of ours; an integration's
- * call for an integration's server; `cursorMcp` naming the server and tool
- * otherwise.
+ * A call to an MCP server as it is stored: our tool's stored name
+ * (`storedToolName`) for our own server, reached as a custom tool or as a
+ * server of ours; an integration's call for an integration's server;
+ * `cursorMcp` naming the server and tool otherwise.
  */
 function storedMcpCall(callId: string, args: WireValue | undefined): StoredCall {
   const mcp = readMcpArgs(args);
@@ -218,7 +219,10 @@ function storedMcpCall(callId: string, args: WireValue | undefined): StoredCall 
         : undefined
       : claudeCodeWorkspaceTool(named);
 
-  if (workspaceTool !== undefined) return { name: workspaceTool, input, workspaceTool };
+  if (workspaceTool !== undefined) {
+    return { name: storedToolName(workspaceTool), input, workspaceTool };
+  }
+
   const server = named === undefined ? providerIdentifier : serverOf(named);
   const tool = named === undefined ? toolName : toolOf(named);
 

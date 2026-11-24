@@ -3,7 +3,7 @@
  *
  * A Manager's chat is a team channel (`@repo/features/manager-chat-view`):
  * anyone may answer a message in its thread, the Manager with
- * `send_to_user`'s `thread_ts` and a person from the thread's pane. Each
+ * `chat_send`'s `thread_ts` and a person from the thread's pane. Each
  * message of the chat offers Reply in thread beside its Copy, and one others
  * answered says so under its words with the faces of who answered
  * (`ThreadSummary`); either opens its thread in a pane at the chat's end

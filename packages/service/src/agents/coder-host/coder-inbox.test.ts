@@ -1089,7 +1089,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "withdraw_ask settles the open ask with why and leaves the thread; one already settled is taken, says how, and changes nothing; a key with no thread is refused",
+    "inbox_withdraw_ask settles the open ask with why and leaves the thread; one already settled is taken, says how, and changes nothing; a key with no thread is refused",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -1174,7 +1174,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "read_thread answers a thread's every message in order, each ask whole with where it stands and each answer by whom, a settled one as much as an open one",
+    "inbox_read_thread answers a thread's every message in order, each ask whole with where it stands and each answer by whom, a settled one as much as an open one",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -1454,7 +1454,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "list_threads with a status lists the latest threads standing there, however many settled otherwise since",
+    "inbox_list_threads with a status lists the latest threads standing there, however many settled otherwise since",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -1488,7 +1488,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "read_thread pages a long thread back from its latest messages, and names the open ask the first page leaves out",
+    "inbox_read_thread pages a long thread back from its latest messages, and names the open ask the first page leaves out",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;

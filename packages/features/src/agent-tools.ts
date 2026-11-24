@@ -110,11 +110,11 @@ export const AGENT_TOOL = {
   // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A Manager's message to its chat, the one way its words reach people.
-  SEND_TO_USER: "send_to_user",
+  SEND_TO_USER: "chat_send",
   // A Manager's own chat read: its newest messages, one thread whole, or the messages a search finds.
-  READ_CHAT_MESSAGES: "read_chat_messages",
-  READ_CHAT_THREAD: "read_chat_thread",
-  SEARCH_CHAT: "search_chat",
+  READ_CHAT_MESSAGES: "chat_read_messages",
+  READ_CHAT_THREAD: "chat_read_thread",
+  SEARCH_CHAT: "chat_search",
   // The retired runtime's own durable pause, which a coding agent took before it checked on its checks or a deploy again.
   SLEEP: "sleep",
 } as const;
@@ -161,7 +161,9 @@ export const CONNECTION_TOOL = {
  * the memory, the plan comments' resolve and reopen, folded into
  * `update_comment`, the plan's edit, renamed for the description it
  * edits, the show of pictures, renamed for the sound clips it shows
- * beside them, and a turn's end, removed with Done and follow-ups.
+ * beside them, a turn's end, removed with Done and follow-ups, and the
+ * Inbox's four and a Manager's chat's four, since named for the surface
+ * each acts on.
  */
 export const RETIRED_TOOL = {
   WEB_FETCH: "web_fetch",
@@ -215,6 +217,16 @@ export const RETIRED_TOOL = {
   SHOW_IMAGE: "show_image",
   // Removed with Done and follow-ups: a coding agent's turn ended in a short summary, the reply its developer read.
   END_TURN: "end_turn",
+  // Renamed `inbox_*`, for the Inbox they act on (`STORED_TOOL_NAME`).
+  POST_THREAD: "post_thread",
+  WITHDRAW_ASK: "withdraw_ask",
+  LIST_THREADS: "list_threads",
+  READ_THREAD: "read_thread",
+  // Renamed `chat_*`, for the Manager's chat they act on (`STORED_TOOL_NAME`).
+  SEND_TO_USER: "send_to_user",
+  READ_CHAT_MESSAGES: "read_chat_messages",
+  READ_CHAT_THREAD: "read_chat_thread",
+  SEARCH_CHAT: "search_chat",
 } as const;
 
 /**
@@ -226,7 +238,48 @@ export const RETIRED_TOOL = {
 export const RENAMED_TOOL: ReadonlyMap<string, AgentTool> = new Map([
   [RETIRED_TOOL.EDIT_PLAN, AGENT_TOOL.EDIT_DESCRIPTION],
   [RETIRED_TOOL.SHOW_IMAGE, AGENT_TOOL.SHOW_MEDIA],
+  [RETIRED_TOOL.POST_THREAD, AGENT_TOOL.POST_THREAD],
+  [RETIRED_TOOL.WITHDRAW_ASK, AGENT_TOOL.WITHDRAW_ASK],
+  [RETIRED_TOOL.LIST_THREADS, AGENT_TOOL.LIST_THREADS],
+  [RETIRED_TOOL.READ_THREAD, AGENT_TOOL.READ_THREAD],
+  [RETIRED_TOOL.SEND_TO_USER, AGENT_TOOL.SEND_TO_USER],
+  [RETIRED_TOOL.READ_CHAT_MESSAGES, AGENT_TOOL.READ_CHAT_MESSAGES],
+  [RETIRED_TOOL.READ_CHAT_THREAD, AGENT_TOOL.READ_CHAT_THREAD],
+  [RETIRED_TOOL.SEARCH_CHAT, AGENT_TOOL.SEARCH_CHAT],
 ]);
+
+/**
+ * The tools a transcript still stores a call of under the name it had
+ * before it was named for its surface, by their name now. Note that this
+ * holds only until every released desktop and iOS build reads the new
+ * names, because a build from before them draws a call by a name it does
+ * not know as a bare row, and leaves a Manager's message out of its chat;
+ * then the service stores the names the model calls and raises
+ * `HOSTED_API_FLOOR` (AGENTS.md's "Breaking the hosted wire"). The chat's
+ * three reads are not here, since no released build read them.
+ */
+const STORED_TOOL_NAME: ReadonlyMap<string, string> = new Map([
+  [AGENT_TOOL.POST_THREAD, RETIRED_TOOL.POST_THREAD],
+  [AGENT_TOOL.WITHDRAW_ASK, RETIRED_TOOL.WITHDRAW_ASK],
+  [AGENT_TOOL.LIST_THREADS, RETIRED_TOOL.LIST_THREADS],
+  [AGENT_TOOL.READ_THREAD, RETIRED_TOOL.READ_THREAD],
+  [AGENT_TOOL.SEND_TO_USER, RETIRED_TOOL.SEND_TO_USER],
+]);
+
+/** The name a transcript stores a call of our tool under: the one it had for a tool `STORED_TOOL_NAME` keeps it for, its own otherwise. */
+export function storedToolName(tool: string): string {
+  return STORED_TOOL_NAME.get(tool) ?? tool;
+}
+
+/**
+ * Whether a stored call is one of a Manager's messages to its chat, under
+ * either of the names it is stored by: `send_to_user`, as the service
+ * stores it (`storedToolName`) and every earlier transcript does, or
+ * `chat_send`.
+ */
+export function isChatSendTool(tool: string): boolean {
+  return tool === AGENT_TOOL.SEND_TO_USER || tool === RETIRED_TOOL.SEND_TO_USER;
+}
 
 /**
  * Whether a call is one that showed the developer media from a coding

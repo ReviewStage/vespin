@@ -15,7 +15,7 @@ import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
 import { noDatabase } from "@repo/database/testing/no-database";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, storedToolName } from "@repo/features/agent-tools";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
@@ -61,9 +61,9 @@ const openManager = Effect.gen(function* () {
   return { owner, agent: Option.getOrThrow(started).agent };
 });
 
-/** A settled `send_to_user` call, its answer naming the message it wrote live where one is given. */
+/** A settled `chat_send` call as the transcript stores it (`storedToolName`), its answer naming the message it wrote live where one is given. */
 const sent = (callId: string, text: string, messageId?: string) => ({
-  type: `tool-${AGENT_TOOL.SEND_TO_USER}`,
+  type: `tool-${storedToolName(AGENT_TOOL.SEND_TO_USER)}`,
   toolCallId: callId,
   state: "output-available",
   input: { text },
@@ -357,10 +357,11 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
             clientId: turn.id,
             role: MESSAGE_ROLE.ASSISTANT,
             metadata: { author: MESSAGE_AUTHOR.MODEL },
+            // The call is stored under its old name, and its live write keyed by the name the model called.
             // SAFETY: the part is the stored vocabulary's, spelled as the relay writes a call it never answered.
             parts: [
               {
-                type: `tool-${AGENT_TOOL.SEND_TO_USER}`,
+                type: `tool-${storedToolName(AGENT_TOOL.SEND_TO_USER)}`,
                 toolCallId: "call-1",
                 state: "input-available",
                 input: unanswered,

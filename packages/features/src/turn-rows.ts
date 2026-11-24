@@ -55,10 +55,10 @@ export const CALL_KIND = {
   INBOX_POST: "inbox-post",
   INBOX_CLOSE: "inbox-close",
   INBOX_READ: "inbox-read",
-  /** One thread read whole (`read_thread`), its row naming the thread's title. */
+  /** One thread read whole (`inbox_read_thread`), its row naming the thread's title. */
   INBOX_THREAD_READ: "inbox-thread-read",
   INBOX_REPLY: "inbox-reply",
-  /** An ask on one of the agent's inbox threads taken back with why (`withdraw_ask`), its row naming the thread's key. */
+  /** An ask on one of the agent's inbox threads taken back with why (`inbox_withdraw_ask`), its row naming the thread's key. */
   INBOX_WITHDRAW: "inbox-withdraw",
   WORKER: "worker",
   WORKER_WAIT: "worker-wait",
@@ -140,9 +140,9 @@ export const CALL_KIND = {
   CANCEL_WAKEUP: "cancel-wakeup",
   /** A turn a coding agent ended (`end_turn`, removed with Done and follow-ups), with the summary its developer read as the reply. */
   END_TURN: "end-turn",
-  /** A Manager's message to its chat (`send_to_user`), its row saying the words. */
+  /** A Manager's message to its chat (`chat_send`), its row saying the words. */
   SEND_TO_USER: "send-to-user",
-  /** A Manager's own chat it read (`read_chat_messages`), a thread of it (`read_chat_thread`), or searched (`search_chat`), its row naming the words searched for. */
+  /** A Manager's own chat it read (`chat_read_messages`), a thread of it (`chat_read_thread`), or searched (`chat_search`), its row naming the words searched for. */
   CHAT_READ: "chat-read",
   CHAT_THREAD_READ: "chat-thread-read",
   CHAT_SEARCH: "chat-search",

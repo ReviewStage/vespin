@@ -25,7 +25,7 @@
  */
 
 import { AGENT_PART, type AgentPart, agentParts, isShownSet } from "./agent-parts.js";
-import { AGENT_TOOL } from "./agent-tools.js";
+import { isChatSendTool } from "./agent-tools.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "./manager-chat-live.js";
 import { isAgentTurn } from "./voice-call-lines.js";
@@ -67,10 +67,7 @@ export interface ManagerChatView {
 function isWork(part: AgentPart): boolean {
   if (part.kind === AGENT_PART.STEP_START || part.kind === AGENT_PART.ARRIVED) return false;
 
-  return !(
-    part.kind === AGENT_PART.TOOL &&
-    (part.tool === AGENT_TOOL.SEND_TO_USER || isShownSet(part))
-  );
+  return !(part.kind === AGENT_PART.TOOL && (isChatSendTool(part.tool) || isShownSet(part)));
 }
 
 /** Whether two messages are one sender's: both the Manager's, or both one person's. */

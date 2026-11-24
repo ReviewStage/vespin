@@ -1,9 +1,9 @@
 /**
- * send-to-user-tool.ts -- `send_to_user`, a Manager's one way to reach people: a message in the chat its page draws.
+ * send-to-user-tool.ts -- `chat_send`, a Manager's one way to reach people: a message in the chat its page draws.
  *
  * A Manager's page draws no transcript: it is a chat between the people who
  * can open the Manager and the Manager itself, in which their lines stand as
- * they sent them and the Manager's words are the input of its `send_to_user`
+ * they sent them and the Manager's words are the input of its `chat_send`
  * calls alone, beside the sets its `show_media` calls showed. The call's
  * input stays in the transcript as every call's does, where today's panel
  * reads it as the Manager's message, and the message is also written as a
@@ -34,7 +34,7 @@ const SEND_TO_USER_CHARS = 8_000;
 /** The most characters the id of the thread a reply names may spell: a message's id, with room to spare. */
 const SEND_TO_USER_ID_CHARS = 200;
 
-/** Why `send_to_user` was refused, in words the model can act on. */
+/** Why `chat_send` was refused, in words the model can act on. */
 const SEND_TO_USER_REFUSAL = {
   UNREADABLE: "Not sent: pass text, the message's words in Markdown; nothing else is read.",
   TOO_LONG: (length: number) =>
@@ -43,7 +43,7 @@ const SEND_TO_USER_REFUSAL = {
   SPOKEN: "You're on a call: answer in plain text; the voice will say it.",
   UNKEPT: "Not sent: the message could not be kept just now. The call may be made again.",
   NO_THREAD: (id: string) =>
-    `Not sent: No message in your chat has the id ${id}. Use read_chat_messages or search_chat to find message ids.`,
+    `Not sent: No message in your chat has the id ${id}. Use chat_read_messages or chat_search to find message ids.`,
 } as const;
 
 const SEND_TO_USER_INPUT = Schema.Struct({
@@ -64,12 +64,12 @@ const SEND_TO_USER_INPUT = Schema.Struct({
 
 const readInput = Schema.decodeUnknownResult(SEND_TO_USER_INPUT);
 
-/** How `send_to_user` threads its replies, in Charles's words. */
+/** How `chat_send` threads its replies, in Charles's words. */
 const CHAT_THREAD_WORDS =
   "Reply in threads. When you answer or follow up on a message, set thread_ts to its thread's " +
   "parent message id. Leave thread_ts out only to bring up something new.";
 
-/** What `send_to_user` says of the chat, whether or not the Manager posts threads. */
+/** What `chat_send` says of the chat, whether or not the Manager posts threads. */
 const SEND_TO_USER_WORDS =
   "Send a message to your chat, the only way your words reach people: your page shows people's " +
   `messages, these, and the files you show with ${AGENT_TOOL.SHOW_MEDIA} alone, never your other text or tool calls. ` +
@@ -82,7 +82,7 @@ const SEND_TO_USER_WORDS =
   "unless what you say needs them. " +
   CHAT_THREAD_WORDS;
 
-/** `send_to_user` as a Manager is offered it: its name, its words, and its input. */
+/** `chat_send` as a Manager is offered it: its name, its words, and its input. */
 export const SEND_TO_USER_TOOL = {
   name: AGENT_TOOL.SEND_TO_USER,
   description: `${SEND_TO_USER_WORDS} For ${MANAGER_THREAD_ASKS}, post an Inbox thread instead.`,
@@ -90,9 +90,9 @@ export const SEND_TO_USER_TOOL = {
 } as const;
 
 /**
- * `send_to_user` in the words of the Manager's standing: the thread it
+ * `chat_send` in the words of the Manager's standing: the thread it
  * hands a decision or a to-do named only where the member its threads would
- * land with keeps an Inbox, which offers it `post_thread`, so a Manager with
+ * land with keeps an Inbox, which offers it `inbox_post`, so a Manager with
  * none is told of no thread.
  */
 export function sendToUserToolOf(on: { readonly inboxOn: boolean }) {
@@ -124,7 +124,7 @@ const stampedSaid = (managerId: string, answer: WireRecord) =>
     Effect.as(answer),
   );
 
-/** One call of `send_to_user`: taken where its input holds to its bound and a Manager calls it on a typed turn, its row written to the chat and its id answered; refused with why otherwise. */
+/** One call of `chat_send`: taken where its input holds to its bound and a Manager calls it on a typed turn, its row written to the chat and its id answered; refused with why otherwise. */
 export function runSendToUser(
   call: AgentCall,
   input: UnparsedWireValue,

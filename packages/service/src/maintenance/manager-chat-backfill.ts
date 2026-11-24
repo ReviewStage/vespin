@@ -37,7 +37,7 @@ import {
 import { listMessagesFrom, type StoredMessageRecord } from "@repo/database/models/message-reads";
 import { readNativeCallKeys } from "@repo/database/models/native-call-keys";
 import { AGENT_PART, type AgentPart, agentParts, messageWords } from "@repo/features/agent-parts";
-import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
+import { isChatSendTool, isShowMediaTool, RENAMED_TOOL } from "@repo/features/agent-tools";
 import { AGENT_SENDER, type AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { managerChatLines } from "@repo/features/manager-chat";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
@@ -243,7 +243,7 @@ function callOf(said: AgentTranscriptMessage, turn: AgentTranscriptMessage): Too
   return tools.find((part) => {
     const text = isRecord(part.input) ? part.input.text : undefined;
 
-    return part.tool === AGENT_TOOL.SEND_TO_USER && isWireString(text) && text.trim() === words;
+    return isChatSendTool(part.tool) && isWireString(text) && text.trim() === words;
   });
 }
 
@@ -382,7 +382,7 @@ function turnMessage(
     return undefined;
   }
 
-  const shown = call.tool !== AGENT_TOOL.SEND_TO_USER;
+  const shown = !isChatSendTool(call.tool);
 
   return {
     clientKey: call.callId,
@@ -414,20 +414,37 @@ function inOrder(
   });
 }
 
+/** The names a stored call may have been called by: the one it is stored under, and the name that took its place where it was renamed. */
+function calledNames(stored: string): readonly string[] {
+  const renamed = RENAMED_TOOL.get(stored);
+
+  return renamed === undefined ? [stored] : [stored, renamed];
+}
+
 /**
- * The digest each call that may stand in the chat was keyed by, by its id:
- * every `send_to_user` and `show_media` call, digested as the workspace's MCP
- * server digests a call it is handed (`nativeCallDigest`), whose key the
- * store kept for the call's live write.
+ * The digests each call that may stand in the chat may have been keyed by,
+ * by its id: every `chat_send` and `show_media` call, digested as the
+ * workspace's MCP server digests a call it is handed (`nativeCallDigest`),
+ * whose key the store kept for the call's live write. Note that a call
+ * stored under a name since renamed is digested under both, because the
+ * server keyed it by the name the model called, which is the new one
+ * where the call is stored under its old name (`storedToolName`).
  */
-function chatCallDigests(messages: readonly AgentTranscriptMessage[]): ReadonlyMap<string, string> {
+function chatCallDigests(
+  messages: readonly AgentTranscriptMessage[],
+): ReadonlyMap<string, readonly string[]> {
   return new Map(
     messages.flatMap((message) =>
       message.role === MESSAGE_ROLE.ASSISTANT
         ? agentParts(message).flatMap((part) =>
             part.kind === AGENT_PART.TOOL &&
-            (part.tool === AGENT_TOOL.SEND_TO_USER || isShowMediaTool(part.tool))
-              ? [[part.callId, nativeCallDigest(part.tool, part.input ?? {})] as const]
+            (isChatSendTool(part.tool) || isShowMediaTool(part.tool))
+              ? [
+                  [
+                    part.callId,
+                    calledNames(part.tool).map((name) => nativeCallDigest(name, part.input ?? {})),
+                  ] as const,
+                ]
               : [],
           )
         : [],
@@ -475,12 +492,12 @@ const backfillOne = (manager: ManagerOfBackfill, dry: boolean) =>
     const digests = chatCallDigests(messages);
 
     const keys = yield* readNativeCallKeys(manager.userId, manager.conversationId, [
-      ...new Set(digests.values()),
+      ...new Set([...digests.values()].flat()),
     ]);
 
     const callKeys = new Map(
-      [...digests].flatMap(([callId, digest]) => {
-        const key = keys.get(digest);
+      [...digests].flatMap(([callId, named]) => {
+        const key = named.map((digest) => keys.get(digest)).find((found) => found !== undefined);
 
         return key === undefined ? [] : [[callId, key] as const];
       }),

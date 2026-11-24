@@ -147,8 +147,8 @@ function threadReachWords(slackOn: boolean): string {
 }
 
 /**
- * What a Manager posts a thread for, the one rule its prompt, `post_thread`,
- * and `send_to_user` all state (Dean, Nov 23, 2026): an ask its chat cannot
+ * What a Manager posts a thread for, the one rule its prompt, `inbox_post`,
+ * and `chat_send` all state (Dean, Nov 23, 2026): an ask its chat cannot
  * hold, and nothing else, so its pull requests, its pages, and its reports
  * stand in its chat.
  */
@@ -168,13 +168,13 @@ function firstPostTo(manager: boolean): string {
     : "the first post under a key must name it";
 }
 
-/** What an agent's `post_thread` names beside its own rule: whether it is a Manager, and whether its workspace connected the Slack bot. */
+/** What an agent's `inbox_post` names beside its own rule: whether it is a Manager, and whether its workspace connected the Slack bot. */
 export interface PostThreadStanding {
   readonly manager: boolean;
   readonly slackOn: boolean;
 }
 
-/** `post_thread`'s words, with a Manager's rule for when in place of a coder's, and naming `send_slack_message` only where the agent is offered it. */
+/** `inbox_post`'s words, with a Manager's rule for when in place of a coder's, and naming `send_slack_message` only where the agent is offered it. */
 const postThreadWords = ({ manager, slackOn }: PostThreadStanding) =>
   "Post a message to the developer's inbox, which is where they look for anything that needs them. " +
   postThreadWhen(manager) +
@@ -213,7 +213,7 @@ const postThreadWords = ({ manager, slackOn }: PostThreadStanding) =>
   threadReachWords(slackOn) +
   "The call answers with the thread and one line for each other thread of yours still open.";
 
-/** `post_thread` as an agent is shown it: a Manager's rule for when in place of a coder's, and its Slack sentence where its workspace connected the Slack bot. */
+/** `inbox_post` as an agent is shown it: a Manager's rule for when in place of a coder's, and its Slack sentence where its workspace connected the Slack bot. */
 export function postThreadToolOf(standing: PostThreadStanding) {
   return {
     name: INBOX_TOOL.POST,
@@ -222,7 +222,7 @@ export function postThreadToolOf(standing: PostThreadStanding) {
   };
 }
 
-/** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input, `post_thread`'s in its words where nothing narrows it. */
+/** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input, `inbox_post`'s in its words where nothing narrows it. */
 export const INBOX_TOOLS = {
   POST: postThreadToolOf({ manager: false, slackOn: true }),
   WITHDRAW: {
@@ -418,12 +418,13 @@ export const INBOX_REFUSAL = {
   UNREADABLE_LIST:
     'Not listed: name whose threads as of, either {"agentId": "<id>"} for one agent of your workspace, your own agentId (in your instructions\' own values) for your own, or {"taskId": "<id or key>"} for one task of it, never both, and status, where you name one, as open, answered, or closed.',
   UNREADABLE_READ:
-    "Not read: name the thread by threadId as list_threads answered it, and before only as a page's older answered it.",
+    "Not read: name the thread by threadId as inbox_list_threads answered it, and before only as a page's older answered it.",
   NO_THREAD:
-    "Not read: no thread of your workspace that the developer may see has that id; list_threads lists them.",
+    "Not read: no thread of your workspace that the developer may see has that id; inbox_list_threads lists them.",
   NO_OPEN_ASK:
     "Not withdrawn: your thread under that key is a notice, which asks nothing; a member settles it.",
-  NO_KEYED_THREAD: "Not withdrawn: you have no thread under that key; list_threads lists them.",
+  NO_KEYED_THREAD:
+    "Not withdrawn: you have no thread under that key; inbox_list_threads lists them.",
   NO_MEMBER:
     "Not posted: to names no member; write a member of your workspace by their mention link, [@Name](link), as a person's chip is written.",
   NO_ADDRESSEE_NAMED:
