@@ -14,7 +14,7 @@
  * (`new-manager-dialog.tsx`), and its View options' Sort by lists the
  * Managers by recent activity, name, or date created, kept per workspace on
  * this machine (`manager-sort.ts`), newest started first until one is chosen. A Manager the reader pinned,
- * from its row's menu, stands here still and under Pinned too, drawn as the
+ * from its row's menu, stands under Pinned alone, not here, until Unpin, drawn as the
  * same row (`SidebarManagerRow`, `usePinnedManagers`) among the pinned
  * tasks, and dragged among them (`sidebar-entries.tsx`). It stands
  * only where the workspace has the Managers experiment on, and says so
@@ -260,11 +260,14 @@ function ManagerViewOptions({
 /** The Managers section; see the module's head. Nothing while the workspace listed has the Managers experiment off. */
 export function SidebarManagers({
   tasks,
+  taskAgentPins,
   folds,
   inSight,
   onOpen,
 }: {
   tasks: SidebarTasksControl;
+  /** The reader's pins of agents, whose Managers stand under Pinned alone. */
+  taskAgentPins: readonly TaskAgentPin[];
   folds: FoldedGroups;
   /** Whether the sidebar is in sight, which its rows' menus ask on. */
   inSight: boolean;
@@ -276,10 +279,16 @@ export function SidebarManagers({
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const sorting = useManagerSort(tasks.workspace?.id, staged);
 
-  const sorted = useMemo(
-    () => (managers === undefined ? undefined : sortedManagers(managers, sorting.sort)),
-    [managers, sorting.sort],
-  );
+  // Note that a pinned Manager stands under Pinned alone, as a pinned task does, and returns here on Unpin.
+  const sorted = useMemo(() => {
+    if (managers === undefined) return undefined;
+    const pinned = new Set(pinnedManagersOf(managers, taskAgentPins).map((each) => each.agent.id));
+
+    return sortedManagers(
+      managers.filter((agent) => !pinned.has(agent.id)),
+      sorting.sort,
+    );
+  }, [managers, taskAgentPins, sorting.sort]);
 
   if (!listed) return null;
 
@@ -300,7 +309,7 @@ export function SidebarManagers({
         {...sidebarHead({
           folded,
           onToggle: folds.toggleManagers,
-          count: managers?.length ?? 0,
+          count: listedManagers.length,
           noun: MANAGER_NOUN,
         })}
         glyph={<GLYPH.MANAGER />}

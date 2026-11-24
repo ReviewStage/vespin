@@ -3130,6 +3130,7 @@ function SidebarColumn({
                     {/* Managers stands above everything the workspace's tasks fill, where the workspace has them on. */}
                     <SidebarManagers
                       tasks={tasks}
+                      taskAgentPins={tasks.taskAgentPins}
                       folds={folds}
                       inSight={overlay.inSight}
                       onOpen={chosen(openManager)}
