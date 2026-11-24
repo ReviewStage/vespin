@@ -1,6 +1,6 @@
 // split-columns.tsx -- a tab's list and its page in a regular window: beside each other in the tab's own split view, or on an iPad the page alone in the last column of the system's split view at the root, whose middle column draws the list itself.
 
-import { PageColumn, Screen, SplitView } from "@repo/ui-native";
+import { Screen, SplitView } from "@repo/ui-native";
 import type { ComponentProps } from "react";
 import { Dimensions } from "react-native";
 import type { SplitHostCommands } from "react-native-screens/experimental";
@@ -56,7 +56,14 @@ export function TabColumns({
   return (
     <Screen key={build}>
       {APP_SIDEBAR ? (
-        <PageColumn view={split.detail} bar={split.detailBar} />
+        // DIAGNOSTIC (not for merge): the page in SwiftUI's own split view, detail alone, as the probe that drew a thread's messages hosted it.
+        <SplitView
+          sidebar={null}
+          detail={split.detail}
+          detailBar={split.detailBar}
+          sidebarShown={false}
+          onSidebarShownChange={keepListShown}
+        />
       ) : (
         <SplitView
           {...split}
