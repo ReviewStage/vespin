@@ -1,10 +1,16 @@
 import { REWIND_ACTION, type RewindAction } from "@repo/features/agent-rewind-model";
+import { fileMarkers } from "@repo/features/file-marker";
 import { BUTTON_SIZE, CopyButton, HeldMessageAction, MessageActions } from "@repo/ui";
+import { useQueryClient } from "@tanstack/react-query";
 import { LinkIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useContext } from "react";
 import { MessageAction } from "../ai-elements/message.js";
-import { copyThroughShell, LINK_COPY } from "../copy-feedback.js";
+import { useSideBundles } from "../bundle-loader.js";
+import { copyRichThroughShell, copyThroughShell, LINK_COPY } from "../copy-feedback.js";
 import { useCopyLink } from "../copy-link-item.js";
+import type { CopiedFile, DescriptionEditorModule } from "../description-editor/contract.js";
+import { copiedFileOf } from "../description-editor/copied-files.js";
+import { type WordFiles, WordFilesContext } from "./file-chips.js";
 import { ForkMessageAction } from "./fork-action.js";
 import { useMessagePlace } from "./message-links.js";
 import { EditMessageAction, RevertMessageAction } from "./rewind-action.js";
@@ -15,10 +21,56 @@ import { EditMessageAction, RevertMessageAction } from "./rewind-action.js";
  * A thin wrapper over AI Elements' message actions, shared by every
  * transcript's messages, whose Copy is `@repo/ui`'s, answered as every copy
  * button in the window is: the glyph turns to a check for a moment and back.
+ * A message whose words name its files copies them too, as a copy out of a
+ * message box does (`useMessageCopy`).
  */
 
 /** What its Copy copies, which `CopyButton` names ("Copy message"). */
 const COPY_WHAT = "message";
+
+/** The files the words name whose bytes are here, by name, as a copy of the message carries them. */
+function carriedFiles(
+  words: string,
+  files: WordFiles | undefined,
+): ReadonlyMap<string, CopiedFile> {
+  return new Map(
+    fileMarkers(words).flatMap((marker): [string, CopiedFile][] => {
+      const file = copiedFileOf(files?.file(marker.name)?.url ?? null);
+
+      return file === undefined ? [] : [[marker.name, file]];
+    }),
+  );
+}
+
+/**
+ * The message's Copy: its words as plain text, and where they name a file
+ * whose bytes are here, beside them the HTML a copy out of a message box
+ * writes, each such file's chip carrying it (`messageClipboard`), so a paste
+ * into a box brings the chips back and another app pastes a picture as one.
+ * Note that the editor's bundle is read as it stands where it has landed,
+ * which the panel starts as it first paints, so the clipboard is written in
+ * the press's own task, as Safari asks.
+ */
+function useMessageCopy(): (words: string) => Promise<void> {
+  const files = useContext(WordFilesContext);
+  const client = useQueryClient();
+  const { descriptionEditor } = useSideBundles();
+
+  return (words) => {
+    const carried = carriedFiles(words, files);
+
+    if (carried.size === 0) return copyThroughShell(words);
+
+    const write = (editor: DescriptionEditorModule) =>
+      copyRichThroughShell(editor.messageClipboard(words, carried));
+
+    const landed = client.getQueryData(descriptionEditor.queryKey);
+
+    return landed === undefined
+      ? client.ensureQueryData(descriptionEditor).then(write)
+      : write(landed);
+  };
+}
 
 export function CopyMessageAction({
   words,
@@ -42,18 +94,14 @@ export function CopyMessageAction({
 }): ReactNode {
   const place = useMessagePlace(messageId ?? "");
   const copyLink = useCopyLink();
+  const copy = useMessageCopy();
 
   return (
     <MessageActions>
       {lead}
       {copyable ? (
         <HeldMessageAction>
-          <CopyButton
-            text={words}
-            what={COPY_WHAT}
-            copy={copyThroughShell}
-            size={BUTTON_SIZE.COMPACT}
-          />
+          <CopyButton text={words} what={COPY_WHAT} copy={copy} size={BUTTON_SIZE.COMPACT} />
         </HeldMessageAction>
       ) : null}
       {messageId === undefined || place === undefined || copyLink === undefined ? null : (

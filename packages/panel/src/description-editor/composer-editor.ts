@@ -28,14 +28,21 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { WRITING_BLOCK, WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
-import { type AnyExtension, Editor, Extension, Node } from "@tiptap/core";
+import { type AnyExtension, Editor, Extension, getSchema, Node } from "@tiptap/core";
 import {
   chainCommands,
   createParagraphNear,
   liftEmptyBlock,
   splitBlock,
 } from "@tiptap/pm/commands";
-import { Fragment, type Mark, type Node as PmNode, type Schema, Slice } from "@tiptap/pm/model";
+import {
+  DOMSerializer,
+  Fragment,
+  type Mark,
+  type Node as PmNode,
+  type Schema,
+  Slice,
+} from "@tiptap/pm/model";
 import {
   type EditorState,
   Plugin,
@@ -55,8 +62,10 @@ import {
   type ComposerMark,
   type ComposerTrigger,
   type CopiedFile,
+  type CopiedWords,
   type EditorAria,
   type LinkedPicture,
+  type MentionDrawer,
   type MentionNode,
   rootAria,
   sameAria,
@@ -165,6 +174,12 @@ const HARD_BREAK_NODE = "hardBreak";
 
 /** No commands, for a box that runs none, and for words laid in among others, which open no message. */
 const NO_COMMANDS: ReadonlySet<string> = new Set();
+
+/** Where a mention chip's rule stands among the rules a paste is read by: before the link mark's, at ProseMirror's default. */
+const MENTION_RULE_PRIORITY = 60;
+
+/** No skill, as a copy of a sent message's words knows none. */
+const NO_SKILLS: ReadonlySet<string> = new Set();
 
 /** A run of plain text in the words: where it starts in the string, and where in the document. */
 interface TextRun {
@@ -818,6 +833,48 @@ function fileNode(
 }
 
 /**
+ * A mention's chip as the box holds it, which a copy writes as the link it
+ * reads out as, `@name` linking its target: another app pastes it as that
+ * link, and a box pastes it back as the chip, where the link is one its
+ * words would be read as a mention by (`mentionTokens`). Note that its rule
+ * is read before the link mark's, which would take the chip for linked words.
+ */
+function composerMentionNode(drawMention: MentionDrawer | undefined) {
+  return mentionNode(drawMention).extend({
+    parseHTML() {
+      return [
+        {
+          tag: `a[data-chip="${MENTION_NODE}"][href]`,
+          priority: MENTION_RULE_PRIORITY,
+          getAttrs: (element) => {
+            const link = mentionLink({
+              name: element.textContent.replace(/^@/u, ""),
+              target: element.getAttribute("href") ?? "",
+            });
+
+            const [token] = mentionTokens(link);
+
+            return token?.start === 0 && token.end === link.length ? { ...token.mention } : false;
+          },
+        },
+      ];
+    },
+    renderHTML({ node }) {
+      const { name, target } = node.attrs;
+
+      return ["a", { "data-chip": MENTION_NODE, href: String(target) }, `@${String(name)}`];
+    },
+  });
+}
+
+/** What the box's chips know of the names they are made of: the skills the repository keeps, the files the box holds, and the bytes a copy of a file's chip carries. */
+interface ChipsKnown {
+  readonly known: (name: string) => boolean;
+  readonly held: (name: string) => boolean;
+  readonly copied: (name: string) => CopiedFile | undefined;
+}
+
+/**
  * What the box may hold: paragraphs, text, a hard break, undo, and the
  * inline marks, StarterKit's and nothing more, the chips, and the quote
  * block; the marks' chords the writing vocabulary's, and the selection told
@@ -827,9 +884,8 @@ function fileNode(
  * nothing, since the box's own right-click opens it.
  */
 function composerExtensions(
-  props: ComposerEditorProps,
-  known: (name: string) => boolean,
-  held: (name: string) => boolean,
+  props: Pick<ComposerEditorProps, "drawChip" | "drawFile" | "mentions" | "format">,
+  chips: ChipsKnown,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
     // Note that the quote is the description's own (`quoteNode`), holding lines alone.
@@ -851,9 +907,9 @@ function composerExtensions(
     withoutTipTapChords(kit),
     writingKeys.configure({ actions: WRITING_ACTIONS }),
     ...formatReports(props.format),
-    skillNode(props.drawChip, known),
-    fileNode(props.drawFile, held, (name) => props.fileCopies?.copied(name)),
-    mentionNode(props.mentions?.drawMention),
+    skillNode(props.drawChip, chips.known),
+    fileNode(props.drawFile, chips.held, chips.copied),
+    composerMentionNode(props.mentions?.drawMention),
     quoteNode(true),
   ];
 }
@@ -1506,6 +1562,51 @@ function attributed(
 }
 
 /**
+ * A sent message's words as a copy out of a message box writes them: its
+ * plain text the words themselves, and its HTML the document a box lays
+ * them in as, each marker of a file in `files` that file's chip carrying its
+ * bytes (`fileNode`), so a paste into a box brings each chip back with its
+ * file (`adoptedSlice`), and an app that takes HTML pastes a picture as one.
+ * A `/name` stays its words, which the box pasted into makes its chip where
+ * it keeps that skill. Note that the HTML is marked a slice open at each end
+ * that is a line, as the editor's own copy marks one, so its first and last
+ * lines join the lines it is pasted between and its spaces stand as written.
+ */
+export function messageClipboard(
+  words: string,
+  files: ReadonlyMap<string, CopiedFile>,
+): CopiedWords {
+  const schema = getSchema(
+    composerExtensions(
+      {
+        drawChip: () => () => undefined,
+        drawFile: undefined,
+        mentions: undefined,
+        format: undefined,
+      },
+      { known: () => false, held: (name) => files.has(name), copied: (name) => files.get(name) },
+    ),
+  );
+
+  const doc = documentOf(schema, words, {
+    skills: NO_SKILLS,
+    commands: NO_COMMANDS,
+    files: new Set(files.keys()),
+    mentions: true,
+  });
+
+  const host = document.createElement("div");
+  host.append(DOMSerializer.fromSchema(schema).serializeFragment(doc.content));
+  const open = (edge: PmNode | null) => (edge?.isTextblock === true ? 1 : 0);
+  host.firstElementChild?.setAttribute(
+    "data-pm-slice",
+    `${String(open(doc.firstChild))} ${String(open(doc.lastChild))} []`,
+  );
+
+  return { html: host.innerHTML, text: words };
+}
+
+/**
  * The message box's editor mounted into `host`, opening on the words given,
  * each change handed back through `onDraft`, and every outside change taken
  * through the handle it answers.
@@ -1535,11 +1636,11 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     // Note that pasted words are read as the box reads its own (`clipboardTextParser`), so no paste rule makes a link of a bare address or bold of `__init__`; a link pasted over words selected still links them.
     enablePasteRules: false,
     extensions: [
-      ...composerExtensions(
-        props,
-        (name) => state.skills.has(name),
-        (name) => state.files.has(name),
-      ),
+      ...composerExtensions(props, {
+        known: (name) => state.skills.has(name),
+        held: (name) => state.files.has(name),
+        copied: (name) => props.fileCopies?.copied(name),
+      }),
       Extension.create({ name: "composerGuard", addProseMirrorPlugins: () => [guard] }),
       chipSpacing,
     ],
