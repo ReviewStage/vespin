@@ -798,7 +798,7 @@ function calledAgentActor(
 }
 
 /** One tool call: its row, and its input and answer under it once opened, a stop naming the worker it stopped by its job where `jobs` knows it, a call about an agent naming it by its chip where `cards` or its answer know it, and a command killed out of memory offering a larger sandbox (`OutOfMemoryOffer`); an answer its page carried cut drawn as `cut` says. */
-function ToolCallView({
+export function ToolCallView({
   part,
   jobs,
   cards,
@@ -2701,7 +2701,7 @@ function findRowOf(row: PlacedRow): FindRow {
 }
 
 /** The class every row of the log wears (tasks.css). */
-const LOG_ROW_CLASS = "agent-log-row";
+export const LOG_ROW_CLASS = "agent-log-row";
 
 /** One row of the log: a placed message, or one piece of a turn too long to draw at once (`turn-pieces.ts`). */
 interface LogEntry {

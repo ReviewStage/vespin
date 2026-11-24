@@ -15,9 +15,11 @@
  * the transcript stands under the turn's own id. A turn's work is all its
  * journal holds but what the chat already draws: its step boundaries, the
  * lines that reached it, and the messages and sets it sent. The Manager's
- * last message of a turn that has ended opens that turn's work on Show work,
- * and the turn under way's work opens under the working line instead, so a
- * finished chat draws no more than its messages.
+ * last message of words in a turn that has ended opens that turn's work on
+ * Show work, since a set of no words offers no presses beside it, or its
+ * last message where it sent no words; the turn under way's work opens
+ * under the working line instead, so a finished chat draws no more than its
+ * messages.
  */
 
 import { AGENT_PART, type AgentPart, agentParts, isShownSet } from "./agent-parts.js";
@@ -39,7 +41,7 @@ export interface ChatRunPlace {
 export interface ManagerChatLine {
   readonly message: ManagerChatLiveMessage;
   readonly place: ChatRunPlace;
-  /** The turn whose work Show work opens under the message: set on the Manager's last message of each turn that has ended and did work; none otherwise. */
+  /** The turn whose work Show work opens under the message: set on the Manager's last message of words of each turn that has ended and did work, or its last message where it sent no words; none otherwise. */
   readonly work?: string;
 }
 
@@ -95,8 +97,8 @@ function turnWork(
 /**
  * A Manager's chat as a page draws it: its rows, read newest first, drawn
  * oldest first, each placed in its sender's run; each ended turn's work,
- * from the transcript held, opened by the Manager's last message of the
- * turn; and the work of the turn under way (`running`, its id), drawn
+ * from the transcript held, opened by the Manager's last message of words
+ * in the turn; and the work of the turn under way (`running`, its id), drawn
  * under the working line. A turn whose journal is not held keeps its work
  * nowhere, so its messages offer none.
  */
@@ -107,12 +109,15 @@ export function managerChatView(
 ): ManagerChatView {
   const { work, live } = turnWork(transcript, options.running);
   const ordered = rows.toReversed();
-  /** The Manager's last message of each turn, by the turn's id. */
-  const lastOfTurn = new Map<string, string>();
+  /** The message of each turn that opens its work, by the turn's id: the Manager's last of words, or its last where it sent none. */
+  const opensWork = new Map<string, ManagerChatLiveMessage>();
 
   for (const message of ordered) {
-    if (message.authorKind === MANAGER_CHAT_AUTHOR.AGENT && message.turnId !== null) {
-      lastOfTurn.set(message.turnId, message.id);
+    if (message.authorKind !== MANAGER_CHAT_AUTHOR.AGENT || message.turnId === null) continue;
+    const held = opensWork.get(message.turnId);
+
+    if (held === undefined || message.text !== "" || held.text === "") {
+      opensWork.set(message.turnId, message);
     }
   }
 
@@ -126,9 +131,9 @@ export function managerChatView(
     };
 
     const turn = message.turnId;
-    const opensWork = turn !== null && lastOfTurn.get(turn) === message.id && work.has(turn);
+    const opener = turn !== null && opensWork.get(turn) === message && work.has(turn);
 
-    return opensWork ? { message, place, work: turn } : { message, place };
+    return opener ? { message, place, work: turn } : { message, place };
   });
 
   return { messages, work, live };

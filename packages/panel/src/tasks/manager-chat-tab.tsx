@@ -9,18 +9,23 @@
  * by sender, the reader's own at the column's right and everyone else's at
  * its left, the Manager's beside its face and under its name. The greeting
  * the Manager opens on stands above its first message once the chat's start
- * is read, since nothing stores it.
+ * is read, since nothing stores it. Each message is a row of the log's run
+ * (`ConversationRows`), drawn only near the view, which opens at the chat's
+ * end and keeps to it as messages land, and which ⌘F reads by its words.
  *
  * The transcript is the work under the chat, read beside it only for what
  * a chat shows of it: whether a turn is under way, which the working line
- * says, and each turn's work, which the Manager's last message of the turn
- * opens on Show work, and the working line opens for the turn under way. A
+ * says, and each turn's work, which the Manager's last message of words in
+ * the turn opens on Show work, and the working line opens for the turn under
+ * way. A call the Manager holds for the reader's answer stands at the chat's
+ * foot, its answers under it, since the work it stands in is a press away. A
  * message the reader sends goes to the chat (`agents.chat.send`) and stands
  * drawn at its end from the moment it is sent, as the host draws it on its
  * way, until its row lands; one refused stands marked, with Retry, Edit, and
  * Delete, as any of the agent box's lines does.
  */
 
+import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { endLineReason } from "@repo/features/agent-continue-model";
 import { computerAppsOf } from "@repo/features/agent-parts";
 import type { ShownPicture } from "@repo/features/agent-pictures-model";
@@ -60,22 +65,31 @@ import {
   Text,
 } from "@repo/ui";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
+import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
+  ConversationRows,
   ConversationScrollButton,
 } from "../ai-elements/conversation.js";
 import { Message, RECEIVED_MESSAGE_CLASS } from "../ai-elements/message.js";
+import { useFindOpen } from "../find-in-tab.js";
 import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
 import { usePerson } from "../member-directory.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
-import { useAgentApprovals, useApprovingSend } from "./agent-approvals.js";
+import { type FindRow, useVirtualFind } from "../virtual-find.js";
+import {
+  ApprovalsProvider,
+  heldCallPart,
+  useAgentApprovals,
+  useApprovingSend,
+} from "./agent-approvals.js";
 import { useAgentBox } from "./agent-box.js";
 import { AgentComposerDock, boxTakesWords } from "./agent-composer-dock.js";
 import { AgentEndRow } from "./agent-end-row.js";
@@ -97,7 +111,7 @@ import {
   useAgentPictureDoor,
 } from "./agent-pictures.js";
 import type { DelegationDoors } from "./agent-tab.js";
-import { TurnWorkRows } from "./agent-tab.js";
+import { LOG_ROW_CLASS, ToolCallView, TurnWorkRows } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ReplyMessageAction, useChatMessageMenu } from "./chat-reply.js";
@@ -433,31 +447,82 @@ function sendingLinesOf(
   sending: readonly ManagerChatSending[] | undefined,
   files: SentFiles,
 ): readonly SendingMessage[] {
-  return (sending ?? []).map((message) => ({
-    id: message.clientKey,
-    clientKey: message.clientKey,
-    text: message.text,
-    sentAt: message.sentAt,
-    steers: false,
-    ...(files.has(message.clientKey) ? { files: files.get(message.clientKey) } : undefined),
-    ...(message.sentBy === undefined ? undefined : { sentBy: message.sentBy }),
-    ...(message.refused === undefined ? undefined : { refused: message.refused }),
-  }));
+  return (sending ?? []).map((message) => {
+    // Note that a message whose bytes this window no longer keeps, as once its tab closed, still names each of its files, so its Retry and Edit find them missing and send nothing short of them.
+    const held =
+      files.get(message.clientKey) ??
+      message.attachments?.map(({ name, mediaType }) => ({ name, mediaType }));
+
+    return {
+      id: message.clientKey,
+      clientKey: message.clientKey,
+      text: message.text,
+      sentAt: message.sentAt,
+      steers: false,
+      ...(held === undefined || held.length === 0 ? undefined : { files: held }),
+      ...(message.sentBy === undefined ? undefined : { sentBy: message.sentBy }),
+      ...(message.refused === undefined ? undefined : { refused: message.refused }),
+    };
+  });
 }
 
-/** The chat's lines in runs, each run the lines of one sender that go on from its first, so the log stands each run as one row and its bubbles close together. */
-function runsOf(lines: readonly ManagerChatLine[]): readonly (readonly ManagerChatLine[])[] {
-  const runs: ManagerChatLine[][] = [];
+/** What a row of the chat's log draws: the Manager's greeting, a message of the chat, or one of the reader's on its way. */
+const CHAT_ROW = {
+  GREETING: "greeting",
+  MESSAGE: "message",
+  SENDING: "sending",
+} as const;
 
-  for (const line of lines) {
-    const run = runs.at(-1);
+/** One row of the chat's log, under the key the log keeps it by. */
+type ChatRow =
+  | { readonly kind: typeof CHAT_ROW.GREETING; readonly key: string; readonly words: string }
+  | { readonly kind: typeof CHAT_ROW.MESSAGE; readonly key: string; readonly line: ManagerChatLine }
+  | { readonly kind: typeof CHAT_ROW.SENDING; readonly key: string; readonly line: SentLine };
 
-    if (run === undefined || line.place.opens) runs.push([line]);
-    else run.push(line);
-  }
+/** The key the greeting's row stands under, which no message's id is. */
+const GREETING_KEY = "greeting";
 
-  return runs;
+/** The height a row of the chat is taken to have before it is drawn and measured, in pixels: a short message's, with the step before it. */
+const CHAT_ROW_ESTIMATE_PX = 88;
+
+/** The chat's log as rows: the greeting where the chat's start is read, its messages oldest first, and the reader's on their way after them. */
+function chatRowsOf(
+  greeting: string | undefined,
+  lines: readonly ManagerChatLine[],
+  sent: readonly SentLine[],
+): readonly ChatRow[] {
+  return [
+    ...(greeting === undefined
+      ? []
+      : [{ kind: CHAT_ROW.GREETING, key: GREETING_KEY, words: greeting } as const]),
+    ...lines.map((line): ChatRow => ({ kind: CHAT_ROW.MESSAGE, key: line.message.id, line })),
+    ...sent.map((line): ChatRow => ({ kind: CHAT_ROW.SENDING, key: line.id, line })),
+  ];
 }
+
+/** A row as ⌘F reads it before it is drawn: its words. */
+function findRowOf(row: ChatRow): FindRow {
+  if (row.kind === CHAT_ROW.GREETING) return { key: row.key, words: row.words };
+
+  return {
+    key: row.key,
+    words: row.kind === CHAT_ROW.MESSAGE ? row.line.message.text : row.line.text,
+  };
+}
+
+/** The key of the reader's newest line, which takes the log to its end as it lands: one on its way, or their newest message the chat holds; none where they wrote none. */
+function ownLastOf(rows: readonly ChatRow[], readerId: string | undefined): string | undefined {
+  return rows.findLast(
+    (row) =>
+      row.kind === CHAT_ROW.SENDING ||
+      (row.kind === CHAT_ROW.MESSAGE &&
+        readerId !== undefined &&
+        row.line.message.authorUserId === readerId),
+  )?.key;
+}
+
+/** No row for ⌘F to read, while no find stands. */
+const NO_FIND_ROWS: readonly FindRow[] = [];
 
 /** No pictures drawn as a set, as a person's message draws its files as chips. */
 const NONE_SHOWN: readonly ShownPicture[] = [];
@@ -591,6 +656,8 @@ export function ManagerChatTab({
   const computerApps = useMemo(() => computerAppsOf(transcript.messages), [transcript.messages]);
   const { door: replyDoor, reply: replyThroughBox } = useBoxReplyDoor();
   const tab = useRef<HTMLElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const rowsHandle = useRef<VirtualRowsHandle>(null);
   useManagerChatLooks(agent.id, agent.saidAt);
 
   const { unarchive, endPress, endTrail, continuedNote, closedRemedy, continuable } =
@@ -691,6 +758,121 @@ export function ManagerChatTab({
   const before = chat?.before;
   const onOlder = before === undefined ? undefined : () => readOlder({ agentId: agent.id, before });
 
+  const rows = useMemo(
+    () =>
+      chatRowsOf(
+        before === undefined ? managerGreeting(agent.title) : undefined,
+        view.messages,
+        composer.sent,
+      ),
+    [before, agent.title, view.messages, composer.sent],
+  );
+
+  const keys = useMemo(() => rows.map((row) => row.key), [rows]);
+  const ownLast = ownLastOf(rows, control.me);
+  const finding = useFindOpen();
+  const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
+  useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });
+
+  // Note that a message going on its sender's run stands close under the one before it, as a chat app stands one sender's bubbles, and every other row a step from it (tasks.css).
+  const rowClassOf = useCallback(
+    (index: number) => {
+      if (index === 0) return LOG_ROW_CLASS;
+      const row = rows[index];
+
+      return row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens
+        ? `${LOG_ROW_CLASS} agent-log-row-run`
+        : `${LOG_ROW_CLASS} agent-log-row-next`;
+    },
+    [rows],
+  );
+
+  const asks = approvals.asks;
+
+  const workingWords =
+    approvals.waiting > 0
+      ? waitingOnYouWords(approvals.waiting)
+      : workingLineWords(standing.phase, standing.waitsUntil);
+
+  // What stands after the messages is drawn inside the last of them, as an agent's log draws it, so the run measures it with the row and keeps to it.
+  const trailing =
+    !standing.working &&
+    asks.length === 0 &&
+    ended === undefined &&
+    endTrail === undefined ? null : (
+      <>
+        {asks.length === 0 ? null : (
+          // Note that only the foot's calls offer the answers, since the same call drawn in the work under the working line would offer them twice.
+          <ApprovalsProvider asks={asks}>
+            <div className="agent-loose-approvals flex flex-col">
+              {asks.map((ask) => (
+                <ToolCallView key={ask.approval.id} part={heldCallPart(ask.approval)} />
+              ))}
+            </div>
+          </ApprovalsProvider>
+        )}
+        {standing.working ? (
+          <ChatWorking
+            words={workingWords}
+            face={agent.face}
+            work={
+              view.live.length === 0 ? null : (
+                <TurnWorkRows parts={view.live} moving delegation={delegation} />
+              )
+            }
+          />
+        ) : null}
+        {ended === undefined && endTrail === undefined ? null : (
+          <div className="agent-end flex flex-col items-start gap-control-gap">
+            {ended === undefined ? null : (
+              <AgentEndRow
+                ended={ended}
+                endReason={endLineReason(standing.failure, starter)}
+                keyProvider={providerOf(agent.model)}
+                onOpenApiKeys={
+                  control.onOpenApiKeys === undefined
+                    ? undefined
+                    : () => control.onOpenApiKeys?.(providerOf(agent.model))
+                }
+                about={{ agentId: agent.id, taskId: agent.taskId ?? undefined }}
+                press={endPress}
+              />
+            )}
+            {endTrail}
+          </div>
+        )}
+      </>
+    );
+
+  /** One row of the log, as its kind draws it. */
+  const drawRow = (row: ChatRow): ReactNode => {
+    if (row.kind === CHAT_ROW.GREETING)
+      return <ManagerGreeting manager={manager} words={row.words} />;
+
+    if (row.kind === CHAT_ROW.SENDING) return <SendingLine line={row.line} />;
+    const { line } = row;
+
+    if (line.message.authorKind !== MANAGER_CHAT_AUTHOR.AGENT) {
+      return <PersonMessage line={line} doors={doors} />;
+    }
+
+    return (
+      <ManagerMessage
+        line={line}
+        doors={doors}
+        work={
+          line.work === undefined ? null : (
+            <TurnWorkRows
+              parts={view.work.get(line.work) ?? []}
+              moving={false}
+              delegation={delegation}
+            />
+          )
+        }
+      />
+    );
+  };
+
   const log = (() => {
     if (read.isError) {
       return (
@@ -706,70 +888,30 @@ export function ManagerChatTab({
     if (chat === undefined) return <TranscriptSkeleton />;
 
     return (
-      <Conversation onNearTop={onOlder}>
+      <Conversation list={list} onNearTop={onOlder}>
         {olderFailed && onOlder !== undefined ? <OlderReadFailed onRetry={onOlder} /> : null}
         <ConversationContent>
-          {before === undefined ? (
-            <ManagerGreeting manager={manager} words={managerGreeting(agent.title)} />
-          ) : null}
-          {runsOf(view.messages).map((run) => (
-            // Note that a run stands as one row of the log, so its bubbles stand close together and runs a step apart.
-            <div key={run[0]?.message.id} className="flex flex-col gap-tight-gap">
-              {run.map((line) =>
-                line.message.authorKind === MANAGER_CHAT_AUTHOR.AGENT ? (
-                  <ManagerMessage
-                    key={line.message.id}
-                    line={line}
-                    doors={doors}
-                    work={
-                      line.work === undefined ? null : (
-                        <TurnWorkRows
-                          parts={view.work.get(line.work) ?? []}
-                          moving={false}
-                          delegation={delegation}
-                        />
-                      )
-                    }
-                  />
-                ) : (
-                  <PersonMessage key={line.message.id} line={line} doors={doors} />
-                ),
-              )}
-            </div>
-          ))}
-          {composer.sent.map((line) => (
-            <SendingLine key={line.id} line={line} />
-          ))}
-          {standing.working ? (
-            <ChatWorking
-              words={workingLineWords(standing.phase, standing.waitsUntil)}
-              face={agent.face}
-              work={
-                view.live.length === 0 ? null : (
-                  <TurnWorkRows parts={view.live} moving delegation={delegation} />
-                )
-              }
-            />
-          ) : null}
-          {ended === undefined && endTrail === undefined ? null : (
-            <div className="agent-end flex flex-col items-start gap-control-gap">
-              {ended === undefined ? null : (
-                <AgentEndRow
-                  ended={ended}
-                  endReason={endLineReason(standing.failure, starter)}
-                  keyProvider={providerOf(agent.model)}
-                  onOpenApiKeys={
-                    control.onOpenApiKeys === undefined
-                      ? undefined
-                      : () => control.onOpenApiKeys?.(providerOf(agent.model))
-                  }
-                  about={{ agentId: agent.id, taskId: agent.taskId ?? undefined }}
-                  press={endPress}
-                />
-              )}
-              {endTrail}
-            </div>
-          )}
+          <ConversationRows
+            keys={keys}
+            estimate={CHAT_ROW_ESTIMATE_PX}
+            gap={0}
+            rowClassName={rowClassOf}
+            handle={rowsHandle}
+            ownLast={ownLast}
+          >
+            {(at) => {
+              const row = rows[at];
+
+              if (row === undefined) return null;
+
+              return (
+                <>
+                  {drawRow(row)}
+                  {at === rows.length - 1 ? trailing : null}
+                </>
+              );
+            }}
+          </ConversationRows>
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>

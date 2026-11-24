@@ -9,8 +9,8 @@ import { managerChatView } from "./manager-chat-view.js";
 /**
  * manager-chat-view.test.ts -- a Manager's chat drawn from its rows: oldest
  * first in runs by sender, and each ended turn's work, less what the chat
- * draws, opened by the Manager's last message of the turn, the turn under
- * way's apart. Synthetic words.
+ * draws, opened by the Manager's last message of words in the turn, the
+ * turn under way's apart. Synthetic words.
  */
 
 const MINUTE = 60 * 1000;
@@ -66,11 +66,12 @@ function heldWork(parts: readonly AgentPart[] | undefined): readonly string[] | 
   });
 }
 
-test("a Manager's chat stands oldest first in runs by sender, a pause past ten minutes opening a new one, and the Manager's last message of each ended turn opens that turn's work, less its steps and what it sent, the turn under way's apart", () => {
+test("a Manager's chat stands oldest first in runs by sender, a pause past ten minutes opening a new one, and the Manager's last message of words in each ended turn opens that turn's work, less its steps and what it sent, the turn under way's apart", () => {
   const rows = [
-    row("m5", 9, 40, { turn: "t3" }),
-    row("ben", 8, 39, { person: "user-ben" }),
-    row("m4", 7, 30, { turn: "t2" }),
+    row("m5", 10, 40, { turn: "t3" }),
+    row("ben", 9, 39, { person: "user-ben" }),
+    row("m4", 8, 30, { turn: "t2" }),
+    { ...row("set", 7, 6, { turn: "t1" }), text: "" },
     row("m3", 6, 5, { turn: "t1" }),
     row("m2", 5, 3, { turn: "t1" }),
     row("ada-2", 4, 2, { person: "user-ada" }),
@@ -98,7 +99,9 @@ test("a Manager's chat stands oldest first in runs by sender, a pause past ten m
       ["ada-1", true, false, undefined],
       ["ada-2", false, true, undefined],
       ["m2", true, false, undefined],
-      ["m3", false, true, "t1"],
+      // Note that t1 ended on a set of no words, which offers no presses, so its last message of words opens its work.
+      ["m3", false, false, "t1"],
+      ["set", false, true, undefined],
       // Note that t2 sent its words and a set, and did nothing else, so it keeps no work to open.
       ["m4", true, true, undefined],
       ["ben", true, true, undefined],
