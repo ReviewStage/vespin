@@ -1,0 +1,51 @@
+pinned to 06de0d4208
+== bundle PJjxcold11c base 06de0d42087
+  built 06de0d42087 base app Vmain13.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(337,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(341,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(361,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(394,185): error TS18048: 'item.thread' is possibly 'undefined'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+t1 (b598167c60) bundle 25280 KB over Vmain13.app
+seed (holders, t1 06de0d4208): 28136 KB
+source maps: index-e7516f08ce926be313f487ab12cb0045.hbc.map (67204 KB); hbc matches the installed main.jsbundle
+sign-in: fails 0 shots 3 
+  touch-1 fresh: launch-probe.json written +80.6 s wallAtLoad +3922 ms; launch-profile-60.json written +80.6 s; launch-profile.json written +80.6 s; launch-watch-65.json written +80.6 s; launch-watch-76.json written +80.6 s; launch-watch.json written +80.6 s
+  touch-1 trace: no export (xctrace failed rc=21, sample fallback); sample-tap ok
+touch-1: pid 39749, probe ok, watch MISSING, profile MISSING, maestro ok
+  touch-1 watch:profile marks: [{"n": "watch:profile-start", "t": 88.8, "d": {"started": true}}]
+  touch-1 cpu peak 94.7% (at 60 s: 18.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 30 s: Tasks on screen: task rows 13, inbox rows 0, probe-touch: 
+touch-1: 
+  idle-1 fresh: launch-probe.json written +80.8 s wallAtLoad +7878 ms; launch-profile-60.json written +80.8 s; launch-profile.json written +80.8 s; launch-watch-65.json written +80.8 s; launch-watch-76.json.missing MISSING; launch-watch.json written +80.8 s
+  idle-1 trace: no export (xctrace failed rc=21, sample fallback); sample-tap ok
+idle-1: pid 41573, probe ok, watch MISSING, profile MISSING
+  idle-1 watch:profile marks: [{"n": "watch:profile-start", "t": 132.4, "d": {"started": true}}]
+  idle-1 cpu peak 81.8% (at 60 s: 4.5%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json.missing launch-watch.json , hierarchy at 3 s: Inbox on screen: task rows 0, inbox rows 10, at 10 s: Inbox on screen: task rows 0, inbox rows 10
+idle-1: 
+  touch-2 fresh: launch-probe.json written +80.0 s wallAtLoad +6546 ms; launch-profile-60.json written +80.1 s; launch-profile.json written +80.1 s; launch-watch-65.json written +80.1 s; launch-watch-76.json.missing MISSING; launch-watch.json written +80.1 s
+  touch-2 trace: no export (xctrace failed rc=21, sample fallback); sample-tap ok
+touch-2: pid 43986, probe ok, watch MISSING, profile MISSING, maestro ok
+  touch-2 watch:profile marks: [{"n": "watch:profile-start", "t": 74.1, "d": {"started": true}}]
+  touch-2 cpu peak 103.1% (at 60 s: 26.8%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json.missing launch-watch.json , hierarchy at 30 s: Tasks on screen: task rows 18, inbox rows 0, probe-touch: 
+touch-2: 
+  idle-2 fresh: launch-probe.json written +80.8 s wallAtLoad +4068 ms; launch-profile-60.json written +80.8 s; launch-profile.json written +80.8 s; launch-watch-65.json written +80.8 s; launch-watch-76.json written +80.8 s; launch-watch.json written +80.8 s
+idle-2: pid 47243, probe ok, watch MISSING, profile MISSING
+  idle-2 watch:profile marks: [{"n": "watch:profile-start", "t": 91, "d": {"started": true}}]
+  idle-2 cpu peak 122.4% (at 60 s: 5.9%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json 
+idle-2: 
+  touch-3 fresh: launch-probe.json written +81.0 s wallAtLoad +4810 ms; launch-profile-60.json written +81.1 s; launch-profile.json written +81.1 s; launch-watch-65.json written +81.1 s; launch-watch-76.json written +81.1 s; launch-watch.json written +81.1 s
+  touch-3 trace: no export (xctrace failed rc=21, sample fallback); sample-tap ok
+touch-3: pid 51309, probe ok, watch MISSING, profile MISSING, maestro ok
+  touch-3 watch:profile marks: [{"n": "watch:profile-start", "t": 100.6, "d": {"started": true}}]
+  touch-3 cpu peak 132.1% (at 60 s: 20.7%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 30 s: Tasks on screen: task rows 13, inbox rows 0, probe-touch: 
+touch-3: 
+  touch-4 fresh: launch-probe.json written +80.8 s wallAtLoad +4573 ms; launch-profile-60.json written +80.8 s; launch-profile.json written +80.8 s; launch-watch-65.json written +80.8 s; launch-watch-76.json written +80.8 s; launch-watch.json written +80.8 s
+  touch-4 trace: no export (xctrace failed rc=21, sample fallback); sample-tap ok
+touch-4: pid 56578, probe ok, watch MISSING, profile MISSING, maestro ok
+  touch-4 watch:profile marks: [{"n": "watch:profile-start", "t": 110.1, "d": {"started": true}}]
+  touch-4 cpu peak 103.2% (at 60 s: 18.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 30 s: Tasks on screen: task rows 15, inbox rows 0, probe-touch: 
+touch-4: 
