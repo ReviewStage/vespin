@@ -145,7 +145,7 @@ const HELD_PUSH_SWEEP = { BATCH: 100, CONCURRENCY: 8 } as const;
  * Inbox. Note that a build before it, or a phone that has not registered
  * since the service kept its version, is never sent one.
  */
-const TASKLESS_THREAD_PUSH_API_VERSION = 8;
+const TASKLESS_THREAD_PUSH_API_VERSION = 9;
 
 /** One notification as a push composes it for the badge, before it is addressed to each phone, and the API version a phone must have named to be sent it, where an older build cannot open it. */
 interface MemberNotification {

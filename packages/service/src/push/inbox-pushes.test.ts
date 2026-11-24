@@ -390,8 +390,8 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         });
 
         const { agent } = Option.getOrThrow(started);
-        const reads = yield* phoneOf(asker, 8);
-        yield* phoneOf(asker, 7);
+        const reads = yield* phoneOf(asker, 9);
+        yield* phoneOf(asker, 8);
         yield* phoneOf(asker);
 
         const manager = {
