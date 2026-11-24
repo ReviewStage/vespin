@@ -1,0 +1,39 @@
+pinned to c53fb47c9e
+== bundle PJjm10729g base c53fb47c9ec
+  built c53fb47c9ec base app Vnatc1.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/features/src/turn-run/tool-set.ts(25,5): error TS2345: Argument of type 'WireValue' is not assignable to parameter of type 'JSONSchema7 | PromiseLike<JSONSchema7> | (() => JSONSchema7 | PromiseLike<JSONSchema7>)'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+G1: maestro ok
+  G1 '@Invite li': {"tag": "G1-Inviteli", "text": "@Invite li", "rec_start": 1795550910642, "input_running": 1795551034983, "input_completed": 1795551034983, "frames": 432, "at_frame_ms": null, "at_to_list_ms": null, "last_char_frame_ms": null, "list_first_frame_ms": null, "list_settled_ms": null, "last_char_to_list_ms": null, "last_char_to_settled_ms": null, "window_start_s": 123.841, "video": "1206x2622"}
+== bundle PJjm10729gmain base aab69d1d0fe
+  built aab69d1d0fe base app Vnatc1.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/features/src/turn-run/tool-set.ts(25,5): error TS2345: Argument of type 'WireValue' is not assignable to parameter of type 'JSONSchema7 | PromiseLike<JSONSchema7> | (() => JSONSchema7 | PromiseLike<JSONSchema7>)'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+G2: maestro ok
+  G2 '@Invite li': {"tag": "G2-Inviteli", "text": "@Invite li", "rec_start": 1795551105597, "input_running": 1795551195833, "input_completed": 1795551195833, "frames": 406, "at_frame_ms": 33, "at_to_list_ms": null, "last_char_frame_ms": 33, "list_first_frame_ms": null, "list_settled_ms": null, "last_char_to_list_ms": null, "last_char_to_settled_ms": null, "window_start_s": 89.736, "video": "1206x2622"}
+== bundle PJjm10729gfix base 5693246f165
+  built 5693246f165 base app Vnatc1.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/features/src/turn-run/tool-set.ts(25,5): error TS2345: Argument of type 'WireValue' is not assignable to parameter of type 'JSONSchema7 | PromiseLike<JSONSchema7> | (() => JSONSchema7 | PromiseLike<JSONSchema7>)'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+G5: maestro ok
+  G5 '@Invite li': {"tag": "G5-Inviteli", "text": "@Invite li", "rec_start": 1795551264761, "input_running": 1795551356716, "input_completed": 1795551356716, "frames": 348, "at_frame_ms": null, "at_to_list_ms": null, "last_char_frame_ms": null, "list_first_frame_ms": null, "list_settled_ms": null, "last_char_to_list_ms": null, "last_char_to_settled_ms": null, "window_start_s": 91.455, "video": "1206x2622"}
+G3: maestro ok
+  G3 '@Invite li': {"tag": "G3-Inviteli", "text": "@Invite li", "rec_start": 1795551368001, "input_running": 1795551398686, "input_completed": 1795551398686, "frames": 357, "at_frame_ms": 800, "at_to_list_ms": 0, "last_char_frame_ms": 800, "list_first_frame_ms": 800, "list_settled_ms": 1033, "last_char_to_list_ms": 0, "last_char_to_settled_ms": 233, "window_start_s": 30.185, "video": "1206x2622"}
+G6: maestro ok
+  G6 '@Invite li': {"tag": "G6-Inviteli", "text": "@Invite li", "rec_start": 1795551410362, "input_running": 1795551442737, "input_completed": 1795551442737, "frames": 333, "at_frame_ms": 617, "at_to_list_ms": 117, "last_char_frame_ms": 617, "list_first_frame_ms": 733, "list_settled_ms": 750, "last_char_to_list_ms": 117, "last_char_to_settled_ms": 133, "window_start_s": 31.875, "video": "1206x2622"}
+G4: maestro FAILED: Tap on id: composer-field... FAILED
+  G4 '@': {"tag": "G4-", "text": "@", "rec_start": 1795551453570, "input_running": 1795551490480, "input_completed": 1795551490480, "frames": 997, "at_frame_ms": null, "at_to_list_ms": null, "last_char_frame_ms": null, "list_first_frame_ms": null, "list_settled_ms": null, "last_char_to_list_ms": null, "last_char_to_settled_ms": null, "window_start_s": 36.41, "video": "1206x2622"}
+  G4 ' @': {"tag": "G4-", "text": " @", "rec_start": 1795551453570, "input_running": null, "input_completed": null, "error": "no clock anchor"}
+  device log:   326092 lines; presentation warnings: 0
