@@ -469,6 +469,27 @@ test("Reply keeps the side it was offered on as the log scrolls the words toward
   assert.equal(press()?.hasAttribute("data-below"), false, "still over the words");
 });
 
+test("Reply over words in a box that only clips them, as a chat bubble does, stands over them where the log has room, never cut at the box's edge", async () => {
+  const tab = await mounted();
+
+  const scope = [...tab.container.querySelectorAll("[data-reply-scope]")].find((each) =>
+    (each.textContent ?? "").includes(AGENT_WORDS),
+  );
+
+  const bubble = scope?.parentElement;
+  assert.ok(bubble, "the agent's words are drawn in a box");
+  // Note that jsdom computes each axis from its own property alone, never from the `overflow` shorthand.
+  bubble.style.overflowX = "clip";
+  bubble.style.overflowY = "clip";
+  vi.spyOn(bubble, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 295, 400, 40));
+  Range.prototype.getBoundingClientRect = () => new DOMRect(40, 300, 120, 20);
+
+  tab.select(AGENT_WORDS, "Option B", "review.");
+
+  const press = document.body.querySelector<HTMLElement>(".reply-to-selection");
+  assert.equal(press?.hasAttribute("data-below"), false, "over the words, past the box's top");
+});
+
 test("with a mouse, a selection resting is offered nothing until the pointer lets it go", async () => {
   const tab = await mounted();
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
