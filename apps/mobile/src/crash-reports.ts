@@ -123,6 +123,9 @@ const LAUNCH_READY = "ready";
 /** The span that ends as the host stands (`launchStood`). */
 const LAUNCH_STOOD = "stood";
 
+/** The span that ends as the app first comes active (`launchActiveAt`), which a system alert over a launch holds back. */
+const LAUNCH_ACTIVE = "active";
+
 /** What the test report says, so it is found in Sentry by its words. */
 const TEST_REPORT_WORDS = `A test report from ${PRODUCT_NAME}'s iOS app (-sentryTest js)`;
 
@@ -204,12 +207,15 @@ export function useCrashReportAccount(): void {
  * rows `readyMs` after the launch's start: each phase the launch reached is a
  * span from its start to the phase (`launch-phases.ts`), and the app start's
  * extension ends with the rows, so Sentry's app start runs from the process's
- * start to them, beside the native steps it measures itself. Note that a
- * launch that went to the background first is never ended here, so its time
- * away is never counted: the extension's own deadline ends it, with no
- * measurement. Nothing happens where no extension stands.
+ * start to them, beside the native steps it measures itself. Where the app
+ * came active only after the rows, as behind a system alert, the extension
+ * ends as it counts, and `activeMs` is a span of its own, so the wait shows
+ * as the alert's. Note that a launch that went to the background first is
+ * never ended here, so its time away is never counted: the extension's own
+ * deadline ends it, with no measurement. Nothing happens where no extension
+ * stands.
  */
-export function finishLaunchTrace(readyMs: number): void {
+export function finishLaunchTrace(readyMs: number, activeMs: number | undefined): void {
   const startedAt = launchStartedAt();
   const extension = getExtendedAppStartSpan();
 
@@ -218,6 +224,7 @@ export function finishLaunchTrace(readyMs: number): void {
       ...Object.values(LAUNCH_PHASE).map((phase) => ({ name: phase, ms: launchPhaseMs(phase) })),
       { name: LAUNCH_STOOD, ms: launchStood()?.ms },
       { name: LAUNCH_READY, ms: readyMs },
+      { name: LAUNCH_ACTIVE, ms: activeMs },
     ];
 
     for (const { name, ms } of spans) {

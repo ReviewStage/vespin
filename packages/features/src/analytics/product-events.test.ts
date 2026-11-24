@@ -178,7 +178,7 @@ test("a launch travels its time to the first rows on a rung, never as the raw ti
   );
 });
 
-test("a launch may add when its bundle evaluated, its account was read, its local copy opened, its host was composed and stood, its screens first drew, its Inbox was first grouped and how many documents it took, which rows it first showed, its build number and what it waited from, each read strictly", () => {
+test("a launch may add when its bundle evaluated, its account was read, its local copy opened, its host was composed and stood, its screens first drew, its Inbox was first grouped, the app first came active, and how many documents it took, which rows it first showed, its build number and what it waited from, each read strictly", () => {
   const phases = {
     [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 8,
     [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: 5,
@@ -188,6 +188,7 @@ test("a launch may add when its bundle evaluated, its account was read, its loca
     [PRODUCT_EVENT_PROPERTY.STARTED_SECONDS]: 3,
     [PRODUCT_EVENT_PROPERTY.INBOX_SECONDS]: 5,
     [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: 0.4,
+    [PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS]: 13,
     [PRODUCT_EVENT_PROPERTY.DELIVERIES]: 5,
     [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "52",
     [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: "feed",
