@@ -69,6 +69,37 @@ const sent = (callId: string, text: string, messageId?: string) => ({
   },
 });
 
+/** A member's line of the conversation, typed, or said on a call under its line's key where one is given. */
+const memberLine = (
+  target: { readonly userId: string; readonly conversationId: string },
+  line: {
+    readonly id: string;
+    readonly seq: number;
+    readonly text: string;
+    readonly callKey?: string;
+  },
+) => ({
+  ...target,
+  id: line.id,
+  seq: line.seq,
+  clientId: randomUUID(),
+  role: MESSAGE_ROLE.USER,
+  parts: [{ type: "text" as const, text: line.text }],
+  metadata:
+    line.callKey === undefined
+      ? { channel: MESSAGE_CHANNEL.TYPED }
+      : {
+          author: MESSAGE_AUTHOR.DEVELOPER,
+          channel: MESSAGE_CHANNEL.VOICE,
+          voice_session_id: "call-1",
+          line_key: line.callKey,
+        },
+  sender: MESSAGE_SENDER.MEMBER,
+  senderUserId: target.userId,
+  placedAt: LINE_AT,
+  finishedAt: LINE_AT,
+});
+
 /** One batch of the backfill for the Manager alone, answered as its JSON. */
 const backfill = (agentId: string, dry: boolean) =>
   Effect.gen(function* () {
@@ -129,19 +160,7 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
         const lineId = randomUUID();
 
         yield* db.insert(messages).values([
-          {
-            ...target,
-            id: lineId,
-            seq: 101,
-            clientId: randomUUID(),
-            role: MESSAGE_ROLE.USER,
-            parts: [{ type: "text", text: "Ship the table?" }],
-            metadata: { channel: MESSAGE_CHANNEL.TYPED },
-            sender: MESSAGE_SENDER.MEMBER,
-            senderUserId: owner,
-            placedAt: LINE_AT,
-            finishedAt: LINE_AT,
-          },
+          memberLine(target, { id: lineId, seq: 101, text: "Ship the table?" }),
           {
             ...target,
             seq: 102,
@@ -259,6 +278,62 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
           { written: 0, moved: 0, standing: 4 },
         );
         assert.deepEqual(yield* chatOf(owner, agent.id), chat, "a second run changes nothing");
+      }),
+  );
+
+  it.effect(
+    "a row written live is found by what names it, so two lines that say the same stay two",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { owner, agent } = yield* openManager;
+        const target = { userId: owner, conversationId: agent.conversationId };
+        const [first, second, spoken] = [randomUUID(), randomUUID(), randomUUID()];
+        const callKey = randomUUID();
+
+        yield* db
+          .insert(messages)
+          .values([
+            memberLine(target, { id: first, seq: 101, text: "ok" }),
+            memberLine(target, { id: second, seq: 102, text: "ok" }),
+            memberLine(target, { id: spoken, seq: 103, text: "ok", callKey }),
+          ]);
+
+        /** A member's "ok" as its live write left it: on its line, or under its call line's key. */
+        const live = (rest: { readonly lineId: string | null; readonly clientKey: string }) =>
+          writeManagerChatMessage(owner, {
+            agentId: agent.id,
+            id: randomUUID().slice(0, 8),
+            authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+            authorUserId: owner,
+            authorName: "Ada Lovelace",
+            text: "ok",
+            attachments: [],
+            inReplyTo: null,
+            broadcast: false,
+            turnId: null,
+            now: LINE_AT,
+            ...rest,
+          });
+
+        yield* live({ lineId: second, clientKey: randomUUID() });
+        yield* live({ lineId: null, clientKey: callKey });
+
+        const run = yield* backfill(agent.id, false);
+
+        assert.deepEqual(
+          { written: run.written, standing: run.standing },
+          { written: 1, standing: 2 },
+        );
+
+        assert.deepEqual(
+          (yield* chatOf(owner, agent.id)).map(({ text, lineId }) => ({ text, lineId })),
+          [
+            { text: "ok", lineId: first },
+            { text: "ok", lineId: second },
+            { text: "ok", lineId: null },
+          ],
+        );
       }),
   );
 });

@@ -272,6 +272,13 @@ function lineTurn(line: AgentTranscriptMessage, index: TranscriptIndex): string 
   return index.journals.find((each) => each.seq > seq)?.turnId ?? null;
 }
 
+/** The key a line is backfilled under: a call's line's own key, which its live write keyed its row by, else its row's id. */
+function lineKeyOf(line: AgentTranscriptMessage): string {
+  const key = isRecord(line.metadata) ? line.metadata.line_key : undefined;
+
+  return spokenLineOf(line) !== undefined && isWireString(key) ? key : line.id;
+}
+
 /** A person's line, typed or said on a call, as their message: under their account where it names one, else the starter's for a line kept before senders were. */
 function personMessage(
   manager: ManagerOfBackfill,
@@ -283,7 +290,7 @@ function personMessage(
   const former = sentBy?.kind === AGENT_SENDER.FORMER;
 
   return {
-    clientKey: line.id,
+    clientKey: lineKeyOf(line),
     liveId: null,
     authorKind: MANAGER_CHAT_AUTHOR.PERSON,
     authorUserId: former ? null : (sentBy?.userId ?? manager.userId),
@@ -304,7 +311,7 @@ function voiceMessage(
   index: TranscriptIndex,
 ): ManagerChatBackfillMessage {
   return {
-    clientKey: line.id,
+    clientKey: lineKeyOf(line),
     liveId: null,
     authorKind: MANAGER_CHAT_AUTHOR.AGENT,
     authorUserId: null,
