@@ -80,8 +80,12 @@ env:
 - takeScreenshot: automation-page-more
 - runFlow:
     file: subflows/dismiss.yaml
-- scrollUntilVisible:
-    element: "Send the weekly digest"
+# Note that an iPad's automation page stands in the page column, so it is scrolled there (`BESIDE`) rather than at the window's middle, the list column.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Send the weekly digest"
+      BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd
 - takeScreenshot: automation-page-runs
 # A run opens the agent it started on the tab, and Back returns to the automation's page.
