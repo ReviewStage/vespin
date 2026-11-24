@@ -13,6 +13,7 @@ import {
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
+import { useQuickActionRouting } from "expo-quick-actions/router";
 import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
@@ -125,6 +126,8 @@ export default function TabsLayout() {
   useSidebarChoiceLapse();
   // New task over the app setup's Finish just let in, where the workspace reaches a repository.
   useNewTaskAfterSetup();
+  // A Home Screen quick action, the one that woke the app included, opens the route its `href` names, once the tabs stand, so a signed-out launch never acts on one.
+  useQuickActionRouting();
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const pathname = usePathname();
   const conversation = iosRouteHidesTabs(pathname);
