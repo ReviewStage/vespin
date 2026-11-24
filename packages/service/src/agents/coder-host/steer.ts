@@ -100,7 +100,10 @@ import { TURN_PUBLISH, TurnQueue } from "./turn-delivery.js";
  *
  * The words are handed to the session the agent runs in, where they steer
  * the turn under way or open one, and written as a line awaiting its turn
- * once the harness has taken them. The hand-over runs inside the conversation's
+ * once the harness has taken them. A line a failed turn never took is
+ * handed on, never dropped: whoever sends next, those lines go ahead of the
+ * words (`resendLostLines`), since a turn the words opened would leave them
+ * awaiting a turn no runner will take up again. The hand-over runs inside the conversation's
  * lock, so the turn the harness opens on the line finds the row standing when its
  * own first write takes the lock, and a harness that did not take the message
  * leaves the row withdrawn, read nowhere unless a turn the harness hands it to
@@ -646,6 +649,13 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     if (queued !== undefined) return queued;
   }
 
+  // The lines the agent's failed turn never took go ahead of the words, whoever sends them, because a line that
+  // opens a newer turn would bury them from every later resend (`resendLostLines`). Note that a carry-on's own line
+  // opens its turn first and hands them on after itself (`carry-on.ts`), so a turn cut off at every resume never loops.
+  if (line.metadata?.channel !== MESSAGE_CHANNEL.CARRY_ON) {
+    yield* resendLostLines(agentSessions, writer, userId, agent);
+  }
+
   // What the words mention goes with them: of the task this send read as its sender, and of the agent's workspace.
   // Note that GitHub's line carries a reviewer's words, which mention nothing on the developer's behalf, so it hands no note of what they mention;
   // and another agent's message links its sender to name who said it, so only what else it mentions is noted.
@@ -1133,10 +1143,10 @@ export const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(
  * their label, and counted under them once the line is written; a repeat
  * under its key is not counted again. The member MCP server's
  * `message_agent` sends the same way. The lines the agent's failed turn
- * never took go ahead of the words (`resendLostLines`), so the agent reads
- * them in the order they were sent; a retry, the failed turn's Try again,
- * sends its own words only where none was lost, since the lines are what it
- * asks to send again.
+ * never took go ahead of the words, as they do ahead of every sender's
+ * (`steerAgentWritten`), so the agent reads them in the order they were
+ * sent; a retry, the failed turn's Try again, sends its own words only where
+ * none was lost, since the lines are what it asks to send again.
  */
 export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords")(function* (
   writer: Effect.Effect<StoreWriter>,
@@ -1146,9 +1156,9 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
   retry = false,
 ) {
   const agentSessions = yield* routedSessions<TypedTurn>(userId);
-  const resent = yield* resendLostLines(agentSessions, writer, userId, agent);
 
-  if (retry && resent > 0) {
+  // A retry asks for the lost lines alone, and sends its own words only where none was lost; every other send hands them on ahead of its words (`steerAgentWritten`).
+  if (retry && (yield* resendLostLines(agentSessions, writer, userId, agent)) > 0) {
     const sent: SteerWritten = { outcome: STEER_OUTCOME.SENT };
 
     return sent;
