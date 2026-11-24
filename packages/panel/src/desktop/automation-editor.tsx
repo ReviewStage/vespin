@@ -38,9 +38,11 @@ import {
   NEW_SECRET_REFUSAL_WORDS,
   PULL_REQUEST_EVENTS,
   PULL_REQUEST_MOMENTS,
+  RUNS_AGENT_WORDS,
   SCHEDULE_KINDS,
   SENTRY_EVENTS,
   SENTRY_LEVELS,
+  SENTRY_WORDS,
   WEBHOOK_WORDS,
   WEEKDAYS,
   zoneLabel,
@@ -74,7 +76,6 @@ import { readerZone } from "@repo/features/date-mention";
 import { INTEGRATION_NAME, integrationConnectionOf } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { clockText, dateOfText, dayAndTimeText, timeZoneNames } from "@repo/features/time-format";
@@ -280,7 +281,7 @@ function sentryWithheld(
 const SENTRY_NOT_SET_UP = "Not set up on this deployment yet";
 
 /** What the page says where a Sentry trigger is held back from saving. */
-const SENTRY_WITHHELD = `${PRODUCT_NAME} cannot receive Sentry events here. Choose another trigger.`;
+const SENTRY_WITHHELD = SENTRY_WORDS.WITHHELD;
 
 /** What the Trigger card says where the read of the workspace's Sentry did not land. */
 const SENTRY_UNREAD = readFailedWords("the workspace's Sentry");
@@ -1415,7 +1416,7 @@ function SentryRows({
   if (sentry.read !== undefined && sentry.read.installations.length === 0) {
     return (
       <SettingsRow
-        label={<ReplayUnmask>Sentry isn't installed</ReplayUnmask>}
+        label={<ReplayUnmask>{SENTRY_WORDS.NOT_INSTALLED}</ReplayUnmask>}
         error={
           sentry.refusal === undefined
             ? undefined
@@ -1437,7 +1438,7 @@ function SentryRows({
               busyLabel="Opening Sentry"
               onClick={sentry.onInstall}
             >
-              Install Sentry
+              {SENTRY_WORDS.INSTALL}
             </Button>
           </ReplayUnmask>
         )}
@@ -1478,8 +1479,8 @@ function SentryRows({
         onChange={(event) => onDraft(withIntegrationEvent(draft, event))}
       />
       <FilterRow
-        label="Projects"
-        detail="Project slugs, comma-separated."
+        label={SENTRY_WORDS.PROJECTS}
+        detail={SENTRY_WORDS.PROJECTS_DETAIL}
         values={trigger.filters?.project ?? []}
         problem={
           filterAdmitted(trigger.filters?.project) ? undefined : problems[DRAFT_FIELD.FILTERS]
@@ -1487,8 +1488,8 @@ function SentryRows({
         onValues={(project) => filter({ project })}
       />
       <FilterRow
-        label="Environments"
-        detail="Comma-separated."
+        label={SENTRY_WORDS.ENVIRONMENTS}
+        detail={SENTRY_WORDS.ENVIRONMENTS_DETAIL}
         values={trigger.filters?.environment ?? []}
         problem={
           filterAdmitted(trigger.filters?.environment) ? undefined : problems[DRAFT_FIELD.FILTERS]
@@ -1496,8 +1497,8 @@ function SentryRows({
         onValues={(environment) => filter({ environment })}
       />
       <SettingsRow
-        label={<ReplayUnmask>Levels</ReplayUnmask>}
-        description={<ReplayUnmask>None picked for every level.</ReplayUnmask>}
+        label={<ReplayUnmask>{SENTRY_WORDS.LEVELS}</ReplayUnmask>}
+        description={<ReplayUnmask>{SENTRY_WORDS.LEVELS_DETAIL}</ReplayUnmask>}
         below={() => (
           <ReplayUnmask>
             <ChoiceList
@@ -1769,7 +1770,7 @@ function ModelRow({
 }
 
 /** What the agent picker names the saved agent the task list holds no longer, such as one deleted. */
-const KEPT_AGENT_LABEL = "An agent no longer listed";
+const KEPT_AGENT_LABEL = RUNS_AGENT_WORDS.NO_LONGER_LISTED;
 
 /** What the agent row says where the workspace's agents could not be read, and where the search among them did not answer. */
 const AGENTS_UNREAD = readFailedWords("the workspace's agents");
@@ -1779,7 +1780,7 @@ const AGENT_SEARCH_FAILED = readFailedWords("the search for agents");
 const AGENT_DETAIL = "Each run is sent to it as a message, on its own model.";
 
 /** What the agent row names and says where no agent is chosen, so the first run starts one, and the menu's row that chooses none. */
-const FIRST_RUN_LABEL = "Started by its first run";
+const FIRST_RUN_LABEL = RUNS_AGENT_WORDS.FIRST_RUN;
 const FIRST_RUN_ROW = "first-run";
 
 const FIRST_RUN_DETAIL = "Later runs are sent to it.";

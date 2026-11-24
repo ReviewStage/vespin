@@ -192,6 +192,28 @@ export const WEBHOOK_WORDS = {
   NEW_SECRET_RUNNING: "Making",
 } as const;
 
+/** A Sentry trigger's rows, as the desktop's editor says them. */
+export const SENTRY_WORDS = {
+  NOT_INSTALLED: "Sentry isn't installed",
+  INSTALL: "Install Sentry",
+  INSTALL_DETAIL: `Its events reach ${PRODUCT_NAME} through the workspace's Sentry, installed on the workspace's Settings page on the web.`,
+  WITHHELD: `${PRODUCT_NAME} cannot receive Sentry events here. Choose another trigger.`,
+  PROJECTS: "Projects",
+  PROJECTS_DETAIL: "Project slugs, comma-separated.",
+  ENVIRONMENTS: "Environments",
+  ENVIRONMENTS_DETAIL: "Comma-separated.",
+  ALL: "All",
+  LEVELS: "Levels",
+  LEVELS_DETAIL: "None picked for every level.",
+} as const;
+
+/** The agent a same-agent automation's runs go to, as its picker names what is not one of the listed agents. */
+export const RUNS_AGENT_WORDS = {
+  AGENT: "Agent",
+  FIRST_RUN: "Started by its first run",
+  NO_LONGER_LISTED: "An agent no longer listed",
+} as const;
+
 /** Why New secret made none, as its question goes on saying. */
 export const NEW_SECRET_REFUSAL_WORDS = {
   ...AUTOMATION_SAVE_REFUSAL_WORDS,
