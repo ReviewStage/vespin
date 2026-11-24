@@ -1594,7 +1594,7 @@ const findAgentLinesOfTask = SqlSchema.findAll({
 });
 
 /** A `LIKE` pattern finding the words anywhere, its own `%`, `_`, and `\\` matched as themselves. */
-function containing(words: string): string {
+export function containing(words: string): string {
   return `%${words.replace(/[\\%_]/gu, (special) => `\\${special}`)}%`;
 }
 

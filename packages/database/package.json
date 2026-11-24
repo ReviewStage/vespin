@@ -94,6 +94,7 @@
     "./models/agent-wakeups": "./src/models/agent-wakeups.js",
     "./models/agent-chat-reads": "./src/models/agent-chat-reads.js",
     "./models/manager-assignee": "./src/models/manager-assignee.js",
+    "./models/manager-chat-messages": "./src/models/manager-chat-messages.js",
     "./models/agent-sandbox-holds": "./src/models/agent-sandbox-holds.js",
     "./models/agent-sandboxes": "./src/models/agent-sandboxes.js",
     "./models/conversation-rewind": "./src/models/conversation-rewind.js",
