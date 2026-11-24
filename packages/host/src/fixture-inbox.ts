@@ -1736,6 +1736,7 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     ...list,
     tasks,
     listed: true,
+    listDrawn: true,
     listStatus: TASKS_READ.READY,
     taskAgents: [
       ...(list.taskAgents ?? []).filter(

@@ -120,6 +120,7 @@ import {
   useTaskListCollections,
   useTaskListRow,
   useTaskListRows,
+  useWholeListRead,
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
@@ -639,6 +640,12 @@ function selectListingParts(state: AppStateSnapshot) {
   };
 }
 
+/** No task: what the listing reads while its tab stands behind, before the list is drawn. */
+const NO_LISTED_TASKS: readonly TaskSummary[] = [];
+
+/** No agent: what the listing reads while its tab stands behind, before the list is drawn. */
+const NO_LISTED_AGENTS: readonly ListedAgent[] = [];
+
 /** The task list's rows as the listing reads them off its collections. */
 interface ListedRows {
   readonly tasks: readonly TaskSummary[];
@@ -650,22 +657,29 @@ interface ListedRows {
  * each as one live query over its collection (`useTaskListCollections`), as
  * the panel's sidebar orders its tasks (`taskTime` under Updated: the later
  * of a task's own update and its agents' last settled activity), so a
- * delivery that moves neither is not read again.
+ * delivery that moves neither is not read again; none while `reading` is
+ * false (`useWholeListRead`).
  */
-function useListedRows(): ListedRows {
+function useListedRows(reading: boolean): ListedRows {
   const collections = useTaskListCollections();
 
-  const tasks = useLiveQuery((q) =>
-    q.from({ task: collections.tasks }).orderBy(({ task }) => {
-      const agentsAt = coalesce(task.agents?.activityAt, 0);
+  const tasks =
+    useLiveQuery((q) =>
+      reading
+        ? q.from({ task: collections.tasks }).orderBy(({ task }) => {
+            const agentsAt = coalesce(task.agents?.activityAt, 0);
 
-      return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
-    }, "desc"),
-  ).data;
+            return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
+          }, "desc")
+        : undefined,
+    ).data ?? NO_LISTED_TASKS;
 
-  const agents = useLiveQuery((q) =>
-    q.from({ agent: collections.agents }).where(({ agent }) => isUndefined(agent.archivedAt)),
-  ).data;
+  const agents =
+    useLiveQuery((q) =>
+      reading
+        ? q.from({ agent: collections.agents }).where(({ agent }) => isUndefined(agent.archivedAt))
+        : undefined,
+    ).data ?? NO_LISTED_AGENTS;
 
   return { tasks, agents };
 }
@@ -720,8 +734,9 @@ export function useTasksListing(search: string): ReadListing {
   const { data: view } = useQuery({ ...appStateQuery, select: selectListingParts });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const waiting = useWaiting(workspace?.id);
-  const { tasks: listed, agents: listedAgents } = useListedRows();
-  const taskPullRequests = useTaskListRows(useTaskListCollections().taskPullRequests);
+  const reading = useWholeListRead();
+  const { tasks: listed, agents: listedAgents } = useListedRows(reading);
+  const taskPullRequests = useTaskListRows(useTaskListCollections().taskPullRequests, reading);
   const { held, setStatus } = useStatusWrites(listed);
   const { rename, setPriority, setAssignee } = useTaskWrites();
   const follow = useFollowWrite();

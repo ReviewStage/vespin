@@ -83,7 +83,7 @@ function countedPool(pool: EntityPool) {
 const settled = Effect.repeat(Effect.yieldNow, { times: 100 });
 
 it.effect(
-  "a list the phone kept for an account of thousands stands before its rows are drawn, then draws every task, then every agent behind them",
+  "a list the phone kept for an account of thousands stands before its rows are drawn, then draws every task, then every agent behind them, and is drawn whole only then",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -122,7 +122,7 @@ it.effect(
 
         const drawings: LiveTaskList[] = [];
 
-        yield* taskListCollections({
+        const collections = yield* taskListCollections({
           pool,
           draw: (read) => {
             drawings.push(read);
@@ -131,11 +131,23 @@ it.effect(
           readAgain: () => Effect.succeed(undefined),
         });
 
+        /** How many agents the list had drawn as it was said drawn whole. */
+        let agentsDrawnWhole: number | undefined;
+
+        yield* Effect.forkScoped(
+          Effect.andThen(
+            collections.drawnWhole,
+            Effect.sync(() => {
+              agentsDrawnWhole = drawings.at(-1)?.taskAgents.length ?? 0;
+            }),
+          ),
+        );
+
         // Standing drew nothing, so the host's first document never waits on the list.
         assert.equal(drawings.length, 0);
 
         yield* Effect.repeat(Effect.yieldNow, {
-          until: () => drawings.at(-1)?.taskAgents.length === agents.length,
+          until: () => agentsDrawnWhole !== undefined,
           times: 10_000,
         });
 
@@ -147,6 +159,8 @@ it.effect(
         const drawn = drawings.at(-1);
         assert.equal(drawn?.list.tasks.length, plans.length);
         assert.equal(drawn?.taskAgents.length, agents.length);
+        // A place standing behind waits on the list drawn whole to read it whole, so it is said only once the last agent is drawn.
+        assert.equal(agentsDrawnWhole, agents.length);
       }),
     ),
 );
