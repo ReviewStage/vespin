@@ -1,0 +1,9 @@
+  still a1-agent-page: New agent in the tree 0x
+  still a2-agent-page-cmd-t: New agent in the tree 1x
+  no Tasks in the sidebar
+  no Teammate invitations row
+  still b1-task-page: New agent in the tree 0x
+  still b2-task-page-cmd-t: New agent in the tree 0x
+  still c-cmd-k: Search field in the tree x, focused field None
+  still c-cmd-f: Search field in the tree x, focused field None
+  still c-cmd-3: Search field in the tree x, focused field None
