@@ -68,6 +68,7 @@ import { liveProcedure } from "../live-read.js";
 import { MACHINE_ASKS_READ } from "../machine-ask-live.js";
 import { MACHINE_COMMANDS_READ } from "../machine-command-live.js";
 import { MACHINES_READ } from "../machine-live.js";
+import { MANAGER_CHAT_READ } from "../manager-chat-live.js";
 import { WORKSPACE_MEMORIES_READ } from "../memory-live.js";
 import {
   PULL_REQUEST_CHAPTERS_READ,
@@ -103,6 +104,7 @@ export const liveContract = {
   [AGENT_ORIGIN_READ.name]: liveProcedure(AGENT_ORIGIN_READ),
   [TASK_HISTORY_READ.name]: liveProcedure(TASK_HISTORY_READ),
   [TASK_COMMENTS_READ.name]: liveProcedure(TASK_COMMENTS_READ),
+  [MANAGER_CHAT_READ.name]: liveProcedure(MANAGER_CHAT_READ),
   [TASK_BROWSER_TABS_READ.name]: liveProcedure(TASK_BROWSER_TABS_READ),
   [AGENT_BROWSER_TABS_READ.name]: liveProcedure(AGENT_BROWSER_TABS_READ),
   [TASK_LIST_READ.name]: liveProcedure(TASK_LIST_READ),

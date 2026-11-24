@@ -23,6 +23,7 @@ import { integrationStatusesRead } from "../live/reads/integration-statuses.js";
 import { machineAsksRead } from "../live/reads/machine-asks.js";
 import { machineCommandsRead } from "../live/reads/machine-commands.js";
 import { machinesRead } from "../live/reads/machines.js";
+import { managerChatRead } from "../live/reads/manager-chat.js";
 import { agentPagesRead, taskPagesRead } from "../live/reads/pages.js";
 import {
   pullRequestChaptersRead,
@@ -72,6 +73,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   taskHistoryRead,
   taskRecordRead,
   taskCommentsRead,
+  managerChatRead,
   taskBrowserTabsRead,
   agentBrowserTabsRead,
   machineCommandsRead,

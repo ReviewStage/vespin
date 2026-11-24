@@ -21,6 +21,7 @@ import {
   markIntegrationInstallationDeleted,
 } from "@repo/database/models/integration-installation-store";
 import { queueMachineCommand } from "@repo/database/models/machine-command-store";
+import { writeManagerChatMessage } from "@repo/database/models/manager-chat-messages";
 import { rememberMemory } from "@repo/database/models/memory-store";
 import { claimChapterGeneration } from "@repo/database/models/pull-request-chapters-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
@@ -61,7 +62,7 @@ import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire"
 import { AGENT_ORIGIN_READ, agentOriginOfLive } from "@repo/features/agent-origin-live";
 import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
-import { AGENT_CURSOR_START } from "@repo/features/agent-wire";
+import { AGENT_CURSOR_START, AGENT_KIND } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { BROWSER_CURSOR_KIND } from "@repo/features/browser-agent-actions";
 import { TASK_BROWSER_TABS_READ } from "@repo/features/browser-tabs-live";
@@ -98,6 +99,7 @@ import {
   machineCommandsOfLiveRows,
 } from "@repo/features/machine-command-live";
 import { MACHINE_COMMAND_KIND } from "@repo/features/machine-command-wire";
+import { MANAGER_CHAT_AUTHOR, MANAGER_CHAT_READ } from "@repo/features/manager-chat-live";
 import { memoriesOfLiveRows, WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
@@ -845,6 +847,73 @@ it.layer(getTestDB())("a task's live reads", (it) => {
           yield* askTask({ bearer: eli, taskId: started.id, path, page: shown.id }),
           { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
         );
+      }),
+  );
+
+  it.effect(
+    "a Manager's chat is answered polled for a member of its workspace, and not found for one of another workspace or for an agent that is no Manager",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const eli = yield* openUser;
+        const workspaceId = yield* openWorkspace(dana);
+        yield* openWorkspace(eli);
+
+        const manager = Option.getOrThrow(
+          yield* createAgent(dana, {
+            taskId: null,
+            workspaceId,
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            descriptionSnapshot: null,
+            prompt: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
+          }),
+        ).agent.id;
+
+        yield* writeManagerChatMessage(dana, {
+          agentId: manager,
+          id: "a1b2c3d4",
+          clientKey: randomUUID(),
+          authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+          authorUserId: dana,
+          authorName: "Test User",
+          text: "Ship the table?",
+          attachments: [],
+          inReplyTo: null,
+          broadcast: false,
+          turnId: null,
+          lineId: null,
+          now: new Date("2026-11-24T12:00:00Z"),
+        });
+        const started = yield* startTask(dana, { name: "Teammate invitations" });
+        const coder = yield* openTaskAgent(dana, started.workspaceId, started.id);
+        const path = "/api/live/manager-chat";
+        const answered = yield* askTask({ bearer: dana, taskId: manager, path });
+        assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
+
+        const { rows } = Schema.decodeUnknownSync(MANAGER_CHAT_READ.answer)(answered.body).queries
+          .messages;
+
+        assert.deepEqual(
+          Schema.decodeUnknownSync(MANAGER_CHAT_READ.rows)({ messages: rows }).messages.map(
+            (message) => message.text,
+          ),
+          ["Ship the table?"],
+        );
+
+        for (const refused of [
+          { bearer: eli, taskId: manager, path },
+          { bearer: dana, taskId: coder, path },
+        ]) {
+          assert.deepEqual(yield* askTask(refused), {
+            status: HOSTED_HTTP_STATUS.NOT_FOUND,
+            body: { error: HOSTED_API_ERROR.NOT_FOUND },
+          });
+        }
       }),
   );
 });
