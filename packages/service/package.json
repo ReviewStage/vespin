@@ -62,6 +62,7 @@
     "./agents/coder-host/title": "./src/agents/coder-host/title.js",
     "./agents/coder-host/transcript": "./src/agents/coder-host/transcript.js",
     "./agents/coder-host/usage": "./src/agents/coder-host/usage.js",
+    "./agents/deployment-sandboxes": "./src/agents/deployment-sandboxes.js",
     "./agents/host-install-script-app": "./src/agents/host-install-script-app.js",
     "./agents/workspace-drive": "./src/agents/workspace-drive.js",
     "./agents/workspace-drive-build-bounds": "./src/agents/workspace-drive-build-bounds.js",
