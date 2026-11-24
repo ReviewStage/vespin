@@ -202,12 +202,16 @@ test("each message is a row under its sender's name where their run opens, a thr
 
   /** Each row a scope draws: its sender's name where its run opens, and its words. */
   const rowsIn = (scope: Element) =>
-    [...scope.querySelectorAll(".ui-channel-message")]
-      .filter((drawn) => drawn.closest("[data-manager-greeting]") === null)
-      .map((drawn) => [
-        drawn.querySelector(".ui-channel-message-head > span")?.textContent?.trim() ?? null,
-        drawn.querySelector(".ui-channel-message-words")?.textContent ?? "",
-      ]);
+    [...scope.querySelectorAll(".ui-channel-message")].flatMap((drawn) =>
+      drawn.closest("[data-manager-greeting]") === null
+        ? [
+            [
+              drawn.querySelector(".ui-channel-message-head > span")?.textContent?.trim() ?? null,
+              drawn.querySelector(".ui-channel-message-words")?.textContent ?? "",
+            ],
+          ]
+        : [],
+    );
 
   assert.deepEqual(rowsIn(container), [
     [DEAN.name, "Ship the invite flow."],

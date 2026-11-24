@@ -656,6 +656,8 @@ export function ManagerChatTab({
   const { mutate: retryChat } = useMutation(managerChatRetryMutation());
   const { mutateAsync: sendChat } = useMutation(actMutation(ACT_KIND.AGENTS_CHAT_SEND));
   const { mutate: unsendChat } = useMutation(actMutation(ACT_KIND.AGENTS_CHAT_UNSEND));
+  // Note that a thread's reply refused stands marked in its thread from the host's record, so its send answers nothing here.
+  const { mutate: replyInThread } = useMutation(actMutation(ACT_KIND.AGENTS_CHAT_SEND));
 
   const { mutate: readOlder, isError: olderFailed } = useMutation(
     actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_OLDER),
@@ -1018,7 +1020,7 @@ export function ManagerChatTab({
 
   /** Sends the reader's words to the chat as a reply in the open thread. */
   const sendInThread = (root: string) => (text: string) => {
-    void sendChat({
+    replyInThread({
       agentId: agent.id,
       text,
       clientKey: crypto.randomUUID(),
