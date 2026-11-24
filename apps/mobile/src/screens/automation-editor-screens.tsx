@@ -76,9 +76,12 @@ import {
 import { readerZone } from "@repo/features/date-mention";
 import { INTEGRATION_NAME, integrationConnectionOf } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { markdownPlainText } from "@repo/features/markdown-plain-text";
 import { effortFor, effortsOf } from "@repo/features/model-effort";
 import { agentName } from "@repo/features/model-label";
 import { type CatalogModel, type ModelChoice, standardModelIdOf } from "@repo/features/models-wire";
+import { mentionPill } from "@repo/features/pill-words";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { dayAndTimeText, timeZoneNames } from "@repo/features/time-format";
 import { ACT_UNREACHED_WORDS, andList, MCP_SERVER_LABEL, readingWords } from "@repo/features/words";
@@ -96,9 +99,12 @@ import {
   BAR_TITLE,
   BUZZ,
   buzz,
+  type CaretAtWord,
   ConfirmAsk,
   DATE_PICK_PART,
   DatePickRow,
+  type DocumentFieldHandle,
+  DocumentPage,
   EmptyState,
   FOOTER_TONE,
   footerToneOf,
@@ -107,6 +113,7 @@ import {
   ListSection,
   LoadingRow,
   MenuPickRow,
+  NoteRow,
   PickRows,
   PUSH_ROW_GOES,
   PushRow,
@@ -123,13 +130,17 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { timeZoneRoute } from "../automations/automation-editor-route.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  PROMPT_ROUTE,
+  RUNS_AGENT_ROUTE,
+  timeZoneRoute,
+} from "../automations/automation-editor-route.js";
+import { EDITOR_PICK, useEditorPick, useEditorPicked } from "../automations/editor-pick.js";
 import {
   useWorkspaceAutomations,
   useWorkspaceIntegrations,
 } from "../automations/use-automations.js";
-import { useZonePick, useZonePicked } from "../automations/zone-pick.js";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useListedAgents } from "../host/host-provider.js";
@@ -144,10 +155,16 @@ import {
 } from "../tasks/use-start.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
 import { DISCARD_CHANGES_WORDS, DISCARD_WORDS, useKeptWords } from "../use-kept-words.js";
+import { useMentionOffer } from "../use-mention-offer.js";
 
 /** What the sheet says where the editor itself has no word for it. */
 const WORDS = {
   CANCEL: "Cancel",
+  /** What the prompt's row says under its words, so its press is found. */
+  PROMPT_LINE: "Type @ to mention a task, an agent, a person, or a file",
+  /** The agents' page's field, before anything is typed. */
+  SEARCH_AGENTS: "Search agents",
+  NO_AGENTS: "No agents match",
   /** Where a schedule's custom cron is typed, as its field says before anything is. */
   CRON_PLACEHOLDER: "0 9 * * 1-5",
 } as const;
@@ -177,6 +194,9 @@ function switchedOffName(connection: string): string {
 
   return account.place === 1 ? name : `${name} (account ${account.place})`;
 }
+
+/** What a flow finds the prompt's field by. */
+const PROMPT_FIELD_ID = "automation-prompt";
 
 /** What a flow finds the name field by. */
 const NAME_FIELD_ID = "automation-name";
@@ -637,41 +657,46 @@ function SentrySections({
   );
 }
 
+/** The agents of the workspace the app lists, by name, as the `@` offer lists them, which a same-agent automation's runs may go to. */
+function useWorkspaceAgents(workspaceId: string): readonly { id: string; label: string }[] {
+  const agents = useListedAgents();
+
+  return agents
+    .filter((agent) => agent.workspaceId === workspaceId)
+    .map((agent) => ({ id: agent.id, label: agentName(agent) }));
+}
+
+/** What the agent row says it holds: the one its first run starts, an agent the app lists by name, or one it no longer lists. */
+function runsAgentLabel(
+  agentId: string | null,
+  listed: readonly { id: string; label: string }[],
+): string {
+  if (agentId === null) return RUNS_AGENT_WORDS.FIRST_RUN;
+
+  return listed.find((option) => option.id === agentId)?.label ?? RUNS_AGENT_WORDS.NO_LONGER_LISTED;
+}
+
 /**
- * The agent a same-agent automation's runs go to: the one its first run
- * starts, or one of the agents the app lists in its workspace, by name; one
- * it was saved with that the app no longer lists stays picked under words
- * that say so.
+ * The agent a same-agent automation's runs go to, as its row says it, a
+ * press pushing the page that picks it from the workspace's agents,
+ * searched (`RunsAgentScreen`).
  */
 function RunsAgentRow({
   agentId,
   workspaceId,
-  onAgent,
 }: {
   readonly agentId: string | null;
   readonly workspaceId: string;
-  readonly onAgent: (agentId: string | null) => void;
 }) {
-  const agents = useListedAgents();
-
-  const listed = agents
-    .filter((agent) => agent.workspaceId === workspaceId)
-    .map((agent) => ({ id: agent.id, label: agentName(agent) }));
-
-  const options = [
-    { id: FIRST_RUN_ID, label: RUNS_AGENT_WORDS.FIRST_RUN },
-    ...(agentId === null || listed.some((option) => option.id === agentId)
-      ? []
-      : [{ id: agentId, label: RUNS_AGENT_WORDS.NO_LONGER_LISTED }]),
-    ...listed,
-  ];
+  const router = useRouter();
+  const listed = useWorkspaceAgents(workspaceId);
 
   return (
-    <MenuPickRow
+    <PushRow
       label={RUNS_AGENT_WORDS.AGENT}
-      options={options}
-      picked={agentId ?? FIRST_RUN_ID}
-      onPick={(id) => onAgent(id === FIRST_RUN_ID ? null : id)}
+      detail={runsAgentLabel(agentId, listed)}
+      goes={PUSH_ROW_GOES.PAGE}
+      onPress={() => router.push(RUNS_AGENT_ROUTE)}
     />
   );
 }
@@ -868,6 +893,7 @@ function EditorForm({
   readonly workspace: Workspace;
   readonly offersOwner: boolean;
 }) {
+  const router = useRouter();
   const acts = useHostActs();
   const repositories = useRepositoryPick(workspace);
   const { slackBot, sentry } = useWorkspaceIntegrations(workspace.id);
@@ -904,7 +930,28 @@ function EditorForm({
     setDraft((was) => (was.repository === null ? { ...was, repository } : was));
   }, [seeded, repositories.picked]);
 
-  useZonePicked((timezone) => edit({ timezone }));
+  // What the pages pushed over the editor edit: its zone, its prompt, and the agent its runs go to, each handed back as it is picked or typed.
+  const lent = useMemo(
+    () => ({ prompt: draft.prompt, agentId: draft.agentId, workspaceId: workspace.id }),
+    [draft.prompt, draft.agentId, workspace.id],
+  );
+
+  useEditorPicked((pick) => {
+    switch (pick.kind) {
+      case EDITOR_PICK.ZONE:
+        edit({ timezone: pick.zone });
+
+        return;
+      case EDITOR_PICK.PROMPT:
+        edit({ prompt: pick.prompt });
+
+        return;
+      case EDITOR_PICK.AGENT:
+        edit({ agentId: pick.agentId });
+
+        return;
+    }
+  }, lent);
 
   const saved = automation === undefined ? undefined : automationDraft(automation, defaults);
   const written = !sameDraft(draft, saved ?? start);
@@ -1141,11 +1188,14 @@ function EditorForm({
             footer={shown[DRAFT_FIELD.PROMPT]}
             footerTone={FOOTER_TONE.FAILURE}
           >
-            <WordsField
-              placeholder={AUTOMATION_EDITOR_WORDS.PROMPT_PLACEHOLDER}
-              label={AUTOMATION_EDITOR_SECTION.PROMPT}
-              initialWords={draft.prompt}
-              onWords={(prompt) => edit({ prompt })}
+            <NoteRow
+              words={
+                draft.prompt.trim() === ""
+                  ? AUTOMATION_EDITOR_WORDS.PROMPT_PLACEHOLDER
+                  : markdownPlainText(draft.prompt)
+              }
+              line={WORDS.PROMPT_LINE}
+              onPress={() => router.push(PROMPT_ROUTE)}
             />
           </ListSection>
           <ListSection
@@ -1195,11 +1245,7 @@ function EditorForm({
               }
             />
             {draft.target === AUTOMATION_TARGET.SAME_AGENT ? (
-              <RunsAgentRow
-                agentId={draft.agentId}
-                workspaceId={workspace.id}
-                onAgent={(agentId) => edit({ agentId })}
-              />
+              <RunsAgentRow agentId={draft.agentId} workspaceId={workspace.id} />
             ) : (
               <>
                 <ModelRows choice={draft.choice} onChoice={(choice) => edit({ choice })} />
@@ -1300,7 +1346,8 @@ export function AutomationEditorScreen() {
 export function TimeZoneScreen() {
   const { zone = "" } = useLocalSearchParams<{ zone?: string }>();
   const router = useRouter();
-  const pick = useZonePick();
+  const { pick: pickFor } = useEditorPick();
+  const pick = (zone: string) => pickFor({ kind: EDITOR_PICK.ZONE, zone });
   const [query, setQuery] = useState("");
 
   const [zones] = useState(() => {
@@ -1336,6 +1383,113 @@ export function TimeZoneScreen() {
                 picked={zone}
                 onPick={(picked) => {
                   pick(picked);
+                  router.back();
+                }}
+              />
+            </ListSection>
+          </SettingsForm>
+        )}
+      </Screen>
+    </>
+  );
+}
+
+/** What the prompt's page is called, in its bar. */
+const PROMPT_TITLE = "Prompt";
+
+/**
+ * An automation's prompt, edited whole on a page pushed over the editor in
+ * its sheet, as a task's description is edited (`DocumentPage`): its
+ * mentions drawn as pills, and the people, tasks, agents, and files an `@`
+ * offers docked over the keyboard. Each change is handed back to the editor
+ * under it as it is typed, so Back keeps it.
+ */
+export function PromptScreen() {
+  const { pick, lent } = useEditorPick();
+  const [prompt, setPrompt] = useState(lent?.prompt ?? "");
+  const field = useRef<DocumentFieldHandle>(null);
+  const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
+
+  const mentions = useMentionOffer(
+    { workspaceId: lent?.workspaceId, taskId: undefined },
+    {
+      word: atWord,
+      pick: (mention) => field.current?.pick(mentionPill(mention.name, mention.target)),
+      rewrite: (words) => field.current?.rewrite(words),
+    },
+  );
+
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: true, title: PROMPT_TITLE }} />
+      <DocumentPage
+        ref={field}
+        value={prompt}
+        onChange={(words) => {
+          setPrompt(words);
+          pick({ kind: EDITOR_PICK.PROMPT, prompt: words });
+        }}
+        placeholder={AUTOMATION_EDITOR_WORDS.PROMPT_PLACEHOLDER}
+        onAtWord={setAtWord}
+        mentions={
+          mentions === undefined
+            ? undefined
+            : {
+                groups: mentions.groups,
+                empty: mentions.empty,
+                crumb: mentions.crumb,
+                onPick: mentions.pick,
+              }
+        }
+        testID={PROMPT_FIELD_ID}
+      />
+    </>
+  );
+}
+
+/**
+ * The agent a same-agent automation's runs go to, picked on a page pushed
+ * over the editor: the one its first run starts, then the workspace's
+ * agents the app lists, as the `@` offer lists them, searched by the bar's
+ * field; one it was saved with that the app no longer lists stands first,
+ * picked. A pick hands the agent to the editor and goes back.
+ */
+export function RunsAgentScreen() {
+  const router = useRouter();
+  const { pick, lent } = useEditorPick();
+  const listed = useWorkspaceAgents(lent?.workspaceId ?? "");
+  const [query, setQuery] = useState("");
+  const picked = lent?.agentId ?? null;
+  const tokens = searchTokens(query);
+
+  const options = [
+    { id: FIRST_RUN_ID, label: RUNS_AGENT_WORDS.FIRST_RUN },
+    ...(picked === null || listed.some((option) => option.id === picked)
+      ? []
+      : [{ id: picked, label: RUNS_AGENT_WORDS.NO_LONGER_LISTED }]),
+    ...listed,
+  ].filter((option) => tokens.length === 0 || matchesTokens([option.label], tokens));
+
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: true, title: RUNS_AGENT_WORDS.AGENT }}>
+        <Stack.SearchBar
+          placeholder={WORDS.SEARCH_AGENTS}
+          onChangeText={(event) => setQuery(event.nativeEvent.text)}
+          onCancelButtonPress={() => setQuery("")}
+        />
+      </Stack.Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
+        {options.length === 0 ? (
+          <EmptyState title={WORDS.NO_AGENTS} symbol={GLYPH.SEARCH} />
+        ) : (
+          <SettingsForm>
+            <ListSection>
+              <PickRows
+                options={options}
+                picked={picked ?? FIRST_RUN_ID}
+                onPick={(id) => {
+                  pick({ kind: EDITOR_PICK.AGENT, agentId: id === FIRST_RUN_ID ? null : id });
                   router.back();
                 }}
               />
