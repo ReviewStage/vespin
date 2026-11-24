@@ -35,6 +35,8 @@ export interface FakeRun {
   readonly steered?: SteerAckOutcome;
   /** How many bytes the checkpoint the run ends on holds; a few where unscripted. */
   readonly checkpointBytes?: number;
+  /** Why the SDK refuses to start the run, as it throws for a summary of an agent with no conversation yet. */
+  readonly refused?: string;
 }
 
 /** What the fake SDK was handed, in the order it was handed it. */
@@ -159,6 +161,12 @@ export function fakeCursor(
     },
     summarize: async () => {
       record.summaries.push(played);
+      const refused = runs[played]?.refused;
+
+      if (refused !== undefined) {
+        played += 1;
+        throw new Error(refused);
+      }
 
       return runOf(options.local?.store, agentId);
     },
