@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { AGENT_KIND } from "@repo/features/agent-wire";
+import { AGENT_KIND, VOICE_SPEAKER } from "@repo/features/agent-wire";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { MANAGER_CHAT_AUTHOR } from "../../schemas/manager-chat-message.js";
-import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
+import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.js";
 import { getTestDB, openWorkspace } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import {
@@ -20,13 +20,14 @@ import {
   searchManagerChat,
   writeManagerChatMessage,
 } from "../manager-chat-messages.js";
+import { storeWriter } from "../writer.js";
 
 /**
  * A Manager's chat, over a real dialect: a write lands once under its key,
  * a reply stands in its root's thread, a clashing id and a reply to no
  * message are refused, the chat reads by page and by words, a rewind's
- * drop takes its messages and their threads, and no other account reads or
- * writes any of it. Synthetic accounts.
+ * drop takes its messages and their threads, a call's line grows in place,
+ * and no other account reads or writes any of it. Synthetic accounts.
  */
 
 const SENT_AT = new Date("2026-11-24T12:00:00Z");
@@ -39,7 +40,7 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-const openManager = (userId: string) =>
+const openManagerAgent = (userId: string) =>
   Effect.gen(function* () {
     const workspaceId = yield* openWorkspace(userId);
 
@@ -56,8 +57,10 @@ const openManager = (userId: string) =>
       kind: AGENT_KIND.MANAGER,
     });
 
-    return Option.getOrThrow(started).agent.id;
+    return Option.getOrThrow(started).agent;
   });
+
+const openManager = (userId: string) => Effect.map(openManagerAgent(userId), (agent) => agent.id);
 
 /** A message from the person to the Manager, under a key and an id of its own unless named. */
 const personSays = (
@@ -234,6 +237,42 @@ it.layer(getTestDB())("a Manager's chat", (it) => {
           ["Keep me"],
         );
       }),
+  );
+
+  it.effect("a call's line recorded in three fragments stands whole as the caller's message", () =>
+    Effect.gen(function* () {
+      const owner = yield* openAccount;
+      const manager = yield* openManagerAgent(owner);
+      const writer = yield* storeWriter({ tools: {} });
+      const target = { userId: owner, conversationId: manager.conversationId };
+      const callId = randomUUID();
+      const sender = { kind: MESSAGE_SENDER.MEMBER, userId: owner } as const;
+      const asked = { key: randomUUID(), callId, speaker: VOICE_SPEAKER.CALLER, sender };
+
+      for (const text of ["Can you", "Can you ship", "Can you ship the table?"]) {
+        yield* writer.recordVoiceLine(target, { ...asked, text });
+      }
+
+      yield* writer.recordVoiceLine(target, {
+        key: randomUUID(),
+        callId,
+        speaker: VOICE_SPEAKER.VOICE,
+        text: "On it.",
+        sender,
+      });
+
+      assert.deepEqual(
+        (yield* readManagerChatPage(owner, manager.id, { limit: 10 })).map((message) => [
+          message.text,
+          message.authorKind,
+          message.authorUserId,
+        ]),
+        [
+          ["On it.", MANAGER_CHAT_AUTHOR.AGENT, null],
+          ["Can you ship the table?", MANAGER_CHAT_AUTHOR.PERSON, owner],
+        ],
+      );
+    }),
   );
 
   it.effect("another account reads, writes, and deletes none of a Manager's chat", () =>

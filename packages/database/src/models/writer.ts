@@ -109,6 +109,7 @@ import {
   takeDispatchClaim,
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
+import { growManagerChatLine } from "./manager-chat-messages.js";
 import { COALESCED_LINE_SEPARATOR, noReceiptOfLine } from "./message-reads.js";
 import {
   type AwaitedTurn,
@@ -634,7 +635,9 @@ export interface StoreWriter {
    * are those standing. A line opens no turn and awaits none
    * (`recordedSpokenLine`) until a delegation adopts the caller's
    * (`AwaitingLineWrite`'s `adopts`). A key standing for another speaker's
-   * line, another call's, or no line of a call is refused.
+   * line, another call's, or no line of a call is refused. On a Manager's
+   * conversation, a line written or grown is written or grown in its chat
+   * too, in the same transaction (`growManagerChatLine`).
    */
   recordVoiceLine(target: ConversationTarget, line: VoiceLineWrite): Write<VoiceLineWritten>;
   /**
@@ -2573,6 +2576,30 @@ function sameCallLine(
   );
 }
 
+/**
+ * A line of a call written to the chat of the Manager whose conversation it
+ * was said in, or grown there, in the line's own transaction: the caller's
+ * as the caller's message, the voice's as the Manager's own. Nothing for a
+ * conversation no Manager stands on.
+ */
+function chatLineOf(context: WriterContext, line: VoiceLineWrite): Write<void> {
+  const caller = line.speaker === VOICE_SPEAKER.CALLER;
+
+  // Note that a caller's line is a member's, as every holder of a call records it, and a person's message names its person.
+  if (caller && line.sender.kind !== MESSAGE_SENDER.MEMBER) return Effect.void;
+  const callerId = caller && line.sender.kind === MESSAGE_SENDER.MEMBER ? line.sender.userId : null;
+
+  return Effect.asVoid(
+    growManagerChatLine(context.target.userId, {
+      conversationId: context.target.conversationId,
+      clientKey: line.key,
+      callerId,
+      text: line.text,
+      now: context.now,
+    }),
+  );
+}
+
 const recordVoiceLine = /* @__PURE__ */ Effect.fn("web/recordVoiceLine")(function* (
   context: WriterContext,
   line: VoiceLineWrite,
@@ -2605,6 +2632,8 @@ const recordVoiceLine = /* @__PURE__ */ Effect.fn("web/recordVoiceLine")(functio
       ...(line.speaker === VOICE_SPEAKER.CALLER ? { sender: line.sender } : undefined),
     });
 
+    yield* chatLineOf(context, line);
+
     return Result.succeed({ effect: STORE_WRITE_EFFECT.WRITTEN, txid });
   }
 
@@ -2624,6 +2653,8 @@ const recordVoiceLine = /* @__PURE__ */ Effect.fn("web/recordVoiceLine")(functio
     metadata,
     finishedAt: context.now,
   });
+
+  yield* chatLineOf(context, line);
 
   return Result.succeed({ effect: STORE_WRITE_EFFECT.WRITTEN });
 });

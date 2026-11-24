@@ -10,29 +10,17 @@
  * digits.
  */
 
-import { createHash } from "node:crypto";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { type Agent, RUNNING_TURN_STATUSES } from "@repo/database/models/agent-store";
 import {
   MANAGER_CHAT_OUTCOME,
+  managerChatIdsOf,
   writeManagerChatMessage,
 } from "@repo/database/models/manager-chat-messages";
 import { latestTurnsOf } from "@repo/database/models/message-reads";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/database/schemas";
 import { agentName } from "@repo/features/model-label";
 import { Clock, Effect, Option } from "effect";
-
-/** How many hex digits a message's id holds: few enough for the model to repeat, enough that a chat's messages seldom share one. */
-const MESSAGE_ID_DIGITS = 8;
-
-/** The ids a message keyed so may go by, in the order tried: the key's digest cut into runs of the id's digits. */
-function messageIdsOf(clientKey: string): readonly string[] {
-  const digest = createHash("sha256").update(clientKey).digest("hex");
-
-  return Array.from({ length: digest.length / MESSAGE_ID_DIGITS }, (_, index) =>
-    digest.slice(index * MESSAGE_ID_DIGITS, (index + 1) * MESSAGE_ID_DIGITS),
-  );
-}
 
 /** What the Manager says in one message: its words, and the files it shows. */
 export interface ManagerChatSaid {
@@ -63,7 +51,7 @@ export function writeManagerSaid(
     const turnId = yield* runningTurnOf(manager);
     const now = new Date(yield* Clock.currentTimeMillis);
 
-    for (const id of messageIdsOf(said.clientKey)) {
+    for (const id of managerChatIdsOf(said.clientKey)) {
       const outcome = yield* writeManagerChatMessage(manager.userId, {
         agentId: manager.id,
         id,
