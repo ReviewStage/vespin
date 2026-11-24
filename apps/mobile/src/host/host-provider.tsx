@@ -217,23 +217,24 @@ function useDeferredAgentsWritten(deferred: DeferredAgents | undefined): void {
 
   useEffect(() => {
     if (deferred === undefined || !released) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let asked: number | undefined;
 
-    const step = () => {
+    const step = (idle: IdleDeadline) => {
       // PROBE ONLY: each chunk's own commit, and the last one landing.
-      const left = probeTimed(
-        "deferred-chunk",
-        () => deferred.write(DEFERRED_AGENTS_CHUNK),
-        (value) => value,
-      );
+      const writeOne = () => probeTimed("deferred-chunk", () => deferred.write(DEFERRED_AGENTS_CHUNK), (value) => value);
+      let left = writeOne();
+
+      while (left > 0 && idle.timeRemaining() > 4) left = writeOne();
 
       if (left === 0) probeOnce("deferred-done");
-      timer = left > 0 ? setTimeout(step, 0) : undefined;
+      asked = left > 0 ? requestIdleCallback(step) : undefined;
     };
 
-    timer = setTimeout(step, 0);
+    asked = requestIdleCallback(step);
 
-    return () => clearTimeout(timer);
+    return () => {
+      if (asked !== undefined) cancelIdleCallback(asked);
+    };
   }, [deferred, released]);
 }
 
