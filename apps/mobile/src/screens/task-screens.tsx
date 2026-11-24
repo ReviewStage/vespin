@@ -206,7 +206,7 @@ import { useMenuPhotos } from "../menu-photos.js";
 import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-on.js";
 import { useOpenDrawnCount } from "../open-drawn.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
-import { usePushStood } from "../push-stood.js";
+import { usePushStarted, usePushStood } from "../push-stood.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
@@ -3577,7 +3577,9 @@ export function TaskScreen() {
   const router = useRouter();
   const colors = useColors();
   const found = useFoundTask(id, workspace);
-  const held = useTaskOverview(found.taskId);
+  // Note that the page's related tasks and agents are read once its push starts, so the push waits on the task as the list holds it alone (`useTaskOverview`).
+  const pushStarted = usePushStarted();
+  const held = useTaskOverview(found.taskId, pushStarted);
 
   const { setStatus, question } = useStatusAsk(held ?? NO_STATUS_DOORS);
 

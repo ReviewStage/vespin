@@ -957,14 +957,18 @@ interface PageRows {
  * those `related` names, newest first, and every agent on any of them, the
  * archived among them, first started first, as the whole list orders each
  * (`useListedTasks`, `useListedAgents`); none of either before a task is
- * named.
+ * named, or while `reading` is false.
  */
-function usePageRows(taskId: string | undefined, related: readonly string[]): PageRows {
+function usePageRows(
+  taskId: string | undefined,
+  related: readonly string[],
+  reading: boolean,
+): PageRows {
   const collections = useTaskListCollections();
 
   const tasks =
     useLiveQuery((q) =>
-      taskId === undefined
+      taskId === undefined || !reading
         ? undefined
         : q
             .from({ task: collections.tasks })
@@ -1010,8 +1014,15 @@ export function useDrawnTasks(): readonly TaskSummary[] {
  * A task the list doesn't hold, named by its id, stands on its own
  * description read, as the panel's page stands on it (`use-found-task.ts`
  * finds one a link names by number); none until that read answers with it.
+ * While `reading` is false, as a page waits for its push to start, the task
+ * stands as the list holds it, read by its key, and the tasks and agents its
+ * page draws beside it are not yet read, so the push waits on no query over
+ * the account's rows; they fill in once it is true.
  */
-export function useTaskOverview(named: string | undefined): TaskOverview | undefined {
+export function useTaskOverview(
+  named: string | undefined,
+  reading = true,
+): TaskOverview | undefined {
   const acts = useHostActs();
   const workspace = useTasksWorkspace();
   const collections = useTaskListCollections();
@@ -1044,19 +1055,30 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   });
 
   // Note that the page reads only the tasks it draws, the task, its parent, its sub-tasks, and those it waits on and holds up, and only their agents and its own agents' pull requests, so a change to any other of the account's tasks or agents, as a working agent's turn makes, draws the page nothing again.
-  const parentId = useTaskListRow(collections.tasks, listedId)?.parentTaskId;
+  const heldRow = useTaskListRow(collections.tasks, listedId);
+  const parentId = heldRow?.parentTaskId;
   const read = held?.document;
   const relatedDocument = read !== undefined && "task" in read ? read.task : undefined;
 
-  const { tasks, agents: listedAgents } = usePageRows(taskId, [
-    ...(parentId === undefined ? [] : [parentId]),
-    ...(relatedDocument?.blockedBy ?? []),
-    ...(relatedDocument?.blocks ?? []),
-  ]);
+  const { tasks: pageTasks, agents: listedAgents } = usePageRows(
+    taskId,
+    [
+      ...(parentId === undefined ? [] : [parentId]),
+      ...(relatedDocument?.blockedBy ?? []),
+      ...(relatedDocument?.blocks ?? []),
+    ],
+    reading,
+  );
+
+  // Note that until its rows are read, the page stands on the task alone, as the list holds it.
+  const tasks = useMemo(
+    () => (reading || heldRow === undefined ? pageTasks : [heldRow]),
+    [reading, heldRow, pageTasks],
+  );
 
   const pullRequests =
     useLiveQuery((q) =>
-      taskId === undefined
+      taskId === undefined || !reading
         ? undefined
         : q
             .from({ pullRequest: collections.agentPullRequests })
@@ -1119,7 +1141,8 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       waitingElsewhere: Math.max(0, (waiting.byTask.get(task.id) ?? 0) - listedWaiting),
       tasks: listed,
       setStatus,
-      workingAgents: workingAgentsIn(agentsListed ? listedAgents : undefined, listed),
+      // Note that the agents read as not yet listed until the page's rows are, so a status set before then asks as it would with none read.
+      workingAgents: workingAgentsIn(agentsListed && reading ? listedAgents : undefined, listed),
       rename,
       setPriority,
       setAssignee,
@@ -1141,6 +1164,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
     placing,
     relations,
     acts,
+    reading,
   ]);
 }
 
