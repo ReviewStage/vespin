@@ -14,6 +14,7 @@ export const PERSON_PAGE_WORDS = {
   PERSON: "Person",
   WORKING: "Working now",
   AGENTS: "Agents",
+  MANAGERS: "Managers",
   /** Someone who left the workspace, in the place of a member's role and email. */
   FORMER: "Former member",
   /** Someone neither the members nor those who left name. */

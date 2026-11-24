@@ -240,8 +240,9 @@ function PersonPage({
     [listedTasks, workspaceId],
   );
 
+  // Note that the app lists no person's Managers yet, so it reads none.
   const page = useMemo(
-    () => personPage(userId, tasks, listedAgents),
+    () => personPage(userId, tasks, listedAgents, undefined),
     [userId, tasks, listedAgents],
   );
 

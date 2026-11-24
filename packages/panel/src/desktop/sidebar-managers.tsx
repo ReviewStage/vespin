@@ -30,6 +30,7 @@
 import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
 import { agentLastMovedAt } from "@repo/features/task-agents-model";
 import type { TaskAgentPin } from "@repo/features/task-wire";
+import { TERM } from "@repo/features/words";
 import {
   MANAGER_SORT,
   type ManagerSort,
@@ -72,15 +73,12 @@ import { ActionMenu, type MenuSubmenu } from "./action-menu.js";
 import { AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
 import type { FoldedGroups } from "./folded-groups.js";
 import { NEW_MANAGER, useNewManagerDialog } from "./new-manager-dialog.js";
-import { type CountNoun, sidebarHead } from "./sidebar-fold.js";
+import { sidebarHead } from "./sidebar-fold.js";
 import { type SidebarTasksControl, useSidebarOpen } from "./sidebar-open.js";
 import { useRowDrag } from "./use-row-drag.js";
 
 /** What the section is called, on its head and its list alike. */
 const MANAGERS_HEAD = "Managers";
-
-/** What its head counts. */
-const MANAGER_NOUN: CountNoun = { one: "manager", many: "managers" };
 
 /** Its key, by which the groups under it glide as it comes and goes. */
 const MANAGERS_KEY = "managers";
@@ -376,7 +374,7 @@ export function SidebarManagers({
           folded,
           onToggle: folds.toggleManagers,
           count: listedManagers.length,
-          noun: MANAGER_NOUN,
+          noun: TERM.MANAGER,
         })}
         glyph={<GLYPH.MANAGER />}
         label={MANAGERS_HEAD}
