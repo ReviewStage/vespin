@@ -3,11 +3,10 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { SOCIAL_PROVIDER_LABEL } from "@repo/features/sign-in-provider";
 import { TASKS_READ } from "@repo/features/tasks-view";
-import { ACT_UNREACHED_WORDS, IRREVERSIBLE_WORDS, readingWords, VERB } from "@repo/features/words";
+import { ACT_UNREACHED_WORDS, IRREVERSIBLE_WORDS, VERB } from "@repo/features/words";
 import { ACT_KIND, accountDeleteRefusalWords, accountDeleteWorkspacesWords } from "@repo/host/acts";
 import {
   selectAccount,
-  selectAppSettingsView,
   selectTaskListStatus,
   selectWorkspaces,
   supportAccessStanding,
@@ -19,21 +18,19 @@ import {
   FOOTER_TONE,
   footerToneOf,
   ListSection,
-  LoadingRow,
   SCREEN_GROUND,
   Screen,
   SettingsForm,
-  ToggleRow,
   useAsyncAction,
   WORDS_KIND,
 } from "@repo/ui-native";
-import { actionRefused } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { clearAccountNotifications } from "../../notifications.js";
 import { useSignOut } from "../../sign-out.js";
+import { useUsageDataSwitch } from "../../usage-data-switch.js";
 import { refusalOf, useWrite } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -47,7 +44,6 @@ export default function AccountScreen() {
   const acts = useHostActs();
   const write = useWrite();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
-  const { data: settings } = useQuery({ ...appStateQuery, select: selectAppSettingsView });
   const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: listStatus } = useQuery({ ...appStateQuery, select: selectTaskListStatus });
 
@@ -60,9 +56,7 @@ export default function AccountScreen() {
   const signOut = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const deletion = useAsyncAction(accountDeleteRefusalWords);
   const supportPress = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  const usage = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  // Note that the system's switch keeps the turn a person made, so a refused write redraws it from the stored choice.
-  const [usageRound, setUsageRound] = useState(0);
+  const usage = useUsageDataSwitch();
   const [asking, setAsking] = useState(false);
 
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return null;
@@ -115,36 +109,7 @@ export default function AccountScreen() {
             }
             footerTone={footerToneOf(usage.refusal ?? supportPress.refusal)}
           >
-            {settings === undefined ? (
-              <LoadingRow words={readingWords("your settings")} />
-            ) : (
-              <ToggleRow
-                key={usageRound}
-                label="Share usage data"
-                on={settings.usageData === true}
-                onChange={(on) => {
-                  // Note that a refusal says why under the group, in the host's words, and puts the toggle back; flipping it again is the retry, so no Try again could replay an older choice.
-                  void usage
-                    .run(() => {
-                      const said: Said = {};
-
-                      return write(
-                        () => acts[ACT_KIND.SETTING_UPDATE]({ field: "usageData", value: on }),
-                        {
-                          // Note that a refusal comes back in the answer rather than thrown, so it is read from it.
-                          refused: actionRefused,
-                          inPlace: (words) => {
-                            said.words = words;
-                          },
-                        },
-                      ).then(() => said.words);
-                    })
-                    .then((landed) => {
-                      if (!landed) setUsageRound((round) => round + 1);
-                    });
-                }}
-              />
-            )}
+            {usage.row}
             {support?.granted === true ? (
               <ActionRow label="Revoke support access" onPress={() => pressSupport(false)} />
             ) : support?.grantable === true ? (
