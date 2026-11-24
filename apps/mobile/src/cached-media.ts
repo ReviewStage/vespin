@@ -5,9 +5,14 @@
 import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
 import { AUDIO_TYPE } from "@repo/features/audio-signature";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import {
+  type ImageDimensions,
+  imageDimensions,
+  sniffImageType,
+} from "@repo/features/image-signature";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { PICTURE_FILE_EXTENSIONS, pictureExtension } from "@repo/ui-native";
-import { Directory, File, Paths } from "expo-file-system";
+import { Directory, File, FileMode, Paths } from "expo-file-system";
 
 /** What a video's file is named with while its bytes are still being written, so no read takes it for the whole file. */
 const WRITING_SUFFIX = ".writing";
@@ -29,11 +34,37 @@ const KEPT_EXTENSIONS: readonly string[] = [
   ...new Set(PLAYED_EXTENSION.values()),
 ];
 
-/** A file an earlier read wrote: its address, its size in bytes, and whether it is a picture rather than a video or a clip. */
+/** What a file an earlier read wrote holds, by its extension: a picture, a video, or a sound clip. */
+export const KEPT_MEDIA = {
+  PICTURE: "picture",
+  VIDEO: "video",
+  AUDIO: "audio",
+} as const;
+
+export type KeptMediaKind = (typeof KEPT_MEDIA)[keyof typeof KEPT_MEDIA];
+
+/** What each extension a file is written under holds: a picture's a picture, and a played type's a video or a clip by its type. */
+const KEPT_KIND: ReadonlyMap<string, KeptMediaKind> = new Map([
+  ...PICTURE_FILE_EXTENSIONS.map((extension) => [extension, KEPT_MEDIA.PICTURE] as const),
+  ...[...PLAYED_EXTENSION].map(
+    ([type, extension]) =>
+      [extension, type.startsWith("video/") ? KEPT_MEDIA.VIDEO : KEPT_MEDIA.AUDIO] as const,
+  ),
+]);
+
+/** A file an earlier read wrote: its address, its size in bytes, and what it holds. */
 export interface KeptMedia {
   readonly uri: string;
   readonly bytes: number;
-  readonly picture: boolean;
+  readonly kind: KeptMediaKind;
+}
+
+/** How much of a picture's head its size is read from: enough for a JPEG's frame header after a camera's EXIF segment, which runs to 64 KB. */
+const SIZE_HEAD_BYTES = 96 * 1024;
+
+/** A file written as `extension`, as a lookup answers it. */
+function keptOf(file: File, extension: string): KeptMedia {
+  return { uri: file.uri, bytes: file.size, kind: KEPT_KIND.get(extension) ?? KEPT_MEDIA.PICTURE };
 }
 
 /** Each write still under way, by the address of the file it writes, so a second read of one video, clip, or file waits on the first rather than writing over it. */
@@ -114,13 +145,7 @@ export function keptMedia(prefix: string, id: string): KeptMedia | undefined {
   for (const extension of KEPT_EXTENSIONS) {
     const file = new File(Paths.cache, `${prefix}-${id}.${extension}`);
 
-    if (file.exists) {
-      return {
-        uri: file.uri,
-        bytes: file.size,
-        picture: PICTURE_FILE_EXTENSIONS.includes(extension),
-      };
-    }
+    if (file.exists) return keptOf(file, extension);
   }
 
   return undefined;
@@ -165,7 +190,29 @@ export async function downloadedMedia(
   const file = new File(Paths.cache, `${prefix}-${id}.${extension}`);
   await partial.move(file, { overwrite: true });
 
-  return { uri: file.uri, bytes: file.size, picture: PICTURE_FILE_EXTENSIONS.includes(extension) };
+  return keptOf(file, extension);
+}
+
+/**
+ * The size in pixels a picture written to a file states in its header, read
+ * from its head alone off the JS thread, so its bubble stands at its shape
+ * before it decodes, as one read as base64 does (`base64PictureSize`); none
+ * where its bytes are no PNG, JPEG, or WebP, state no size, or could not be
+ * read.
+ */
+export async function keptPictureSize(uri: string): Promise<ImageDimensions | undefined> {
+  const handle = new File(uri).open(FileMode.ReadOnly);
+
+  try {
+    const head = await handle.readBytes(SIZE_HEAD_BYTES);
+    const type = sniffImageType(head);
+
+    return type === undefined ? undefined : imageDimensions(head, type);
+  } catch {
+    return undefined;
+  } finally {
+    handle.close();
+  }
 }
 
 /**
