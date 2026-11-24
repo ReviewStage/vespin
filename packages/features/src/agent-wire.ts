@@ -1001,6 +1001,23 @@ export const agentMessageRequestSchema = EffectSchema.Struct({
 
 export type AgentMessageRequest = typeof agentMessageRequestSchema.Type;
 
+/**
+ * A person's message to a Manager's chat, as its composer sends it: a
+ * message's words, files, key, and retry, and the chat message it replies
+ * in, which nothing sends yet. The service mints the message's id and
+ * writes it beside the line the Manager reads it as
+ * (`manager_chat_message`), so the chat holds it before the send answers.
+ */
+export const agentChatSendRequestSchema = EffectSchema.Struct({
+  text: messageWordsSchema,
+  clientKey: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
+  attachments: EffectSchema.optionalKey(agentAttachmentsSchema),
+  retry: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+  threadRoot: EffectSchema.optionalKey(trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS)),
+}).check(EffectSchema.makeFilter(({ text, attachments }) => hasWordsOrFiles(text, attachments)));
+
+export type AgentChatSendRequest = typeof agentChatSendRequestSchema.Type;
+
 /** What a member asks of an agent's queue (`agent-queue-wire.ts`). */
 export const QUEUE_CHANGE = {
   /** A message queued at the end, under the id its window minted, which a retry carries again. */
@@ -1500,6 +1517,17 @@ export const agentMessageAnswerSchema = EffectSchema.Struct({
    * message was sent, and from a service older than it.
    */
   queued: EffectSchema.optionalKey(agentQueueSchema),
+});
+
+/**
+ * A person's message to a Manager's chat, as the service answers it: as a
+ * message to the agent is answered, and the id the chat holds it under,
+ * which it lands under once the Manager's queue hands it on where it waits
+ * there.
+ */
+export const agentChatSendAnswerSchema = EffectSchema.Struct({
+  ...agentMessageAnswerSchema.fields,
+  messageId: EffectSchema.String,
 });
 
 /** Whether a window or device shows an agent's chat now, as its warm call says: shown holds the sandbox up, and hidden lets go of that window's hold at once. */

@@ -278,6 +278,8 @@ export const AGENT_ACT_KIND = {
   /** The page of a held transcript below the oldest message it holds, as its newest or last older page named it, laid before them on app state: whether it landed, or why it was not read. */
   AGENTS_TRANSCRIPT_OLDER: "agents.transcriptOlder",
   AGENTS_MESSAGE: "agents.message",
+  /** A person's message to a Manager's chat, written to the chat beside the line the Manager reads it as: the agent and the message's id, or why it was not sent. */
+  AGENTS_CHAT_SEND: "agents.chat.send",
   AGENTS_CHOOSE: "agents.choose",
   AGENTS_RENAME: "agents.rename",
   AGENTS_SERVERS: "agents.servers",
@@ -1172,6 +1174,7 @@ export const PORT_ACT_USE = {
   AGENTS_PART: ACT_USE.FETCH,
   AGENTS_TRANSCRIPT_OLDER: ACT_USE.WRITE,
   AGENTS_MESSAGE: ACT_USE.WRITE,
+  AGENTS_CHAT_SEND: ACT_USE.WRITE,
   AGENTS_CHOOSE: ACT_USE.WRITE,
   AGENTS_RENAME: ACT_USE.WRITE,
   AGENTS_SERVERS: ACT_USE.WRITE,

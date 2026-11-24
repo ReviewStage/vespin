@@ -14,6 +14,7 @@ import {
   agentBeforeSchema,
   agentCallIdSchema,
   agentChatHoldSchema,
+  agentChatSendRequestSchema,
   agentFaceRequestSchema,
   agentMessageRequestSchema,
   agentMessagesAnswerSchema,
@@ -786,6 +787,19 @@ export interface SendingMessage {
 const agentMessageAnswerViewSchema = answerView(messagesContract.send);
 
 export type AgentMessageAnswerView = typeof agentMessageAnswerViewSchema.Type;
+
+/** A person's message to a Manager's chat, as the host hears the service answer it: as a message's answer, and the id the chat holds it under; or why there is none. */
+export const agentChatSendAnswerViewSchema = answerView(messagesContract.chatSend);
+
+export type AgentChatSendAnswerView = typeof agentChatSendAnswerViewSchema.Type;
+
+/** A person's message to a Manager's chat, as the window asks it: the Manager, and the message as its composer sends it (`agentChatSendRequestSchema`). */
+export const agentChatSendParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  ...agentChatSendRequestSchema.fields,
+});
+
+export type AgentChatSendParams = typeof agentChatSendParamsSchema.Type;
 
 /**
  * One change of an agent's queue, as the window asks it: the agent, the

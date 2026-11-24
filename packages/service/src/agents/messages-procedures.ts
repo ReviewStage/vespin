@@ -11,6 +11,8 @@
  * message to an agent (`POST /api/agents/{id}/messages`), handed to its
  * session through the one steer path (`coder-host/steer.ts`), and a line of
  * a call into it recorded as it stands (`POST /api/agents/{id}/voice-lines`),
+ * a person's message to a Manager's chat (`POST /api/agents/{id}/chat-messages`),
+ * written to the chat beside the line the same steer hands the Manager,
  * under the same reach a message takes, which opens no turn: a delegation's
  * message names the caller's lines it is, and starts its turn on them.
  *
@@ -35,12 +37,17 @@
  * first and reads back only as far as it is scrolled.
  */
 
+import { randomBytes } from "node:crypto";
 import { middlewareGen } from "@orpc/experimental-effect";
 import { ORPCError } from "@orpc/server";
 import { type Agent, readAgent, readVisibleAgent } from "@repo/database/models/agent-store";
 import { childTitlesOf } from "@repo/database/models/child-titles";
 import { readRewoundRevision } from "@repo/database/models/conversation-rewind";
 import { childConversationId } from "@repo/database/models/ids";
+import {
+  readManagerChatMessage,
+  readManagerChatMessageByKey,
+} from "@repo/database/models/manager-chat-messages";
 import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
 import { listStandingVoiceCalls } from "@repo/database/models/voice-calls";
 import {
@@ -52,6 +59,7 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   AGENT_BOUNDS,
   AGENT_CURSOR_START,
+  AGENT_KIND,
   AGENT_STATUS,
   type AgentMessagesAnswer,
   type AgentNewestAnswer,
@@ -83,7 +91,7 @@ import { cutMessage, wholePartOf } from "./coder-host/part-cut.js";
 import { changeAgentQueue } from "./coder-host/queue-change.js";
 import { spokenLineMetadata } from "./coder-host/spoken-line.js";
 import { startedBlank } from "./coder-host/status.js";
-import { STEER_OUTCOME, steerMemberWords } from "./coder-host/steer.js";
+import { STEER_OUTCOME, type SteerWritten, steerMemberWords } from "./coder-host/steer.js";
 import { summaryOf } from "./coder-host/stop.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import {
@@ -317,6 +325,57 @@ function olderAnswer(older: TranscriptOlder, cut: boolean): AgentOlderAnswer {
   };
 }
 
+/** How many bytes a chat message's id is minted from: eight hex digits, short since the model repeats it. */
+const CHAT_ID_BYTES = 4;
+
+/** A fresh id for a person's chat message, unique within the chat but by a clash its write refuses, which a send again mints past. */
+function mintedChatId(): string {
+  return randomBytes(CHAT_ID_BYTES).toString("hex");
+}
+
+/**
+ * The root of the thread a chat send replies in, as the chat holds it: the
+ * message it names where that is a root, or that message's own root, so
+ * every header the Manager reads names a root; none for a message of the
+ * chat itself, and refused for one naming no message of the chat.
+ */
+const threadRootOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agentId: string,
+  named: string | undefined,
+) {
+  if (named === undefined) return null;
+
+  const parent = yield* hostedStoreOrUnavailable(readManagerChatMessage(userId, agentId, named));
+
+  if (Option.isNone(parent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
+  return parent.value.threadRoot ?? parent.value.id;
+});
+
+/**
+ * The id a chat send's message stands under: the one minted for it where
+ * this send wrote it or queued it, or, for a send repeated under its key,
+ * the one the chat holds under that key. A key a send of no chat message
+ * wrote holds none, which the send is refused for.
+ */
+const chatMessageIdOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agentId: string,
+  clientKey: string,
+  sent: { readonly outcome: SteerWritten["outcome"]; readonly minted: string },
+) {
+  if (sent.outcome !== STEER_OUTCOME.REPEATED) return sent.minted;
+
+  const landed = yield* hostedStoreOrUnavailable(
+    readManagerChatMessageByKey(userId, agentId, clientKey),
+  );
+
+  if (Option.isNone(landed)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
+  return landed.value.id;
+});
+
 /** A detailed input whose body's words run past the bound, whatever else it carries: refused as too long rather than as a body that does not read. */
 const isTooLong = Schema.is(
   Schema.Struct({
@@ -437,6 +496,48 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
 
         // The transaction that wrote the line, which the host waits to see live before it confirms the send.
         return txid === undefined ? { agent: summary } : { agent: summary, txid };
+      }),
+
+    chatSend: hosted.messages
+      .use(accountMiddleware(seams.resolveUserId))
+      .use(tooLongMiddleware)
+      .chatSend.effect(function* ({ input, context }) {
+        const { agent } = yield* reachedAgent(context.userId, input.params.id);
+
+        // Note that only a Manager keeps a chat, so any other agent names none.
+        if (agent.kind !== AGENT_KIND.MANAGER) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+        const { retry, threadRoot, ...words } = input.body;
+
+        const chat = {
+          id: mintedChatId(),
+          threadRoot: yield* threadRootOf(context.userId, agent.id, threadRoot),
+        };
+
+        const { txid, outcome } = yield* steerMemberWords(
+          writer,
+          context.userId,
+          agent,
+          { ...words, chat },
+          retry === true,
+        );
+
+        const messageId = yield* chatMessageIdOf(context.userId, agent.id, words.clientKey, {
+          outcome,
+          minted: chat.id,
+        });
+
+        const summary = yield* summaryOf(context.userId, agent);
+
+        // A message the Manager's first launch holds waits in its queue, and lands in the chat as the queue hands it on.
+        if (outcome === STEER_OUTCOME.QUEUED) {
+          const queued = yield* hostedStoreOrUnavailable(queueOnPage(agent.id));
+
+          return { agent: summary, queued, messageId };
+        }
+
+        return txid === undefined
+          ? { agent: summary, messageId }
+          : { agent: summary, txid, messageId };
       }),
 
     recordVoiceLine: hosted.messages

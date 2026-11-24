@@ -580,6 +580,12 @@ function fakeService() {
 
         return { messages: SAID.messages, before: "3" };
       }),
+    chatSend: (agentId, request) =>
+      Effect.sync(() => {
+        asked.push(`chatSend:${agentId}:${request.clientKey}:${request.text}`);
+
+        return { agent: AGENT, messageId: "a1b2c3d4" };
+      }),
     message: (agentId, request) =>
       Effect.andThen(
         Effect.suspend(() => messageSendGate),

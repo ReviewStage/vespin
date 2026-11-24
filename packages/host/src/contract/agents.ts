@@ -22,6 +22,8 @@ import {
   agentApprovalAnswerParamsSchema,
   agentApprovalAnswerViewSchema,
   agentArchiveParamsSchema,
+  agentChatSendAnswerViewSchema,
+  agentChatSendParamsSchema,
   agentChooseParamsSchema,
   agentDefaultAnswerViewSchema,
   agentDefaultMachineAnswerViewSchema,
@@ -295,6 +297,14 @@ export const AGENT_ACTS = declaredActs({
     door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,
     byHand: true,
+  }),
+  AGENTS_CHAT_SEND: hostAct({
+    input: agentChatSendParamsSchema,
+    output: agentChatSendAnswerViewSchema,
+    refusal: "Could not message the Manager on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
   }),
   AGENTS_CHOOSE: hostAct({
     input: agentChooseParamsSchema,

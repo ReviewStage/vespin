@@ -17,6 +17,10 @@ import {
 import { MENTIONED_HEADING } from "@repo/database/models/attached-file-parts";
 import { createAutomation } from "@repo/database/models/automation-store";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
+import {
+  readManagerChatMessage,
+  readManagerChatPage,
+} from "@repo/database/models/manager-chat-messages";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import { writePage } from "@repo/database/models/task-pages";
@@ -47,6 +51,7 @@ import {
   AGENT_SENDER,
   AGENT_STATUS,
   agentAnswerSchema,
+  agentChatSendAnswerSchema,
   agentListAnswerSchema,
   agentMessageAnswerSchema,
   agentMessagesAnswerSchema,
@@ -68,6 +73,7 @@ import { keptPictureIdOf } from "@repo/features/conversation-picture-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { INBOX_ASK, INBOX_CURSOR_START, inboxAnswerSchema } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { READ_MARK } from "@repo/features/read-mark";
@@ -94,6 +100,7 @@ import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { postInboxThread } from "../inbox/inbox-store.js";
 import {
   AGENT,
+  AGENT_CHAT_MESSAGES,
   AGENT_INBOX,
   AGENT_MESSAGES,
   AGENT_NEWEST,
@@ -2050,6 +2057,170 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           ),
         );
         assert.equal(agentSessions.sent.length, 1);
+      }),
+  );
+
+  it.effect(
+    "a person's message to a Manager's chat lands in the chat on the line it is written beside, the line keeping their plain words while the Manager is handed them under a header naming them and the message; a send again under its key answers the same message and hands nothing",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, agent, ask } = yield* messagedAgent(agentSessions, { running: false });
+        const db = yield* Database;
+        yield* db.update(user).set({ name: "Ada Lovelace" }).where(eq(user.id, owner));
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const body = { text: "Ship the invites.", clientKey: randomUUID() };
+
+        const send = () =>
+          Effect.map(
+            ask(request(AGENT_CHAT_MESSAGES, owner, { method: "POST", id: agent.id, body })),
+            (answered) =>
+              readAnswer(agentChatSendAnswerSchema, HOSTED_HTTP_STATUS.ACCEPTED, answered),
+          );
+
+        const sent = yield* send();
+        const again = yield* send();
+
+        assert.equal(again.messageId, sent.messageId);
+        assert.deepEqual(
+          agentSessions.sent.map((each) => each.message.message),
+          [[text(`Ada Lovelace, message ${sent.messageId}:`), text("Ship the invites.")]],
+        );
+
+        const page = readAnswer(
+          agentMessagesAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
+        );
+
+        const line = page.messages.find(
+          (message) =>
+            message.role === MESSAGE_ROLE.USER &&
+            userTexts({ messages: [message] })[0] === body.text,
+        );
+
+        assert.ok(line, "the line stands in the transcript with the person's plain words");
+
+        const stored = Option.getOrThrow(
+          yield* readManagerChatMessage(owner, agent.id, sent.messageId),
+        );
+
+        assert.deepEqual(
+          {
+            authorKind: stored.authorKind,
+            authorUserId: stored.authorUserId,
+            authorName: stored.authorName,
+            text: stored.text,
+            lineId: stored.lineId,
+          },
+          {
+            authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+            authorUserId: owner,
+            authorName: "Ada Lovelace",
+            text: body.text,
+            lineId: line.id,
+          },
+        );
+      }),
+  );
+
+  it.effect(
+    "a person's chat message to a Manager whose turn was lost is handed again under the same header, read from the chat, when Try again resends it",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+
+        const { owner, agent, ask, target, writer } = yield* messagedAgent(agentSessions, {
+          running: false,
+        });
+
+        const db = yield* Database;
+        yield* db.update(user).set({ name: "Ada Lovelace" }).where(eq(user.id, owner));
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const sent = readAnswer(
+          agentChatSendAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            request(AGENT_CHAT_MESSAGES, owner, {
+              method: "POST",
+              id: agent.id,
+              body: { text: "Ship the invites.", clientKey: randomUUID() },
+            }),
+          ),
+        );
+
+        // The turn the line queued is lost before its runner reads it, as a launch that failed leaves it.
+        yield* TestClock.adjust(Duration.seconds(1));
+        yield* settleRunnerLostTurns(
+          writer,
+          target.conversationId,
+          yield* Clock.currentTimeMillis,
+          "the sandbox could not be opened",
+        );
+        yield* TestClock.adjust(Duration.seconds(1));
+
+        readAnswer(
+          agentMessageAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            messageAs(owner, agent.id, { text: "Try again", clientKey: randomUUID(), retry: true }),
+          ),
+        );
+
+        const handed = [
+          text(`Ada Lovelace, message ${sent.messageId}:`),
+          text("Ship the invites."),
+        ];
+
+        assert.deepEqual(
+          agentSessions.sent.map((each) => each.message.message),
+          [handed, handed],
+        );
+      }),
+  );
+
+  it.effect(
+    "no Manager's chat is written by an account outside its workspace, nor through an agent that is no Manager",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const opened = yield* openTask({ agentSessions });
+        const { owner, other, ask } = opened;
+        const { agent } = yield* agentStartedOn(opened, agentSessions, { running: false });
+        const coder = yield* agentStartedOn(opened, agentSessions, { running: false });
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const sends = agentSessions.sent.length;
+        const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
+
+        const chatSend = (bearer: string, agentId: string) =>
+          ask(
+            request(AGENT_CHAT_MESSAGES, bearer, {
+              method: "POST",
+              id: agentId,
+              body: { text: "Ship the invites.", clientKey: randomUUID() },
+            }),
+          );
+
+        assert.deepEqual(yield* chatSend(other, agent.id), notFound);
+        assert.deepEqual(yield* chatSend(owner, coder.agent.id), notFound);
+        assert.equal(agentSessions.sent.length, sends);
+        assert.deepEqual(yield* readManagerChatPage(owner, agent.id, { limit: 10 }), []);
       }),
   );
 });
