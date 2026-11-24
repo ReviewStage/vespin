@@ -270,7 +270,11 @@ import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
-import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import {
+  useTaskListCollections,
+  useTaskListRow,
+  useTaskListRowAs,
+} from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
@@ -399,6 +403,7 @@ import { ShownPage } from "./shown-page.js";
 import { SentWords, useSkill } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
+import { useStartingAgent } from "./starting-agent.js";
 import { useSuggestionSender } from "./suggestion-send.js";
 import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
@@ -1638,10 +1643,13 @@ function TaskSender({
   task,
   onOpen,
   starter,
+  forWhom,
 }: {
   task: BriefTask | undefined;
   onOpen: (() => void) | undefined;
   starter: Actor | undefined;
+  /** Who the starter, an agent, started it for (`briefFor`); none for every other starter. */
+  forWhom: Actor | undefined;
 }): React.JSX.Element {
   // The window hands the task anew on every draw, so a transcript's sender reads it live (`LiveDoors`), and the description's card is not drawn again for it.
   const live = useContext(LiveDoors);
@@ -1653,7 +1661,13 @@ function TaskSender({
       {starter === undefined ? null : (
         <ActorLine>
           {named === undefined ? "Started by " : " · started by "}
-          <ActorRef actor={starter} sentence />
+          <MessageSender actor={starter} />
+          {forWhom === undefined ? null : (
+            <ActorLine>
+              {" · for "}
+              <ActorRef actor={forWhom} sentence />
+            </ActorLine>
+          )}
         </ActorLine>
       )}
     </ActorLine>
@@ -1835,6 +1849,28 @@ function AutomationSender({
 }
 
 /**
+ * Who an agent that another started was started for, as its brief names
+ * them after its author: the member its task is assigned to, which a
+ * Manager sets to whoever asked, else the member whose account it runs on;
+ * none where no agent started it. Note that it reads the task as it stands,
+ * since the brief keeps no member of its own.
+ */
+function useBriefFor(agent: AgentSummary, started: boolean): Actor | undefined {
+  const asked = started ? (agent.taskId ?? undefined) : undefined;
+
+  const assignee = useTaskListRowAs(
+    useTaskListCollections().tasks,
+    asked,
+    (task) => task?.assignee,
+  );
+
+  const member = assignee ?? agent.startedBy;
+  const person = usePerson(member);
+
+  return started && member !== undefined ? person : undefined;
+}
+
+/**
  * What an agent's transcript opens on: an automation's prompt, from the
  * automation, where an automation's run started it; the description, from its task
  * and the teammate who started the agent, where it was handed the description; and
@@ -1847,9 +1883,11 @@ function agentOrigin(input: {
   task: BriefTask | undefined;
   onOpenTask: (() => void) | undefined;
   starter: Actor | undefined;
+  /** Who the starter, an agent, started it for (`briefFor`); none for every other starter. */
+  forWhom: Actor | undefined;
   openGitHub: (url: string) => void;
 }): TranscriptOrigin | undefined {
-  const { agent, run, task, starter } = input;
+  const { agent, run, task, starter, forWhom } = input;
 
   if (agent.automationId !== undefined || agent.automationName !== undefined) {
     return {
@@ -1874,7 +1912,7 @@ function agentOrigin(input: {
   return {
     sender:
       task === undefined && starter === undefined ? undefined : (
-        <TaskSender task={task} onOpen={input.onOpenTask} starter={starter} />
+        <TaskSender task={task} onOpen={input.onOpenTask} starter={starter} forWhom={forWhom} />
       ),
   };
 }
@@ -2034,6 +2072,7 @@ export function AgentMessage({
   todos = NO_TODOS,
   briefTitle,
   sender,
+  senderFor,
   origin,
   arrived = NO_ARRIVED,
   wakeupDelay,
@@ -2064,6 +2103,8 @@ export function AgentMessage({
   todos?: TodosPlace;
   /** Who wrote or said the message, named over it: a teammate, the app, an automation, or the agent itself, for a wakeup it set; none for the reader's own, or where nobody is named. */
   sender?: Actor | undefined;
+  /** Who the sender wrote it for, named after it, as the agent that started this one wrote its brief for the member who asked; none for every other message. */
+  senderFor?: Actor | undefined;
   /** The developer's lines that reached this turn while it ran (`placedMessages`), each drawn where it arrived. */
   arrived?: readonly ArrivedLine[];
   /** How long the wakeup this line hands back waited, where it is one and the turn that set it says (`wakeupDelayOf`). */
@@ -2115,7 +2156,18 @@ export function AgentMessage({
 
   // A line the voice said on a call is the voice's, never the agent's words; in a Manager's chat it is one of the Manager's messages (`managerChatLines`), drawn as any.
   if (isVoiceLine(message) && chatRuns === undefined) return <VoiceLineRow message={message} />;
-  const named = sender === undefined ? null : <MessageSender actor={sender} />;
+
+  const named =
+    sender === undefined ? null : senderFor === undefined ? (
+      <MessageSender actor={sender} />
+    ) : (
+      <ActorLine>
+        <MessageSender actor={sender} />
+        {" · for "}
+        <ActorRef actor={senderFor} sentence />
+      </ActorLine>
+    );
+
   // What GitHub said on the pull request is drawn as its card, never as the prompt the agent read.
   const github = githubLineOf(message);
 
@@ -2822,6 +2874,7 @@ function sameMessageDraw(a: AgentMessageProps, b: AgentMessageProps): boolean {
     message: (ours, theirs) => ours === theirs || sameHeldPiece(a, b),
     todos: sameTodosPlace,
     sender: sameFields,
+    senderFor: sameFields,
     arrived: sameArrived,
     delegation: sameDoors,
   });
@@ -3268,6 +3321,7 @@ function AgentTranscriptView({
   earlierOmitted = false,
   briefTitle,
   briefSender,
+  briefFor,
   origin,
   readerId,
   agentId,
@@ -3349,8 +3403,10 @@ function AgentTranscriptView({
   earlierOmitted?: boolean;
   /** The description's or task's card line, where it is named otherwise than by its first line, as a brain's worker is by its job. */
   briefTitle?: string | undefined;
-  /** The teammate who handed the agent its task, named over the task's message; none for the reader's own agent. */
+  /** Who handed the agent its task, named over the task's message: the agent that started it, else the teammate who did; none for the reader's own agent. */
   briefSender?: Actor | undefined;
+  /** Who the agent that started this one handed it its task for, named after it (`briefFor`); none where no agent started it. */
+  briefFor?: Actor | undefined;
   /** Who handed the agent what it opens on, which is then its card under their line, a prompt among them; none where only a description is, whose card names nobody. */
   origin?: TranscriptOrigin | undefined;
   /** The reader's own account id, whose messages are drawn with no name over them (`lineSender`). */
@@ -3751,6 +3807,7 @@ function AgentTranscriptView({
                                 briefTitle={briefTitle}
                                 origin={message === description ? drawnOrigin : undefined}
                                 sender={sender}
+                                senderFor={message === task ? briefFor : undefined}
                                 wakeupDelay={
                                   isWakeupLine(message)
                                     ? wakeupDelayOf(placed[index - 1]?.message)
@@ -3778,6 +3835,7 @@ function AgentTranscriptView({
                                     moving={false}
                                     delegation={delegation}
                                     sender={briefSender}
+                                    senderFor={briefFor}
                                   />
                                 )}
                               </>
@@ -4255,6 +4313,10 @@ function AgentTabView({
   );
 
   const starterActor = usePerson(agent.startedBy);
+  // An agent another agent started, as a Manager does, opens on that agent's brief, named as its author, and on who it was written for, rather than on the account it runs on.
+  const startingAgent = useStartingAgent(agent.startedByAgentId, models ?? [])?.actor;
+  const forWhom = useBriefFor(agent, startingAgent !== undefined);
+  const briefSender = startingAgent ?? (starter === undefined ? undefined : starterActor);
   const wholeParts = useWholePartDoor(agent.id);
   const { members, former } = useMemberDirectory();
   // The door the box hands Reply, which lays a quote in at its caret.
@@ -4298,7 +4360,8 @@ function AgentTabView({
   // The task's line reads the task live (`TaskSender`), so whether there is one is all the card's sender hangs on here.
   const briefTask = cards?.task;
   const tasked = briefTask !== undefined;
-  const originStarter = useKept(starter === undefined ? undefined : starterActor, sameFields);
+  const originStarter = useKept(briefSender, sameFields);
+  const originFor = useKept(forWhom, sameFields);
 
   // The description's card is drawn again only when who handed it, or what, changed, not with each page.
   const origin = useMemo(
@@ -4309,10 +4372,21 @@ function AgentTabView({
         task: briefTask,
         onOpenTask: openTarget === undefined ? undefined : () => openTarget(TASK_TARGET),
         starter: originStarter,
+        forWhom: originFor,
         openGitHub: steadyGitHub,
       }),
     // Note that the agent is read for how it was briefed alone, which these name.
-    [automationId, automationName, brief, run, tasked, openTarget, originStarter, steadyGitHub],
+    [
+      automationId,
+      automationName,
+      brief,
+      run,
+      tasked,
+      openTarget,
+      originStarter,
+      originFor,
+      steadyGitHub,
+    ],
   );
 
   // An automation may send its runs to an agent it did not start, whose lines then name it all the same.
@@ -4346,7 +4420,8 @@ function AgentTabView({
                                 messages={drawnLines}
                                 standingCalls={transcript.calls}
                                 brief={agent.brief}
-                                briefSender={starter === undefined ? undefined : starterActor}
+                                briefSender={briefSender}
+                                briefFor={forWhom}
                                 origin={origin}
                                 readerId={readerId}
                                 agentId={agent.id}

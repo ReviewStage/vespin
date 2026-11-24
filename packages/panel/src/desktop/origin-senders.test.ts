@@ -3,11 +3,13 @@
 import assert from "node:assert/strict";
 import {
   AGENT_BRIEF,
+  AGENT_KIND,
   AGENT_STATUS,
   type AgentSummary,
   type AgentTranscriptMessage,
+  type ListedAgent,
 } from "@repo/features/agent-wire";
-import type { Task } from "@repo/features/task-wire";
+import type { Task, TaskSummary } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { agentTab, subagentTab } from "@repo/ui/tab-strip-model";
 import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
@@ -21,9 +23,11 @@ import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import {
   agentsControl,
+  listedAgent,
   pushedTranscripts,
   taskAgentsOf,
   tasksControl,
@@ -42,6 +46,7 @@ import { DesktopTasks } from "./desktop-tasks.js";
 
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
 const CHARLES = { userId: "user-charles", name: "Charles Pan" };
+const GRACE = { userId: "user-grace", name: "Grace Hopper" };
 
 const TASK: Task = {
   id: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
@@ -93,6 +98,8 @@ async function mount(input: {
   messages?: readonly AgentTranscriptMessage[];
   /** The agent the tab draws; the one started on the task's description where unsaid. */
   agent?: AgentSummary;
+  /** The tasks and agents the window's task list holds; none where unsaid. */
+  listed?: { readonly tasks: readonly TaskSummary[]; readonly agents: readonly ListedAgent[] };
 }): Promise<{ container: HTMLElement; chosen: (MainTab | SidePanelTab)[] }> {
   const chosen: (MainTab | SidePanelTab)[] = [];
   pushedTranscripts((transcript) => [
@@ -130,6 +137,8 @@ async function mount(input: {
         me: input.reader,
       }),
     ),
+    tasks: input.listed?.tasks ?? [],
+    listedAgents: input.listed?.agents ?? [],
   });
 
   const container = document.body.appendChild(document.createElement("div"));
@@ -139,10 +148,7 @@ async function mount(input: {
     root.render(
       windowRouter().provide(
         withQueryClient(
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: control,
-          }),
+          overEveryTask(control, createElement(DesktopTasks, { looks: NO_LOOKS, tasks: control })),
         ),
       ),
     ),
@@ -328,4 +334,58 @@ test("a worker's tab opens on its task sent by the agent that delegated it, whos
   act(() => parent?.click());
 
   assert.deepEqual(chosen, [agentTab(AGENT.id)]);
+});
+
+test("an agent another agent started opens on its brief by that agent, for the member its task is assigned to, never by the account it runs on", async () => {
+  const manager = listedAgent({
+    id: "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32",
+    taskId: null,
+    model: AGENT.model,
+    effort: AGENT.effort,
+    title: "Frontend Manager",
+    kind: AGENT_KIND.MANAGER,
+    createdAt: 0,
+    status: AGENT_STATUS.COMPLETED,
+    turnId: null,
+    startedBy: CHARLES,
+  });
+
+  const listed = {
+    tasks: [{ ...TASK, assignee: GRACE }],
+    agents: [manager, listedAgent({ ...AGENT, startedByAgentId: manager.id })],
+  };
+
+  const started = { ...AGENT, startedByAgentId: manager.id };
+
+  const brief: AgentTranscriptMessage = {
+    ...BRIEF,
+    metadata: { channel: MESSAGE_CHANNEL.START, brief: START_LINE_BRIEF.PROMPT },
+    sentBy: { name: manager.title ?? "", agent: true, agentId: manager.id },
+  };
+
+  const described = await mount({
+    reader: DEAN.userId,
+    main: agentTab(AGENT.id),
+    agent: started,
+    listed,
+  });
+
+  assert.equal(
+    words(senderLine(described.container)),
+    "Teammate invitations · started by Frontend Manager · for Grace Hopper",
+  );
+
+  const prompted = await mount({
+    reader: DEAN.userId,
+    main: agentTab(AGENT.id),
+    messages: [brief],
+    agent: { ...started, brief: AGENT_BRIEF.PROMPT },
+    listed,
+  });
+
+  const head =
+    prompted.container.querySelector('[data-message-id="brief"] .ui-message-head-sender') ??
+    assert.fail("the brief is headed by who sent it");
+
+  assert.equal(words(head), "Frontend Manager · for Grace Hopper");
 });
