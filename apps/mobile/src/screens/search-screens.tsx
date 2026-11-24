@@ -1,4 +1,4 @@
-// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, or those last opened before anything is typed, each row drawn by its own list's row.
+// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, then the places it goes to by name and the row that starts a task on what was typed; or, before anything is typed, those last opened, the workspace's Managers, and those places, each row drawn by its own list's row.
 
 import {
   holderTask,
@@ -22,14 +22,24 @@ import {
   showAllHeard,
   shownOfWords,
 } from "@repo/features/search-found-model";
+import {
+  GO_TO,
+  GO_TO_TITLE,
+  GO_TO_WORDS,
+  type GoTo,
+  goToShown,
+  startTaskLabel,
+} from "@repo/features/search-go-to-model";
 import { RECENT_WORDS } from "@repo/features/search-recent-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { NO_RESULTS_HINT, noResultsForWords, readingWords } from "@repo/features/words";
 import {
   EmptyState,
   GLYPH,
+  type Glyph,
   glyphSymbol,
   LIST_LOOK,
+  LinkRow,
   type ListScopes,
   ListSection,
   RowForEach,
@@ -41,9 +51,11 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
+import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
+import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-on.js";
 import { lowerKeyboard } from "../native-interactions-module.js";
 import { forgetRecentOpened } from "../search/recent-opened.js";
 import {
@@ -53,7 +65,7 @@ import {
   useSearchRecent,
 } from "../search/use-search.js";
 import { SEARCH_FOCUS_PARAM, useRefilledSearchField } from "../search-field.js";
-import { SettingsBarButton } from "../settings-button.js";
+import { SETTINGS_ROUTE, SettingsBarButton, useOpenSettings } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -62,6 +74,7 @@ import { useRemind } from "./inbox-remind.js";
 import { InboxItemRow, InboxItemRows } from "./inbox-screens.js";
 import {
   type AgentAsking,
+  ManagerTaskRow,
   StatusQuestionAsk,
   TaskAgentRow,
   TaskListRow,
@@ -84,6 +97,22 @@ const SCOPES: readonly SearchScope[] = Object.values(SEARCH_SCOPE);
 
 /** The scopes while the member turned the Inbox off, which leave its own out. */
 const SCOPES_WITHOUT_INBOX = SCOPES.filter((each) => each !== SEARCH_SCOPE.INBOX);
+
+/** Every place Go to lists, in the order it lists them. */
+const GO_TO_PLACES: readonly GoTo[] = Object.values(GO_TO);
+
+/** The places Go to lists while the account has the Merge queue off. */
+const GO_TO_WITHOUT_QUEUE = GO_TO_PLACES.filter((place) => place !== GO_TO.MERGE_QUEUE);
+
+/** The glyph each place Go to lists leads with, the one its own button or row leads with elsewhere. */
+const GO_TO_GLYPH = {
+  [GO_TO.MERGE_QUEUE]: GLYPH.QUEUED,
+  [GO_TO.AUTOMATIONS]: GLYPH.AUTOMATION,
+  [GO_TO.SETTINGS]: GLYPH.SETTINGS,
+} as const satisfies Record<GoTo, Glyph>;
+
+/** New task's sheet, which a typed query opens with its words as the prompt. */
+const NEW_TASK_ROUTE = "/start-task";
 
 /** The screen a task's row opens: its Overview, on its own tab. */
 function taskRoute(task: TaskSummary): string | undefined {
@@ -146,6 +175,86 @@ function useOpenPicked(
 }
 
 /**
+ * The places Go to lists, those the account reaches, and what opens each:
+ * the Merge queue on the tab it belongs on, as a row found opens, while the
+ * account has it on, and Automations and Settings as Settings opens, a
+ * sheet over the tabs. The keyboard is lowered first, as a pick lowers it.
+ */
+function useGoTo(leave: (() => void) | undefined) {
+  const mergeQueueOn = useMergeQueueOn();
+  const router = useRouter();
+  const onTab = useOnTab();
+  const openSettings = useOpenSettings();
+
+  const go = (place: GoTo) => {
+    lowerKeyboard();
+
+    switch (place) {
+      case GO_TO.MERGE_QUEUE:
+        leave?.();
+        router.push(onTab(MERGE_QUEUE_ROUTE));
+
+        return;
+      case GO_TO.AUTOMATIONS:
+        openSettings(SETTINGS_ROUTE.AUTOMATIONS);
+
+        return;
+      case GO_TO.SETTINGS:
+        openSettings();
+
+        return;
+    }
+  };
+
+  return { reached: mergeQueueOn ? GO_TO_PLACES : GO_TO_WITHOUT_QUEUE, go };
+}
+
+/** The places `places` names under Go to, each its glyph and name; nothing where none is named. */
+function GoToSection({
+  places,
+  onGo,
+}: {
+  readonly places: readonly GoTo[];
+  readonly onGo: (place: GoTo) => void;
+}) {
+  if (places.length === 0) return null;
+
+  return (
+    <ListSection title={GO_TO_WORDS.TITLE}>
+      {places.map((place) => (
+        <LinkRow
+          key={place}
+          symbol={GO_TO_GLYPH[place]}
+          label={GO_TO_TITLE[place]}
+          onPress={() => onGo(place)}
+        />
+      ))}
+    </ListSection>
+  );
+}
+
+/** The row that starts a task on what was typed, New task opening with it as the prompt, as ⌘K's last row does; nothing while nothing is typed. */
+function StartTaskSection({ query }: { readonly query: string }) {
+  const router = useRouter();
+  const label = startTaskLabel(query);
+
+  if (label === undefined) return null;
+
+  return (
+    <ListSection>
+      <LinkRow
+        symbol={GLYPH.ADD}
+        label={label}
+        onPress={() => {
+          lowerKeyboard();
+          router.push({ pathname: NEW_TASK_ROUTE, params: { prompt: query.trim() } });
+        }}
+      />
+    </ListSection>
+  );
+}
+
+/**
  * What a scope's rows are still being read from, as the words its wait
  * says, so it never says it found nothing before the lists it searches have
  * answered: Inbox waits on the Inbox's first read, Tasks and Agents on the
@@ -186,6 +295,7 @@ function FoundList({
   asking,
   scopes,
   empty,
+  after,
 }: {
   readonly found: SearchFound;
   /** What was typed, whose words each row's title sets in bold. */
@@ -204,6 +314,8 @@ function FoundList({
   readonly scopes: ListScopes;
   /** What stands over the list while the scope found nothing. */
   readonly empty?: ReactNode | undefined;
+  /** What stands under the rows found: the places Go to names and the row that starts a task. */
+  readonly after?: ReactNode | undefined;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
@@ -280,6 +392,7 @@ function FoundList({
           ))}
         </ListSection>
       )}
+      {after}
     </RowList>
   );
 }
@@ -288,9 +401,10 @@ function FoundList({
  * What Search draws before anything is typed, in either window, as Apple's
  * own search tabs list their recents under the field: the tasks, threads,
  * and agents last opened on this phone, newest first, each drawn as its own
- * list draws it, under Recent with Clear at its end; nothing where none was
- * opened, so the page waits on the field. A pick opens as a result's does,
- * and the questions and sheets a row's acts raise stand beside it.
+ * list draws it, under Recent with Clear at its end; then the workspace's
+ * Managers, as the panel's sidebar lists them; then the places Go to names,
+ * as ⌘K goes somewhere by name. A pick opens as a result's does, and the
+ * questions and sheets a row's acts raise stand beside it.
  */
 function SearchRecentList({ leave }: { readonly leave: (() => void) | undefined }) {
   const recent = useSearchRecent();
@@ -300,9 +414,14 @@ function SearchRecentList({ leave }: { readonly leave: (() => void) | undefined 
   const { listing, status, deletion } = useListingAsks(recent.listing, doors);
   const remind = useRemind();
   const asking = useAgentRowAsk();
+  const managers = useWorkspaceManagers(recent.listing.workspace?.id);
+  const goTo = useGoTo(leave);
 
   const open = useOpenPicked(
-    new Map(recent.rows.map((row) => [row.id, recentRoute(row)] as const)),
+    new Map([
+      ...recent.rows.map((row) => [row.id, recentRoute(row)] as const),
+      ...managers.map((agent) => [agent.id, iosAgentRoute(agent.id)] as const),
+    ]),
     leave,
   );
 
@@ -359,6 +478,14 @@ function SearchRecentList({ leave }: { readonly leave: (() => void) | undefined 
               </RowForEach>
             </ListSection>
           )}
+          {managers.length === 0 ? null : (
+            <ListSection title={GO_TO_WORDS.MANAGERS}>
+              {managers.map((agent) => (
+                <ManagerTaskRow key={agent.id} agent={agent} asking={asking} />
+              ))}
+            </ListSection>
+          )}
+          <GoToSection places={goTo.reached} onGo={goTo.go} />
         </RowList>
       </Screen>
       <StatusQuestionAsk question={status} />
@@ -408,6 +535,9 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   const remind = useRemind();
   const asking = useAgentRowAsk();
   const open = useOpenPicked(foundRoutes(found), leave);
+  const goTo = useGoTo(leave);
+  // Note that Go to stands under All alone, since a kind's own scope lists that kind.
+  const places = scope === SEARCH_SCOPE.ALL ? goToShown(goTo.reached, query) : [];
 
   const shown = scopedFound(found, scope);
   const none = shown.tasks.length + shown.inbox.length + shown.agents.length === 0;
@@ -434,6 +564,12 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
       onOpen={open}
       remindMenu={remind.itemMenu}
       asking={asking}
+      after={
+        <>
+          <GoToSection places={places} onGo={goTo.go} />
+          <StartTaskSection query={query} />
+        </>
+      }
       empty={
         !empty ? undefined : reading !== undefined ? (
           <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />

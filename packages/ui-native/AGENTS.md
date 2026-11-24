@@ -454,9 +454,11 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   panel's merge box does; and the rest of its acts in the bar's ⋯, an act
   that asks first asking in `ConfirmAsk`. The bar holds no press of words,
   which pushed the page's path out of a compact bar.
-- **The tab bar** is `NativeTabs`: icons alone in a compact window, through
-  its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
-  New task; a regular window's bar keeps its labels and is
+- **The tab bar** is `NativeTabs`: each tab labeled in every window, since a
+  compact window's icons alone read as empty (the developer, Nov 23, 2026),
+  the round + alone an icon there through its `Label`'s own `hidden`, the
+  Inbox count in copper, and the round + for New task; a regular window's
+  bar is
   `sidebarAdaptable`, so iPadOS stands it as its own tab sidebar, as Apple's
   tab guidance has it. A compact window hides it while a
   conversation stands in front (a thread, an agent's page, or a pull

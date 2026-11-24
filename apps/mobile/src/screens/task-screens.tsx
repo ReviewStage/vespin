@@ -2464,7 +2464,7 @@ function useAgentRowParts(agent: ListedAgent, name: string, asking: AgentAsking 
  * an agent's own (`useAgentRowParts`). A Manager the service picked no face
  * for, from before faces, stands as its agent's row instead.
  */
-function ManagerTaskRow({
+export function ManagerTaskRow({
   agent,
   asking,
 }: {
