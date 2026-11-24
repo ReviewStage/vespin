@@ -623,11 +623,8 @@ export function PageColumn({
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
 }) {
-  return (
-    <NavigationStack>
-      <Column view={view} bar={bar} system />
-    </NavigationStack>
-  );
+  // DIAGNOSTIC (not for merge): the page column with no navigation container, to see whether a NavigationStack keeps an RNHostView's children from laying out.
+  return <Column view={view} bar={bar} system />;
 }
 
 /**
