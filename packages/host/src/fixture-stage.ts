@@ -77,3 +77,10 @@ export function fixturePage(page: TasksPageParams): TasksPageAnswer {
 
   return version === undefined ? { failure: TASK_CALL_FAILURE.UNANSWERED } : { page: version };
 }
+
+/** The fixture's page at its newest version, as a link opens it, by its id; that the service did not answer for any other. */
+export function fixtureNewestPage(pageId: string): TasksPageAnswer {
+  return pageId === FIXTURE_PAGE.id
+    ? { page: FIXTURE_PAGE }
+    : { failure: TASK_CALL_FAILURE.UNANSWERED };
+}
