@@ -29,6 +29,10 @@ import {
   agentBrowserTabsProcedures,
 } from "../agents/agent-browser-tabs-procedures.js";
 import {
+  type AgentFollowersProcedureSeams,
+  agentFollowersProcedures,
+} from "../agents/agent-followers-procedures.js";
+import {
   type AgentPagesProcedureSeams,
   agentPagesProcedures,
 } from "../agents/agent-pages-procedures.js";
@@ -187,6 +191,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   SupportAccessProcedureSeams &
   TaskFilesProcedureSeams &
   TaskFollowersProcedureSeams &
+  AgentFollowersProcedureSeams &
   TaskSectionsProcedureSeams &
   TasksProcedureSeams &
   WorkspaceEnvironmentProcedureSeams &
@@ -207,6 +212,7 @@ export function hostedRouter(seams: HostedRouterSeams): HostedRouter {
     account: accountProcedures(seams),
     admin: adminProcedures(seams),
     agentBrowserTabs: agentBrowserTabsProcedures(seams),
+    agentFollowers: agentFollowersProcedures(seams),
     agentPages: agentPagesProcedures(seams),
     agentPorts: agentPortsProcedures(seams),
     agentPullRequests: agentPullRequestProcedures(published),

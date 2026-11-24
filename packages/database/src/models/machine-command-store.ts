@@ -624,13 +624,16 @@ const ownAgent = alias(agentTable, "own_agent");
 /**
  * The account whose Mac the conversation's commands run on: the assignee of
  * the task its agent works on, or else the agent's starter, read through a
- * worker's conversation to the agent it was delegated from.
+ * worker's conversation to the agent it was delegated from; and, for an
+ * agent on no task, a Manager, the agent itself, whose own followers stand
+ * in for a task's.
  */
 const findMacOwner = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
   Result: Schema.Struct({
     userId: Schema.String,
     taskId: Schema.NullOr(Schema.String),
+    managerId: Schema.NullOr(Schema.String),
     workspaceId: Schema.NullOr(Schema.String),
     targetDeviceId: Schema.NullOr(Schema.String),
     deviceId: Schema.NullOr(Schema.String),
@@ -642,6 +645,9 @@ const findMacOwner = SqlSchema.findOneOption({
         .select({
           userId: sql<string>`coalesce(${member.userId}, ${ownAgent.userId})`,
           taskId: task.id,
+          managerId: sql<
+            string | null
+          >`case when ${ownAgent.taskId} is null then ${ownAgent.id} end`,
           workspaceId: task.organizationId,
           targetDeviceId: ownAgent.targetDeviceId,
           deviceId: ownAgent.deviceId,
@@ -761,10 +767,12 @@ export function machineOwnerOf(target: ConversationTarget): TaskStoreEffect<stri
   return Effect.map(machineRoutingOf(target), (routing) => routing.userId);
 }
 
-/** What a conversation's commands are routed by: whose Mac runs them (`machineOwnerOf`), the task and workspace of its agent, the agent's default machine, the machine it runs on itself, and who started it; each none for a conversation that is no agent's. */
+/** What a conversation's commands are routed by: whose Mac runs them (`machineOwnerOf`), the task and workspace of its agent, or the agent itself where it stands on no task, the agent's default machine, the machine it runs on itself, and who started it; each none for a conversation that is no agent's. */
 export interface MachineRouting {
   readonly userId: string;
   readonly taskId: string | null;
+  /** The agent itself where it stands on no task, a Manager, whose followers count as a task's do; none for an agent on a task. */
+  readonly managerId: string | null;
   readonly workspaceId: string | null;
   readonly targetDeviceId: string | null;
   readonly deviceId: string | null;
@@ -778,6 +786,7 @@ export function machineRoutingOf(target: ConversationTarget): TaskStoreEffect<Ma
     Option.getOrElse(() => ({
       userId: target.userId,
       taskId: null,
+      managerId: null,
       workspaceId: null,
       targetDeviceId: null,
       deviceId: null,

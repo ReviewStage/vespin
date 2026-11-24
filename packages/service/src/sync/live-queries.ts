@@ -8,6 +8,7 @@
 import { type AnyBoundRead, liveReadRegistry } from "../live/live-read-binding.js";
 import { accountInboxRead } from "../live/reads/account-inbox.js";
 import { accountPreferencesRead } from "../live/reads/account-preferences.js";
+import { agentFollowersRead } from "../live/reads/agent-followers.js";
 import { agentOriginRead } from "../live/reads/agent-origin.js";
 import { agentTranscriptRead } from "../live/reads/agent-transcript.js";
 import {
@@ -74,6 +75,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   taskRecordRead,
   taskCommentsRead,
   managerChatRead,
+  agentFollowersRead,
   taskBrowserTabsRead,
   agentBrowserTabsRead,
   machineCommandsRead,

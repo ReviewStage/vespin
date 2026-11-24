@@ -126,6 +126,7 @@
     "./schemas/agent": "./src/schemas/agent.js",
     "./schemas/agent-approval": "./src/schemas/agent-approval.js",
     "./schemas/agent-browser-tab": "./src/schemas/agent-browser-tab.js",
+    "./schemas/agent-follower": "./src/schemas/agent-follower.js",
     "./schemas/agent-boot": "./src/schemas/agent-boot.js",
     "./schemas/agent-sandbox": "./src/schemas/agent-sandbox.js",
     "./schemas/agent-queue": "./src/schemas/agent-queue.js",
