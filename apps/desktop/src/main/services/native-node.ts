@@ -7,7 +7,7 @@ import {
   type MicrophoneStatus,
 } from "@repo/settings/microphone";
 import { Schema } from "effect";
-import { systemPreferences } from "electron";
+import { app, systemPreferences } from "electron";
 import {
   microphoneRouteWatcher as createMicrophoneRouteWatcher,
   type MicrophoneRouteWatch,
@@ -84,6 +84,12 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
     return status;
   }
 
+  /** The microphone read again as the app comes to the front, where the developer may have changed it in System Settings; written only where it moved, so a return tells the windows nothing new. */
+  function microphoneOnActive(): void {
+    if (readMicrophoneStatus() !== state.snapshot().audio.microphoneStatus)
+      refreshMicrophoneStatus();
+  }
+
   return {
     name: "native",
     capabilities: {
@@ -102,6 +108,7 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
     microphoneRouteWatcher: () => microphoneRouteWatcher,
     start: async () => {
       refreshMicrophoneStatus();
+      app.on("did-become-active", microphoneOnActive);
 
       if (!config.runMode.observesProviders) return;
       microphoneRouteWatcher = createMicrophoneRouteWatcher({
@@ -116,6 +123,7 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
       if (!microphoneRouteWatcher.start()) microphoneRouteWatcher = undefined;
     },
     stop: async () => {
+      app.removeListener("did-become-active", microphoneOnActive);
       microphoneRouteWatcher?.stop();
       microphoneRouteWatcher = undefined;
     },

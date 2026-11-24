@@ -72,7 +72,7 @@ const RECORDING_FAILURE_OF: ReadonlyMap<string, RecordingFailure> = new Map([
  * The requests beyond the agent's actions: one app named, without launching
  * it, so the developer can be asked about it; the apps installed, without
  * their icons, for the developer's @ list; the Mac's two grants,
- * read, or asked for by macOS's own prompts, for Settings to show; and the
+ * read, or asked for by their System Settings pane, for Settings to show; and the
  * agent's cursor put away as its turn ends, which no model is offered.
  */
 export const COMPUTER_HELPER_OP = {
