@@ -59,7 +59,7 @@ import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.
 import { openInSafari } from "../open-link.js";
 import { SEARCH_FOCUS_PARAM } from "../search-field.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
-import { useSidebarShown } from "../sidebar-shown.js";
+import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
 import { useHeldTasksNamed } from "../tasks/use-found-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
@@ -78,6 +78,7 @@ const SHEET_ROUTE = {
   SETTINGS: "/settings",
   NEW_TASK: "/start-task",
   NEW_AGENT: "/start-agent",
+  FINDER: "/finder",
 } as const;
 
 /** The commands that act on no one thing, enabled whenever an account is signed in, but Inbox while the member turned it off, since no Inbox stands to go to. */
@@ -463,6 +464,9 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.TASKS:
         return router.navigate("/tasks");
       case MENU_COMMAND.SEARCH:
+        // Note that an iPad opens the finder's sheet over whatever stands, as ⌘K opens the panel's, its field focused as it opens.
+        if (APP_SIDEBAR) return router.push(SHEET_ROUTE.FINDER);
+
         // Note that Search is opened asking for its field's focus, since the system activates it only as its tab is tapped.
         return router.navigate({ pathname: "/search", params: { [SEARCH_FOCUS_PARAM]: "1" } });
       case MENU_COMMAND.SIDEBAR:

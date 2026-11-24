@@ -93,6 +93,7 @@ const SHEET_ROUTE = {
   CHATGPT_SIGN_IN: "chatgpt-sign-in",
   VARIABLE_VALUE: "variable-value",
   AUTOMATION_EDITOR: "automation-editor",
+  FINDER: "finder",
 } as const;
 
 /** The sheets, each drawn on the lifted ground in dark. */
@@ -245,6 +246,10 @@ function GuardedScreens() {
             options={{ presentation: sheetPresentation, title: "Settings" }}
           />
           {/* Note that New task opens as a sheet at its full height, as Mail's compose does, so a swipe down closes it, held while it holds a draft, which its ✕ and the swipe ask about first (Discard draft or Save draft); New agent opens over the whole window in every window, as Messages, ChatGPT and Claude open a new conversation, on the page's plain ground, its composer docked on the keyboard. */}
+          <Stack.Screen
+            name={SHEET_ROUTE.FINDER}
+            options={{ presentation: sheetPresentation, title: "Search" }}
+          />
           <Stack.Screen
             name={SHEET_ROUTE.START_TASK}
             options={{ presentation: sheetPresentation, title: "New task" }}

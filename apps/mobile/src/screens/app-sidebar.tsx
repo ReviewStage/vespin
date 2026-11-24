@@ -99,6 +99,9 @@ export const PLUS_TAB = !APP_SIDEBAR;
 /** The last segment of the Merge queue's route, by which the sidebar knows its page stands in front. */
 const MERGE_QUEUE_SEGMENT = MERGE_QUEUE_ROUTE.split("/").at(-1);
 
+/** The finder's sheet, which Search opens over whatever stands, as ⌘K does. */
+const FINDER_ROUTE = "/finder";
+
 /** The place a tab stands for in the sidebar, by the tab's group. */
 const TAB_PLACE = {
   [IOS_TAB.INBOX]: SIDEBAR_PLACE.INBOX,
@@ -196,7 +199,7 @@ export function AppSidebarPane() {
   const go = (id: string) => {
     switch (id) {
       case SIDEBAR_PLACE.SEARCH:
-        return router.navigate("/search");
+        return router.push(FINDER_ROUTE);
       case SIDEBAR_PLACE.INBOX:
         return router.navigate("/inbox");
       case SIDEBAR_PLACE.TASKS:

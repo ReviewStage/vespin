@@ -1,5 +1,6 @@
 // search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, then the places it goes to by name and the row that starts a task on what was typed; or, before anything is typed, those last opened, the workspace's Managers, and those places, each row drawn by its own list's row.
 
+import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import {
   holderTask,
   type InboxAnyHolder,
@@ -42,7 +43,6 @@ import {
   LinkRow,
   type ListScopes,
   ListSection,
-  PageColumn,
   RowForEach,
   RowList,
   type RowSubmenu,
@@ -51,7 +51,7 @@ import {
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter, useSegments } from "expo-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { AUTOMATIONS_ROUTE } from "../automations/automation-routes.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -67,12 +67,12 @@ import {
   useSearchRecent,
 } from "../search/use-search.js";
 import { SEARCH_FOCUS_PARAM, useRefilledSearchField } from "../search-field.js";
-import { SettingsBarButton, useOpenSettings } from "../settings-button.js";
-import { APP_SIDEBAR } from "../sidebar-shown.js";
+import { SETTINGS_ROUTE, SettingsBarButton, useOpenSettings } from "../settings-button.js";
+import { useSurfaceOpen } from "../surface-open.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { PLUS_TAB, useComposeAction, useSidebarShowAction, useSplitBuild } from "./app-sidebar.js";
+import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRow, InboxItemRows } from "./inbox-screens.js";
 import {
@@ -116,6 +116,22 @@ const GO_TO_GLYPH = {
 
 /** New task's sheet, which a typed query opens with its words as the prompt. */
 const NEW_TASK_ROUTE = "/start-task";
+
+/** Whether the finder stands in its own sheet over the tabs, as an iPad opens it, rather than as the Search tab. */
+const FinderSheetContext = createContext(false);
+
+/**
+ * Opens what the finder picked: in its sheet, by closing the sheet onto it,
+ * since a push from inside the sheet would stand it inside the sheet, a
+ * route outside the tabs, such as New task, standing in the sheet's place;
+ * on the Search tab, pushed on the tab's stack as before.
+ */
+function useFinderOpen(): (href: Parameters<ReturnType<typeof useRouter>["push"]>[0]) => void {
+  const router = useRouter();
+  const inSheet = useContext(FinderSheetContext);
+
+  return (href) => (inSheet ? router.dismissTo(href) : router.push(href));
+}
 
 /** The screen a task's row opens: its Overview, on its own tab. */
 function taskRoute(task: TaskSummary): string | undefined {
@@ -162,7 +178,7 @@ function useOpenPicked(
   routes: ReadonlyMap<string, string | undefined>,
   leave?: () => void,
 ): (id: string) => void {
-  const router = useRouter();
+  const open = useFinderOpen();
   const onTab = useOnTab();
 
   return (id) => {
@@ -173,21 +189,24 @@ function useOpenPicked(
 
     // Note that the search is ended before the route opens, because a regular window opens it on its own tab, and the iPad's top tab bar, folded into the field while it is searched, stood folded over the tab it switched to, with no way back to Search; blurring the field alone left it folded.
     leave?.();
-    router.push(onTab(route));
+    open(onTab(route));
   };
 }
 
 /**
  * The places Go to lists, those the account reaches, and what opens each:
  * the Merge queue on the tab it belongs on, as a row found opens, while the
- * account has it on, and Automations and Settings as Settings opens, a
- * sheet over the tabs. The keyboard is lowered first, as a pick lowers it.
+ * account has it on, Automations its own tab, and Settings as it opens, a
+ * sheet over the tabs, in the finder sheet's place where the finder stands
+ * in one. The keyboard is lowered first, as a pick lowers it.
  */
 function useGoTo(leave: (() => void) | undefined) {
   const mergeQueueOn = useMergeQueueOn();
   const router = useRouter();
   const onTab = useOnTab();
+  const open = useFinderOpen();
   const openSettings = useOpenSettings();
+  const inSheet = useContext(FinderSheetContext);
 
   const go = (place: GoTo) => {
     lowerKeyboard();
@@ -195,16 +214,19 @@ function useGoTo(leave: (() => void) | undefined) {
     switch (place) {
       case GO_TO.MERGE_QUEUE:
         leave?.();
-        router.push(onTab(MERGE_QUEUE_ROUTE));
+        open(onTab(MERGE_QUEUE_ROUTE));
 
         return;
       case GO_TO.AUTOMATIONS:
         leave?.();
-        router.navigate(AUTOMATIONS_ROUTE);
+
+        if (inSheet) router.dismissTo(AUTOMATIONS_ROUTE);
+        else router.navigate(AUTOMATIONS_ROUTE);
 
         return;
       case GO_TO.SETTINGS:
-        openSettings();
+        if (inSheet) router.dismissTo(SETTINGS_ROUTE.MAIN);
+        else openSettings();
 
         return;
     }
@@ -239,7 +261,7 @@ function GoToSection({
 
 /** The row that starts a task on what was typed, New task opening with it as the prompt, as ⌘K's last row does; nothing while nothing is typed. */
 function StartTaskSection({ query }: { readonly query: string }) {
-  const router = useRouter();
+  const open = useFinderOpen();
   const label = startTaskLabel(query);
 
   if (label === undefined) return null;
@@ -251,7 +273,7 @@ function StartTaskSection({ query }: { readonly query: string }) {
         label={label}
         onPress={() => {
           lowerKeyboard();
-          router.push({ pathname: NEW_TASK_ROUTE, params: { prompt: query.trim() } });
+          open({ pathname: NEW_TASK_ROUTE, params: { prompt: query.trim() } });
         }}
       />
     </ListSection>
@@ -635,9 +657,10 @@ function SearchStackScreen(words: SearchWords) {
   const compose = useComposeAction();
   const regular = useWindowSizeClass() !== WINDOW_SIZE_CLASS.COMPACT;
   const router = useRouter();
-  const shown = useSearchTabShown();
-  // Note that only a regular window ends the search, since it opens the pick on another tab, while a compact one pushes it on Search's own stack, whose results Back returns to.
-  const leave = regular ? () => field.current?.cancelSearch() : undefined;
+  const inSheet = useContext(FinderSheetContext);
+  const shown = useSearchTabShown() || inSheet;
+  // Note that only a regular window's tab ends the search, since it opens the pick on another tab, while a compact one pushes it on Search's own stack, whose results Back returns to, and the finder's sheet closes onto the pick.
+  const leave = regular && !inSheet ? () => field.current?.cancelSearch() : undefined;
 
   // Note that the field is focused here only where code opened Search, since the system focuses it as the tab is tapped.
   const { [SEARCH_FOCUS_PARAM]: focusAsked } = useLocalSearchParams<{
@@ -651,6 +674,11 @@ function SearchStackScreen(words: SearchWords) {
     router.setParams({ [SEARCH_FOCUS_PARAM]: undefined });
   }, [focusAsked, field, router]);
 
+  // Note that the finder's sheet opens with its field focused, as ⌘K's palette does, since nothing else in it asks for a press first.
+  useEffect(() => {
+    if (inSheet) field.focusOnce();
+  }, [inSheet, field]);
+
   return (
     <>
       <Stack.Screen options={{ title: SEARCH_TITLE }}>
@@ -661,12 +689,13 @@ function SearchStackScreen(words: SearchWords) {
           placeholder={placeholder}
           onChangeText={(event) => setQuery(event.nativeEvent.text)}
           onSearchButtonPress={() => field.current?.blur()}
-          onCancelButtonPress={() => setQuery("")}
+          // Note that Cancel closes the finder's sheet, as Escape closes ⌘K's palette.
+          onCancelButtonPress={() => (inSheet ? router.dismiss() : setQuery(""))}
         />
       </Stack.Screen>
-      <SettingsBarButton switcher={switcher} />
-      {/* Note that an iPad's tab bar has no round +, so its Search offers New task in its bar, as its lists do. */}
-      {PLUS_TAB ? null : (
+      {inSheet ? null : <SettingsBarButton switcher={switcher} />}
+      {/* Note that an iPad's tab bar has no round +, so its Search offers New task in its bar, as its lists do; the finder's sheet offers Start a task in its rows instead. */}
+      {PLUS_TAB || inSheet ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
@@ -686,69 +715,6 @@ function SearchStackScreen(words: SearchWords) {
   );
 }
 
-/**
- * Search's column on an iPad while its tab is shown, beside its own
- * sidebar: the system's field over the column, and under it what the query
- * finds or, with nothing typed, the recents, each drawn as the Stack's
- * Search draws it, under Show Sidebar while the sidebar is folded. Note that
- * both are read here, under one column, so the first key typed swaps the
- * column's rows rather than building the column and its field anew, which
- * dropped the keyboard.
- */
-function SearchSidebarShown(words: SearchWords) {
-  const { query, setQuery, scope } = words;
-  const show = useSidebarShowAction();
-  const compose = useComposeAction();
-  const build = useSplitBuild();
-  const found = useSearchScreen(words, undefined);
-  const recent = useRecentScreen(undefined);
-  const shown = query.trim() !== "" ? found : recent;
-
-  return (
-    <>
-      <Screen key={build}>
-        <PageColumn
-          view={shown.results}
-          bar={{
-            title: SEARCH_TITLE,
-            lead: show === undefined ? [compose] : [show, compose],
-            search: { placeholder: searchPlaceholder(scope), text: query, onChange: setQuery },
-          }}
-        />
-      </Screen>
-      <StatusQuestionAsk question={shown.status} />
-      <StatusQuestionAsk question={shown.deletion} />
-      {found.remind.sheet}
-      {recent.remind.sheet}
-    </>
-  );
-}
-
-/**
- * Search on an iPad, beside its own sidebar, as the sidebar's Search opens
- * it. Note that what it finds and its recents are read only while the tab
- * is shown, as the Stack's Search reads them, since the tab stays mounted
- * behind the others; behind them its column stands empty.
- */
-function SearchSidebarScreen(words: SearchWords) {
-  const shown = useSearchTabShown();
-  const build = useSplitBuild();
-
-  return (
-    <>
-      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the column names its back button by it. */}
-      <Stack.Screen options={{ headerShown: false, title: SEARCH_TITLE }} />
-      {shown ? (
-        <SearchSidebarShown {...words} />
-      ) : (
-        <Screen key={build}>
-          <PageColumn view={null} />
-        </Screen>
-      )}
-    </>
-  );
-}
-
 /** The Search tab's root screen, under the Stack's bar, the query and its scope held here. */
 export function SearchScreen() {
   const [query, setQuery] = useState("");
@@ -757,12 +723,26 @@ export function SearchScreen() {
   // Note that the Inbox's scope, chosen before the member turned the Inbox off, stands as All for the field and the results alike, since no scope offers it then.
   const scope = inboxShown || chosen !== SEARCH_SCOPE.INBOX ? chosen : SEARCH_SCOPE.ALL;
 
-  const words = { query, setQuery, scope, setScope };
-  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  return <SearchStackScreen query={query} setQuery={setQuery} scope={scope} setScope={setScope} />;
+}
 
-  return APP_SIDEBAR && regular ? (
-    <SearchSidebarScreen {...words} />
-  ) : (
-    <SearchStackScreen {...words} />
+/**
+ * The finder in a sheet of its own over the tabs, as an iPad opens it from
+ * its sidebar's Search and ⌘K, ⌘F, and ⌘3, rather than a Search column
+ * beside the sidebar: Search's own screen, its field focused, every pick
+ * closing the sheet onto what it opens, and Cancel closing it.
+ */
+export function FinderSheetScreen() {
+  // Note that the sheet counts as Search, as the Search tab's visit does on an iPhone.
+  useSurfaceOpen(PRODUCT_SURFACE.SEARCH);
+  const [query, setQuery] = useState("");
+  const [chosen, setScope] = useState<SearchScope>(SEARCH_SCOPE.ALL);
+  const inboxShown = useInboxShown();
+  const scope = inboxShown || chosen !== SEARCH_SCOPE.INBOX ? chosen : SEARCH_SCOPE.ALL;
+
+  return (
+    <FinderSheetContext value>
+      <SearchStackScreen query={query} setQuery={setQuery} scope={scope} setScope={setScope} />
+    </FinderSheetContext>
   );
 }
