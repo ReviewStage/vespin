@@ -1,0 +1,112 @@
+heads: #10743 27eff2a8bd #10612 deb1bfdd0f #10669 b960d89d73 #10551 1c40ab2b54 
+Auto-merging packages/features/package.json
+Auto-merging packages/host/src/contract/client-parity.ts
+Auto-merging packages/host/src/contract/kinds.ts
+Auto-merging packages/ui-native/CLAUDE.md
+Auto-merging packages/ui-native/src/composer.tsx
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/transcript-model.ts
+Auto-merging pnpm-lock.yaml
+Auto-merging pnpm-workspace.yaml
+CONFLICT (file location): apps/mobile/src/app/(tabs)/(inbox,tasks,search,automations)/tasks/pull/[workspace]/[owner]/[name]/[number]/file.tsx added in pr/10551 inside a directory that was renamed in HEAD, suggesting it should perhaps be moved to apps/mobile/src/app/(app)/(tabs)/(inbox,tasks,search,automations)/tasks/pull/[workspace]/[owner]/[name]/[number]/file.tsx.
+CONFLICT (file location): apps/mobile/src/app/(tabs)/(inbox,tasks,search,automations)/tasks/pull/[workspace]/[owner]/[name]/[number]/line-comment.tsx added in pr/10551 inside a directory that was renamed in HEAD, suggesting it should perhaps be moved to apps/mobile/src/app/(app)/(tabs)/(inbox,tasks,search,automations)/tasks/pull/[workspace]/[owner]/[name]/[number]/line-comment.tsx.
+CONFLICT (file location): apps/mobile/src/app/(tabs)/(inbox,tasks,search,automations)/tasks/pull/[workspace]/[owner]/[name]/[number]/review.tsx added in pr/10551 inside a directory that was renamed in HEAD, suggesting it should perhaps be moved to apps/mobile/src/app/(app)/(tabs)/(inbox,tasks,search,automations)/tasks/pull/[workspace]/[owner]/[name]/[number]/review.tsx.
+Auto-merging packages/ui-native/src/index.ts
+Automatic merge failed; fix conflicts and then commit the result.
+  #10551: merge failed once; refetching its objects (a partial clone cannot lazily fetch a PR-only blob)
+CONFLICT (file location): apps/mobile/src/app/(tabs)/(inbox,tasks,search,automations)/tasks/pull/[workspace]/[owner]/[name]/[number]/file.tsx added in pr/10551 inside a directory that was renamed in HEAD, suggesting it should perhaps be moved to apps/mobile/src/app/(app)/(tabs)/(inbox,tasks,search,automations)/tasks/pull/[workspace]/[owner]/[name]/[number]/file.tsx.
+Auto-merging packages/ui-native/src/index.ts
+Automatic merge failed; fix conflicts and then commit the result.
+SKIPPED #10551 (conflict: apps/mobile/src/app/(app)/(tabs)/(inbox,tasks,search,automations)/tasks/pull/[workspace]/[owner]/[name]/[number]/file.tsx )
+built main 67f59d95c4 + #10743 27eff2a8bd #10612 deb1bfdd0f #10669 b960d89d73 #10551 1c40ab2b54 #10551 SKIPPED as 6aad66d4e6
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 03:53:34 16021 MB
+curve 03:54:04 15970 MB
+curve 03:54:35 15366 MB
+curve 03:55:05 13841 MB
+curve 03:55:35 13723 MB
+curve 03:56:05 13508 MB
+curve 03:56:35 13238 MB
+curve 03:57:05 13219 MB
+curve 03:57:36 13216 MB
+curve 03:58:06 13145 MB
+curve 03:58:36 13129 MB
+curve 03:59:06 12804 MB
+curve 03:59:36 12521 MB
+curve 04:00:06 12359 MB
+curve 04:00:37 12186 MB
+curve 04:01:07 12102 MB
+curve 04:01:37 12052 MB
+curve 04:02:07 12021 MB
+curve 04:02:38 11983 MB
+curve 04:03:08 11882 MB
+curve 04:03:38 11785 MB
+curve 04:04:08 11622 MB
+curve 04:04:38 11548 MB
+curve 04:05:09 11498 MB
+curve 04:05:39 11464 MB
+curve 04:06:09 11450 MB
+curve 04:06:39 11426 MB
+curve 04:07:10 11366 MB
+curve 04:07:40 11315 MB
+curve 04:08:10 11293 MB
+curve 04:08:40 11279 MB
+curve 04:09:10 11269 MB
+curve 04:09:41 18469 MB
+curve 04:10:11 18448 MB
+curve 04:10:41 18434 MB
+curve 04:11:11 18424 MB
+curve 04:11:41 18403 MB
+curve 04:12:12 18386 MB
+curve 04:12:42 18207 MB
+curve 04:13:12 18192 MB
+curve 04:13:42 18158 MB
+curve 04:14:12 18150 MB
+curve 04:14:42 18119 MB
+curve 04:15:13 18096 MB
+curve 04:15:43 18060 MB
+curve 04:16:13 18033 MB
+curve 04:16:43 17986 MB
+curve 04:17:14 17878 MB
+curve 04:17:44 17730 MB
+curve 04:18:14 17158 MB
+curve 04:18:44 17051 MB
+curve 04:19:14 16941 MB
+curve 04:19:45 16641 MB
+curve 04:20:15 16561 MB
+curve 04:20:45 16411 MB
+curve 04:21:15 16294 MB
+curve 04:21:45 16244 MB
+curve 04:22:16 16160 MB
+curve 04:22:46 16040 MB
+curve 04:23:16 15968 MB
+curve 04:23:46 15916 MB
+curve 04:24:16 15904 MB
+curve 04:24:46 15856 MB
+curve 04:25:17 15728 MB
+curve 04:25:47 15703 MB
+curve 04:26:17 15665 MB
+curve 04:26:47 15646 MB
+curve 04:27:17 15455 MB
+curve 04:27:48 15383 MB
+BUILD EXIT 0 04:28:18
+sizes: Assets.car 24800088 bytes (main Vmain12.app 24800088), .app 126996 KB (main 121104 KB), zipped .app 47816861 bytes
+actool: 2 warnings or errors
+tree-sitter share: linked binary symbols: 12675439 bytes; tree-sitter + VespinDiffView: 0 bytes (0.00 MB, 0.0%)
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImage.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageAVIFCoder.framework SDWebImageSVGCoder.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework libavif.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnatc2.app: replacing existing signature
+p10612-iphone-light-composer: fails 1 shots 5 Tap on "Picture 1"... FAILED
+  p10669 still 0-inbox (Search Vespin field: 0)
+  p10669 still 1-cmd-k (Search Vespin field: 1)
+  p10669 still 2-cmd-f (Search Vespin field: 1)
+  p10669 still 3-cmd-3 (Search Vespin field: 1)
+  p10669 still 4-hold-cmd (Search Vespin field: 0)
+  p10669 still 5-task-page (Search Vespin field: 0)
+  p10669 still 6-cmd-t-new-agent (Search Vespin field: 0)
+  p10669 still 7-hold-cmd-task-page (Search Vespin field: 0)
+p10669-ipad27-cmdk: 8 stills (0-inbox, 1-cmd-k, 2-cmd-f, 3-cmd-3, 4-hold-cmd, 5-task-page, 6-cmd-t-new-agent, 7-hold-cmd-task-page)
+p10669 hw keyboard back to 0
