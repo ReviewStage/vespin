@@ -454,6 +454,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
               taskId: agentTaskId(on),
               agentId: on.id,
               organizationId: on.organizationId,
+              conversationId: on.conversationId,
             };
 
             yield* postToInbox(
