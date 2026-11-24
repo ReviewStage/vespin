@@ -14,8 +14,9 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { playheadText } from "@repo/features/time-format";
-import { useVideoPlayer, type VideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
-import { useEffect, useRef, useState } from "react";
+import { useEvent, useEventListener } from "expo";
+import { useVideoPlayer, type VideoPlayer, VideoView } from "expo-video";
+import { useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -24,7 +25,7 @@ import { InlineHost } from "./inline-host.js";
 import { KEPT_KIND } from "./keep-model.js";
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
-import { type MediaSize, mediaFrame } from "./media-frame.js";
+import { mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
@@ -64,19 +65,10 @@ const styles = StyleSheet.create({
 
 /** How long the player's video runs, in seconds, once its file is read; none before then, or for a stream with no end. */
 function useVideoLength(player: VideoPlayer): number | undefined {
-  const [length, setLength] = useState<number | undefined>(undefined);
-  useEffect(() => {
-    // Note that a file the player read before this listens is taken as it stands, since its load has already gone by.
-    setLength(player.duration > 0 ? player.duration : undefined);
+  // Note that a file the player read before this listens is taken as it stands, since its load has already gone by.
+  const duration = useEvent(player, "sourceLoad")?.duration ?? player.duration;
 
-    const loaded = player.addListener("sourceLoad", ({ duration }) =>
-      setLength(duration > 0 ? duration : undefined),
-    );
-
-    return () => loaded.remove();
-  }, [player]);
-
-  return length;
+  return duration > 0 ? duration : undefined;
 }
 
 /**
@@ -91,13 +83,9 @@ function usePlayedOnce(player: VideoPlayer, source: string): boolean {
     player.playing ? source : undefined,
   );
 
-  useEffect(() => {
-    const listening = player.addListener("playingChange", ({ isPlaying }) => {
-      if (isPlaying) setPlayedSource(source);
-    });
-
-    return () => listening.remove();
-  }, [player, source]);
+  useEventListener(player, "playingChange", ({ isPlaying }) => {
+    if (isPlaying) setPlayedSource(source);
+  });
 
   return playedSource === source;
 }
@@ -185,23 +173,10 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
   const large = useAccessibilitySize();
   const player = useVideoPlayer(source ?? null);
   const view = useRef<VideoView>(null);
-  const [status, setStatus] = useState<VideoPlayerStatus>(player.status);
-  const [natural, setNatural] = useState<MediaSize | null | undefined>(undefined);
-  useEffect(() => {
-    setStatus(player.status);
-    // Note that a track the player read before this listens is taken as it stands, since its change has already gone by.
-    setNatural(player.videoTrack?.size);
-    const listening = player.addListener("statusChange", ({ status: next }) => setStatus(next));
-
-    const sized = player.addListener("videoTrackChange", ({ videoTrack }) =>
-      setNatural(videoTrack?.size),
-    );
-
-    return () => {
-      listening.remove();
-      sized.remove();
-    };
-  }, [player]);
+  const { status } = useEvent(player, "statusChange", { status: player.status });
+  // Note that a track the player read before this listens is taken as it stands, since its change has already gone by.
+  const { videoTrack } = useEvent(player, "videoTrackChange", { videoTrack: player.videoTrack });
+  const natural = videoTrack?.size;
   const failed = status === "error";
   const length = useVideoLength(player);
   const played = usePlayedOnce(player, source ?? "");
