@@ -1,5 +1,6 @@
 import { WHOLE_PART } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { managerChatLines } from "@repo/features/manager-chat";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
@@ -349,6 +350,69 @@ describe("transcriptItems", () => {
       ["e", false, false, undefined, true, false],
       ["f", false, false, "Morning triage", false, true],
       ["Ship it.", false, false, "Triage", false, true],
+    ]);
+  });
+
+  it("draws a Manager's chat as bubbles: its greeting first, each message it sent a received bubble in the run it sent it in, with no turn's foot, and its working line a bubble", () => {
+    const minute = 60 * 1000;
+
+    const sent = (callId: string, text: string) => ({
+      type: "tool-send_to_user",
+      toolCallId: callId,
+      state: "output-available",
+      input: { text },
+      output: { status: "accepted" },
+    });
+
+    const lines = managerChatLines([
+      {
+        id: "ask",
+        role: MESSAGE_ROLE.USER,
+        parts: [{ type: "text", text: "Fix the login." }],
+        sentAt: 0,
+      },
+      {
+        id: "turn",
+        role: MESSAGE_ROLE.ASSISTANT,
+        parts: [
+          { type: "text", text: "Its own words, left out." },
+          sent("first", "On it."),
+          sent("second", "Started an agent."),
+        ],
+        startedAt: minute,
+        finishedAt: 2 * minute,
+      },
+      {
+        id: "thanks",
+        role: MESSAGE_ROLE.USER,
+        parts: [{ type: "text", text: "Thanks!" }],
+        sentAt: 3 * minute,
+      },
+    ]);
+
+    const items = transcriptItems(lines, {
+      writing: true,
+      readerId: "u1",
+      toggles: NO_TOGGLES,
+      now: 3 * minute,
+      pullRequests: [],
+      chat: true,
+      greeting: "Hi, I'm Pat.",
+    });
+
+    expect(
+      items.map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? [item.words, item.received, item.joinsAbove, item.joinsBelow]
+          : [item.kind, item.kind === TRANSCRIPT_ITEM.WORKING && item.chat],
+      ),
+    ).toEqual([
+      ["Hi, I'm Pat.", true, false, false],
+      ["Fix the login.", false, false, false],
+      ["On it.", true, false, true],
+      ["Started an agent.", true, true, false],
+      ["Thanks!", false, false, false],
+      [TRANSCRIPT_ITEM.WORKING, true],
     ]);
   });
 

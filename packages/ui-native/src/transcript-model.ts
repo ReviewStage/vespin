@@ -64,6 +64,7 @@ import {
 import { fileName } from "@repo/features/code-ref-words";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
+import { type ManagerChatRuns, managerChatRuns } from "@repo/features/manager-chat";
 import { messageFileChips } from "@repo/features/message-files";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
@@ -233,6 +234,10 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly sender: string | undefined;
       /** Whether anyone but the reader sent it (another agent, a teammate, the app, an automation, GitHub), so it stands at the column's leading edge, as the panel stands a received line at its left; the reader's own alone stand trailing. */
       readonly received: boolean;
+      /** Whether the Manager whose chat this is said it (`managerChatLines`), or greeted with it, so it stands among the people's lines as their bubbles do. */
+      readonly manager?: boolean | undefined;
+      /** Whether it stands in a Manager's chat, where the reader's own bubble stands in copper and runs stand as Messages spaces them. */
+      readonly chat?: boolean | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
@@ -292,6 +297,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly words: string;
       /** Whether the agent waits on the reader's answer rather than working, which the line says in the attention ink with no spinner. */
       readonly waiting?: boolean | undefined;
+      /** Whether it is a Manager's chat's, which says it in a bubble of the Manager's, as Messages shows the other side typing. */
+      readonly chat?: boolean | undefined;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.PAGE;
@@ -350,6 +357,10 @@ export interface TranscriptReading {
   readonly suggestionAddress?: ((agentId: string) => string | undefined) | undefined;
   /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
   readonly waitingCalls?: ReadonlySet<string> | undefined;
+  /** Whether the messages are a Manager's chat (`managerChatLines`), its messages drawn as bubbles in the runs the panel groups them in (`managerChatRuns`), with no turn's foot. */
+  readonly chat?: boolean | undefined;
+  /** The greeting a Manager's chat opens on, drawn as its first bubble (`managerGreeting`); none for any other agent, or while older pages are still unread. */
+  readonly greeting?: string | undefined;
 }
 
 /** What the items are read with: the page's reading, and the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`). */
@@ -1025,15 +1036,27 @@ function joinsRun(last: SaidItem, next: SaidItem): boolean {
  * tight under one sender's name, and the day and time stand centered over
  * the first line with a time and over one sent after a pause of
  * `STAMP_PAUSE_MS` since the line before it, rather than under every line.
+ * A Manager's chat (`chatRuns`) runs its lines as the panel does
+ * (`managerChatRuns`), its own messages among them.
  */
-function inRuns(items: readonly TranscriptItem[], now: number): readonly TranscriptItem[] {
+function inRuns(
+  items: readonly TranscriptItem[],
+  now: number,
+  chatRuns: ManagerChatRuns | undefined,
+): readonly TranscriptItem[] {
   let lastSent: number | undefined;
 
   const timed = items.map((item, index): TranscriptItem => {
     if (item.kind !== TRANSCRIPT_ITEM.SAID) return item;
 
     const before = items[index - 1];
-    const joinsAbove = before?.kind === TRANSCRIPT_ITEM.SAID && joinsRun(before, item);
+
+    // Note that a Manager's chat stands in the runs the panel groups it in, so a run reads the same on either.
+    const joinsAbove =
+      before?.kind === TRANSCRIPT_ITEM.SAID &&
+      (chatRuns === undefined
+        ? joinsRun(before, item)
+        : chatRuns.places.get(item.place.message)?.opens === false);
 
     const paused =
       item.at !== undefined && (lastSent === undefined || item.at - lastSent >= STAMP_PAUSE_MS);
@@ -1042,7 +1065,7 @@ function inRuns(items: readonly TranscriptItem[], now: number): readonly Transcr
 
     if (item.at !== undefined) lastSent = item.at;
 
-    return { ...item, joinsAbove, stamp };
+    return { ...item, joinsAbove, stamp, chat: chatRuns !== undefined };
   });
 
   return timed.map((item, index): TranscriptItem => {
@@ -1077,6 +1100,51 @@ export function withSending(
         sentAt: message.sentAt,
       }),
     ),
+  ];
+}
+
+/** The place a Manager's greeting stands under, which no message of its chat holds. */
+const GREETING_PLACE = linePlace("greeting", "greeting");
+
+/** A Manager's words as one of its chat's bubbles, sent as its turn began (`managerChatRuns` times it so), its pictures and anything else as they stand. */
+function managerSaid(item: TranscriptItem, message: AgentTranscriptMessage): TranscriptItem {
+  if (item.kind !== TRANSCRIPT_ITEM.WORDS) return item;
+
+  return {
+    place: item.place,
+    depth: item.depth,
+    kind: TRANSCRIPT_ITEM.SAID,
+    words: item.words,
+    sender: undefined,
+    received: true,
+    manager: true,
+    by: undefined,
+    at: message.sentAt ?? message.startedAt,
+    stamp: undefined,
+    joinsAbove: false,
+    joinsBelow: false,
+  };
+}
+
+/** A Manager's greeting as its chat's first bubble, though no one sent it and nothing stores it; none where there is none. */
+function greetingItems(greeting: string | undefined): readonly TranscriptItem[] {
+  if (greeting === undefined) return [];
+
+  return [
+    {
+      place: GREETING_PLACE,
+      depth: 0,
+      kind: TRANSCRIPT_ITEM.SAID,
+      words: greeting,
+      sender: undefined,
+      received: true,
+      manager: true,
+      by: undefined,
+      at: undefined,
+      stamp: undefined,
+      joinsAbove: false,
+      joinsBelow: false,
+    },
   ];
 }
 
@@ -1137,6 +1205,9 @@ export function transcriptItems(
 
     const { startedAt, finishedAt } = message;
 
+    // Note that a Manager's chat draws its messages alone, each a bubble of its own, with no foot, as the panel's chat draws it.
+    if (reading.chat === true) return turn.map((item) => managerSaid(item, message));
+
     // Note that a turn that finished ends on how long it worked, as the panel's turn does.
     const foot: readonly TranscriptItem[] =
       moving || startedAt === undefined || finishedAt === undefined
@@ -1156,7 +1227,8 @@ export function transcriptItems(
   });
 
   const last = placed.at(-1)?.message.id;
-  const runs = inRuns(items, reading.now);
+  const chatRuns = reading.chat === true ? managerChatRuns(messages, reading.readerId) : undefined;
+  const runs = inRuns([...greetingItems(reading.greeting), ...items], reading.now, chatRuns);
 
   if (!reading.writing || last === undefined) return runs;
 
@@ -1167,6 +1239,7 @@ export function transcriptItems(
       depth: 0,
       kind: TRANSCRIPT_ITEM.WORKING,
       words: WORKING_LINE,
+      chat: reading.chat,
     },
   ];
 }
