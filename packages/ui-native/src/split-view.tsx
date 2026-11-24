@@ -1,11 +1,13 @@
-// split-view.tsx -- a regular window's columns side by side, as SwiftUI's own NavigationSplitView: an iPad's own sidebar, the list, and the detail, each column under a bar of its own.
+// split-view.tsx -- a regular window's columns, as SwiftUI's own NavigationSplitView: the list and the detail side by side, a page standing alone, and an iPad's own sidebar pane beside the tabs, each column under a bar of its own.
 
 import {
   Divider,
+  Host,
   HStack,
   Image,
   Menu,
   NavigationSplitView,
+  NavigationStack,
   Button as SwiftUIButton,
   Text,
   Toggle,
@@ -33,6 +35,7 @@ import {
   navigationTitle,
   overlay,
   searchable,
+  tint,
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
@@ -42,6 +45,7 @@ import { useScaledSize } from "./accessibility.js";
 import { BarContent } from "./bar-content.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
+import { sidebarToggleOff } from "./interactions.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { MANAGER_FACE_SEAT, ManagerFace, TaskStatusMark } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
@@ -65,13 +69,10 @@ export const BAR_ITEM_MENU = [menuStyle("button"), buttonStyle("plain"), menuInd
  */
 const LIST_COLUMN_WIDTH = { min: 280, ideal: 320, max: 480 } as const;
 
-/** How wide an iPad's own sidebar stands, as the panel's sidebar does, and how far its divider drags. */
-const APP_COLUMN_WIDTH = { min: 240, ideal: 280, max: 360 } as const;
-
 /**
- * Which of a split view's columns a column is: an iPad's own sidebar, the
- * places and the tasks; a tab's list, such as the Inbox's threads; or the
- * page picked in it.
+ * Which column a column is: an iPad's own sidebar, the places and the
+ * tasks, standing beside the tabs; a tab's list, such as the Inbox's
+ * threads; or the page picked in it, or a page standing alone.
  */
 const COLUMN_PLACE = {
   APP: "app",
@@ -186,78 +187,26 @@ export function isBarMenu(item: BarFootItem): item is BarMenu {
   return "actions" in item;
 }
 
-/**
- * An iPad's own sidebar, the split view's first column before the tab's
- * list: the places and the tasks, as the panel's sidebar holds them, under
- * its bar, and whether it stands, which the system's sidebar button, a
- * swipe, and the menu bar change.
- */
-export type AppColumn = {
-  readonly view: ReactNode;
-  readonly bar?: ColumnBar | undefined;
-  readonly shown: boolean;
-  readonly onShownChange: (shown: boolean) => void;
-};
-
 type SplitViewProps = {
-  /** An iPad's own sidebar, standing before the list; none where the system's tab sidebar or bar stands instead, as on the unfolded iPhone Duo. */
-  readonly app?: AppColumn | undefined;
-  /** The tab's list, such as the Inbox's threads, as a `RowList`; none where the iPad's sidebar alone stands beside the page, as Tasks' does, since the sidebar holds its tasks. */
-  readonly sidebar?: ReactNode;
+  /** The tab's list, such as the Inbox's threads, as a `RowList`. */
+  readonly sidebar: ReactNode;
   readonly sidebarBar?: ColumnBar | undefined;
   /** The selected row's page, or an `EmptyState` before one is picked. */
   readonly detail: ReactNode;
   readonly detailBar?: ColumnBar | undefined;
-  /** Whether the list stands beside the detail; hidden, the system's own button in the detail's bar brings it back. Note that a list beside an iPad's own sidebar always stands, so none is given there. */
+  /** Whether the list stands beside the detail; hidden, the system's own button in the detail's bar brings it back. */
   readonly sidebarShown?: boolean | undefined;
-  /** Called as a person shows or hides the list, with the system's button, a swipe, or a drag; none beside an iPad's own sidebar. */
+  /** Called as a person shows or hides the list, with the system's button, a swipe, or a drag. */
   readonly onSidebarShownChange?: ((shown: boolean) => void) | undefined;
+  /**
+   * Whether the list always stands, as an iPad's Inbox list does beside the
+   * app's own sidebar: it never folds, and its column stands no sidebar
+   * button of the system's, since the app's sidebar has its own.
+   */
+  readonly listFixed?: boolean | undefined;
+  /** Called where a fixed list's system button still stands, in a build without the module that takes it off, so a press on it shows or hides the app's own sidebar rather than nothing. */
+  readonly onFixedToggle?: (() => void) | undefined;
 };
-
-/** The columns a split view stands, as SwiftUI names them: all, the last two, or the detail alone. */
-type ColumnsShown = "all" | "doubleColumn" | "detailOnly";
-
-/**
- * The columns standing for what the caller says stands. Beside an iPad's
- * own sidebar the list always stands, as Mail's message list does, so the
- * sidebar alone comes and goes: all three columns, or the list and the
- * detail. Note that a two-column split view names both columns standing
- * "doubleColumn", which is its "all".
- */
-function columnsShown(
-  app: AppColumn | undefined,
-  listed: boolean,
-  listShown: boolean,
-): ColumnsShown {
-  if (app === undefined) return listShown ? "all" : "detailOnly";
-
-  if (!listed) return app.shown ? "all" : "detailOnly";
-
-  return app.shown ? "all" : "doubleColumn";
-}
-
-/**
- * Hands a change of the columns standing to whoever holds what it changed.
- * Note that beside an iPad's own sidebar, every change but to all three
- * columns hides the sidebar alone, so the system's asking for the detail
- * alone, as a portrait window's tap on the page does, leaves the list
- * standing rather than folding it, and the system's sidebar button folds
- * only the sidebar.
- */
-function onColumnsShown(
-  shown: ColumnsShown,
-  app: AppColumn | undefined,
-  listed: boolean,
-  onListShown: ((shown: boolean) => void) | undefined,
-): void {
-  if (app === undefined) {
-    onListShown?.(shown !== "detailOnly");
-
-    return;
-  }
-
-  app.onShownChange(shown === "all" || (!listed && shown === "doubleColumn"));
-}
 
 /** What a group is told apart by, since it has no name of its own: the words of its first act, of its first menu, or of its first switch. */
 export function groupKey(group: BarMenuGroup): string {
@@ -518,18 +467,21 @@ function Column({
   bar = {},
   place,
   first = false,
+  fixed = false,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
   readonly place: ColumnPlace;
   /** Whether it is the split view's first column, whose search the system stands in the sidebar's own place. */
   readonly first?: boolean | undefined;
+  /** Whether it stands no sidebar button of the system's, as a list that never folds doesn't. */
+  readonly fixed?: boolean | undefined;
 }) {
   const colors = useColors();
   const text = useSearchWords(bar.search);
   const listed = place === COLUMN_PLACE.LIST;
-  // Note that the list ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own.
-  const ruled = listed;
+  // Note that the list ends in a hairline beside the detail, as Mail's message list does, and an iPad's own sidebar beside the tabs, because the columns paint one ground and the system's sidebar column draws no edge of its own.
+  const ruled = listed || place === COLUMN_PLACE.APP;
 
   const stacked = (
     <ZStack
@@ -539,7 +491,7 @@ function Column({
         background(colors.GROUND),
         // Note that the list column is drawn at its own width, which a person drags its divider within, rather than the system's fixed one.
         ...(listed ? [navigationSplitViewColumnWidth(LIST_COLUMN_WIDTH)] : []),
-        ...(place === COLUMN_PLACE.APP ? [navigationSplitViewColumnWidth(APP_COLUMN_WIDTH)] : []),
+        ...(fixed ? [sidebarToggleOff()] : []),
         // Note that the list stands its title large under its bar, collapsing into it as the list scrolls, as Mail's list column does, rather than leading the bar (`inlineLarge`), because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [navigationTitle(bar.title), toolbarTitleDisplayMode(listed ? "large" : "inlineLarge")]
@@ -637,52 +589,124 @@ function Column({
 /**
  * A tab's columns in a regular-width window, as Mail stands its message
  * list beside the message: the tab's list and the selected row's page,
- * beside the system's own tab sidebar on the unfolded iPhone Duo, and after
- * the iPad's own sidebar (`app`) on an iPad, as Mail stands its mailboxes
- * first, three columns in all, or two where the sidebar's tasks are the
- * list. The split view draws each column's navigation bar itself, so the
- * screen around it shows no header of its own. Whether the list, or the
- * iPad's sidebar, stands is the caller's, so a menu bar's command can toggle
- * it and a person's choice holds as the tabs change.
+ * beside the system's own tab sidebar on the unfolded iPhone Duo, and
+ * beside the app's own sidebar on an iPad (`SidebarPane`), where the list
+ * always stands (`listFixed`). The split view draws each column's
+ * navigation bar itself, so the screen around it shows no header of its
+ * own. Whether the list stands is the caller's, so a menu bar's command can
+ * toggle it and a person's choice holds as the tabs change; hidden, the page
+ * stands alone across the window.
  */
 export function SplitView({
-  app,
   sidebar,
   sidebarBar,
   detail,
   detailBar,
   sidebarShown = true,
   onSidebarShownChange,
+  listFixed = false,
+  onFixedToggle,
 }: SplitViewProps) {
-  const listed = sidebar !== undefined;
-
-  const list = (
-    <Column view={sidebar} bar={sidebarBar} place={COLUMN_PLACE.LIST} first={app === undefined} />
-  );
-
   return (
     <NavigationSplitView
-      columnVisibility={columnsShown(app, listed, sidebarShown)}
+      // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
+      columnVisibility={listFixed || sidebarShown ? "all" : "detailOnly"}
       onColumnVisibilityChange={(visibility) => {
         if (visibility === "automatic") return;
 
-        onColumnsShown(visibility, app, listed, onSidebarShownChange);
+        const shown = visibility !== "detailOnly";
+
+        // Note that a fixed list refuses to fold, its split view held at both columns, and a press on a system button left standing shows or hides the app's own sidebar instead.
+        if (listFixed) {
+          if (!shown) onFixedToggle?.();
+
+          return;
+        }
+
+        onSidebarShownChange?.(shown);
       }}
       modifiers={[navigationSplitViewStyle("balanced")]}
     >
       <NavigationSplitView.Sidebar>
-        {app === undefined ? (
-          list
-        ) : (
-          <Column view={app.view} bar={app.bar} place={COLUMN_PLACE.APP} first />
-        )}
+        <Column view={sidebar} bar={sidebarBar} place={COLUMN_PLACE.LIST} first fixed={listFixed} />
       </NavigationSplitView.Sidebar>
-      {app === undefined || !listed ? null : (
-        <NavigationSplitView.Content>{list}</NavigationSplitView.Content>
-      )}
       <NavigationSplitView.Detail>
         <Column view={detail} bar={detailBar} place={COLUMN_PLACE.DETAIL} />
       </NavigationSplitView.Detail>
     </NavigationSplitView>
+  );
+}
+
+/**
+ * A page standing alone under its own bar in a regular window, as a tab's
+ * root stands beside an iPad's own sidebar where it has no list of its
+ * own, such as Tasks' and Search's: its view under its column's bar, a
+ * title, acts, a menu and a search as a split view's detail holds them.
+ */
+export function PageColumn({
+  view,
+  bar,
+}: {
+  readonly view: ReactNode;
+  readonly bar?: ColumnBar | undefined;
+}) {
+  return (
+    <NavigationStack>
+      <Column view={view} bar={bar} place={COLUMN_PLACE.DETAIL} />
+    </NavigationStack>
+  );
+}
+
+/**
+ * An iPad's own sidebar, standing beside the tabs as the panel's sidebar
+ * stands beside its pages, so every page, a pushed one included, keeps it
+ * beside it: its rows under its bar, which holds Hide Sidebar, and at its
+ * foot what its bar's `bottom` pins in the system's glass, such as the
+ * workspace switcher and the account. It is one SwiftUI host of its own.
+ */
+export function SidebarPane({
+  view,
+  bar,
+}: {
+  readonly view: ReactNode;
+  readonly bar?: ColumnBar | undefined;
+}) {
+  const colors = useColors();
+
+  return (
+    <Host style={{ flex: 1 }} modifiers={[tint(colors.TEXT)]}>
+      <NavigationStack>
+        <Column view={view} bar={bar} place={COLUMN_PLACE.APP} />
+      </NavigationStack>
+    </Host>
+  );
+}
+
+/** What the sidebar's button says it does: shows the sidebar, or hides it, as iPadOS names its own. */
+export const SIDEBAR_BUTTON_WORDS = {
+  SHOW: "Show Sidebar",
+  HIDE: "Hide Sidebar",
+} as const;
+
+/** The act that shows or hides an iPad's own sidebar, under the sidebar's glyph, for a column's bar. */
+export function sidebarAction(shown: boolean, onToggle: () => void): BarAction {
+  return {
+    label: shown ? SIDEBAR_BUTTON_WORDS.HIDE : SIDEBAR_BUTTON_WORDS.SHOW,
+    symbol: GLYPH.SIDEBAR,
+    onPress: onToggle,
+  };
+}
+
+/**
+ * Show Sidebar for a screen's own navigation bar, the stack's header, which
+ * holds React Native views: the sidebar's glyph in a SwiftUI host the size
+ * of its button, which the header stands in its round glass, as it stands
+ * the account's photo.
+ */
+export function SidebarStackButton({ onPress }: { readonly onPress: () => void }) {
+  return (
+    <Host matchContents>
+      <BarActionButton action={sidebarAction(false, onPress)} />
+    </Host>
   );
 }

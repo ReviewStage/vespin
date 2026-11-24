@@ -25,14 +25,34 @@ const picked = new Map<SplitTab, string>();
 /** The tabs asked to stand their whole list rather than their last pick, as an iPad sidebar's Tasks asks from another tab, each taken once by its root. */
 const listAsked = new Set<SplitTab>();
 
-const listListeners = new Set<() => void>();
+/** Who hears a tab's pick or an ask for its whole list change, such as an iPad's sidebar, which stands the picked task selected. */
+const listeners = new Set<() => void>();
 
-function subscribeListAsked(listener: () => void): () => void {
-  listListeners.add(listener);
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
 
   return () => {
-    listListeners.delete(listener);
+    listeners.delete(listener);
   };
+}
+
+function told(): void {
+  for (const listener of listeners) listener();
+}
+
+/** Keeps a tab's pick, or lets it go, telling whoever hears it. */
+function keepPick(tab: SplitTab, id: string | undefined): void {
+  if (picked.get(tab) === id) return;
+
+  if (id === undefined) picked.delete(tab);
+  else picked.set(tab, id);
+
+  told();
+}
+
+/** The item a tab's root last picked beside its list, as an iPad's sidebar stands it selected; none while its whole list stands. */
+export function useSplitPicked(tab: SplitTab): string | undefined {
+  return useSyncExternalStore(subscribe, () => picked.get(tab));
 }
 
 /**
@@ -41,10 +61,9 @@ function subscribeListAsked(listener: () => void): () => void {
  * tab opens on its list rather than the task it last showed.
  */
 export function showSplitList(tab: SplitTab): void {
-  picked.delete(tab);
   listAsked.add(tab);
-
-  for (const listener of listListeners) listener();
+  keepPick(tab, undefined);
+  told();
 }
 
 /** A pick let go, and the selection the route held when it was, which stands as none until the route names another. */
@@ -56,8 +75,6 @@ type HeldPick = { readonly id: string; readonly over: string | undefined };
 type UseSplitSelectionResult = {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
-  /** Lets the pick go, so the whole list stands, as an iPad sidebar's Tasks does. */
-  readonly deselect: () => void;
 };
 
 /**
@@ -82,7 +99,7 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const [held, hold] = useState<HeldPick | undefined>(undefined);
   const [dropped, drop] = useState<Dropped | undefined>(undefined);
-  const asked = useSyncExternalStore(subscribeListAsked, () => listAsked.has(tab));
+  const asked = useSyncExternalStore(subscribe, () => listAsked.has(tab));
   // Note that a pick let go stands as none only while the route still names what it named then, so a link or a notification naming another item after it still lands.
   const letGo = dropped !== undefined && dropped.over === selected;
   const routed = letGo ? undefined : (selected ?? (regular ? picked.get(tab) : undefined));
@@ -100,8 +117,8 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   useEffect(() => hold(undefined), [routed]);
 
   useEffect(() => {
-    if (regular && selected !== undefined) picked.set(tab, selected);
-  }, [regular, selected, tab]);
+    if (regular && selected !== undefined && !letGo) keepPick(tab, selected);
+  }, [regular, selected, tab, letGo]);
 
   // Note that the root hears its focus through an effect rather than reading it, because a read draws the root and its whole list again on every tab switch and every page pushed over it or popped.
   useFocusEffect(
@@ -113,7 +130,7 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
 
       if (shown === undefined) return;
       // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
-      picked.delete(tab);
+      keepPick(tab, undefined);
 
       if (selected !== undefined) router.setParams({ selected: undefined });
       router.push(itemRoute(tab, shown));
@@ -125,13 +142,8 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
     select: (id) => {
       drop(undefined);
       hold({ id, over: routed });
-      picked.set(tab, id);
+      keepPick(tab, id);
       router.setParams({ selected: id });
-    },
-    deselect: () => {
-      picked.delete(tab);
-      hold(undefined);
-      drop({ over: selected });
     },
   };
 }

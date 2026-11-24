@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: labeled glass tabs for Inbox with its count, Tasks, Automations, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window but an iPad's, whose split views lead with the app's own sidebar and stand no bar, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: labeled glass tabs for Inbox with its count, Tasks, Automations, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window but an iPad's, which stands the app's own sidebar beside the tabs and no bar, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import {
   IOS_TAB,
@@ -9,6 +9,7 @@ import {
 import {
   CallAccessory,
   GLYPH,
+  SidebarFrame,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -20,7 +21,7 @@ import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxShown, useKeepInboxShown } from "../../inbox/inbox-shown.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
-import { PLUS_TAB } from "../../screens/app-sidebar.js";
+import { AppSidebarPane, PLUS_TAB, useAppSidebarShown } from "../../screens/app-sidebar.js";
 import { SidebarTasksProvider } from "../../screens/task-screens.js";
 import { useNewTaskAfterSetup } from "../../setup/setup-place.js";
 import { APP_SIDEBAR, useSidebarChoiceLapse } from "../../sidebar-shown.js";
@@ -93,14 +94,16 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // The bar is `sidebarAdaptable` on an iPhone, as Apple's tab sidebar
 // guidance has it: folded, iOS 27 stands the Duo's tabs as a glass rail on
 // the outer display, and unfolded the bar becomes a sidebar rail. An iPad
-// stands no system tab sidebar and, in a regular window, no bar at all:
-// each tab's split view leads with the app's own sidebar instead
-// (`useAppColumn`), as the panel's does, its places, tasks, workspace and
-// account, which the system's sidebar button folds away rather than moving
-// the tabs into a floating bar over the page, which the developer ruled out
-// (Nov 23, 2026). A compact iPad window, such as a narrow Split View, keeps
-// the bar, which only shows or hides, so nothing mounts again; whether a
-// sidebar can stand at all is read by the device's idiom, as the + is.
+// stands no system tab sidebar and, in a regular window, no bar at all: the
+// app's own sidebar stands beside the tabs instead (`AppSidebarPane` in
+// `SidebarFrame`), as the panel's does, its places, tasks, workspace and
+// account, so every page, a pushed one included, keeps it beside it; its
+// Hide Sidebar and the Show Sidebar a page's bar then stands fold it away
+// rather than moving the tabs into a floating bar over the page, which the
+// developer ruled out (Nov 23, 2026). A compact iPad window, such as a
+// narrow Split View, folds the sidebar and keeps the bar, which only shows
+// or hides, so nothing mounts again; whether a sidebar can stand at all is
+// read by the device's idiom, as the + is.
 // Each tab's root stands its own
 // list beside its detail in a regular window (`SplitView`), and Tasks keeps
 // Pinned, Following, and the member's sections as groups atop its list.
@@ -130,6 +133,7 @@ export default function TabsLayout() {
   // New task over the app setup's Finish just let in, where the workspace reaches a repository.
   useNewTaskAfterSetup();
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
+  const sidebar = useAppSidebarShown();
   const pathname = usePathname();
   const conversation = iosRouteHidesTabs(pathname);
   const segments: readonly string[] = useSegments();
@@ -208,6 +212,14 @@ export default function TabsLayout() {
     </NativeTabs>
   );
 
-  // Note that an iPad reads its task list once, above the tabs, for every tab's sidebar and Tasks alike; whether it does is the device's idiom, so the tabs never mount again under it.
-  return APP_SIDEBAR ? <SidebarTasksProvider>{tabs}</SidebarTasksProvider> : tabs;
+  // Note that an iPad stands its own sidebar beside the tabs, and reads its task list once, above them, for the sidebar and Tasks alike; whether it does is the device's idiom, so the tabs never mount again under it, and a compact window folds the sidebar away rather than unmounting it.
+  return APP_SIDEBAR ? (
+    <SidebarTasksProvider>
+      <SidebarFrame shown={sidebar.shown} sidebar={<AppSidebarPane />}>
+        {tabs}
+      </SidebarFrame>
+    </SidebarTasksProvider>
+  ) : (
+    tabs
+  );
 }

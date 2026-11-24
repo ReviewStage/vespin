@@ -42,11 +42,11 @@ import {
   LinkRow,
   type ListScopes,
   ListSection,
+  PageColumn,
   RowForEach,
   RowList,
   type RowSubmenu,
   Screen,
-  SplitView,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
@@ -72,13 +72,7 @@ import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import {
-  PLUS_TAB,
-  SIDEBAR_PLACE,
-  useAppColumn,
-  useComposeAction,
-  useSplitBuild,
-} from "./app-sidebar.js";
+import { PLUS_TAB, useComposeAction, useSidebarShowAction, useSplitBuild } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRow, InboxItemRows } from "./inbox-screens.js";
 import {
@@ -693,16 +687,17 @@ function SearchStackScreen(words: SearchWords) {
 }
 
 /**
- * Search's columns on an iPad while its tab is shown, beside its own
- * sidebar: the system's field over the detail's column, and under it what
- * the query finds or, with nothing typed, the recents, each drawn as the
- * Stack's Search draws it. Note that both are read here, under one split
- * view, so the first key typed swaps the column's rows rather than building
- * the split view and its field anew, which dropped the keyboard.
+ * Search's column on an iPad while its tab is shown, beside its own
+ * sidebar: the system's field over the column, and under it what the query
+ * finds or, with nothing typed, the recents, each drawn as the Stack's
+ * Search draws it, under Show Sidebar while the sidebar is folded. Note that
+ * both are read here, under one column, so the first key typed swaps the
+ * column's rows rather than building the column and its field anew, which
+ * dropped the keyboard.
  */
 function SearchSidebarShown(words: SearchWords) {
   const { query, setQuery, scope } = words;
-  const app = useAppColumn(SIDEBAR_PLACE.SEARCH);
+  const show = useSidebarShowAction();
   const compose = useComposeAction();
   const build = useSplitBuild();
   const found = useSearchScreen(words, undefined);
@@ -712,12 +707,11 @@ function SearchSidebarShown(words: SearchWords) {
   return (
     <>
       <Screen key={build}>
-        <SplitView
-          app={app}
-          detail={shown.results}
-          detailBar={{
+        <PageColumn
+          view={shown.results}
+          bar={{
             title: SEARCH_TITLE,
-            lead: [compose],
+            lead: show === undefined ? [compose] : [show, compose],
             search: { placeholder: searchPlaceholder(scope), text: query, onChange: setQuery },
           }}
         />
@@ -734,22 +728,21 @@ function SearchSidebarShown(words: SearchWords) {
  * Search on an iPad, beside its own sidebar, as the sidebar's Search opens
  * it. Note that what it finds and its recents are read only while the tab
  * is shown, as the Stack's Search reads them, since the tab stays mounted
- * behind the others; behind them its columns stand empty.
+ * behind the others; behind them its column stands empty.
  */
 function SearchSidebarScreen(words: SearchWords) {
   const shown = useSearchTabShown();
-  const app = useAppColumn(SIDEBAR_PLACE.SEARCH);
   const build = useSplitBuild();
 
   return (
     <>
-      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it. */}
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the column names its back button by it. */}
       <Stack.Screen options={{ headerShown: false, title: SEARCH_TITLE }} />
       {shown ? (
         <SearchSidebarShown {...words} />
       ) : (
         <Screen key={build}>
-          <SplitView app={app} detail={null} />
+          <PageColumn view={null} />
         </Screen>
       )}
     </>

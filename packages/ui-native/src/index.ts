@@ -383,8 +383,9 @@ export {
   WorkspaceRow,
 } from "./settings-form.js";
 
+export { SidebarFrame } from "./sidebar-frame.js";
+
 export {
-  type AppColumn,
   type BarAction,
   type BarBottom,
   type BarFootItem,
@@ -398,7 +399,12 @@ export {
   isBarMenu,
   menuWithout,
   PATH_PART,
+  PageColumn,
+  SIDEBAR_BUTTON_WORDS,
+  SidebarPane,
+  SidebarStackButton,
   SplitView,
+  sidebarAction,
 } from "./split-view.js";
 
 export {

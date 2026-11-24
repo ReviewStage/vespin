@@ -466,13 +466,17 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   Inbox count in copper, and the round + for New task; a regular window's
   bar, on an iPhone, is `sidebarAdaptable`, so the unfolded Duo stands it as
   a sidebar rail. An
-  iPad stands no system tab sidebar and, in a regular window, no bar: each
-  tab's `SplitView` leads with the app's own sidebar (`AppColumn`, a
-  `PlaceRow` for each place, the workspace switcher and the account's photo
-  at its foot in the system's glass, `ColumnBar`'s `bottom`), which the
-  system's sidebar button folds away rather than moving the tabs to a
-  floating bar over the page, a list beside it always standing (the
-  developer, Nov 23, 2026). A compact window hides it while a
+  iPad stands no system tab sidebar and, in a regular window, no bar: the
+  app's own sidebar stands beside the tabs (`SidebarFrame` holding a
+  `SidebarPane`: Hide Sidebar heading it, a `PlaceRow` for each place, the
+  tasks, and the workspace switcher and the account's photo at its foot in
+  the system's glass, `ColumnBar`'s `bottom`), so every page, a pushed one
+  included, keeps it beside it; it folds away rather than moving the tabs
+  to a floating bar over the page, a root's column or a pushed page's
+  header then standing Show Sidebar (`sidebarAction`,
+  `SidebarStackButton`), and a `SplitView`'s list beside it always stands,
+  with no system sidebar button (`listFixed`), while a root with no list
+  stands a `PageColumn` (the developer, Nov 23, 2026). A compact window hides it while a
   conversation stands in front (a thread, an agent's page, or a pull
   request it opened), as Messages does, so the composer stands alone at
   the foot (the developer, Nov 12, 2026).

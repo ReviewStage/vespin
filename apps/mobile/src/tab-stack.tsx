@@ -1,7 +1,8 @@
-// tab-stack.tsx -- a tab's native stack: a large title in the ink on its root and inline ones on its pages, round glass back buttons, its items in the brand's copper, its bar clear over the brand's ground.
+// tab-stack.tsx -- a tab's native stack: a large title in the ink on its root and inline ones on its pages, round glass back buttons and, on an iPad with its sidebar folded, Show Sidebar beside them, its items in the brand's copper, its bar clear over the brand's ground.
 
-import { BAR_TITLE, useBarScheme, useColors } from "@repo/ui-native";
+import { BAR_TITLE, SidebarStackButton, useBarScheme, useColors } from "@repo/ui-native";
 import { Stack } from "expo-router";
+import { useSidebarShowAction } from "./screens/app-sidebar.js";
 
 /**
  * How many screens pushed over a screen in its own tab's stack let it rest
@@ -56,10 +57,15 @@ const TAB_ROOTS: ReadonlySet<string> = new Set(Object.values(TAB_ROOT));
  * a split view mounting under the header's frame on iPadOS 26 kept its height
  * as a gap above both columns: Tasks', mounted on its first visit with its
  * rows already read, where the Inbox's mounts behind the launch's wait.
+ *
+ * On an iPad whose own sidebar is folded, a page pushed over a root stands
+ * Show Sidebar after its back button, as the root's column does, so the
+ * sidebar is one press away on every page.
  */
 export function TabStack() {
   const colors = useColors();
   const scheme = useBarScheme();
+  const show = useSidebarShowAction();
 
   return (
     <Stack
@@ -77,6 +83,11 @@ export function TabStack() {
           headerLargeTitleShadowVisible: false,
         }),
         ...(SPLIT_ROOTS.has(route.name) && { headerShown: false }),
+        ...(show !== undefined &&
+          !TAB_ROOTS.has(route.name) && {
+            headerBackVisible: true,
+            headerLeft: () => <SidebarStackButton onPress={show.onPress} />,
+          }),
       })}
     />
   );

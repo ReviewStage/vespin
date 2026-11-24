@@ -1,8 +1,8 @@
-// app-sidebar.tsx -- a regular window's tab roots: an iPad's own sidebar of places with the workspace and account at its foot, each tab's list column beside its detail, and New task, the compose button leading the detail's bar where the tab bar has no round +.
+// app-sidebar.tsx -- a regular window's tab roots: an iPad's own sidebar of places and tasks beside the tabs, with the workspace and account at its foot, each tab's list column beside its detail, and New task, the compose button leading the detail's bar where the tab bar has no round +.
 
+import { IOS_TAB, type IosTab, iosTabOfGroup } from "@repo/features/ios-app-links";
 import {
   AccountBarItem,
-  type AppColumn,
   type BarAction,
   type ColumnBar,
   GLYPH,
@@ -11,10 +11,14 @@ import {
   MARK_SIZE,
   PlaceRow,
   RowList,
+  SidebarPane,
   SWITCHER_LOOK,
+  sidebarAction,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
   WorkspaceSwitcherItem,
 } from "@repo/ui-native";
-import { useIsFocused, useRouter } from "expo-router";
+import { useIsFocused, useRouter, useSegments } from "expo-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useWindowDimensions } from "react-native";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -22,7 +26,7 @@ import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useSettingsAccount } from "../settings-button.js";
 import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
 import { useSidebarTasks } from "../sidebar-tasks.js";
-import { SPLIT_TAB, showSplitList } from "../split-route.js";
+import { SPLIT_TAB, showSplitList, useSplitPicked } from "../split-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
 /** New task as the detail's bar offers it, under the compose glyph, as the tab bar's round + names it. */
@@ -46,14 +50,6 @@ const PLACE_WORDS = {
   [SIDEBAR_PLACE.AUTOMATIONS]: "Automations",
 } as const satisfies Record<SidebarPlace, string>;
 
-/** What a tab's root does with a press in its sidebar that it answers itself, rather than going to another tab. */
-type SidebarDoors = {
-  /** Stands Tasks' whole list, where Tasks is the tab in front. */
-  readonly onTasks?: (() => void) | undefined;
-  /** Picks a task beside the sidebar, where Tasks is the tab in front. */
-  readonly onTask?: ((id: string) => void) | undefined;
-};
-
 /** The list a tab's split view stands beside its detail, and its bar: its title, its menu, and its search. */
 type ListColumn = {
   readonly view: ReactNode;
@@ -68,11 +64,12 @@ type SidebarVisibility = {
   readonly onSidebarShownChange: (shown: boolean) => void;
 };
 
-/** A split view's list column and its bar, after an iPad's own sidebar where one stands. */
+/** A split view's list column and its bar, fixed beside an iPad's own sidebar. */
 type FirstColumn = SidebarVisibility & {
-  readonly app: AppColumn | undefined;
   readonly sidebar: ReactNode;
   readonly sidebarBar: ColumnBar;
+  readonly listFixed: boolean;
+  readonly onFixedToggle: () => void;
 };
 
 /**
@@ -86,40 +83,88 @@ type FirstColumn = SidebarVisibility & {
  */
 export const PLUS_TAB = !APP_SIDEBAR;
 
+/** The place a tab stands for in the sidebar, by the tab's group. */
+const TAB_PLACE = {
+  [IOS_TAB.INBOX]: SIDEBAR_PLACE.INBOX,
+  [IOS_TAB.TASKS]: SIDEBAR_PLACE.TASKS,
+  [IOS_TAB.SEARCH]: SIDEBAR_PLACE.SEARCH,
+} as const satisfies Record<IosTab, SidebarPlace>;
+
 /**
- * An iPad's own sidebar, the first column of each tab's split view, as the
- * panel's sidebar stands: its places (Search, the Inbox with what waits on
- * the reader, Tasks, and Automations),
- * then the tasks, as the Tasks list draws them, read once for every tab
- * (`useSidebarTasks`), the place or task in front (`here`) standing
- * selected, and at its foot, in the system's glass, the workspace switcher
- * with the account's photo opening Settings beside it, as the panel's foot
- * holds the account. A press on Tasks while Tasks stands calls `onTasks`,
- * which stands its whole list again, and on a task `onTask`, which picks
- * it; from another tab each opens Tasks so. Note that a tab behind another
- * keeps the sidebar as it last stood in front, as its list does
- * (`useListColumn`). None stands but on an iPad (`APP_SIDEBAR`).
+ * What the sidebar stands selected: the tab in front's place, or on Tasks
+ * the task picked beside it, by its id. Note that while no tab stands, as
+ * under a sheet over the tabs, it keeps what it last stood on.
  */
-export function useAppColumn(
-  /** The place in front (`SIDEBAR_PLACE`), or the task picked beside the sidebar, by its id. */
-  here: string | undefined,
-  { onTasks, onTask }: SidebarDoors = {},
-): AppColumn | undefined {
+function useSidebarHere(): string | undefined {
+  const segments: readonly string[] = useSegments();
+  const tab = iosTabOfGroup(segments[1]);
+  const pickedTask = useSplitPicked(SPLIT_TAB.TASKS);
+
+  const here =
+    tab === undefined
+      ? undefined
+      : tab === IOS_TAB.TASKS
+        ? (pickedTask ?? TAB_PLACE[tab])
+        : TAB_PLACE[tab];
+
+  const [kept, keep] = useState(here);
+
+  useEffect(() => {
+    if (here !== undefined) keep(here);
+  }, [here]);
+
+  return here ?? kept;
+}
+
+/** Whether an iPad's own sidebar stands, and what shows or hides it. */
+type AppSidebarShown = { readonly shown: boolean; readonly toggle: () => void };
+
+/**
+ * Whether an iPad's own sidebar stands, and its toggle: on an iPad in a
+ * regular window, as the person last left it (`useSidebarShown`); never
+ * elsewhere, nor in a compact iPad window, which stands the tab bar.
+ */
+export function useAppSidebarShown(): AppSidebarShown {
+  const { shown, toggle } = useSidebarShown();
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+
+  return { shown: APP_SIDEBAR && regular && shown, toggle };
+}
+
+/**
+ * Show Sidebar, for a bar beside where an iPad's own sidebar stood, while
+ * it is folded: a tab root's column or a pushed page; none while it stands,
+ * when Hide Sidebar heads the sidebar itself, or where none can stand.
+ */
+export function useSidebarShowAction(): BarAction | undefined {
+  const { shown, toggle } = useAppSidebarShown();
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+
+  return APP_SIDEBAR && regular && !shown ? sidebarAction(false, toggle) : undefined;
+}
+
+/**
+ * An iPad's own sidebar, standing beside the tabs as the panel's sidebar
+ * stands beside its pages, so every page, a pushed one included, keeps it
+ * beside it: Hide Sidebar heading it; its places (Search, the Inbox with
+ * what waits on the reader, Tasks, and Automations, which opens Settings'
+ * list of them); then the tasks, as the Tasks list draws them, read once
+ * above the tabs (`useSidebarTasks`); the place or task in front standing
+ * selected (`useSidebarHere`); and at its foot, in the system's glass, the
+ * workspace switcher with the account's photo opening Settings beside it,
+ * as the panel's foot holds the account. A place opens its tab; Tasks opens
+ * on its whole list, and a task beside the sidebar on Tasks, as a link to
+ * it does. It is drawn once, by the tabs' layout, and only on an iPad.
+ */
+export function AppSidebarPane() {
   const router = useRouter();
   const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const inboxShown = useInboxShown();
   const waiting = useInboxBadge();
   const tasks = useSidebarTasks();
-  const { shown, setShown } = useSidebarShown();
-  const focused = useIsFocused();
-  const [kept, keep] = useState(shown);
-
-  useEffect(() => {
-    if (focused) keep(shown);
-  }, [focused, shown]);
-
-  if (!APP_SIDEBAR) return undefined;
+  const here = useSidebarHere();
+  const { toggle } = useAppSidebarShown();
 
   const go = (id: string) => {
     switch (id) {
@@ -128,20 +173,16 @@ export function useAppColumn(
       case SIDEBAR_PLACE.INBOX:
         return router.navigate("/inbox");
       case SIDEBAR_PLACE.TASKS:
-        if (onTasks !== undefined) return onTasks();
-
         showSplitList(SPLIT_TAB.TASKS);
 
-        return router.navigate("/tasks");
+        return router.navigate(SPLIT_TAB.TASKS);
       case SIDEBAR_PLACE.AUTOMATIONS:
         return router.navigate("/automations");
     }
 
     if (tasks?.opens(id) === true) return;
 
-    // Note that a task opens beside the sidebar on Tasks, picked where Tasks stands and handed to its root from another tab, as a link to it is.
-    if (onTask !== undefined) return onTask(id);
-
+    // Note that a task opens beside the sidebar on Tasks, handed to its root as a link to it is, which pops any page pushed over the root.
     router.navigate({ pathname: SPLIT_TAB.TASKS, params: { selected: id } });
   };
 
@@ -156,44 +197,41 @@ export function useAppColumn(
         ? undefined
         : { leading: <AccountBarItem {...account} /> };
 
-  return {
-    view: (
-      <RowList look={LIST_LOOK.PLAIN} selected={here} onSelect={go}>
-        <ListSection>
-          <PlaceRow
-            id={SIDEBAR_PLACE.SEARCH}
-            symbol={GLYPH.SEARCH}
-            label={PLACE_WORDS[SIDEBAR_PLACE.SEARCH]}
-          />
-          {inboxShown ? (
+  return (
+    <SidebarPane
+      bar={{ lead: [sidebarAction(true, toggle)], bottom }}
+      view={
+        <RowList look={LIST_LOOK.PLAIN} selected={here} onSelect={go}>
+          <ListSection>
             <PlaceRow
-              id={SIDEBAR_PLACE.INBOX}
-              symbol={GLYPH.INBOX}
-              label={PLACE_WORDS[SIDEBAR_PLACE.INBOX]}
-              count={waiting}
+              id={SIDEBAR_PLACE.SEARCH}
+              symbol={GLYPH.SEARCH}
+              label={PLACE_WORDS[SIDEBAR_PLACE.SEARCH]}
             />
-          ) : null}
-          <PlaceRow
-            id={SIDEBAR_PLACE.TASKS}
-            symbol={GLYPH.TASK}
-            label={PLACE_WORDS[SIDEBAR_PLACE.TASKS]}
-          />
-          <PlaceRow
-            id={SIDEBAR_PLACE.AUTOMATIONS}
-            symbol={GLYPH.AUTOMATION}
-            label={PLACE_WORDS[SIDEBAR_PLACE.AUTOMATIONS]}
-          />
-        </ListSection>
-        {tasks?.sections}
-      </RowList>
-    ),
-    bar: { bottom },
-    shown: focused ? shown : kept,
-    // Note that only the split view in front is heard, because a tab kept behind another lays its split view out off screen.
-    onShownChange: (next) => {
-      if (focused) setShown(next);
-    },
-  };
+            {inboxShown ? (
+              <PlaceRow
+                id={SIDEBAR_PLACE.INBOX}
+                symbol={GLYPH.INBOX}
+                label={PLACE_WORDS[SIDEBAR_PLACE.INBOX]}
+                count={waiting}
+              />
+            ) : null}
+            <PlaceRow
+              id={SIDEBAR_PLACE.TASKS}
+              symbol={GLYPH.TASK}
+              label={PLACE_WORDS[SIDEBAR_PLACE.TASKS]}
+            />
+            <PlaceRow
+              id={SIDEBAR_PLACE.AUTOMATIONS}
+              symbol={GLYPH.AUTOMATION}
+              label={PLACE_WORDS[SIDEBAR_PLACE.AUTOMATIONS]}
+            />
+          </ListSection>
+          {tasks?.sections}
+        </RowList>
+      }
+    />
+  );
 }
 
 /**
@@ -259,18 +297,19 @@ export function useSplitBuild(): number {
 }
 
 /**
- * A regular window's list column, an iPad's after its own sidebar
- * (`useAppColumn`, which `place` names the place in front of) or the
- * unfolded Duo's beside the system's tab sidebar: the tab's list, under the
- * switcher's tile at its bar's leading edge beside the list's title, as the
- * compact bar stands it, but on an iPad, whose sidebar holds the switcher at
- * its foot. Note that the photo leads only until the workspaces are read, as
- * the compact bar's does, so Settings is never out of reach. Note that an
- * iPad's list always stands, as Mail's message list does beside its
- * mailboxes, so the system's sidebar button folds the sidebar alone.
+ * A regular window's list column, an iPad's beside its own sidebar
+ * (`AppSidebarPane`) or the unfolded Duo's beside the system's tab sidebar:
+ * the tab's list, under the switcher's tile at its bar's leading edge beside
+ * the list's title, as the compact bar stands it, but on an iPad, whose
+ * sidebar holds the switcher at its foot and whose list's bar leads with
+ * Show Sidebar while the sidebar is folded. Note that the photo leads only
+ * until the workspaces are read, as the compact bar's does, so Settings is
+ * never out of reach. Note that an iPad's list always stands, as Mail's
+ * message list does beside its mailboxes (`listFixed`).
  */
-export function useListColumn(list: ListColumn, place: SidebarPlace): FirstColumn {
-  const app = useAppColumn(place);
+export function useListColumn(list: ListColumn): FirstColumn {
+  const show = useSidebarShowAction();
+  const { toggle } = useAppSidebarShown();
   const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const { shown, setShown } = useSidebarShown();
@@ -293,19 +332,26 @@ export function useListColumn(list: ListColumn, place: SidebarPlace): FirstColum
       <AccountBarItem {...account} />
     );
 
+  const lead = list.bar.lead ?? [];
+
   return {
-    app,
     sidebar: list.view,
-    // Note that New task leads the detail's bar instead (`useDetailColumnBar`), as in Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done, and acts it leads with, such as Select all, stand in the switcher's place, as on the iPhone, since a second leading item folds into the bar's overflow.
+    // Note that New task leads the detail's bar instead (`useDetailColumnBar`), as in Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done, and acts it leads with, such as Select all, stand in the switcher's place, as on the iPhone, since a second leading item folds into the bar's overflow; on an iPad, Show Sidebar stands there while nothing else does.
     sidebarBar: {
       ...list.bar,
-      leading: app !== undefined || (list.bar.lead ?? []).length > 0 ? undefined : leading,
+      lead: lead.length === 0 && show !== undefined ? [show] : lead,
+      leading: APP_SIDEBAR || lead.length > 0 ? undefined : leading,
     },
     // Note that the list always stands while no row is picked, as Mail opens a mailbox on its list, because the detail has no page to stand alone with; the split view folds its list on its own in a portrait window, which left a tab opening on "No item selected" alone.
-    sidebarShown: app !== undefined || !list.chosen || (focused ? shown : kept),
+    sidebarShown: APP_SIDEBAR || !list.chosen || (focused ? shown : kept),
     // Note that only the split view in front with a row picked is heard, because a tab kept behind another lays its split view out off screen, which reports its list folded, and a fold with nothing picked is the split view's own, never the person's choice.
     onSidebarShownChange: (next) => {
-      if (app === undefined && focused && list.chosen) setShown(next);
+      if (!APP_SIDEBAR && focused && list.chosen) setShown(next);
+    },
+    listFixed: APP_SIDEBAR,
+    // Note that only the split view in front is heard, as above.
+    onFixedToggle: () => {
+      if (focused) toggle();
     },
   };
 }

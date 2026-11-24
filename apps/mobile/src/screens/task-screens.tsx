@@ -148,6 +148,7 @@ import {
   menuWithout,
   NoSelection,
   PATH_PART,
+  PageColumn,
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
   ProblemLine,
@@ -270,11 +271,10 @@ import {
 } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
-  SIDEBAR_PLACE,
-  useAppColumn,
   useComposeAction,
   useDetailColumnBar,
   useListColumn,
+  useSidebarShowAction,
   useSplitBuild,
 } from "./app-sidebar.js";
 import { DESCRIPTION_EDIT_WORDS, EDIT_DESCRIPTION_ROUTE } from "./description-edit-screens.js";
@@ -3624,7 +3624,7 @@ function TasksSplitScreen({
     },
   };
 
-  const first = useListColumn(list, SIDEBAR_PLACE.TASKS);
+  const first = useListColumn(list);
   const firstDetailBar = useDetailColumnBar(detailBar);
   const build = useSplitBuild();
 
@@ -3639,34 +3639,58 @@ function TasksSplitScreen({
   );
 }
 
-// An iPad's regular window: its own sidebar, the places and, as the panel's
-// sidebar holds them, the tasks, beside the picked task's page, or beside
-// the whole tree with its View options and search while none is picked, as
-// the sidebar's Tasks stands it. The Stack's header steps aside, since the
-// split view draws each column's navigation bar itself.
+/**
+ * A page column whose task's description may be edited in place, as
+ * `InlineSplitView` is: while it is, Done stands at the bar's trailing edge
+ * in the place of its acts and ⋯.
+ */
+function InlinePageColumn({
+  chrome,
+  bar,
+  view,
+}: ComponentProps<typeof PageColumn> & { readonly chrome: InlineChrome }) {
+  const editing = useInlineEditing(chrome);
+
+  const shown =
+    editing && bar !== undefined
+      ? {
+          ...bar,
+          acts: undefined,
+          menu: undefined,
+          action: { label: WORDS.DONE, onPress: chrome.done },
+        }
+      : bar;
+
+  return <PageColumn view={view} bar={shown} />;
+}
+
+// An iPad's regular window, beside its own sidebar, which lists the tasks:
+// the picked task's page, or the whole tree with its View options and
+// search while none is picked, as the sidebar's Tasks stands it, each under
+// Show Sidebar while the sidebar is folded. The Stack's header steps aside,
+// since the column draws its navigation bar itself.
 function TasksSidebarScreen({
   selected,
   select,
-  deselect,
   screen,
   hold,
 }: {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
-  readonly deselect: () => void;
   readonly screen: TasksScreenState;
   readonly hold: TreeHold;
 }) {
   const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
   const chrome = useInlineChrome();
   const task = useTaskDetail(selected, listing, chrome);
-  const app = useAppColumn(selected ?? SIDEBAR_PLACE.TASKS, { onTasks: deselect, onTask: select });
+  const show = useSidebarShowAction();
   const compose = useComposeAction();
   const taskBar = useDetailColumnBar(task.detailBar);
   const build = useSplitBuild();
   const listed = selected === undefined;
+  const showing = show === undefined ? [] : [show];
 
-  const detail = listed ? (
+  const view = listed ? (
     <TasksTree
       listing={listing}
       hold={hold}
@@ -3681,21 +3705,21 @@ function TasksSidebarScreen({
   );
 
   // Note that the whole tree's bar holds New task, its View options and its search, as its list column's did, and a task's page its own acts.
-  const detailBar = listed
+  const bar = listed
     ? {
         title: TASKS_TITLE,
-        lead: [compose],
+        lead: [...showing, compose],
         menu: viewMenu,
         search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
       }
-    : taskBar;
+    : { ...taskBar, lead: [...showing, ...(taskBar.lead ?? [])] };
 
   return (
     <>
-      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it. */}
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the column names its back button by it. */}
       <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />
       <Screen key={build}>
-        <InlineSplitView app={app} detail={detail} detailBar={detailBar} chrome={chrome} />
+        <InlinePageColumn view={view} bar={bar} chrome={chrome} />
       </Screen>
     </>
   );
@@ -3715,7 +3739,7 @@ const SharedTasksContext = createContext<SharedTasks | undefined>(undefined);
  * once for each tab, and a group folded in one tab's sidebar stands folded
  * in every tab's; and the questions a row's status or delete asks, asked
  * once for all. A Manager's row pressed in a sidebar opens its page; a
- * task's opens on Tasks (`useAppColumn`).
+ * task's opens on Tasks (`AppSidebarPane`).
  */
 export function SidebarTasksProvider({ children }: { readonly children: ReactNode }) {
   const router = useRouter();
@@ -3763,20 +3787,14 @@ export function SidebarTasksProvider({ children }: { readonly children: ReactNod
 function TasksSharedRoot() {
   const shared = useContext(SharedTasksContext);
   const sizeClass = useWindowSizeClass();
-  const { selected, select, deselect } = useSplitSelection(SPLIT_TAB.TASKS);
+  const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
 
   if (shared === undefined) throw new Error("An iPad's Tasks stands under SidebarTasksProvider.");
 
   const { screen, hold } = shared;
 
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <TasksSidebarScreen
-      selected={selected}
-      select={select}
-      deselect={deselect}
-      screen={screen}
-      hold={hold}
-    />
+    <TasksSidebarScreen selected={selected} select={select} screen={screen} hold={hold} />
   ) : (
     <TasksStackList screen={screen} hold={hold} />
   );
