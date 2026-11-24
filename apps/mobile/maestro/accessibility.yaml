@@ -159,8 +159,8 @@ env:
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 30000
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 # Note that the switcher is waited for before its list is scrolled to the
 # account's row, which at this text size a short window, the iPhone Duo's,
 # stands below its foot, and that an iPad's switcher, a popover down the
@@ -201,8 +201,8 @@ env:
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 15000
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd:
     timeout: 5000
@@ -223,8 +223,8 @@ env:
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 15000
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd:
     timeout: 5000
@@ -243,8 +243,8 @@ env:
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 15000
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd:
     timeout: 5000

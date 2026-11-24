@@ -3,6 +3,8 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # The app is launched on the host's Inbox fixture (`src/host/launch-arguments.ts`),
 # so the Inbox lists the synthetic threads the panel's own fixture run lists
@@ -79,14 +81,15 @@ appId: dev.vespin.ios
     commands:
       - tapOn:
           id: "search-tab"
-# The iPad's top tab bar carries no id, so there the tab is the Search right of Tasks.
+# An iPad stands no tabs, so there Search is its sidebar's row, as a reader picks it.
 - runFlow:
     when:
-      notVisible: "Search Vespin"
+      true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn:
-          text: "Search"
-          rightOf: "Tasks"
+      - runFlow:
+          file: subflows/tab.yaml
+          env:
+            TAB: Search
 - assertVisible: "Search Vespin"
 - tapOn: "Search Vespin"
 - inputText: "invitations"

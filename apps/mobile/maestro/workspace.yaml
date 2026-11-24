@@ -18,12 +18,14 @@ appId: dev.vespin.ios
 # The switcher leads the bar alone in a compact window and a portrait
 # regular one, with no photo beside it, and heads the sidebar in a landscape
 # iPad's, heard as the workspace and who shares it.
+- runFlow:
+    file: subflows/show-sidebar.yaml
 - assertVisible:
     id: "workspace-switcher"
 - waitForAnimationToEnd
 - takeScreenshot: workspace-inbox
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 # Note that a menu row is heard as its name and who shares it together, so a
 # workspace is found by both.
 - assertVisible: "Relay, 6 members"
@@ -50,8 +52,8 @@ appId: dev.vespin.ios
       fixture: inbox
 - assertNotVisible: "Recorded the invite flow"
 # New workspace opens its sheet, a team's name and Create.
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "New workspace"
 - assertVisible:
     id: "new-workspace-name"
@@ -69,8 +71,8 @@ appId: dev.vespin.ios
 # Back to the account's own workspace, whose threads stand again. The Inbox
 # is tapped first, since a wide iPad keeps the Tasks collection picked above
 # and would stand on it after the switch.
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "Ada Lovelace, Personal workspace"
 - runFlow:
     file: subflows/tab.yaml
