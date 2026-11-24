@@ -221,16 +221,16 @@ export function runShowMedia(
 
     if (binding.chat === undefined) return answer;
 
-    // Note that a Manager's set stands in its chat as a row of no words, written before the call answers.
+    // Note that a Manager's set stands in its chat as a row of no words, written before the call answers, each picture with its size, so the chat draws the set at its shape as the transcript does.
     const written = yield* writeManagerSaid(binding.chat.manager, {
       clientKey: yield* binding.chat.clientKey,
       text: "",
       attachments: kept.value.map((each, index) => {
         const caption = read.success.images[index]?.caption;
+        const { id, mediaType, width, height, byteCount } = each;
+        const picture = { id, mediaType, width, height, byteCount };
 
-        return caption === undefined
-          ? { id: each.id, mediaType: each.mediaType }
-          : { id: each.id, mediaType: each.mediaType, caption };
+        return caption === undefined ? picture : { ...picture, caption };
       }),
     });
 

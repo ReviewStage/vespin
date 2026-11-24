@@ -2,16 +2,19 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { createAgent } from "@repo/database/models/agent-store";
 import {
   readConversationPicture,
   readServedConversationPicture,
 } from "@repo/database/models/conversation-pictures";
+import { readManagerChatMessage } from "@repo/database/models/manager-chat-messages";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
 import { conversations } from "@repo/database/schemas/storage";
-import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
-import { getTestDB } from "@repo/database/testing";
+import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   CONVERSATION_MEDIA_TYPE,
   CONVERSATION_PICTURE_BOUNDS,
@@ -23,6 +26,7 @@ import { m4aBytes, mp4Bytes, pngBytes, webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { ACTION_RESULT_STATUS } from "../../core.js";
+import { openGithubUser } from "../../testing/github-app-fake.js";
 import { runShowMedia, SHOW_MEDIA_REFUSAL, type ShowMediaBinding } from "./show-media.js";
 
 /**
@@ -481,6 +485,54 @@ it.layer(getTestDB())("show_media", (it) => {
           Option.some([CONVERSATION_MEDIA_TYPE.OGG, [...OGG_CLIP]]),
           "every other reader the Ogg it was",
         );
+      }),
+  );
+  it.effect(
+    "a Manager's shown set stands in its chat as a message of no words, each picture with its caption and its size",
+    () =>
+      Effect.gen(function* () {
+        const userId = yield* openGithubUser();
+
+        const started = yield* createAgent(userId, {
+          taskId: null,
+          workspaceId: yield* openWorkspace(userId),
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          descriptionSnapshot: null,
+          prompt: null,
+          repository: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          kind: AGENT_KIND.MANAGER,
+        });
+
+        const manager = Option.getOrThrow(started).agent;
+        const target = { userId, conversationId: manager.conversationId };
+        const sandbox = sandboxWith({ "/tmp/funnel.png": pngBytes(1200, 720) });
+
+        const answer = yield* show(
+          { target, sandbox, chat: { manager, clientKey: Effect.succeed(randomUUID()) } },
+          { images: [{ path: "/tmp/funnel.png", caption: "The funnel" }] },
+        );
+
+        const { pictures } = readShown(answer);
+
+        const messageId = Schema.decodeUnknownSync(Schema.Struct({ message_id: Schema.String }))(
+          answer,
+        ).message_id;
+
+        const row = Option.getOrThrow(yield* readManagerChatMessage(userId, manager.id, messageId));
+        assert.equal(row.text, "");
+        assert.deepEqual(row.attachments, [
+          {
+            id: pictures[0]?.id,
+            mediaType: INBOX_IMAGE_TYPE.PNG,
+            width: 1200,
+            height: 720,
+            byteCount: 33,
+            caption: "The funnel",
+          },
+        ]);
       }),
   );
 });
