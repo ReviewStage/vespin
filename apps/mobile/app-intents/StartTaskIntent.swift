@@ -6,13 +6,19 @@
 // Note that a prompt is the member's own words and nothing else: no
 // credential, token, or account ever goes into a parameter or a donation.
 // `app.config.ts` builds this file into the app's own target, where iOS
-// reads its App Shortcuts from.
+// reads its App Shortcuts from, and into the widget extension, whose New
+// task control runs Start a task; the extension's copy, which never runs,
+// leaves the opening and the App Shortcuts out (`APP_EXTENSION`), since iOS
+// runs an intent that opens the app in the app's process.
 
 import AppIntents
-import UIKit
+
+#if !APP_EXTENSION
+  import UIKit
+#endif
 
 /// New task's route in the app, with `prompt` as its words where there are any.
-private func newTaskURL(prompt: String?) -> URL {
+func newTaskURL(prompt: String?) -> URL {
   var components = URLComponents()
   components.scheme = "vespin"
   components.host = "start-task"
@@ -24,7 +30,9 @@ private func newTaskURL(prompt: String?) -> URL {
 /// Opens New task in the app, prefilled with `prompt` where one was given.
 @MainActor
 private func openNewTask(prompt: String?) {
-  UIApplication.shared.open(newTaskURL(prompt: prompt))
+  #if !APP_EXTENSION
+    UIApplication.shared.open(newTaskURL(prompt: prompt))
+  #endif
 }
 
 /// Start a task: New task, with an optional prompt, which a shortcut can hand it from anything.
@@ -61,6 +69,7 @@ struct DictateTaskIntent: AppIntent {
   }
 }
 
+#if !APP_EXTENSION
 /// The phrases Siri and Spotlight offer from the moment the app is installed.
 struct VespinShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
@@ -84,3 +93,4 @@ struct VespinShortcuts: AppShortcutsProvider {
     )
   }
 }
+#endif

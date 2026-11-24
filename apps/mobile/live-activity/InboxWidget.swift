@@ -5,8 +5,8 @@
 // moves and the Notification Service Extension moves on a push, each then
 // asking WidgetKit to draw it again, so its timeline holds one entry and
 // never asks on its own. The small and Lock Screen sizes open the Inbox; the
-// medium's rows each open their thread, and the rest of it the Inbox, by the
-// app's own `vespin://` routes. Copper (`Attention`) marks only what wants
+// medium's rows each open their thread, its compose New task, and the rest
+// of it the Inbox, by the app's own `vespin://` routes. Copper (`Attention`) marks only what wants
 // the member: the count while any waits, and each ask's glyph. Rows are
 // privacy-sensitive, so iOS redacts them on a locked phone as the member's
 // settings say. The colors are the brand's, written into this target's
@@ -152,6 +152,11 @@ struct MediumInbox: View {
             .widgetAccentable()
             .lineLimit(1)
         }
+        // Note that New task's compose ends the heading, as ChatGPT's and Claude's widgets offer New chat, so a new agent is a press away from the Home Screen.
+        Link(destination: InboxRoute.newTask) {
+          Image("SquarePen").ink(muted: true)
+        }
+        .accessibilityLabel("New Task")
       }
       if let snapshot {
         if snapshot.waiting == 0 {
@@ -338,6 +343,7 @@ extension View {
 /// The app's routes the widget opens: the Inbox, and a thread on it.
 enum InboxRoute {
   static let inbox = URL(string: "vespin://inbox")!
+  static let newTask = URL(string: "vespin://start-task")!
 
   static func thread(_ id: String) -> URL {
     var components = URLComponents()
