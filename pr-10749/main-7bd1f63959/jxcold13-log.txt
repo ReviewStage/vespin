@@ -1,0 +1,74 @@
+pinned to 4b39a4b03e
+== bundle PJjxcold13 base 4b39a4b03ed
+  built 4b39a4b03ed base app Vmain13.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(336,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(340,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(360,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(393,185): error TS18048: 'item.thread' is possibly 'undefined'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+MAIN (4b39a4b03e) bundle 25276 KB
+seed 4b39a4b03e: 28108 KB, answers 4748 KB + 12 KB
+== bundle PJjxcold13B77 base 5a45a93bb35
+  built 5a45a93bb35 base app Vmain13.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(336,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(340,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(360,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(393,185): error TS18048: 'item.thread' is possibly 'undefined'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+B77 (5a45a93bb3) bundle 25032 KB
+seed 5a45a93bb3: 28108 KB, answers 4748 KB + 12 KB
+== bundle PJjxcold13B78 base 6d95828cfda
+  built 6d95828cfda base app Vmain13.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(336,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(340,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(360,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(393,185): error TS18048: 'item.thread' is possibly 'undefined'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+B78 (6d95828cfd) bundle 25152 KB
+seed 6d95828cfd: 28108 KB, answers 4748 KB + 12 KB
+sign-in (MAIN): fails 0 shots 3 
+MAIN-0: pid 51342, probe ok, watch ok, profile 980 KB
+  MAIN-0 cpu peak 43.2% (at 60 s: 2.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+MAIN-0: marks screens-render=1577.8 tabs-render=1641.5 app-ready=1682.7 splash-hide=1851.6 | stub inbox-whole answer t=4116.3 {"d": {"chars": 4860883, "ms": 3016}}, tasks-delta t=1798.9, held inbox 0 tasks 1 |  | kept rows read (4 kept-load marks)
+B77-1: pid 52667, probe ok, watch ok, profile 832 KB
+  B77-1 cpu peak 101.3% (at 60 s: 2.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B77-1: marks screens-render=2552.6 tabs-render=2633.7 app-ready=2696 splash-hide=3269.1 | stub inbox-whole answer t=4613.6 {"d": {"chars": 4860883, "ms": 3010}}, tasks-delta t=3194.4, held inbox 0 tasks 1 |  | kept rows read (4 kept-load marks)
+B78-1: pid 53999, probe ok, watch ok, profile 832 KB
+  B78-1 cpu peak 68.4% (at 60 s: 1.4%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B78-1: marks screens-render=2262.9 tabs-render=2406.4 app-ready=2456.2 splash-hide=2905.4 | stub inbox-whole answer t=4423.2 {"d": {"chars": 4860883, "ms": 3004}}, tasks-delta t=2834.7, held inbox 0 tasks 1 |  | kept rows read (4 kept-load marks)
+MAIN-1: pid 54951, probe ok, watch ok, profile 576 KB
+  MAIN-1 cpu peak 141% (at 60 s: 2.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+MAIN-1: marks screens-render=1655.9 tabs-render=1725.7 app-ready=1769.7 splash-hide=1959.7 | stub inbox-whole answer t=4164.6 {"d": {"chars": 4860883, "ms": 3005}}, tasks-delta t=1904.2, held inbox 0 tasks 1 |  | kept rows read (4 kept-load marks)
+round 1: B77 2633.7 ms, B78 2406.4 ms, MAIN 1725.7 ms (tabs-render, else screens-render)
+B77-2: pid 55884, probe ok, watch ok, profile 576 KB
+  B77-2 cpu peak 88.5% (at 60 s: 2.1%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B77-2: marks screens-render=2242.8 tabs-render=2309 app-ready=2345.9 splash-hide=2770 | stub inbox-whole answer t=4418.6 {"d": {"chars": 4860883, "ms": 3017}}, tasks-delta t=2705.1, held inbox 0 tasks 1 |  | kept rows read (4 kept-load marks)
+B78-2: pid 56877, probe ok, watch ok, profile 696 KB
+  B78-2 cpu peak 79.3% (at 60 s: 1.1%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B78-2: marks screens-render=2184.7 tabs-render=2254.1 app-ready=2293.7 splash-hide=2720.7 | stub inbox-whole answer t=4398.6 {"d": {"chars": 4860883, "ms": 3017}}, tasks-delta t=2652.4, held inbox 0 tasks 1 |  | kept rows read (4 kept-load marks)
+MAIN-2: pid 57786, probe ok, watch ok, profile 520 KB
+  MAIN-2 cpu peak 29.3% (at 60 s: 1.7%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+MAIN-2: marks screens-render=1551.3 tabs-render=1603.8 app-ready=1658 splash-hide=1855.4 | stub inbox-whole answer t=4059.3 {"d": {"chars": 4860883, "ms": 3014}}, tasks-delta t=1794.2, held inbox 3 tasks 3 |  | kept rows read (4 kept-load marks)
+round 2: B77 2309 ms, B78 2254.1 ms, MAIN 1603.8 ms (tabs-render, else screens-render)
+B77-3: pid 58759, probe ok, watch ok, profile 904 KB
+  B77-3 cpu peak 121% (at 60 s: 1.6%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B77-3: marks screens-render=2022.9 tabs-render=2081.8 app-ready=2121.1 splash-hide=2522.6 | stub inbox-whole answer t=4207.4 {"d": {"chars": 4860883, "ms": 3006}}, tasks-delta t=2460.8, held inbox 0 tasks 1 |  | kept rows read (4 kept-load marks)
+B78-3: pid 59706, probe ok, watch ok, profile 672 KB
+  B78-3 cpu peak 194.5% (at 60 s: 1.6%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B78-3: marks screens-render=1940.6 tabs-render=1993.9 app-ready=2030.6 splash-hide=2435.7 | stub inbox-whole answer t=4151.5 {"d": {"chars": 4860883, "ms": 3005}}, tasks-delta t=2376, held inbox 0 tasks 1 |  | kept rows read (4 kept-load marks)
+MAIN-3: pid 60638, probe ok, watch ok, profile 700 KB
+  MAIN-3 cpu peak 113.8% (at 60 s: 1.7%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+MAIN-3: marks screens-render=1980 tabs-render=2041.4 app-ready=2092.5 splash-hide=2329.9 | stub inbox-whole answer t=4488.7 {"d": {"chars": 4860883, "ms": 3021}}, tasks-delta t=2256.5, held inbox 0 tasks 1 |  | kept rows read (4 kept-load marks)
+round 3: B77 2081.8 ms, B78 1993.9 ms, MAIN 2041.4 ms (tabs-render, else screens-render)
