@@ -230,11 +230,13 @@ function ManagerMessage({
       )}
       {toggle.shown && work !== null ? <ChatAside inset={chatInset(face)}>{work}</ChatAside> : null}
       {menu.menu}
-      <MessageLine
-        align={MESSAGE_LINE_ALIGN.START}
-        inset={chatInset(face)}
-        at={place.closes ? message.createdAt : undefined}
-      />
+      {place.closes ? (
+        <MessageLine
+          align={MESSAGE_LINE_ALIGN.START}
+          inset={chatInset(face)}
+          at={message.createdAt}
+        />
+      ) : null}
     </Message>
   );
 }
@@ -280,11 +282,13 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
           <TranscriptWords text={message.text} />
         </ChatBubble>
       )}
-      <MessageLine
-        align={own ? MESSAGE_LINE_ALIGN.END : MESSAGE_LINE_ALIGN.START}
-        inset={own ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR}
-        at={place.closes ? message.createdAt : undefined}
-      />
+      {place.closes ? (
+        <MessageLine
+          align={own ? MESSAGE_LINE_ALIGN.END : MESSAGE_LINE_ALIGN.START}
+          inset={own ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR}
+          at={message.createdAt}
+        />
+      ) : null}
     </Message>
   );
 }
@@ -354,6 +358,20 @@ function sendingLinesOf(
     ...(message.sentBy === undefined ? undefined : { sentBy: message.sentBy }),
     ...(message.refused === undefined ? undefined : { refused: message.refused }),
   }));
+}
+
+/** The chat's lines in runs, each run the lines of one sender that go on from its first, so the log stands each run as one row and its bubbles close together. */
+function runsOf(lines: readonly ManagerChatLine[]): readonly (readonly ManagerChatLine[])[] {
+  const runs: ManagerChatLine[][] = [];
+
+  for (const line of lines) {
+    const run = runs.at(-1);
+
+    if (run === undefined || line.place.opens) runs.push([line]);
+    else run.push(line);
+  }
+
+  return runs;
 }
 
 /** No message on its way. */
@@ -522,26 +540,31 @@ export function ManagerChatTab({
           {before === undefined ? (
             <ManagerGreeting manager={manager} words={managerGreeting(agent.title)} />
           ) : null}
-          {view.messages.map((line) =>
-            line.message.authorKind === MANAGER_CHAT_AUTHOR.AGENT ? (
-              <ManagerMessage
-                key={line.message.id}
-                line={line}
-                doors={doors}
-                work={
-                  line.work === undefined ? null : (
-                    <TurnWorkRows
-                      parts={view.work.get(line.work) ?? []}
-                      moving={false}
-                      delegation={delegation}
-                    />
-                  )
-                }
-              />
-            ) : (
-              <PersonMessage key={line.message.id} line={line} doors={doors} />
-            ),
-          )}
+          {runsOf(view.messages).map((run) => (
+            // Note that a run stands as one row of the log, so its bubbles stand close together and runs a step apart.
+            <div key={run[0]?.message.id} className="flex flex-col gap-tight-gap">
+              {run.map((line) =>
+                line.message.authorKind === MANAGER_CHAT_AUTHOR.AGENT ? (
+                  <ManagerMessage
+                    key={line.message.id}
+                    line={line}
+                    doors={doors}
+                    work={
+                      line.work === undefined ? null : (
+                        <TurnWorkRows
+                          parts={view.work.get(line.work) ?? []}
+                          moving={false}
+                          delegation={delegation}
+                        />
+                      )
+                    }
+                  />
+                ) : (
+                  <PersonMessage key={line.message.id} line={line} doors={doors} />
+                ),
+              )}
+            </div>
+          ))}
           {composer.sent.map((line) => (
             <SendingLine key={line.id} line={line} />
           ))}
