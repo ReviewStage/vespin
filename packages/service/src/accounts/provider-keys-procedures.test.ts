@@ -1306,6 +1306,56 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
+    "a read of a Codex plan's usage that shows room lifts a limit a turn wrote with no reset named, and one that shows a window spent keeps it",
+    () =>
+      Effect.gen(function* () {
+        const standingAfter = (sessionUsedPercent: number) =>
+          Effect.gen(function* () {
+            const device = fakeDeviceAuth();
+            device.state.codePollStatus = HTTP_STATUS.OK;
+
+            const window = (usedPercent: number, seconds: number) => ({
+              used_percent: usedPercent,
+              limit_window_seconds: seconds,
+              reset_after_seconds: 0,
+              reset_at: 1_800_000_000,
+            });
+
+            const { owner, ask } = yield* openAccounts({
+              ring: KEK.ONE,
+              auth: device.auth,
+              usage: () =>
+                jsonResponse({
+                  rate_limit: {
+                    primary_window: window(sessionUsedPercent, 18_000),
+                    secondary_window: window(40, 604_800),
+                  },
+                }),
+            });
+
+            yield* connectPlan(ask, owner);
+            yield* TestClock.adjust("5 minutes");
+            const now = new Date(yield* Clock.currentTimeMillis);
+            // A turn that met the limit before Codex reported a reset names none, so no reset lifts it.
+            yield* setPlanStatus(
+              owner,
+              PROVIDER_KEY_PROVIDER.OPENAI,
+              PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+              PROVIDER_KEY_STATUS.LIMIT_REACHED,
+              undefined,
+              now,
+              now,
+            );
+
+            return keysOf(yield* ask(request(owner))).subscriptions?.[0]?.status;
+          });
+
+        assert.equal(yield* standingAfter(12), PROVIDER_KEY_STATUS.VERIFIED);
+        assert.equal(yield* standingAfter(100), PROVIDER_KEY_STATUS.LIMIT_REACHED);
+      }),
+  );
+
+  it.effect(
     "a Claude plan's refresh that goes through lifts the limit a turn wrote before its named reset, and one Anthropic answers 429 keeps it",
     () =>
       Effect.gen(function* () {
