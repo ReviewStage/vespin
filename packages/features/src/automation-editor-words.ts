@@ -4,7 +4,9 @@
 
 import { SCHEDULE_KIND, type ScheduleKind } from "./automation-draft-model.js";
 import {
+  AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
+  type AutomationTargetKind,
   type AutomationTriggerKind,
   GITHUB_SENDER,
   GITHUB_TRIGGER_EVENT,
@@ -111,6 +113,62 @@ export const GITHUB_SWITCH_WORDS = {
   FORKS_DETAIL: "Its code comes from outside the repository, and the agent can push to it.",
   INCLUDE_PRERELEASES: "Include prereleases",
 } as const;
+
+/** Where a run lands, as the Runs land in picker names them. */
+export const AUTOMATION_TARGETS: readonly EditorChoice<AutomationTargetKind>[] = [
+  { value: AUTOMATION_TARGET.NEW_AGENT, label: "New agent each run" },
+  { value: AUTOMATION_TARGET.SAME_AGENT, label: "Same agent" },
+];
+
+/** The editor's rows and what they say beside or under themselves, the desktop's and the phone's alike. */
+export const AUTOMATION_EDITOR_WORDS = {
+  NEW: "New automation",
+  EDIT: "Edit automation",
+  NAME: "Name",
+  NAME_PLACEHOLDER: "Untitled automation",
+  OWNER: "Owner",
+  PERSONAL_OWNER_DETAIL: "Only you can change it. Owners and admins can see it.",
+  /** Who may change a workspace's automation besides its owners and admins, where the reader made it. */
+  YOU: "You",
+  /** Who may change it, where someone else made it. */
+  ITS_CREATOR: "Its creator",
+  TYPE: "Type",
+  RUNS: "Runs",
+  TIME: "Time",
+  DAY: "Day",
+  DATE: "Date",
+  MINUTES_PAST: "Minutes past the hour",
+  CRON: "Cron",
+  TIME_ZONE: "Time zone",
+  SEARCH_ZONES: "Search time zones",
+  NO_ZONES: "No time zones match",
+  PROMPT_PLACEHOLDER: "Find the flakiest test in CI this week and fix it.",
+  REPOSITORY: "Repository",
+  NO_REPOSITORY: "None",
+  TASK_REPOSITORY: "Its task's repository.",
+  RUNS_LAND_IN: "Runs land in",
+  FIRST_RUN_DETAIL: "Started by its first run. Later runs are sent to it.",
+  AGENT_DETAIL: "Each run is sent to it as a message, on its own model.",
+  MODEL: "Model",
+  EFFORT: "Effort",
+  DEFAULT_MODEL: "Your default model.",
+  MARK_DONE: "Mark finished runs Done",
+  SLACK_RESULT: "Send the result to me on Slack",
+  SAVE: "Save",
+  SAVING: "Saving",
+  CREATE: "Create",
+  CREATING: "Creating",
+} as const;
+
+/** What the Owner row says under itself where the workspace owns it: who sees, runs, and changes it. */
+export function workspaceOwnerDetail(workspaceName: string, changers: string): string {
+  return `Everyone in ${workspaceName} can see and run it. ${changers}, owners, and admins can change it.`;
+}
+
+/** The schedule's next run, as its Runs row says under itself: "Next: Mon, Nov 24 at 9:00 AM". */
+export function nextRunWords(when: string): string {
+  return `Next: ${when}`;
+}
 
 /** The days of the week as cron numbers them, Sunday at 0. */
 export const WEEKDAYS = [

@@ -93,6 +93,7 @@ const SHEET_ROUTE = {
   AGENT_KEY: "agent-key",
   CHATGPT_SIGN_IN: "chatgpt-sign-in",
   VARIABLE_VALUE: "variable-value",
+  AUTOMATION_EDITOR: "automation-editor",
 } as const;
 
 /** The sheets, each drawn on the lifted ground in dark. */
@@ -289,6 +290,11 @@ function GuardedScreens() {
           <Stack.Screen
             name={SHEET_ROUTE.MANAGER_SETTINGS}
             options={{ presentation: sheetPresentation, title: "Manager settings" }}
+          />
+          {/* Note that New automation and an automation's Edit open whole and can't be swiped away while they hold a change not saved (`useKeptWords`), as Edit description stands. */}
+          <Stack.Screen
+            name={SHEET_ROUTE.AUTOMATION_EDITOR}
+            options={{ presentation: sheetPresentation, title: "Automation" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.VARIABLE_VALUE}
