@@ -59,7 +59,7 @@ const ACT_FAILED = {
 const ARCHIVE_AT_REST = { title: archiveStopWords(false).title, act: "Archive agent" } as const;
 
 /** What Archive asks first: its title, what it stops where the agent works, and its act. */
-export interface ArchiveQuestion {
+interface ArchiveQuestion {
   readonly title: string;
   readonly message: string | undefined;
   readonly act: string;

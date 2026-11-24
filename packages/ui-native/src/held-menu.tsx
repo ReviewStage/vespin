@@ -55,7 +55,7 @@ export interface HeldAct {
 }
 
 /** Where a pressed thumbnail stands in the window, in points, which a picture's viewer grows out of. */
-export interface PicturePlace {
+interface PicturePlace {
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -104,7 +104,7 @@ const KeepingDoor = createContext<Keeping | undefined>(undefined);
 const OriginDoor = createContext<PictureOrigin | undefined>(undefined);
 
 /** A thumbnail whose place in the window can be measured, as a React Native view's can. */
-export interface MeasuredThumbnail {
+interface MeasuredThumbnail {
   readonly measureInWindow: (
     done: (x: number, y: number, width: number, height: number) => void,
   ) => void;

@@ -106,10 +106,10 @@ export const WRITE_SUBJECT = {
   AUTOMATION_SWITCH: "automation-switch",
 } as const;
 
-export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];
+type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];
 
 /** One thing a write sets: its kind, and the thread's, task's, or agent's id. */
-export interface WriteSubject {
+interface WriteSubject {
   readonly kind: WriteSubjectKind;
   readonly id: string;
 }

@@ -74,7 +74,7 @@ const SAVE_PAUSE_MS = 1_000;
 export const INLINE_EDIT_MOST_CHARS = 25_000;
 
 /** Where a press on the words as read landed: where its block starts in the Markdown, and how far in from the block's start. */
-export interface PressedAt {
+interface PressedAt {
   readonly at: number;
   readonly x: number;
   readonly y: number;
