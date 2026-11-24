@@ -35,6 +35,7 @@ import {
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { readReplyButton } from "@repo/database/models/reply-buttons";
 import { readRunsOnPick } from "@repo/database/models/runs-on-pick";
+import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import { writePage } from "@repo/database/models/task-pages";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
 import {
@@ -65,6 +66,7 @@ import {
   joinWorkspace,
   leaveWorkspace,
   openHostedStoreTestDatabase,
+  openRunningTurn,
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
@@ -3212,6 +3214,44 @@ test("create_task makes a task in the caller's workspace for the member the agen
     agentSessions.sent.length,
     1,
     "a taskless agent's start naming no task starts nothing",
+  );
+});
+
+test("a Manager's create_task in a turn a teammate opened starts the task for them, assigned to them, its owner following nothing", async () => {
+  const { workspaceId, plans: tasks, agents } = await openWorkspaces();
+  const alice = agents.caller.userId;
+  const bob = agents.teammates.userId;
+  const manager = await agentOn(alice, tasks.invitations);
+
+  await database.run(
+    Effect.gen(function* () {
+      yield* (yield* Database)
+        .update(agentTable)
+        .set({ kind: AGENT_KIND.MANAGER, taskId: null })
+        .where(eq(agentTable.id, manager.id));
+      yield* openRunningTurn(manager, [{ member: bob }]);
+    }),
+  );
+
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), manager, agentSessions.services);
+
+  const made = await call(
+    AGENT_TOOL.CREATE_TASK,
+    { name: "Invite expiry", repository: null, status: TASK_STATUS.TODO },
+    "call-asked",
+  );
+
+  assert.ok(isRecord(made.task) && isWireString(made.task.id), JSON.stringify(made));
+  const stored = Option.getOrThrow(await database.run(readTask(bob, made.task.id)));
+  assert.deepEqual(
+    [stored.ownerId, stored.task.assignee?.userId, stored.task.origin],
+    [bob, bob, { actor: DESCRIPTION_ACTOR.AGENT, agentId: manager.id }],
+  );
+  const followers = Option.getOrThrow(await database.run(listTaskFollowers(bob, made.task.id)));
+  assert.deepEqual(
+    followers.map((each) => each.userId),
+    [bob],
   );
 });
 
