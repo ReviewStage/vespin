@@ -369,7 +369,9 @@ the app's own functions ran and for how long, never the values they handled.
 It sends no other performance traces, and no screenshots or recordings of the
 screen. It sends Sentry nothing while Settings › Account › "Share usage data"
 is off on that iPhone or iPad, a crash as the app starts included, and starts
-again when you turn it back on.
+again when you turn it back on. Once, on the first launch after the update
+that brought this, it may start Sentry for a moment before it has read the
+switch, so a crash or error in that moment can still be reported.
 
 ### Feedback
 
