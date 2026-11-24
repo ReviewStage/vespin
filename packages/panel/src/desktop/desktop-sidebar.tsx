@@ -1,5 +1,4 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
-import type { ListedAgent } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -204,6 +203,7 @@ import { useSubTaskReads } from "../tasks/use-sub-task-reads.js";
 import { useReadMark, useUnreadWatching } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import type { PinnedManager } from "../tasks/workspace-managers.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";
@@ -228,15 +228,11 @@ import { useInboxViewCount } from "./places-waiting.js";
 import { ProductIdentity } from "./product-identity.js";
 import { RowPlaced, useRowMoveKeys } from "./row-moves.js";
 import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-collapse.js";
+import { ownOf, SIDEBAR_ENTRY, type SidebarEntry, SidebarEntryRow } from "./sidebar-entries.js";
 import { type CountNoun, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { SidebarFoot } from "./sidebar-foot.js";
 import { SidebarInboxRow } from "./sidebar-inbox-row.js";
-import {
-  ManagerRows,
-  type PinnedManagers,
-  SidebarManagers,
-  usePinnedManagers,
-} from "./sidebar-managers.js";
+import { SidebarManagers, usePinnedManagers } from "./sidebar-managers.js";
 import {
   type OpenMarks,
   openMarks,
@@ -854,40 +850,59 @@ function TaskRows({
 }
 
 /**
- * One row under Pinned and where its pin stands: a pinned plan, a tab
- * pinned on a listed plan, or an agent pinned on it, drawn as its tab.
+ * One pin under Pinned that stands on a listed plan: the plan pinned, a tab
+ * pinned on it, or an agent pinned on it, drawn as its tab.
  */
-interface PinnedRow {
+interface PinnedOnTask {
   readonly task: TaskSummary;
   readonly pin: SidebarPin | undefined;
-  readonly place: PinPlace;
 }
 
-/** A row under Pinned's key: its plan's id, an agent's drawn as its tab by the agent's, or where a pinned tab's pin stands. */
-function pinnedRowKey(row: PinnedRow): string {
-  const { pin } = row;
+/**
+ * One row under Pinned and where its pin stands: a pin on a listed plan, or
+ * a Manager the reader pinned, in the one order (`sidebar-entries.tsx`).
+ */
+type PinnedRow = SidebarEntry<PinnedOnTask> & { readonly place: PinPlace };
 
-  if (pin === undefined) return row.task.id;
+/** A plan's own pin under Pinned, the plan itself; none for a tab's, an agent's, or a Manager's. */
+function pinnedPlanOf(row: PinnedRow): TaskSummary | undefined {
+  const own = ownOf(row);
+
+  return own === undefined || own.pin !== undefined ? undefined : own.task;
+}
+
+/** A row under Pinned's key: its plan's id, an agent's drawn as its tab or a Manager's by the agent's, or where a pinned tab's pin stands. */
+function pinnedRowKey(row: PinnedRow): string {
+  if (row.kind === SIDEBAR_ENTRY.MANAGER) return row.agent.id;
+  const { pin, task } = row.own;
+
+  if (pin === undefined) return task.id;
 
   return isAgentPin(pin) ? pin.tab.agent : String(pin.at);
 }
 
-/** The tab a row's pin keeps on this Mac; none for a plan's or an agent's, which the account keeps. */
+/** The tab a row's pin keeps on this Mac; none for a plan's, an agent's, or a Manager's, which the account keeps. */
 function localPinOf(row: PinnedRow): PinnedTab | undefined {
-  const { pin } = row;
+  const pin = ownOf(row)?.pin;
 
   return pin === undefined || isAgentPin(pin) ? undefined : pin;
 }
 
-/** The plan or agent a row's pin is on the account; none for a tab's, which this Mac keeps. */
+/** The plan or agent a row's pin is on the account, a Manager's being its agent's; none for a tab's, which this Mac keeps. */
 function accountPinOf(
   row: PinnedRow,
 ): { readonly agent: boolean; readonly id: string } | undefined {
-  const { pin } = row;
+  if (row.kind === SIDEBAR_ENTRY.MANAGER) return { agent: true, id: row.agent.id };
+  const { pin, task } = row.own;
 
-  if (pin === undefined) return { agent: false, id: row.task.id };
+  if (pin === undefined) return { agent: false, id: task.id };
 
   return isAgentPin(pin) ? { agent: true, id: pin.tab.agent } : undefined;
+}
+
+/** A pin on a listed plan as its row under Pinned. */
+function onTaskRow(task: TaskSummary, pin: SidebarPin | undefined, place: PinPlace): PinnedRow {
+  return { kind: SIDEBAR_ENTRY.OWN, own: { task, pin }, place };
 }
 
 /** An agent on a plan the account pinned as its row under Pinned draws it: as its tab in the plan's column, named as the agent is. */
@@ -914,7 +929,8 @@ const placeOf = (row: PinnedRow): PinPlace => row.place;
 /**
  * The rows under Pinned in the order the developer dragged them to, a pin
  * not yet dragged on top, newest pinned first (`pin-order.ts`): the pinned
- * plans, the pinned agents among them, on a plan the list holds, and the
+ * plans, the pinned agents among them, on a plan the list holds, the
+ * Managers the reader pinned (`usePinnedManagers`), and the
  * tabs pinned to the sidebar on plans the list holds. A tab or an agent of an archived or deleted plan is drawn nowhere,
  * its plan being out of the list; nor is a Plan tab an earlier version
  * pinned, which is made its plan's own pin as soon as the list names the
@@ -924,26 +940,27 @@ function pinnedRows(
   pinned: readonly TaskSummary[],
   listed: (taskId: string) => TaskSummary | undefined,
   listedAgent: (agentId: string) => NamedAgentRow | undefined,
+  managers: readonly PinnedManager[],
   tasks: SidebarTasks,
 ): PinnedRow[] {
-  const taskRows = pinned.map(
-    (task): PinnedRow => ({
-      task,
-      pin: undefined,
-      place: { position: task.pinPosition, at: task.pinnedAt ?? 0 },
-    }),
+  const taskRows = pinned.map((task) =>
+    onTaskRow(task, undefined, { position: task.pinPosition, at: task.pinnedAt ?? 0 }),
   );
 
   const taskAgentRows = tasks.taskAgentPins.flatMap((pin): PinnedRow[] => {
-    // Note that an agent pinned on no task, a Manager, is drawn as its own row instead (`PinnedManagers`).
+    // Note that an agent pinned on no task, a Manager, is drawn as its own row, as the Managers section draws it (`managerRows`).
     const task = pin.taskId === null ? undefined : listed(pin.taskId);
     const agent = tasks.agentsCarried ? listedAgent(pin.agentId) : undefined;
 
     if (task === undefined || agent === undefined) return [];
     const drawn = agentPinOf(pin, task, agent, tasks);
 
-    return [{ task, pin: drawn, place: { position: drawn.position, at: drawn.at } }];
+    return [onTaskRow(task, drawn, { position: drawn.position, at: drawn.at })];
   });
+
+  const managerRows = managers.map(
+    ({ agent, place }): PinnedRow => ({ kind: SIDEBAR_ENTRY.MANAGER, agent, place }),
+  );
 
   const tabRows = tasks.sidePanel.pins.flatMap((pin): PinnedRow[] => {
     const place = { position: pin.position, at: pin.at };
@@ -951,10 +968,10 @@ function pinnedRows(
 
     return task === undefined || pin.tab === SIDE_PANEL_TAB.DESCRIPTION
       ? []
-      : [{ task, pin, place }];
+      : [onTaskRow(task, pin, place)];
   });
 
-  return inPinOrder([...taskRows, ...taskAgentRows, ...tabRows], placeOf);
+  return inPinOrder([...taskRows, ...taskAgentRows, ...managerRows, ...tabRows], placeOf);
 }
 
 /**
@@ -1007,12 +1024,12 @@ function pinAt(
   at: number,
   tasks: SidebarTasks,
 ): void {
-  const moving: PinnedRow = { task, pin: undefined, place: { at: Date.now() } };
+  const moving = onTaskRow(task, undefined, { at: Date.now() });
   tasks.onMarkTask(task.id, TASK_MARK.PIN);
   placePins(pinPositionsForInsert(rows, moving, at, placeOf), tasks);
 }
 
-/** Takes a row out of Pinned: a plan's or an agent's pin on the account, a tab's on this Mac. */
+/** Takes a row out of Pinned: a plan's, an agent's, or a Manager's pin on the account, a tab's on this Mac. */
 function unpin(row: PinnedRow, tasks: SidebarTasks): void {
   const local = localPinOf(row);
 
@@ -1033,9 +1050,13 @@ function leaveSection(tasks: SidebarTasks, taskId: string): TaskSectionWrite[] {
   return sectionOfTask(tasks.taskSections, taskId) === undefined ? [] : unplaceAllWrites([taskId]);
 }
 
-/** The rows Pinned holds of its own, which child tasks stand under: its plans, a pinned tab, or an agent drawn as one, being its holder's. */
+/** The rows Pinned holds of its own, which child tasks stand under: its plans, a pinned tab, or an agent drawn as one, being its holder's, and a Manager standing on no plan. */
 function pinnedHeld(rows: readonly PinnedRow[]): TaskSummary[] {
-  return rows.flatMap((row): TaskSummary[] => (row.pin === undefined ? [row.task] : []));
+  return rows.flatMap((row): TaskSummary[] => {
+    const plan = pinnedPlanOf(row);
+
+    return plan === undefined ? [] : [plan];
+  });
 }
 
 /** One row Pinned draws: a pin, with how its child tasks stand under it where it is a task's own, or a child task nested under one. */
@@ -1067,7 +1088,9 @@ function pinnedDrawn(
   const tops = new Map<TaskSummary, PinnedRow>();
 
   for (const pin of rows) {
-    if (pin.pin === undefined) tops.set(pin.task, pin);
+    const plan = pinnedPlanOf(pin);
+
+    if (plan !== undefined) tops.set(plan, pin);
   }
 
   const under = new Map<PinnedRow, PinnedDrawn[]>();
@@ -1094,12 +1117,13 @@ function pinSlot(drawn: readonly PinnedDrawn[], at: number): number {
   return drawn.slice(0, at).filter((each) => each.pin !== undefined).length;
 }
 
-/** The rows of the list walked by ⌥↑ and ⌥↓ that Pinned holds: its plans and their child tasks, a pinned tab, or an agent drawn as one, being its holder's. */
+/** The rows of the list walked by ⌥↑ and ⌥↓ that Pinned holds: its plans and their child tasks, a pinned tab, an agent drawn as one, being its holder's, or a Manager, being no plan's. */
 function pinnedTaskRows(drawn: readonly PinnedDrawn[]): TaskSummary[] {
   return drawn.flatMap(({ pin, held }): TaskSummary[] => {
     if (pin === undefined) return [held.task];
+    const plan = pinnedPlanOf(pin);
 
-    return pin.pin === undefined ? [pin.task] : [];
+    return plan === undefined ? [] : [plan];
   });
 }
 
@@ -1108,13 +1132,14 @@ const NO_PINNED_ROWS: readonly PinnedRow[] = [];
 
 /**
  * Whether a pinned row stands under a folded Pinned: a plan's while it is
- * open, and a tab's while its holder is open and its column shows it, an
+ * open, a Manager's while its page is, and a tab's while its holder is open and its column shows it, an
  * agent's in the task's own column and any other in the side panel, or
  * while it is the pin marked, so a fold never hides the row the sidebar
  * marks.
  */
 function pinnedShown(open: SidebarOpen, row: PinnedRow, marks: OpenMarks): boolean {
-  const { pin, task } = row;
+  if (row.kind === SIDEBAR_ENTRY.MANAGER) return open.tasks.agentView.agentId === row.agent.id;
+  const { pin, task } = row.own;
   const holderOpen = marks.current(open, task.id);
 
   if (pin === undefined) return holderOpen;
@@ -1144,17 +1169,19 @@ function MarkedPinnedTab({
 }
 
 /**
- * The Pinned section's rows, each a plan's, an agent's, or a tab's, a
- * plan's child tasks nested under it. A tab's row is keyed by when it was
- * pinned, which no other pin shares, and a plan's or an agent's by its id.
- * A pin moves among the pins, its child tasks with it, and a child task
- * keeps its place under its parent.
+ * The Pinned section's rows, each a plan's, an agent's, a Manager's, or a
+ * tab's, a plan's child tasks nested under it. A tab's row is keyed by when
+ * it was pinned, which no other pin shares, and a plan's, an agent's, or a
+ * Manager's by its id. A pin moves among the pins, a Manager among them as
+ * any other, its child tasks with it, and a child task keeps its place under
+ * its parent.
  */
 function PinnedRows({
   rows,
   drawn: listed,
   context,
   onOpenTab,
+  onOpenManager,
   movable,
   onDropOut,
 }: {
@@ -1163,6 +1190,8 @@ function PinnedRows({
   drawn: readonly PinnedDrawn[];
   context: RowContext;
   onOpenTab: (pin: SidebarPin) => void;
+  /** Opens a Manager's page. */
+  onOpenManager: (agentId: string) => void;
   /** Whether a row is dragged to another place among them, which a fold drawing only some of them forbids. */
   movable: boolean;
   /** Hears a row let go over a section or Tasks, while the account keeps sections; none while it does not. */
@@ -1227,6 +1256,7 @@ function PinnedRows({
   };
 
   const nests = nestsOf(drawn.map(({ value }) => depthOf(value)));
+  const rowsShown = context.tasks.shown && context.inSight;
 
   return (
     // An open Pinned keeps an order a row carried in lands at a place in; a folded one draws only some of its rows, so a drop lands on top.
@@ -1269,35 +1299,43 @@ function PinnedRows({
           );
         }
 
-        const { task, pin } = row;
-
         return (
           <RowPlaced key={key} place={placeOf(key)}>
-            {pin === undefined ? (
-              <SidebarTask
-                tasks={context.tasks}
-                task={task}
-                marks={context.marks}
-                now={context.now}
-                nest={nest}
-                place={place}
-                fold={held === undefined ? undefined : childTasksFold(held, context.onFoldTask)}
-                childCount={context.childCount(task.id)}
-                onOpen={() => context.onOpen(task.id)}
-              />
-            ) : (
-              <MarkedPinnedTab
-                pin={pin}
-                on={{ task }}
-                nest={nest}
-                place={place}
-                marks={context.marks}
-                inSight={context.inSight}
-                onOpen={() => onOpenTab(pin)}
-                onOpenHolder={() => context.onOpen(task.id)}
-                onUnpin={() => unpin(row, context.tasks)}
-              />
-            )}
+            <SidebarEntryRow
+              entry={row}
+              tasks={context.tasks}
+              shown={rowsShown}
+              place={place}
+              nest={nest}
+              onOpenManager={onOpenManager}
+              own={({ task, pin }) =>
+                pin === undefined ? (
+                  <SidebarTask
+                    tasks={context.tasks}
+                    task={task}
+                    marks={context.marks}
+                    now={context.now}
+                    nest={nest}
+                    place={place}
+                    fold={held === undefined ? undefined : childTasksFold(held, context.onFoldTask)}
+                    childCount={context.childCount(task.id)}
+                    onOpen={() => context.onOpen(task.id)}
+                  />
+                ) : (
+                  <MarkedPinnedTab
+                    pin={pin}
+                    on={{ task }}
+                    nest={nest}
+                    place={place}
+                    marks={context.marks}
+                    inSight={context.inSight}
+                    onOpen={() => onOpenTab(pin)}
+                    onOpenHolder={() => context.onOpen(task.id)}
+                    onUnpin={() => unpin(row, context.tasks)}
+                  />
+                )
+              }
+            />
           </RowPlaced>
         );
       }}
@@ -1324,14 +1362,14 @@ function PinnedRows({
  * group's is (`sidebarHead`), led by the pin Pin draws, and offers, from its
  * ⋯ and a right-click alike, Mark all as read while a pinned task is unread;
  * it offers no menu while none is, and no Move up or down, since Pinned is
- * the one of its kind. The Managers the reader pinned stand on top, as the
- * Managers section draws them (`ManagerRows`), in their pins' order, and
- * are counted among the pins; a drag moves none of them, since they stand
- * in a list of agents' rows of their own.
+ * the one of its kind. The Managers the reader pinned stand among the pins,
+ * each where its pin stands, as the Managers section draws them
+ * (`SidebarManagerRow`), counted among the pins and dragged among them as
+ * any pin is, a Manager's place kept on its agent's pin as a pinned agent's
+ * is; carried out onto Tasks, one is unpinned.
  */
 function PinnedSection({
   rows,
-  managers,
   onOpenManager,
   adopted,
   folds,
@@ -1341,8 +1379,6 @@ function PinnedSection({
   carried,
 }: {
   rows: readonly PinnedRow[];
-  /** The Managers the reader pinned (`usePinnedManagers`). */
-  managers: PinnedManagers;
   /** Opens a Manager's page. */
   onOpenManager: (agentId: string) => void;
   /** The child tasks standing under its plans (`homedTaskRows`). */
@@ -1375,28 +1411,15 @@ function PinnedSection({
     context.every,
   );
 
-  const pinnedManagers = managers.managers;
-  const openManagerId = context.tasks.agentView.agentId;
-  const standingManagers = pinnedManagers.filter((agent) => agent.id === openManagerId);
-  const empty = rows.length === 0 && pinnedManagers.length === 0;
-  const rowsShown = context.tasks.shown && context.inSight;
-
-  const managerRows = (drawn: readonly ListedAgent[]) =>
-    drawn.length === 0 ? null : (
-      <ManagerRows
-        managers={drawn}
-        tasks={context.tasks}
-        shown={rowsShown}
-        onOpen={onOpenManager}
-      />
-    );
+  const empty = rows.length === 0;
 
   const menu = useMenu(context.tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
 
   const actionGroups = markAllReadGroups(
-    useUnreadAmong(pinnedTasksOf(rows), context.marks),
+    // The tasks it marks read are the pinned plans, a pinned tab's task aside, since its row is the tab's.
+    useUnreadAmong(pinnedHeld(rows), context.marks),
     markRead,
   );
 
@@ -1414,7 +1437,7 @@ function PinnedSection({
             : {
                 folded,
                 onToggle: folds.togglePinned,
-                count: rows.length + pinnedManagers.length,
+                count: rows.length,
                 noun: PIN_NOUN,
               },
         )}
@@ -1433,25 +1456,20 @@ function PinnedSection({
           )
         }
         standing={
-          standing.length === 0 && standingManagers.length === 0 ? undefined : (
-            <>
-              {managerRows(standingManagers)}
-              {standing.length === 0 ? null : (
-                <PinnedRows
-                  rows={shown}
-                  drawn={standing}
-                  context={context}
-                  onOpenTab={onOpenTab}
-                  movable={false}
-                  onDropOut={onDropOut}
-                />
-              )}
-            </>
+          standing.length === 0 ? undefined : (
+            <PinnedRows
+              rows={shown}
+              drawn={standing}
+              context={context}
+              onOpenTab={onOpenTab}
+              onOpenManager={onOpenManager}
+              movable={false}
+              onDropOut={onDropOut}
+            />
           )
         }
       >
-        {managerRows(pinnedManagers)}
-        {rows.length === 0 ? (
+        {empty ? (
           carried && <DropSlot />
         ) : (
           <PinnedRows
@@ -1459,6 +1477,7 @@ function PinnedSection({
             drawn={drawn}
             context={context}
             onOpenTab={onOpenTab}
+            onOpenManager={onOpenManager}
             movable
             onDropOut={onDropOut}
           />
@@ -1564,11 +1583,6 @@ function markAllReadGroups(
   };
 
   return [[read]];
-}
-
-/** The tasks Pinned's actions mark read, offered alike from its ⋯ and a right-click on its head (`markAllReadGroups`): the pinned tasks, a pinned tab's task aside, since its row is the tab's. */
-function pinnedTasksOf(rows: readonly PinnedRow[]): TaskSummary[] {
-  return rows.flatMap((row) => (row.pin === undefined ? [row.task] : []));
 }
 
 /**
@@ -2549,8 +2563,16 @@ function SidebarColumn({
   // Note that while the view shows finished sub-tasks, those a parent's count names that the list holds not are read into it.
   useSubTaskReads(listedTasks.unheldSubTasks, taskView.view.finishedSubTasks && tasks.listRead);
   // Note that a pinned agent is read by its id alone (`useTaskListRows`), so a step of any other agent's turn draws the sidebar nothing.
-  const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, rows.agent, tasks);
   const pinnedManagers = usePinnedManagers(tasks, tasks.taskAgentPins);
+
+  const pinnedSection = pinnedRows(
+    listedTasks.pinned,
+    listedTasks.task,
+    rows.agent,
+    pinnedManagers,
+    tasks,
+  );
+
   // The pin the open task was opened from is marked in its task's place,
   // whichever of the task's tabs is shown, while its row still stands and its holder is open.
   const { chosenPin } = tasks;
@@ -2558,7 +2580,9 @@ function SidebarColumn({
   const chosenRow =
     chosenPin === undefined
       ? undefined
-      : pinnedSection.find((row) => row.pin !== undefined && samePin(row.pin, chosenPin));
+      : pinnedSection
+          .map(ownOf)
+          .find((own) => own?.pin !== undefined && samePin(own.pin, chosenPin));
 
   const chosenMark = chosenRow?.pin;
   const chosenHolder = chosenRow?.task.id;
@@ -2653,9 +2677,9 @@ function SidebarColumn({
     );
   };
 
-  // A tab pinned to the sidebar is no task, so it goes into no section, though Tasks unpins it as any pin.
+  // A tab pinned to the sidebar is no task, nor is a Manager, so neither goes into a section, though Tasks unpins it as any pin.
   const dropPinned = (row: PinnedRow, zone: string, at: number) => {
-    const taskId = row.pin !== undefined ? undefined : row.task.id;
+    const taskId = pinnedPlanOf(row)?.id;
 
     if (zone === TASKS_DROP_ZONE) {
       unpin(row, tasks);
@@ -2844,7 +2868,13 @@ function SidebarColumn({
     listedTasks.unpinned,
   ]);
 
-  const pinnedTasks = useSteadyList(pinnedSection.map((pin) => pin.task));
+  const pinnedTasks = useSteadyList(
+    pinnedSection.flatMap((pin) => {
+      const own = ownOf(pin);
+
+      return own === undefined ? [] : [own.task];
+    }),
+  );
 
   // The tasks are chosen together across Pinned, the sections, and Tasks, only those the view draws staying chosen, a child task homed nowhere among those it does not.
   const choosable = useMemo(
@@ -3107,10 +3137,7 @@ function SidebarColumn({
                     {/* Pinned stands once something is pinned, or, while the account keeps sections, as the place a carried row drops in, and leaves after its exit once neither holds. */}
                     <LeavingGroups
                       groups={
-                        tasks.signedIn &&
-                        (pinnedSection.length > 0 ||
-                          pinnedManagers.managers.length > 0 ||
-                          (sectionsShown && carrying))
+                        tasks.signedIn && (pinnedSection.length > 0 || (sectionsShown && carrying))
                           ? PINNED_LISTED
                           : NOTHING_LISTED
                       }
@@ -3119,7 +3146,6 @@ function SidebarColumn({
                         <PinnedSection
                           key={key}
                           rows={pinnedSection}
-                          managers={pinnedManagers}
                           onOpenManager={chosen(openManager)}
                           adopted={pinnedAdopted}
                           folds={folds}

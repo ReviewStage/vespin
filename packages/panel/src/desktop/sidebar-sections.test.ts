@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { AGENT_KIND, AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import {
   TASK_SECTION_ICON_COLOR,
   TASK_SECTION_ICON_KIND,
@@ -15,6 +16,7 @@ import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { type PinMove, TASK_MARK, type TaskMark } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -1890,6 +1892,54 @@ test("under a finger, a pin held offers Move down, which moves it below the next
     [PINNED.id],
   );
   assert.ok((asked.moves[0]?.position ?? "") > SECOND_PIN.pinPosition, "it sorts after Pin review");
+});
+
+/** A Manager the reader pinned, as the live task list carries it, pinned after both pins and never dragged. */
+const PINNED_MANAGER: ListedAgent = {
+  id: "0a1b2c3d-0000-4000-8000-00000000000a",
+  taskId: null,
+  workspaceId: WORKSPACE.id,
+  repository: "acme/relay",
+  model: "anthropic/claude-opus-5.5",
+  effort: "high",
+  title: "Relay Manager",
+  kind: AGENT_KIND.MANAGER,
+  createdAt: 1,
+  status: AGENT_STATUS.COMPLETED,
+  turnId: null,
+  settledAt: 2,
+};
+
+test("a pinned Manager stands among the pinned tasks, and dragged between two of them is given a place between theirs on its agent's pin", async () => {
+  handState({ [EXPERIMENT.MANAGERS]: true });
+  const asked = noneAsked();
+
+  const sidebar = await mountDraggable([PINNED, SECOND_PIN], SECTIONS, asked, {
+    listedAgents: [PINNED_MANAGER],
+  });
+
+  writeListedTasks({
+    taskSections: SECTIONS,
+    taskAgentPins: [{ agentId: PINNED_MANAGER.id, taskId: null, pinnedAt: 6 }],
+  });
+  await settle();
+  layOutRows();
+
+  const pins = pinnedGroup(sidebar) ?? assert.fail("Pinned stands");
+
+  // Pinned last, holding no place of its own, the Manager stands on top, above Pin audit and Pin review.
+  assert.deepEqual(namesIn(sidebar, "Pinned"), ["Relay Manager", "Pin audit", "Pin review"]);
+
+  drag(pins, "Relay Manager", ROW_HEIGHT + ROW_HEIGHT / 2);
+  await settle();
+
+  assert.deepEqual(
+    asked.moves.map(({ agent, id }) => ({ agent, id })),
+    [{ agent: true, id: PINNED_MANAGER.id }],
+  );
+
+  const position = asked.moves[0]?.position ?? "";
+  assert.ok(position > PINNED.pinPosition && position < SECOND_PIN.pinPosition, position);
 });
 
 test("with a mouse, a pin's menu offers its move too, with its chord", async () => {
