@@ -2,13 +2,12 @@
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { selectTaskListDrawn } from "@repo/host/app-state-reads";
 import type { AppBridge } from "@repo/host/bridge";
 import type { ActPortClient } from "@repo/host/contract";
 import type { TaskListCollections } from "@repo/host/task-list-following";
 import { listenToRow } from "@repo/host/task-list-row-readers";
 import { type Collection, useLiveQuery } from "@tanstack/react-db";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Effect } from "effect";
 import Constants from "expo-constants";
 import { useIsFocused } from "expo-router";
@@ -32,7 +31,7 @@ import {
 } from "../launch-phases.js";
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
-import { appStateQuery, followAppStateInto } from "./app-state-query.js";
+import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot, onNetworkChanged } from "./device-seams.js";
 import {
   launchFixtureProfile,
@@ -217,22 +216,21 @@ export function useTaskListRowsOf<Row extends object>(
 const NOT_READ: readonly never[] = [];
 
 /**
- * Whether a place reads the task list whole: once the tab it stands on is
- * in front, or once the host says the rows the list stood with are drawn
- * (`selectTaskListDrawn`), and from then on. Note that every tab mounts at
- * launch, so a tab standing behind that read the list whole as it landed
- * took each of an account's thousands of rows through its sorted reads as
- * it moved, several times the work of reading them once drawn, on the JS
- * thread the Inbox draws on. A read begun holds every row in its first
- * render, so a tab brought forward draws its rows at once.
+ * Whether a place reads the task list whole: once the tab it stands on has
+ * come in front, and from then on. Note that every tab mounts at launch, so
+ * a tab standing behind that read the list whole took each of an account's
+ * thousands of rows through its sorted reads as they landed, and a first
+ * read of all of them as they were drawn, both on the JS thread the Inbox
+ * draws on in the launch's first seconds; behind, it reads nothing until
+ * it is first brought forward. A read begun holds every row in its first
+ * render, and stays, so a page pushed over the tab, or the tab left, never
+ * drops what it read only to read it again.
  */
 export function useWholeListRead(): boolean {
   const inFront = useIsFocused();
-  const { data: drawn = false } = useQuery({ ...appStateQuery, select: selectTaskListDrawn });
   const [begun, begin] = useState(false);
-  const reading = begun || inFront || drawn;
+  const reading = begun || inFront;
 
-  // Note that a read once begun stays, so a page pushed over the tab, or the tab left, never drops what it read only to read it again.
   useEffect(() => {
     if (reading) begin(true);
   }, [reading]);

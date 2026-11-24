@@ -306,10 +306,6 @@ export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.lis
 export const selectTaskListListed = (state: AppStateSnapshot): boolean =>
   state.tasks.listed === true;
 
-/** Whether every row the task list stood with is drawn, its kept agents included, which a place standing behind waits on before it reads the list whole. */
-export const selectTaskListDrawn = (state: AppStateSnapshot): boolean =>
-  state.tasks.listDrawn === true;
-
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;
 
