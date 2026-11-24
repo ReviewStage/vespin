@@ -21,6 +21,7 @@ import {
   frame,
   gaugeStyle,
   lineLimit,
+  type ModifierConfig,
   monospacedDigit,
   offset,
   opacity,
@@ -119,11 +120,14 @@ export function ToneGlyph({
   tone,
   textStyle = TYPE_ROLE.TIME,
   hidden = false,
+  modifiers = [],
 }: {
   readonly glyph: Glyph;
   readonly tone: StatusTone;
   readonly textStyle?: (typeof TYPE_ROLE)[keyof typeof TYPE_ROLE];
   readonly hidden?: boolean;
+  /** What the mark stands in beyond its own look, such as a row's measure of it, so it takes no view around it. */
+  readonly modifiers?: readonly ModifierConfig[] | undefined;
 }) {
   const colors = useColors();
 
@@ -131,7 +135,7 @@ export function ToneGlyph({
     <Image
       {...glyphImage(glyph)}
       color={toneColor(colors, tone)}
-      modifiers={[font({ textStyle }), ...(hidden ? [accessibilityHidden()] : [])]}
+      modifiers={[font({ textStyle }), ...(hidden ? [accessibilityHidden()] : []), ...modifiers]}
     />
   );
 }
@@ -144,8 +148,11 @@ export function ToneGlyph({
  */
 export const TaskStatusMark = memo(function TaskStatusMark({
   status,
+  modifiers = [],
 }: {
   readonly status: TaskStatus;
+  /** What the mark stands in beyond its own look, such as the menu a task's ring opens (`StatusRing`), so it takes no view around it. */
+  readonly modifiers?: readonly ModifierConfig[] | undefined;
 }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
@@ -155,7 +162,7 @@ export const TaskStatusMark = memo(function TaskStatusMark({
       {...glyphImage(STATUS_MARK_SYMBOL[status])}
       size={size}
       color={toneColor(colors, TASK_STATUS_TONE[status])}
-      modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
+      modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status]), ...modifiers]}
     />
   );
 });
@@ -609,7 +616,12 @@ export function NeedsYouDot() {
 }
 
 /** The mark a failed agent's row, or its task's, ends with: the filled alert in the danger ink, heard as Failed. */
-export function FailedMark() {
+export function FailedMark({
+  modifiers = [],
+}: {
+  /** What the mark stands in beyond its own look, such as a row's measure of it, so it takes no view around it. */
+  readonly modifiers?: readonly ModifierConfig[] | undefined;
+} = {}) {
   const colors = useColors();
 
   return (
@@ -619,6 +631,7 @@ export function FailedMark() {
       modifiers={[
         font({ textStyle: TYPE_ROLE.TIME }),
         accessibilityLabel(GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]),
+        ...modifiers,
       ]}
     />
   );
@@ -650,9 +663,12 @@ function useBeat(still: boolean): number {
  */
 export function WorkingMark({
   side: given,
+  modifiers = [],
 }: {
   /** Its side, in points, such as inside a Manager's face's disc; the 16 pt mark at the reader's text size where none is given. */
   readonly side?: number | undefined;
+  /** What the mark stands in beyond its own look, such as a row's measure of it, so it takes no view around it. */
+  readonly modifiers?: readonly ModifierConfig[] | undefined;
 } = {}) {
   const colors = useColors();
   const scaled = useScaledSize(WORKING_SIDE);
@@ -687,6 +703,7 @@ export function WorkingMark({
       modifiers={[
         frame({ width: side, height: side, alignment: "topLeading" }),
         accessibilityLabel(GLYPH_STATE_WORDS[GLYPH_STATE.WORKING]),
+        ...modifiers,
       ]}
     >
       {WORKING_TRACK.map((_, index) => square(index, WORKING_OPACITY.TRACK, `track-${index}`))}
@@ -721,15 +738,18 @@ export function subTasksHeard(done: number, total: number): string {
 export function SubTaskProgress({
   done,
   total,
+  modifiers = [],
 }: {
   readonly done: number;
   readonly total: number;
+  /** What the mark stands in beyond its own look, such as a row's measure of it, so it takes no view around it. */
+  readonly modifiers?: readonly ModifierConfig[] | undefined;
 }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH - 2);
 
   return (
-    <HStack spacing={SPACE.TIGHT} modifiers={[accessibilityHidden(true)]}>
+    <HStack spacing={SPACE.TIGHT} modifiers={[accessibilityHidden(true), ...modifiers]}>
       <Gauge
         value={total > 0 ? done / total : 0}
         modifiers={[

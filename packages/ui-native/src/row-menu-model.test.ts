@@ -15,6 +15,7 @@ import {
   menuTree,
   ROW_ACTION_TONE,
   type RowAction,
+  submenuOwnMenu,
 } from "./row-menu-model.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
@@ -192,6 +193,44 @@ describe("menuTree", () => {
       "Garden",
       "Permanently delete",
     ]);
+  });
+});
+
+describe("submenuOwnMenu", () => {
+  it("stands a status ring's choices as a menu of their own, checked where they stand, and presses the one at each place", () => {
+    const pressed: string[] = [];
+
+    const status = {
+      label: "Status",
+      symbol: GLYPH.STATUS,
+      choices: [
+        { label: "Todo", on: false, onPress: () => pressed.push("Todo") },
+        { label: "In progress", on: true, onPress: () => pressed.push("In progress") },
+        { label: "Done", on: false, onPress: () => pressed.push("Done") },
+      ],
+    };
+
+    const own = submenuOwnMenu(status, INKS);
+
+    expect(JSON.parse(own.tree)).toEqual({
+      groups: [
+        [
+          { kind: MENU_NODE.CHOICE, label: "Todo", on: false, heard: "Status: Todo" },
+          { kind: MENU_NODE.CHOICE, label: "In progress", on: true, heard: "Status: In progress" },
+          { kind: MENU_NODE.CHOICE, label: "Done", on: false, heard: "Status: Done" },
+        ],
+      ],
+    });
+
+    // Note that a place outside its one group presses nothing.
+    for (const place of [
+      [0, 2],
+      [0, 0],
+      [1, 0],
+    ])
+      own.pressAt(place)?.();
+
+    expect(pressed).toEqual(["Done", "Todo"]);
   });
 });
 

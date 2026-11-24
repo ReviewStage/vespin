@@ -518,8 +518,6 @@ function submenuNode(
   ink: string,
   path: readonly string[] = [],
 ): MenuNode {
-  const within = [...path, submenu.label];
-
   return {
     kind: MENU_NODE.MENU,
     label: submenu.label,
@@ -528,22 +526,32 @@ function submenuNode(
         ? glyphIcon(submenu.symbol)
         : { kind: MENU_ICON.MARK, asset: submenu.picture },
     tint: ink,
-    nodes: [
-      ...submenu.choices.map(
-        (choice): MenuNode => ({
-          kind: MENU_NODE.CHOICE,
-          label: choice.label,
-          // Note that a choice led by an integration's mark or an emoji says nothing under its words, as `markContent` and `emojiContent` drew it.
-          detail: saysUnder(choice) ? choice.detail : undefined,
-          icon: choiceIcon(choice, inks),
-          on: choice.on,
-          heard: heard(choice, within),
-        }),
-      ),
-      ...(submenu.submenus ?? []).map((inner) => submenuNode(inner, inks, ink, within)),
-      ...(submenu.actions ?? []).map((action) => actNode(action, inks.act, true, within)),
-    ],
+    nodes: submenuNodes(submenu, inks, ink, [...path, submenu.label]),
   };
+}
+
+/** A submenu's items as nodes, in `submenuItems`' order: its choices, each checked where it stands, its menus within, and its acts. */
+function submenuNodes(
+  submenu: RowSubmenu,
+  inks: MenuInks,
+  ink: string,
+  within: readonly string[],
+): readonly MenuNode[] {
+  return [
+    ...submenu.choices.map(
+      (choice): MenuNode => ({
+        kind: MENU_NODE.CHOICE,
+        label: choice.label,
+        // Note that a choice led by an integration's mark or an emoji says nothing under its words, as `markContent` and `emojiContent` drew it.
+        detail: saysUnder(choice) ? choice.detail : undefined,
+        icon: choiceIcon(choice, inks),
+        on: choice.on,
+        heard: heard(choice, within),
+      }),
+    ),
+    ...(submenu.submenus ?? []).map((inner) => submenuNode(inner, inks, ink, within)),
+    ...(submenu.actions ?? []).map((action) => actNode(action, inks.act, true, within)),
+  ];
 }
 
 /** The groups a long press menu draws, those holding something, in its order; a press's place counts among these alone. */
@@ -623,6 +631,27 @@ export function pressAt(
   const items = list === undefined ? undefined : lists[list];
 
   return items === undefined ? undefined : itemPressAt(items, rest);
+}
+
+/** A submenu's own menu: its tree, and the press each place in it names. */
+interface SubmenuOwnMenu {
+  readonly tree: string;
+  readonly pressAt: (path: readonly number[]) => (() => void) | undefined;
+}
+
+/**
+ * A submenu's own items standing as a menu of their own, as a task's status
+ * ring opens its choices on a tap: the tree the native module builds it from
+ * (`headerMenu`), its items in one group as a long press menu's submenu holds
+ * them, each choice checked where it stands, and the press of the place the
+ * module hands back.
+ */
+export function submenuOwnMenu(submenu: RowSubmenu, inks: MenuInks): SubmenuOwnMenu {
+  return {
+    tree: JSON.stringify({ groups: [submenuNodes(submenu, inks, inks.act, [submenu.label])] }),
+    pressAt: ([group, ...rest]) =>
+      group === 0 ? itemPressAt(submenuItems(submenu), rest) : undefined,
+  };
 }
 
 /** The press a place in a long press menu names, its group counted among those holding something, as `menuTree` stands them. */

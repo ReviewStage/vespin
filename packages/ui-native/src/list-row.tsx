@@ -6,10 +6,8 @@ import {
   HStack,
   Image,
   Label,
-  Menu,
   Spacer,
   Text,
-  Toggle,
   VStack,
   ZStack,
 } from "@expo/ui/swift-ui";
@@ -63,7 +61,14 @@ import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { LookIcon, menuActContent } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { cellFocusRingOff, dragLink, rowHeard, rowMenu, rowSwipes } from "./interactions.js";
+import {
+  cellFocusRingOff,
+  dragLink,
+  headerMenu,
+  rowHeard,
+  rowMenu,
+  rowSwipes,
+} from "./interactions.js";
 import { type RowInset, useRowInset } from "./layout-margin.js";
 import {
   Avatar,
@@ -98,6 +103,7 @@ import {
   type RowSubmenu,
   type RowSwipe,
   saysUnder,
+  submenuOwnMenu,
   swipeTree,
 } from "./row-menu-model.js";
 import {
@@ -762,6 +768,7 @@ export function RowHead({
   end,
   trail,
   fit,
+  indent = 0,
 }: {
   /** Whether the unread dot stands in the margin; a task's row draws none, its unread name standing in semibold alone, as the panel's task rows do. */
   readonly dot?: boolean | undefined;
@@ -782,6 +789,8 @@ export function RowHead({
   readonly trail?: ReactNode;
   /** Where given, what the title's whole width and its room on the line are told to, so the row can let marks of its end go before the title is cut. */
   readonly fit?: TitleFit | undefined;
+  /** How far the line stands in from its leading edge, as a sub-task's row stands under its parent; its own padding, so it takes no view around it. */
+  readonly indent?: number | undefined;
 }) {
   const lines = useRowLines();
   const stacked = useAccessibilitySize();
@@ -817,17 +826,19 @@ export function RowHead({
       >
         <ZStack alignment="leading">
           {words}
-          <HStack modifiers={[frame({ width: 0, height: 0 }), hidden(), accessibilityHidden(true)]}>
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
-                fixedSize(),
-                onGeometryChange(({ width }) => fit.onName(width)),
-              ]}
-            >
-              {title}
-            </Text>
-          </HStack>
+          {/* Note that the copy is measured at its own whole width before it stands in no room at all, so it takes none on the line and needs no view around it. */}
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
+              fixedSize(),
+              onGeometryChange(({ width }) => fit.onName(width)),
+              frame({ width: 0, height: 0 }),
+              hidden(),
+              accessibilityHidden(true),
+            ]}
+          >
+            {title}
+          </Text>
         </ZStack>
         <Spacer minLength={SPACE.ROW} />
       </HStack>
@@ -835,7 +846,11 @@ export function RowHead({
 
   // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line, and the dot stands on the title's first line rather than centered on the whole stack.
   const line = (
-    <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+    <HStack
+      spacing={SPACE.ROW}
+      alignment={stacked ? "top" : "center"}
+      modifiers={indent === 0 || dot ? [] : [padding({ leading: indent })]}
+    >
       {/* Note that the fold and the marks stand centered on each other, so the chevron sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
       <HStack spacing={SPACE.ROW} alignment="center">
         {fold}
@@ -862,7 +877,11 @@ export function RowHead({
   if (!dot) return line;
 
   return (
-    <HStack spacing={ROW_INSET.GUTTER} alignment={stacked ? "firstTextBaseline" : "center"}>
+    <HStack
+      spacing={ROW_INSET.GUTTER}
+      alignment={stacked ? "firstTextBaseline" : "center"}
+      modifiers={indent === 0 ? [] : [padding({ leading: indent })]}
+    >
       <UnreadDot unread={unread} faded={faded} />
       {line}
     </HStack>
@@ -1258,16 +1277,22 @@ function useSparedMarks(id: string, spared: readonly SparedMark[]): SparedMarks 
 }
 
 /** What a task's agents say on its row, as the panel's sidebar row says it in one mark: a failed agent, one at work, or its pull request's state. */
-function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
+function TaskAgentsMark({
+  agents,
+  modifiers,
+}: Pick<TaskRowProps, "agents"> & {
+  /** What the mark stands in beyond its own look, such as the row's measure of it, so it takes no view around it. */
+  readonly modifiers?: readonly ModifierConfig[] | undefined;
+}) {
   switch (agents?.kind) {
     case TASK_AGENTS_STATUS.FAILED:
-      return <FailedMark />;
+      return <FailedMark modifiers={modifiers} />;
     case TASK_AGENTS_STATUS.WORKING:
-      return <WorkingMark />;
+      return <WorkingMark modifiers={modifiers} />;
     case TASK_AGENTS_STATUS.PULL_REQUEST: {
       const pull = PULL_REQUEST_LOOK[pullRequestMarkState(agents.pullRequest)];
 
-      return <ToneGlyph glyph={pull.symbol} tone={pull.tone} />;
+      return <ToneGlyph glyph={pull.symbol} tone={pull.tone} modifiers={modifiers} />;
     }
 
     case TASK_AGENTS_STATUS.NONE:
@@ -1428,19 +1453,19 @@ export function StatusRing({
     vertical: (target - lead) / 2,
   };
 
+  // Note that the menu is built natively from its tree as it opens (`headerMenu`), so a list's rings hold no views of menus nobody opened: each ring's choices once stood as a toggle each under its own menu, created with every row.
+  const own = submenuOwnMenu(menu, {
+    act: colors.TEXT_MUTED,
+    tone: (tone) => toneColor(colors, tone),
+  });
+
   return (
-    <Menu
-      label={
-        <HStack
-          modifiers={[
-            frame({ width: lead + reach.leading + reach.trailing, height: target }),
-            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-          ]}
-        >
-          <TaskStatusMark status={status} />
-        </HStack>
-      }
+    <TaskStatusMark
+      status={status}
       modifiers={[
+        frame({ width: lead + reach.leading + reach.trailing, height: target }),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        headerMenu(own.tree, (path) => own.pressAt(path)?.(), undefined),
         menuStyle("button"),
         buttonStyle("borderless"),
         menuIndicator("hidden"),
@@ -1453,16 +1478,7 @@ export function StatusRing({
         }),
         zIndex(1),
       ]}
-    >
-      {menu.choices.map((choice) => (
-        <Toggle
-          key={choice.label}
-          {...choiceContent(choice, colors)}
-          isOn={choice.on}
-          onIsOnChange={() => choice.onPress()}
-        />
-      ))}
-    </Menu>
+    />
   );
 }
 
@@ -1524,71 +1540,69 @@ export function TaskRow(props: TaskRowProps) {
   ]);
 
   const row: ReactElement = (
-    <HStack modifiers={[padding({ leading: depth * column })]}>
-      <RowHead
-        dot={false}
-        unread={unread}
-        faded={finished}
-        lead={
-          props.manager === undefined ? (
-            <StatusRing status={props.status} menu={props.statusMenu} edge={inset.lead} />
-          ) : (
-            <ManagerFace face={props.manager.face} size={lead} working={props.manager.working} />
-          )
-        }
-        title={name}
-        ink={titleInk(colors, unread, finished)}
-        fit={spared.fit}
-        end={
-          <HStack spacing={END_GAP}>
-            {props.blocked === true ? (
-              <ToneGlyph glyph={GLYPH.BLOCKED_BY} tone={STATUS_TONE.NEUTRAL} hidden />
-            ) : null}
-            {props.needsYou === true ? <NeedsYouDot /> : null}
-            {props.subTasks === undefined || spared.aside.has(SPARED_MARK.SUB_TASKS) ? null : (
-              <HStack
-                modifiers={[
-                  onGeometryChange(({ width }) => spared.measured(SPARED_MARK.SUB_TASKS)(width)),
-                ]}
-              >
-                <SubTaskProgress done={props.subTasks.finished} total={props.subTasks.total} />
-              </HStack>
-            )}
-            {!agentsMarked || spared.aside.has(SPARED_MARK.AGENTS) ? null : (
-              <HStack
-                modifiers={[
-                  onGeometryChange(({ width }) => spared.measured(SPARED_MARK.AGENTS)(width)),
-                ]}
-              >
-                <TaskAgentsMark agents={props.agents} />
-              </HStack>
-            )}
-            {props.assignee === undefined ? null : (
-              <Avatar
-                name={props.assignee.name}
-                id={props.assignee.id}
-                picture={props.assignee.picture}
-                size={MARK_SIZE.FACE}
-              />
-            )}
-            {props.unassigned === true ? <UnassignedMark size={MARK_SIZE.FACE} /> : null}
-            {props.at === undefined ? null : <RowTime at={props.at} now={minute} />}
-            {taskKey === undefined ? null : (
-              <Text
-                modifiers={[
-                  font({ textStyle: TYPE_ROLE.TIME }),
-                  monospacedDigit(),
-                  foregroundStyle(colors.TEXT_MUTED),
-                  fixedSize(),
-                ]}
-              >
-                {taskKey}
-              </Text>
-            )}
-          </HStack>
-        }
-      />
-    </HStack>
+    <RowHead
+      indent={depth * column}
+      dot={false}
+      unread={unread}
+      faded={finished}
+      lead={
+        props.manager === undefined ? (
+          <StatusRing status={props.status} menu={props.statusMenu} edge={inset.lead} />
+        ) : (
+          <ManagerFace face={props.manager.face} size={lead} working={props.manager.working} />
+        )
+      }
+      title={name}
+      ink={titleInk(colors, unread, finished)}
+      fit={spared.fit}
+      end={
+        <HStack spacing={END_GAP}>
+          {props.blocked === true ? (
+            <ToneGlyph glyph={GLYPH.BLOCKED_BY} tone={STATUS_TONE.NEUTRAL} hidden />
+          ) : null}
+          {props.needsYou === true ? <NeedsYouDot /> : null}
+          {props.subTasks === undefined || spared.aside.has(SPARED_MARK.SUB_TASKS) ? null : (
+            <SubTaskProgress
+              done={props.subTasks.finished}
+              total={props.subTasks.total}
+              modifiers={[
+                onGeometryChange(({ width }) => spared.measured(SPARED_MARK.SUB_TASKS)(width)),
+              ]}
+            />
+          )}
+          {!agentsMarked || spared.aside.has(SPARED_MARK.AGENTS) ? null : (
+            <TaskAgentsMark
+              agents={props.agents}
+              modifiers={[
+                onGeometryChange(({ width }) => spared.measured(SPARED_MARK.AGENTS)(width)),
+              ]}
+            />
+          )}
+          {props.assignee === undefined ? null : (
+            <Avatar
+              name={props.assignee.name}
+              id={props.assignee.id}
+              picture={props.assignee.picture}
+              size={MARK_SIZE.FACE}
+            />
+          )}
+          {props.unassigned === true ? <UnassignedMark size={MARK_SIZE.FACE} /> : null}
+          {props.at === undefined ? null : <RowTime at={props.at} now={minute} />}
+          {taskKey === undefined ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.TIME }),
+                monospacedDigit(),
+                foregroundStyle(colors.TEXT_MUTED),
+                fixedSize(),
+              ]}
+            >
+              {taskKey}
+            </Text>
+          )}
+        </HStack>
+      }
+    />
   );
 
   return (
