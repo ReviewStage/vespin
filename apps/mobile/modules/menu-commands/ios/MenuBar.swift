@@ -37,8 +37,11 @@ private struct Command {
   var modifiers: UIKeyModifierFlags = .command
   /// A command whose act cannot be taken back with another press, which holding its keys never repeats.
   var nonRepeatable = false
-  /// A second key for a command the menu already shows under its own, kept out of the menu so the command stands once: Search's ⌘K beside its ⌘3.
-  var hidden = false
+  /// The command this one is a second key for, which it acts as, enabled and posted as that command: Search's ⌘K beside its ⌘3. Note that it carries an id of its own and stands hidden, because UIKit refuses two commands in one menu with the same action and property list, hidden or not.
+  var keyFor: String? = nil
+
+  /// The command JavaScript hears when this one is pressed, and whose enabling it follows.
+  var acts: String { keyFor ?? id }
 }
 
 /// A glyph by its name: the asset catalog's symbol of that name, as the app's Lucide glyphs are, else an SF Symbol's.
@@ -70,7 +73,8 @@ private let commands: [Command] = [
   Command(id: "search", place: .view, title: "Search", symbol: "Search", input: "3"),
   // The panel's own ⌘K for its finder, opening Search as ⌘3 and ⌘F do.
   Command(
-    id: "search", place: .view, title: "Search", symbol: "Search", input: "k", hidden: true),
+    id: "searchKey", place: .view, title: "Search", symbol: "Search", input: "k",
+    keyFor: "search"),
   Command(id: "back", place: .navigate, title: "Back", symbol: nil, input: "["),
   // The panel's own pager keys, K and J, unmodified as the panel's are, so an open thread steps through the list it was opened from as it does on the desktop.
   Command(
@@ -169,14 +173,19 @@ enum MenuBar {
     let shown = look(of: known)
     command.title = shown.title
     command.image = shown.image
-    // Note that a hidden key stays hidden as it is validated, since it shares its command's id with the item the menu shows.
-    let hidden: UIMenuElement.Attributes = command.attributes.contains(.hidden) ? .hidden : []
+    // Note that a second key stays hidden as it is validated, so the menu shows its command once.
+    let hidden: UIMenuElement.Attributes = known.keyFor == nil ? [] : .hidden
     command.attributes = shown.enabled ? hidden : hidden.union(.disabled)
   }
 
   /// Whether a command may act now: one JavaScript said may.
   static func mayAct(_ id: String) -> Bool {
     enabled.contains(id)
+  }
+
+  /// The command a pressed one acts as: its own, or the one it is a second key for.
+  static func acts(_ id: String) -> String {
+    commands.first(where: { $0.id == id })?.acts ?? id
   }
 
   private static func build(_ builder: UIMenuBuilder) {
@@ -274,17 +283,17 @@ enum MenuBar {
         title: shown.title, image: shown.image, action: action, propertyList: command.id)
     }
     if !shown.enabled { made.attributes = .disabled }
-    if command.hidden { made.attributes.insert(.hidden) }
+    if command.keyFor != nil { made.attributes.insert(.hidden) }
     if command.nonRepeatable, #available(iOS 26.0, *) { made.repeatBehavior = .nonRepeatable }
     return made
   }
 
   /// How a command reads now: toggled as JavaScript says, and enabled where it may act.
   private static func look(of command: Command) -> (title: String, image: UIImage?, enabled: Bool) {
-    let on = toggled.contains(command.id)
+    let on = toggled.contains(command.acts)
     let title = on ? command.toggledTitle ?? command.title : command.title
     let image = glyph(on ? command.toggledSymbol ?? command.symbol : command.symbol)
-    return (title, image, mayAct(command.id))
+    return (title, image, mayAct(command.acts))
   }
 
   /// The system's own items with their keys taken off, so ⌘, opens Vespin's Settings rather than the app's page in the Settings app.
@@ -339,7 +348,9 @@ extension UIApplication {
 
   /// The action of every command of Vespin's, which reaches here at the end of the responder chain whatever is focused.
   @objc func vespinMenuCommand(_ sender: UICommand) {
-    guard let id = sender.propertyList as? String, MenuBar.mayAct(id) else { return }
+    guard let pressed = sender.propertyList as? String else { return }
+    let id = MenuBar.acts(pressed)
+    guard MenuBar.mayAct(id) else { return }
     NotificationCenter.default.post(name: menuCommandPosted, object: nil, userInfo: ["command": id])
   }
 
