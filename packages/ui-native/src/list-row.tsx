@@ -146,9 +146,11 @@ const TITLE_LOOK = {
 } as const;
 
 /** The ids a flow finds a row by, one for each kind of row, beside the row's own words. */
-const ROW_TEST_ID = {
+export const ROW_TEST_ID = {
   THREAD: "inbox-row",
   TASK: "task-row",
+  /** A place an iPad's sidebar goes to, such as the Inbox, found beside its name. */
+  PLACE: "place-row",
 } as const;
 
 type RowTestId = (typeof ROW_TEST_ID)[keyof typeof ROW_TEST_ID];

@@ -66,8 +66,8 @@ onFlowComplete:
           file: subflows/tab.yaml
           env:
             TAB: Inbox
-      - tapOn:
-          id: "workspace-switcher"
+      - runFlow:
+          file: subflows/switcher.yaml
       - assertVisible: "Settings"
       - assertVisible: "Manage"
       - takeScreenshot: ipad-switcher-settings
@@ -84,8 +84,8 @@ onFlowComplete:
     when:
       notVisible: "No item selected"
     commands:
-      - tapOn:
-          id: "workspace-switcher"
+      - runFlow:
+          file: subflows/switcher.yaml
       - assertVisible: "Settings"
       - assertVisible: "Manage"
       - takeScreenshot: switcher-settings

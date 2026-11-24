@@ -64,6 +64,7 @@ import {
   type LongPressGroup,
   LongPressMenu,
   ROW_ACTION_TONE,
+  ROW_TEST_ID,
   type RowAction,
   type RowFold,
   RowFrame,
@@ -694,6 +695,7 @@ export function PlaceRow({ id, symbol, label, count }: PlaceRowProps) {
     <RowFrame
       id={id}
       dot={false}
+      testId={ROW_TEST_ID.PLACE}
       heard={{ label, value: [counted ? String(count) : undefined] }}
       row={
         <RowHead

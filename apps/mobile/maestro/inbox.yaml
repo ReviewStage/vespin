@@ -18,6 +18,8 @@ env:
     timeout: 30000
 # The workspace's one button leads the bar, its menu holding the account and
 # Settings (`workspace.yaml`).
+- runFlow:
+    file: subflows/show-sidebar.yaml
 - assertVisible:
     id: "workspace-switcher"
 - waitForAnimationToEnd
