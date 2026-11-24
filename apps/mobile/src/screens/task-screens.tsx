@@ -1378,7 +1378,7 @@ type TasksTreeProps = {
 function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
   const { tree } = listing;
   const status = useTasksReadStatus();
-  // Note that a list its tab has not yet read says it is reading, never that it holds no task, should the tab come forward before its rows are drawn.
+  // Note that a list its tab has not yet read says it is reading, never that it holds no task, as the tab first comes forward and its rows are read.
   const read = useWholeListRead() ? status : TASKS_READ.READING;
   const router = useRouter();
   const onOwnTab = useOnOwnTab();

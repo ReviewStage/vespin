@@ -640,10 +640,10 @@ function selectListingParts(state: AppStateSnapshot) {
   };
 }
 
-/** No task: what the listing reads while its tab stands behind, before the list is drawn. */
+/** No task: what the listing reads while its tab stands behind, never yet brought forward. */
 const NO_LISTED_TASKS: readonly TaskSummary[] = [];
 
-/** No agent: what the listing reads while its tab stands behind, before the list is drawn. */
+/** No agent: what the listing reads while its tab stands behind, never yet brought forward. */
 const NO_LISTED_AGENTS: readonly ListedAgent[] = [];
 
 /** The task list's rows as the listing reads them off its collections. */

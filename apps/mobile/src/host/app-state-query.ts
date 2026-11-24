@@ -28,7 +28,7 @@ import {
 import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { noteDelivered } from "../launch-phases.js";
-import { probeOnce, probeTimed } from "../launch-probe.js";
+import { probeTimed } from "../launch-probe.js";
 
 /** The one key the document is held under in the app's client. */
 const APP_STATE_KEY = "app-state";
@@ -70,7 +70,6 @@ export function followAppStateInto(
     bridge,
     (state) => {
       probeTimed("setQueryData", () => client.setQueryData(appStateQuery.queryKey, state));
-      if (state.tasks.listDrawn === true) probeOnce("list-drawn");
       noteDelivered();
 
       return undefined;
