@@ -1,0 +1,16 @@
+fatal: couldn't find remote ref refs/heads/pin2b/main-index1
+FETCH FAILED pin2b/main-index1
+screen.mp4 kept
+merging pin2b/main-index1 at 3772f123947
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging apps/mobile/src/crash-reports.ts
+Auto-merging apps/mobile/src/host/compose-mobile.ts
+Auto-merging apps/mobile/src/host/polyfills.ts
+Auto-merging apps/mobile/src/splash.ts
+Auto-merging packages/host/src/fixture-inbox.ts
+built 1a1725ffb1d = probe + pin2b/main-index1 (PROFILE=0)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ALLDONE
