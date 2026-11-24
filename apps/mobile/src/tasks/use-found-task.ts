@@ -23,8 +23,9 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { eq, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 
 /** The key a number's find is held under, by the account, the workspace and the number. */
 const TASK_BY_NUMBER_QUERY = "task-by-number";
@@ -75,7 +76,10 @@ function selectAccountId(state: AppStateSnapshot): string | undefined {
  * with that number, a number counting within each workspace. Note that the
  * list is read by that key alone, so a caller is drawn again only as such a
  * task comes, goes, or moves workspace, never as any other of the account's
- * tasks moves, as a working agent's turn moves its task.
+ * tasks moves, as a working agent's turn moves its task. Note too that a
+ * task named by its id, as every row's open names it, is read by that key,
+ * with no query over the account's tasks, since a task page's open read it
+ * three times over in the commit its push waited on.
  */
 export function useHeldTasksNamed(named: string | undefined): readonly HeldTaskNamed[] {
   const { tasks } = useTaskListCollections();
@@ -83,20 +87,30 @@ export function useHeldTasksNamed(named: string | undefined): readonly HeldTaskN
   const number =
     named === undefined ? undefined : taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: named });
 
+  const byId = useTaskListRow(tasks, number === undefined ? named : undefined);
+  const byIdId = byId?.id;
+  const byIdWorkspace = byId?.workspaceId;
+
+  const heldById = useMemo(
+    () =>
+      byIdId === undefined || byIdWorkspace === undefined
+        ? NONE_NAMED
+        : [{ id: byIdId, workspaceId: byIdWorkspace }],
+    [byIdId, byIdWorkspace],
+  );
+
   const { data } = useLiveQuery((q) =>
-    named === undefined
+    number === undefined
       ? undefined
       : q
           .from({ task: tasks })
-          .where(({ task }) =>
-            number === undefined ? eq(task.id, named) : eq(task.number, number),
-          )
+          .where(({ task }) => eq(task.number, number))
           .orderBy(({ task }) => task.createdAt, "desc")
           .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
           .select(({ task }) => ({ id: task.id, workspaceId: task.workspaceId })),
   );
 
-  return data ?? NONE_NAMED;
+  return number === undefined ? heldById : (data ?? NONE_NAMED);
 }
 
 /**
