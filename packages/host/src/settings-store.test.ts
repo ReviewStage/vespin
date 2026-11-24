@@ -1080,6 +1080,33 @@ it.effect("two stores on one file, as two browser tabs are, each keep the other'
   }).pipe(Effect.provide(NodeFileSystem.layer)),
 );
 
+it.effect(
+  "the install's usage id is made once, and another tab that read the file before it was kept reads the same one",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("settings-install-");
+
+      const tab = () =>
+        new SettingsStore({
+          directory: () => directory,
+          cipher: undefined,
+          fileSystem: FILE_SYSTEM,
+          path: PATH,
+        });
+
+      const first = tab();
+      const second = tab();
+      yield* first.snapshot();
+      yield* second.snapshot();
+      let made = 0;
+      const createId = () => `install-${++made}`;
+
+      assert.equal(yield* first.usageInstallId(createId), "install-1");
+      assert.equal(yield* second.usageInstallId(createId), "install-1");
+      assert.equal(yield* tab().usageInstallId(createId), "install-1");
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+);
+
 /** The suite's file system, but with every read of a file failing while `failing.reads` is set, as a disk's transient error does. */
 function flakyReads(failing: { reads: boolean }): FileSystem.FileSystem {
   return {

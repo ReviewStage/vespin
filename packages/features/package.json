@@ -58,7 +58,6 @@
     "./suggestion-model": "./src/suggestion-model.js",
     "./out-of-memory-wire": "./src/out-of-memory-wire.js",
     "./sandbox-size": "./src/sandbox-size.js",
-    "./sentry-account": "./src/sentry-account.js",
     "./sentry-addresses": "./src/sentry-addresses.js",
     "./sentry-breadcrumbs": "./src/sentry-breadcrumbs.js",
     "./sentry-early-reports": "./src/sentry-early-reports.js",

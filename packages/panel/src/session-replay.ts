@@ -51,7 +51,11 @@
  * under a person, named by the account's name and email, from its first
  * frame, and can be erased with the account. `PRIVACY.md` says so. A
  * recording is also filed under the workspace the window lists, by its id
- * alone, as the service's counts are (`WORKSPACE_GROUP_TYPE`).
+ * alone, as the service's own counts are (`WORKSPACE_GROUP_TYPE`). The
+ * apps' counted events are not: they go under the install's own random id,
+ * never this client's (whose anonymous id `identify` folds into the person),
+ * and under no workspace, so nothing files them beside a recording
+ * (`packages/service/src/events/events.ts`).
  */
 
 import type { ProductPlatform } from "@repo/features/analytics";
@@ -64,8 +68,8 @@ import { sessionRecorderLoaded } from "./session-recorder/contract.js";
 
 /**
  * The group type a recording is filed under its workspace by, the one the
- * service files its counts under (`packages/service/src/events/events.ts`), so a workspace's
- * recordings and counts are one group in PostHog.
+ * service files its own counts under (`packages/service/src/events/server-events.ts`), so a
+ * workspace's recordings and the service's counts are one group in PostHog.
  */
 const WORKSPACE_GROUP_TYPE = "workspace";
 
@@ -655,9 +659,9 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
    * Files what is being recorded under the signed-in account, and sets the
    * name, email, and platform the person is shown by.
    *
-   * The id is the same opaque one the counted events resolve to, so a recording
-   * and the counts around it belong to one person — which is what makes
-   * deleting the account erase the recordings with it.
+   * The id is the account's own, the one the service's counts are filed
+   * under too, which is what makes deleting the account erase the
+   * recordings with it. The apps' counted events are filed under neither.
    *
    * A sign-out or a deletion stops the recording and resets the person
    * (`stop`). Someone else signing in in place of the account, with no

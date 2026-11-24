@@ -48,6 +48,7 @@ const SETTINGS_FIELD = {
   ACCOUNT_PREFERENCES_SYNC: "accountPreferencesSync",
   EXPERIMENTS: "experiments",
   PRODUCT_EVENT_DAYS: "productEventDays",
+  USAGE_INSTALL_ID: "usageInstallId",
   VERSION: "version",
 } as const;
 
@@ -441,6 +442,9 @@ const PersistedSettingsSchema = Schema.Struct({
   ),
   [SETTINGS_FIELD.EXPERIMENTS]: Schema.optionalKey(settingsField(storedExperiments)),
   [SETTINGS_FIELD.PRODUCT_EVENT_DAYS]: Schema.optionalKey(settingsField(storedProductEventDays)),
+  [SETTINGS_FIELD.USAGE_INSTALL_ID]: Schema.optionalKey(
+    settingsField((value) => (isWireString(value) && value ? value : undefined)),
+  ),
   ...storedSettingFields,
 });
 
@@ -894,6 +898,35 @@ export class SettingsStore {
       const others = entries.filter((entry) => entry !== held && entry.day >= kept.day);
 
       return { ...persisted, productEventDays: productEventDaysFrom([...others, kept]) };
+    });
+  }
+
+  /**
+   * This install's random id, which usage counts are filed under in place of
+   * the account: made with `createId` the first time it is asked for and kept
+   * in the file from then on, through sign-outs and other accounts alike, so
+   * it names the install and never a person.
+   */
+  usageInstallId(createId: () => string): Effect.Effect<string, PlatformError> {
+    return Effect.gen({ self: this }, function* () {
+      const held = (yield* this.#load()).usageInstallId;
+
+      if (held !== undefined) return held;
+      const made = createId();
+      let kept = made;
+
+      // Note that the write reads the file again, because another window may have kept one first.
+      yield* this.#mutate((persisted) => {
+        if (persisted.usageInstallId !== undefined) {
+          kept = persisted.usageInstallId;
+
+          return undefined;
+        }
+
+        return { ...persisted, usageInstallId: made };
+      });
+
+      return kept;
     });
   }
 

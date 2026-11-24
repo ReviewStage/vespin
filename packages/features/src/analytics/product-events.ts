@@ -1339,6 +1339,27 @@ export function productEventBuildFromWire(value: UnparsedWireValue): ProductEven
   return Option.getOrElse(decodeProductEventBuild(value.build), () => ({}));
 }
 
+/**
+ * The batch field naming the install it came from: a random UUID one Mac
+ * app, browser, or iPhone made for itself and keeps, and that the service
+ * files the batch's counts under in place of the account.
+ */
+export const PRODUCT_EVENT_INSTALL_ID_FIELD = "installId";
+
+/** A UUID in its canonical lowercase form, so the field can carry nothing else. */
+const INSTALL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+
+/**
+ * Reads a batch's install id, which is never a reason to refuse it: a build
+ * from before the field sends none, and anything but a UUID reads as none.
+ */
+export function productEventInstallIdFromWire(value: UnparsedWireValue): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const installId = value[PRODUCT_EVENT_INSTALL_ID_FIELD];
+
+  return isWireString(installId) && INSTALL_ID_PATTERN.test(installId) ? installId : undefined;
+}
+
 /** What every emitter is handed: a name, and exactly that name's properties. */
 export type RecordProductEvent = <Name extends ProductEventName>(
   name: Name,

@@ -1,4 +1,3 @@
-import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
   PRODUCT_EVENT,
   productSessionCountBucket,
@@ -6,7 +5,6 @@ import {
 } from "@repo/features/analytics";
 import type { FeedbackResult, FeedbackSubmission } from "@repo/features/feedback";
 import { feedbackDeliveryFromEnvironment } from "@repo/features/feedback";
-import { sentryUser } from "@repo/features/sentry-account";
 import {
   eventWithoutAccessTokens,
   SPANS_NAMING_ACCESS_TOKENS,
@@ -222,28 +220,6 @@ export const mainSentry: SentryCapture = {
  * and the host, so their fibers and the acts' runs all report through it.
  */
 export const mainErrorReporting: Layer.Layer<never> = sentryReporterLayer(mainSentry);
-
-/**
- * Names the signed-in account as Sentry's user, by its id alone, for as long
- * as `scope` stands: set as one signs in, changed as another does, and
- * cleared as they sign out, from main's own document. Every report main
- * sends takes it: its own, a window's or the preload's event as it passes
- * through, and a native crash's. A window's log line is not among them, and
- * names the account as it leaves the window (`@repo/features/sentry-account`).
- */
-export function followAccountInReports(
-  state: AppStateStore,
-): Effect.Effect<void, never, Scope.Scope> {
-  return Effect.asVoid(
-    Effect.forkScoped(
-      state.changes.pipe(
-        Stream.map((document) => signedInAccountId(document.account)),
-        Stream.changes,
-        Stream.runForEach((accountId) => Effect.sync(() => Sentry.setUser(sentryUser(accountId)))),
-      ),
-    ),
-  );
-}
 
 /**
  * Follows the device's "Share usage data" switch in main's document, for as
