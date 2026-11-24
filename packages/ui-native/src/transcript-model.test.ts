@@ -860,7 +860,7 @@ describe("managerChatItems", () => {
 
   const run = (opens: boolean, closes: boolean) => ({ opens, closes });
 
-  it("draws the chat's rows as bubbles: its greeting first, the reader's own trailing and a teammate's named, the Manager's received in the runs placed, a set it showed as its pictures, a message on its way joining the reader's run, and its working line a bubble", () => {
+  it("draws the chat's rows as bubbles: its greeting first, the reader's own trailing and a teammate's named with the picture it kept and the file it carried, the Manager's received in the runs placed, a set it showed as its pictures, a message on its way joining the reader's run, and its working line a bubble", () => {
     const lines = [
       {
         message: row("a1", 1, {
@@ -888,6 +888,10 @@ describe("managerChatItems", () => {
           authorUserId: "u2",
           authorName: "Grace",
           text: "And the signup.",
+          attachments: [
+            { id: "kept-shot", mediaType: "image/png", name: "signup.png" },
+            { name: "notes.txt", mediaType: "text/plain", url: "data:text/plain;base64,YQpi" },
+          ],
         }),
         place: run(true, true),
       },
@@ -937,6 +941,10 @@ describe("managerChatItems", () => {
       ["One more thing.", undefined, false, true],
       [TRANSCRIPT_ITEM.WORKING, true],
     ]);
+    expect(items[4]).toMatchObject({
+      pictures: [{ name: "signup.png", pictureId: "kept-shot", url: undefined }],
+      files: [{ name: "notes.txt", base64: "YQpi", size: "2 lines" }],
+    });
   });
 
   it("opens a finished turn's work under the Manager's message that offers it on Show work, and folds it away again", () => {

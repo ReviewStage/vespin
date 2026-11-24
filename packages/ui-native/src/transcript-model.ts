@@ -72,7 +72,7 @@ import type {
   ManagerChatLine,
   ManagerChatView,
 } from "@repo/features/manager-chat-view";
-import { messageFileChips } from "@repo/features/message-files";
+import { type MessageFileChip, messageFileChips } from "@repo/features/message-files";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
@@ -553,8 +553,8 @@ export interface SaidPicture {
 }
 
 /** The pictures a sent line carried, in order, as the panel lists a line's files (`messageFileChips`); a file that is no picture, such as a PDF, stands as its chip (`saidFiles`). */
-function saidPictures(line: AgentTranscriptMessage): readonly SaidPicture[] {
-  return messageFileChips(line).flatMap((file, index): SaidPicture[] =>
+function saidPictures(chips: readonly MessageFileChip[]): readonly SaidPicture[] {
+  return chips.flatMap((file, index): SaidPicture[] =>
     PICTURE_TYPES.has(file.mediaType)
       ? [
           {
@@ -623,8 +623,8 @@ function saidSize(file: FileChip, base64: string): string {
 }
 
 /** The files a sent line carried that are no picture, in order, as the panel lists a line's files (`messageFileChips`). */
-function saidFiles(line: AgentTranscriptMessage): readonly SaidFile[] {
-  return messageFileChips(line).flatMap((file, index): SaidFile[] => {
+function saidFiles(chips: readonly MessageFileChip[]): readonly SaidFile[] {
+  return chips.flatMap((file, index): SaidFile[] => {
     if (PICTURE_TYPES.has(file.mediaType)) return [];
     const base64 = chipBase64(file);
     const kept = base64 === "" ? undefined : base64;
@@ -682,8 +682,8 @@ function saidItem(
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
     words: shown,
-    ...placedPictures(shown, saidPictures(line)),
-    files: saidFiles(line),
+    ...placedPictures(shown, saidPictures(messageFileChips(line))),
+    files: saidFiles(messageFileChips(line)),
     sender: started ? undefined : sender,
     received: !own,
     from,
@@ -707,8 +707,8 @@ function originItem(
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
     words,
-    ...placedPictures(words, saidPictures(line)),
-    files: saidFiles(line),
+    ...placedPictures(words, saidPictures(messageFileChips(line))),
+    files: saidFiles(messageFileChips(line)),
     sender: undefined,
     // Note that an automation's prompt is the automation's, so it stands at the leading edge under the run's card, as the panel stands its received lines.
     received: true,
@@ -1300,52 +1300,56 @@ export function transcriptItems(
   ];
 }
 
-/** What a picture, a recording, or a sound clip a chat message carried is heard as where it has no caption, since a chat's row keeps no file's name. */
+/** What a picture, a recording, or a sound clip a chat message carried is heard as where it has no caption or name. */
 const CHAT_MEDIA_WORDS = {
   [SHOWN_MEDIA.PICTURE]: "Picture",
   [SHOWN_MEDIA.VIDEO]: "Recording",
   [SHOWN_MEDIA.AUDIO]: "Sound clip",
 } as const satisfies Record<ShownMediaKind, string>;
 
-/** The files a Manager's message showed, by the ids they were kept under, as a set it showed stands. */
-function chatShownMedia(attachments: readonly ManagerChatAttachment[]): readonly ShownMedia[] {
-  return attachments.map((file) => {
+/** A file a chat message carried kept apart under an id, such as a picture its row names by it, rather than carried as its bytes. */
+type KeptChatFile = Extract<ManagerChatAttachment, { readonly id: string }>;
+
+/** Whether a chat message's file was kept apart, under an id, rather than carried as its `data:` URL. */
+function keptChatFile(file: ManagerChatAttachment): file is KeptChatFile {
+  return "id" in file;
+}
+
+/** A file a chat message carried as a sent line's chip: one kept apart named by its name or its caption and read by its id, any other carrying its bytes. */
+function chatFileChip(file: ManagerChatAttachment): MessageFileChip {
+  if (!keptChatFile(file)) return file;
+
+  return {
+    name: file.name ?? file.caption ?? "",
+    mediaType: file.mediaType,
+    url: "",
+    pictureId: file.id,
+  };
+}
+
+/** The files a Manager's message showed and kept apart, by their ids, as a set it showed stands. */
+function chatShownMedia(files: readonly KeptChatFile[]): readonly ShownMedia[] {
+  return files.map((file) => {
     const kind = shownKindOf(file.mediaType);
     const caption = file.caption ?? "";
 
-    return { id: file.id, caption, label: caption === "" ? CHAT_MEDIA_WORDS[kind] : caption, kind };
+    return {
+      id: file.id,
+      caption,
+      label: caption === "" ? (file.name ?? CHAT_MEDIA_WORDS[kind]) : caption,
+      kind,
+    };
   });
 }
 
-/** The files a person's chat message carried, as its line draws them. */
-interface ChatSentFiles {
-  readonly pictures: readonly SaidPicture[];
-  readonly files: readonly SaidFile[];
-}
+/** A chat message's files as its line draws them: its pictures placed by its words, and its other files as their chips. */
+function chatSaidFiles(
+  words: string,
+  files: readonly ManagerChatAttachment[],
+): PlacedPictures & { readonly files: readonly SaidFile[] } {
+  const chips = files.map(chatFileChip);
 
-/** The files a person's chat message carried, as a sent line's stand: each picture over its words by the id it was kept under, and any other file as its chip named by its caption or its type, since a chat's row keeps no file's name or bytes. */
-function chatSentFiles(attachments: readonly ManagerChatAttachment[]): ChatSentFiles {
-  const pictures = attachments.flatMap((file): SaidPicture[] =>
-    PICTURE_TYPES.has(file.mediaType)
-      ? [{ key: file.id, name: file.caption ?? "", url: undefined, pictureId: file.id }]
-      : [],
-  );
-
-  const files = attachments.flatMap((file): SaidFile[] =>
-    PICTURE_TYPES.has(file.mediaType)
-      ? []
-      : [
-          {
-            key: file.id,
-            name: file.caption ?? file.mediaType,
-            mediaType: file.mediaType,
-            base64: undefined,
-            size: undefined,
-          },
-        ],
-  );
-
-  return { pictures, files };
+  return { ...placedPictures(words, saidPictures(chips)), files: saidFiles(chips) };
 }
 
 /**
@@ -1379,7 +1383,7 @@ function chatLineItems(
     return [
       {
         ...said,
-        ...chatSentFiles(message.attachments),
+        ...chatSaidFiles(message.text, message.attachments),
         sender: own ? undefined : message.authorName,
         received: !own,
         by: own ? undefined : (message.authorUserId ?? undefined),
@@ -1389,13 +1393,16 @@ function chatLineItems(
 
   const work = line.work === undefined ? [] : (view.work.get(line.work) ?? []);
   const shown = work.length > 0 && reading.toggles.work.has(message.id);
-  const words = message.text.trim() === "" ? [] : [message.text];
-  const media = chatShownMedia(message.attachments);
+  // Note that what the Manager showed and kept stands as the set's pictures under its words, and any file it carried as its bytes stands on its bubble, as a person's would.
+  const media = chatShownMedia(message.attachments.filter(keptChatFile));
+  const carried = message.attachments.filter((file) => !keptChatFile(file));
+  const words = message.text.trim() === "" && carried.length === 0 ? [] : [message.text];
 
   return [
     ...words.map(
       (text): TranscriptItem => ({
         ...said,
+        ...chatSaidFiles(text, carried),
         words: text,
         sender: undefined,
         received: true,
