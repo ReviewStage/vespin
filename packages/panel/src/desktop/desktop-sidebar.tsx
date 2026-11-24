@@ -234,8 +234,7 @@ import {
   MANAGERS_DROP_ZONE,
   ManagerRows,
   SidebarManagers,
-  usePinnedManagers,
-  useUnpinnedManagers,
+  useManagersByPin,
 } from "./sidebar-managers.js";
 import {
   type OpenMarks,
@@ -944,7 +943,7 @@ const placeOf = (row: PinnedRow): PinPlace => row.place;
  * The rows under Pinned in the order the developer dragged them to, a pin
  * not yet dragged on top, newest pinned first (`pin-order.ts`): the pinned
  * plans, the pinned agents among them, on a plan the list holds, the
- * Managers the reader pinned (`usePinnedManagers`), and the
+ * Managers the reader pinned (`useManagersByPin`), and the
  * tabs pinned to the sidebar on plans the list holds. A tab or an agent of an archived or deleted plan is drawn nowhere,
  * its plan being out of the list; nor is a Plan tab an earlier version
  * pinned, which is made its plan's own pin as soon as the list names the
@@ -2588,9 +2587,14 @@ function SidebarColumn({
   const rows = useTaskListRows();
   // Note that while the view shows finished sub-tasks, those a parent's count names that the list holds not are read into it.
   useSubTaskReads(listedTasks.unheldSubTasks, taskView.view.finishedSubTasks && tasks.listRead);
-  // Note that a pinned agent is read by its id alone (`useTaskListRows`), so a step of any other agent's turn draws the sidebar nothing.
-  const pinnedManagers = usePinnedManagers(tasks, tasks.taskAgentPins);
 
+  // Note that the Managers are read once here, for Pinned and the sections alike.
+  const { pinned: pinnedManagers, unpinned: unpinnedManagers } = useManagersByPin(
+    tasks,
+    tasks.taskAgentPins,
+  );
+
+  // Note that a pinned agent is read by its id alone (`useTaskListRows`), so a step of any other agent's turn draws the sidebar nothing.
   const pinnedSection = pinnedRows(
     listedTasks.pinned,
     listedTasks.task,
@@ -2650,9 +2654,6 @@ function SidebarColumn({
   const sectionsShown = tasks.signedIn && tasks.workspace !== undefined;
 
   const sectionedIn = sectionsShown ? tasks.workspace?.id : undefined;
-
-  // The Managers no pin holds, which the sections may keep, as they keep the tasks no pin holds.
-  const unpinnedManagers = useUnpinnedManagers(tasks, tasks.taskAgentPins);
 
   // Note that every list below is derived once per move of what it reads, so a render that moves nothing in the lists walks none of them.
   const sectioned = useMemo(

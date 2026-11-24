@@ -15,7 +15,7 @@
  * Managers by recent activity, name, or date created, kept per workspace on
  * this machine (`manager-sort.ts`), newest started first until one is chosen. A Manager the reader pinned,
  * from its row's menu, stands under Pinned alone, not here, until Unpin, drawn as the
- * same row (`SidebarManagerRow`, `usePinnedManagers`) among the pinned
+ * same row (`SidebarManagerRow`, `useManagersByPin`) among the pinned
  * tasks, and dragged among them (`sidebar-entries.tsx`); and one the reader
  * put in one of their sections, from its row's Move to section or by a
  * drag, stands in that section alone, among its tasks, until it is taken
@@ -123,31 +123,30 @@ function useListedManagers(tasks: SidebarTasksControl): ReturnType<typeof useWor
   };
 }
 
-/** The Managers the reader pinned, each with where its pin stands, by `taskAgentPins`, the reader's pins of agents, which Pinned draws among its pins (`pinnedManagersOf`); none while the Managers experiment is off. */
-export function usePinnedManagers(
-  tasks: SidebarTasksControl,
-  taskAgentPins: readonly TaskAgentPin[],
-): readonly PinnedManager[] {
-  const { managers } = useListedManagers(tasks);
-
-  return useMemo(
-    () => (managers === undefined ? NO_MANAGERS : pinnedManagersOf(managers, taskAgentPins)),
-    [managers, taskAgentPins],
-  );
+/** The workspace's Managers by the reader's pins: those pinned, which Pinned draws among its pins, and the rest, which the reader's sections may keep. */
+export interface ManagersByPin {
+  /** Each with where its pin stands (`pinnedManagersOf`). */
+  readonly pinned: readonly PinnedManager[];
+  /** Those no pin holds (`sectionedTasks`). */
+  readonly unpinned: readonly ListedAgent[];
 }
 
-/** The Managers no pin of the reader's holds, by `taskAgentPins`, which the reader's sections may keep (`sectionedTasks`); none while the Managers experiment is off. */
-export function useUnpinnedManagers(
+/** No Manager, pinned or not, while the Managers experiment is off or the list is still read. */
+const NO_MANAGERS_BY_PIN: ManagersByPin = { pinned: NO_MANAGERS, unpinned: NO_LISTED };
+
+/** The workspace's Managers split by `taskAgentPins`, the reader's pins of agents, read once for Pinned and the sections alike; none while the Managers experiment is off. */
+export function useManagersByPin(
   tasks: SidebarTasksControl,
   taskAgentPins: readonly TaskAgentPin[],
-): readonly ListedAgent[] {
+): ManagersByPin {
   const { managers } = useListedManagers(tasks);
 
   return useMemo(() => {
-    if (managers === undefined) return NO_LISTED;
-    const pinned = new Set(pinnedManagersOf(managers, taskAgentPins).map((each) => each.agent.id));
+    if (managers === undefined) return NO_MANAGERS_BY_PIN;
+    const pinned = pinnedManagersOf(managers, taskAgentPins);
+    const pinnedIds = new Set(pinned.map((each) => each.agent.id));
 
-    return managers.filter((agent) => !pinned.has(agent.id));
+    return { pinned, unpinned: managers.filter((agent) => !pinnedIds.has(agent.id)) };
   }, [managers, taskAgentPins]);
 }
 
