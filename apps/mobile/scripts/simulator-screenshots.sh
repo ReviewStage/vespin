@@ -196,9 +196,12 @@ run_suite() {
 
 # Runs the notification flow on the booted simulator `$1`, its output under
 # `$2`: the app installed afresh and let notify, launched and sent to the
-# background, `ask.apns` pushed to it, and the notification tapped; then sent
-# to the background again, `manager.apns`, a Manager's thread on no task,
-# pushed, and that notification tapped, since Maestro cannot send a push. Note that the app is installed here rather than
+# background, `ask.apns` pushed to it, and the notification tapped; then
+# launched and sent to the background afresh, `manager.apns`, a Manager's
+# thread on no task, pushed, and that notification tapped, since Maestro
+# cannot send a push. Note that the second round launches the app again, as
+# the first does, because one sent home from the thread the first opened
+# never showed the second push in Notification Center. Note that the app is installed here rather than
 # cleared by the flow's `launchApp`, because Maestro's clear reinstalls the
 # app, which takes back the permission.
 run_notification_flow() {
@@ -209,7 +212,7 @@ run_notification_flow() {
     run_maestro "$1" "$2" "$directory/background.yaml" || return 1
     xcrun simctl push "$1" "$bundle_id" "$directory/ask.apns" || return 1
     run_maestro "$1" "$2" "$directory/open.yaml" || return 1
-    run_maestro "$1" "$2" "$directory/home.yaml" || return 1
+    run_maestro "$1" "$2" "$directory/background.yaml" || return 1
     xcrun simctl push "$1" "$bundle_id" "$directory/manager.apns" || return 1
     run_maestro "$1" "$2" "$directory/open-manager.yaml"
 }

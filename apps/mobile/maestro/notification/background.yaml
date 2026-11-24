@@ -1,4 +1,4 @@
-# background.yaml -- the first half of the notification flow: the app launched on the Inbox fixture with notifications allowed, then sent to the background, where `ask.apns` is pushed to it.
+# background.yaml -- the opening of each round of the notification flow: the app launched on the Inbox fixture with notifications allowed, then sent to the background, where `ask.apns`, and in the second round `manager.apns`, is pushed to it.
 #
 # Maestro pushes nothing itself, so `scripts/simulator-screenshots.sh` runs
 # this flow, pushes `ask.apns` with `xcrun simctl push`, and runs `open.yaml`.
