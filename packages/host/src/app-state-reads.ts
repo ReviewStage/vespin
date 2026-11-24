@@ -928,6 +928,15 @@ export function selectAutomationRuns(
   return (state) => state[LIVE_READ.AUTOMATION_RUNS][automationId];
 }
 
+/** Every run of one workspace's automations the host holds, newest fired first (`ACT_KIND.AUTOMATIONS_FOLLOW`), as a `select`; none before they are read. */
+export function selectWorkspaceRuns(
+  workspaceId: string,
+): (
+  state: AppStateSnapshot,
+) => AppStateSnapshot[typeof LIVE_READ.AUTOMATION_WORKSPACE_RUNS][string] | undefined {
+  return (state) => state[LIVE_READ.AUTOMATION_WORKSPACE_RUNS][workspaceId];
+}
+
 /** The memories the host holds for one workspace, with every save and delete drawn over them (`ACT_KIND.MEMORIES_FOLLOW`), as a `select`; none before they are read. */
 export function selectWorkspaceMemories(
   workspaceId: string,

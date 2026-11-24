@@ -44,6 +44,36 @@ export const AUTOMATION_RUN_REFUSAL_WORDS = {
     "Only its creator, or the workspace's owners and admins, can run it.",
 } as const satisfies Record<AutomationCallFailure, string>;
 
+/** Why a Delete did not land, as its question goes on saying until it is tried again or let go. */
+export const AUTOMATION_DELETE_REFUSAL_WORDS = {
+  [AUTOMATION_CALL_FAILURE.UNANSWERED]: "The automation could not be deleted. Try again.",
+  [AUTOMATION_CALL_FAILURE.NOT_FOUND]: "This automation, or its workspace, is gone.",
+  [AUTOMATION_CALL_FAILURE.NO_REPOSITORY]: "The automation could not be deleted. Try again.",
+  [AUTOMATION_CALL_FAILURE.REPOSITORY_NOT_REACHABLE]:
+    "The automation could not be deleted. Try again.",
+  [AUTOMATION_CALL_FAILURE.INVALID]: "The automation could not be deleted. Try again.",
+  [AUTOMATION_CALL_FAILURE.NOT_PERMITTED]:
+    "Only its creator, or the workspace's owners and admins, can delete it.",
+} as const satisfies Record<AutomationCallFailure, string>;
+
+/** What deleting an automation asks, from its page and its row alike: what goes, and what stays. */
+export const AUTOMATION_DELETE_WORDS = {
+  BODY: "Its schedule stops and its run history goes. Agents its runs started stay.",
+  VERB: "Delete automation",
+  RUNNING: "Deleting",
+} as const;
+
+/** The question's title, naming the automation where it is known. */
+export function automationDeleteTitle(name: string | undefined): string {
+  return `Delete ${name ?? "this automation"}?`;
+}
+
+/** Take over, which an owner or an admin offers on an automation whose creator left the workspace: the act, and what a refusal says. */
+export const AUTOMATION_TAKE_OVER_WORDS = {
+  ACT: "Take over",
+  REFUSED: "Couldn't take over this automation.",
+} as const;
+
 /** Why a switch did not move, as its notice says it; none where it moved. */
 export function automationToggleRefusal(
   answer: AutomationView | { readonly failure: AutomationCallFailure },
@@ -154,6 +184,37 @@ export const AUTOMATION_PHONE_WORDS = {
   READING_RUNS: "Reading the runs…",
   NEVER_RAN: "Hasn't run yet",
   NO_REPOSITORY: "Works in no repository",
+  /** Its page's ⋯ and its acts, the panel's own words. */
+  MORE: "More",
+  EDIT: "Edit",
+  COPY_LINK: "Copy link",
+  DELETE: "Delete",
+  /** A schedule's next runs, said under what fires it. */
+  NEXT_RUNS: "Next runs",
+  /** The address a webhook trigger is called at, and its row's act. */
+  WEBHOOK_URL: "Webhook URL",
+  COPY_URL: "Copy URL",
+  /** Where its runs work and land, its page's group under the prompt, as the editor names the group and its rows. */
+  WHERE_IT_RUNS: "Where it runs",
+  REPOSITORY: "Repository",
+  NO_REPOSITORY_VALUE: "None",
+  RUNS_LAND_IN: "Runs land in",
+  NEW_AGENT: "New agent each run",
+  SAME_AGENT: "Same agent",
+  FIRST_RUN_AGENT: "Started by its first run",
+  MODEL: "Model",
+  DEFAULT_MODEL: "Your default",
+  ARCHIVE_SUCCESSFUL: "Mark finished runs Done",
+  SLACK_DELIVERY: "Send the result on Slack",
+  YES: "On",
+  NO: "Off",
+  /** Who it is for and who made it, its page's last group. */
+  SHARING: "Sharing",
+  OWNER: "Owner",
+  CREATED_BY: "Created by",
+  FORMER_MEMBER: "Former member",
+  /** The press under its newest runs that opens every run it made. */
+  ALL_RUNS: "All runs",
 } as const;
 
 /** What a phone's row says of an automation turned off before what fires it, since the row stands no switch. */

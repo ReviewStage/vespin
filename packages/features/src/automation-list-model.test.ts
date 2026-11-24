@@ -7,6 +7,7 @@ import {
   AUTOMATIONS_ORDER,
   automationGroups,
   automationNext,
+  automationNextRuns,
   automationRunLine,
   automationRunPlace,
   automationRunStanding,
@@ -286,6 +287,22 @@ test("an automation fired by an event has no next run to name, a schedule with n
 
   assert.deepEqual(automationNext(webhook), { kind: AUTOMATION_NEXT.EVENT });
   assert.deepEqual(automationNext({ ...webhook, enabled: false }), { kind: AUTOMATION_NEXT.OFF });
+});
+
+test("a page lists a turned-on schedule's next weekday runs in its zone, and none for one off or fired by an event", () => {
+  // Friday Nov 20, 2026, 10:00 in New York, past that day's 9:00 run.
+  const now = Date.parse("2026-11-20T15:00:00Z");
+
+  assert.deepEqual(automationNextRuns(automation("a"), now, 3), [
+    Date.parse("2026-11-23T14:00:00Z"),
+    Date.parse("2026-11-24T14:00:00Z"),
+    Date.parse("2026-11-25T14:00:00Z"),
+  ]);
+  assert.deepEqual(automationNextRuns(automation("a", { enabled: false }), now, 3), []);
+  assert.deepEqual(
+    automationNextRuns(automation("a", { trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK } }), now, 3),
+    [],
+  );
 });
 
 test("a time of day typed is read as the summary says it and as a 24-hour clock does", () => {

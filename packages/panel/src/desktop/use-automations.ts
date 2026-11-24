@@ -8,6 +8,7 @@ import {
   type AutomationView,
 } from "@repo/features/automation-view";
 import type { AutomationSummary } from "@repo/features/automation-wire";
+import { AUTOMATION_DELETE_REFUSAL_WORDS } from "@repo/features/automation-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { useConfirmDialog } from "@repo/ui";
@@ -50,18 +51,6 @@ const unreached = unreachedAs(AUTOMATION_CALL_FAILURE.UNANSWERED);
 
 const UNANSWERED = { failure: AUTOMATION_CALL_FAILURE.UNANSWERED } as const;
 
-/** Why a Delete did not land, as its question goes on saying until it is tried again or let go. */
-const DELETE_REFUSAL_WORDS = {
-  [AUTOMATION_CALL_FAILURE.UNANSWERED]: "The automation could not be deleted. Try again.",
-  [AUTOMATION_CALL_FAILURE.NOT_FOUND]: "This automation, or its workspace, is gone.",
-  [AUTOMATION_CALL_FAILURE.NO_REPOSITORY]: "The automation could not be deleted. Try again.",
-  [AUTOMATION_CALL_FAILURE.REPOSITORY_NOT_REACHABLE]:
-    "The automation could not be deleted. Try again.",
-  [AUTOMATION_CALL_FAILURE.INVALID]: "The automation could not be deleted. Try again.",
-  [AUTOMATION_CALL_FAILURE.NOT_PERMITTED]:
-    "Only its creator, or the workspace's owners and admins, can delete it.",
-} as const satisfies Record<AutomationCallFailure, string>;
-
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
 /** One automation deleted, as the question asking it holds its own mutation over it, and why where the service refused it. */
@@ -94,7 +83,10 @@ export function useAutomationDeletion(
     },
     answered: (answer): ActionResult =>
       "failure" in answer
-        ? { status: ACTION_RESULT_STATUS.REJECTED, reason: DELETE_REFUSAL_WORDS[answer.failure] }
+        ? {
+            status: ACTION_RESULT_STATUS.REJECTED,
+            reason: AUTOMATION_DELETE_REFUSAL_WORDS[answer.failure],
+          }
         : ACCEPTED,
   });
 

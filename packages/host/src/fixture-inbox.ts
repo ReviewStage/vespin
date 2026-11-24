@@ -3345,6 +3345,18 @@ const HELD_RUNS: AppStateSnapshot[typeof LIVE_READ.AUTOMATION_RUNS] = Object.fro
   [...AUTOMATION_RUNS].map(([id, runs]) => [id, { rows: runs }]),
 );
 
+/** Every run of the fixture workspace's automations, each naming its automation, newest fired first, as the host holds the workspace's runs once read. */
+const HELD_WORKSPACE_RUNS: AppStateSnapshot[typeof LIVE_READ.AUTOMATION_WORKSPACE_RUNS] = {
+  [FIXTURE_IDS.WORKSPACE]: {
+    rows: AUTOMATIONS.flatMap((automation) =>
+      (AUTOMATION_RUNS.get(automation.id) ?? []).map((run) => ({
+        ...run,
+        automation: { id: automation.id, name: automation.name },
+      })),
+    ).toSorted((a, b) => b.firedAt - a.firedAt),
+  },
+};
+
 /**
  * The document as the phone's fixture run draws Settings › Automations: the
  * fixture workspace's automations and each one's runs held as their reads
@@ -3375,6 +3387,10 @@ export function inboxAutomationsAppState(
     ...state,
     [LIVE_READ.AUTOMATIONS]: { ...state[LIVE_READ.AUTOMATIONS], ...held },
     [LIVE_READ.AUTOMATION_RUNS]: { ...state[LIVE_READ.AUTOMATION_RUNS], ...HELD_RUNS },
+    [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: {
+      ...state[LIVE_READ.AUTOMATION_WORKSPACE_RUNS],
+      ...HELD_WORKSPACE_RUNS,
+    },
   };
 }
 

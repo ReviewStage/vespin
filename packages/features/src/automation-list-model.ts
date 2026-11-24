@@ -1,6 +1,6 @@
 import { agentFailureWords } from "./agent-failure-words.js";
 import { AGENT_STATUS, type AgentStatus } from "./agent-wire.js";
-import { onceInstant, SCHEDULE_PRESET } from "./automation-schedule.js";
+import { onceInstant, SCHEDULE_PRESET, scheduleNextRuns } from "./automation-schedule.js";
 import {
   AUTOMATION_FIRING,
   AUTOMATION_RUN_REASON,
@@ -203,6 +203,48 @@ export const AUTOMATION_RUN_STANDING = {
 
 export type AutomationRunStanding =
   (typeof AUTOMATION_RUN_STANDING)[keyof typeof AUTOMATION_RUN_STANDING];
+
+/** Which of a workspace's runs its Runs list shows: all of them, the ones whose agent still works, or the ones that failed. */
+export const RUNS_SHOWN = {
+  ALL: "all",
+  RUNNING: "running",
+  FAILED: "failed",
+} as const;
+
+export type RunsShown = (typeof RUNS_SHOWN)[keyof typeof RUNS_SHOWN];
+
+/** What each choice that narrows the runs is called, in the bar's order. */
+export const RUNS_SHOWN_WORDS = {
+  [RUNS_SHOWN.ALL]: "All",
+  [RUNS_SHOWN.RUNNING]: "Running",
+  [RUNS_SHOWN.FAILED]: "Failed",
+} as const satisfies Record<RunsShown, string>;
+
+/** What the list says where the narrowing leaves no run. */
+export const RUNS_SHOWN_NONE = {
+  [RUNS_SHOWN.ALL]: "No runs yet.",
+  [RUNS_SHOWN.RUNNING]: "Nothing is running.",
+  [RUNS_SHOWN.FAILED]: "No run failed.",
+} as const satisfies Record<RunsShown, string>;
+
+/** The standing each narrowing keeps; none for All, which keeps every run. */
+const SHOWN_STANDING = {
+  [RUNS_SHOWN.ALL]: undefined,
+  [RUNS_SHOWN.RUNNING]: AUTOMATION_RUN_STANDING.WORKING,
+  [RUNS_SHOWN.FAILED]: AUTOMATION_RUN_STANDING.FAILED,
+} as const satisfies Record<RunsShown, AutomationRunStanding | undefined>;
+
+/** The runs a narrowing keeps, in the order they came. */
+export function shownRuns<Run extends AutomationRunSummary>(
+  runs: readonly Run[],
+  shown: RunsShown,
+): readonly Run[] {
+  const standing = SHOWN_STANDING[shown];
+
+  if (standing === undefined) return runs;
+
+  return runs.filter((run) => automationRunStanding(run) === standing);
+}
 
 /** When an automation runs next, as its row ends. */
 export const AUTOMATION_NEXT = {
@@ -556,6 +598,19 @@ export function automationNext(automation: AutomationSummary): AutomationNext {
   if (automation.nextRunAt === null) return { kind: AUTOMATION_NEXT.UNSCHEDULED };
 
   return { kind: AUTOMATION_NEXT.AT, at: automation.nextRunAt };
+}
+
+/** The next instants a turned-on scheduled automation is due after `now`, as many as asked, as its page lists them; none for one off or fired by an event. */
+export function automationNextRuns(
+  automation: AutomationSummary,
+  now: number,
+  count: number,
+): readonly number[] {
+  const { trigger } = automation;
+
+  if (!automation.enabled || trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return [];
+
+  return scheduleNextRuns(trigger, new Date(now), count);
 }
 
 /** What fired a run, in words: what an event is about where it names it, else the kind of firing. */

@@ -177,3 +177,19 @@ export function readSchedule(schedule: Schedule, from: Date): Result.Result<Date
 export function nextScheduledRun(schedule: Schedule, after: Date): Date | undefined {
   return Result.getOrUndefined(readSchedule(schedule, after));
 }
+
+/** The next instants a schedule is due after `now`, as many as asked, fewer where it runs out, as a one-time one does; none for one that cannot be read. */
+export function scheduleNextRuns(schedule: Schedule, now: Date, count: number): readonly number[] {
+  const runs: number[] = [];
+  let after = now;
+
+  while (runs.length < count) {
+    const next = nextScheduledRun(schedule, after);
+
+    if (next === undefined) break;
+    runs.push(next.getTime());
+    after = next;
+  }
+
+  return runs;
+}

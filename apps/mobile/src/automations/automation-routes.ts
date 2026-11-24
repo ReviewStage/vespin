@@ -1,0 +1,17 @@
+// automation-routes.ts -- the Automations tab's routes: an automation's page, every run it made, and the workspace's runs, each named on the tab a press opens it on (`useOnOwnTab`).
+
+/** The Automations tab's root: the workspace's automations. */
+export const AUTOMATIONS_ROUTE = "/automations";
+
+/** The workspace's runs, every automation's, newest first. */
+export const AUTOMATION_RUNS_ROUTE = `${AUTOMATIONS_ROUTE}/runs`;
+
+/** An automation's page. */
+export function automationRoute(automationId: string): string {
+  return `${AUTOMATIONS_ROUTE}/${encodeURIComponent(automationId)}`;
+}
+
+/** Every run an automation made, newest first. */
+export function automationRunsRoute(automationId: string): string {
+  return `${automationRoute(automationId)}/runs`;
+}

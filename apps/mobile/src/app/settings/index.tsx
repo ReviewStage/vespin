@@ -2,7 +2,6 @@
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { AUTOMATION_PHONE_WORDS } from "@repo/features/automation-words";
 import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { LINK_PAGE } from "@repo/features/link-home";
 import {
@@ -128,13 +127,6 @@ export default function SettingsScreen() {
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY]}
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.MEMORY)}
-              />
-              <PushRow
-                symbol={GLYPH.AUTOMATION}
-                label={AUTOMATION_PHONE_WORDS.TITLE}
-                goes={PUSH_ROW_GOES.PAGE}
-                onPress={() => router.push(SETTINGS_ROUTE.AUTOMATIONS)}
-                testId="settings-automations"
               />
             </ListSection>
           )}

@@ -352,6 +352,7 @@ export {
   AccountHead,
   AccountRow,
   ActionRow,
+  AUTOMATION_ROW_LOOK,
   AutomationRow,
   CodeRow,
   type ConnectionLine,
