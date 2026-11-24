@@ -1,0 +1,41 @@
+pinned to d9ad0deb43
+== bundle PJjxcold12 base d9ad0deb430
+  built d9ad0deb430 base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+B77 (d9ad0deb43) bundle 25028 KB
+seed d9ad0deb43: 32264 KB
+== bundle PJjxcold12B78 base 5aa6b64e676
+  built 5aa6b64e676 base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+B78 (5aa6b64e67) bundle 25144 KB
+seed 5aa6b64e67: 32264 KB
+sign-in (B77): fails 0 shots 3 
+B77-1: pid 91808, probe ok, watch ok, profile 780 KB
+  B77-1 cpu peak 100.4% (at 60 s: 28.4%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B77-1: marks screens-render=2152.1 tabs-render=2213.8 app-ready=2249.4 splash-hide=2576 |  | kept rows read (4 kept-load marks)
+B78-1: pid 92823, probe ok, watch ok, profile 780 KB
+  B78-1 cpu peak 79.9% (at 60 s: 2.1%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B78-1: marks screens-render=2213.2 tabs-render=2311.6 app-ready=2376.1 splash-hide=2768.5 |  | kept rows read (4 kept-load marks)
+round 1: B77 2213.8 ms, B78 2311.6 ms (tabs-render, else screens-render)
+B77-2: pid 93758, probe ok, watch ok, profile 1004 KB
+  B77-2 cpu peak 91.8% (at 60 s: 2.2%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B77-2: marks screens-render=2504.5 tabs-render=2579.5 app-ready=2630.1 splash-hide=3045.4 |  | kept rows read (4 kept-load marks)
+B78-2: pid 96774, probe ok, watch ok, profile 712 KB
+  B78-2 cpu peak 73% (at 60 s: 1.7%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B78-2: marks screens-render=2563.7 tabs-render=2656 app-ready=2711.4 splash-hide=3175.6 |  | kept rows read (4 kept-load marks)
+round 2: B77 2579.5 ms, B78 2656 ms (tabs-render, else screens-render)
+B77-3: pid 97703, probe ok, watch ok, profile 768 KB
+  B77-3 cpu peak 76.5% (at 60 s: 2.2%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B77-3: marks screens-render=2495.2 tabs-render=2577.1 app-ready=2625.5 splash-hide=3046.5 |  | kept rows read (4 kept-load marks)
+B78-3: pid 99021, probe ok, watch ok, profile 704 KB
+  B78-3 cpu peak 130.9% (at 60 s: 23.1%), sample ok, at80: launch-probe.json launch-profile-60.json launch-watch-65.json launch-watch-76.json 
+B78-3: marks screens-render=2167.2 tabs-render=2264.9 app-ready=2313.4 splash-hide=2668.4 |  | kept rows read (4 kept-load marks)
+round 3: B77 2577.1 ms, B78 2264.9 ms (tabs-render, else screens-render)
+== phase 1 done 10:26:15: B78 >= 4 s later in 0 of 3 rounds
+phase 2 skipped: B78 not >= 4 s later in 2 of 3 rounds
