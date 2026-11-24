@@ -1,0 +1,9 @@
+pinned to aab69d1d0f
+== bundle PJjm10729d base aab69d1d0fe
+  built aab69d1d0fe base app Vnatc1.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+main cut:      178 lines ->      145 lines, last: - inputText: "@Invite li" - assertVisible: "Invite limits" 
+main-aab69-iphone-light-compose (to the Invite limits assert): fails 0 shots 9 
