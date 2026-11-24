@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { VOICE_SPEAKER, type VoiceSpeaker } from "@repo/features/agent-wire";
 import { type AutomationFiring, FIRING_HANDS_OUTSIDE_WORDS } from "@repo/features/automation-wire";
 import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
+import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import {
   RUN_EVENT,
   RUN_STATUS,
@@ -91,7 +92,6 @@ import {
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { CURRENT_TXID } from "../core/txid.js";
-import { MANAGER_CHAT_AUTHOR } from "../schemas/manager-chat-message.js";
 import {
   conversations,
   messages,
