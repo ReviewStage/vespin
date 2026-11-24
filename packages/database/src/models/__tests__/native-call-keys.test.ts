@@ -8,13 +8,14 @@ import { user } from "../../schemas/auth.js";
 import { conversations } from "../../schemas/storage.js";
 import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
 import { getTestDB } from "../../testing/index.js";
-import { nativeCallKeyOf } from "../native-call-keys.js";
+import { nativeCallKeyOf, readNativeCallKeys } from "../native-call-keys.js";
 
 /**
  * The key a native agent's call runs under, over a real dialect: a call of
  * the same input within the window reads the key the first was given, one
  * past the window is given a fresh one, and another conversation's call of
  * the same input, the same account's or another's, is never handed it.
+ * A read of a conversation's keys answers its own and never another's.
  * Synthetic accounts and digests throughout.
  */
 
@@ -86,6 +87,24 @@ it.layer(getTestDB())("native call keys", (it) => {
         assert.notEqual(theirs, first);
         assert.notEqual(sameAccount, first);
         assert.notEqual(sameAccount, theirs);
+      }),
+  );
+
+  it.effect(
+    "a read answers the keys the conversation holds for its digests, and none of another's",
+    () =>
+      Effect.gen(function* () {
+        const own = yield* openConversation;
+        const other = yield* openConversation;
+        const [kept, unkept] = [`digest-${randomUUID()}`, `digest-${randomUUID()}`];
+        const key = yield* nativeCallKeyOf(own.userId, own.conversationId, kept, WINDOW_MS);
+        yield* nativeCallKeyOf(other.userId, other.conversationId, unkept, WINDOW_MS);
+
+        const read = yield* readNativeCallKeys(own.userId, own.conversationId, [kept, unkept]);
+        const theirs = yield* readNativeCallKeys(other.userId, other.conversationId, [kept]);
+
+        assert.deepEqual([...read], [[kept, key]]);
+        assert.deepEqual([...theirs], []);
       }),
   );
 });

@@ -550,14 +550,16 @@ export function deleteDroppedManagerChat(
 
 /**
  * A message a one-time backfill plans for a Manager's chat, as its transcript
- * holds it (`service/src/maintenance/manager-chat-backfill.ts`): its key, the
- * id the transcript says a live write landed it under where it says one, and
- * what it says, by whom, and when.
+ * holds it (`service/src/maintenance/manager-chat-backfill.ts`): its key, what
+ * names the row a live write landed it as, and what it says, by whom, and
+ * when.
  */
 export interface ManagerChatBackfillMessage {
   readonly clientKey: string;
   /** The id a send's answer named, which says the message was written live under it; null where the answer named none. */
   readonly liveId: string | null;
+  /** The key a send's call ran under as the store keyed it (`native-call-keys.ts`), which its live write keyed its row by; null for a line, or a call no key was kept for. */
+  readonly callKey: string | null;
   readonly authorKind: ManagerChatMessage["authorKind"];
   readonly authorUserId: string | null;
   readonly authorName: string;
@@ -594,10 +596,6 @@ const BackfillRowSchema = Schema.Struct({
   id: Schema.String,
   seq: Schema.Number,
   clientKey: Schema.String,
-  authorKind: Schema.Literals(Object.values(MANAGER_CHAT_AUTHOR)),
-  text: Schema.String,
-  attachments: Schema.Array(managerChatAttachmentSchema),
-  turnId: Schema.NullOr(Schema.String),
   lineId: Schema.NullOr(Schema.String),
 });
 
@@ -674,10 +672,6 @@ const findBackfillRows = SqlSchema.findAll({
           id: managerChatMessage.id,
           seq: managerChatMessage.seq,
           clientKey: managerChatMessage.clientKey,
-          authorKind: managerChatMessage.authorKind,
-          text: managerChatMessage.text,
-          attachments: managerChatMessage.attachments,
-          turnId: managerChatMessage.turnId,
           lineId: managerChatMessage.lineId,
         })
         .from(managerChatMessage)
@@ -686,43 +680,31 @@ const findBackfillRows = SqlSchema.findAll({
     ),
 });
 
-/** The ids of a message's files, in order, which two sightings of one message share. */
-function attachmentIds(attachments: readonly ManagerChatAttachment[]): string {
-  return JSON.stringify(attachments.map((file) => file.id));
-}
-
-/** Whether a row says what a planned message says, by the same kind of author, in the same turn and on the same line where both name one. */
-function sameSaying(row: BackfillRow, planned: ManagerChatBackfillMessage): boolean {
-  return (
-    row.authorKind === planned.authorKind &&
-    row.text.trim() === planned.text.trim() &&
-    attachmentIds(row.attachments) === attachmentIds(planned.attachments) &&
-    (row.turnId === null || planned.turnId === null || row.turnId === planned.turnId) &&
-    (row.lineId === null || planned.lineId === null || row.lineId === planned.lineId)
-  );
-}
-
-/** The row a planned message is by name: the one under its key, which an earlier backfill wrote; the one under the id its send answered; or the one on its line. */
-function namedRowOf(
+/**
+ * The row a planned message already stands as, by what names it and never
+ * by its words, so two messages that say the same stay two: the row under
+ * its key, which an earlier backfill or a call's live line wrote; the one
+ * under the id its send answered; or the one on its line.
+ */
+function rowOf(
   planned: ManagerChatBackfillMessage,
   free: readonly BackfillRow[],
 ): BackfillRow | undefined {
+  const { clientKey, liveId, lineId } = planned;
+
   return (
-    free.find((row) => row.clientKey === planned.clientKey) ??
-    (planned.liveId === null ? undefined : free.find((row) => row.id === planned.liveId)) ??
-    (planned.lineId === null ? undefined : free.find((row) => row.lineId === planned.lineId))
+    free.find((row) => row.clientKey === clientKey) ??
+    (liveId === null ? undefined : free.find((row) => row.id === liveId)) ??
+    (lineId === null ? undefined : free.find((row) => row.lineId === lineId))
   );
 }
 
 /**
  * The chat as it should stand: the planned messages in their transcript's
- * order, each with the row it already stands as, and every row no planned
- * message took kept just after the row before it in the chat's order, so a
- * message written live and missing from the transcript read keeps its place.
- * A message takes the row that names it first (`namedRowOf`), and only then,
- * among the rows left, the oldest that says what it says, which a live
- * write of a call's line, or of a send whose answer the transcript lacks,
- * left; so an old message never takes the row a later one is by name.
+ * order, each with the row it already stands as (`rowOf`), and every row no
+ * planned message took kept just after the row before it in the chat's
+ * order, so a message written live and missing from the transcript read
+ * keeps its place.
  */
 function backfilledChat(
   rows: readonly BackfillRow[],
@@ -736,10 +718,15 @@ function backfilledChat(
     return row;
   };
 
-  const named = planned.map((message) => take(namedRowOf(message, free)));
+  const named = planned.map((message) => take(rowOf(message, free)));
 
+  // Note that a call's key is the newest call's of the same input, so it is read only once every message named by its own has taken its row.
   const entries: BackfillEntry[] = planned.map((message, index) => ({
-    row: named[index] ?? take(free.find((row) => sameSaying(row, message))),
+    row:
+      named[index] ??
+      (message.callKey === null
+        ? undefined
+        : take(free.find((row) => row.clientKey === message.callKey))),
     planned: message,
   }));
 
