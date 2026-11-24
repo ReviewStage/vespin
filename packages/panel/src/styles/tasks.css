@@ -2805,7 +2805,7 @@ svg.lucide {
 }
 
 /* A message of a Manager's chat that goes on its sender's run
-   (`managerChatRuns`) stands close under the one before it, as a chat app
+   (`managerChatView`) stands close under the one before it, as a chat app
    stands one sender's bubbles, so the run reads as one. */
 .agent-log-row-run {
   padding-block-start: var(--ui-tight-gap);

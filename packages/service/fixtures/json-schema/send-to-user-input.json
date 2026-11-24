@@ -6,6 +6,16 @@
       "minLength": 1,
       "maxLength": 8000,
       "description": "One message, in Markdown, as people will read it in your chat: a line or two making one point, with mention links for what they can open."
+    },
+    "thread_ts": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "The parent message's id, to make this message a reply in its thread."
+    },
+    "reply_broadcast": {
+      "type": "boolean",
+      "description": "Also post the reply to the chat."
     }
   },
   "required": [

@@ -875,11 +875,15 @@ note them (`packages/service/src/auth/auth-counts.ts`) and the auth route
 records them once Better Auth has answered. Only a member's own thread post,
 description edit, and description comment are counted, never an agent's through its tools.
 Its vocabulary is typed per event and holds only fixed words, booleans, and
-catalog ids, and each event carries the account's id as `distinct_id`, so it
-joins the desktop's person and is erased with it. The `ProductAnalytics`
-service is read optionally, so a runtime or test without it records nothing,
-and a deployment without `POSTHOG_PROJECT_API_KEY` builds one that records
-nothing.
+catalog ids. Each event's `distinct_id` is an HMAC-SHA256 of the account's id
+under `POSTHOG_DISTINCT_ID_KEY` (`packages/service/src/events/analytics-distinct-id.ts`),
+never the id itself, with no name or email on it, and a workspace's group is
+named only where it has more than one member. The account `delete` procedure
+recomputes the hash to erase those counts beside the account's own id, so the
+key, once set, is never rotated. The `ProductAnalytics` service is read
+optionally, so a runtime or test without it records nothing, and a deployment
+without `POSTHOG_PROJECT_API_KEY` or `POSTHOG_DISTINCT_ID_KEY` records no
+count.
 
 The browser half of the funnel is separate and weaker: `VITE_POSTHOG_PROJECT_API_KEY`
 is a build-time variable that lets the site's own pages talk to PostHog

@@ -37,8 +37,8 @@ import { trimmedText } from "./text-schema.js";
  * agent works on, only where the reader may open that task; or, for a
  * Manager, which works on no task, the Manager and its line
  * (`managerSource`), beside a null `source` that a client from before it
- * reads as no source; none for a member's own keep, a memory kept before it was recorded, or one whose
- * agent is gone. And how often coding agents were handed it, by their
+ * reads as no source; none for a member's own keep, a memory kept before
+ * it was recorded, or one whose agent is gone. And how often coding agents were handed it, by their
  * search or as a turn opened, in the last `MEMORY_RECALL_WINDOW_DAYS` days
  * (`recalls30d`), and when last (`lastRecalledAt`), a member's own search
  * not counted.
@@ -60,12 +60,17 @@ export const MEMORY_RECALL_WINDOW_DAYS = 30;
 export const MEMORY_QUERY = {
   WORKSPACE_ID: "workspaceId",
   ID: "id",
+  /** The Manager whose own memories a read, a forget, or a keep reaches, in the workspace's place; none for the workspace's own. */
+  MANAGER_ID: "managerId",
   /** A search's words. */
   QUERY: "query",
 } as const;
 
 /** A memory's id as the service mints it: the row's UUID. */
 export const memoryIdSchema = wireUuidSchema;
+
+/** The Manager whose own memories a request reaches, by its agent id; left out for the workspace's own. */
+export const memoryManagerIdSchema = EffectSchema.optionalKey(wireUuidSchema);
 
 /** Where a memory's words came from, as a reader who may open the agent's task sees it. */
 const memorySourceSchema = EffectSchema.Struct({
@@ -130,13 +135,15 @@ export const MEMORY_SAVED = {
 
 /**
  * A memory kept in the member's own words (POST): the workspace, the
- * statement, and, at most, the memory it corrects, which is then rewritten
- * in place rather than kept beside it.
+ * statement, at most the memory it corrects, which is then rewritten in
+ * place rather than kept beside it, and the Manager it is kept for alone,
+ * where it names one.
  */
 export const memorySaveRequestSchema = EffectSchema.Struct({
   workspaceId: workspaceIdSchema,
   text: trimmedText(MEMORY_BOUNDS.MAX_CHARS),
   replaces: EffectSchema.optionalKey(memoryIdSchema),
+  [MEMORY_QUERY.MANAGER_ID]: memoryManagerIdSchema,
 });
 
 /** What a keep came to, and the memory as it then stands. */

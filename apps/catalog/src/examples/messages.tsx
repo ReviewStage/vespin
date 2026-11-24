@@ -9,6 +9,8 @@ import {
   BUTTON_SIZE,
   CHAT_RUN,
   CHAT_SIDE,
+  ChannelMessage,
+  ChannelSplit,
   ChatAside,
   ChatBubble,
   CopyIcon,
@@ -30,6 +32,10 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  ThreadPane,
+  ThreadReplies,
+  TIME_LOOK,
+  Time,
 } from "@repo/ui";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { CATALOG_FAILURE } from "../catalog-failure";
@@ -214,6 +220,76 @@ function Messages(): React.JSX.Element {
               </MessageFrame>
             ))}
           </div>
+        </div>
+      </CatalogSection>
+      <CatalogSection
+        id="message-channel"
+        title="A channel: rows under their sender, a thread's replies under its message, and the thread in its pane"
+      >
+        <div className="catalog-frame">
+          <ChannelSplit
+            pane={
+              <ThreadPane
+                root={
+                  <ChannelMessage
+                    avatar={MANAGER_AVATAR}
+                    name="Iris"
+                    at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
+                  >
+                    <Text>Wanna do standup now?</Text>
+                  </ChannelMessage>
+                }
+                count={1}
+                onClose={() => {}}
+                composer={null}
+              >
+                <ChannelMessage
+                  avatar={<Avatar name="Ada Lovelace" size={AVATAR_SIZE.CARD} decorative />}
+                  name="Ada Lovelace"
+                  at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
+                >
+                  <Text>Give me five minutes.</Text>
+                </ChannelMessage>
+              </ThreadPane>
+            }
+          >
+            <ChannelMessage
+              avatar={MANAGER_AVATAR}
+              name="Iris"
+              at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
+              actions={
+                <IconButton
+                  icon={<CopyIcon />}
+                  label="Copy"
+                  size={BUTTON_SIZE.COMPACT}
+                  onClick={() => {}}
+                />
+              }
+              under={
+                <ThreadReplies
+                  count={1}
+                  faces={[
+                    <Avatar key="ada" name="Ada Lovelace" size={AVATAR_SIZE.INLINE} decorative />,
+                  ]}
+                  open
+                  onOpen={() => {}}
+                />
+              }
+            >
+              <Text>Wanna do standup now?</Text>
+            </ChannelMessage>
+            {RUN.map((words, index) => (
+              <ChannelMessage
+                key={words}
+                avatar={<Avatar name="Ada Lovelace" size={AVATAR_SIZE.CARD} decorative />}
+                name="Ada Lovelace"
+                at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
+                continues={index > 0}
+              >
+                <Text>{words}</Text>
+              </ChannelMessage>
+            ))}
+          </ChannelSplit>
         </div>
       </CatalogSection>
     </>

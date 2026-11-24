@@ -18,7 +18,7 @@ import { SqlClient } from "effect/sql";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, type WireRecord } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { type InboxSandboxDoor, phoneCopyOfSandbox, readSandboxImage } from "./inbox-image.js";
-import { writeManagerSaid } from "./manager-chat-row.js";
+import { MANAGER_SAID, writeManagerSaid } from "./manager-chat-row.js";
 
 /**
  * show-media.ts -- a coding agent or its worker shows the developer pictures, recordings, and sound clips from its sandbox, kept beside its transcript as one set.
@@ -234,9 +234,10 @@ export function runShowMedia(
       }),
     });
 
-    if (Option.isNone(written)) return showMediaRejected(SHOW_MEDIA_REFUSAL.UNAVAILABLE);
+    if (written.kind !== MANAGER_SAID.KEPT)
+      return showMediaRejected(SHOW_MEDIA_REFUSAL.UNAVAILABLE);
 
-    return { ...answer, message_id: written.value };
+    return { ...answer, message_id: written.id };
   }).pipe(
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(showMediaRejected(SHOW_MEDIA_REFUSAL.UNAVAILABLE))),

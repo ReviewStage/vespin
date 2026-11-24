@@ -9,13 +9,21 @@ import {
   recordAgentRunnerToken,
   updateAgentServers,
 } from "@repo/database/models/agent-store";
+import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { user } from "@repo/database/schemas/auth";
 import { messages } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, startTask } from "@repo/database/testing";
-import { AGENT_PAYER } from "@repo/features/agent-wire";
+import {
+  getTestDB,
+  joinWorkspace,
+  openRunningTurn,
+  openWorkspace,
+  startTask,
+} from "@repo/database/testing";
+import { AGENT_KIND, AGENT_PAYER } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
+import { EXPERIMENT } from "@repo/settings";
 import { isRecord, MESSAGE_ROLE, type UnparsedWireValue, type WireRecord } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import {
@@ -108,6 +116,56 @@ const memberWithLinear = Effect.gen(function* () {
   const admitted = Option.getOrThrow(yield* admitRunnerBearer(bearer));
 
   return { userId, agentId: agent.id, admitted, bearer };
+});
+
+/**
+ * A Manager of an owner who connected Linear, on a workspace with Managers
+ * act for whoever asked on, admitted on its runner's bearer, and its turn
+ * under way opened by Dean, a member of the workspace who connected nothing.
+ */
+const managerAskedByDean = Effect.gen(function* () {
+  const db = yield* Database;
+  const owner = `user-${randomUUID()}`;
+  const dean = `user-${randomUUID()}`;
+
+  yield* db.insert(user).values([
+    { id: owner, name: "Owner", email: `${owner}@app.test` },
+    { id: dean, name: "Dean", email: `${dean}@app.test` },
+  ]);
+
+  const workspace = yield* openWorkspace(owner);
+  yield* joinWorkspace(workspace, dean);
+
+  yield* setWorkspaceExperiment({
+    organizationId: workspace,
+    experiment: EXPERIMENT.MANAGER_ACTS_FOR_ASKER,
+    on: true,
+    by: owner,
+  });
+
+  const started = yield* createAgent(owner, {
+    taskId: null,
+    workspaceId: workspace,
+    idempotencyKey: randomUUID(),
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    repository: null,
+    descriptionSnapshot: null,
+    prompt: null,
+    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+    payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+    kind: AGENT_KIND.MANAGER,
+  });
+
+  const agent = Option.getOrThrow(started).agent;
+  const bearer = randomBytes(32).toString("base64url");
+  yield* recordAgentRunnerToken(owner, agent.id, runnerTokenDigest(bearer));
+  yield* beginIntegrationSignIn(owner, firstIntegrationAccount(owner, LINEAR), `state-${owner}`);
+  assert.equal(yield* completeIntegrationSignIn(owner, LINEAR, `state-${owner}`), true);
+  const admitted = Option.getOrThrow(yield* admitRunnerBearer(bearer));
+  yield* openRunningTurn(admitted.target, [{ member: dean }]);
+
+  return { owner, dean, admitted };
 });
 
 /** The door's services: the store, the fake Connect, GitHub as the App, and Linear's server; every line logged is kept. */
@@ -410,6 +468,46 @@ it.layer(SUITE)("the integrations' door", (it) => {
         assert.equal(led.failure.connection, LINEAR);
         assert.deepEqual(heard.calls, [{ name: "list_issues", arguments: {} }]);
         assert.ok(Result.isSuccess(own));
+      }),
+  );
+
+  it.effect("a Manager's call in a turn a teammate opened runs on the teammate's own grant", () =>
+    Effect.gen(function* () {
+      const { dean, admitted } = yield* managerAskedByDean;
+      yield* beginIntegrationSignIn(dean, firstIntegrationAccount(dean, LINEAR), `state-${dean}`);
+      assert.equal(yield* completeIntegrationSignIn(dean, LINEAR, `state-${dean}`), true);
+      const heard = hearing();
+
+      const called = yield* callConnectionTool(admitted, LINEAR, "list_issues", {}).pipe(
+        Effect.provide(doorServices(linearTokenOf(dean), heard, [])),
+      );
+
+      assert.ok(Result.isSuccess(called));
+      assert.deepEqual(heard.calls, [{ name: "list_issues", arguments: {} }]);
+    }),
+  );
+
+  it.effect(
+    "a Manager's call in a turn a teammate opened who has not connected the integration is refused, never run on the owner's grant",
+    () =>
+      Effect.gen(function* () {
+        const { owner, admitted } = yield* managerAskedByDean;
+        const heard = hearing();
+
+        const called = yield* callConnectionTool(admitted, LINEAR, "list_issues", {}).pipe(
+          Effect.provide(doorServices(linearTokenOf(owner), heard, [])),
+        );
+
+        assert.deepEqual(
+          called,
+          Result.fail({
+            status: "rejected",
+            error: integrationUnavailable(LINEAR).NOT_CONNECTED,
+            connection: LINEAR,
+            requiresSignIn: true,
+          }),
+        );
+        assert.deepEqual(heard.bearers, []);
       }),
   );
 

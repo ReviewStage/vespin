@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 400,
+      "description": "The fact or convention, as one self-contained statement a later task can read without this call, such as \"The web server's tests run on PGlite through `test:store`.\""
+    },
+    "replaces": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The id of the memory this one corrects, as search_memory answered it; leave it out for a new memory."
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "workspace",
+        "manager"
+      ],
+      "description": "Where to keep a new memory: workspace, the default, for every agent of the workspace, or manager, for you alone. A correction stays where its memory is kept."
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "additionalProperties": false
+}

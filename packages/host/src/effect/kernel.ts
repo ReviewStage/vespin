@@ -167,7 +167,7 @@ const kernelLayer = Layer.effect(
  * The kernel over the seams, with the late service beside it. Every seam is a
  * requirement, so a composition that did not state one cannot build; the one
  * exception is `ServiceOrigin`, read where it was provided and otherwise left
- * to the desktop's derivation.
+ * to `accountBaseUrlFor`'s derivation.
  */
 export const hostKernelLayer: Layer.Layer<HostKernelTag | HostService, never, HostSeamTags> =
   Layer.provideMerge(kernelLayer, hostServiceLayer);

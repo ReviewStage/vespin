@@ -14,7 +14,7 @@ import {
 import { updateTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openRunningTurn, startTask } from "@repo/database/testing";
 import { AGENT_AUTHOR, AGENT_KIND, type AgentAuthor } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { ACTION_RESULT_STATUS, unparsedWire, type WireBoundaryInput } from "@repo/wire";
@@ -42,7 +42,8 @@ import { openPullRequest } from "./pull-request.js";
  * the App where it writes as the App; and as the App in the developer's
  * place where GitHub refuses their token, the agent's row recording why;
  * and on its starter's own token alone where that is its credential. A
- * Manager's agent opens as its task's assignee, and as the App naming them
+ * Manager's agent opens as its task's assignee, and a Manager's own pull
+ * request as the member who asked for its turn, each as the App naming them
  * where GitHub refuses their token.
  * A refusal of the pull request itself opens nothing and moves nothing.
  * GitHub is a script and the store PGlite; synthetic accounts and tokens
@@ -310,13 +311,22 @@ const openManagersAgent = (installationId: number) =>
     ).agent;
 
     yield* settleAgentAuthor(owner, started.id, AGENT_AUTHOR.DEVELOPER);
+    yield* settleAgentAuthor(owner, manager.id, AGENT_AUTHOR.DEVELOPER);
     const agent = Option.getOrThrow(yield* readAgent(owner, started.id));
+    const managerAgent = Option.getOrThrow(yield* readAgent(owner, manager.id));
     assert.ok(hasRepository(agent));
+    assert.ok(hasRepository(managerAgent));
 
     return {
       installation,
       agent,
       target: { userId: owner, conversationId: agent.conversationId },
+      teammate: assignee,
+      manager: {
+        installation,
+        agent: managerAgent,
+        target: { userId: owner, conversationId: managerAgent.conversationId },
+      },
     };
   });
 
@@ -364,6 +374,42 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
           `${INPUT.body}\n\nRequested by Avery Assignee.`,
         );
         assert.equal(author, AGENT_AUTHOR.DEVELOPER, "the row is left as it stood");
+      }),
+  );
+
+  it.effect(
+    "a Manager's own pull request in a turn a teammate asked for opens on the teammate's token, else as the App naming them, never on the owner's",
+    () =>
+      Effect.gen(function* () {
+        const { manager, teammate } = yield* openManagersAgent(53);
+        yield* openRunningTurn(manager.target, [{ member: teammate }]);
+
+        const asTeammate = yield* open(manager, manager.target, opened);
+
+        const appOnly = (bearer: string) =>
+          bearer === `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}`
+            ? opened()
+            : Response.json({ message: "Bad credentials" }, { status: 401 });
+
+        const asApp = yield* open(manager, manager.target, appOnly);
+
+        assert.ok(asTeammate.result.status === ACTION_RESULT_STATUS.ACCEPTED);
+        assert.equal(asTeammate.result.openedAs, "asker");
+        assert.deepEqual(
+          asTeammate.openings.map((sent) => sent.headers.get("authorization")),
+          [`Bearer ${ASSIGNEE_TOKEN}`],
+        );
+        assert.ok(asApp.result.status === ACTION_RESULT_STATUS.ACCEPTED);
+        assert.equal(asApp.result.openedAs, "app");
+        assert.deepEqual(
+          asApp.openings.map((sent) => sent.headers.get("authorization")),
+          [`Bearer ${ASSIGNEE_TOKEN}`, `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}`],
+        );
+        assert.equal(
+          JSON.parse(asApp.openings[1]?.body ?? "{}").body,
+          `${INPUT.body}\n\nRequested by Avery Assignee.`,
+        );
+        assert.equal(asApp.author, AGENT_AUTHOR.DEVELOPER, "the row is left as it stood");
       }),
   );
 

@@ -1501,12 +1501,28 @@ body,
   transition: visibility 0s linear var(--ui-duration-pane);
 }
 
-/* The run's bar under an automation's agent's bar (`automation-agent-run.tsx`)
-   is a tab's (`PaneBar`), but it stands under the page's toolbar rather than
-   a tab strip, so it starts its glyph a column's inset further in, on one
-   line with the toolbar's first crumb. */
-.agent-page > .ui-pane-bar {
-  padding-inline: calc(var(--column-inset) + var(--ui-list-inset));
+/* A Manager's overview stands its lists in two columns side by side
+   (`manager-overview.tsx`), each its cards one under another, a block's gap
+   apart as the cards over them are, and in one column where its room holds
+   no two. */
+.manager-overview-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--ui-block-gap);
+}
+
+@container (width < 640px) {
+  .manager-overview-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.manager-overview-column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--ui-block-gap);
 }
 
 /* The panel's ground, named once (`--side-panel-ground`): the panel paints

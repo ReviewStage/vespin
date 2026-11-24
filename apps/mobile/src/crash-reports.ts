@@ -8,8 +8,8 @@
  * fixture run, as the desktop's does not (`sentryReportingEnabled`). The SDK
  * runs with its default data collection and the desktop renderer's filters:
  * a breadcrumb or an event that names an access token is dropped whole
- * (`@repo/features/sentry-breadcrumbs`), and each event names the account
- * signed in by its id alone (`@repo/features/sentry-account`).
+ * (`@repo/features/sentry-breadcrumbs`), and no event names the account,
+ * since the app sets no user (`PRIVACY.md`).
  *
  * It traces a launch alone, never a request, a screen, or a press: Sentry's
  * app start, from the process's start through its native steps and the
@@ -37,9 +37,8 @@
  */
 
 import { RENEWAL_REFUSED } from "@repo/credentials";
-import { type AccountProvider, signedInAccountId } from "@repo/credentials/snapshot";
+import type { AccountProvider } from "@repo/credentials/snapshot";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { sentryUser } from "@repo/features/sentry-account";
 import { eventWithoutAccessTokens, withoutAccessTokens } from "@repo/features/sentry-breadcrumbs";
 import { sentryReporterLayer } from "@repo/features/sentry-reporting";
 import type { SignInFailure } from "@repo/features/words";
@@ -54,15 +53,12 @@ import {
   init,
   nativeCrash,
   setTag,
-  setUser,
   startInactiveSpan,
 } from "@sentry/react-native";
-import { useQuery } from "@tanstack/react-query";
 import { type Layer, Option, Schema } from "effect";
 import Constants from "expo-constants";
 import { useEffect } from "react";
 import { AppState } from "react-native";
-import { appStateQuery } from "./host/app-state-query.js";
 import {
   LAUNCH_SENTRY_TEST,
   launchFixtureProfile,
@@ -187,19 +183,6 @@ function startCrashReports(): void {
   if (test === LAUNCH_SENTRY_TEST.JS) captureException(new Error(TEST_REPORT_WORDS));
 
   if (test === LAUNCH_SENTRY_TEST.NATIVE) nativeCrash();
-}
-
-/**
- * Names the account signed in as Sentry's user, by its id alone, for as long
- * as it is, on the native half's scope too, so a native crash names it.
- */
-export function useCrashReportAccount(): void {
-  const { data: accountId } = useQuery({
-    ...appStateQuery,
-    select: (state) => signedInAccountId(state.account),
-  });
-
-  useEffect(() => setUser(sentryUser(accountId)), [accountId]);
 }
 
 /**

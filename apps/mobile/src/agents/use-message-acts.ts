@@ -5,13 +5,16 @@
  * `rewindPoints` and `editsInPlace`): Edit on a person's line that opened a
  * turn, never a comment's, a Slack message's, one said on a call, or files
  * alone; Rewind conversation to here on a reply some such line follows.
- * Both are offered only while the agent takes messages, not archived and
+ * Every message of a Manager's chat, of any author's, offers Reply first,
+ * which quotes it whole into the composer as the panel's Reply does.
+ * Edit and Rewind are offered only while the agent takes messages, not archived and
  * with no call of this phone's standing into it, as the service refuses a
  * rewind under a call. Rewind asks first, in the panel's words
  * (`revertAsk`), and sends the panel's `AGENTS_REWIND`; only the
  * conversation goes back from the phone, the files staying as they are.
  * Edit lays the line's words in the composer, which sends them in its place
- * (`use-agent-composer.ts`); a line that carried files is written again only
+ * (`use-agent-composer.ts`), a Manager's chat message edited as the line it
+ * went as (its row's `lineId`); a line that carried files is written again only
  * on the desktop and the web, since the phone does not read a line's files
  * back into its field. Fork to new agent opens New agent as the panel's
  * fork opens its draft (`@repo/features/agent-fork-model`), on a turn of
@@ -36,6 +39,9 @@ import { useMemo, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 import type { AgentComposer } from "./use-agent-composer.js";
+
+/** What Reply on a chat message says, as the panel's does. */
+const REPLY_WORD = "Reply";
 
 /** A sent line, as the transcript draws it. */
 type SaidItem = Extract<MessageItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>;
@@ -65,10 +71,12 @@ export function useMessageActs(input: {
   readonly agent: FollowedAgent | undefined;
   readonly transcript: AppTranscript | undefined;
   readonly readerId: string | undefined;
-  readonly composer: Pick<AgentComposer, "editMessage">;
+  readonly composer: Pick<AgentComposer, "editMessage" | "reply">;
   readonly calling: boolean;
+  /** Each message of a Manager's chat by its row's id, to the transcript line it went as (`lineId`), which its Edit takes the Manager back to, or null for one that went as none, such as the Manager's own; none for any other agent. */
+  readonly chatLines?: ReadonlyMap<string, string | null> | undefined;
 }): MessageActs {
-  const { agentId, agent, transcript, readerId, composer, calling } = input;
+  const { agentId, agent, transcript, readerId, composer, calling, chatLines } = input;
   const acts = useHostActs();
   const write = useWrite();
   const router = useRouter();
@@ -113,7 +121,10 @@ export function useMessageActs(input: {
 
   /** A line's Edit, where it opened a turn a person wrote, carried words alone, and the agent takes messages. */
   const lineActs = (item: SaidItem): readonly HeldAct[] => {
-    const id = item.place.row;
+    // Note that a chat message stands under its row's id, and is edited as the transcript line it went as, so one with no line, the Manager's own, offers no Edit.
+    const id = chatLines === undefined ? item.place.row : chatLines.get(item.place.row);
+
+    if (id === undefined || id === null) return [];
     const line = byId.get(id);
     const { words } = item;
 
@@ -141,6 +152,19 @@ export function useMessageActs(input: {
         ]
       : [];
   };
+
+  /** Reply on a chat message of any author's, which quotes its words whole into the composer, as every message of the panel's chat offers it; none for a message of no words, or outside a Manager's chat. */
+  const replyActs = (item: SaidItem): readonly HeldAct[] =>
+    // Note that the greeting and a message still on its way are no row of the chat, so they offer none.
+    chatLines?.has(item.place.row) !== true || item.words.trim() === ""
+      ? []
+      : [
+          {
+            label: REPLY_WORD,
+            symbol: GLYPH.REPLY,
+            onPress: () => composer.reply(item.words),
+          },
+        ];
 
   /** A finished turn's Fork to new agent and Rewind conversation to here, in the panel's order, each where it is offered. */
   const turnActs = (id: string, words: string): readonly HeldAct[] => {
@@ -174,7 +198,9 @@ export function useMessageActs(input: {
 
   return {
     more: (item) =>
-      item.kind === TRANSCRIPT_ITEM.FOOT ? turnActs(item.place.message, item.copy) : lineActs(item),
+      item.kind === TRANSCRIPT_ITEM.FOOT
+        ? turnActs(item.place.message, item.copy)
+        : [...replyActs(item), ...lineActs(item)],
     reverting: {
       title: ask.title,
       message: ask.body,

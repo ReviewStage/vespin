@@ -157,6 +157,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   PICTURE_FROM: "picture_from",
   PICTURE_KIND: "picture_kind",
   PICTURE_BYTES: "picture_bytes",
+  LAUNCHED_IN: "launched_in",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -395,6 +396,7 @@ export const PRODUCT_EXPERIMENT = {
   MOVE_AGENTS: "move-agents",
   CURSOR: "cursor",
   MANAGERS: "managers",
+  MANAGER_ACTS_FOR_ASKER: "manager-acts-for-asker",
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   STARTER_TASKS: "starter-tasks",
 } as const;
@@ -533,6 +535,20 @@ export const PRODUCT_READY_AFTER = {
 } as const;
 
 export type ProductReadyAfter = (typeof PRODUCT_READY_AFTER)[keyof typeof PRODUCT_READY_AFTER];
+
+/**
+ * Where a launch began: in front, as a tap opens it, or in the background,
+ * where the system woke the app with nothing on screen, as a push's wake
+ * does on a phone. Note that a launch counted in the background shows its
+ * first screen only once it is brought forward, so the time from its count
+ * to that screen is time spent away, never a launch's wait.
+ */
+export const PRODUCT_LAUNCHED_IN = {
+  FRONT: "front",
+  BACKGROUND: "background",
+} as const;
+
+export type ProductLaunchedIn = (typeof PRODUCT_LAUNCHED_IN)[keyof typeof PRODUCT_LAUNCHED_IN];
 
 /** Where one of a launch's first reads stood: not yet drawn, drawn from the rows the phone kept, the service's answer drawn, or failed. */
 export const PRODUCT_READ_STATE = {
@@ -764,6 +780,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: ProductReadyAfter;
+  [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: ProductLaunchedIn;
   [PRODUCT_EVENT_PROPERTY.INBOX_READ]: ProductReadState;
   [PRODUCT_EVENT_PROPERTY.TASKS_READ]: ProductReadState;
   [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: ProductReadState;
@@ -832,6 +849,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
+  [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: Object.values(PRODUCT_LAUNCHED_IN),
   [PRODUCT_EVENT_PROPERTY.INBOX_READ]: Object.values(PRODUCT_READ_STATE),
   [PRODUCT_EVENT_PROPERTY.TASKS_READ]: Object.values(PRODUCT_READ_STATE),
   [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: Object.values(PRODUCT_READ_STATE),
@@ -922,6 +940,7 @@ const PRODUCT_EVENT_PROPERTIES = {
  * phone has updated.
  */
 const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
+  [PRODUCT_EVENT.APP_LAUNCH]: [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN],
   [PRODUCT_EVENT.APP_READY]: [
     PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
     PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS,
@@ -1318,6 +1337,27 @@ export function productEventBuildFromWire(value: UnparsedWireValue): ProductEven
   if (!isRecord(value)) return {};
 
   return Option.getOrElse(decodeProductEventBuild(value.build), () => ({}));
+}
+
+/**
+ * The batch field naming the install it came from: a random UUID one Mac
+ * app, browser, or iPhone made for itself and keeps, and that the service
+ * files the batch's counts under in place of the account.
+ */
+export const PRODUCT_EVENT_INSTALL_ID_FIELD = "installId";
+
+/** A UUID in its canonical lowercase form, so the field can carry nothing else. */
+const INSTALL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+
+/**
+ * Reads a batch's install id, which is never a reason to refuse it: a build
+ * from before the field sends none, and anything but a UUID reads as none.
+ */
+export function productEventInstallIdFromWire(value: UnparsedWireValue): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const installId = value[PRODUCT_EVENT_INSTALL_ID_FIELD];
+
+  return isWireString(installId) && INSTALL_ID_PATTERN.test(installId) ? installId : undefined;
 }
 
 /** What every emitter is handed: a name, and exactly that name's properties. */

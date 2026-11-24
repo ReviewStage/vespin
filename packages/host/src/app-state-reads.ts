@@ -64,6 +64,7 @@ import {
   type AppStateSnapshot,
   type AppTranscript,
   OWN_TRANSCRIPT,
+  sharesUsageData,
   withAppStateDelivery,
 } from "./app-state.js";
 
@@ -321,6 +322,10 @@ export const selectSettingsHeld = (state: AppStateSnapshot): boolean =>
 /** The settings as the panel draws them. */
 export const selectAppSettingsView = (state: AppStateSnapshot): AppSettingsView | undefined =>
   state.settings === undefined ? undefined : appSettingsView(state.settings);
+
+/** Whether this device shares usage data, undefined before the settings are read (`sharesUsageData`). */
+export const selectSharesUsageData = (state: AppStateSnapshot): boolean | undefined =>
+  sharesUsageData(state);
 
 /** Whether the account keeps an Inbox (`@repo/settings`'s `inbox`): every window draws it but the account's that turned it off; signed out, or before the settings are read, it stands. */
 export const selectInboxOn = (state: AppStateSnapshot): boolean =>

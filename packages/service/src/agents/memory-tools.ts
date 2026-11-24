@@ -1,16 +1,25 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
 import { logMemoryRecalls } from "@repo/database/models/memory-recall-store";
-import type { MemorySource } from "@repo/database/models/memory-store";
+import {
+  MEMORY_SCOPE,
+  type MemoryKeepScope,
+  type MemoryScope,
+  type MemorySource,
+  WORKSPACE_MEMORIES,
+} from "@repo/database/models/memory-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { dateTimeSchema } from "@repo/features/date-mention";
 import { MEMORY_BOUNDS, type MemorySummary, memoryIdSchema } from "@repo/features/memory-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { describeWire } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import {
+  correctionScope,
   forgetWorkspaceMemory,
   listWorkspaceMemoriesSince,
+  managerMemories,
   readWorkspaceMemories,
   saveWorkspaceMemory,
   searchWorkspaceMemories,
@@ -76,6 +85,13 @@ import { EXPERIMENT_OFF_REFUSAL, experimentOnIn } from "./workspace-experiment-o
  * provenance (`forgetProvenance`): never on a turn an automation opened or
  * that read the web, so no page or prompt deletes what the team kept,
  * while the turn a member's answer on the agent's thread opens may.
+ *
+ * A Manager keeps and recalls beside the workspace's memories its own
+ * (`MemoryCall.managerId`): its `save_memory` takes a scope for one kept for
+ * it alone (`saveMemoryToolOf`), a correction staying where the memory it
+ * corrects is kept, and its search, listing, and forget reach the
+ * workspace's memories and its own. No other agent is offered the scope or
+ * reads a Manager's own.
  */
 
 /** What a memory call acts in: the agent's workspace, the member whose words it keeps, and, for a coding agent's call, where it comes from. */
@@ -83,7 +99,15 @@ export interface MemoryCall {
   readonly workspaceId: string;
   readonly userId: string;
   readonly source?: MemorySource;
+  /** The Manager calling, which recalls its own memories beside the workspace's and may keep one for itself alone; none for any other caller. */
+  readonly managerId?: string;
 }
+
+/** Where a Manager's `save_memory` keeps a new memory. */
+const SAVE_MEMORY_SCOPE = {
+  WORKSPACE: "workspace",
+  MANAGER: "manager",
+} as const;
 
 const REMEMBER_INPUT = Schema.Struct({
   text: describeWire(
@@ -95,6 +119,18 @@ const REMEMBER_INPUT = Schema.Struct({
     describeWire(
       memoryIdSchema,
       `The id of the memory this one corrects, as ${AGENT_TOOL.SEARCH_MEMORY} answered it; leave it out for a new memory.`,
+    ),
+  ),
+});
+
+/** A Manager's `save_memory` input: a coder's, and where a new memory is kept. */
+const MANAGER_REMEMBER_INPUT = Schema.Struct({
+  ...REMEMBER_INPUT.fields,
+  scope: Schema.optionalKey(
+    describeWire(
+      Schema.Literals(Object.values(SAVE_MEMORY_SCOPE)),
+      `Where to keep a new memory: ${SAVE_MEMORY_SCOPE.WORKSPACE}, the default, for every agent of the ` +
+        `workspace, or ${SAVE_MEMORY_SCOPE.MANAGER}, for you alone. A correction stays where its memory is kept.`,
     ),
   ),
 });
@@ -133,7 +169,7 @@ const FORGET_INPUT = Schema.Struct({
   ),
 });
 
-const readRemember = Schema.decodeUnknownResult(REMEMBER_INPUT);
+const readRemember = Schema.decodeUnknownResult(MANAGER_REMEMBER_INPUT);
 const readRecall = Schema.decodeUnknownResult(RECALL_INPUT);
 const readList = Schema.decodeUnknownResult(LIST_INPUT);
 const readForget = Schema.decodeUnknownResult(FORGET_INPUT);
@@ -186,6 +222,11 @@ export const SAVE_MEMORY_TOOL = {
   inputSchema: REMEMBER_INPUT,
 } as const;
 
+/** `save_memory` as an agent is listed it: a Manager's takes the scope a new memory is kept in. */
+export function saveMemoryToolOf(manager: boolean) {
+  return manager ? { ...SAVE_MEMORY_TOOL, inputSchema: MANAGER_REMEMBER_INPUT } : SAVE_MEMORY_TOOL;
+}
+
 export const SEARCH_MEMORY_TOOL = {
   name: AGENT_TOOL.SEARCH_MEMORY,
   description:
@@ -228,6 +269,23 @@ export const FORGET_MEMORY_TOOL = {
 
 function rejected(reason: string): WireRecord {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason };
+}
+
+/** The memories a call recalls, lists, and forgets: a Manager's own beside the workspace's, and the workspace's alone for any other caller. */
+function recallScope(call: MemoryCall): MemoryScope {
+  return call.managerId === undefined ? WORKSPACE_MEMORIES : managerMemories(call.managerId);
+}
+
+/** Where a call's keep lands: the workspace's own, unless a Manager keeps one for itself alone or corrects one of its own (`correctionScope`); any other caller keeps in the workspace, whatever scope it names. */
+function keepScope(call: MemoryCall, replaces: string | undefined, scope: string | undefined) {
+  if (call.managerId === undefined) return Effect.succeed<MemoryKeepScope>(WORKSPACE_MEMORIES);
+
+  const chosen: MemoryKeepScope =
+    scope === SAVE_MEMORY_SCOPE.MANAGER
+      ? { kind: MEMORY_SCOPE.MANAGER, managerId: call.managerId }
+      : WORKSPACE_MEMORIES;
+
+  return correctionScope(call.workspaceId, call.managerId, replaces, chosen);
 }
 
 /** A memory as the model reads it. */
@@ -275,11 +333,13 @@ export function runRemember(
   const asked = readRemember(input);
 
   if (Result.isFailure(asked)) return Effect.succeed(rejected(MEMORY_REFUSAL.UNREADABLE_REMEMBER));
-  const { text, replaces } = asked.success;
+  const { text, replaces, scope } = asked.success;
 
   return orUnavailable(
     Effect.map(
-      saveWorkspaceMemory(call.userId, call.workspaceId, text, replaces, call.source),
+      Effect.flatMap(keepScope(call, replaces, scope), (keep) =>
+        saveWorkspaceMemory(call.userId, call.workspaceId, text, replaces, call.source, keep),
+      ),
       (answer): WireRecord =>
         answer.kind === WORKSPACE_MEMORY_SAVE.SAVED
           ? {
@@ -334,6 +394,7 @@ export function runRecall(
         call.userId,
         call.workspaceId,
         asked.success.query,
+        recallScope(call),
       );
 
       if (answer.kind === WORKSPACE_MEMORY.NOT_MEMBER) return rejected(MEMORY_REFUSAL.UNAVAILABLE);
@@ -361,7 +422,7 @@ export function runListMemories(
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   return orUnavailable(
     Effect.map(
-      readWorkspaceMemories(call.userId, call.workspaceId),
+      readWorkspaceMemories(call.userId, call.workspaceId, recallScope(call)),
       (answer): WireRecord =>
         answer.kind === WORKSPACE_MEMORY.READ
           ? {
@@ -395,6 +456,7 @@ function runListMemoriesSince(
         call.workspaceId,
         since === undefined ? 0 : Date.parse(since),
         { offset, limit: MEMORY_LIST_PAGE },
+        recallScope(call),
       ),
       (answer): WireRecord => {
         if (answer.kind !== WORKSPACE_MEMORY.READ) return rejected(MEMORY_REFUSAL.UNAVAILABLE);
@@ -424,7 +486,7 @@ function runForget(
 
   return orUnavailable(
     Effect.gen(function* () {
-      const answer = yield* forgetWorkspaceMemory(userId, workspaceId, memoryId);
+      const answer = yield* forgetWorkspaceMemory(userId, workspaceId, memoryId, recallScope(call));
 
       switch (answer.kind) {
         case WORKSPACE_MEMORY.NOT_MEMBER:
@@ -478,6 +540,7 @@ function agentMemory(
         workspaceId: workspace.value,
         userId,
         ...(read === undefined ? undefined : { source: read.source }),
+        ...(agent?.kind === AGENT_KIND.MANAGER ? { managerId: agent.id } : undefined),
       });
     }),
   );

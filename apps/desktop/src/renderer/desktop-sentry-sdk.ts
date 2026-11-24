@@ -5,8 +5,6 @@
  * only that in the chunk, and no window's entry carries any of it.
  */
 
-import { signedInAccountId } from "@repo/credentials/snapshot";
-import { logNamingAccount } from "@repo/features/sentry-account";
 import {
   eventWithoutAccessTokens,
   SPANS_NAMING_ACCESS_TOKENS,
@@ -20,7 +18,6 @@ import {
 } from "@repo/features/sentry-tracing";
 import { sendShownFailure } from "@repo/features/shown-failure";
 import { sentrySendTracer } from "@repo/panel/send-traces";
-import { appStateQuery } from "@repo/panel/use-app-state";
 import {
   browserProfilingIntegration,
   browserTracingIntegration,
@@ -35,7 +32,6 @@ import {
   startSpan,
   withStreamedSpan,
 } from "@sentry/electron/renderer";
-import type { QueryClient } from "@tanstack/react-query";
 import { BLANK_WINDOW, type BlankWindow, type DesktopSentry } from "./desktop-sentry";
 
 /** The mechanism each blank window's report names, so Sentry's issue says which path caught it. */
@@ -54,16 +50,16 @@ const PANEL_SPAN_OP = "ui.panel";
  * span sent has its addresses scrubbed (`@repo/features/sentry-breadcrumbs`).
  * The DSN, release, and environment are main's, which every renderer event
  * goes through, and its reports reach main as requests of their own, which
- * are never traced (`sentryTracesRequest`).
+ * are never traced (`sentryTracesRequest`). So does the device's "Share usage
+ * data" switch: main's transport sends nothing of the window's while it is
+ * off (`main/services/telemetry-service.ts`).
  *
  * A failure the panel showed is sent as a Sentry log line, and as an issue
  * besides where nothing named it (`@repo/features/shown-failure`); the
  * window's logs reach Sentry through main, as its events do.
  *
- * Main names the signed-in account as its SDK's user, which every event the
- * window sends through it takes; a log line the window sends leaves with the
- * account read from the window's document as it does, and the window sets no
- * user of its own (`@repo/features/sentry-account`).
+ * No report names the account: neither main nor the window sets a user, so
+ * an event or a log line leaves naming nobody (`PRIVACY.md`).
  *
  * Tracing keeps long animation frames, which name the script that held a
  * slow frame, and Interaction to Next Paint, which the SDK's web vitals
@@ -80,7 +76,7 @@ const PANEL_SPAN_OP = "ui.panel";
  * profiling policy. A profile is the panel's own stack frames, function names
  * and bundle paths, and none of a person's words.
  */
-export function initDesktopSentry(queryClient: QueryClient): DesktopSentry {
+export function initDesktopSentry(): DesktopSentry {
   init({
     integrations: [
       browserTracingIntegration({
@@ -93,11 +89,6 @@ export function initDesktopSentry(queryClient: QueryClient): DesktopSentry {
     ...SENTRY_PROFILING,
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,
-    beforeSendLog: (log) =>
-      logNamingAccount(
-        log,
-        signedInAccountId(queryClient.getQueryData(appStateQuery.queryKey)?.account),
-      ),
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,
     beforeSendSpan: withStreamedSpan(spanWithoutAccessTokens),
   });

@@ -26,6 +26,7 @@ import {
   listMemories,
   MEMORY_FORGET,
   MEMORY_OUTCOME,
+  MEMORY_SCOPE,
   type MemoryOutcome,
   readMemorySources,
   rememberMemory,
@@ -48,7 +49,9 @@ import {
  * line, a correction names the corrector's or none for a member's, and the
  * same words kept again stay where they first came from; and only a member
  * who may open the agent's task reads where they came from, or, for a
- * Manager, which works on no task, the Manager by its name.
+ * Manager, which works on no task, the Manager by its name. A memory kept
+ * for one Manager alone is never read, deduped against, corrected, or
+ * forgotten from the workspace's own memories nor from another Manager's.
  *
  * Synthetic accounts, workspaces, and words throughout.
  */
@@ -81,6 +84,27 @@ function keptId(outcome: MemoryOutcome): string {
 
   return outcome.memory.id;
 }
+
+/** A Manager of the member's in the workspace, on no task; its id. */
+const openManager = (userId: string, workspaceId: string) =>
+  Effect.gen(function* () {
+    const started = yield* createAgent(userId, {
+      taskId: null,
+      workspaceId,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: null,
+      descriptionSnapshot: null,
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      kind: AGENT_KIND.MANAGER,
+    });
+
+    return Option.getOrThrow(started).agent.id;
+  });
+
+const managers = (managerId: string) => ({ kind: MEMORY_SCOPE.MANAGER, managerId }) as const;
 
 const wordsOf = (workspaceId: string) =>
   Effect.map(listMemories(workspaceId), (memories) => memories.map((kept) => kept.text));
@@ -319,6 +343,110 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
 
       assert.deepEqual(yield* wordsOf(workspaceId), [DEPLOYS]);
     }),
+  );
+
+  it.effect(
+    "the workspace's reads and writes never reach a memory kept for a Manager alone, which that Manager reads beside the workspace's",
+    () =>
+      Effect.gen(function* () {
+        const { owner, workspaceId } = yield* openTeam;
+        const managerId = yield* openManager(owner, workspaceId);
+
+        const own = keptId(
+          yield* rememberMemory(
+            workspaceId,
+            owner,
+            DEPLOYS,
+            undefined,
+            undefined,
+            managers(managerId),
+          ),
+        );
+
+        // The same words kept for the workspace are a memory of its own, since the Manager's is no workspace's.
+        const shared = yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined);
+        assert.equal(shared.kind, MEMORY_OUTCOME.KEPT);
+        assert.equal(
+          (yield* rememberMemory(workspaceId, owner, DEPLOYS_CORRECTED, own)).kind,
+          MEMORY_OUTCOME.NOT_FOUND,
+        );
+        yield* forgetMemory(workspaceId, own, { userId: owner, manages: true });
+
+        assert.deepEqual(
+          (yield* listMemories(workspaceId)).map((kept) => [kept.id, kept.managerId]),
+          [[keptId(shared), null]],
+        );
+        assert.deepEqual(
+          (yield* listMemories(workspaceId, managers(managerId))).map((kept) => kept.id),
+          [own],
+        );
+        assert.deepEqual(
+          (yield* listMemories(workspaceId, {
+            kind: MEMORY_SCOPE.WORKSPACE_AND_MANAGER,
+            managerId,
+          }))
+            .map((kept) => kept.id)
+            .sort(),
+          [keptId(shared), own].sort(),
+        );
+      }),
+  );
+
+  it.effect(
+    "one Manager never reads, corrects, or forgets another's memory, and a keep for an agent that is no Manager writes nothing",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, workspaceId } = yield* openTeam;
+        const first = yield* openManager(owner, workspaceId);
+        const second = yield* openManager(teammate, workspaceId);
+
+        const firsts = keptId(
+          yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined, undefined, managers(first)),
+        );
+
+        assert.deepEqual(yield* listMemories(workspaceId, managers(second)), []);
+        assert.deepEqual(
+          yield* listMemories(workspaceId, {
+            kind: MEMORY_SCOPE.WORKSPACE_AND_MANAGER,
+            managerId: second,
+          }),
+          [],
+        );
+        assert.equal(
+          (yield* rememberMemory(
+            workspaceId,
+            teammate,
+            DEPLOYS_CORRECTED,
+            firsts,
+            undefined,
+            managers(second),
+          )).kind,
+          MEMORY_OUTCOME.NOT_FOUND,
+        );
+        yield* forgetMemory(
+          workspaceId,
+          firsts,
+          { userId: owner, manages: true },
+          managers(second),
+        );
+
+        const coder = yield* openAgentOnOwnTask(owner, workspaceId);
+        assert.equal(
+          (yield* rememberMemory(
+            workspaceId,
+            owner,
+            TESTS_RUN,
+            undefined,
+            undefined,
+            managers(coder),
+          )).kind,
+          MEMORY_OUTCOME.NOT_FOUND,
+        );
+        assert.deepEqual(
+          (yield* listMemories(workspaceId, managers(first))).map((kept) => kept.text),
+          [DEPLOYS],
+        );
+      }),
   );
 
   it.effect(

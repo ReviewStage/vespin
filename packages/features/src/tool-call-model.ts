@@ -836,7 +836,11 @@ function inboxToolView(
 ): ToolCallView {
   const refused = inboxRefusal(output);
 
-  if (tool === AGENT_TOOL.POST_THREAD || tool === RETIRED_TOOL.POST_TO_INBOX) {
+  if (
+    tool === AGENT_TOOL.POST_THREAD ||
+    tool === RETIRED_TOOL.POST_THREAD ||
+    tool === RETIRED_TOOL.POST_TO_INBOX
+  ) {
     const message = threadPostView(input);
 
     if (message !== undefined) {
@@ -863,7 +867,7 @@ function inboxToolView(
     };
   }
 
-  if (tool === AGENT_TOOL.WITHDRAW_ASK) {
+  if (tool === AGENT_TOOL.WITHDRAW_ASK || tool === RETIRED_TOOL.WITHDRAW_ASK) {
     return {
       kind: CALL_KIND.INBOX_WITHDRAW,
       subject: stringAt(input, "key") ?? "",
@@ -890,7 +894,7 @@ function inboxToolView(
     };
   }
 
-  if (tool === AGENT_TOOL.READ_THREAD) {
+  if (tool === AGENT_TOOL.READ_THREAD || tool === RETIRED_TOOL.READ_THREAD) {
     const thread = isRecord(output) ? output.thread : undefined;
 
     return {
@@ -1241,18 +1245,35 @@ function remoteToolView(
   };
 }
 
-/** How a native harness names a tool of an MCP server: Claude Code's `mcp__<server>__<tool>`. */
-const CLAUDE_CODE_MCP = /^mcp__(.+?)__(.+)$/u;
+/** How Claude Code names a tool of an MCP server: `mcp__<server>__<tool>`, the server up to the first `__` after its first character. */
+const CLAUDE_CODE_MCP = { LEAD: "mcp__", SEPARATOR: "__" } as const;
 
 /** How Codex's MCP calls are named by `native-tool-calls.ts`: the server, a dot, and the tool. */
 const CODEX_MCP = /^([^.]+)\.(.+)$/u;
+
+/**
+ * A Claude Code MCP tool's name split into its server and its tool, as
+ * `/^mcp__(.+?)__(.+)$/` would split it, but read in one pass, since that
+ * pattern backtracks for a long while over a name of many `__`; none for
+ * any other name.
+ */
+function claudeCodeMcpParts(tool: string): readonly [string, string] | undefined {
+  const { LEAD, SEPARATOR } = CLAUDE_CODE_MCP;
+
+  if (!tool.startsWith(LEAD)) return undefined;
+  const rest = tool.slice(LEAD.length);
+  const at = rest.indexOf(SEPARATOR, 1);
+  const name = at === -1 ? "" : rest.slice(at + SEPARATOR.length);
+
+  return at === -1 || name === "" ? undefined : [rest.slice(0, at), name];
+}
 
 /** A call of a tool of an MCP server a native harness made, as it names it: the server by the name its card gives and the tool's own name; nothing for any other tool. */
 function nativeMcpCall(
   tool: string,
 ): { readonly server: string; readonly connection: string; readonly name: string } | undefined {
-  const match = CLAUDE_CODE_MCP.exec(tool) ?? CODEX_MCP.exec(tool);
-  const [, connection, name] = match ?? [];
+  const codex = CODEX_MCP.exec(tool);
+  const [connection, name] = claudeCodeMcpParts(tool) ?? [codex?.[1], codex?.[2]];
 
   return connection === undefined || name === undefined
     ? undefined
@@ -1714,6 +1735,12 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.SLACK_REACT, input, output, "emoji"),
   [AGENT_TOOL.SEND_TO_USER]: ({ input, output }) =>
     namedCall(CALL_KIND.SEND_TO_USER, input, output, "text"),
+  [AGENT_TOOL.READ_CHAT_MESSAGES]: ({ input, output }) =>
+    namedCall(CALL_KIND.CHAT_READ, input, output, undefined),
+  [AGENT_TOOL.READ_CHAT_THREAD]: ({ input, output }) =>
+    namedCall(CALL_KIND.CHAT_THREAD_READ, input, output, undefined),
+  [AGENT_TOOL.SEARCH_CHAT]: ({ input, output }) =>
+    namedCall(CALL_KIND.CHAT_SEARCH, input, output, "keywords"),
 } as const satisfies Record<AgentTool, ToolReader>;
 
 /**
@@ -1787,6 +1814,14 @@ const RETIRED_TOOL_VIEWS = {
     namedCall(CALL_KIND.REOPEN_THREAD, input, output, undefined),
   [RETIRED_TOOL.END_TURN]: ({ input, output }) =>
     namedCall(CALL_KIND.END_TURN, input, output, undefined),
+  [RETIRED_TOOL.POST_THREAD]: READ_INBOX_CALL,
+  [RETIRED_TOOL.WITHDRAW_ASK]: READ_INBOX_CALL,
+  [RETIRED_TOOL.LIST_THREADS]: READ_INBOX_CALL,
+  [RETIRED_TOOL.READ_THREAD]: READ_INBOX_CALL,
+  [RETIRED_TOOL.SEND_TO_USER]: AGENT_TOOL_VIEWS[AGENT_TOOL.SEND_TO_USER],
+  [RETIRED_TOOL.READ_CHAT_MESSAGES]: AGENT_TOOL_VIEWS[AGENT_TOOL.READ_CHAT_MESSAGES],
+  [RETIRED_TOOL.READ_CHAT_THREAD]: AGENT_TOOL_VIEWS[AGENT_TOOL.READ_CHAT_THREAD],
+  [RETIRED_TOOL.SEARCH_CHAT]: AGENT_TOOL_VIEWS[AGENT_TOOL.SEARCH_CHAT],
 } as const satisfies Record<RetiredTool, ToolReader>;
 
 /** The tools the retired runtime gave a session and a native harness's subagent, a message to one and a stop of what runs in Claude Code's background, which a transcript carries beside the agent's own, and the retired runtime's connection tools: a connection's search and its run, each naming the server its input does. */
@@ -2098,11 +2133,15 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [RETIRED_TOOL.REOPEN_THREAD, namedDescription],
   [AGENT_TOOL.OPEN_PULL_REQUEST, openedPullRequest],
   [AGENT_TOOL.POST_THREAD, namedThread],
+  [RETIRED_TOOL.POST_THREAD, namedThread],
   [RETIRED_TOOL.POST_TO_INBOX, namedThread],
   [AGENT_TOOL.WITHDRAW_ASK, namedThread],
+  [RETIRED_TOOL.WITHDRAW_ASK, namedThread],
   [RETIRED_TOOL.CLOSE_INBOX_ITEM, () => INBOX_TARGET],
   [AGENT_TOOL.LIST_THREADS, () => INBOX_TARGET],
+  [RETIRED_TOOL.LIST_THREADS, () => INBOX_TARGET],
   [AGENT_TOOL.READ_THREAD, readThread],
+  [RETIRED_TOOL.READ_THREAD, readThread],
   [RETIRED_TOOL.READ_THREADS, () => INBOX_TARGET],
   [RETIRED_TOOL.READ_INBOX, () => INBOX_TARGET],
   [RETIRED_TOOL.REPLY_INBOX, () => INBOX_TARGET],

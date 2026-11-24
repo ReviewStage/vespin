@@ -169,6 +169,10 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       appVersion: identity.appVersion,
       packaged: identity.packaged,
       platform: identity.platform,
+      // Note that an id the file could not keep still counts this run, under an id of its own.
+      installId: store
+        .usageInstallId(kernel.createId)
+        .pipe(Effect.orElseSucceed(() => kernel.createId())),
       sends: runMode.sendsNetwork,
       // The kernel's clock, so a count is stamped on the same clock as every other timer here.
       now: kernel.now,
@@ -443,7 +447,9 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
      * Whether this run's launch is counted yet. Note that we count it on the
      * first arm rather than at launch alone, because a launch whose settings
      * read failed, as one woken in the background may, learns usage data is
-     * on only later, and would otherwise never be counted.
+     * on only later, and would otherwise never be counted. The count says
+     * where the launch began where the platform knows (`launchedIn`), so a
+     * wake in the background is never read as a launch someone waited on.
      */
     let launchCounted = false;
 
@@ -452,7 +458,10 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
 
       if (launchCounted) return;
       launchCounted = true;
-      productEvents.record(PRODUCT_EVENT.APP_LAUNCH, { app_version: identity.appVersion });
+      productEvents.record(PRODUCT_EVENT.APP_LAUNCH, {
+        app_version: identity.appVersion,
+        ...(identity.launchedIn === undefined ? undefined : { launched_in: identity.launchedIn }),
+      });
     };
 
     const sideEffects = hostSettingSideEffects({

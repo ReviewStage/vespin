@@ -6,7 +6,7 @@
  * taking a kernel that holds all of them.
  */
 import type { AccountRenewalWindow, OpenConsent } from "@repo/credentials";
-import type { ProductClientPlatform } from "@repo/features/analytics";
+import type { ProductClientPlatform, ProductLaunchedIn } from "@repo/features/analytics";
 import type {
   DeviceArch,
   DeviceCapability,
@@ -54,6 +54,12 @@ export interface AppIdentityFacts {
    * member's, which names none.
    */
   readonly deviceZone?: () => string;
+  /**
+   * Where this launch began, which its count says (`app:launch`): in the
+   * background where the system woke the app with nothing on screen, as a
+   * phone's push does; none on a platform with no such launch.
+   */
+  readonly launchedIn?: ProductLaunchedIn;
 }
 
 export class AppIdentity extends Context.Service<AppIdentity, AppIdentityFacts>()(
@@ -134,7 +140,8 @@ export class IdSource extends Context.Service<IdSource, IdSourceSeam>()("@repo/h
  * cross-origin. Every hosted address the host builds — the account service
  * and the hosted routes — then stands on it, and no development
  * override redirects any of them. It is optional: a host handed none derives
- * its addresses as a desktop build does, so the desktop provides none.
+ * its addresses itself. The desktop provides the origin its bootstrap
+ * settled, which alone honors an end-to-end build's loopback service.
  */
 export class ServiceOrigin extends Context.Service<ServiceOrigin, string>()(
   "@repo/host/ServiceOrigin",

@@ -25,7 +25,6 @@ import { Option, Schema } from "effect";
 import { AGENT_PART, type AgentPart, agentParts, messageWords } from "./agent-parts.js";
 import { AGENT_TOOL, CLAUDE_CODE_TOOL } from "./agent-tools.js";
 import {
-  AGENT_SENDER,
   type AgentTranscriptMessage,
   CHECK_STATE,
   type CheckState,
@@ -64,8 +63,8 @@ export function agentMessageOf(message: AgentTranscriptMessage): AgentMessageMet
  * voice, sent from a suggestion they pressed, or the prompt they started the
  * agent with; never words the service wrote in their name (`app_words`), a
  * description or another agent's work a Start handed on, nor a line any other
- * channel carried. The one test the chat's live write (`chatOfLine`) and its
- * derivation (`isPersonLine`) both take, so the two keep the same messages.
+ * channel carried. The one test the chat's live write (`chatOfLine`) takes,
+ * whichever door sent the line.
  */
 export function isPersonChatMetadata(metadata: UserMessageMetadata): boolean {
   if (!isDeveloperLine(metadata) || !("channel" in metadata)) return false;
@@ -77,33 +76,6 @@ export function isPersonChatMetadata(metadata: UserMessageMetadata): boolean {
   return (
     metadata.channel === MESSAGE_CHANNEL.VOICE || metadata.channel === MESSAGE_CHANNEL.SUGGESTION
   );
-}
-
-/**
- * Whether a line is a person's own words to the agent (`isPersonChatMetadata`),
- * or a line that holds no metadata, as one the window drew as it
- * sent; never another agent's message, a wakeup, a thread's, a comment's,
- * GitHub's, Slack's, an automation's, the app's, a runtime note, or a line
- * whose metadata this build cannot read.
- */
-export function isPersonLine(message: AgentTranscriptMessage): boolean {
-  if (message.role !== MESSAGE_ROLE.USER) return false;
-  const { sentBy, metadata } = message;
-
-  if (sentBy?.agent === true) return false;
-
-  if (
-    sentBy?.kind !== undefined &&
-    sentBy.kind !== AGENT_SENDER.MEMBER &&
-    sentBy.kind !== AGENT_SENDER.FORMER
-  ) {
-    return false;
-  }
-
-  if (metadata === undefined) return true;
-  const read = Option.getOrUndefined(readUserMetadata(metadata));
-
-  return read !== undefined && isPersonChatMetadata(read);
 }
 
 /**
