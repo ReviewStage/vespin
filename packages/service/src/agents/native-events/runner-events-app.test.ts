@@ -87,6 +87,7 @@ import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { CURSOR_START, transcriptPast } from "../coder-host/transcript.js";
 import { readNativeTurnHanded, recordNativeTurnHanded } from "../coder-host/turn-message.js";
 import { launchUrl, runnerTokenDigest } from "../workspace-mcp/bearer.js";
+import { claudeCodeMoments } from "./claude-code-moments.js";
 import {
   RUNNER_EVENTS_PATH,
   type RunnerAlive,
@@ -608,6 +609,49 @@ it.layer(SUITE)("the runner events route", (it) => {
           ["tool-Write", "output-available", "File�created"],
           ["step-start"],
           ["tool-read_inbox", "output-available", { status: "accepted", inbox: ["a�b"] }],
+        ]);
+      }),
+  );
+
+  it.effect(
+    "an event read as a value the store can never keep is passed over, the events around it land, and the batch posted again applies nothing",
+    () =>
+      Effect.gen(function* () {
+        // Half a character the boundary's cleaning did not foresee, as a reader would hand on a value
+        // it had not met, which Postgres refuses in a JSON value as a data exception.
+        const post = yield* standingWith({
+          read: (message, held) =>
+            // SAFETY: the moments are the real reader's, one marked word in them replaced.
+            JSON.parse(
+              JSON.stringify(claudeCodeMoments(message, held)).replaceAll("UNKEPT", "\\ud83d"),
+            ) as ReturnType<typeof claudeCodeMoments>,
+        });
+
+        const agent = yield* agentWithBearer;
+
+        const events = workflowTurn(agent.lineId).map(
+          (event) =>
+            // SAFETY: each event is one the pinned SDK or the runner emits, one tool answer's text alone changed.
+            JSON.parse(
+              JSON.stringify(event).replace('\\"inbox\\":[]', '\\"inbox\\":[\\"UNKEPT\\"]'),
+            ) as RunnerEvent,
+        );
+
+        const landed = yield* post(agent.bearer, events.slice(0, 7));
+        const again = yield* post(agent.bearer, events.slice(0, 7));
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(landed, {
+          status: HOSTED_HTTP_STATUS.OK,
+          body: { applied: 6, sequence: 6 },
+        });
+        assert.deepEqual(again.body, { applied: 0, sequence: 6 });
+        assert.deepEqual(rows.at(-1)?.parts.map(drawn).slice(1), [
+          ["tool-Write", "output-available", "File created"],
+          ["step-start"],
+          // The answer passed over took its step's boundary with it, and the call stands unanswered.
+          ["tool-read_inbox", "input-available"],
+          ["tool-Bash", "input-available"],
         ]);
       }),
   );
