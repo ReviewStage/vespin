@@ -17,7 +17,6 @@ import {
   repositoryHeld,
   SCHEDULE_KIND,
   type ScheduleDraft,
-  type ScheduleKind,
   sameDraft,
   scheduleOf,
   withGithubEvent,
@@ -26,6 +25,22 @@ import {
   withRepository,
   withScheduleKind,
 } from "@repo/features/automation-draft-model";
+import {
+  AUTOMATION_EDITOR_SECTION,
+  AUTOMATION_TRIGGERS,
+  GITHUB_EVENTS,
+  GITHUB_SENDERS,
+  GITHUB_SWITCH_WORDS,
+  HOURLY_MINUTES,
+  hourlyLabel,
+  PULL_REQUEST_EVENTS,
+  PULL_REQUEST_MOMENTS,
+  SCHEDULE_KINDS,
+  SENTRY_EVENTS,
+  SENTRY_LEVELS,
+  WEEKDAYS,
+  zoneLabel,
+} from "@repo/features/automation-editor-words";
 import { parseAutomationClock } from "@repo/features/automation-list-model";
 import { type AutomationPresetName, automationPreset } from "@repo/features/automation-presets";
 import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
@@ -43,14 +58,9 @@ import {
   type AutomationScope,
   type AutomationSummary,
   type AutomationTargetKind,
-  type AutomationTriggerKind,
-  GITHUB_SENDER,
   GITHUB_TRIGGER_EVENT,
-  type GitHubSender,
   type GitHubTriggerEvent,
   type IntegrationTriggerFilters,
-  PULL_REQUEST_MOMENT,
-  type PullRequestMoment,
 } from "@repo/features/automation-wire";
 import {
   AUTOMATION_RUN_REFUSAL_WORDS,
@@ -66,12 +76,6 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { clockText, dateOfText, dayAndTimeText, timeZoneNames } from "@repo/features/time-format";
-import {
-  SENTRY_LEVEL,
-  SENTRY_TRIGGER_EVENT,
-  type SentryLevel,
-  type SentryTriggerEvent,
-} from "@repo/features/trigger-catalog";
 import {
   andList,
   IRREVERSIBLE_WORDS,
@@ -286,71 +290,6 @@ export interface AutomationWrites {
   toggle(automationId: string, enabled: boolean): Promise<AutomationWriteAnswer>;
 }
 
-/** The kinds of schedule as the picker offers them, in its order. */
-const SCHEDULE_KINDS: readonly { value: ScheduleKind; label: string }[] = [
-  { value: SCHEDULE_KIND.HOURLY, label: "Hourly" },
-  { value: SCHEDULE_KIND.DAILY, label: "Daily" },
-  { value: SCHEDULE_KIND.WEEKDAYS, label: "Weekdays" },
-  { value: SCHEDULE_KIND.WEEKLY, label: "Weekly" },
-  { value: SCHEDULE_KIND.ONCE, label: "Once" },
-  { value: SCHEDULE_KIND.CUSTOM, label: "Custom" },
-];
-
-/** What may fire an automation, as the Type picker names them. */
-const TRIGGERS: readonly { value: AutomationTriggerKind; label: string }[] = [
-  { value: AUTOMATION_TRIGGER.SCHEDULE, label: "Schedule" },
-  { value: AUTOMATION_TRIGGER.GITHUB, label: "GitHub event" },
-  { value: AUTOMATION_TRIGGER.WEBHOOK, label: "Webhook" },
-  { value: AUTOMATION_TRIGGER.INTEGRATION, label: "Sentry" },
-];
-
-/** The Sentry events the event menu offers, the recommended one first. */
-const SENTRY_EVENTS: readonly { value: SentryTriggerEvent; label: string }[] = [
-  { value: SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED, label: "Alert triggered (recommended)" },
-  { value: SENTRY_TRIGGER_EVENT.ISSUE_CREATED, label: "New issue" },
-];
-
-/** What a Sentry event's row says under its name where its name alone cannot: how an alert reaches us. */
-const SENTRY_EVENT_DETAIL: Partial<Record<SentryTriggerEvent, string>> = {
-  [SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED]: `Set the alert rule's action to send a notification to the ${PRODUCT_NAME} integration.`,
-};
-
-/** Sentry's levels as the level pills name them, least severe first. */
-const SENTRY_LEVELS: readonly { value: SentryLevel; label: string }[] = [
-  { value: SENTRY_LEVEL.DEBUG, label: "Debug" },
-  { value: SENTRY_LEVEL.INFO, label: "Info" },
-  { value: SENTRY_LEVEL.WARNING, label: "Warning" },
-  { value: SENTRY_LEVEL.ERROR, label: "Error" },
-  { value: SENTRY_LEVEL.FATAL, label: "Fatal" },
-];
-
-/** The GitHub events the event menu offers, in its order. */
-const GITHUB_EVENTS: readonly { value: GitHubTriggerEvent; label: string }[] = [
-  { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED, label: "Pull request opened or updated" },
-  { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED, label: "Pull request opened" },
-  { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED, label: "Pull request labeled" },
-  { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED, label: "Pull request merged" },
-  { value: GITHUB_TRIGGER_EVENT.ISSUE_OPENED, label: "Issue opened" },
-  { value: GITHUB_TRIGGER_EVENT.ISSUE_LABELED, label: "Issue labeled" },
-  { value: GITHUB_TRIGGER_EVENT.CHECK_FAILED, label: "Checks failed" },
-  { value: GITHUB_TRIGGER_EVENT.PUSH, label: "Commits pushed" },
-  { value: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED, label: "Release published" },
-];
-
-/** The days of the week as cron numbers them. */
-const WEEKDAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-] as const;
-
-/** The minutes past the hour an hourly schedule offers. */
-const HOURLY_MINUTES = [0, 15, 30, 45] as const;
-
 /** Every zone this Mac knows, as the zone menu lists them. */
 const TIME_ZONES = timeZoneNames();
 
@@ -517,16 +456,6 @@ function DateField({
       onBlur={() => setTyped(unreadable ? typed : undefined)}
     />
   );
-}
-
-/** A minute past the hour as the hourly picker names it: "At :15". */
-function hourlyLabel(minute: number): string {
-  return `At :${String(minute).padStart(2, "0")}`;
-}
-
-/** A zone as the zone picker names it, its underscores read as spaces. */
-function zoneLabel(zone: string): string {
-  return zone.replaceAll("_", " ");
 }
 
 /**
@@ -914,14 +843,6 @@ function ScheduleRows({
   );
 }
 
-/** The form's groups, by their headings, in the order the form stands them. */
-const EDITOR_SECTION = {
-  SHARING: "Sharing",
-  TRIGGER: "Trigger",
-  PROMPT: "Prompt",
-  WHERE_IT_RUNS: "Where it runs",
-} as const;
-
 /** How many lines the prompt's field stands, written in or read. */
 const PROMPT_ROWS = 5;
 
@@ -933,18 +854,18 @@ const PROMPT_ROWS = 5;
  * finished runs, each with the words under its name where it says them.
  */
 const SCHEDULED_ROWS = {
-  [EDITOR_SECTION.SHARING]: [
+  [AUTOMATION_EDITOR_SECTION.SHARING]: [
     { described: true, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     { described: true, controls: [SETTINGS_SKELETON_CONTROL.VALUE] },
   ],
-  [EDITOR_SECTION.TRIGGER]: [
+  [AUTOMATION_EDITOR_SECTION.TRIGGER]: [
     { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     { described: true, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     // The time's field stands at a picker's width beside the pickers (`.automation-field`).
     { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
   ],
-  [EDITOR_SECTION.WHERE_IT_RUNS]: [
+  [AUTOMATION_EDITOR_SECTION.WHERE_IT_RUNS]: [
     { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
@@ -1315,32 +1236,6 @@ function EditorToolbar({
   );
 }
 
-/** Whose events a GitHub trigger may hear, as its switches name them. */
-const SENDER_CHOICES: readonly { value: GitHubSender; label: string; detail?: string }[] = [
-  { value: GITHUB_SENDER.PEOPLE, label: "From people" },
-  { value: GITHUB_SENDER.APP_AGENTS, label: `From ${PRODUCT_NAME}'s agents` },
-  { value: GITHUB_SENDER.OTHER_BOTS, label: "From other bots" },
-];
-
-/** The moments of a pull request an update may fire on, as its switches name them. */
-const MOMENT_CHOICES: readonly { value: PullRequestMoment; label: string; detail?: string }[] = [
-  { value: PULL_REQUEST_MOMENT.OPENED, label: "When opened" },
-  { value: PULL_REQUEST_MOMENT.READY, label: "When marked ready" },
-  {
-    value: PULL_REQUEST_MOMENT.PUSHED,
-    label: "When pushed to",
-    detail: `Never for a push by ${PRODUCT_NAME}'s agents.`,
-  },
-];
-
-/** The GitHub events a pull request's forks speak to. */
-const PULL_REQUEST_EVENTS: ReadonlySet<GitHubTriggerEvent> = new Set([
-  GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
-  GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED,
-  GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
-  GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
-]);
-
 /** A list with a value in it or out of it, as a switch leaves it. */
 function toggled<Value>(list: readonly Value[], value: Value, on: boolean): readonly Value[] {
   return on
@@ -1367,7 +1262,7 @@ function GitHubSettingsRows({
 }): React.JSX.Element {
   return (
     <Reveal shown={event !== GITHUB_TRIGGER_EVENT.CHECK_FAILED}>
-      {SENDER_CHOICES.map((choice) => (
+      {GITHUB_SENDERS.map((choice) => (
         <SwitchRow
           key={choice.value}
           label={choice.label}
@@ -1382,7 +1277,7 @@ function GitHubSettingsRows({
         />
       ))}
       <Reveal shown={event === GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED}>
-        {MOMENT_CHOICES.map((choice) => (
+        {PULL_REQUEST_MOMENTS.map((choice) => (
           <SwitchRow
             key={choice.value}
             label={choice.label}
@@ -1400,27 +1295,23 @@ function GitHubSettingsRows({
       <Reveal shown={PULL_REQUEST_EVENTS.has(event)}>
         <Reveal shown={event !== GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED}>
           <SwitchRow
-            label="Skip drafts"
+            label={GITHUB_SWITCH_WORDS.SKIP_DRAFTS}
             labelReplayUnmasked
             checked={!settings.drafts}
             onChange={(skip) => onSettings({ ...settings, drafts: !skip })}
           />
         </Reveal>
         <SwitchRow
-          label="Include forks"
+          label={GITHUB_SWITCH_WORDS.INCLUDE_FORKS}
           labelReplayUnmasked
-          detail={
-            <ReplayUnmask>
-              Its code comes from outside the repository, and the agent can push to it.
-            </ReplayUnmask>
-          }
+          detail={<ReplayUnmask>{GITHUB_SWITCH_WORDS.FORKS_DETAIL}</ReplayUnmask>}
           checked={settings.forks}
           onChange={(forks) => onSettings({ ...settings, forks })}
         />
       </Reveal>
       <Reveal shown={event === GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED}>
         <SwitchRow
-          label="Include prereleases"
+          label={GITHUB_SWITCH_WORDS.INCLUDE_PRERELEASES}
           labelReplayUnmasked
           checked={settings.prereleases}
           onChange={(prereleases) => onSettings({ ...settings, prereleases })}
@@ -1578,7 +1469,7 @@ function SentryRows({
         width={CHIP_WIDTH.MIN_FIELD}
         label="Event"
         labelReplayUnmasked
-        detail={SENTRY_EVENT_DETAIL[trigger.event]}
+        detail={SENTRY_EVENTS.find((each) => each.value === trigger.event)?.detail}
         value={trigger.event}
         options={SENTRY_EVENTS}
         parse={sentryEventOf}
@@ -2113,7 +2004,7 @@ function RunsGroup({
   const also = draft.alsoRepositories.filter((repository) => repository !== draft.repository);
 
   return (
-    <SettingsSection title={<ReplayUnmask>{EDITOR_SECTION.WHERE_IT_RUNS}</ReplayUnmask>}>
+    <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.WHERE_IT_RUNS}</ReplayUnmask>}>
       <SettingsRow
         label={<ReplayUnmask>Repository</ReplayUnmask>}
         description={
@@ -2200,7 +2091,7 @@ function RunsGroup({
 }
 
 /** The parse the Trigger picker reads its kind back with. */
-const triggerKindOf = optionValue(TRIGGERS);
+const triggerKindOf = optionValue(AUTOMATION_TRIGGERS);
 
 /** The parse the event picker reads its event back with. */
 const githubEventOf = optionValue(GITHUB_EVENTS);
@@ -2252,12 +2143,12 @@ function EditorForm({
   // Note that Sentry stays listed where the deployment holds no integration, unpickable and saying why, so it can be found.
   const triggers =
     sentry.read?.configured === false && draft.triggerKind !== AUTOMATION_TRIGGER.INTEGRATION
-      ? TRIGGERS.map((trigger) =>
+      ? AUTOMATION_TRIGGERS.map((trigger) =>
           trigger.value === AUTOMATION_TRIGGER.INTEGRATION
             ? { ...trigger, disabled: SENTRY_NOT_SET_UP }
             : trigger,
         )
-      : TRIGGERS;
+      : AUTOMATION_TRIGGERS;
 
   // The form is the area its reveals move, so the groups under a trigger's rows glide as they unroll.
   const form = useRef<HTMLDivElement>(null);
@@ -2280,7 +2171,7 @@ function EditorForm({
     <RevealArea root={form}>
       <AutomationForm ref={form} {...revealArea()}>
         {offersOwner ? (
-          <SettingsSection title={<ReplayUnmask>{EDITOR_SECTION.SHARING}</ReplayUnmask>}>
+          <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.SHARING}</ReplayUnmask>}>
             <OwnerRow
               owner={draft.owner}
               owners={owners}
@@ -2292,7 +2183,7 @@ function EditorForm({
             {automation === undefined ? null : <MakerRow maker={maker} at={automation.createdAt} />}
           </SettingsSection>
         ) : null}
-        <SettingsSection title={<ReplayUnmask>{EDITOR_SECTION.TRIGGER}</ReplayUnmask>}>
+        <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.TRIGGER}</ReplayUnmask>}>
           <SelectRow
             width={CHIP_WIDTH.MIN_FIELD}
             label="Type"
@@ -2354,7 +2245,7 @@ function EditorForm({
           </RevealChoice>
         </SettingsSection>
         <SettingsSection
-          title={<ReplayUnmask>{EDITOR_SECTION.PROMPT}</ReplayUnmask>}
+          title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.PROMPT}</ReplayUnmask>}
           frame={SETTINGS_SECTION_FRAME.NONE}
         >
           <AutomationPrompt
@@ -2488,21 +2379,25 @@ function EditorSkeleton({ offersOwner }: { offersOwner: boolean }): React.JSX.El
         <Skeleton kind={SKELETON_KIND.CONTROL} />
         <AutomationForm>
           {offersOwner ? (
-            <SettingsSection title={<ReplayUnmask>{EDITOR_SECTION.SHARING}</ReplayUnmask>}>
-              <SettingsRowsSkeleton rows={SCHEDULED_ROWS[EDITOR_SECTION.SHARING]} />
+            <SettingsSection
+              title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.SHARING}</ReplayUnmask>}
+            >
+              <SettingsRowsSkeleton rows={SCHEDULED_ROWS[AUTOMATION_EDITOR_SECTION.SHARING]} />
             </SettingsSection>
           ) : null}
-          <SettingsSection title={<ReplayUnmask>{EDITOR_SECTION.TRIGGER}</ReplayUnmask>}>
-            <SettingsRowsSkeleton rows={SCHEDULED_ROWS[EDITOR_SECTION.TRIGGER]} />
+          <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.TRIGGER}</ReplayUnmask>}>
+            <SettingsRowsSkeleton rows={SCHEDULED_ROWS[AUTOMATION_EDITOR_SECTION.TRIGGER]} />
           </SettingsSection>
           <SettingsSection
-            title={<ReplayUnmask>{EDITOR_SECTION.PROMPT}</ReplayUnmask>}
+            title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.PROMPT}</ReplayUnmask>}
             frame={SETTINGS_SECTION_FRAME.NONE}
           >
             <PromptSkeleton />
           </SettingsSection>
-          <SettingsSection title={<ReplayUnmask>{EDITOR_SECTION.WHERE_IT_RUNS}</ReplayUnmask>}>
-            <SettingsRowsSkeleton rows={SCHEDULED_ROWS[EDITOR_SECTION.WHERE_IT_RUNS]} />
+          <SettingsSection
+            title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.WHERE_IT_RUNS}</ReplayUnmask>}
+          >
+            <SettingsRowsSkeleton rows={SCHEDULED_ROWS[AUTOMATION_EDITOR_SECTION.WHERE_IT_RUNS]} />
           </SettingsSection>
         </AutomationForm>
       </AutomationSetup>
