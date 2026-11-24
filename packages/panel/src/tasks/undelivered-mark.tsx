@@ -2,9 +2,11 @@ import type { Failure } from "@repo/features/failure-remedy";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { MessageFailedMark } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { createContext, type ReactNode, useContext } from "react";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { failureShown } from "../failure-report.js";
-import { refusedAtLimit } from "./agent-model.js";
+import { refusedAtLimit, SENT_LINE_STATE } from "./agent-model.js";
+import { sameNotes, sameSet, useKept, useSteady } from "./kept-draws.js";
+import type { HeldComposer } from "./use-agent-composer.js";
 
 /**
  * undelivered-mark.tsx -- the red alert beside a line the developer sent that did not go, and the "Not delivered" its time is led by, as a chat app marks a message that did not go: refused for now, its menu offers Retry, Edit, and Delete; refused for good, it says why.
@@ -96,6 +98,73 @@ function lineCause(messageId: string, code: LineCause["code"]): LineCause {
 
 /** Hands an agent's transcript the lines that did not go. */
 export const UndeliveredLines = MarksContext.Provider;
+
+/**
+ * The lines of the box's that did not go, or are still on their way, as
+ * `UndeliveredLines` hands them on, each set and door kept from draw to draw
+ * while what it says is unchanged, so a page that moved none of them draws
+ * no message again.
+ */
+export function useSentLineMarks(
+  composer: Pick<
+    HeldComposer,
+    "sent" | "closed" | "retryLine" | "takeBackLine" | "dropLine" | "failedNotes"
+  >,
+  archived: boolean,
+): SentLineMarks {
+  const undelivered = useKept(
+    new Set(
+      composer.sent
+        .filter((line) => line.state === SENT_LINE_STATE.UNDELIVERED)
+        .map((line) => line.id),
+    ),
+    sameSet,
+  );
+
+  const unsent = useKept(
+    new Set(
+      composer.sent.filter((line) => line.state === SENT_LINE_STATE.FAILED).map((line) => line.id),
+    ),
+    sameSet,
+  );
+
+  const sending = useKept(
+    new Set(
+      composer.sent.filter((line) => line.state === SENT_LINE_STATE.PENDING).map((line) => line.id),
+    ),
+    sameSet,
+  );
+
+  const retryLine = useSteady(composer.retryLine);
+  const takeBackLine = useSteady(composer.takeBackLine);
+  const dropLine = useSteady(composer.dropLine);
+  const failedNotes = useKept(composer.failedNotes, sameNotes);
+
+  return useMemo(
+    () => ({
+      undelivered,
+      closed: composer.closed,
+      unsent,
+      notes: failedNotes,
+      sending,
+      // Note that an archived agent takes no message, so a line refused before it was archived is only deleted.
+      retry: !archived ? (id: string) => retryLine?.(id) : undefined,
+      takeBack: !archived ? (id: string) => takeBackLine?.(id) : undefined,
+      drop: (id: string) => dropLine?.(id),
+    }),
+    [
+      undelivered,
+      composer.closed,
+      unsent,
+      failedNotes,
+      sending,
+      retryLine,
+      takeBackLine,
+      dropLine,
+      archived,
+    ],
+  );
+}
 
 /** The ids of the lines the agent refused for good, none of which is the brief its transcript opens on. */
 export function useUndeliveredLines(): ReadonlySet<string> {

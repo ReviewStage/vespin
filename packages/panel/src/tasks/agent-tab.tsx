@@ -328,15 +328,7 @@ import { EditComposer } from "./edit-composer.js";
 import { FollowOfferDock } from "./follow-offer-dock.js";
 import { ForkedToLine, SuggestionChip, useForkOffered } from "./fork-action.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
-import {
-  sameEntries,
-  sameFields,
-  sameIds,
-  sameNotes,
-  sameSet,
-  useKept,
-  useSteady,
-} from "./kept-draws.js";
+import { sameEntries, sameFields, sameIds, sameSet, useKept, useSteady } from "./kept-draws.js";
 import {
   CommentLineHead,
   GitHubLineCard,
@@ -393,6 +385,7 @@ import {
   useLineMarked,
   useLineSending,
   useLineStatus,
+  useSentLineMarks,
   useUndeliveredLines,
   useUnsentLines,
 } from "./undelivered-mark.js";
@@ -3953,58 +3946,7 @@ function AgentTabView({
     sameSet,
   );
 
-  const undelivered = useKept(
-    new Set(
-      composer.sent
-        .filter((line) => line.state === SENT_LINE_STATE.UNDELIVERED)
-        .map((line) => line.id),
-    ),
-    sameSet,
-  );
-
-  const unsent = useKept(
-    new Set(
-      composer.sent.filter((line) => line.state === SENT_LINE_STATE.FAILED).map((line) => line.id),
-    ),
-    sameSet,
-  );
-
-  const sending = useKept(
-    new Set(
-      composer.sent.filter((line) => line.state === SENT_LINE_STATE.PENDING).map((line) => line.id),
-    ),
-    sameSet,
-  );
-
-  const retryLine = useSteady(composer.retryLine);
-  const takeBackLine = useSteady(composer.takeBackLine);
-  const dropLine = useSteady(composer.dropLine);
-  const failedNotes = useKept(composer.failedNotes, sameNotes);
-
-  const marks = useMemo(
-    () => ({
-      undelivered,
-      closed: composer.closed,
-      unsent,
-      notes: failedNotes,
-      sending,
-      // Note that an archived agent takes no message, so a line refused before it was archived is only deleted.
-      retry: onUnarchive === undefined ? (id: string) => retryLine?.(id) : undefined,
-      takeBack: onUnarchive === undefined ? (id: string) => takeBackLine?.(id) : undefined,
-      drop: (id: string) => dropLine?.(id),
-    }),
-    [
-      undelivered,
-      composer.closed,
-      unsent,
-      failedNotes,
-      sending,
-      retryLine,
-      takeBackLine,
-      dropLine,
-      onUnarchive,
-    ],
-  );
+  const marks = useSentLineMarks(composer, onUnarchive !== undefined);
 
   const starterActor = usePerson(agent.startedBy);
   // An agent another agent started, as a Manager does, opens on that agent's brief, named as its author, and on who it was written for, rather than on the account it runs on.
