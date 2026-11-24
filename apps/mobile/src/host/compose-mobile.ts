@@ -99,7 +99,7 @@ import { plainCodeLines } from "@repo/host/task-code-remote";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
-import { fixtureActs, stageFixture } from "./fixture-host.js";
+import type * as FixtureHost from "./fixture-host.js";
 
 /**
  * How long the share sheet sends a token after it is issued: ten minutes
@@ -376,6 +376,7 @@ const servedActPort = (
  * same data twice settles rather than loops.
  */
 const stagedFixture = (
+  stageFixture: typeof FixtureHost.stageFixture,
   state: AppStateStore,
   updateNeeded: boolean,
   machineAsk: boolean,
@@ -515,16 +516,25 @@ export function composeMobile(
   ).pipe(Layer.provideMerge(serviceReachLayer));
 
   const launched = Layer.unwrap(
-    Effect.map(ComposedMobileTag, (mobile) => {
+    Effect.gen(function* () {
+      const mobile = yield* ComposedMobileTag;
+      const { fixture } = options;
+
+      // Note that a fixture run's host is loaded only on a fixture run, because importing it ran the desktop's whole synthetic Inbox, some 130 KB of it, in every live launch before the first frame.
+      const fixtureHost =
+        fixture === undefined
+          ? undefined
+          : yield* Effect.promise(() => import("./fixture-host.js"));
+
       const standing = Layer.mergeAll(
         Layer.succeed(MobileHostTag, {
           bridge: mobile.bridge,
           acts:
-            options.fixture === undefined
+            fixture === undefined || fixtureHost === undefined
               ? mobile.acts
-              : fixtureActs(
+              : fixtureHost.fixtureActs(
                   mobile.acts,
-                  options.fixture,
+                  fixture,
                   mobile.state,
                   options.fixtureRefusesWrites === true,
                 ),
@@ -533,9 +543,10 @@ export function composeMobile(
       ).pipe(Layer.provideMerge(hostStandingLayer));
 
       const staged =
-        options.fixture === undefined
+        fixtureHost === undefined
           ? Layer.empty
           : stagedFixture(
+              fixtureHost.stageFixture,
               mobile.state,
               options.fixtureUpdateNeeded === true,
               options.fixtureMachineAsk === true,
