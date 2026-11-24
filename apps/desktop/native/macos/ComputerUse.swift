@@ -280,17 +280,15 @@ private func grantPanelOrigin(_ size: NSSize, beside window: NSRect) -> NSPoint 
 }
 
 /// The app as a Finder row draws it, its icon and name on a light rounded row, which drags the bundle's file URL as
-/// Finder drags an app, so a Privacy & Security list takes it; it tells when a drag begins and ends.
+/// Finder drags an app, so a Privacy & Security list takes it; it dims while it is dragged.
 private final class AppRowView: NSView, NSDraggingSource {
     private let app: URL
     private let icon: NSImage
     private let name: String
-    private let onDragging: (Bool) -> Void
 
-    init(app: URL, name: String, onDragging: @escaping (Bool) -> Void) {
+    init(app: URL, name: String) {
         self.app = app
         self.name = name
-        self.onDragging = onDragging
         icon = NSWorkspace.shared.icon(forFile: app.path)
         super.init(frame: NSRect(origin: .zero, size: GRANT_ROW_SIZE))
     }
@@ -336,12 +334,10 @@ private final class AppRowView: NSView, NSDraggingSource {
 
     func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
         alphaValue = 0.35
-        onDragging(true)
     }
 
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         alphaValue = 1
-        onDragging(false)
     }
 }
 
@@ -351,18 +347,15 @@ private final class AppRowView: NSView, NSDraggingSource {
 private final class GrantPanel: NSObject {
     private var panel: NSPanel?
     private var checking: Task<Void, Never>?
-    /// The grant the panel stands for while it shows.
-    private var grant: Grant?
-    private let title = NSTextField(labelWithString: "")
-    private let body = NSTextField(wrappingLabelWithString: "")
+    private let words = NSTextField(wrappingLabelWithString: "")
 
     func show(_ grant: Grant) {
         close()
         guard let app = responsibleAppURL else { return }
         let name = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
+        // Note that the words name the list and the grant, as Codex's do, so the panel says where the app goes.
+        words.stringValue = "Drag \(name) to the list to allow \(grant.name)"
         let card = contents(app: app, name: name)
-        self.grant = grant
-        say(grant, name: name, dragging: false)
         let made = NSPanel(
             contentRect: NSRect(origin: .zero, size: card.fittingSize),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -383,34 +376,20 @@ private final class GrantPanel: NSObject {
     @objc func close() {
         checking?.cancel()
         checking = nil
-        grant = nil
         panel?.close()
         panel = nil
     }
 
-    /// What the panel says: where to drag the app, then, while it is dragged, where to let it go.
-    private func say(_ grant: Grant, name: String, dragging: Bool) {
-        title.stringValue = dragging ? "Drop \(name) in the list" : "Drag \(name) into Settings"
-        body.stringValue = dragging ? "Then turn on its switch in System Settings." : "To allow \(grant.name)."
-    }
-
     /// The card: a dark rounded material holding a close button, the words, and the app's row.
     private func contents(app: URL, name: String) -> NSView {
-        title.font = .systemFont(ofSize: 20)
-        title.alignment = .center
-        body.font = .systemFont(ofSize: 13)
-        body.alignment = .center
-        body.textColor = .secondaryLabelColor
-        body.preferredMaxLayoutWidth = GRANT_PANEL_WIDTH - 4 * GRANT_PANEL_GAP
-        let row = AppRowView(app: app, name: name) { [weak self] dragging in
-            guard let self, let grant = self.grant else { return }
-            self.say(grant, name: name, dragging: dragging)
-        }
-        let stack = NSStackView(views: [title, body, row])
+        words.font = .systemFont(ofSize: 17)
+        words.alignment = .center
+        words.preferredMaxLayoutWidth = GRANT_PANEL_WIDTH - 4 * GRANT_PANEL_GAP
+        let row = AppRowView(app: app, name: name)
+        let stack = NSStackView(views: [words, row])
         stack.orientation = .vertical
         stack.alignment = .centerX
-        stack.spacing = 8
-        stack.setCustomSpacing(20, after: body)
+        stack.spacing = 20
         stack.edgeInsets = NSEdgeInsets(top: 36, left: GRANT_PANEL_GAP, bottom: 24, right: GRANT_PANEL_GAP)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
