@@ -43,6 +43,7 @@ import {
   type SectionMember,
   sectionedTasks,
   sectionOfAgent,
+  sectionOfMember,
   sectionOfTask,
   sectionWithoutSettled,
   unplaceAllWrites,
@@ -2741,8 +2742,12 @@ function SidebarColumn({
     if (zone === TASKS_DROP_ZONE || zone === MANAGERS_DROP_ZONE) {
       if (zone === MANAGERS_DROP_ZONE && agentId === undefined) return;
       unpin(row, tasks);
+      // Note that a pinned plan or Manager may still be kept in a section, which it leaves too, so it lands where it was let go.
+      const member = pinnedMemberOf(row);
 
-      if (taskId !== undefined) tasks.onWriteSections(leaveSection(tasks, taskId));
+      if (member !== undefined && sectionOfMember(tasks.taskSections, member) !== undefined) {
+        tasks.onWriteSections([unplaceWrite(member)]);
+      }
 
       return;
     }

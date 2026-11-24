@@ -2003,6 +2003,32 @@ test("a Manager open in a section stands under the folded Tasks head, as an open
   assert.deepEqual(names, ["Launch Manager"]);
 });
 
+test("a pinned Manager kept in a section, dragged onto Tasks, is unpinned and leaves the section too", async () => {
+  handState({ [EXPERIMENT.MANAGERS]: true });
+  const asked = noneAsked();
+
+  const sidebar = await mountDraggable([INVITES, RETRIES], MANAGER_IN_LAUNCH, asked, {
+    listedAgents: [KEPT_MANAGER],
+  });
+
+  writeListedTasks({
+    taskSections: MANAGER_IN_LAUNCH,
+    taskAgentPins: [{ agentId: KEPT_MANAGER.id, taskId: null, pinnedAt: 6 }],
+  });
+
+  await settle();
+  layOutRows();
+
+  // Down the column: Launch Manager under Pinned alone, Invite expiry under Launch, Retry audit under Tasks.
+  assert.deepEqual(namesIn(sidebar, "Pinned"), ["Launch Manager"]);
+  drag(sidebar, "Launch Manager", 3 * ROW_HEIGHT - 4);
+  await settle();
+
+  assert.deepEqual(asked.writes, [
+    { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: KEPT_MANAGER.id, sectionId: null },
+  ]);
+});
+
 /** The ids of a section's rows, its tasks' and its Managers', in the order it keeps them. */
 const rowIdsIn = (state: TaskSections, sectionId: string) =>
   sectionRows(state, sectionId).map((entry) => ("taskId" in entry ? entry.taskId : entry.agentId));
