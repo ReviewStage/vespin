@@ -5,6 +5,7 @@ import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { VERB } from "@repo/features/words";
+import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { BUTTON_LOOK, EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
@@ -16,6 +17,7 @@ import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { openInSafari } from "../open-link.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useFoundTask } from "../tasks/use-found-task.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
 
 /** What stands in a page's place while it is read, and where it could not be. */
@@ -50,6 +52,8 @@ type PageOpened = {
   readonly pageId: string;
   readonly version: number | undefined;
   readonly title: string;
+  /** Whether the page's task was found nowhere, so the page can never be read. */
+  readonly lost?: boolean;
 };
 
 /** A route's version as its screen opens it: the number it names, or none for a link, which names none. */
@@ -61,23 +65,28 @@ export function openedVersion(version: string): number | undefined {
  * The version a page opens at: the one its opener named, else the newest
  * the task's pages hold, as the panel opens a page's link, those pages
  * followed while the page stands; none until they are read, and `missing`
- * where they hold no such page.
+ * where they hold no such page or could not be read.
  */
 function useVersionOf(taskId: string | undefined, pageId: string, named: number | undefined) {
   const acts = useHostActs();
   const follows = named === undefined ? taskId : undefined;
   useLiveFollow(follows, (id) => acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }));
 
-  const { data: pages } = useQuery({
+  const { data: held } = useQuery({
     ...appStateQuery,
     select: (state) =>
-      follows === undefined ? undefined : state[LIVE_READ.PAGES][PAGE_OWNER.TASK][follows]?.rows,
+      follows === undefined ? undefined : state[LIVE_READ.PAGES][PAGE_OWNER.TASK][follows],
   });
 
   if (named !== undefined) return { version: named, missing: false };
+  const pages = held?.rows;
   const newest = pages?.find(({ id }) => id === pageId)?.version;
 
-  return { version: newest, missing: pages !== undefined && newest === undefined };
+  // Note that pages the service could not read count as missing until a later answer brings them, as the follow tries again on its own, rather than reading for good.
+  return {
+    version: newest,
+    missing: pages === undefined ? held?.failed === true : newest === undefined,
+  };
 }
 
 /**
@@ -86,12 +95,19 @@ function useVersionOf(taskId: string | undefined, pageId: string, named: number 
  * it, with a ⋯ that opens it in the browser. It reads until its task is
  * known.
  */
-export function PageScreen({ workspaceId, taskId, pageId, version: asked, title }: PageOpened) {
+export function PageScreen({
+  workspaceId,
+  taskId,
+  pageId,
+  version: asked,
+  title,
+  lost = false,
+}: PageOpened) {
   useSurfaceOpen(PRODUCT_SURFACE.PAGE, pageId);
   const { version, missing } = useVersionOf(taskId, pageId, asked);
   const html = usePageHtml(taskId, pageId, version);
   const { again } = html;
-  const read = missing ? { failed: true as const } : html.read;
+  const read = missing || lost ? { failed: true as const } : html.read;
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
 
@@ -156,12 +172,28 @@ export function TaskPageScreen() {
   );
 }
 
-/** A page a task's Overview lists, in its task's own workspace, or the one chosen where it names none. */
+/**
+ * A page a task's Overview lists or a link names, in the workspace its route
+ * names, by id or as a link's slug, or the one chosen where it names none.
+ * A task a link names by number is found first, as a task's link finds one
+ * (`useFoundTask`), and one found nowhere says the page could not be read.
+ */
 function TaskPage({
-  workspaceId,
+  workspaceId: named,
+  taskId,
   ...opened
 }: Omit<PageOpened, "taskId"> & { readonly taskId: string }) {
   const chosen = useTasksWorkspace();
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const workspace = named === undefined ? chosen : workspaceOfSlug(workspaces, named);
+  const found = useFoundTask(taskId, named ?? chosen?.id);
 
-  return <PageScreen {...opened} workspaceId={workspaceId ?? chosen?.id} />;
+  return (
+    <PageScreen
+      {...opened}
+      workspaceId={workspace?.id ?? chosen?.id}
+      taskId={found.taskId}
+      lost={found.taskId === undefined && !found.seeking}
+    />
+  );
 }
