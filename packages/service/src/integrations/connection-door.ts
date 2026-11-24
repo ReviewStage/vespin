@@ -125,15 +125,15 @@ const LIST_TIMEOUT = Duration.seconds(10);
 /**
  * Why a call ran nothing while a teammate leads the agent
  * (`ledByAnotherAccount`): its integrations are its starter's own accounts,
- * which another member's words never drive. A Manager is never taken over, so
- * the words say so rather than offering a takeover it has none of.
+ * which another member's words never drive. A Manager has no task to take
+ * over, so the words offer a takeover only to an agent on one.
  */
 const LED_BY_TEAMMATE =
   "Not run: this agent's integrations are its starter's own accounts, and they are off while " +
   "the newest message to it is a teammate's. They come back once its starter writes to it " +
   "again. Carry on without them. If this agent works on a task, tell the teammate they can take " +
-  "it over to go on with their own integrations; a Manager is never taken over, so its " +
-  "integrations stay its owner's and are simply off while a teammate leads it.";
+  "it over to go on with their own integrations; a Manager's integrations stay its owner's " +
+  "and are simply off while a teammate leads it.";
 
 /** A refusal: the words the call is failed with, and, for a connection the member must connect, which and that it must. */
 export interface ConnectionRefusal {
