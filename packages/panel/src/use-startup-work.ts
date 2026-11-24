@@ -24,11 +24,15 @@ import { IDLE_TIMEOUT_MS, useWhenIdle } from "./use-when-idle.js";
  * halt or a sign-out is never held back, but only when the word differs: a
  * delivery of the document that moved nothing recording reads is not a word.
  * The workspace the window lists rides on the word too, so a recording is
- * filed under the workspace it was made in from the moment it is chosen.
+ * filed under the workspace it was made in from the moment it is chosen. So
+ * does the device's "Share usage data" switch: turned off, it stops the
+ * recording where it stands, and turned back on, it starts one, with no
+ * relaunch between.
  */
 export function useSessionReplay(
   run: AppState["run"] | undefined,
   sessionReplay: AppState["sessionReplay"] | undefined,
+  usageData: boolean | undefined,
   workspaceId: string | undefined,
 ): void {
   /** The word the platform last heard, so a delivery that moved nothing is not another. */
@@ -46,13 +50,13 @@ export function useSessionReplay(
     latest.current =
       run && sessionReplay
         ? {
-            ...sessionReplayBootstrap({ run, sessionReplay }),
+            ...sessionReplayBootstrap({ run, sessionReplay }, usageData),
             ...(workspaceId ? { workspaceId } : undefined),
           }
         : undefined;
 
     if (started.current) tell(latest.current);
-  }, [run, sessionReplay, workspaceId, tell]);
+  }, [run, sessionReplay, usageData, workspaceId, tell]);
   useWhenIdle(() => {
     started.current = true;
     tell(latest.current);

@@ -71,7 +71,7 @@ export function TabColumns({
   return (
     <>
       {split.detailBar === undefined ? (
-        <Stack.Screen options={{ headerShown: true, headerLargeTitle: false, title: "" }} />
+        <Stack.Screen options={{ headerShown: true, headerLargeTitleEnabled: false, title: "" }} />
       ) : (
         <StackColumnBar bar={split.detailBar} />
       )}

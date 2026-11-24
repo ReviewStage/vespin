@@ -16,7 +16,6 @@ import { Stack, useIsFocused } from "expo-router";
 import type { ReactElement, ReactNode } from "react";
 import { MachineAsks } from "../../agents/machine-asks.js";
 import { useAppNotReadyCount } from "../../app-ready.js";
-import { useCrashReportAccount } from "../../crash-reports.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostConnectLink } from "../../host-connect-link.js";
 import { useInboxWidget } from "../../inbox-widget/use-inbox-widget.js";
@@ -154,7 +153,6 @@ export default function GuardedScreens() {
   useSystemActivity(signedIn);
   useRecentOpenedSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
-  useCrashReportAccount();
   useOfflineNotice();
   useNoticeForAccount();
   useShareSheet(updateNeeded);
@@ -197,7 +195,7 @@ export default function GuardedScreens() {
           <Stack.Screen name="index" />
           {/* Note that the tabs stand at once, with no push, because the launch reaches them by the index route's redirect, which the stack animated as a push: the Inbox's list was laid out again on every frame of the slide, holding the splash and the first frame about 1.5 s on a cold launch; a sign-in reaches them the same way, and a link opens inside them, so nothing else ever slid them in. */}
           <Stack.Screen name="(tabs)" options={{ animation: "none" }} />
-          {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
+          {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name. */}
           <Stack.Screen
             name={SHEET_ROUTE.SETTINGS}
             options={{ presentation: sheetPresentation, title: "Settings" }}

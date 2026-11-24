@@ -394,6 +394,8 @@ export interface OriginAgent {
   readonly name: string;
   readonly provider: ModelProvider | undefined;
   readonly state: ActorState;
+  /** A Manager's face, which it wears in place of its harness's mark; none for a coder. */
+  readonly face?: ManagerFace | undefined;
   readonly taskId?: string | undefined;
   /** The name of the task the agent works on, which a task it made is said to come from. */
   readonly taskName?: string | undefined;
@@ -423,6 +425,7 @@ export function originActor(
     name: agent?.name ?? TAB_WORDS.AGENT,
     provider: agent?.provider,
     state: agent?.state ?? ACTOR_STATE.REST,
+    ...(agent?.face === undefined ? undefined : { face: agent.face }),
   };
 }
 
@@ -439,10 +442,12 @@ export interface EditReader {
   readonly memberCount?: number | undefined;
 }
 
-/** A coding agent an edit names, as the window found it among the task's agents: its harness and where its work stands. */
+/** A coding agent an edit names, as the window found it among the task's agents: its harness, a Manager's face, and where its work stands. */
 export interface EditAgent {
   readonly provider: ModelProvider | undefined;
   readonly state: ActorState;
+  /** A Manager's face, which it wears in place of its harness's mark; none for a coder. */
+  readonly face?: ManagerFace | undefined;
 }
 
 /** The member an edit names, for the reader, as the directory reads them. */
@@ -470,6 +475,7 @@ export function editActor(
         name: edit.label ?? TAB_WORDS.AGENT,
         provider: agent?.provider,
         state: agent?.state ?? ACTOR_STATE.REST,
+        ...(agent?.face === undefined ? undefined : { face: agent.face }),
       };
     case DESCRIPTION_ACTOR.EARLIER:
       return undefined;

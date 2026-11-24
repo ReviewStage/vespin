@@ -37,6 +37,7 @@ export const VOICE_CALLER_ENVIRONMENT: HostedEnvironmentValues = {
   posthogApiHost: undefined,
   posthogProjectApiKey: undefined,
   posthogIngestHost: undefined,
+  posthogDistinctIdKey: undefined,
   cronSecret: undefined,
   githubWebhookSecret: undefined,
   providerKeyEncryptionKeys: Redacted.make(RING),

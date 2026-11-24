@@ -423,7 +423,11 @@ const findWorkspaceLogo = SqlSchema.findOneOption({
     ),
 });
 
-const WorkspaceFaceSchema = Schema.Struct({ name: Schema.String, createdAt: Schema.Date });
+const WorkspaceFaceSchema = Schema.Struct({
+  name: Schema.String,
+  createdAt: Schema.Date,
+  memberCount: Schema.Number,
+});
 
 const findWorkspaceFace = SqlSchema.findOneOption({
   Request: Schema.String,
@@ -431,7 +435,11 @@ const findWorkspaceFace = SqlSchema.findOneOption({
   execute: (organizationId) =>
     Database.use((db) =>
       db
-        .select({ name: WORKSPACE_NAME, createdAt: organization.createdAt })
+        .select({
+          name: WORKSPACE_NAME,
+          createdAt: organization.createdAt,
+          memberCount: sql<number>`(select count(*)::int from ${member} where ${member.organizationId} = ${organizationId})`,
+        })
         .from(organization)
         .where(eq(organization.id, organizationId))
         .limit(1),
@@ -1091,12 +1099,13 @@ export function readWorkspacePhoto(
   );
 }
 
-/** A workspace's name, as its members read it, and when it was made. */
+/** A workspace's name, as its members read it, when it was made, and how many members it has. */
 export type WorkspaceFace = typeof WorkspaceFaceSchema.Type;
 
 /**
- * One workspace's name and creation, by its id alone, for the service's own
- * analytics to name the workspace a count is grouped under; nothing for an
+ * One workspace's name, creation, and member count, by its id alone, for the
+ * service's own analytics to name the workspace a count is grouped under, and
+ * to tell a team's workspace from one person's; nothing for an
  * id no workspace holds. No account gates it, because no member asks for it.
  */
 export function readWorkspaceFace(

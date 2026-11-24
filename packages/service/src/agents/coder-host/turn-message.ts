@@ -19,6 +19,7 @@ import {
 } from "@repo/database/models/agent-store";
 import { readDescriptionCommentThreads } from "@repo/database/models/description-comments";
 import { listRevisions } from "@repo/database/models/description-revisions";
+import { WORKSPACE_MEMORIES } from "@repo/database/models/memory-store";
 import { turnsBefore } from "@repo/database/models/message-reads";
 import { pendingRunnerHanded } from "@repo/database/models/runner-line-store";
 import { readTask } from "@repo/database/models/task-store";
@@ -27,7 +28,7 @@ import { AGENT_KIND } from "@repo/features/agent-wire";
 import { EXPERIMENT } from "@repo/settings";
 import type { WireValue } from "@repo/wire";
 import { Effect, Option, Result, Schema } from "effect";
-import { matchWorkspaceMemories } from "../../accounts/workspace-memories.js";
+import { managerMemories, matchWorkspaceMemories } from "../../accounts/workspace-memories.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { standingContext } from "../agent-runtime/standing-context.js";
 import { recallSource } from "../memory-provenance.js";
@@ -223,14 +224,22 @@ const tasklessOf = (admitted: AdmittedConversation, turn: CoderTurn) =>
  * workspace has Memory on; nothing where it is off or none match. They are
  * found as the member who started the agent, so only a workspace they are a
  * member of is searched, and each is logged as recalled by the agent and its
- * turn's line (`recordMemoryRecalls`), as a search's are. A store that fails
- * is logged and hands nothing, as `search_memory` carries on without memory;
- * a recall that cannot be logged hands the memories all the same.
+ * turn's line (`recordMemoryRecalls`), as a search's are. A Manager is
+ * handed its own memories beside the workspace's (`managerMemories`). A
+ * store that fails is logged and hands nothing, as `search_memory` carries
+ * on without memory; a recall that cannot be logged hands the memories all
+ * the same.
  */
 const memoriesOf = (agent: Agent, words: string) =>
   Effect.gen(function* () {
     if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.MEMORY))) return undefined;
-    const found = yield* matchWorkspaceMemories(agent.userId, agent.organizationId, words);
+
+    const found = yield* matchWorkspaceMemories(
+      agent.userId,
+      agent.organizationId,
+      words,
+      agent.kind === AGENT_KIND.MANAGER ? managerMemories(agent.id) : WORKSPACE_MEMORIES,
+    );
 
     if (found.length === 0) return undefined;
     yield* recordMemoryRecalls(
@@ -245,7 +254,7 @@ const memoriesOf = (agent: Agent, words: string) =>
     Effect.catch(() => Effect.succeed(undefined)),
   );
 
-/** How the agent's reply reaches the developer, which its turn's kind words follow: a Manager's by `send_to_user`, and every other agent's by its last message. */
+/** How the agent's reply reaches the developer, which its turn's kind words follow: a Manager's by `chat_send`, and every other agent's by its last message. */
 function turnReplyOf(agent: Agent): TurnReply {
   return agent.kind === AGENT_KIND.MANAGER ? TURN_REPLY.SEND_TO_USER : TURN_REPLY.LAST_MESSAGE;
 }
@@ -255,7 +264,7 @@ function turnReplyOf(agent: Agent): TurnReply {
  * spoken one, the only turn whose words name it: a thread where it posts
  * them, its Manager where one started it, and its reply otherwise. Note that
  * its standing is read only for that turn, since every other turn's words
- * name none, and that a Manager's own words name `send_to_user` instead.
+ * name none, and that a Manager's own words name `chat_send` instead.
  */
 const turnAskOf = (
   agent: Agent,

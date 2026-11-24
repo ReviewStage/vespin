@@ -20,8 +20,8 @@ below as that one. You and the workers talk by `message_agent`.
 
 | Action | How |
 | --- | --- |
-| Ask the user | `post_thread` with a `decide` or `answer` ask, which waits for the reply; where another coding agent started you, also send it the thread's mention with `message_agent` and its agent id |
-| Tell the user | `post_thread` without an ask, and your reply; where another coding agent started you, also send it the thread's mention, as above |
+| Ask the user | `inbox_post` with a `decide` or `answer` ask, which waits for the reply; where another coding agent started you, also send it the thread's mention with `message_agent` and its agent id |
+| Tell the user | `inbox_post` without an ask, and your reply; where another coding agent started you, also send it the thread's mention, as above |
 | Valid model ids | `list_models` |
 | Your id, for reports | Nothing to record: a started agent is told your id and your mention link |
 | Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, `status` set to `todo`, and the PR's scope as `description` |

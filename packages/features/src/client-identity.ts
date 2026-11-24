@@ -29,9 +29,14 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
  * service may answer one to it alone until the floor passes 5. A build from
  * 7 on reads an agent on a machine its workspace owns
  * (`AGENT_MACHINE.WORKSPACE`), so a service may answer one to it alone until
- * the floor passes 6.
+ * the floor passes 6. A build from 8 on draws the Inbox's and a Manager's
+ * chat's tools under the names they took for their surface (`inbox_*`,
+ * `chat_*`), so a service may store their calls under those names
+ * (`storedToolName`) once the floor reaches 8. An iOS build from 9 on opens a
+ * thread's push that names no task, a Manager's, on the thread in its Inbox,
+ * so a service may push one to a phone that registered at 9 or later alone.
  */
-export const HOSTED_API_VERSION = 7;
+export const HOSTED_API_VERSION = 9;
 
 /** The headers a client names itself in: which app and version, as `platform/version`, and the hosted API version it was built against. */
 export const CLIENT_HEADER = {

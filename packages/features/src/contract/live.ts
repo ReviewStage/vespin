@@ -46,6 +46,7 @@
  */
 
 import { ACCOUNT_PREFERENCES_READ } from "../account-preferences-live.js";
+import { AGENT_FOLLOWERS_READ } from "../agent-followers-live.js";
 import { AGENT_ORIGIN_READ } from "../agent-origin-live.js";
 import { AGENT_TRANSCRIPT_READ } from "../agent-transcript-live.js";
 import {
@@ -105,6 +106,7 @@ export const liveContract = {
   [TASK_HISTORY_READ.name]: liveProcedure(TASK_HISTORY_READ),
   [TASK_COMMENTS_READ.name]: liveProcedure(TASK_COMMENTS_READ),
   [MANAGER_CHAT_READ.name]: liveProcedure(MANAGER_CHAT_READ),
+  [AGENT_FOLLOWERS_READ.name]: liveProcedure(AGENT_FOLLOWERS_READ),
   [TASK_BROWSER_TABS_READ.name]: liveProcedure(TASK_BROWSER_TABS_READ),
   [AGENT_BROWSER_TABS_READ.name]: liveProcedure(AGENT_BROWSER_TABS_READ),
   [TASK_LIST_READ.name]: liveProcedure(TASK_LIST_READ),

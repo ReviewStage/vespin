@@ -12,14 +12,21 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { Stack } from "expo-router";
+import type { ReactElement } from "react";
 
-/** A bar's act as the header's own button: its glyph, heard by its words, or its words where it has none. */
-function StackAct({ act }: { readonly act: BarAction }) {
-  const colors = useColors();
-
+/**
+ * A bar's act as the header's own button element: its glyph, heard by its
+ * words, or its words where it has none. Note that it is built as the
+ * toolbar's own child rather than drawn by a component of ours, because
+ * expo-router reads a header toolbar's items from its children's types and
+ * drops any other element, which left a page's ✉, ⏱ and ✓ out of its bar
+ * (vjsplit4).
+ */
+function stackAct(act: BarAction, tint: string): ReactElement {
   return act.symbol === undefined ? (
     <Stack.Toolbar.Button
-      tintColor={colors.TEXT}
+      key={act.label}
+      tintColor={tint}
       disabled={act.disabled === true}
       onPress={act.onPress}
     >
@@ -27,8 +34,9 @@ function StackAct({ act }: { readonly act: BarAction }) {
     </Stack.Toolbar.Button>
   ) : (
     <Stack.Toolbar.Button
+      key={act.label}
       icon={glyphSymbol(act.symbol)}
-      tintColor={colors.TEXT}
+      tintColor={tint}
       accessibilityLabel={act.label}
       disabled={act.disabled === true}
       onPress={act.onPress}
@@ -36,14 +44,14 @@ function StackAct({ act }: { readonly act: BarAction }) {
   );
 }
 
-/** One of a page's main acts: a button, or a menu opening from its glyph, such as Remind me's times. */
-function StackItem({ item }: { readonly item: BarFootItem }) {
+/** One of a page's main acts as the toolbar's own child: a button, or a menu opening from its glyph, such as Remind me's times. */
+function stackItem(item: BarFootItem, tint: string): ReactElement {
   return isBarMenu(item) ? (
-    <Stack.Toolbar.View>
+    <Stack.Toolbar.View key={item.label}>
       <StackBarMenu menu={item} />
     </Stack.Toolbar.View>
   ) : (
-    <StackAct act={item} />
+    stackAct(item, tint)
   );
 }
 
@@ -68,7 +76,7 @@ export function StackColumnBar({ bar }: { readonly bar: ColumnBar }) {
       <Stack.Screen
         options={{
           headerShown: true,
-          headerLargeTitle: false,
+          headerLargeTitleEnabled: false,
           title,
           // Note that a path stands small and muted in the bar, as a pushed page's path does, and a title in the ink.
           headerTitleStyle:
@@ -79,9 +87,7 @@ export function StackColumnBar({ bar }: { readonly bar: ColumnBar }) {
       />
       {(bar.lead ?? []).length === 0 ? null : (
         <Stack.Toolbar placement="left">
-          {(bar.lead ?? []).map((act) => (
-            <StackAct key={act.label} act={act} />
-          ))}
+          {(bar.lead ?? []).map((act) => stackAct(act, colors.TEXT))}
         </Stack.Toolbar>
       )}
       {/* Note that a right bar's first item stands at its edge, so ⋯ is written first and the main acts after it in reverse, standing in their order before it. */}
@@ -91,10 +97,8 @@ export function StackColumnBar({ bar }: { readonly bar: ColumnBar }) {
             <StackBarMenu menu={bar.menu} />
           </Stack.Toolbar.View>
         )}
-        {bar.action === undefined ? null : <StackAct act={bar.action} />}
-        {trailing.map((item) => (
-          <StackItem key={item.label} item={item} />
-        ))}
+        {bar.action === undefined ? null : stackAct(bar.action, colors.TEXT)}
+        {trailing.map((item) => stackItem(item, colors.TEXT))}
       </Stack.Toolbar>
     </>
   );

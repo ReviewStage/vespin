@@ -62,16 +62,17 @@ const UNCLEAR_LINE =
 /**
  * What a Manager is told in place of its reply's, its threads', and an
  * unclear request's lines: its page is a chat, whose every message from it
- * is a `send_to_user` call, so its plain text and its other calls are never
+ * is a `chat_send` call, so its plain text and its other calls are never
  * shown, and it writes there as a coworker on Slack, in several short
- * messages; and, where it posts threads, that a thread is kept for the asks
- * a chat cannot hold, since every post is a notification.
+ * messages, replying in the thread of the message it answers; and, where it
+ * posts Inbox threads, that an Inbox thread is kept for the asks a chat
+ * cannot hold, since every post is a notification.
  */
 function chatLine(posts: boolean): string {
-  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there, as a coworker would on Slack: several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
+  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there, as a coworker would on Slack. Reply in the thread of the message you're answering or following up on, with \`thread_ts\`, and start a new message only for something new. Write several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
 
   return posts
-    ? `${chat} Post a thread with \`${INBOX_TOOLS.POST.name}\` only for ${MANAGER_THREAD_ASKS}, since every post reaches people as a notification: your pull requests and pages are named in your chat once ready, and a go-ahead you want on one is a decision.`
+    ? `${chat} Post an Inbox thread with \`${INBOX_TOOLS.POST.name}\` only for ${MANAGER_THREAD_ASKS}, since every post reaches people as a notification: your pull requests and pages are named in your chat once ready, and a go-ahead you want on one is a decision.`
     : chat;
 }
 
@@ -131,7 +132,7 @@ function machineLines(machine: CoderMachine, repository: boolean): string[] {
  * its id, its task's id where it stands on one, where it runs as `start_agent`'s `runsOn` names
  * it, its repository, and the branch it was cloned at; then the developer it
  * works for, by their id and mention link, as `list_agents`' `startedBy`,
- * `post_thread`'s `to`, and a task's `assignee` take them, so it names them
+ * `inbox_post`'s `to`, and a task's `assignee` take them, so it names them
  * without reading the workspace's members for a guess. Note that they sit in
  * the instructions, since none changes over a session, so the prompt cache
  * holds them; the branch it pushes to is its own to read with git.
@@ -340,9 +341,9 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
  * `edit_description`, a Manager's reply by
- * `send_to_user`, which stands for its threads' and unclear request's lines
+ * `chat_send`, which stands for its threads' and unclear request's lines
  * too, and its threads by
- * `post_thread`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
+ * `inbox_post`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
  * not named, since each harness loads its own.
  */
 export function coderInstructions(
@@ -439,7 +440,7 @@ function managerRepositoryOf(repositories: readonly string[]): string {
  * What a Manager is told beyond the coder's lines: its role, the greeting its
  * conversation opens on,
  * how it starts and briefs work, and when it reaches a person, its threads
- * named only where it posts them (`post_thread`, behind its Inbox). Note that
+ * named only where it posts them (`inbox_post`, behind its Inbox). Note that
  * this is short on purpose, as its starter asked: each tool's description
  * carries how to call it, so these lines say only what a Manager does that a
  * coder does not. The agents it starts get no prompt of their own; the
@@ -462,6 +463,7 @@ export function managerInstructions(place: ManagerPlace, posts: boolean): string
       : []),
     `Only message me when it's worth my time. Tell me when you've got a plan for something I asked, when something I can actually use is done, or when something goes wrong or changes. I don't need play-by-plays of PRs, CI, or what your agents are up to, and don't remind me about stuff that's already in my inbox. Tell me what changed for me, not how you did it. If there's nothing worth saying, don't say anything.`,
     `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers, but never start another Manager.`,
+    `Keep a memory for yourself alone (\`scope: "manager"\`) when it bears only on how you work or on the people you manage; keep it for the workspace when any agent would need it.`,
   ].join("\n");
 }
 

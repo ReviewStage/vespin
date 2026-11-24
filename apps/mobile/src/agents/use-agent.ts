@@ -1,5 +1,5 @@
 /**
- * use-agent.ts -- one agent as its page reads it: the agent as the task list follows it, its transcript held live while the page shows, its older pages read as the reader scrolls up to them, the pictures and recordings it showed read into what the system draws them from, and a page it showed read whole.
+ * use-agent.ts -- one agent as its page reads it: the agent as the task list follows it, its transcript held live while the page shows, a Manager's chat held beside it, its older pages read as the reader scrolls up to them, the pictures and recordings it showed read into what the system draws them from, and a page it showed read whole.
  *
  * The transcript is held as the panel's tab holds it: its follow
  * (`ACT_KIND.AGENTS_TRANSCRIPT`) kept open on the host while the page is in
@@ -25,6 +25,7 @@ import {
 import {
   AGENT_CALL_FAILURE,
   type AgentPageAnswerView,
+  type AgentTranscriptOlderAnswer,
   TRANSCRIPT_KIND,
 } from "@repo/features/agent-view";
 import {
@@ -41,8 +42,17 @@ import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
-import { type FollowedAgent, selectTranscript } from "@repo/host/app-state-reads";
+import type {
+  AppHostRead,
+  AppManagerChat,
+  AppStateSnapshot,
+  AppTranscript,
+} from "@repo/host/app-state";
+import {
+  type FollowedAgent,
+  selectManagerChat,
+  selectTranscript,
+} from "@repo/host/app-state-reads";
 import {
   BUZZ,
   latestStep,
@@ -333,6 +343,48 @@ export function useAgentTranscript(agentId: string): AppHostRead<AppTranscript> 
   );
 
   return useQuery({ ...appStateQuery, select }).data;
+}
+
+/**
+ * A Manager's chat as the host holds it (`ACT_KIND.AGENTS_MANAGER_CHAT_FOLLOW`),
+ * held followed while the page is in focus and shows a Manager, as the
+ * transcript is held; none before the host holds it, or for an agent that is
+ * no Manager.
+ */
+export function useManagerChat(
+  agentId: string,
+  manager: boolean,
+): AppHostRead<AppManagerChat> | undefined {
+  const acts = useHostActs();
+  const follow = useHostFollow();
+  useFocusEffect(
+    useCallback(
+      () =>
+        manager
+          ? follow(
+              () => acts[ACT_KIND.AGENTS_MANAGER_CHAT_FOLLOW]({ agentId }),
+              () => undefined,
+            )
+          : undefined,
+      [acts, follow, agentId, manager],
+    ),
+  );
+
+  const select = useMemo(() => selectManagerChat(agentId), [agentId]);
+  const held = useQuery({ ...appStateQuery, select }).data;
+
+  return manager ? held : undefined;
+}
+
+/** Reads a Manager's chat again after its read failed, as Try again asks it. */
+export function useManagerChatRetry(agentId: string): () => void {
+  const acts = useHostActs();
+
+  return useCallback(() => {
+    acts[ACT_KIND.AGENTS_MANAGER_CHAT_RETRY]({ agentId }).catch(
+      refused("Reading the Manager's chat again"),
+    );
+  }, [acts, agentId]);
 }
 
 /** Waits `ms` milliseconds, as a failed media read pauses before it is tried again. */
@@ -742,9 +794,9 @@ export function usePageHtml(
 }
 
 /** The older read asked last: of which agent, below where, and whether it failed. */
-interface OlderAsk {
+interface OlderAsk<Before> {
   readonly agentId: string;
-  readonly before: string;
+  readonly before: Before;
   readonly failed: boolean;
 }
 
@@ -762,9 +814,46 @@ interface OlderAsk {
  */
 export function useOlderPages(agentId: string, before: string | undefined): OlderPages | undefined {
   const acts = useHostActs();
-  const [asked, setAsked] = useState<OlderAsk | undefined>(undefined);
+
+  const ask = useCallback(
+    (at: string) =>
+      acts[ACT_KIND.AGENTS_TRANSCRIPT_OLDER]({ kind: TRANSCRIPT_KIND.AGENT, agentId, before: at }),
+    [acts, agentId],
+  );
+
+  return useOlderReads(agentId, before, ask, "An older page of the transcript");
+}
+
+/**
+ * The pages of a Manager's chat older than the oldest message the host
+ * holds, read one at a time as the reader scrolls up to them
+ * (`ACT_KIND.AGENTS_MANAGER_CHAT_OLDER`), on the terms the transcript's
+ * older pages are read (`useOlderPages`); none where nothing older stands.
+ */
+export function useOlderChatPages(
+  agentId: string,
+  before: number | undefined,
+): OlderPages | undefined {
+  const acts = useHostActs();
+
+  const ask = useCallback(
+    (at: number) => acts[ACT_KIND.AGENTS_MANAGER_CHAT_OLDER]({ agentId, before: at }),
+    [acts, agentId],
+  );
+
+  return useOlderReads(agentId, before, ask, "An older page of the Manager's chat");
+}
+
+/** One older read below `before`, asked by `ask`, as `useOlderPages` reads them; `what` names it where it fails. */
+function useOlderReads<Before extends string | number>(
+  agentId: string,
+  before: Before | undefined,
+  ask: (before: Before) => Promise<AgentTranscriptOlderAnswer>,
+  what: string,
+): OlderPages | undefined {
+  const [asked, setAsked] = useState<OlderAsk<Before> | undefined>(undefined);
   // Note that the read out is held apart from what is drawn, since the list may ask twice before it draws the first ask.
-  const out = useRef<OlderAsk | undefined>(undefined);
+  const out = useRef<OlderAsk<Before> | undefined>(undefined);
 
   const read = useCallback(
     (again: boolean) => {
@@ -781,29 +870,29 @@ export function useOlderPages(agentId: string, before: string | undefined): Olde
         return;
       }
 
-      const ask: OlderAsk = { agentId, before, failed: false };
-      out.current = ask;
-      setAsked(ask);
+      const asking: OlderAsk<Before> = { agentId, before, failed: false };
+      out.current = asking;
+      setAsked(asking);
 
       // An answer settles the ask it answers alone, never a newer one.
-      const settle = (next: OlderAsk | undefined) => {
-        if (out.current !== ask) return;
+      const settle = (next: OlderAsk<Before> | undefined) => {
+        if (out.current !== asking) return;
         out.current = next;
         setAsked(next);
       };
 
-      acts[ACT_KIND.AGENTS_TRANSCRIPT_OLDER]({ kind: TRANSCRIPT_KIND.AGENT, agentId, before }).then(
+      ask(before).then(
         (answer) => {
-          if ("failure" in answer) settle({ ...ask, failed: true });
+          if ("failure" in answer) settle({ ...asking, failed: true });
           else if (!answer.landed) settle(undefined);
         },
         (cause: unknown) => {
-          refused("An older page of the transcript")(cause);
-          settle({ ...ask, failed: true });
+          refused(what)(cause);
+          settle({ ...asking, failed: true });
         },
       );
     },
-    [acts, agentId, before],
+    [ask, agentId, before, what],
   );
 
   // Note that an ask that landed is let go once the cursor moves past it, and only then, so a rewind that brings the cursor back reads it anew while the landing still holds off a second read.

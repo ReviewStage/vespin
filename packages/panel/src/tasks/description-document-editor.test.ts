@@ -137,6 +137,7 @@ const STAND_IN: DescriptionEditorModule = {
     };
   },
   mountComposer: () => assert.fail("the description document mounts no message box"),
+  messageClipboard: () => assert.fail("the description document copies no message"),
 };
 
 /** The diagram bundle's stand-in: a picture named by the code and the appearance it was asked to draw. */

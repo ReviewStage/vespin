@@ -66,8 +66,8 @@ export const TOOL_GATE = {
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
 
 /**
- * The gates an agent's own threads stand behind, `post_thread` and
- * `withdraw_ask`: an Inbox to land in, and no Manager between the agent and
+ * The gates an agent's own threads stand behind, `inbox_post` and
+ * `inbox_withdraw_ask`: an Inbox to land in, and no Manager between the agent and
  * people. Note that they are declared once here, because a turn's words read
  * them where the catalog's own `offers` would close a cycle.
  */

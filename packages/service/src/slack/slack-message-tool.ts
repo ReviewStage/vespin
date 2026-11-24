@@ -63,7 +63,7 @@ import { type InboxSandboxDoor, readSandboxImage } from "../agents/coder-host/in
 import { ACTION_RESULT_STATUS, type UnparsedWireValue } from "../core.js";
 import type { SlackBot, SlackMessage, SlackUpload } from "./slack-bot.js";
 import { slackClipped, slackMarkdownBlock } from "./slack-markdown.js";
-import { reachChannel, reachSlack, SLACK_USE, type SlackReach } from "./slack-reach.js";
+import { reachChannel, reachSlack, SLACK_USE, type SlackReach, slackAsker } from "./slack-reach.js";
 
 /** The most characters one message may spell. */
 const SLACK_MESSAGE_CHARS = 4_000;
@@ -220,8 +220,8 @@ const postedMessage = Effect.fn("web/slackAgentPost")(function* (
   const { bot, agent } = reach;
   let posted: Option.Option<SlackMessage>;
   let threadTs = input.thread;
-  // Note that the thread is kept for the member a DM went to, and for the agent's starter anywhere else.
-  let keptFor = agent.userId;
+  // Note that the thread is kept for the member a DM went to, and for whoever the agent acts for anywhere else.
+  let keptFor: string;
 
   if (input.member !== undefined) {
     const userId = namedMember(input.member);
@@ -246,6 +246,7 @@ const postedMessage = Effect.fn("web/slackAgentPost")(function* (
       posted = yield* bot.reply(slackId.value, input.thread, content);
     }
   } else {
+    keptFor = yield* slackAsker(reach);
     const current = Option.getOrUndefined(reach.thread);
     const named = input.channel ?? current?.channelId;
 

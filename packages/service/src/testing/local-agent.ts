@@ -1,5 +1,5 @@
 /**
- * local-agent.ts -- a local agent over the test's real store, the Claude Code sessions that reach it through its Mac's lines, and one whose runner its Mac took and left warm past its first turn.
+ * local-agent.ts -- a local agent over the test's real store, the sessions of its harness, Claude Code or Cursor, that reach it through its Mac's lines, and one whose runner its Mac took and left warm past its first turn.
  *
  * Synthetic accounts, agents, Macs, and keys throughout.
  */
@@ -12,7 +12,7 @@ import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/de
 import { registerDevice } from "@repo/database/models/device-store";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
-import { CONVERSATION_RUNTIME, type ConversationRuntime } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, startTask } from "@repo/database/testing";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { DEVICE_AGENT_LINE_KIND, DEVICE_CAPABILITY } from "@repo/features/device-agent-wire";
@@ -22,6 +22,7 @@ import { eq } from "drizzle-orm";
 import { DateTime, Effect, Layer, Option } from "effect";
 import { AgentImage } from "../agents/coder-host/agent-image.js";
 import { claudeCodeSessions } from "../agents/coder-host/claude-code-sessions.js";
+import { cursorSessions } from "../agents/coder-host/cursor-sessions.js";
 import { claimedDeviceAgentLine } from "../agents/device-agent.js";
 import { AgentMachine } from "../agents/machine/agent-machine.js";
 import { deviceMachine } from "../agents/machine/device-machine.js";
@@ -31,12 +32,29 @@ import { LINK_OUTCOME } from "../github/github-installations.js";
 import { AGENT_KEY_RING } from "./agent-credentials.js";
 import { connectWorkspaceGitHub, type InstallationFixture, NO_GITHUB } from "./github-app-fake.js";
 
+/** The harnesses a local agent runs on here, each with a model it runs and the SDK its Mac registers for it, where it runs one. */
+const LOCAL_HARNESS = {
+  [CONVERSATION_RUNTIME.CLAUDE_CODE]: {
+    model: "anthropic/claude-opus-5.5",
+    sessions: claudeCodeSessions,
+    device: {},
+  },
+  [CONVERSATION_RUNTIME.CURSOR]: {
+    model: "cursor/composer-2.5",
+    sessions: cursorSessions,
+    device: { cursorSdk: "/Applications/Vespin.app/Contents/Resources/cursor-sdk/index.js" },
+  },
+} as const;
+
+/** A harness a local agent runs on here. */
+export type LocalHarness = keyof typeof LOCAL_HARNESS;
+
 /** How a local agent is opened: in the repository the installation given reaches, on the harness given, on a host as old as asked. */
 export interface LocalAgentOptions {
   /** The installation reaching the repository it works in, connected to its task's workspace; none for an agent in no repository. */
   readonly installation?: InstallationFixture;
-  /** The harness its conversation runs on, as Start records it; the store's own where none is named. */
-  readonly runtime?: ConversationRuntime;
+  /** The harness its conversation runs on, as Start records it, which picks its model and what its Mac registers; Claude Code where none is named. */
+  readonly harness?: LocalHarness;
   /** Whether its host is a build from before it works in every repository on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`), which every host registers now. */
   readonly hostPredatesOwnSignIn?: boolean;
 }
@@ -52,10 +70,12 @@ export const openLocalAgent = (options: LocalAgentOptions = {}) =>
     const userId = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
     const deviceId = randomUUID();
+    const harness = LOCAL_HARNESS[options.harness ?? CONVERSATION_RUNTIME.CLAUDE_CODE];
     yield* registerDevice(userId, {
       id: deviceId,
       name: "Studio",
       ...DEVICE_LAYOUT,
+      ...harness.device,
       capabilities:
         options.hostPredatesOwnSignIn === true ? [] : [DEVICE_CAPABILITY.GITHUB_SIGN_IN],
     });
@@ -74,14 +94,14 @@ export const openLocalAgent = (options: LocalAgentOptions = {}) =>
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
-      model: "anthropic/claude-opus-5.5",
+      model: harness.model,
       effort: "high",
       descriptionSnapshot: "# Invitations\n",
       prompt: null,
       repository,
       machine: AGENT_MACHINE.DEVICE,
       deviceId,
-      runtime: options.runtime ?? CONVERSATION_RUNTIME.CLAUDE_CODE,
+      runtime: options.harness ?? CONVERSATION_RUNTIME.CLAUDE_CODE,
       payer: AGENT_PAYER.MAC_SIGN_IN,
     });
 
@@ -107,21 +127,27 @@ const LOCAL_AGENT_SERVICES = Layer.mergeAll(
 );
 
 /**
- * The account's Claude Code sessions over its Macs alone, which launch a
- * local agent's runner and write its messages as lines its Mac follows,
- * each launch numbering its events from naught.
+ * The account's sessions on the harness given, Claude Code where none is,
+ * over its Macs alone, which launch a local agent's runner and write its
+ * messages as lines its Mac follows, each launch numbering its events from
+ * naught.
  */
-export const localAgentSessions = (userId: string) =>
-  claudeCodeSessions({
-    userId,
-    eventsUrl: "https://app.test/api/agents/runner/events",
-    linesUrl: "https://app.test/api/agents/runner-lines",
-    transcriptsUrl: "https://app.test/api/agents/runner-transcripts",
-    mcpUrl: "https://app.test/api/agents/mcp",
-    integrations: () => Effect.succeed([]),
-    instructions: () => Effect.succeed("You are a Vespin coding agent."),
-    nextSequence: () => Effect.succeed(0),
-  }).pipe(Effect.provide(LOCAL_AGENT_SERVICES)) satisfies Effect.Effect<
+export const localAgentSessions = (
+  userId: string,
+  harness: LocalHarness = CONVERSATION_RUNTIME.CLAUDE_CODE,
+) =>
+  LOCAL_HARNESS[harness]
+    .sessions({
+      userId,
+      eventsUrl: "https://app.test/api/agents/runner/events",
+      linesUrl: "https://app.test/api/agents/runner-lines",
+      transcriptsUrl: "https://app.test/api/agents/runner-transcripts",
+      mcpUrl: "https://app.test/api/agents/mcp",
+      integrations: () => Effect.succeed([]),
+      instructions: () => Effect.succeed("You are a Vespin coding agent."),
+      nextSequence: () => Effect.succeed(0),
+    })
+    .pipe(Effect.provide(LOCAL_AGENT_SERVICES)) satisfies Effect.Effect<
     unknown,
     never,
     DatabaseServices | HostedEnvironment
@@ -134,6 +160,7 @@ export const LOCAL_AGENT_ENVIRONMENT = Layer.succeed(HostedEnvironment, {
   posthogApiHost: undefined,
   posthogProjectApiKey: undefined,
   posthogIngestHost: undefined,
+  posthogDistinctIdKey: undefined,
   cronSecret: undefined,
   githubWebhookSecret: undefined,
   providerKeyEncryptionKeys: AGENT_KEY_RING,
@@ -149,16 +176,16 @@ export const typedMessage = (agent: Agent, text: string) => ({
 });
 
 /**
- * A local agent whose Start launched its runner,
+ * A local agent on the harness given whose Start launched its runner,
  * which its Mac took, and whose first turn then settled, as its IDLE's
  * batch writes it: the agent, its sessions, the session its Start claimed,
  * the turn that settled, and the launch line its Mac claimed.
  */
-export const warmLocalAgent = Effect.gen(function* () {
+export const warmLocalAgentOn = Effect.fnUntraced(function* (harness: LocalHarness) {
   const db = yield* Database;
-  const opened = yield* openLocalAgent({ runtime: CONVERSATION_RUNTIME.CLAUDE_CODE });
+  const opened = yield* openLocalAgent({ harness });
   const { userId, deviceId, agent } = opened;
-  const sessions = yield* localAgentSessions(userId);
+  const sessions = yield* localAgentSessions(userId, harness);
   const started = yield* sessions.open(typedMessage(agent, "Fix the invitations."));
   assert.ok(started.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
   const { sessionId } = started;
@@ -188,6 +215,9 @@ export const warmLocalAgent = Effect.gen(function* () {
 
   return { ...opened, sessions, sessionId, turnId: settled.id, launchId: launch.id };
 });
+
+/** A warm local agent on Claude Code (`warmLocalAgentOn`). */
+export const warmLocalAgent = warmLocalAgentOn(CONVERSATION_RUNTIME.CLAUDE_CODE);
 
 export type WarmLocalAgent = Effect.Success<typeof warmLocalAgent>;
 

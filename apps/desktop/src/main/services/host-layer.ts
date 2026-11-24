@@ -25,6 +25,7 @@ import {
   RunMode,
   reporterLayer,
   SecretCipher,
+  ServiceOrigin,
   ShutdownSignal,
   SignInConsent,
   StateRoot,
@@ -67,6 +68,10 @@ function hostSeamLayersFor(dependencies: HostSeamDependencies) {
       deviceZone: readerZone,
     }),
     Layer.succeed(Environment, ConfigProvider.fromEnvRecord(config.environment)),
+    // Note that the service origin is the one bootstrap settled, because the
+    // host's own derivation drops every override from a packaged build, the
+    // end-to-end build's loopback one included (`bootstrap.ts`).
+    Layer.succeed(ServiceOrigin, config.hostedServiceBaseUrl),
     Layer.succeed(IdSource, { create: () => randomUUID() }),
     reporterLayer(config.report),
     // The account's local database opens on Node's own `node:sqlite`, bundled with Electron.

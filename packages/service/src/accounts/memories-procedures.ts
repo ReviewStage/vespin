@@ -19,8 +19,20 @@
  * named has Memory on (`experimentOnIn`), refused as off otherwise. A keep
  * that looks like it holds a credential is refused, as is one past the
  * workspace's bound, and a correction of a memory gone is answered not found.
+ *
+ * Each of the read, the forget, and the keep may name a Manager of the
+ * workspace (`managerId`), for its Settings › Memory: it then reaches that
+ * Manager's own memories in the workspace's place, a keep landing there for
+ * it alone, under the same rules. Every member reads every Manager's, as
+ * every member sees every Manager. A keep for an agent that is no Manager of
+ * the workspace is answered not found, and a read of one, none.
  */
 
+import {
+  MEMORY_SCOPE,
+  type MemoryKeepScope,
+  WORKSPACE_MEMORIES,
+} from "@repo/database/models/memory-store";
 import { EXPERIMENT } from "@repo/settings";
 import { Effect } from "effect";
 import { experimentOnIn } from "../agents/workspace-experiment-on.js";
@@ -77,6 +89,11 @@ function saveAnswer(answer: WorkspaceMemorySaveAnswer) {
   }
 }
 
+/** The memories a request reaches: the Manager's own where it names one, and the workspace's own otherwise. */
+function scopeOf(managerId: string | undefined): MemoryKeepScope {
+  return managerId === undefined ? WORKSPACE_MEMORIES : { kind: MEMORY_SCOPE.MANAGER, managerId };
+}
+
 /** Refused as off unless the workspace has Memory on, as the member MCP server's memory tools are. */
 const memoryOn = (workspaceId: string) =>
   Effect.flatMap(experimentOnIn(workspaceId, EXPERIMENT.MEMORY), (on) =>
@@ -90,15 +107,17 @@ export function memoriesProcedures(seams: MemoriesProcedureSeams) {
   return {
     memories: signedIn.memories.effect(function* ({ context, input }) {
       return yield* memoriesAnswer(
-        yield* hostedStoreOrUnavailable(readWorkspaceMemories(context.userId, input.workspaceId)),
+        yield* hostedStoreOrUnavailable(
+          readWorkspaceMemories(context.userId, input.workspaceId, scopeOf(input.managerId)),
+        ),
       );
     }),
 
     forgetMemory: signedIn.forgetMemory.effect(function* ({ context, input }) {
-      const { workspaceId, id } = input.query;
+      const { workspaceId, id, managerId } = input.query;
 
       const answer = yield* hostedStoreOrUnavailable(
-        forgetWorkspaceMemory(context.userId, workspaceId, id),
+        forgetWorkspaceMemory(context.userId, workspaceId, id, scopeOf(managerId)),
       );
 
       const answered = yield* memoriesAnswer(answer);
@@ -113,12 +132,19 @@ export function memoriesProcedures(seams: MemoriesProcedureSeams) {
     }),
 
     saveMemory: signedIn.saveMemory.effect(function* ({ context, input }) {
-      const { workspaceId, text, replaces } = input;
+      const { workspaceId, text, replaces, managerId } = input;
       yield* memoryOn(workspaceId);
 
       return yield* saveAnswer(
         yield* hostedStoreOrUnavailable(
-          saveWorkspaceMemory(context.userId, workspaceId, text, replaces),
+          saveWorkspaceMemory(
+            context.userId,
+            workspaceId,
+            text,
+            replaces,
+            undefined,
+            scopeOf(managerId),
+          ),
         ),
       );
     }),

@@ -41,7 +41,8 @@ import {
   setTaskParent,
   type TaskChanges,
 } from "@repo/database/models/task-store";
-import { isWorkspaceMember } from "@repo/database/models/workspace-store";
+import { turnAsker } from "@repo/database/models/turn-asker";
+import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
 import type { ConversationTarget, StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
 import {
@@ -1559,10 +1560,9 @@ const ENTRY_WORDS = {
   SAID: "Said",
 } as const;
 
+/** An entry on one line, cut to the bound on a whole character, since half an emoji left by the cut is refused by the store its answer lands in (STAG-3994). */
 function cut(text: string, maximumChars: number): string {
-  const line = text.replace(/\s+/gu, " ").trim();
-
-  return line.length > maximumChars ? `${line.slice(0, maximumChars - 1)}…` : line;
+  return cutText(text.replace(/\s+/gu, " ").trim(), maximumChars);
 }
 
 /** One entry's words, whole, and the id of the call it says, where it is one. */
@@ -1960,10 +1960,9 @@ export const orStoreRefusal = <R>(
  * starts a second agent nor tells of one in a workspace the caller left
  * behind; nothing where the call made no agent.
  */
-const startedBefore = (call: AgentCall) =>
+const startedBefore = (call: AgentCall, userId: string) =>
   Effect.gen(function* () {
     const { caller } = call;
-    const userId = callerUserId(caller);
     const made = yield* readAgentByKey(userId, call.clientKey);
 
     if (Option.isNone(made)) return Option.none<WireRecord>();
@@ -2690,6 +2689,41 @@ const runsOnOfStart = Effect.fnUntraced(function* (
 });
 
 /**
+ * The account a start makes its agent under. A Manager's fresh start, where
+ * its workspace has Managers act for whoever asked on, is the account of the
+ * member whose line opened the Manager's turn under way (`turnAsker`), so
+ * their payer, machines, skills, and GitHub identity carry the work and the
+ * agent is theirs; a turn no member opened has no asker, and the Manager's
+ * owner stands in. Every other start is the caller's own: a coding agent on
+ * a task acts for its starter, and a start from another agent lands where
+ * that agent stands, which the caller reads as itself.
+ */
+const startAccountOf = (caller: AgentCaller, from: AgentStartFrom | undefined) =>
+  Effect.gen(function* () {
+    const calling = callerAgent(caller);
+    const owner = callerUserId(caller);
+
+    if (calling?.kind !== AGENT_KIND.MANAGER || from !== undefined) return owner;
+
+    if (!(yield* experimentOnIn(calling.organizationId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER))) {
+      return owner;
+    }
+
+    return yield* turnAsker({ userId: calling.userId, conversationId: calling.conversationId });
+  });
+
+/** Why a Manager's start for the member who asked was refused for want of a payer: none of theirs pays for the model, and the owner's never stands in for theirs. */
+function askerCredentialWords(asker: string | undefined): string {
+  const who = asker ?? "the member who asked";
+
+  return (
+    `Not started: an agent you start is ${who}'s, who asked for this turn, and no subscription or API key of theirs ` +
+    `pays for that model, and ${PRODUCT_NAME}'s key pays for no agent. Start it on a model whose provider ` +
+    `they connected, or tell them to connect one in Settings › Agents.`
+  );
+}
+
+/**
  * One call of `start_agent`: an agent started under the call's own key on
  * the task its taskId names, the caller's own or another of its workspace,
  * or, from another agent, that agent's own task, which taskId must name; or
@@ -2702,12 +2736,14 @@ const runsOnOfStart = Effect.fnUntraced(function* (
  * out is the calling agent's own (`startValuesOf`), never the member's
  * default, newest agent, or last pick, and is checked as one named is: a
  * model no longer offered, or a mode the model's harness does not take, is
- * refused naming the field to pass, never run on full access. Note that a
- * start from another agent can take tens of seconds, a copy of its work and
- * a summary of its transcript among them, which the call is let run: our
- * MCP server's function runs a tool to the function's own bound, and the
- * copy and the summary each hold to their own timeouts well inside it
- * (`snapshot.ts`, `replay-summary.ts`).
+ * refused naming the field to pass, never run on full access. A Manager's
+ * start may be made under the account of the member who asked
+ * (`startAccountOf`), refused by name where none of theirs pays for its
+ * model. Note that a start from another agent can take tens of seconds, a
+ * copy of its work and a summary of its transcript among them, which the
+ * call is let run: our MCP server's function runs a tool to the function's
+ * own bound, and the copy and the summary each hold to their own timeouts
+ * well inside it (`snapshot.ts`, `replay-summary.ts`).
  */
 export function runStartAgent(
   call: AgentCall,
@@ -2769,6 +2805,7 @@ export function runStartAgent(
 
   return orStoreRefusal(
     Effect.gen(function* () {
+      const account = yield* startAccountOf(caller, from);
       // Another task, or another agent's, is started on only where it is of the caller's
       // own workspace; a call run again after its start landed answers what it made
       // (`startedBefore`), before its task's key is read again, which a renamed workspace no
@@ -2777,7 +2814,7 @@ export function runStartAgent(
       const elsewhere = from !== undefined || taskRef !== ownTask;
 
       if (elsewhere || asked.success.images !== undefined) {
-        const before = yield* startedBefore(call);
+        const before = yield* startedBefore(call, account);
 
         if (Option.isSome(before)) return before.value;
       }
@@ -2802,7 +2839,7 @@ export function runStartAgent(
 
       // Note that a call run again after its start landed answers what it made, even where its task has since gained a repository.
       if (branchless !== undefined) {
-        const before = yield* startedBefore(call);
+        const before = yield* startedBefore(call, account);
 
         return Option.isSome(before) ? before.value : agentToolRejected(branchless);
       }
@@ -2842,7 +2879,7 @@ export function runStartAgent(
         return agentToolRejected(`Not started: ${forwardedImageRefusalWords(images.failure)}`);
       }
 
-      const runsOn = yield* runsOnOfStart(userId, callerWorkspaceId(caller), runsOnAsked);
+      const runsOn = yield* runsOnOfStart(account, callerWorkspaceId(caller), runsOnAsked);
 
       if (Result.isFailure(runsOn)) return agentToolRejected(runsOn.failure);
       const place: StartWhere = landing?.success.place ?? { taskId };
@@ -2851,7 +2888,10 @@ export function runStartAgent(
       const note =
         calling === undefined ? asked.success.note : startedByNote(calling, asked.success.note);
 
-      const started = yield* startAgent(Effect.succeed(agentSessions), userId, {
+      // The agent is made as the account it belongs to, whose sessions open it.
+      const sessions = account === userId ? agentSessions : call.agentSessionsAs(account);
+
+      const started = yield* startAgent(Effect.succeed(sessions), account, {
         ...place,
         idempotencyKey: call.clientKey,
         choice,
@@ -2888,6 +2928,13 @@ export function runStartAgent(
               ? ownChoiceRefusal(choice, refusal.offered)
               : choiceRefusal(choice, refusal.offered),
           );
+        }
+
+        // Note that a Manager's start for whoever asked is refused where they pay for nothing, never made the owner's instead.
+        if (account !== userId && refusal.error === HOSTED_API_ERROR.AGENT_CREDENTIAL_MISSING) {
+          const names = yield* readAccountNames([account]);
+
+          return agentToolRejected(askerCredentialWords(names.get(account)));
         }
 
         return agentToolRejected(startFromRefusalWords(refusal, from));

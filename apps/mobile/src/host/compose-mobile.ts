@@ -28,7 +28,7 @@
 import { createORPCClient } from "@orpc/client";
 import { type AccountRenewalWindow, type AuthSession, authSessionConsent } from "@repo/credentials";
 import { GITHUB_INSTALL_LANDING } from "@repo/features";
-import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import { PRODUCT_PLATFORM, type ProductLaunchedIn } from "@repo/features/analytics";
 import { readerZone } from "@repo/features/date-mention";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
@@ -133,6 +133,8 @@ export class MobileHostTag extends Context.Service<MobileHostTag, MobileHost>()(
 
 /** What the host reads of the device, as the app answers it (`device-seams.ts`) or a test does. */
 export interface DeviceSeams {
+  /** Where this launch began, in front or woken in the background, as the app read it when its bundle first ran (`launch-state.ts`). */
+  readonly launchedIn?: ProductLaunchedIn;
   /** The host's files, which hold the settings store's one file. */
   readonly fileSystem: Layer.Layer<FileSystem.FileSystem>;
   /** The ids the host mints for its own records. */
@@ -236,6 +238,7 @@ function seamLayers(options: MobileHostOptions) {
       packaged: true,
       platform: PRODUCT_PLATFORM.IOS,
       deviceZone: readerZone,
+      ...(device.launchedIn === undefined ? undefined : { launchedIn: device.launchedIn }),
     }),
     // The app has no environment to read an override from.
     Layer.succeed(Environment, ConfigProvider.fromEnv({ env: {} })),

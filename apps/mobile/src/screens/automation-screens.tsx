@@ -84,7 +84,7 @@ import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { TabColumns } from "../split-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { PLUS_TAB, useComposeAction, useSplitBuild } from "./app-sidebar.js";
+import { useComposeAction, useSplitBuild } from "./app-sidebar.js";
 
 /** What the list's field says before anything is typed. */
 const SEARCH_AUTOMATIONS = "Search automations";
@@ -307,14 +307,12 @@ function AutomationsStackScreen() {
           accessibilityLabel={NEW_AUTOMATION}
           onPress={() => router.push(newAutomationRoute())}
         />
-        {/* Note that an iPad's tab bar has no round +, so its list's bar offers New task too, as every tab root's does. */}
-        {PLUS_TAB ? null : (
-          <Stack.Toolbar.Button
-            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
-            accessibilityLabel={compose.label}
-            onPress={compose.onPress}
-          />
-        )}
+        {/* Note that New task's compose ends the bar, as every tab root's does. */}
+        <Stack.Toolbar.Button
+          icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+          accessibilityLabel={compose.label}
+          onPress={compose.onPress}
+        />
       </Stack.Toolbar>
       <Screen>
         {chosen === undefined ? null : (

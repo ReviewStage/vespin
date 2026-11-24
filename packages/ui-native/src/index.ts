@@ -512,6 +512,7 @@ export {
 
 export {
   drawnCallIds,
+  managerChatItems,
   NO_TOGGLES,
   openCuts,
   rowsNear,

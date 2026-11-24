@@ -51,6 +51,7 @@ export {
   selectRun,
   selectSessionReplay,
   selectSettingsHeld,
+  selectSharesUsageData,
   selectSignedIn,
   selectStoredExperimentChoices,
   selectTaskSendRefused,

@@ -50,9 +50,14 @@
   }
 
   /* A step stands among a transcript's rows at a row's height, its words on
-     the row's center, so it keeps the rows' rhythm. */
+     the row's center, so it keeps the rows' rhythm, and is laid out across
+     as a call's row is (line-button.tsx's row): its glyph set in by the
+     row's hairline inset and its words a glyph's gap past it, so its glyph
+     and words stand in the rows' columns. */
   .ui-note-line[data-look="step"] {
     min-height: var(--ui-control-height);
+    padding-inline: var(--ui-space-4);
+    gap: var(--ui-icon-gap);
   }
 
   .ui-note-line[data-fill] {

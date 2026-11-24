@@ -1,13 +1,16 @@
 /**
  * workspace-memories.ts -- a workspace's memories' live read bound: its one statement, the tables it reads, the topics that wake it, and who it admits.
  *
- * Every memory of the workspace, while the reader is a member of it, each
+ * Every memory of the workspace's own, never one kept for a Manager alone,
+ * or, where the reader names a Manager (`managerId`), that Manager's own
+ * alone, while the reader is a member of it, each
  * with the name of the member whose words it holds, null once that account
  * is gone, and whether the reader may forget it: its words are theirs, or
  * they own or administer the workspace, as `forgetMemory`'s caller settles
  * it (`WORKSPACE_MEMORIES_READ`). Each says too where its words came from,
- * the agent, the line that opened its turn, and the agent's task, only
- * where the reader may open that agent and task (`agentVisibleTo`), as
+ * the agent, the line that opened its turn, and the agent's task, or the
+ * Manager's name for a Manager, which works on none, only where the reader
+ * may open that agent and task (`agentVisibleTo`), as
  * `readMemorySources` says it; and how often agents were handed it in the
  * last `MEMORY_RECALL_WINDOW_DAYS` days and when last, as
  * `tallyMemoryRecalls` counts them. A workspace the reader is no member of
@@ -46,10 +49,11 @@ import {
   taskSync,
   userSync,
 } from "@repo/database/sync/tables";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import { MEMORY_RECALL_WINDOW_DAYS } from "@repo/features/memory-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
-import { and, eq, exists, gte, or, sql } from "drizzle-orm";
+import { and, eq, exists, gte, isNull, or, sql } from "drizzle-orm";
 import { Clock, Duration, Effect } from "effect";
 import { instantParam } from "../../sync/live-param.js";
 import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-binding.js";
@@ -106,7 +110,7 @@ export const workspaceMemoriesRead = bindLiveRead(WORKSPACE_MEMORIES_READ, {
     [TOPIC.MEMORY, workspaceId],
     [TOPIC.ACCOUNT, userId],
   ],
-  statements: ({ userId, workspaceId, recalledSince }) => ({
+  statements: ({ userId, workspaceId, managerId, recalledSince }) => ({
     memories: liveRowsStatement(
       WORKSPACE_MEMORIES_READ.parts.memories,
       {
@@ -125,6 +129,10 @@ export const workspaceMemoriesRead = bindLiveRead(WORKSPACE_MEMORIES_READ, {
           >`case when ${agentTable.id} is not null then ${memory.messageId} end`,
           sourceTaskId: outerJoined(task.id),
           sourceTaskName: outerJoined(task.name),
+          // Note that a Manager works on no task, so it is named where the reader may open it and its task is none.
+          sourceManagerName: sql<
+            string | null
+          >`case when ${agentTable.kind} = ${AGENT_KIND.MANAGER} and ${agentTable.taskId} is null then coalesce(${agentTable.title}, ${agentTable.model}) end`,
           recalls30d: recallsSince(instantParam(recalledSince)),
           lastRecalledAt: LAST_RECALLED_AT,
         },
@@ -138,7 +146,12 @@ export const workspaceMemoriesRead = bindLiveRead(WORKSPACE_MEMORIES_READ, {
           .leftJoin(agentTable, and(eq(agentTable.id, memory.agentId), agentVisibleTo(userId)))
           .leftJoin(task, eq(task.id, agentTable.taskId))
           .where(
-            and(eq(memory.organizationId, workspaceId), workspaceReachableBy(userId, workspaceId)),
+            and(
+              eq(memory.organizationId, workspaceId),
+              // Note that a memory kept for one Manager alone is read only where that Manager is named, never among the workspace's.
+              managerId === "" ? isNull(memory.managerId) : eq(memory.managerId, managerId),
+              workspaceReachableBy(userId, workspaceId),
+            ),
           ),
     ),
   }),

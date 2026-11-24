@@ -123,6 +123,7 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
+import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
@@ -181,6 +182,7 @@ import {
   type AppHeldById,
   type AppInboxTask,
   type AppInboxTaskHolding,
+  type AppManagerChat,
   type AppStateSnapshot,
   type AppTranscript,
   OWN_TRANSCRIPT,
@@ -657,6 +659,9 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             "",
             // Note that this names someone no member is, whose page says so.
             "[@Nobody Known](https://vespin.dev/personal/person/user-nobody) was asked too.",
+            "",
+            // Note that this names the account itself, whose page leads with the Manager it started.
+            "[@Ada Lovelace](https://vespin.dev/personal/person/user-ada) signed off on it.",
             "",
             // Note that this links a settled thread, outside the Open list, so a flow can push it over this one and come back to step on from here.
             "It goes out with the digest, on the day [@Which day the digest goes out](https://vespin.dev/personal/inbox/81e2a425-6d9f-4ab7-92df-00000000000d) settled.",
@@ -2160,8 +2165,66 @@ const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix le
 /** The digest agent's run, which the weekly digest automation's newest run opens. */
 const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the weekly digest");
 
-/** The release Manager's run, which its page draws as its chat. */
+/** The release Manager's run, whose turns' work its chat keeps a press away. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
+
+/** The release Manager's turn, which its two messages were sent in (`fixtureManagerTranscript`). */
+const MANAGER_TURN = "fixture-manager-turn";
+
+/**
+ * The release Manager's chat as its rows stand, newest first as the host
+ * holds them: the account's ask, then the two messages its turn sent the
+ * account, a minute apart, so they stand in one run under the ask.
+ */
+const MANAGER_CHAT: AppManagerChat = {
+  messages: [
+    {
+      id: "a3c9e1f4",
+      seq: 3,
+      authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+      authorUserId: null,
+      authorName: "Release manager",
+      text: "Left before it ships: a Resend button on pending invites, and the audit log line. I'll tell you once both land.",
+      attachments: [],
+      threadRoot: null,
+      broadcast: false,
+      turnId: MANAGER_TURN,
+      lineId: null,
+      createdAt: MANAGER_STARTED + 3 * MINUTE,
+      editedAt: null,
+    },
+    {
+      id: "7b2d40e8",
+      seq: 2,
+      authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+      authorUserId: null,
+      authorName: "Release manager",
+      text: "On it. The invitations agent has its pull request open and its tests pass.",
+      attachments: [],
+      threadRoot: null,
+      broadcast: false,
+      turnId: MANAGER_TURN,
+      lineId: null,
+      createdAt: MANAGER_STARTED + 2 * MINUTE,
+      editedAt: null,
+    },
+    {
+      id: "e0f5a612",
+      seq: 1,
+      authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+      authorUserId: ADA.userId,
+      authorName: ADA.name,
+      text: "Get the invitations work ready to ship this week, and tell me what's left.",
+      attachments: [],
+      threadRoot: null,
+      broadcast: false,
+      turnId: MANAGER_TURN,
+      lineId: "fixture-manager-ask",
+      createdAt: MANAGER_STARTED,
+      editedAt: null,
+    },
+  ],
+};
 
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
 function withQueued(transcript: AppTranscript): AppTranscript {
@@ -2675,6 +2738,10 @@ export function inboxAppState(
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
+    [LIVE_READ.MANAGER_CHAT]: {
+      ...state[LIVE_READ.MANAGER_CHAT],
+      [AGENT.MANAGER]: { rows: MANAGER_CHAT },
+    },
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.INTEGRATION_TOOLS]: INTEGRATION_TOOLS,

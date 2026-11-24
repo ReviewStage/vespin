@@ -477,6 +477,7 @@ describe("the cookie account source", () => {
         appVersion: "0.2.0",
         packaged: false,
         platform: PRODUCT_PLATFORM.DESKTOP,
+        installId: Effect.succeed(crypto.randomUUID()),
         sends: true,
         credential: session.credential,
         confirmAccount: session.confirmAccount,

@@ -15,7 +15,7 @@
  * like an identifier, so a name that was given a sentence is not written
  * either.
  */
-import { Cause, Option, Predicate, Schema } from "effect";
+import { Cause, Option, Schema } from "effect";
 
 /** A tag as a line may carry it: one identifier, nothing shaped like a sentence or a value. */
 const KIND_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -38,7 +38,10 @@ const readKind = Schema.decodeUnknownOption(Kind);
 const readTagged = Schema.decodeUnknownOption(Tagged);
 const readReason = Schema.decodeUnknownOption(Schema.Struct({ reason: Tagged }));
 const readIssue = Schema.decodeUnknownOption(Schema.Struct({ issue: Tagged }));
-const readCode = Schema.decodeUnknownOption(Schema.String.check(Schema.isPattern(CODE_PATTERN)));
+
+const readCode = Schema.decodeUnknownOption(
+  Schema.Struct({ code: Schema.String.check(Schema.isPattern(CODE_PATTERN)) }),
+);
 
 const readSqlCause = Schema.decodeUnknownOption(
   Schema.Struct({
@@ -73,6 +76,15 @@ function wrappedOf(cause: unknown): Option.Option<unknown> {
   );
 }
 
+/** The driver's own error beneath a `SqlError`, through any wrapper around it; nothing where the failure is no `SqlError`. */
+function driverErrorOf(cause: unknown): Option.Option<unknown> {
+  const wrapped = wrappedOf(cause);
+
+  if (Option.isSome(wrapped)) return driverErrorOf(wrapped.value);
+
+  return Option.map(readSqlCause(cause), (sql) => sql.reason.cause);
+}
+
 /**
  * The failure as a few fixed words: `SqlError: ConnectionError`,
  * `TypeError`, or `unnamed` for a thrown value with no name of its own.
@@ -100,22 +112,27 @@ export function failureKind(cause: unknown): string {
  * whose code no kind of its own was made for, which is why it is read here.
  */
 export function failureDetail(cause: unknown): Option.Option<string> {
-  const wrapped = wrappedOf(cause);
+  const driver = driverErrorOf(cause);
 
-  if (Option.isSome(wrapped)) return failureDetail(wrapped.value);
-  const sql = readSqlCause(cause);
+  if (Option.isNone(driver)) return Option.none();
+  const code = readCode(driver.value);
 
-  if (Option.isNone(sql)) return Option.none();
-  const driver = sql.value.reason.cause;
-
-  const code = readCode(
-    Predicate.isObjectOrArray(driver) && "code" in driver ? driver.code : undefined,
-  );
-
-  if (Option.isSome(code)) return Option.some(`code ${code.value}`);
-  const name = driver instanceof Error ? readKind(driver.name) : Option.none();
+  if (Option.isSome(code)) return Option.some(`code ${code.value.code}`);
+  const name = driver.value instanceof Error ? readKind(driver.value.name) : Option.none();
 
   return Option.some(`cause ${Option.getOrElse(name, () => FAILURE_KIND.UNNAMED)}`);
+}
+
+/**
+ * The code the driver's own error beneath a `SqlError` carries, a Postgres
+ * SQLSTATE (`22P02`) or a socket's (`ECONNRESET`), for a caller that tells
+ * one failure from another by it; nothing where the failure is no `SqlError`
+ * or its driver's error carries no code of that shape.
+ */
+export function failureCode(cause: unknown): Option.Option<string> {
+  return Option.flatMap(driverErrorOf(cause), (driver) =>
+    Option.map(readCode(driver), (read) => read.code),
+  );
 }
 
 /** The cause as `failureKind` names what it squashes to, or `Interrupt` where nothing failed. */

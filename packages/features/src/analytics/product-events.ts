@@ -60,6 +60,8 @@ export const PRODUCT_EVENT = {
   REPLY_DRAWN: "reply:drawn",
   /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was busy before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew. */
   OPEN_DRAWN: "open:drawn",
+  /** A tab of the iOS app chosen for the first time since launch, Tasks, counted once a launch by how long from the tap that chose it the app took to hear the switch, to draw the tab's first frame, and to draw its rows, each on a rung of `productOpenMilliseconds`, and its kind: never what it shows. */
+  TAB_DRAWN: "tab:drawn",
   /** A page an agent showed, opened on the iOS app, counted once an open by how long it took to read its HTML and to draw it, each on a rung of `productOpenMilliseconds`, whether its opener named its version or it waited on the task's pages for the newest, and whether it was the first page since launch. */
   PAGE_SHOWN: "page:shown",
   /** A picture an agent showed, drawn on the iOS app, counted once a read by how long it took from the page asking for it to its file in hand, on a rung of `productOpenMilliseconds`, whether it came from the phone's own copy or was read through the service, its kind, and its size on a rung. */
@@ -88,6 +90,7 @@ export const PRODUCT_SURFACE_EVENT = {
   APP_NOT_READY: PRODUCT_EVENT.APP_NOT_READY,
   REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
   OPEN_DRAWN: PRODUCT_EVENT.OPEN_DRAWN,
+  TAB_DRAWN: PRODUCT_EVENT.TAB_DRAWN,
   PAGE_SHOWN: PRODUCT_EVENT.PAGE_SHOWN,
   PICTURE_SHOWN: PRODUCT_EVENT.PICTURE_SHOWN,
 } as const;
@@ -157,6 +160,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   PICTURE_FROM: "picture_from",
   PICTURE_KIND: "picture_kind",
   PICTURE_BYTES: "picture_bytes",
+  LAUNCHED_IN: "launched_in",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -395,6 +399,7 @@ export const PRODUCT_EXPERIMENT = {
   MOVE_AGENTS: "move-agents",
   CURSOR: "cursor",
   MANAGERS: "managers",
+  MANAGER_ACTS_FOR_ASKER: "manager-acts-for-asker",
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   STARTER_TASKS: "starter-tasks",
 } as const;
@@ -533,6 +538,20 @@ export const PRODUCT_READY_AFTER = {
 } as const;
 
 export type ProductReadyAfter = (typeof PRODUCT_READY_AFTER)[keyof typeof PRODUCT_READY_AFTER];
+
+/**
+ * Where a launch began: in front, as a tap opens it, or in the background,
+ * where the system woke the app with nothing on screen, as a push's wake
+ * does on a phone. Note that a launch counted in the background shows its
+ * first screen only once it is brought forward, so the time from its count
+ * to that screen is time spent away, never a launch's wait.
+ */
+export const PRODUCT_LAUNCHED_IN = {
+  FRONT: "front",
+  BACKGROUND: "background",
+} as const;
+
+export type ProductLaunchedIn = (typeof PRODUCT_LAUNCHED_IN)[keyof typeof PRODUCT_LAUNCHED_IN];
 
 /** Where one of a launch's first reads stood: not yet drawn, drawn from the rows the phone kept, the service's answer drawn, or failed. */
 export const PRODUCT_READ_STATE = {
@@ -764,6 +783,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: ProductReadyAfter;
+  [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: ProductLaunchedIn;
   [PRODUCT_EVENT_PROPERTY.INBOX_READ]: ProductReadState;
   [PRODUCT_EVENT_PROPERTY.TASKS_READ]: ProductReadState;
   [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: ProductReadState;
@@ -832,6 +852,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
+  [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: Object.values(PRODUCT_LAUNCHED_IN),
   [PRODUCT_EVENT_PROPERTY.INBOX_READ]: Object.values(PRODUCT_READ_STATE),
   [PRODUCT_EVENT_PROPERTY.TASKS_READ]: Object.values(PRODUCT_READ_STATE),
   [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: Object.values(PRODUCT_READ_STATE),
@@ -901,6 +922,12 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.STAND_MS,
     PRODUCT_EVENT_PROPERTY.OPEN_ORDER,
   ],
+  [PRODUCT_EVENT.TAB_DRAWN]: [
+    PRODUCT_EVENT_PROPERTY.SURFACE,
+    PRODUCT_EVENT_PROPERTY.BUSY_MS,
+    PRODUCT_EVENT_PROPERTY.START_MS,
+    PRODUCT_EVENT_PROPERTY.STAND_MS,
+  ],
   [PRODUCT_EVENT.PAGE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.READ_MS,
     PRODUCT_EVENT_PROPERTY.SHOWN_MS,
@@ -922,6 +949,7 @@ const PRODUCT_EVENT_PROPERTIES = {
  * phone has updated.
  */
 const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
+  [PRODUCT_EVENT.APP_LAUNCH]: [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN],
   [PRODUCT_EVENT.APP_READY]: [
     PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
     PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS,
@@ -953,6 +981,7 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.BUSY_MS,
     PRODUCT_EVENT_PROPERTY.PAGE_DATA,
   ],
+  [PRODUCT_EVENT.TAB_DRAWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PAGE_SHOWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PICTURE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.PICTURE_BYTES,
@@ -1318,6 +1347,27 @@ export function productEventBuildFromWire(value: UnparsedWireValue): ProductEven
   if (!isRecord(value)) return {};
 
   return Option.getOrElse(decodeProductEventBuild(value.build), () => ({}));
+}
+
+/**
+ * The batch field naming the install it came from: a random UUID one Mac
+ * app, browser, or iPhone made for itself and keeps, and that the service
+ * files the batch's counts under in place of the account.
+ */
+export const PRODUCT_EVENT_INSTALL_ID_FIELD = "installId";
+
+/** A UUID in its canonical lowercase form, so the field can carry nothing else. */
+const INSTALL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+
+/**
+ * Reads a batch's install id, which is never a reason to refuse it: a build
+ * from before the field sends none, and anything but a UUID reads as none.
+ */
+export function productEventInstallIdFromWire(value: UnparsedWireValue): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const installId = value[PRODUCT_EVENT_INSTALL_ID_FIELD];
+
+  return isWireString(installId) && INSTALL_ID_PATTERN.test(installId) ? installId : undefined;
 }
 
 /** What every emitter is handed: a name, and exactly that name's properties. */

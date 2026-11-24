@@ -21,7 +21,14 @@ import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
 import type { HeldTranscripts } from "../desktop/strip-tabs.js";
-import { agentActor, agentName, archivedByReading, teammateRef } from "./agent-model.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import {
+  agentActor,
+  agentActorState,
+  agentName,
+  archivedByReading,
+  teammateRef,
+} from "./agent-model.js";
 import {
   AgentTabCard,
   type CardFoot,
@@ -380,7 +387,8 @@ export function AgentHoverCard({
 
 /**
  * Another coding agent named as a line's sender, by the id the service
- * answered for it: its harness's mark and its name, as it sent the line,
+ * answered for it: its harness's mark, or a Manager's face wearing where it
+ * stands now, and its name, as it sent the line,
  * hanging its tab's card as the task list carries it now
  * (`mentioned-agent-card.tsx`), and opening its tab on a press.
  */
@@ -395,8 +403,16 @@ export function SendingAgent({
   nameOnly?: boolean;
 }): React.JSX.Element {
   const openPlace = useOpenPlace();
+  const listed = useTaskListRow(useTaskListCollections().agents, agentId);
   const { taskId } = actor;
-  const card = <AgentHoverCard actor={actor} agentId={agentId} />;
+
+  // Note that a Manager's line names it by its face, wearing where it stands now, as the list carries both.
+  const worn =
+    listed?.face === undefined
+      ? actor
+      : { ...actor, face: listed.face, state: agentActorState(listed.status) };
+
+  const card = <AgentHoverCard actor={worn} agentId={agentId} />;
 
   const open =
     openPlace === undefined
@@ -408,5 +424,5 @@ export function SendingAgent({
             agentId,
           });
 
-  return <ActorRef actor={actor} card={card} onOpen={open} nameOnly={nameOnly} />;
+  return <ActorRef actor={worn} card={card} onOpen={open} nameOnly={nameOnly} />;
 }

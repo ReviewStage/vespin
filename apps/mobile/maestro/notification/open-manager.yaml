@@ -1,0 +1,40 @@
+# open-manager.yaml -- the second round of the notification flow: a Manager's pushed decide, a thread on no task, tapped in Notification Center, which brings the app forward on its thread in the Inbox.
+#
+# Run by `scripts/simulator-screenshots.sh` after a fresh install,
+# `background.yaml`, and the push of `manager.apns`, the fixture's "Cut the release?" thread as the service
+# writes a Manager's push: no `taskId`, threaded by its agent. It is opened
+# as `open.yaml` opens the task's, by a swipe on an iPhone and a tap on an
+# iPad, and its options stand on the thread once it opens.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- swipe:
+    start: 30%, 0%
+    end: 30%, 70%
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: ".*Cut the release.*"
+    timeout: 15000
+- takeScreenshot: notification-center-manager
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: ".*Cut the release.*"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - swipe:
+          from:
+            text: ".*Cut the release.*"
+          direction: RIGHT
+- tapOn:
+    id: "swipe-action-button-identifier"
+    optional: true
+- extendedWaitUntil:
+    visible: "Cut it now"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: notification-thread-manager

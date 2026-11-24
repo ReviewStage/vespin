@@ -8,6 +8,7 @@
 import { accountContract } from "./account.js";
 import { adminContract } from "./admin.js";
 import { agentBrowserTabsContract } from "./agent-browser-tabs.js";
+import { agentFollowersContract } from "./agent-followers.js";
 import { agentPagesContract } from "./agent-pages.js";
 import { agentPortsContract } from "./agent-ports.js";
 import { agentPullRequestsContract } from "./agent-pull-requests.js";
@@ -80,6 +81,7 @@ export type HostedContract = {
   account: typeof accountContract;
   admin: typeof adminContract;
   agentBrowserTabs: typeof agentBrowserTabsContract;
+  agentFollowers: typeof agentFollowersContract;
   agentPages: typeof agentPagesContract;
   agentPorts: typeof agentPortsContract;
   agentPullRequests: typeof agentPullRequestsContract;
@@ -130,6 +132,7 @@ export const hostedContract: HostedContract = {
   account: accountContract,
   admin: adminContract,
   agentBrowserTabs: agentBrowserTabsContract,
+  agentFollowers: agentFollowersContract,
   agentPages: agentPagesContract,
   agentPorts: agentPortsContract,
   agentPullRequests: agentPullRequestsContract,

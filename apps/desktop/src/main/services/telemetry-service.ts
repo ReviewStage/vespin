@@ -1,4 +1,3 @@
-import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
   PRODUCT_EVENT,
   productSessionCountBucket,
@@ -6,7 +5,6 @@ import {
 } from "@repo/features/analytics";
 import type { FeedbackResult, FeedbackSubmission } from "@repo/features/feedback";
 import { feedbackDeliveryFromEnvironment } from "@repo/features/feedback";
-import { sentryUser } from "@repo/features/sentry-account";
 import {
   eventWithoutAccessTokens,
   SPANS_NAMING_ACCESS_TOKENS,
@@ -15,7 +13,9 @@ import {
 } from "@repo/features/sentry-breadcrumbs";
 import { type SentryCapture, sentryReporterLayer } from "@repo/features/sentry-reporting";
 import { sentryTracesSampler } from "@repo/features/sentry-tracing";
+import { usageDataTransportOptions } from "@repo/features/sentry-usage-data";
 import { type RunMode, sentryReportingEnabled } from "@repo/host";
+import { sharesUsageData } from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
 import type { EffectDesktopService } from "@repo/host/desktop-service";
 import type { ReportAttributes } from "@repo/host/effect";
@@ -50,6 +50,13 @@ declare const PACKAGED_SENTRY_DSN: string;
 declare const PACKAGED_SENTRY_RELEASE: string;
 
 /**
+ * Whether this device shares usage data, as main's document last said;
+ * undefined until the host has read the device's settings
+ * (`followUsageDataInReports`).
+ */
+let usageData: boolean | undefined;
+
+/**
  * Crash reporting, begun at the entry rather than inside `start`: Electron
  * spawns its GPU process during bootstrap, and the crash reporter has to
  * stand before a child process it is to file a minidump for. The one
@@ -66,6 +73,12 @@ declare const PACKAGED_SENTRY_RELEASE: string;
  * `Document-Policy: js-profiling`, which the browser's profiler needs
  * (`renderer/desktop-sentry-sdk.ts`). Main itself is not profiled, because
  * Sentry ships its Node profiler's addon for Node's ABIs and not Electron's.
+ *
+ * Nothing leaves while the device does not share usage data: main's offline
+ * transport, which sends every window's envelopes and the crash reporter's
+ * minidumps as well as main's own, asks the switch before each one
+ * (`@repo/features/sentry-usage-data`). A report made before the settings
+ * are read is kept on disk until they are, then sent or dropped.
  */
 export function initializeCrashReporting(runMode: RunMode, environment: SentryEnvironment): void {
   Sentry.init({
@@ -80,6 +93,7 @@ export function initializeCrashReporting(runMode: RunMode, environment: SentryEn
     beforeSend: eventWithoutAccessTokens,
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,
     beforeSendSpan: Sentry.withStreamedSpan(spanWithoutAccessTokens),
+    transportOptions: usageDataTransportOptions(() => usageData),
   });
 }
 
@@ -208,22 +222,22 @@ export const mainSentry: SentryCapture = {
 export const mainErrorReporting: Layer.Layer<never> = sentryReporterLayer(mainSentry);
 
 /**
- * Names the signed-in account as Sentry's user, by its id alone, for as long
- * as `scope` stands: set as one signs in, changed as another does, and
- * cleared as they sign out, from main's own document. Every report main
- * sends takes it: its own, a window's or the preload's event as it passes
- * through, and a native crash's. A window's log line is not among them, and
- * names the account as it leaves the window (`@repo/features/sentry-account`).
+ * Follows the device's "Share usage data" switch in main's document, for as
+ * long as `scope` stands, so the transport asks the switch as it stands now:
+ * turning it off stops every report from the next one, and turning it back
+ * on resumes them, with no relaunch.
  */
-export function followAccountInReports(
+export function followUsageDataInReports(
   state: AppStateStore,
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.asVoid(
     Effect.forkScoped(
       state.changes.pipe(
-        Stream.map((document) => signedInAccountId(document.account)),
-        Stream.changes,
-        Stream.runForEach((accountId) => Effect.sync(() => Sentry.setUser(sentryUser(accountId)))),
+        Stream.runForEach((document) =>
+          Effect.sync(() => {
+            usageData = sharesUsageData(document);
+          }),
+        ),
       ),
     ),
   );

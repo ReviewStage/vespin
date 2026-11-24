@@ -1,4 +1,4 @@
-# person.yaml -- a person's chip in a thread's message and in an agent's transcript: held, it opens Open link and Copy link over the message's own menu; pressed, it opens the person's page, their name heading it and its ⋯ holding Copy link, Copy email and Manage in workspace settings; and a chip naming no member opens a page that says so.
+# person.yaml -- a person's chip in a thread's message and in an agent's transcript: held, it opens Open link and Copy link over the message's own menu; pressed, it opens the person's page, their name heading it and its ⋯ holding Copy link, Copy email and Manage in workspace settings; and a chip naming no member opens a page that says so; and the account's own chip opens its page, which leads with the Managers it started.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -12,6 +12,32 @@ appId: dev.vespin.ios
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
+# Launched on the host's Inbox fixture, signed in as Ada Lovelace, whose
+# invite recording thread names her by a chip leading its own line: pressed,
+# it opens her own page, which leads with the Managers she started, the
+# fixture's Release manager, its face in the ring's place.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*signed off on it.*"
+- tapOn:
+    text: ".*signed off on it.*"
+    point: "6%, 50%"
+- extendedWaitUntil:
+    visible: "Managers.*"
+    timeout: 10000
+- assertVisible: "Release manager"
+- waitForAnimationToEnd
+- takeScreenshot: person-managers
 # Launched on the host's Inbox fixture, whose invite recording thread names
 # Grace Hopper, a member, and Nobody Known, who is none, each by a chip
 # leading its own line (`@repo/host/fixture-inbox`); nothing reaches a server.

@@ -38,7 +38,10 @@ import { connectionToolEntries } from "../../integrations/connection-tools.js";
  * of and reply on an inbox item since folded into `withdraw_ask` and
  * `post_to_inbox`, that post and its read, since named `post_thread` and
  * `read_threads`, that read, since split into `list_threads` and
- * `read_thread`, the four of the workspace's Chat, removed with it,
+ * `read_thread`, the Inbox's four and a Manager's chat's four, since
+ * named `inbox_*` and `chat_*` for their surface (five of them still stored
+ * under their old names, `storedToolName`), the four of the workspace's
+ * Chat, removed with it,
  * `create_channel`, `update_channel`, and `move_thread`, removed with the
  * channels they kept,
  * `show_code`, `draw_on_board`, and `look_at_board`, removed with the Code
@@ -76,6 +79,14 @@ export const RETIRED_CODER_TOOL = {
   RESOLVE_THREAD: RETIRED_TOOL.RESOLVE_THREAD,
   REOPEN_THREAD: RETIRED_TOOL.REOPEN_THREAD,
   END_TURN: RETIRED_TOOL.END_TURN,
+  POST_THREAD: RETIRED_TOOL.POST_THREAD,
+  WITHDRAW_ASK: RETIRED_TOOL.WITHDRAW_ASK,
+  LIST_THREADS: RETIRED_TOOL.LIST_THREADS,
+  READ_THREAD: RETIRED_TOOL.READ_THREAD,
+  SEND_TO_USER: RETIRED_TOOL.SEND_TO_USER,
+  READ_CHAT_MESSAGES: RETIRED_TOOL.READ_CHAT_MESSAGES,
+  READ_CHAT_THREAD: RETIRED_TOOL.READ_CHAT_THREAD,
+  SEARCH_CHAT: RETIRED_TOOL.SEARCH_CHAT,
 } as const;
 
 const TOOL_INPUT = verbatimJsonSchema(WireValueSchema, {

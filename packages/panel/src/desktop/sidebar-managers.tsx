@@ -27,9 +27,9 @@
  * its head alone.
  */
 
-import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
-import { agentLastMovedAt } from "@repo/features/task-agents-model";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import type { TaskAgentPin } from "@repo/features/task-wire";
+import { TERM } from "@repo/features/words";
 import {
   MANAGER_SORT,
   type ManagerSort,
@@ -58,7 +58,6 @@ import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
-import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { type ManagerSortControl, useManagerSort } from "../tasks/manager-sort.js";
 import {
   type PinnedManager,
@@ -69,18 +68,16 @@ import {
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu, type MenuSubmenu } from "./action-menu.js";
-import { AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
+import { AGENT_ROW_LOOK } from "./agent-list-row.js";
 import type { FoldedGroups } from "./folded-groups.js";
+import { ManagerRow } from "./manager-row.js";
 import { NEW_MANAGER, useNewManagerDialog } from "./new-manager-dialog.js";
-import { type CountNoun, sidebarHead } from "./sidebar-fold.js";
+import { sidebarHead } from "./sidebar-fold.js";
 import { type SidebarTasksControl, useSidebarOpen } from "./sidebar-open.js";
 import { useRowDrag } from "./use-row-drag.js";
 
 /** What the section is called, on its head and its list alike. */
 const MANAGERS_HEAD = "Managers";
-
-/** What its head counts. */
-const MANAGER_NOUN: CountNoun = { one: "manager", many: "managers" };
 
 /** Its key, by which the groups under it glide as it comes and goes. */
 const MANAGERS_KEY = "managers";
@@ -106,9 +103,6 @@ const NO_LISTED: readonly ListedAgent[] = [];
 
 /** The zone Managers is as a drop zone, which takes a Manager out of every section. */
 export const MANAGERS_DROP_ZONE = "managers";
-
-/** No pull request, which a Manager's row never names, since a Manager opens none of its own. */
-const NO_PULL_REQUESTS: ReadonlyMap<string, AgentPullRequest> = new Map();
 
 /** The workspace's Managers, while its Managers experiment is on and the reader is signed in; none while it is off. */
 function useListedManagers(tasks: SidebarTasksControl): ReturnType<typeof useWorkspaceManagers> & {
@@ -186,32 +180,20 @@ export function SidebarManagerRow({
   const more = !useCoarsePointer();
   // Note that the row acts through the window's agents control as it stands, which moves as a task opens, so it reads it itself rather than the sidebar handing it on (`sidebar-open.tsx`).
   const agents = useManagerAgents(useSidebarOpen((open) => open.tasks.agents));
-  const at = agentLastMovedAt(agent);
-
-  const subject = listedRowSubject(agent, at, {
-    models: agents.models,
-    me: tasks.me,
-    pullRequests: NO_PULL_REQUESTS,
-  });
 
   return (
-    <AgentListRow
+    <ManagerRow
       agent={agent}
       agents={agents}
+      me={tasks.me}
       shown={shown}
-      subject={subject}
-      at={at}
-      card={<AgentCard subject={subject} models={agents.models} />}
-      pullRequest={undefined}
+      more={more}
+      current={agent.id === tasks.agentView.agentId}
       chosen={undefined}
       place={place}
       nest={nest}
-      more={more}
-      current={agent.id === tasks.agentView.agentId}
-      runsOn={false}
       look={AGENT_ROW_LOOK.SIDEBAR}
-      onPress={() => onOpen(agent.id)}
-      onOpenPullRequest={() => onOpen(agent.id)}
+      onOpen={onOpen}
     />
   );
 }
@@ -376,7 +358,7 @@ export function SidebarManagers({
           folded,
           onToggle: folds.toggleManagers,
           count: listedManagers.length,
-          noun: MANAGER_NOUN,
+          noun: TERM.MANAGER,
         })}
         glyph={<GLYPH.MANAGER />}
         label={MANAGERS_HEAD}

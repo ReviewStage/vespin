@@ -79,7 +79,7 @@ const RECORDED: readonly WireValue[] = [
     status: "completed",
     args: {
       providerIdentifier: "custom-user-tools",
-      toolName: "mcp__team__post_thread",
+      toolName: "mcp__team__inbox_post",
       args: { key: "readme", body: "Done." },
     },
     result: {

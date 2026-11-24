@@ -171,7 +171,7 @@ export function runAgentEditDescription(
 
 /**
  * A look at a thread's picture as the agent: one of a thread of its own
- * workspace that its starter may read, as `read_thread` reads the thread;
+ * workspace that its starter may read, as `inbox_read_thread` reads the thread;
  * refused for a thread of another workspace, as for none.
  */
 function lookInThread(

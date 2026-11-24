@@ -6,6 +6,8 @@ import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { FAILURE_SURFACE, type ShownFailureReport } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
+import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
+import { MESSAGE_ROLE } from "@repo/wire";
 import { closeHistory } from "@tiptap/pm/history";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode, useEffect, useRef, useState } from "react";
@@ -13,6 +15,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { installShownFailureReporter } from "./failure-report.js";
 import { AgentComposer } from "./tasks/agent-composer.js";
+import { AGENT_LEAD, AgentMessage } from "./tasks/agent-tab.js";
 import { useAgentComposer } from "./tasks/use-agent-composer.js";
 import { fakeActPort, fakeActPortCalls } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
@@ -147,6 +150,26 @@ function KeptDraftBox(): ReactNode {
   return kept
     ? createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined })
     : null;
+}
+
+/** The agent's box, its control handed to the case, which lays a message back in once the box stands, as Edit and Retry do. */
+function HandedBox({
+  hand,
+}: {
+  hand: (composer: ReturnType<typeof useAgentComposer>) => void;
+}): ReactNode {
+  const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
+    agentId: "agent-1",
+    taskId: "plan-1",
+    messages: [],
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
+  });
+
+  hand(composer);
+
+  return createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined });
 }
 
 /** The boxes that take files, each drawn alone. */
@@ -334,6 +357,30 @@ test("a file laid in as its chip before closing punctuation takes no space befor
   assert.equal(editor.getText(), "See [Picture 1],.");
 });
 
+test("a message laid back into a box that stands, its words and files together as Edit and Retry lay them, holds each file's chip where its marker stands", async () => {
+  let composer: ReturnType<typeof useAgentComposer> | undefined;
+
+  const container = await drawn(
+    createElement(HandedBox, {
+      hand: (each) => {
+        composer = each;
+      },
+    }),
+  );
+
+  act(() =>
+    composer?.updateHeld(() => ({
+      text: "Like [Picture 1]",
+      attachments: [
+        { name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" },
+      ],
+    })),
+  );
+  await settle();
+
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
+});
+
 /** The box's words selected from the first to the last and copied, as a drag over them and ⌘C do: what the copy wrote to the clipboard, by type. */
 function copyAll(container: HTMLElement): Map<string, string> {
   const written = new Map<string, string>();
@@ -377,6 +424,78 @@ test("a picture's chip copied out of one box and pasted into another comes with 
 
   const editor = composerEditor(to).editor ?? assert.fail("the box's editor is running");
   assert.equal(editor.getText(), "[Picture 1] Look at [Picture 2] ");
+  assert.deepEqual(held(to), {
+    chips: [],
+    pictures: ["Open Picture 1", "Open Picture 2"],
+    note: null,
+  });
+});
+
+test("a sent line copied with Copy message and pasted into the agent's box comes with its picture and its mention as their chips, the picture numbered after the box's own", async () => {
+  const store = "[@session-store.ts](luke://file/apps/web/session-store.ts)";
+  const written: { readonly html: string; readonly text: string }[] = [];
+  fakeAppPlatform({
+    ...QUIET_PANEL,
+    copyRich: (rich) => {
+      written.push(rich);
+
+      return Promise.resolve();
+    },
+  });
+
+  const line = await drawn(
+    createElement(AgentMessage, {
+      message: {
+        id: "line",
+        role: MESSAGE_ROLE.USER,
+        parts: [
+          { type: "text", text: `Look at [Picture 1], not \\[Picture 1], in ${store}` },
+          {
+            type: "file",
+            mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+            filename: "Picture 1",
+            url: "data:image/png;base64,AAAA",
+          },
+        ],
+      },
+      description: false,
+      lead: AGENT_LEAD,
+      moving: false,
+      delegation: { models: [] },
+    }),
+  );
+
+  // The pointer comes onto the line, as a reader's does to reach its actions.
+  pointAtTurns(line);
+
+  const copy =
+    line.querySelector<HTMLElement>('[aria-label="Copy message"]') ?? assert.fail("no Copy");
+
+  await act(async () => copy.click());
+
+  const [copied] = written;
+  // Note that the marker typed as words is copied as the words it reads as, without its escape.
+  assert.equal(copied?.text, `Look at [Picture 1], not [Picture 1], in ${store}`);
+
+  const to = await mounted("agent");
+  // Note that this box's own picture is another picture, of other bytes, under the same name.
+  await drop(to, [png("image.png", 16)]);
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: {
+      files: [],
+      types: ["text/html", "text/plain"],
+      getData: (type: string) => (type === "text/html" ? copied.html : copied.text),
+    },
+  });
+  act(() => {
+    composerEditor(to).dispatchEvent(event);
+  });
+  await read();
+
+  const editor = composerEditor(to).editor ?? assert.fail("the box's editor is running");
+  // Note that the editor's own text reads a chip out as its words, and a link's words alone.
+  assert.equal(editor.getText(), `[Picture 1] Look at [Picture 2], not [Picture 1], in ${store}`);
   assert.deepEqual(held(to), {
     chips: [],
     pictures: ["Open Picture 1", "Open Picture 2"],

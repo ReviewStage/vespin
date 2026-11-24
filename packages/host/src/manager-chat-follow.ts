@@ -286,13 +286,14 @@ export function heldManagerChats(
       (send: ChatSend): ChatSend =>
       (params) =>
         Effect.gen(function* () {
-          const { agentId, clientKey, text, attachments } = params;
+          const { agentId, clientKey, text, attachments, threadRoot } = params;
           const sentBy = dependencies.accountId();
 
           const message: ManagerChatSending = {
             clientKey,
             text,
             ...(attachments === undefined ? undefined : { attachments }),
+            ...(threadRoot === undefined ? undefined : { threadRoot }),
             sentAt: dependencies.now(),
             ...(sentBy === undefined ? undefined : { sentBy }),
           };

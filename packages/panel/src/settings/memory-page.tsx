@@ -21,7 +21,7 @@ import {
   selectAllWords,
 } from "@repo/features/memory-settings-words";
 import { MEMORY_BOUNDS, type MemorySummary } from "@repo/features/memory-wire";
-import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
+import { encodeMention, MENTION_KIND, type Mention } from "@repo/features/mention-link";
 import { formatCount } from "@repo/features/number-format";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -254,16 +254,65 @@ function forgetterOf(memory: MemorySummary, actor: Actor): string {
     : `Only ${keeper}, or an owner or admin`;
 }
 
-/** Where a memory's words came from, as a reader who may open its task sees it. */
-type MemorySource = NonNullable<MemorySummary["source"]>;
+/**
+ * Where a memory's words came from, as its chip draws it: the agent and the
+ * line that kept them, the agent's task, none for a Manager, which works on
+ * none, and the mention the chip is, with the name it wears.
+ */
+interface ShownSource {
+  readonly agentId: string;
+  readonly messageId: string | null;
+  readonly taskId: string | undefined;
+  readonly mention: Mention;
+  readonly name: string;
+}
 
-/** One memory with whose words it holds, as the members the panel reads name them, and the agent that saved it as the window names it. */
+/** One memory with whose words it holds, as the members the panel reads name them, and where it came from as its chip draws it. */
 interface ShownMemory {
   readonly memory: MemorySummary;
   readonly actor: Actor;
   readonly keeper: string;
-  /** The agent's name where the window holds it; none where it names the agent not. */
-  readonly agentName: string | undefined;
+  /** Where its words came from; none where the reader is told of no source. */
+  readonly source: ShownSource | undefined;
+}
+
+/**
+ * Where a memory's words came from, as its chip draws it: the agent, by
+ * the name the window holds for it, or its task's where the window names
+ * it not; or the Manager, which works on no task, by the window's name for
+ * it or else the service's.
+ */
+function shownSourceOf(
+  memory: MemorySummary,
+  agents: ReadonlyMap<string, string>,
+): ShownSource | undefined {
+  const { source, managerSource } = memory;
+
+  if (source !== null) {
+    const { agentId, messageId, taskId, taskName } = source;
+    const agentName = agents.get(agentId);
+
+    return agentName === undefined
+      ? { agentId, messageId, taskId, mention: { kind: MENTION_KIND.TASK, taskId }, name: taskName }
+      : {
+          agentId,
+          messageId,
+          taskId,
+          mention: { kind: MENTION_KIND.AGENT, agentId },
+          name: agentName,
+        };
+  }
+
+  if (managerSource === undefined) return undefined;
+  const { agentId, messageId, name } = managerSource;
+
+  return {
+    agentId,
+    messageId,
+    taskId: undefined,
+    mention: { kind: MENTION_KIND.AGENT, agentId },
+    name: agents.get(agentId) ?? name,
+  };
 }
 
 /**
@@ -274,39 +323,33 @@ interface ShownMemory {
  */
 function SourceChip({
   source,
-  agentName,
   workspaceStep,
 }: {
-  source: MemorySource;
-  agentName: string | undefined;
+  source: ShownSource;
   /** The step the workspace's links name it by: its slug, or its id where none traveled. */
   workspaceStep: string;
 }): React.JSX.Element | null {
-  const { agentId, messageId, taskId, taskName } = source;
+  const { agentId, messageId, taskId, mention, name } = source;
   const doors = useMentionDoors();
   const openPlace = useOpenPlace();
 
   const opened = useMemo(() => {
     if (messageId === null || openPlace === undefined) return doors;
 
-    const openLine = () =>
-      openPlace({ kind: LINK_DESTINATION.MESSAGE, taskId: taskId, agentId, messageId });
+    // Note that a Manager's line is opened by its agent alone, since it works on no task.
+    const line =
+      taskId === undefined
+        ? { kind: LINK_DESTINATION.MESSAGE, agentId, messageId }
+        : { kind: LINK_DESTINATION.MESSAGE, taskId, agentId, messageId };
+
+    const openLine = () => openPlace(line);
 
     return { ...doors, onOpenTask: openLine, onOpenAgent: openLine };
   }, [doors, openPlace, agentId, messageId, taskId]);
 
   const place = { workspace: workspaceStep, repository: null };
 
-  const chip =
-    agentName === undefined
-      ? linkChip(encodeMention({ kind: MENTION_KIND.TASK, taskId }, place), `@${taskName}`, opened)
-      : linkChip(
-          encodeMention({ kind: MENTION_KIND.AGENT, agentId }, place),
-          `@${agentName}`,
-          opened,
-        );
-
-  return chip ?? null;
+  return linkChip(encodeMention(mention, place), `@${name}`, opened) ?? null;
 }
 
 /** A memory's recalls, as its row's end says them on its first lines: how many in the window, then when last, or never. */
@@ -329,7 +372,7 @@ function MemoryUse({ memory }: { memory: MemorySummary }): React.JSX.Element {
   );
 }
 
-/** Who saved a memory and when, as Always allowed says who added a command: "Saved 2h ago by" its keeper, "from" the agent it came from. */
+/** Who saved a memory and when, as Always allowed says who added a command: "Saved 2h ago by" its keeper, "from" the agent it came from, or "via" the Manager, on no task, that kept it for them. */
 function SavedLine({
   shown,
   workspaceStep,
@@ -337,7 +380,7 @@ function SavedLine({
   shown: ShownMemory;
   workspaceStep: string;
 }): React.JSX.Element {
-  const { memory, actor, agentName } = shown;
+  const { memory, actor, source } = shown;
 
   return (
     // Note that whom and whence are parts of their own, so a narrow row wraps between them rather than cutting a name.
@@ -348,11 +391,11 @@ function SavedLine({
         {` ${MEMORY_SAVED_WORDS.BY} `}
         <ActorRef actor={actor} />
       </ActorLine>
-      {memory.source === null ? null : (
+      {source === undefined ? null : (
         <ActorLine>
           {/* Note that the space between the parts leads this one's words, since a flex line drops a run of spaces standing alone. */}
-          {` ${MEMORY_SAVED_WORDS.FROM} `}
-          <SourceChip source={memory.source} agentName={agentName} workspaceStep={workspaceStep} />
+          {` ${source.taskId === undefined ? MEMORY_SAVED_WORDS.VIA : MEMORY_SAVED_WORDS.FROM} `}
+          <SourceChip source={source} workspaceStep={workspaceStep} />
         </ActorLine>
       )}
     </SettingsRowStateLine>
@@ -837,9 +880,8 @@ function MemoryList({
         : personActor(memory.keptBy, members, readerId, former);
 
     const keeper = memory.keptBy?.name ?? "";
-    const agentName = memory.source === null ? undefined : agents.get(memory.source.agentId);
 
-    return { memory, actor, keeper, agentName };
+    return { memory, actor, keeper, source: shownSourceOf(memory, agents) };
   });
 
   const searched = all.filter((each) => matchesTokens([each.memory.text, each.keeper], found));

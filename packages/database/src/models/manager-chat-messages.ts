@@ -28,6 +28,7 @@ import {
   managerChatAttachmentSchema,
 } from "@repo/features/manager-chat-live";
 import { agentName } from "@repo/features/model-label";
+import { wellFormedSoFar, wellFormedText } from "@repo/wire/well-formed";
 import { and, asc, desc, eq, exists, inArray, isNull, lt, or, type SQL, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -277,6 +278,25 @@ const findMessages = SqlSchema.findAll({
     }),
 });
 
+/** An attachment with its words well formed (`wellFormedText`), as its jsonb column keeps them. */
+function keptAttachment(attachment: ManagerChatAttachment): ManagerChatAttachment {
+  if ("url" in attachment) return { ...attachment, name: wellFormedText(attachment.name) };
+  const { name, caption, ...rest } = attachment;
+
+  return {
+    ...rest,
+    ...(name === undefined ? undefined : { name: wellFormedText(name) }),
+    ...(caption === undefined ? undefined : { caption: wellFormedText(caption) }),
+  };
+}
+
+/**
+ * One message inserted in a chat, by every writer of one: a message sent, a
+ * call's line, and a message carried over. Its words are kept well formed,
+ * half a character (a lone surrogate, as a cut that split an emoji leaves)
+ * kept as the replacement character, since an attachment's jsonb refuses one
+ * outright (SQLSTATE 22P02) and the message would never land (STAG-3994).
+ */
 const insertMessage = SqlSchema.findAll({
   Request: Schema.Struct({
     agentId: Schema.String,
@@ -294,11 +314,17 @@ const insertMessage = SqlSchema.findAll({
     now: Schema.Date,
   }),
   Result: ManagerChatMessageSchema,
-  execute: ({ now, ...row }) =>
+  execute: ({ now, text, authorName, attachments, ...row }) =>
     Database.use((db) =>
       db
         .insert(managerChatMessage)
-        .values({ ...row, createdAt: now })
+        .values({
+          ...row,
+          text: wellFormedText(text),
+          authorName: wellFormedText(authorName),
+          attachments: attachments.map(keptAttachment),
+          createdAt: now,
+        })
         .onConflictDoNothing()
         .returning(MESSAGE_COLUMNS),
     ),
@@ -471,7 +497,9 @@ export function growManagerChatLine(
   userId: string,
   line: ManagerChatLineWrite,
 ): AgentStoreEffect<ManagerChatOutcome> {
-  const { conversationId, clientKey, text } = line;
+  const { conversationId, clientKey } = line;
+  // Note that the words may end on half a character the next words complete; it waits for them rather than standing as "�".
+  const text = wellFormedSoFar(line.text);
 
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -496,7 +524,7 @@ export function growManagerChatLine(
           return { status: MANAGER_CHAT_OUTCOME.DONE, message: grown ?? standing } as const;
         }
 
-        return yield* insertedLine(manager, line);
+        return yield* insertedLine(manager, { ...line, text });
       }),
     ),
   );
@@ -542,6 +570,156 @@ export function readManagerChatPage(
   page: ManagerChatPage,
 ): AgentStoreEffect<readonly ManagerChatMessage[]> {
   return findMessages({ userId, agentId, limit: page.limit, before: page.before });
+}
+
+/** Which of a chat's messages a filtered read takes, each where named: at the chat's top or in a thread, the Manager's or a named person's, holding every word, sent inside a window, and before or after a `seq`; newest first unless `oldestFirst`, at most `limit`. */
+export interface ManagerChatQuery {
+  /** The messages at the chat's top, a reply posted to the chat among them (true), or the thread replies alone (false). */
+  readonly top?: boolean;
+  /** The Manager's own messages, or a person's whose name holds these words, whatever their case. */
+  readonly from?: { readonly manager: true } | { readonly manager: false; readonly name: string };
+  readonly words?: readonly string[];
+  readonly sentAfter?: Date;
+  readonly sentBefore?: Date;
+  readonly beforeSeq?: number;
+  readonly afterSeq?: number;
+  readonly oldestFirst?: boolean;
+  /** How many of the messages the read takes to pass over first, for a page past them. */
+  readonly offset?: number;
+  readonly limit: number;
+}
+
+const findQueried = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...ChatKeySchema.fields,
+    top: Schema.optionalKey(Schema.Boolean),
+    manager: Schema.optionalKey(Schema.Boolean),
+    name: Schema.optionalKey(Schema.String),
+    words: Schema.Array(Schema.String),
+    sentAfter: Schema.optionalKey(Schema.Date),
+    sentBefore: Schema.optionalKey(Schema.Date),
+    beforeSeq: Schema.optionalKey(Schema.Number),
+    afterSeq: Schema.optionalKey(Schema.Number),
+    oldestFirst: Schema.Boolean,
+    offset: Schema.optionalKey(Schema.Number),
+    limit: Schema.Number,
+  }),
+  Result: ManagerChatMessageSchema,
+  execute: (query) =>
+    Database.use((db) => {
+      const { userId, agentId } = query;
+
+      const atTop = or(
+        isNull(managerChatMessage.threadRoot),
+        eq(managerChatMessage.broadcast, true),
+      );
+
+      return db
+        .select(MESSAGE_COLUMNS)
+        .from(managerChatMessage)
+        .innerJoin(agentTable, eq(agentTable.id, managerChatMessage.agentId))
+        .where(
+          ofReachedChat(
+            userId,
+            agentId,
+            query.top === undefined
+              ? undefined
+              : query.top
+                ? atTop
+                : sql`${managerChatMessage.threadRoot} is not null`,
+            query.manager === undefined
+              ? undefined
+              : eq(
+                  managerChatMessage.authorKind,
+                  query.manager ? MANAGER_CHAT_AUTHOR.AGENT : MANAGER_CHAT_AUTHOR.PERSON,
+                ),
+            query.name === undefined
+              ? undefined
+              : sql`${managerChatMessage.authorName} ilike ${containing(query.name)}`,
+            ...query.words.map((word) => sql`${managerChatMessage.text} ilike ${containing(word)}`),
+            query.sentAfter === undefined
+              ? undefined
+              : sql`${managerChatMessage.createdAt} >= ${query.sentAfter.toISOString()}::timestamptz`,
+            query.sentBefore === undefined
+              ? undefined
+              : sql`${managerChatMessage.createdAt} <= ${query.sentBefore.toISOString()}::timestamptz`,
+            query.beforeSeq === undefined ? undefined : lt(managerChatMessage.seq, query.beforeSeq),
+            query.afterSeq === undefined
+              ? undefined
+              : sql`${managerChatMessage.seq} > ${query.afterSeq}`,
+          ),
+        )
+        .orderBy(query.oldestFirst ? asc(managerChatMessage.seq) : desc(managerChatMessage.seq))
+        .limit(query.limit)
+        .offset(query.offset ?? 0);
+    }),
+});
+
+/**
+ * The messages of the Manager's chat a filtered read takes (`ManagerChatQuery`),
+ * as the account reaches the chat.
+ */
+export function queryManagerChat(
+  userId: string,
+  agentId: string,
+  query: ManagerChatQuery,
+): AgentStoreEffect<readonly ManagerChatMessage[]> {
+  const { from, words, oldestFirst, ...rest } = query;
+
+  return findQueried({
+    userId,
+    agentId,
+    ...rest,
+    ...(from === undefined
+      ? undefined
+      : from.manager
+        ? { manager: true }
+        : { manager: false, name: from.name }),
+    words: [...(words ?? [])],
+    oldestFirst: oldestFirst === true,
+  });
+}
+
+/** How many replies a thread holds, and when its newest was sent. */
+export interface ManagerChatReplies {
+  readonly count: number;
+  readonly latestAt: Date;
+}
+
+const findReplyCounts = SqlSchema.findAll({
+  Request: Schema.Struct({ ...ChatKeySchema.fields, roots: Schema.Array(Schema.String) }),
+  Result: Schema.Struct({
+    root: Schema.String,
+    count: Schema.Number,
+    latestAt: InstantColumnSchema,
+  }),
+  execute: ({ userId, agentId, roots }) =>
+    Database.use((db) =>
+      db
+        .select({
+          root: sql<string>`${managerChatMessage.threadRoot}`,
+          count: sql<number>`count(*)::int`,
+          latestAt: sql<Date>`max(${managerChatMessage.createdAt})`,
+        })
+        .from(managerChatMessage)
+        .innerJoin(agentTable, eq(agentTable.id, managerChatMessage.agentId))
+        .where(ofReachedChat(userId, agentId, inArray(managerChatMessage.threadRoot, [...roots])))
+        .groupBy(managerChatMessage.threadRoot),
+    ),
+});
+
+/** Each of these roots' threads' reply counts and newest reply, by root, as the account reaches the chat; a root with no replies is absent. */
+export function readManagerChatReplies(
+  userId: string,
+  agentId: string,
+  roots: readonly string[],
+): AgentStoreEffect<ReadonlyMap<string, ManagerChatReplies>> {
+  if (roots.length === 0) return Effect.succeed(new Map());
+
+  return Effect.map(
+    findReplyCounts({ userId, agentId, roots }),
+    (rows) => new Map(rows.map((row) => [row.root, { count: row.count, latestAt: row.latestAt }])),
+  );
 }
 
 /** A thread of the Manager's chat, its root then its replies, oldest first, as the account reaches the chat; none where the id names no root. */
@@ -596,321 +774,5 @@ export function deleteRewoundManagerChat(
       onNone: () => Effect.void,
       onSome: ({ id }) => deleteDroppedManagerChat(userId, id, dropped),
     }),
-  );
-}
-
-/**
- * A message a one-time backfill plans for a Manager's chat, as its transcript
- * holds it (`service/src/maintenance/manager-chat-backfill.ts`): its key, what
- * names the row a live write landed it as, and what it says, by whom, and
- * when.
- */
-export interface ManagerChatBackfillMessage {
-  readonly clientKey: string;
-  /** The id a send's answer named, which says the message was written live under it; null where the answer named none. */
-  readonly liveId: string | null;
-  /** The key a send's call ran under as the store keyed it (`native-call-keys.ts`), which its live write keyed its row by; null for a line, or a call no key was kept for. */
-  readonly callKey: string | null;
-  readonly authorKind: ManagerChatMessage["authorKind"];
-  readonly authorUserId: string | null;
-  readonly authorName: string;
-  readonly text: string;
-  readonly attachments: readonly ManagerChatAttachment[];
-  readonly turnId: string | null;
-  readonly lineId: string | null;
-  readonly createdAt: Date;
-}
-
-/** What a backfill of one Manager's chat came to, or would come to on a dry run, in counts alone. */
-export interface ManagerChatBackfilled {
-  /** Planned messages a row already stood for. */
-  readonly standing: number;
-  /** Planned messages written as new rows. */
-  readonly written: number;
-  /** Rows already standing given a later place, so the chat reads in its transcript's order. */
-  readonly moved: number;
-}
-
-/** A Manager as a backfill reads it: its id, its starter, its conversation, and what names it. */
-export interface ManagerOfBackfill {
-  readonly id: string;
-  readonly userId: string;
-  readonly conversationId: string;
-  readonly title: string | null;
-  readonly model: string;
-  readonly automationName: string | null;
-  /** The starter's name as it stands, which a line kept before senders were is theirs under; empty once their account is gone. */
-  readonly starterName: string;
-}
-
-const BackfillRowSchema = Schema.Struct({
-  id: Schema.String,
-  seq: Schema.Number,
-  clientKey: Schema.String,
-  lineId: Schema.NullOr(Schema.String),
-});
-
-type BackfillRow = typeof BackfillRowSchema.Type;
-
-/** A place in the backfilled chat: a row already standing, a planned message no row stands for, or both where one matched. */
-interface BackfillEntry {
-  readonly row: BackfillRow | undefined;
-  readonly planned: ManagerChatBackfillMessage | undefined;
-}
-
-const findEveryManager = SqlSchema.findAll({
-  Request: Schema.Struct({
-    after: Schema.NullOr(Schema.String),
-    agent: Schema.NullOr(Schema.String),
-    limit: Schema.Number,
-  }),
-  Result: Schema.Struct({
-    id: Schema.String,
-    userId: Schema.String,
-    conversationId: Schema.String,
-    title: Schema.NullOr(Schema.String),
-    model: Schema.String,
-    automationName: Schema.NullOr(Schema.String),
-    starterName: Schema.NullOr(Schema.String),
-  }),
-  execute: ({ after, agent, limit }) =>
-    Database.use((db) =>
-      db
-        .select({
-          id: agentTable.id,
-          userId: agentTable.userId,
-          conversationId: agentTable.conversationId,
-          title: agentTable.title,
-          model: agentTable.model,
-          automationName: agentAutomationNameSql(agentTable),
-          starterName: user.name,
-        })
-        .from(agentTable)
-        .leftJoin(user, eq(user.id, agentTable.userId))
-        .where(
-          and(
-            eq(agentTable.kind, AGENT_KIND.MANAGER),
-            after === null ? undefined : sql`${agentTable.id} > ${after}::uuid`,
-            agent === null ? undefined : eq(agentTable.id, agent),
-          ),
-        )
-        .orderBy(asc(agentTable.id))
-        .limit(limit),
-    ),
-});
-
-const lockManager = SqlSchema.findOneOption({
-  Request: Schema.String,
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: (agentId) =>
-    Database.use((db) =>
-      db
-        .select({ id: agentTable.id })
-        .from(agentTable)
-        .where(and(eq(agentTable.id, agentId), eq(agentTable.kind, AGENT_KIND.MANAGER)))
-        .limit(1)
-        .for("no key update", { of: agentTable }),
-    ),
-});
-
-const findBackfillRows = SqlSchema.findAll({
-  Request: Schema.String,
-  Result: BackfillRowSchema,
-  execute: (agentId) =>
-    Database.use((db) =>
-      db
-        .select({
-          id: managerChatMessage.id,
-          seq: managerChatMessage.seq,
-          clientKey: managerChatMessage.clientKey,
-          lineId: managerChatMessage.lineId,
-        })
-        .from(managerChatMessage)
-        .where(eq(managerChatMessage.agentId, agentId))
-        .orderBy(asc(managerChatMessage.seq)),
-    ),
-});
-
-/**
- * The row a planned message already stands as, by what names it and never
- * by its words, so two messages that say the same stay two: the row under
- * its key, which an earlier backfill or a call's live line wrote; the one
- * under the id its send answered; or the one on its line.
- */
-function rowOf(
-  planned: ManagerChatBackfillMessage,
-  free: readonly BackfillRow[],
-): BackfillRow | undefined {
-  const { clientKey, liveId, lineId } = planned;
-
-  return (
-    free.find((row) => row.clientKey === clientKey) ??
-    (liveId === null ? undefined : free.find((row) => row.id === liveId)) ??
-    (lineId === null ? undefined : free.find((row) => row.lineId === lineId))
-  );
-}
-
-/**
- * The chat as it should stand: the planned messages in their transcript's
- * order, each with the row it already stands as (`rowOf`), and every row no
- * planned message took kept just after the row before it in the chat's
- * order, so a message written live and missing from the transcript read
- * keeps its place.
- */
-function backfilledChat(
-  rows: readonly BackfillRow[],
-  planned: readonly ManagerChatBackfillMessage[],
-): readonly BackfillEntry[] {
-  const free = [...rows];
-
-  const take = (row: BackfillRow | undefined) => {
-    if (row !== undefined) free.splice(free.indexOf(row), 1);
-
-    return row;
-  };
-
-  const named = planned.map((message) => take(rowOf(message, free)));
-
-  // Note that a call's key is the newest call's of the same input, so it is read only once every message named by its own has taken its row.
-  const entries: BackfillEntry[] = planned.map((message, index) => ({
-    row:
-      named[index] ??
-      (message.callKey === null
-        ? undefined
-        : take(free.find((row) => row.clientKey === message.callKey))),
-    planned: message,
-  }));
-
-  for (const row of free) {
-    const before = entries.findLastIndex(
-      (entry) => entry.row !== undefined && entry.row.seq < row.seq,
-    );
-
-    entries.splice(before + 1, 0, { row, planned: undefined });
-  }
-
-  return entries;
-}
-
-/** Where the chat first stands out of its order: the first entry no row stands for, or whose row stands before one above it; none where every entry stands in order. */
-function firstOutOfPlace(entries: readonly BackfillEntry[]): number | undefined {
-  let highest = Number.NEGATIVE_INFINITY;
-
-  for (const [index, { row }] of entries.entries()) {
-    if (row === undefined || row.seq <= highest) return index;
-    highest = row.seq;
-  }
-
-  return undefined;
-}
-
-/** A standing row given the chat's next place, its id, key, and words untouched. */
-const moveToEnd = (agentId: string, id: string) =>
-  Effect.flatMap(
-    SqlClient.SqlClient,
-    (client) =>
-      client`update manager_chat_message set seq = default where agent_id = ${agentId} and id = ${id}`,
-  );
-
-/** A planned message inserted under the first id of its key's digest no message holds; none where every one is held. */
-const insertedPlanned = Effect.fnUntraced(function* (
-  agentId: string,
-  planned: ManagerChatBackfillMessage,
-  held: Set<string>,
-) {
-  for (const id of managerChatIdsOf(planned.clientKey)) {
-    if (held.has(id)) continue;
-    const { clientKey, authorKind, authorUserId, authorName, text, attachments } = planned;
-
-    const [inserted] = yield* insertMessage({
-      agentId,
-      id,
-      clientKey,
-      authorKind,
-      authorUserId,
-      authorName,
-      text,
-      attachments,
-      threadRoot: null,
-      broadcast: false,
-      turnId: planned.turnId,
-      lineId: planned.lineId,
-      now: planned.createdAt,
-    });
-
-    if (inserted !== undefined) {
-      held.add(id);
-
-      return true;
-    }
-  }
-
-  return false;
-});
-
-/** Every Manager past the id given, or the one named, in the order of their ids, at most `limit`: a backfill's next batch, whatever account started each. */
-export function listManagersForBackfill(batch: {
-  readonly after: string | null;
-  readonly agent: string | null;
-  readonly limit: number;
-}): AgentStoreEffect<readonly ManagerOfBackfill[]> {
-  const { after, agent, limit } = batch;
-
-  return Effect.map(findEveryManager({ after, agent, limit }), (managers) =>
-    managers.map((manager) => ({ ...manager, starterName: manager.starterName ?? "" })),
-  );
-}
-
-/**
- * The Manager's chat backfilled from the messages its transcript holds, in
- * one transaction under the Manager's lock: each planned message a row
- * already stands as is left (`rowOf`), each other written under its key,
- * and, from the first place the chat stands out of its transcript's order,
- * every row given the chat's next place in turn, so old messages read
- * before those written live since. A dry run writes nothing and answers
- * what a run would do. Run again, it finds every message standing in
- * order, and writes nothing. None where the agent is no Manager.
- *
- * Note that it is no account's read: it is the one-time move of every
- * Manager's chat, asked by hand under the deployment's secret.
- */
-export function backfillManagerChat(
-  agentId: string,
-  planned: readonly ManagerChatBackfillMessage[],
-  options: { readonly dry: boolean },
-): AgentStoreEffect<Option.Option<ManagerChatBackfilled>> {
-  return Effect.flatMap(SqlClient.SqlClient, (client) =>
-    client.withTransaction(
-      Effect.gen(function* () {
-        if (Option.isNone(yield* lockManager(agentId))) return Option.none();
-        const rows = yield* findBackfillRows(agentId);
-        const entries = backfilledChat(rows, planned);
-        const start = firstOutOfPlace(entries);
-        const from = start === undefined ? [] : entries.slice(start);
-
-        const standing = entries.filter(
-          (entry) => entry.row !== undefined && entry.planned !== undefined,
-        ).length;
-
-        const written = from.filter((entry) => entry.row === undefined).length;
-        const moved = from.length - written;
-
-        if (options.dry || start === undefined) return Option.some({ standing, written, moved });
-        const held = new Set(rows.map((row) => row.id));
-
-        for (const entry of from) {
-          if (entry.row !== undefined) {
-            yield* moveToEnd(agentId, entry.row.id);
-          } else if (
-            entry.planned !== undefined &&
-            !(yield* insertedPlanned(agentId, entry.planned, held))
-          ) {
-            return yield* Effect.die(new Error("no id of a backfilled message's key was free"));
-          }
-        }
-
-        return Option.some({ standing, written, moved });
-      }),
-    ),
   );
 }

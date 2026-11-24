@@ -26,6 +26,14 @@ import { insideCode } from "./mention-link.js";
  * What a model is handed puts each file right after the first marker naming
  * it, and the files no marker names where they always went (`placedFiles`);
  * a message whose words name none of its files is handed as it always was.
+ *
+ * A marker's words typed or pasted as words name no file: a box writes them
+ * with CommonMark's escape before the bracket, `\[Picture 1]`
+ * (`escapedLiteralMarkers`), which every reader passes over as words
+ * (`writtenMarkers`), a Markdown reader drawing them without the backslash
+ * and a box laying them back in as the words typed (`escapedMarkers`). A
+ * file's marker an odd run of backslashes stands right before is written
+ * with one more, so the backslashes stay words and the marker its file's.
  */
 
 /** The word a picture's name opens on, before its number. */
@@ -52,6 +60,9 @@ const BLANK_NAME = "File";
 
 /** A name and the extension after it, so a numbered name keeps its type: "notes.txt" as "notes" and ".txt". */
 const EXTENSION = /^(.+?)(\.[^.\s]{1,16})?$/u;
+
+/** What escapes the character after it, as CommonMark reads one outside code. */
+const BACKSLASH = "\\";
 
 /** The stem the clipboard gives a picture pasted with no file of its own, "image.png", which says nothing of it. */
 const CLIPBOARD_STEM = "image";
@@ -140,13 +151,75 @@ export function attachedPictureName(name: string, used: ReadonlySet<string>): st
   return unnamed ? nextPictureName(used) : unusedName(writableName(name), used);
 }
 
-/** Every marker written in the words, in order, code's among them: what the words hold of each file, which undo may bring back. */
-export function writtenMarkers(text: string): readonly FileMarkerToken[] {
+/** A marker's spelling found in the words, and whether a backslash outside code escapes it into words. */
+interface SpelledMarker extends FileMarkerToken {
+  readonly escaped: boolean;
+}
+
+/** Whether an odd run of backslashes stands right before the place, which escapes the character there. */
+function afterOddBackslashes(text: string, at: number): boolean {
+  let run = 0;
+
+  while (text[at - run - 1] === BACKSLASH) run += 1;
+
+  return run % 2 === 1;
+}
+
+/** Every spelling of a marker in the words, in order, code's among them, each escaped where a backslash outside code stands before it. */
+function spelledMarkers(text: string): readonly SpelledMarker[] {
   return [...text.matchAll(FILE_MARKER)].map((match) => ({
     start: match.index,
     end: match.index + match[0].length,
     name: match[1] ?? match[2] ?? "",
+    escaped: afterOddBackslashes(text, match.index) && !insideCode(text, match.index),
   }));
+}
+
+/** Every marker written in the words, in order, code's among them, but none escaped into words: what the words hold of each file, which undo may bring back. */
+export function writtenMarkers(text: string): readonly FileMarkerToken[] {
+  return spelledMarkers(text)
+    .filter((marker) => !marker.escaped)
+    .map(({ start, end, name }) => ({ start, end, name }));
+}
+
+/** Every marker escaped into words, outside code, in order, from the backslash that escapes it: the words a box lays back in as typed, without it. */
+export function escapedMarkers(text: string): readonly FileMarkerToken[] {
+  return spelledMarkers(text)
+    .filter((marker) => marker.escaped)
+    .map(({ start, end, name }) => ({ start: start - BACKSLASH.length, end, name }));
+}
+
+/**
+ * The words as a box sends them, `literal` answering for each place a
+ * marker is spelled outside code whether it stands there as words typed
+ * rather than as a file's chip: a backslash written before each one typed
+ * that none escapes yet, so it names no file, and before each file's marker
+ * that an odd run of backslashes would escape, so it still names its file.
+ */
+export function escapedLiteralMarkers(text: string, literal: (at: number) => boolean): string {
+  let words = "";
+  let at = 0;
+
+  for (const marker of spelledMarkers(text)) {
+    if (insideCode(text, marker.start) || literal(marker.start) === marker.escaped) continue;
+    words += text.slice(at, marker.start) + BACKSLASH;
+    at = marker.start;
+  }
+
+  return words + text.slice(at);
+}
+
+/** The words with the backslash taken off each marker escaped into words: what they read as in plain text, as a copy of them puts them on the clipboard. */
+export function unescapedMarkers(text: string): string {
+  let words = "";
+  let at = 0;
+
+  for (const marker of escapedMarkers(text)) {
+    words += text.slice(at, marker.start);
+    at = marker.start + BACKSLASH.length;
+  }
+
+  return words + text.slice(at);
 }
 
 /**
@@ -188,7 +261,7 @@ export function markersAsNames(text: string): string {
     at = marker.end;
   }
 
-  return words + text.slice(at);
+  return unescapedMarkers(words + text.slice(at));
 }
 
 /** The next picture's name: one past the highest picture's number among the names, so a picture taken off frees no number a later one reuses beside its neighbor's marker. */

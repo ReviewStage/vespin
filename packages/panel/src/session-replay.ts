@@ -42,13 +42,21 @@
  * project key its build carries (none, and nothing records), where its
  * recording posts, the address its window says it has in place of the one it
  * has, and where its recorder's bundle is. Whether a run may record at all is
- * the host's word (`SessionReplayBootstrap`): there is no switch. Where it may, recording
+ * the host's word (`SessionReplayBootstrap`), which the device's "Share usage
+ * data" switch is part of: turned off, the word stops the recording and opts
+ * the client out, and turned back on, it opts in and records again, with no
+ * relaunch between. Where it may, recording
  * waits for an account: nothing loads and nothing records while signed out,
  * so a visit that never signs in sends nothing, and every recording is filed
  * under a person, named by the account's name and email, from its first
  * frame, and can be erased with the account. `PRIVACY.md` says so. A
  * recording is also filed under the workspace the window lists, by its id
- * alone, as the service's counts are (`WORKSPACE_GROUP_TYPE`).
+ * alone, as the service's own counts are (`WORKSPACE_GROUP_TYPE`), though
+ * those go under a keyed hash of the account's id, never this person. The
+ * apps' counted events are not: they go under the install's own random id,
+ * never this client's (whose anonymous id `identify` folds into the person),
+ * and under no workspace, so nothing files them beside a recording
+ * (`packages/service/src/events/events.ts`).
  */
 
 import type { ProductPlatform } from "@repo/features/analytics";
@@ -61,8 +69,8 @@ import { sessionRecorderLoaded } from "./session-recorder/contract.js";
 
 /**
  * The group type a recording is filed under its workspace by, the one the
- * service files its counts under (`packages/service/src/events/events.ts`), so a workspace's
- * recordings and counts are one group in PostHog.
+ * service files its own counts under (`packages/service/src/events/server-events.ts`), so a
+ * workspace's recordings and the service's counts are one group in PostHog.
  */
 const WORKSPACE_GROUP_TYPE = "workspace";
 
@@ -652,9 +660,9 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
    * Files what is being recorded under the signed-in account, and sets the
    * name, email, and platform the person is shown by.
    *
-   * The id is the same opaque one the counted events resolve to, so a recording
-   * and the counts around it belong to one person — which is what makes
-   * deleting the account erase the recordings with it.
+   * The id is the account's own, which is what makes deleting the account
+   * erase the recordings with it. The service's own counts are filed under
+   * a keyed hash of it instead, and the apps' counted events under neither.
    *
    * A sign-out or a deletion stops the recording and resets the person
    * (`stop`). Someone else signing in in place of the account, with no

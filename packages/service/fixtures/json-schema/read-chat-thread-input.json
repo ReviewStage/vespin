@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The id of the thread's parent message."
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "description": "How many messages to return, 1 to 100; 20 where left out."
+    },
+    "cursor": {
+      "type": "string",
+      "description": "The next_cursor a previous read returned, for its next page."
+    },
+    "oldest": {
+      "type": "string",
+      "description": "Only messages sent at or after this time, in ISO 8601."
+    },
+    "latest": {
+      "type": "string",
+      "description": "Only messages sent at or before this time, in ISO 8601."
+    },
+    "response_format": {
+      "type": "string",
+      "enum": [
+        "detailed",
+        "concise"
+      ],
+      "description": "`detailed` (the default) for times and thread info, or `concise` for ids, senders, and words alone."
+    }
+  },
+  "required": [
+    "message_id"
+  ],
+  "additionalProperties": false
+}

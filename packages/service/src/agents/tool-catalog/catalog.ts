@@ -163,6 +163,14 @@ import {
 import { INBOX_TOOLS, postThreadToolOf } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
+import {
+  READ_CHAT_MESSAGES_TOOL,
+  READ_CHAT_THREAD_TOOL,
+  runReadChatMessages,
+  runReadChatThread,
+  runSearchChat,
+  SEARCH_CHAT_TOOL,
+} from "../coder-host/manager-chat-tools.js";
 import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
 import { sessionsRouter } from "../coder-host/runtime-sessions.js";
 import {
@@ -190,6 +198,7 @@ import {
   runAgentRemember,
   SAVE_MEMORY_TOOL,
   SEARCH_MEMORY_TOOL,
+  saveMemoryToolOf,
 } from "../memory-tools.js";
 import {
   LIST_PORTS_TOOL,
@@ -666,7 +675,11 @@ const CATALOG = [
   agentTool(DELETE_AUTOMATION_TOOL, runDeleteAutomation),
   agentTool(RUN_AUTOMATION_TOOL, runRunAutomation),
   // The workspace's shared memory.
-  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { ...LOADED, gates: [TOOL_GATE.MEMORY] }),
+  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, {
+    ...LOADED,
+    gates: [TOOL_GATE.MEMORY],
+    variant: (_experiments, open) => saveMemoryToolOf(open.has(TOOL_GATE.MANAGER)),
+  }),
   agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { ...LOADED, gates: [TOOL_GATE.MEMORY] }),
   agentTool(LIST_MEMORIES_TOOL, runAgentListMemories, { gates: [TOOL_GATE.MEMORY] }),
   agentTool(FORGET_MEMORY_TOOL, runAgentForget, { gates: [TOOL_GATE.MEMORY] }),
@@ -714,6 +727,13 @@ const CATALOG = [
     gates: [TOOL_GATE.MANAGER],
     variant: sendToUserToolOf,
   }),
+  // A Manager's own chat read, as Slack's tools read a channel: its newest messages, one thread whole, or a search.
+  agentTool(READ_CHAT_MESSAGES_TOOL, runReadChatMessages, {
+    ...LOADED,
+    gates: [TOOL_GATE.MANAGER],
+  }),
+  agentTool(READ_CHAT_THREAD_TOOL, runReadChatThread, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
+  agentTool(SEARCH_CHAT_TOOL, runSearchChat, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
 ] as const;
 
 /** The name of a tool the catalog serves. */

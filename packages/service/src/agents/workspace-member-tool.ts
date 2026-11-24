@@ -5,7 +5,7 @@
  * through the one members read (`../accounts/workspace-operations.ts`), as
  * the member who started the agent. Each member is answered with their
  * mention link under the workspace's step (`written-mentions.ts`), the
- * words `post_thread`'s `to` and a task's `assignee` take as written, so a
+ * words `inbox_post`'s `to` and a task's `assignee` take as written, so a
  * call names a person from what this answered. Their email is left out,
  * since no call names a person by it; nor are members who left, since no
  * call may name them.

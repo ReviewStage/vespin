@@ -81,7 +81,7 @@ onFlowComplete:
 # A compact window, the iPhone's, names its workspace as the Inbox's one
 # leading button, whose list holds the workspaces, New workspace, the
 # workspace's Manage, then the account opening Settings, and keeps the
-# system's tab bar, minimizing it as the Tasks list scrolls down, the round +
+# system's tab bar, minimizing it as the Tasks list scrolls down, Search
 # staying on its own glass beside it.
 - runFlow:
     when:

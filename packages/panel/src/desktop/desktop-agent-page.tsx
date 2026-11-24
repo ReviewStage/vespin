@@ -18,9 +18,11 @@
  * (`own-agent-place.tsx`), and its copy and delete keys act on the agent,
  * as a task's column's do on its chosen tab. ⌘F finds in its conversation,
  * as in a task's column, and a phone's ⋯ offers Find in its place. A
- * Manager's page, whose conversation is a chat of bubbles, marks itself one
- * (`data-chat`), so both sides' bubbles stand at one width, and take the
- * column in a phone's room, as desktop.css says. The agent is read from the task list where
+ * Manager's page stands a row of tabs under its head, as a Slack channel's
+ * does: Overview, what the Manager is doing (`manager-overview.tsx`);
+ * and Messages, its chat. While Messages shows, the page marks itself a chat (`data-chat`), so
+ * both sides' bubbles stand at one width, and take the column in a phone's
+ * room, as desktop.css says. The agent is read from the task list where
  * it carries it, and else once by its id.
  * Until then the page stands in an agent tab's own shape saying Reading; an
  * agent the service does not hold for the reader, deleted or of a workspace
@@ -46,21 +48,28 @@ import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
 import { readingWords } from "@repo/features/words";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
+  CHOICE_BAR_LOOK,
+  ChoiceBar,
+  type ChoiceItem,
   ERROR_STATE_PLACEMENT,
   ErrorState,
   FILL_ELEMENT,
   Fill,
+  IconButton,
   moreLabel,
   NOT_FOUND_THING,
   NotFound,
+  PaneBar,
   Toolbar,
   type ToolbarTitleEdit,
+  Tooltip,
   useMenu,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { agentTab, pageTab, type StripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
 import { FindScope } from "../find-in-tab.js";
@@ -86,6 +95,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
 import { AgentPane } from "./main-tabs.js";
+import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
@@ -120,6 +130,26 @@ const NO_OPEN_AGENTS: readonly string[] = [];
 
 /** What the agent's menu is named, as its head's ⋯ names it. */
 const AGENT_THING = "Agent";
+
+/** The views a Manager's page offers on its tab row. */
+const MANAGER_VIEW = {
+  OVERVIEW: "overview",
+  MESSAGES: "messages",
+} as const;
+
+type ManagerView = (typeof MANAGER_VIEW)[keyof typeof MANAGER_VIEW];
+
+/** A Manager's page's tabs, in their row's order. */
+const MANAGER_VIEWS: readonly ChoiceItem<ManagerView>[] = [
+  { value: MANAGER_VIEW.OVERVIEW, label: "Overview" },
+  { value: MANAGER_VIEW.MESSAGES, label: "Messages" },
+];
+
+/** What a Manager's page's tab row is called to a reader. */
+const MANAGER_VIEWS_LABEL = "Manager views";
+
+/** What a Manager's Settings button is named and hinted by. */
+const SETTINGS = "Settings";
 
 /** Where the agent of the page's address stands: on a task, on none, nowhere the reader may open, not read yet, or not read at all. */
 type AgentFound =
@@ -237,9 +267,11 @@ function useOwnAgentThreads(
 /**
  * The head of an agent on no task: a Manager's face leading it, as a
  * task's status leads a task's (`ManagerGlyph`), then its name, a right-click on which opens
- * its one menu and whose Rename turns it into the name's field (a
- * Manager's Settings… opens its card instead), and ⋯
- * holding the same menu; on a phone, its way back before them.
+ * its one menu and whose Rename turns it into the name's field, a Manager's
+ * Settings as a button of its own, which opens its card, and ⋯ holding the
+ * same menu, Settings left out of both menus there since its button stands
+ * beside them; on a phone, its way back before them, and Settings back in
+ * the ⋯, since a phone's bar holds one control a corner.
  */
 function OwnAgentHead({
   tasks,
@@ -285,7 +317,16 @@ function OwnAgentHead({
     FOCUSED_OFFER,
   );
 
+  const { onSettings } = actions.doors;
   const groups = agentMenuGroups({ ...actions.doors, subject: actions.subject });
+
+  // Note that the window's bar stands Settings as a button beside the ⋯, so its menus there leave it out.
+  const barGroups = agentMenuGroups({
+    ...actions.doors,
+    onSettings: undefined,
+    subject: actions.subject,
+  });
+
   const { rename } = actions;
   const editing = rename?.editing === true;
 
@@ -302,9 +343,16 @@ function OwnAgentHead({
     <PlaceMore
       thing={AGENT_THING}
       shown={shown}
-      groups={() => (away === undefined ? groups : [...phoneFindGroups(), ...groups])}
+      groups={() => (away === undefined ? barGroups : [...phoneFindGroups(), ...groups])}
     />
   );
+
+  const settings =
+    onSettings === undefined ? null : (
+      <Tooltip label={SETTINGS}>
+        <IconButton icon={<GLYPH.SETTINGS />} label={SETTINGS} onClick={onSettings} />
+      </Tooltip>
+    );
 
   return (
     <>
@@ -318,7 +366,12 @@ function OwnAgentHead({
           title={editing ? (rename.asked ?? label) : label}
           titleMenu={{ contextMenu: titleMenu.contextMenu(), keyMenu: titleMenu.keyMenu }}
           titleEdit={titleEdit}
-          actions={more}
+          actions={
+            <>
+              {settings}
+              {more}
+            </>
+          }
         />
       ) : (
         <PhoneHead
@@ -333,7 +386,7 @@ function OwnAgentHead({
         <ActionMenu
           label={moreLabel(AGENT_THING)}
           menu={titleMenu.drawn}
-          groups={groups}
+          groups={barGroups}
           onClose={titleMenu.close}
         />
       )}
@@ -358,10 +411,12 @@ function OwnAgentPage({
   tasks,
   agent,
   away,
+  staged,
 }: {
   tasks: TasksControl;
   agent: ListedAgent;
   away: TaskHeadBack | undefined;
+  staged: boolean;
 }): React.JSX.Element {
   const { sidePanel } = tasks;
   const { onArea, focus, setFocus } = useColumnFocus(tasks.tabKeys, tasks.onTabKeysTaken);
@@ -434,6 +489,14 @@ function OwnAgentPage({
     [workspaceId, repository, agents.agentIds, agents.heldIds, openPullRequest, openPageBeside],
   );
 
+  // Note that a phone's head has no row for views, so a phone's page keeps the chat alone, as it did before them.
+  const manager = agent.kind === AGENT_KIND.MANAGER && away === undefined;
+  // Note that a Manager's page opens on its chat, what it is doing a tab away.
+  const [view, setView] = useState<ManagerView>(MANAGER_VIEW.MESSAGES);
+  const ids = useId();
+  const panels = (value: ManagerView) => ({ tab: `${ids}tab-${value}`, panel: `${ids}panel` });
+  const chat = manager && view === MANAGER_VIEW.MESSAGES;
+
   const openTarget = (target: ToolTarget) => {
     if (target.kind !== TOOL_TARGET.TASK) return;
 
@@ -453,33 +516,58 @@ function OwnAgentPage({
             as={FILL_ELEMENT.SECTION}
             className="agent-page"
             aria-label={label}
-            data-chat={agent.kind === AGENT_KIND.MANAGER ? "" : undefined}
+            data-chat={chat ? "" : undefined}
             hidden={sidePanel.fullScreen}
           >
             <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
-            {/* Note that the scope stands as the column's own box, as its fill did. */}
-            <FindScope
-              className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
-              active={tasks.shown && !sideFocused}
-              subject={findSubject}
-            >
-              <AgentPane
-                label={label}
-                tabbed={false}
-                tab={agentTab(agent.id)}
-                agents={agents}
-                shown={tasks.shown && !sidePanel.fullScreen}
-                views={views}
-                // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
-                onOpenDelegation={(_agent, callId, _task, status) =>
-                  views.onWorkerStatus(callId, status)
+            {/* Note that the views stand on a tab's bar at the card's top, as a pull request's do, so their words start under the head's. */}
+            {manager ? (
+              <PaneBar
+                middle={
+                  <ChoiceBar
+                    label={MANAGER_VIEWS_LABEL}
+                    items={MANAGER_VIEWS}
+                    value={view}
+                    look={CHOICE_BAR_LOOK.FILL}
+                    panels={panels}
+                    onChange={setView}
+                  />
                 }
-                onOpenPullRequest={openPullRequest}
-                onOpenTarget={openTarget}
-                cards={cards}
-                threads={threads}
               />
-            </FindScope>
+            ) : null}
+            {manager && view === MANAGER_VIEW.OVERVIEW ? (
+              <Fill id={panels(view).panel} role="tabpanel" aria-labelledby={panels(view).tab}>
+                <ManagerOverview tasks={tasks} manager={agent} threads={threads} staged={staged} />
+              </Fill>
+            ) : (
+              // Note that the scope stands as the column's own box, as its fill did, and is the panel of the tab shown on a Manager's page.
+              <FindScope
+                className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+                active={tasks.shown && !sideFocused}
+                subject={findSubject}
+                id={manager ? panels(view).panel : undefined}
+                role={manager ? "tabpanel" : undefined}
+                aria-labelledby={manager ? panels(view).tab : undefined}
+              >
+                <AgentPane
+                  label={label}
+                  tabbed={false}
+                  tab={agentTab(agent.id)}
+                  agents={agents}
+                  shown={tasks.shown && !sidePanel.fullScreen}
+                  views={views}
+                  // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
+                  onOpenDelegation={(_agent, callId, _task, status) =>
+                    views.onWorkerStatus(callId, status)
+                  }
+                  onOpenPullRequest={openPullRequest}
+                  onOpenTarget={openTarget}
+                  cards={cards}
+                  threads={threads}
+                  chat={chat}
+                />
+              </FindScope>
+            )}
           </Fill>
           {/* Note that the panel stands while its toggle asks for its "+" with nothing to show, drawing the menu alone. */}
           {drawing.panel !== undefined || sidePanel.toggleAsked ? (
@@ -513,10 +601,13 @@ function OwnAgentPage({
 export function AgentRoutePage({
   tasks,
   away,
+  staged = false,
 }: {
   tasks: TasksControl;
   /** A phone's way back out of the page, the window's Back; none elsewhere. */
   away?: TaskHeadBack | undefined;
+  /** Whether a fixture stages the window, whose tasks' looks are its own rather than kept (`useUnreadTasks`). */
+  staged?: boolean | undefined;
 }): React.JSX.Element {
   const { agentId } = useParams({ from: "/places/$workspace/agent/$agentId" });
   const found = useAgentFound(tasks, agentId);
@@ -537,7 +628,9 @@ export function AgentRoutePage({
   }
 
   if ("agent" in found)
-    return <OwnAgentPage key={agentId} tasks={tasks} agent={found.agent} away={away} />;
+    return (
+      <OwnAgentPage key={agentId} tasks={tasks} agent={found.agent} away={away} staged={staged} />
+    );
 
   // In the page's own frame, so its row and sheet stand where the task's agent tab will.
   return (

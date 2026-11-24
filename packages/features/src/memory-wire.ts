@@ -34,9 +34,11 @@ import { trimmedText } from "./text-schema.js";
  * Each memory also says where its words came from (`source`): the coding
  * agent that kept or last corrected them, the line that opened its turn
  * then, which a link to the agent's transcript lands on, and the task the
- * agent works on, only where the reader may open that task; none for a
- * member's own keep, a memory kept before it was recorded, or one whose
- * agent is gone. And how often coding agents were handed it, by their
+ * agent works on, only where the reader may open that task; or, for a
+ * Manager, which works on no task, the Manager and its line
+ * (`managerSource`), beside a null `source` that a client from before it
+ * reads as no source; none for a member's own keep, a memory kept before
+ * it was recorded, or one whose agent is gone. And how often coding agents were handed it, by their
  * search or as a turn opened, in the last `MEMORY_RECALL_WINDOW_DAYS` days
  * (`recalls30d`), and when last (`lastRecalledAt`), a member's own search
  * not counted.
@@ -58,12 +60,17 @@ export const MEMORY_RECALL_WINDOW_DAYS = 30;
 export const MEMORY_QUERY = {
   WORKSPACE_ID: "workspaceId",
   ID: "id",
+  /** The Manager whose own memories a read, a forget, or a keep reaches, in the workspace's place; none for the workspace's own. */
+  MANAGER_ID: "managerId",
   /** A search's words. */
   QUERY: "query",
 } as const;
 
 /** A memory's id as the service mints it: the row's UUID. */
 export const memoryIdSchema = wireUuidSchema;
+
+/** The Manager whose own memories a request reaches, by its agent id; left out for the workspace's own. */
+export const memoryManagerIdSchema = EffectSchema.optionalKey(wireUuidSchema);
 
 /** Where a memory's words came from, as a reader who may open the agent's task sees it. */
 const memorySourceSchema = EffectSchema.Struct({
@@ -72,6 +79,14 @@ const memorySourceSchema = EffectSchema.Struct({
   messageId: EffectSchema.NullOr(EffectSchema.String),
   taskId: EffectSchema.String,
   taskName: EffectSchema.String,
+});
+
+/** Where a memory's words came from when a Manager kept them: the Manager, which works on no task, by its id and name, and the line that opened its turn. */
+const memoryManagerSourceSchema = EffectSchema.Struct({
+  agentId: EffectSchema.String,
+  /** The line that opened the Manager's turn as it kept them, a `messages` id; null for a turn no line opened. */
+  messageId: EffectSchema.NullOr(EffectSchema.String),
+  name: EffectSchema.String,
 });
 
 /** One memory as a member of its workspace sees it. */
@@ -88,6 +103,8 @@ const memorySummarySchema = EffectSchema.Struct({
   updatedAt: countedNumber,
   /** The agent, line, and task its words came from; null for a member's own keep, one from before it was kept, one whose agent is gone, and one whose task the reader may not open. */
   source: EffectSchema.NullOr(memorySourceSchema),
+  /** The Manager its words came from, where a Manager the reader may open kept or last corrected them, `source` null beside it; absent otherwise, and from a service that predates it. */
+  managerSource: EffectSchema.optionalKey(memoryManagerSourceSchema),
   /** How often coding agents were handed it in the last `MEMORY_RECALL_WINDOW_DAYS` days. */
   recalls30d: countedNumber,
   /** When a coding agent was last handed it, in epoch milliseconds; null where none ever was. */
@@ -118,13 +135,15 @@ export const MEMORY_SAVED = {
 
 /**
  * A memory kept in the member's own words (POST): the workspace, the
- * statement, and, at most, the memory it corrects, which is then rewritten
- * in place rather than kept beside it.
+ * statement, at most the memory it corrects, which is then rewritten in
+ * place rather than kept beside it, and the Manager it is kept for alone,
+ * where it names one.
  */
 export const memorySaveRequestSchema = EffectSchema.Struct({
   workspaceId: workspaceIdSchema,
   text: trimmedText(MEMORY_BOUNDS.MAX_CHARS),
   replaces: EffectSchema.optionalKey(memoryIdSchema),
+  [MEMORY_QUERY.MANAGER_ID]: memoryManagerIdSchema,
 });
 
 /** What a keep came to, and the memory as it then stands. */

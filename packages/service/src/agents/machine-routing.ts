@@ -3,21 +3,25 @@
  *
  * Two rules decide it. First, whose machines count: the owner's always,
  * the task's assignee or, where it has none, its agent's starter
- * (`machineOwnerOf`), and a teammate's only while they follow the task with
- * their "Let agents here use my machines" switch on; a local agent's own
- * machine always counts for that agent. Of those, a machine can take a call
+ * (`machineOwnerOf`), and a teammate's only while they follow the task, or
+ * the agent itself where it stands on no task, a Manager
+ * (`agent-follower-store.ts`), with their "Let agents here use my machines"
+ * switch on; a local agent's own machine always counts for that agent. Of those, a machine can take a call
  * where it listened for commands lately and, for a shell command, its
  * command mode is not Never, or, for an action on an app, its switch for
  * apps is not off. A Mac whose app never carried that switch up keeps it on
  * the Mac itself, so an action on an app may go to it and be refused there.
  *
  * Second, which machine: the agent's own pick (`agent.target_device_id`),
- * which a member sets from its composer or a refusal's card; else the
+ * which a member sets from its composer or a refusal's card; else, for a
+ * Manager, the default machine of the member who asked for the turn under
+ * way (`turnAsker`), where they let its agents use their machines; else the
  * owner's default machine, as they set it in Settings › Machines
  * (`isDefaultMachine`), read at each call so a change there is followed at
- * once. A call names no machine of its own. A machine so chosen that
- * cannot take the call refuses it, rather than moving it to another without
- * a word, and nothing rewrites a pick: a reassignment that leaves one out of
+ * once. A turn an automation or an agent opened has no asker, so its calls
+ * go to the owner's default. A call names no machine of its own. A machine
+ * so chosen that cannot take the call refuses it, rather than moving it to
+ * another without a word, and nothing rewrites a pick: a reassignment that leaves one out of
  * reach refuses the next call. A refusal lists the machines that could take
  * it: in words for the model, and as data (`why`, `others`) for the
  * transcript, which says why in its own words and offers each to make the
@@ -29,6 +33,7 @@
  * is queued for the account, as it was before.
  */
 
+import { listAgentFollowers } from "@repo/database/models/agent-follower-store";
 import {
   type CommandMachine,
   commandMachinesOf,
@@ -37,6 +42,7 @@ import {
 } from "@repo/database/models/machine-command-store";
 import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import type { TaskStoreEffect } from "@repo/database/models/task-store";
+import { turnAsker } from "@repo/database/models/turn-asker";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import {
   MACHINE_COMMAND_KIND,
@@ -98,21 +104,32 @@ interface Person {
   readonly lets: boolean;
 }
 
+/** The followers of the routing's task, or of its Manager where its agent stands on no task, as its owner reads them, each with whether their switch is on; none for neither. */
+function followersOf(routing: MachineRouting) {
+  const { userId, taskId, workspaceId, managerId } = routing;
+  const none = (): readonly { readonly userId: string; readonly machines: boolean }[] => [];
+
+  if (taskId !== null && workspaceId !== null) {
+    return Effect.map(listTaskFollowers(userId, taskId), Option.getOrElse(none));
+  }
+
+  if (managerId !== null) {
+    return Effect.map(listAgentFollowers(userId, managerId), Option.getOrElse(none));
+  }
+
+  return Effect.succeed(none());
+}
+
 /**
  * The people whose machines the call may reach: the owner, who always
- * lets, each follower with whether their switch is on, and a local agent's
- * starter, whose own machine that agent always reaches whatever their
- * switch says (`candidatesOf`).
+ * lets, each follower of the task or the Manager with whether their switch
+ * is on, and a local agent's starter, whose own machine that agent always
+ * reaches whatever their switch says (`candidatesOf`).
  */
 function peopleOf(routing: MachineRouting) {
   return Effect.gen(function* () {
-    const { taskId, workspaceId } = routing;
     const owner: Person = { userId: routing.userId, lets: true };
-
-    const followers =
-      taskId === null || workspaceId === null
-        ? []
-        : Option.getOrElse(yield* listTaskFollowers(routing.userId, taskId), () => []);
+    const followers = yield* followersOf(routing);
 
     const people: Person[] = [owner];
 
@@ -212,7 +229,7 @@ function whyNot(
   if (!machine.lets) {
     return {
       code: MACHINE_UNREACHED.NOT_LET,
-      words: `Not run: ${machine.ownerName} doesn't let this task's agents use their machines. ${MACHINE_REFUSAL_NEXT.SETTING}`,
+      words: `Not run: ${machine.ownerName} doesn't let this task's or Manager's agents use their machines. ${MACHINE_REFUSAL_NEXT.SETTING}`,
     };
   }
 
@@ -250,7 +267,8 @@ export interface RouteAsk {
 
 /**
  * Where a call made in the conversation given goes: the agent's pick, else
- * the owner's default machine, as the module says.
+ * a Manager's asker's default machine, else the owner's, as the module
+ * says.
  */
 export function routeOf(
   target: ConversationTarget,
@@ -279,10 +297,21 @@ export function routeOf(
       return refusal(
         {
           code: MACHINE_UNREACHED.DEFAULT_GONE,
-          words: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. ${MACHINE_REFUSAL_NEXT.WITHOUT}`,
+          words: `Not run: this agent's default machine was removed, or its owner no longer lets this task's or Manager's agents use it. ${MACHINE_REFUSAL_NEXT.WITHOUT}`,
         },
         reachable,
       );
+    }
+
+    // Note that the asker's default is passed over only where they don't let the Manager use their machines or have none: one that cannot take the call now refuses it, rather than moving it to the owner's Mac without a word.
+    if (routing.managerId !== null) {
+      const asker = yield* turnAsker(target);
+
+      const askersDefault = candidates.find(
+        (machine) => machine.userId === asker && machine.isDefault && machine.lets,
+      );
+
+      if (asker !== routing.userId && askersDefault !== undefined) return to(askersDefault);
     }
 
     const ownersDefault = candidates.find(

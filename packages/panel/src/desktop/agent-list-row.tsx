@@ -46,7 +46,7 @@ import { changesAddressOf, useChangesPeople } from "../tasks/changes-people.js";
 import { PullRequestCard, peopleOf } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { RunsOnPlace } from "../tasks/runs-on.js";
-import { AgentGlyph, agentEndMark, ManagerGlyph } from "../tasks/tab-look.js";
+import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useAgentPinWrite } from "../tasks/use-pin-writes.js";
 import { appStateQuery, selectFixtureStaged, selectSignedIn } from "../use-app-state.js";
@@ -259,12 +259,7 @@ export function AgentListRow({
     press.current = held instanceof HTMLButtonElement ? held : null;
   }, []);
 
-  const glyph =
-    agent.face === undefined ? (
-      <AgentGlyph agent={agent} />
-    ) : (
-      <ManagerGlyph face={agent.face} status={agent.status} />
-    );
+  const glyph = <AgentGlyph agent={agent} />;
 
   const waiting = <WaitingCount count={waits + asked} />;
 

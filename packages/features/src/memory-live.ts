@@ -11,7 +11,7 @@ import {
   orderedLiveRows,
 } from "./live-read.js";
 import { LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js";
-import { type MemorySummary, memoryIdSchema } from "./memory-wire.js";
+import { MEMORY_QUERY, type MemorySummary, memoryIdSchema } from "./memory-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
 
@@ -31,11 +31,15 @@ import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
  * One workspace's memories as the host follows them: one part, every memory
  * of the workspace while the reader is a member of it, each with its
  * keeper's id and name, each null once that account is gone, the agent,
- * line, and task its words came from, each null where the reader may not
- * open that task or none stands, and its recalls since `recalledSince`,
+ * line, and task its words came from, or the Manager, which works on no
+ * task, by its name, each null where the reader may not open them or none
+ * stands, and its recalls since `recalledSince`,
  * which the service serves from its clock, most recently kept or corrected
- * first, then the newest kept, then by id. The service answers `not-found`
- * for a workspace the account is no member of.
+ * first, then the newest kept, then by id. The memories are the workspace's
+ * own, or, where the reader names a Manager (`managerId`), that Manager's
+ * own alone, for its Settings › Memory. The service answers `not-found`
+ * for a workspace the account is no member of, and for a `managerId` that
+ * spells no id.
  */
 export const WORKSPACE_MEMORIES_READ = liveRead({
   name: LIVE_READ.MEMORIES,
@@ -43,6 +47,7 @@ export const WORKSPACE_MEMORIES_READ = liveRead({
   params: {
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
     workspaceId: LIVE_PARAM.TEXT,
+    [MEMORY_QUERY.MANAGER_ID]: LIVE_PARAM.OPTIONAL_ID,
     recalledSince: LIVE_PARAM.SERVED,
   },
   mode: LIVE_MODE.SNAPSHOT,
@@ -60,6 +65,8 @@ export const WORKSPACE_MEMORIES_READ = liveRead({
         sourceMessageId: Schema.NullOr(Schema.String),
         sourceTaskId: Schema.NullOr(Schema.String),
         sourceTaskName: Schema.NullOr(Schema.String),
+        /** The Manager's name where a Manager the reader may open kept them, which works on no task; absent from a service before it. */
+        sourceManagerName: Schema.optionalKey(Schema.NullOr(Schema.String)),
         recalls30d: countedNumber,
         lastRecalledAt: Schema.NullOr(countedNumber),
       }),
@@ -86,16 +93,23 @@ function keeperOf(row: MemoryLiveRow): MemorySummary["keptBy"] {
     : { userId: row.keeperId, name: row.keeperName };
 }
 
-/** Where a row's words came from, as the reader may see it; none where the statement found no agent and task the reader may open. */
-function sourceOf(row: MemoryLiveRow): MemorySummary["source"] {
-  return row.sourceAgentId === null || row.sourceTaskId === null || row.sourceTaskName === null
-    ? null
-    : {
-        agentId: row.sourceAgentId,
-        messageId: row.sourceMessageId,
-        taskId: row.sourceTaskId,
-        taskName: row.sourceTaskName,
-      };
+/** Where a row's words came from, as the reader may see it: the agent's task, or the Manager standing on none; neither where the statement found no agent and task the reader may open. */
+function sourcesOf(row: MemoryLiveRow): Pick<MemorySummary, "source" | "managerSource"> {
+  const { sourceAgentId: agentId, sourceMessageId: messageId } = row;
+
+  if (agentId === null) return { source: null };
+
+  if (row.sourceTaskId !== null && row.sourceTaskName !== null) {
+    return {
+      source: { agentId, messageId, taskId: row.sourceTaskId, taskName: row.sourceTaskName },
+    };
+  }
+
+  const name = row.sourceManagerName ?? null;
+
+  return name === null
+    ? { source: null }
+    : { source: null, managerSource: { agentId, messageId, name } };
 }
 
 /** A workspace's memories as the held read answers them, most recently kept or corrected first. */
@@ -107,7 +121,7 @@ export function memoriesOfLiveRows(rows: readonly MemoryLiveRow[]): readonly Mem
     forgettable: row.forgettable,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    source: sourceOf(row),
+    ...sourcesOf(row),
     recalls30d: row.recalls30d,
     lastRecalledAt: row.lastRecalledAt,
   }));

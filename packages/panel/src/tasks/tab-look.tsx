@@ -76,6 +76,8 @@ export const TAB_KIND = {
 interface AgentStanding {
   readonly model: string;
   readonly status?: AgentStatus | undefined;
+  /** A Manager's face, which it wears in place of its harness's mark; none for a coder. */
+  readonly face?: ManagerFaceValue | undefined;
 }
 
 /** A task as its tab or its row names it: its name, and its status where the place knows it. */
@@ -219,9 +221,15 @@ export function SubagentMark({ model }: { model: string | undefined }) {
  * says the failure at its end (`agentEndMark`). An agent whose standing is
  * not known, a pin's whose task is not open, wears its mark at rest, and one
  * this window does not list, one another Mac started, the mark of no known
- * harness, so a row naming it keeps the glyph's column.
+ * harness, so a row naming it keeps the glyph's column. A Manager wears its
+ * face instead (`ManagerGlyph`), wherever its tab, its title, or a row names it.
  */
 export function AgentGlyph({ agent }: { agent: AgentStanding | undefined }) {
+  // A Manager wears its face wherever its glyph stands, as its sidebar row does.
+  if (agent?.face !== undefined) {
+    return <ManagerGlyph face={agent.face} status={agent.status} />;
+  }
+
   const provider = agent === undefined ? undefined : providerOf(agent.model);
   const state = agent?.status === undefined ? GLYPH_STATE.REST : agentGlyphState(agent.status);
 
@@ -243,9 +251,9 @@ export function ManagerGlyph({
   status,
 }: {
   face: ManagerFaceValue;
-  status: AgentStatus;
+  status: AgentStatus | undefined;
 }): React.JSX.Element {
-  const state = agentGlyphState(status);
+  const state = status === undefined ? GLYPH_STATE.REST : agentGlyphState(status);
   const working = state === GLYPH_STATE.WORKING;
 
   const drawn = <ManagerFace face={face} size={MANAGER_FACE_SIZE.ROW} working={working} />;

@@ -1,20 +1,3 @@
-import {
-  CURSOR_TOOL,
-  claudeCodeWorkspaceTool,
-  WORKSPACE_MCP_SERVER_NAMES,
-} from "@repo/features/agent-tools";
-import type { ToolCallSettlement } from "@repo/features/turn-run";
-import { isRecord, type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
-import { Option, Schema } from "effect";
-import { storedServerCall } from "../../integrations/connection-tools.js";
-import { NATIVE_MOMENT, type NativeHeld, type NativeMoment } from "./native-moments.js";
-import {
-  FAILURE_CHARS,
-  PICTURE_STAND_IN,
-  runnerMoments,
-  toolAnswerSettlement,
-} from "./runner-moments.js";
-
 /**
  * cursor-moments.ts -- Cursor's SDK messages, as its runner posts them, read as the moments of a native run.
  *
@@ -42,6 +25,24 @@ import {
  * read with a schema of the fields this reads alone, so a field Cursor adds
  * changes nothing here, and a message no schema fits is no moment.
  */
+
+import {
+  CURSOR_TOOL,
+  claudeCodeWorkspaceTool,
+  storedToolName,
+  WORKSPACE_MCP_SERVER_NAMES,
+} from "@repo/features/agent-tools";
+import type { ToolCallSettlement } from "@repo/features/turn-run";
+import { isRecord, type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
+import { Option, Schema } from "effect";
+import { storedServerCall } from "../../integrations/connection-tools.js";
+import { NATIVE_MOMENT, type NativeHeld, type NativeMoment } from "./native-moments.js";
+import {
+  FAILURE_CHARS,
+  PICTURE_STAND_IN,
+  runnerMoments,
+  toolAnswerSettlement,
+} from "./runner-moments.js";
 
 /** The message types read here, as the SDK spells them. */
 const MESSAGE = {
@@ -198,10 +199,10 @@ interface StoredCall {
 }
 
 /**
- * A call to an MCP server as it is stored: our tool's own name for our own
- * server, reached as a custom tool or as a server of ours; an integration's
- * call for an integration's server; `cursorMcp` naming the server and tool
- * otherwise.
+ * A call to an MCP server as it is stored: our tool's stored name
+ * (`storedToolName`) for our own server, reached as a custom tool or as a
+ * server of ours; an integration's call for an integration's server;
+ * `cursorMcp` naming the server and tool otherwise.
  */
 function storedMcpCall(callId: string, args: WireValue | undefined): StoredCall {
   const mcp = readMcpArgs(args);
@@ -218,7 +219,10 @@ function storedMcpCall(callId: string, args: WireValue | undefined): StoredCall 
         : undefined
       : claudeCodeWorkspaceTool(named);
 
-  if (workspaceTool !== undefined) return { name: workspaceTool, input, workspaceTool };
+  if (workspaceTool !== undefined) {
+    return { name: storedToolName(workspaceTool), input, workspaceTool };
+  }
+
   const server = named === undefined ? providerIdentifier : serverOf(named);
   const tool = named === undefined ? toolName : toolOf(named);
 

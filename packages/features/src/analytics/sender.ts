@@ -9,6 +9,7 @@ import {
   PRODUCT_EVENT,
   PRODUCT_EVENT_BATCH_LIMIT,
   PRODUCT_EVENT_BUILD_FIELD,
+  PRODUCT_EVENT_INSTALL_ID_FIELD,
   type ProductClientPlatform,
   type ProductEvent,
   type ProductEventBuild,
@@ -111,6 +112,11 @@ export interface ProductEventSenderOptions {
   packaged: boolean;
   /** Which app this is, for the service to label every count with. */
   platform: ProductClientPlatform;
+  /**
+   * This install's own random id, which the service files every count under
+   * in place of the account: made once and kept by the host, read once a run.
+   */
+  installId: Effect.Effect<string>;
   /** `runMode.sendsNetwork`. False makes every record a no-op. */
   sends: boolean;
   /** The `HttpClient` a test hands over in place of the ambient fetch client. */
@@ -145,7 +151,9 @@ export interface ProductEventSenderOptions {
  *
  * No identity travels with an event. The service resolves the account from the
  * bearer token this sender already holds for the voice and review endpoints,
- * so there is nothing here to name a person with.
+ * to authorize and brake the batch, and files the counts under the install's
+ * own random id rather than under the account (`events.ts`), so there is
+ * nothing here to name a person with.
  *
  * It runs nothing itself. {@link ProductEventSender.make} builds one in the
  * scope its caller is already composing in, forks the flush cadence into that
@@ -165,6 +173,8 @@ export class ProductEventSender {
   readonly #readHolder: () => Effect.Effect<string | undefined>;
   readonly #confirmAccount: () => Effect.Effect<void>;
   readonly #keptDays: RecordedDayStore;
+  /** The install's id, read from the host the first time a batch is sent and held for the run. */
+  #installId: Effect.Effect<string>;
   readonly #queue: QueuedEvent[] = [];
   /**
    * This run's own guard, by name, then discriminator, then account: nested
@@ -236,6 +246,7 @@ export class ProductEventSender {
       );
     this.#confirmAccount = options.confirmAccount ?? (() => Effect.void);
     this.#keptDays = options.recordedDays ?? UNKEPT_DAYS;
+    this.#installId = options.installId;
     this.#flushIntervalMs = positiveInteger(
       options.flushIntervalMs,
       PRODUCT_EVENT_DEFAULTS.FLUSH_INTERVAL_MS,
@@ -253,6 +264,9 @@ export class ProductEventSender {
   ): Effect.Effect<ProductEventSender, never, Scope.Scope> {
     return Effect.gen(function* () {
       const sender = new ProductEventSender(options);
+      // Note that the id is read once a run, because a host that could not
+      // keep it makes a new one on every read.
+      sender.#installId = yield* Effect.cached(options.installId);
 
       // The day is marked on the tick rather than at launch alone, because an
       // app left running crosses midnight without relaunching — which is the
@@ -429,12 +443,13 @@ export class ProductEventSender {
 
   /** Posts one batch. */
   #send(queued: QueuedEvent[]): Effect.Effect<void, never, HttpClient.HttpClient> {
-    return Effect.suspend(() =>
+    return Effect.flatMap(this.#installId, (installId) =>
       Effect.flatMap(
         Effect.match(
           askHosted(this.#hosted.events.record, {
             events: queued.map(({ event }) => event),
             build: this.#build,
+            [PRODUCT_EVENT_INSTALL_ID_FIELD]: installId,
           }),
           {
             // A call that ended before any status names its fault; anything

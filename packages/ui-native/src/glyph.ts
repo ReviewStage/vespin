@@ -205,6 +205,8 @@ export const GLYPH = {
   EDIT: lucide(LUCIDE_SYMBOL.PENCIL_LINE),
   WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
   COPY: lucide(LUCIDE_SYMBOL.COPY),
+  /** Reply, which quotes a message into the composer, the panel's Lucide Reply, among every glyph the catalog holds. */
+  REPLY: catalogLucide("Reply"),
   SAVE: lucide(LUCIDE_SYMBOL.DOWNLOAD),
   LINK: lucide(LUCIDE_SYMBOL.LINK),
   UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),

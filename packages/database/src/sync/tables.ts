@@ -28,6 +28,7 @@ import { agentDelegationTable, agentTable } from "../schemas/agent.js";
 import { agentApproval } from "../schemas/agent-approval.js";
 import { agentBootTable } from "../schemas/agent-boot.js";
 import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
+import { agentFollower } from "../schemas/agent-follower.js";
 import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { agentQueue } from "../schemas/agent-queue.js";
@@ -138,6 +139,15 @@ export const taskFollowerSync = defineSyncTable(taskFollower, {
     },
   ],
   log: LOG.EVERY,
+});
+
+/**
+ * A member following an agent on no task, a Manager, on the agent's topic,
+ * so its followers' live read (`agentFollowers`) hears a follow, an
+ * unfollow, or a follower's switch at once.
+ */
+export const agentFollowerSync = defineSyncTable(agentFollower, {
+  topics: [{ kind: TOPIC.AGENT, column: agentFollower.agentId }],
 });
 
 /**
@@ -982,6 +992,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentBootSync,
   voiceCallSync,
   managerChatMessageSync,
+  agentFollowerSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
   descriptionCommentThreadSync,

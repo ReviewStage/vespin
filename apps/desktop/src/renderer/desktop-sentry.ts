@@ -22,7 +22,6 @@ import { reportsOnceStarted } from "@repo/features/sentry-early-reports";
 import type { ShownFailureSent } from "@repo/features/shown-failure";
 import type { ShownFailureReporter } from "@repo/panel/failure-report";
 import type { PanelSpanRecorder } from "@repo/panel/panel-spans";
-import { queryClient } from "@repo/panel/query-client";
 import type { SendTracer } from "@repo/panel/send-traces";
 
 /** Why a window drew nothing: its state could not be read, or its surface failed to render. */
@@ -69,7 +68,7 @@ async function loadedSentry(): Promise<DesktopSentry | undefined> {
   try {
     const { initDesktopSentry } = await import("./desktop-sentry-sdk");
 
-    return initDesktopSentry(queryClient);
+    return initDesktopSentry();
   } catch (error) {
     console.warn("Sentry's SDK could not load; this window reports nothing.", error);
 
