@@ -2,6 +2,7 @@
 
 import {
   Divider,
+  Host,
   HStack,
   Image,
   Menu,
@@ -14,6 +15,7 @@ import {
   useNativeState,
   ZStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
   accessibilityLabel,
@@ -24,6 +26,7 @@ import {
   foregroundStyle,
   frame,
   ignoreSafeArea,
+  labelStyle,
   lineLimit,
   type ModifierConfig,
   menuIndicator,
@@ -258,6 +261,33 @@ export const BarMenuButton = memo(function BarMenuButton({
 /** A bar's menu standing in its bar, such as a column's ⋯, its glyph alone in the bar's glass. */
 export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
   return <BarMenuButton menu={menu} modifiers={BAR_ITEM_MENU} />;
+}
+
+/**
+ * A bar's menu standing in a compact window's stack bar, such as the Tasks
+ * list's View options or a page's ⋯: SwiftUI's own menu, as a split view's
+ * bar stands it (`BarMenuButton`), hosted as the bar's item, as the
+ * workspace switcher stands beside it, so every choice leads with its own
+ * mark, a status's ring in its tone or a person's photo, which the stack
+ * bar's own menu, building UIKit's menu from a glyph's name alone, drew as
+ * a gray template. Its trigger is its glyph alone, at the bar face's size,
+ * in the bar's round glass, heard by its name.
+ */
+export function StackBarMenu({ menu }: { readonly menu: BarMenu }) {
+  return (
+    <Host matchContents>
+      <BarMenuButton
+        menu={menu}
+        modifiers={[
+          ...BAR_ITEM_MENU,
+          labelStyle("iconOnly"),
+          frame({ width: MARK_SIZE.BAR_FACE, height: MARK_SIZE.BAR_FACE }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          accessibilityLabel(menu.label),
+        ]}
+      />
+    </Host>
+  );
 }
 
 /** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol or stands `worded`, dimmed while it can't act. */

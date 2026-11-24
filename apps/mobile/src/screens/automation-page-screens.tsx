@@ -58,6 +58,7 @@ import {
   SCREEN_GROUND,
   Screen,
   SettingsForm,
+  StackBarMenu,
   ToggleRow,
   TRY_AGAIN_WORDS,
   useColors,
@@ -83,7 +84,6 @@ import {
 } from "../automations/use-automations.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { stackMenuItems } from "../stack-bar-menu.js";
 import { useOnOwnTab } from "../tab-route.js";
 
 /** The bar's title before the automation is read: none, since its name comes with it. */
@@ -285,13 +285,9 @@ function AutomationDetail({
     <>
       <Stack.Screen options={{ title: automation.name }} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu
-          icon={glyphSymbol(menu.symbol)}
-          tintColor={colors.TEXT}
-          accessibilityLabel={menu.label}
-        >
-          {stackMenuItems(menu)}
-        </Stack.Toolbar.Menu>
+        <Stack.Toolbar.View>
+          <StackBarMenu menu={menu} />
+        </Stack.Toolbar.View>
         {/* Note that Edit stands as a glyph before ⋯, as a page's main act stands in its bar; it is written after ⋯ because a right bar's first item stands at its edge. */}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.EDIT)}
