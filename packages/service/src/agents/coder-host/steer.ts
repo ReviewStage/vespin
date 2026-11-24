@@ -135,7 +135,9 @@ import { TURN_PUBLISH, TurnQueue } from "./turn-delivery.js";
  * A teammate's words, a member's other than the starter, are handed to the harness
  * behind a label naming them by their mention link (`attached-files.ts`'s
  * `senderLabel`), which the row leaves out, since its sender is its own
- * column, so the model never reads a teammate's words as the developer's.
+ * column, so the model never reads a teammate's words as the developer's;
+ * a Manager's starter's words are labeled as well, so a Manager shared by
+ * several members reads every person's line under their name.
  * Who reaches the agent is the caller's; the agent's harness answers the
  * message (`runtime-sessions.ts`). An archived agent takes
  * no message, and is refused as one that names nothing, since every list
@@ -327,12 +329,18 @@ const chatAuthorOf = (sender: LineSender, chat: SteerChat | undefined) => {
 };
 
 /**
- * The label naming the teammate who sent the line, by their mention link
- * under the agent's workspace; nothing for the starter's own words or any
- * other sender's, whose line already says who sent it.
+ * The label naming the member who sent the line, by their mention link
+ * under the agent's workspace: a teammate's on any agent, and on a Manager
+ * its starter's too, since a Manager is a coworker several members talk to,
+ * and a line left unnamed reads as whoever spoke last. Nothing for a coding
+ * agent's starter, the developer it is told it works for, or any other
+ * sender, whose line already says who sent it.
  */
 const teammateLabel = (agent: Agent, sender: LineSender) => {
-  if (sender.kind !== MESSAGE_SENDER.MEMBER || sender.userId === agent.userId) {
+  if (
+    sender.kind !== MESSAGE_SENDER.MEMBER ||
+    (sender.userId === agent.userId && agent.kind !== AGENT_KIND.MANAGER)
+  ) {
     return Effect.succeed(undefined);
   }
 
