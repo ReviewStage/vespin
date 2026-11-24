@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
+import { Database } from "@repo/database/core/query";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
@@ -10,11 +11,14 @@ import {
   updateAgentBranch,
   type WithRepository,
 } from "@repo/database/models/agent-store";
+import { updateTask } from "@repo/database/models/task-store";
+import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, startTask } from "@repo/database/testing";
-import { AGENT_AUTHOR, type AgentAuthor } from "@repo/features/agent-wire";
+import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
+import { AGENT_AUTHOR, AGENT_KIND, type AgentAuthor } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { ACTION_RESULT_STATUS, unparsedWire, type WireBoundaryInput } from "@repo/wire";
+import { eq } from "drizzle-orm";
 import { Clock, Effect, Option } from "effect";
 import {
   connectWorkspaceGitHub,
@@ -38,7 +42,9 @@ import { openPullRequest } from "./pull-request.js";
  * the App where it writes as the App; and as the App in the developer's
  * place where GitHub refuses their token, the agent's row recording why;
  * and on its starter's own token alone where that is its credential. A
- * refusal of the pull request itself opens nothing and moves nothing.
+ * Manager's agent opens as its task's assignee, and as the App naming them
+ * where GitHub refuses their token.
+ * A refusal of the pull request itself opens nothing and moves nothing.
  * GitHub is a script and the store PGlite; synthetic accounts and tokens
  * throughout.
  */
@@ -239,7 +245,128 @@ const openAgentBesideDocs = (installationId: number) =>
     };
   });
 
+/** The token the assignee's own GitHub sign-in left on their row. */
+const ASSIGNEE_TOKEN = "ghu_assignee";
+
+/** A signed-in account renamed as given, so a line naming it reads it apart. */
+const openNamedGithubUser = (name: string, row?: GitHubAccountRow) =>
+  Effect.gen(function* () {
+    const userId = yield* openGithubUser(row);
+    const db = yield* Database;
+    yield* db.update(user).set({ name }).where(eq(user.id, userId));
+
+    return userId;
+  });
+
+/** A coder a Manager of the owner's started, writing as the owner, on a task assigned to a signed-in teammate. */
+const openManagersAgent = (installationId: number) =>
+  Effect.gen(function* () {
+    const installation: InstallationFixture = {
+      id: installationId,
+      login: RELAY.owner,
+      repositories: [RELAY],
+    };
+
+    const now = yield* Clock.currentTimeMillis;
+    const owner = yield* openNamedGithubUser("Dana Owner");
+
+    const assignee = yield* openNamedGithubUser("Avery Assignee", {
+      accessToken: ASSIGNEE_TOKEN,
+      refreshToken: "ghr_assignee",
+      accessTokenExpiresAt: new Date(now + 7 * GITHUB_FIXTURE.HOUR_MS),
+      refreshTokenExpiresAt: new Date(now + 170 * 24 * GITHUB_FIXTURE.HOUR_MS),
+    });
+
+    const task = yield* startTask(owner, { name: "Invitations", repository: RELAY_FULL_NAME });
+    yield* connectWorkspaceGitHub(task.workspaceId, installation);
+    yield* joinWorkspace(task.workspaceId, assignee);
+    yield* updateTask(owner, task.id, { assigneeId: assignee });
+
+    const start = {
+      taskId: task.id,
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      descriptionSnapshot: null,
+      repository: RELAY_FULL_NAME,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+    };
+
+    const manager = Option.getOrThrow(
+      yield* createAgent(owner, {
+        ...start,
+        idempotencyKey: "manager",
+        prompt: "Run the invitations work.",
+        kind: AGENT_KIND.MANAGER,
+      }),
+    ).agent;
+
+    const started = Option.getOrThrow(
+      yield* createAgent(owner, {
+        ...start,
+        idempotencyKey: "coder",
+        prompt: "Expire teammate invitations.",
+        startedByAgentId: manager.id,
+      }),
+    ).agent;
+
+    yield* settleAgentAuthor(owner, started.id, AGENT_AUTHOR.DEVELOPER);
+    const agent = Option.getOrThrow(yield* readAgent(owner, started.id));
+    assert.ok(hasRepository(agent));
+
+    return {
+      installation,
+      agent,
+      target: { userId: owner, conversationId: agent.conversationId },
+    };
+  });
+
 it.layer(getTestDB())("a coding agent's pull request", (it) => {
+  it.effect(
+    "a Manager's agent on a task assigned to a teammate opens on the assignee's own token, its description as the agent wrote it",
+    () =>
+      Effect.gen(function* () {
+        const managers = yield* openManagersAgent(51);
+
+        const { result, openings, author } = yield* open(managers, managers.target, opened);
+
+        assert.ok(result.status === ACTION_RESULT_STATUS.ACCEPTED);
+        assert.equal(result.openedAs, "assignee");
+        assert.deepEqual(
+          openings.map((sent) => sent.headers.get("authorization")),
+          [`Bearer ${ASSIGNEE_TOKEN}`],
+        );
+        assert.equal(JSON.parse(openings[0]?.body ?? "{}").body, INPUT.body);
+        assert.equal(author, AGENT_AUTHOR.DEVELOPER, "the row is left as it stood");
+      }),
+  );
+
+  it.effect(
+    "where GitHub refuses the assignee's token, the App opens it in their place, its description ending on who it was requested by, and never on the owner's token",
+    () =>
+      Effect.gen(function* () {
+        const managers = yield* openManagersAgent(52);
+
+        const appOnly = (bearer: string) =>
+          bearer === `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}`
+            ? opened()
+            : Response.json({ message: "Bad credentials" }, { status: 401 });
+
+        const { result, openings, author } = yield* open(managers, managers.target, appOnly);
+
+        assert.ok(result.status === ACTION_RESULT_STATUS.ACCEPTED);
+        assert.equal(result.openedAs, "app");
+        assert.deepEqual(
+          openings.map((sent) => sent.headers.get("authorization")),
+          [`Bearer ${ASSIGNEE_TOKEN}`, `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}`],
+        );
+        assert.equal(
+          JSON.parse(openings[1]?.body ?? "{}").body,
+          `${INPUT.body}\n\nRequested by Avery Assignee.`,
+        );
+        assert.equal(author, AGENT_AUTHOR.DEVELOPER, "the row is left as it stood");
+      }),
+  );
+
   it.effect(
     "an agent in several repositories names the one to open in, refused with their names where it names none or another, and its pull request in an extra one opens there against the base it names, its head written on that repository's row alone",
     () =>
