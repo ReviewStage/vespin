@@ -76,8 +76,8 @@ function startOf(): number | undefined {
   );
 }
 
-/** When the clock mark ran, by `performance.now()`, so the profile's own clock can be lined up with the marks. */
-let clockMark: { start: number; end: number } | undefined;
+/** When each clock mark ran, by `performance.now()`, so each profile's own clock can be lined up with the marks; the first is the launch profile's. */
+const clockMarks: Array<{ start: number; end: number }> = [];
 
 /** Spins the JS thread for 20 ms under its own name, which the profile's samples show, at a time the watch keeps. */
 function probeClockMark(): void {
@@ -85,7 +85,7 @@ function probeClockMark(): void {
   let spun = 0;
 
   while (performance.now() - start < 20) spun += 1;
-  clockMark = { start, end: performance.now() };
+  clockMarks.push({ start, end: performance.now() });
   probe("watch:clock-mark", { spun });
 }
 
@@ -97,11 +97,11 @@ try {
   probe("watch:profile-start-failed", String(cause));
 }
 
-/** Writes the long tasks, the events, and the profile, once the watch is done. */
-function written(): void {
+/** Writes the long tasks and events so far under `watchFile`, and stops the profile running into `profileFile`, where one runs. */
+function written(watchFile: string, profileFile: string): void {
   try {
-    new File(Paths.document, "launch-watch.json").writeSync(
-      JSON.stringify({ zero: startOf(), clockMark, longTasks, events }),
+    new File(Paths.document, watchFile).writeSync(
+      JSON.stringify({ zero: startOf(), clockMark: clockMarks[0], clockMarks, longTasks, events }),
     );
 
     if (!profiling) return;
@@ -109,14 +109,34 @@ function written(): void {
     profiling = false;
 
     if (stopped?.profile !== undefined) {
-      new File(Paths.document, "launch-profile.json").writeSync(stopped.profile);
+      new File(Paths.document, profileFile).writeSync(stopped.profile);
     }
-    probe("watch:profile-written", { chars: stopped?.profile?.length, error: stopped?.error });
+    probe("watch:profile-written", {
+      profileFile,
+      chars: stopped?.profile?.length,
+      error: stopped?.error,
+    });
   } catch (cause) {
     probe("watch:write-failed", String(cause));
   }
 }
 
+/** Starts a second profile a minute in, with its own clock mark, for what still runs after the first minute. */
+function profileAgain(): void {
+  try {
+    const started = sentry?.startProfiling(false);
+    profiling = started?.started === true;
+    probe("watch:profile-again", { started: profiling, error: started?.error });
+    setTimeout(probeClockMark, 50);
+  } catch (cause) {
+    probe("watch:profile-again-failed", String(cause));
+  }
+}
+
 // Note that the mark runs after the profile starts, once the bundle's own evaluation is done.
 setTimeout(probeClockMark, 50);
-setTimeout(written, WATCH_MS);
+setTimeout(() => written("launch-watch.json", "launch-profile.json"), WATCH_MS);
+// Note that a minute in, a second profile runs for ten seconds, and the long tasks and events are kept to 76 s.
+setTimeout(profileAgain, 55_000);
+setTimeout(() => written("launch-watch-65.json", "launch-profile-60.json"), 65_000);
+setTimeout(() => written("launch-watch-76.json", "launch-profile-unused.json"), 76_000);
