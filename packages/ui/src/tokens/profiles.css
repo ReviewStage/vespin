@@ -166,11 +166,18 @@
   --ui-dialog-wide-width: 520px;
   --ui-dialog-composer-width: 720px;
   /* A settings dialog with a section list (`components/settings-dialog/`):
-     its card's measure and height, held as it turns from section to section,
-     and its list's column. */
-  --ui-dialog-sections-width: 760px;
-  --ui-dialog-sections-height: 560px;
-  --ui-dialog-sections-list-width: 200px;
+     its list's column, and beside it the section at Settings' own measure
+     inside the card's inset, so its rows read as Settings' do; and its
+     height, held as it turns from section to section, a sectioned settings
+     dialog's usual two thirds of a laptop's window. */
+  --ui-dialog-sections-list-width: 220px;
+  --ui-dialog-sections-width: calc(
+    var(--ui-dialog-sections-list-width) +
+    var(--ui-settings-measure) +
+    2 *
+    var(--ui-dialog-inset)
+  );
+  --ui-dialog-sections-height: 640px;
   --ui-dialog-media-min-width: 360px;
   --ui-dialog-media-max-width: 1200px;
   --ui-dialog-inset: var(--ui-space-20);
@@ -447,11 +454,18 @@
   --ui-dialog-wide-width: 520px;
   --ui-dialog-composer-width: 720px;
   /* A settings dialog with a section list (`components/settings-dialog/`):
-     its card's measure and height, held as it turns from section to section,
-     and its list's column. */
-  --ui-dialog-sections-width: 760px;
-  --ui-dialog-sections-height: 560px;
-  --ui-dialog-sections-list-width: 200px;
+     its list's column, and beside it the section at Settings' own measure
+     inside the card's inset, so its rows read as Settings' do; and its
+     height, held as it turns from section to section, a sectioned settings
+     dialog's usual two thirds of a laptop's window. */
+  --ui-dialog-sections-list-width: 220px;
+  --ui-dialog-sections-width: calc(
+    var(--ui-dialog-sections-list-width) +
+    var(--ui-settings-measure) +
+    2 *
+    var(--ui-dialog-inset)
+  );
+  --ui-dialog-sections-height: 640px;
   --ui-dialog-media-min-width: 360px;
   --ui-dialog-media-max-width: 1200px;
   --ui-dialog-inset: var(--ui-space-20);

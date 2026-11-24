@@ -20,9 +20,9 @@ import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
  *
  * A thing whose settings are more than one card holds, a Manager's, opens
  * them in this dialog rather than a page of its own, since they are its and
- * not the window's. The card stands at its own measure and at a height it
- * holds as the reader turns from one section to the next, so the list never
- * jumps under the pointer. Down its start stands the list, on the sidebar's
+ * not the window's. Its section stands at Settings' own measure, so its rows
+ * read as Settings' do, and the card at a height it holds as the reader turns
+ * from one section to the next, so the list never jumps under the pointer. Down its start stands the list, on the sidebar's
  * ground, headed by the dialog's name, which names the card: one place for
  * each section (`NavItem`), the one shown lit and announced as the page,
  * one Tab stop the arrows walk, as Settings' own list of pages is. Beside it
@@ -98,6 +98,14 @@ const GRID =
 /** The list's column, on the sidebar's ground, a hairline at its end; on a phone the card's whole room while it shows. */
 const LIST =
   "ui-settings-dialog-list flex min-h-0 min-w-0 flex-col gap-block-gap border-e border-border bg-sidebar p-dialog-inset pe-ui-12 room-narrow:border-e-0 room-narrow:pe-dialog-inset room-narrow:group-data-[listed=false]/settings-dialog:hidden";
+
+/**
+ * The room the list scrolls in, reaching past the list's inset by a focus
+ * ring's reach, with the list held that far inside it, as Settings' own list
+ * of pages is, so the place shown keeps its hairline and shadow whole and a
+ * focused place its ring, rather than clipped at the scroller's edge.
+ */
+const LIST_ROOM = "-m-ring-reach flex min-h-0 flex-1 flex-col";
 
 /** The section's column; on a phone hidden while the list shows. */
 const PAGE =
@@ -196,32 +204,34 @@ export function SettingsDialog<Id extends string>({
             </Text>
             <span className={PHONE_ONLY}>{close}</span>
           </div>
-          <ScrollArea fade={SCROLL_FADE.BOTH}>
-            <div {...roving}>
-              <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.ROW} aria-labelledby={titleId}>
-                {sections.map((section) => (
-                  <li key={section.id}>
-                    <NavItem
-                      icon={section.icon}
-                      current={section.id === current ? NAV_CURRENT.PAGE : undefined}
-                      roving
-                      mark={
-                        <span className={PHONE_ONLY}>
-                          <ForwardIcon />
-                        </span>
-                      }
-                      onClick={() => {
-                        onChoose(section.id);
-                        setListed(false);
-                      }}
-                    >
-                      {section.title}
-                    </NavItem>
-                  </li>
-                ))}
-              </Stack>
-            </div>
-          </ScrollArea>
+          <div className={LIST_ROOM}>
+            <ScrollArea fade={SCROLL_FADE.BOTH}>
+              <div {...roving} className="p-ring-reach">
+                <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.ROW} aria-labelledby={titleId}>
+                  {sections.map((section) => (
+                    <li key={section.id}>
+                      <NavItem
+                        icon={section.icon}
+                        current={section.id === current ? NAV_CURRENT.PAGE : undefined}
+                        roving
+                        mark={
+                          <span className={PHONE_ONLY}>
+                            <ForwardIcon />
+                          </span>
+                        }
+                        onClick={() => {
+                          onChoose(section.id);
+                          setListed(false);
+                        }}
+                      >
+                        {section.title}
+                      </NavItem>
+                    </li>
+                  ))}
+                </Stack>
+              </div>
+            </ScrollArea>
+          </div>
         </div>
         <section ref={page} className={PAGE} aria-labelledby={pageTitleId}>
           <div className={PAGE_HEAD}>

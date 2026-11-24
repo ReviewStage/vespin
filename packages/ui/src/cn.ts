@@ -502,7 +502,7 @@ const merge = extendTailwindMerge({
         "dialog-action-gap",
         "dialog-action",
         "dialog-room",
-        "dialog-sections",
+        "dialog-sections-height",
         "dialog-window-top",
         "dialog-command-top",
         "dialog-command-room",
