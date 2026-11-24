@@ -8,12 +8,13 @@
  * collection the list writes as each grace ends, so nothing here reads a
  * clock. An agent is joined with its grace and with the agents started from
  * it (`task-list-continuations.ts`), and drawn by a `fn.select` over the
- * three (`listedAgentOf`). A plan is joined with its agents as the pull
- * requests gather them (`agentsByTask`), its pull requests, and the few of
- * its agents past their grace, and its agents are tallied by a `fn.select`
- * over the four (`agentsTallyOf`); its summary is drawn from that tally,
- * outside the query, with what its archived agents held apart from these
- * queries add (`task-list-archived.ts`, `summaryOfTally`). Each derivation
+ * three (`listedAgentOf`). A plan's agents as the pull requests gather them
+ * (`agentsByTask`) are joined with the few of them past their grace, and
+ * tallied by one `fn.select` over the two (`agentsTallyOf`), with how many
+ * pull requests they opened (`pullRequestLinesOf`). The plan is joined with
+ * that one row, and its summary is drawn from the tally, outside the query,
+ * with what its archived agents held apart from these queries add
+ * (`task-list-archived.ts`, `summaryOfTally`). Each derivation
  * is written into a field of the query's row, never spread over it, so a
  * reader takes the derivation's own object, the very object until its row,
  * its grace, or its plan's agents move again, and the lists are built
@@ -40,6 +41,7 @@ import {
   agentsTallyOf,
   type GracedAgent,
   listedAgentOf,
+  pullRequestLinesOf,
   summaryOfTally,
   taskSummaryOf,
 } from "@repo/features/task-list-live";
@@ -59,7 +61,7 @@ import { Effect, type Scope } from "effect";
 import { listedOf, type QueryCollection } from "./drawn-rows.js";
 import { keyedListLog } from "./list-moves.js";
 import type { Continued } from "./task-list-continuations.js";
-import type { PlanAgents, PlanPullRequests } from "./task-list-pull-requests.js";
+import type { PlanAgents } from "./task-list-pull-requests.js";
 import type { AgentRow, PastGrace, PlanRow } from "./task-list-rows.js";
 
 /** The plans held apart from the list's live queries: those none of whose agents stands in them. */
@@ -78,8 +80,7 @@ export interface TaskListSources {
   readonly agents: RowCollection<AgentRow, string>;
   /** The agents whose starting grace has ended, by id. */
   readonly pastGrace: Collection<PastGrace, string>;
-  /** Each plan's pull requests, and its agents gathered under it (`taskListPullRequests`). */
-  readonly pullRequests: QueryCollection<PlanPullRequests>;
+  /** Each plan's agents gathered under it (`taskListPullRequests`). */
   readonly agentsByTask: QueryCollection<PlanAgents>;
   /** The agents started from each agent (`taskListContinuations`). */
   readonly continuations: QueryCollection<Continued>;
@@ -206,8 +207,7 @@ export function taskListTasks(
   sources: TaskListSources,
 ): Effect.Effect<TaskListTasks, never, Scope.Scope> {
   return Effect.gen(function* () {
-    const { plans, apart, agents, pastGrace, pullRequests, agentsByTask, continuations, archived } =
-      sources;
+    const { plans, apart, agents, pastGrace, agentsByTask, continuations, archived } = sources;
 
     // Each agent as the tabs draw it, first started first, and by id among those started at one instant, derived again only as its row, its grace, or those started from it move.
     const listed = yield* scopedCollection(() =>
@@ -260,30 +260,44 @@ export function taskListTasks(
       }),
     );
 
-    // Each plan with its agents tallied, newest started first, derived again only as its row, its agents, or their graces move.
+    // Each plan's agents tallied with their graces and how many pull requests they opened, derived again only as one of them or their graces move.
+    // Note that the pull requests are counted here from the plan's lines, the same `pullRequestLinesOf` the plan's own lines are listed by (`task-list-pull-requests.ts`), so a plan joins one row of its agents rather than their lines too.
+    const tallies = yield* scopedCollection(() =>
+      createLiveQueryCollection({
+        query: (q) =>
+          q
+            .from({ group: agentsByTask })
+            .leftJoin({ graced: graces }, ({ group, graced }) => eq(group.taskId, graced.taskId))
+            .fn.select(({ group, graced }) => {
+              const { taskId, agents: rows } = group;
+
+              return {
+                taskId,
+                tally: agentsTallyOf(
+                  gracedOf(rows, graced?.agentIds),
+                  pullRequestLinesOf(rows).length,
+                ),
+              };
+            }),
+        gcTime: KEPT_BY_SCOPE,
+        startSync: true,
+      }),
+    );
+
+    // Each plan with its agents tallied, newest started first, derived again only as its row or what its agents derive moves.
+    // Note that the plan joins its agents' one tallied row, never their group, lines, and graces apiece, because joining the group carried each plan's agents through this query's joins and order again, about a sixth of the time a busy account's kept agents took to draw.
     // Note that the summary is drawn from the tally outside the query, with what the plan's archived agents held apart add, because joining that in made every plan's row move through the query again for a whole answer, the most of what an account's archived agents cost it.
     const summaries = yield* scopedCollection(() =>
       createLiveQueryCollection({
         query: (q) =>
           q
             .from({ plan: plans })
-            .fullJoin({ group: agentsByTask }, ({ plan, group }) => eq(plan.id, group.taskId))
-            .fullJoin({ lines: pullRequests }, ({ plan, lines }) => eq(plan.id, lines.taskId))
-            .fullJoin({ graced: graces }, ({ plan, graced }) => eq(plan.id, graced.taskId))
+            .fullJoin({ agents: tallies }, ({ plan, agents }) => eq(plan.id, agents.taskId))
             .where(({ plan }) => not(isUndefined(plan.id)))
             .orderBy(({ plan }) => plan.createdAt, "desc")
             .orderBy(({ plan }) => plan.id, { direction: "desc", stringSort: "lexical" })
-            .fn.select(({ plan, group, lines, graced }) => ({
-              tallied: {
-                plan: mainOf(plan),
-                tally:
-                  group === undefined
-                    ? undefined
-                    : agentsTallyOf(
-                        gracedOf(group.agents, graced?.agentIds),
-                        lines?.listing?.pullRequests.length ?? 0,
-                      ),
-              } satisfies TalliedPlan,
+            .fn.select(({ plan, agents }) => ({
+              tallied: { plan: mainOf(plan), tally: agents?.tally } satisfies TalliedPlan,
             })),
         gcTime: KEPT_BY_SCOPE,
         startSync: true,
