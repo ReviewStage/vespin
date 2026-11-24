@@ -1,6 +1,7 @@
 import type { AgentFork } from "@repo/features/agent-fork-model";
 import {
   AGENT_BOUNDS,
+  AGENT_KIND,
   AGENT_STATUS,
   type AgentAttachment,
   type AgentStatus,
@@ -55,6 +56,7 @@ import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { DraftAgentTab } from "../tasks/draft-agent-tab.js";
 import { useFailedAgents } from "../tasks/failed-lines.js";
 import { agentForkDoors, ForkProvider, type SuggestDoor } from "../tasks/fork-action.js";
+import { ManagerChatTab } from "../tasks/manager-chat-tab.js";
 import { RunActionsButton, runSubmenu, useRunActions } from "../tasks/run-actions-button.js";
 import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
@@ -1064,20 +1066,32 @@ export function MainTabContent({
                 })
           }
         >
-          <AgentTab
-            agentId={agentId}
-            agent={agent}
-            control={agents}
-            shown={shown}
-            onOpenSubagent={(callId, task, status) =>
-              onOpenDelegation(agentId, callId, task, status)
-            }
-            onOpenPullRequest={onOpenPullRequest}
-            onOpenTarget={onOpenTarget}
-            cards={cards.agent(agentId)}
-            onHeld={views.onAgentHeld}
-            threads={threads}
-          />
+          {agent?.kind === AGENT_KIND.MANAGER ? (
+            // A Manager's page is its chat, never its transcript, which the chat reads only for its work.
+            <ManagerChatTab
+              agent={agent}
+              control={agents}
+              shown={shown}
+              onOpenTarget={onOpenTarget}
+              cards={cards.agent(agentId)}
+              threads={threads}
+            />
+          ) : (
+            <AgentTab
+              agentId={agentId}
+              agent={agent}
+              control={agents}
+              shown={shown}
+              onOpenSubagent={(callId, task, status) =>
+                onOpenDelegation(agentId, callId, task, status)
+              }
+              onOpenPullRequest={onOpenPullRequest}
+              onOpenTarget={onOpenTarget}
+              cards={cards.agent(agentId)}
+              onHeld={views.onAgentHeld}
+              threads={threads}
+            />
+          )}
         </ForkProvider>
       );
     }

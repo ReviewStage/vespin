@@ -2270,7 +2270,7 @@ export function AgentMessage({
           moving={moving}
           work={
             work === undefined || work.length === 0 ? null : (
-              <ChatWorkRows parts={work} moving={false} delegation={doors} />
+              <TurnWorkRows parts={work} moving={false} delegation={doors} />
             )
           }
         >
@@ -2531,8 +2531,8 @@ function useWorkToggle(): ChatWorkToggle {
   return { shown, onToggle: () => setShown((was) => !was) };
 }
 
-/** A stretch of a Manager's work (`managerChatWork`) as the rows a turn's transcript draws, each part drawn as the turn's own is. */
-function ChatWorkRows({
+/** A stretch of a turn's work as the rows its transcript draws, each part drawn as the turn's own is: what a Manager's chat opens under a message on Show work. */
+export function TurnWorkRows({
   parts,
   moving,
   delegation,
@@ -3397,7 +3397,7 @@ function AgentTranscriptView({
               face={manager?.face}
               work={
                 chatWork === undefined || chatWork.live.length === 0 ? null : (
-                  <ChatWorkRows parts={chatWork.live} moving delegation={delegation} />
+                  <TurnWorkRows parts={chatWork.live} moving delegation={delegation} />
                 )
               }
             />
