@@ -14,6 +14,7 @@ import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { noDatabase } from "@repo/database/testing/no-database";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
@@ -465,3 +466,16 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
       }),
   );
 });
+
+it.effect(
+  "a sweep over a store that refuses every statement, as before its table is migrated, answers failed and never fails the sweep",
+  () =>
+    Effect.gen(function* () {
+      const swept = yield* Effect.provide(sweepManagerChatBackfill(TURN_END.getTime()), noDatabase);
+
+      assert.deepEqual(
+        { managers: swept.managers, failed: swept.failed, done: swept.done },
+        { managers: 0, failed: 1, done: false },
+      );
+    }),
+);

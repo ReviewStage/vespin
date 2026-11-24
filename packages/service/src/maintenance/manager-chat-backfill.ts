@@ -44,6 +44,7 @@ import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/
 import { messageFileChips } from "@repo/features/message-files";
 import { agentName } from "@repo/features/model-label";
 import { isVoiceLine, spokenLineOf } from "@repo/features/voice-call-lines";
+import { causeKind } from "@repo/runtime/effect";
 import {
   isRecord,
   isWireNumber,
@@ -52,7 +53,7 @@ import {
   type WireRecord,
   type WireValue,
 } from "@repo/wire";
-import { Effect, Option, type Redacted } from "effect";
+import { Cause, Clock, Duration, Effect, Option, type Redacted } from "effect";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { type TranscriptMessage, transcriptMessagesOf } from "../agents/coder-host/transcript.js";
 import { nativeCallDigest } from "../agents/workspace-mcp/call-key.js";
@@ -546,20 +547,41 @@ export interface ManagerChatBackfillSwept extends ManagerChatBackfillCounts {
   readonly done: boolean;
 }
 
+/** How long one scheduled sweep of the backfill may work: well inside the sweep's minute, so the next sweep's other work is never kept waiting on it. */
+const SWEEP_BUDGET = Duration.seconds(30);
+
+/** What a sweep of the backfill answers where its own work failed: the failure logged, the sweep's other work untouched, and the next sweep to try again. */
+const SWEEP_FAILED_COUNTS: ManagerChatBackfillSwept = { ...NO_COUNTS, failed: 1, done: false };
+
+/** One Manager backfilled inside what is left of the sweep's budget; one it cuts off is a failure, rolled back with its transaction and tried again by the next sweep. */
+const backfillWithin = (manager: ManagerOfBackfill, left: Duration.Duration) =>
+  Effect.map(
+    Effect.timeoutOption(backfillOne(manager, false), left),
+    Option.getOrElse((): ManagerOutcome => ({ read: false, failed: true })),
+  );
+
 /**
  * One scheduled sweep of the backfill: the next Managers not yet marked,
  * a sweep's worth, each backfilled as the endpoint backfills it
  * (`backfillOne`) and then marked, so the next sweep takes the next ones
- * and, once every Manager is marked, reads one query and does nothing. A
- * Manager whose store failed stays unmarked for the next sweep to try
- * again; one whose transcript the vocabulary cannot read is marked, since
- * it never will. A sweep that did anything logs its counts alone, no
- * Manager and no word of any chat.
+ * and, once every Manager is marked, reads one query and does nothing. It
+ * works inside a budget (`SWEEP_BUDGET`): no Manager starts past it, and
+ * one still running at it is cut off. A Manager whose store failed or was
+ * cut off stays unmarked for the next sweep to try again; one whose
+ * transcript the vocabulary cannot read is marked, since it never will.
+ *
+ * It never fails: its own failure, of any kind but an interruption, is
+ * logged and answered as a failed sweep of its own (`SWEEP_FAILED_COUNTS`),
+ * so the sweep's other work and its cron check-in never hang on it. A sweep
+ * that did anything logs its counts alone, no Manager and no word of any
+ * chat.
  */
 export function sweepManagerChatBackfill(
   now: number,
-): Effect.Effect<ManagerChatBackfillSwept, StoreFailure, DatabaseServices> {
+): Effect.Effect<ManagerChatBackfillSwept, never, DatabaseServices> {
   return Effect.gen(function* () {
+    const started = yield* Clock.currentTimeMillis;
+
     const listed = yield* listManagersForBackfill({
       after: null,
       agent: null,
@@ -568,24 +590,40 @@ export function sweepManagerChatBackfill(
     });
 
     let counts = NO_COUNTS;
-    let failed = false;
+    let unfinished = false;
 
     for (const manager of listed) {
-      const outcome = yield* backfillOne(manager, false);
+      const left = Duration.toMillis(SWEEP_BUDGET) - ((yield* Clock.currentTimeMillis) - started);
+
+      if (left <= 0) {
+        unfinished = true;
+        break;
+      }
+
+      const outcome = yield* backfillWithin(manager, Duration.millis(left));
       counts = counted(counts, outcome);
 
-      if (!outcome.read && outcome.failed) failed = true;
+      if (!outcome.read && outcome.failed) unfinished = true;
       else yield* markManagerChatBackfilled(manager.id, new Date(now));
     }
 
-    const swept = { ...counts, done: listed.length < BACKFILL_BATCH.SWEEP && !failed };
+    const swept = { ...counts, done: listed.length < BACKFILL_BATCH.SWEEP && !unfinished };
 
     if (listed.length > 0) {
       yield* Effect.logInfo(`the manager chat backfill swept: ${JSON.stringify(swept)}`);
     }
 
     return swept;
-  });
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : Effect.as(
+            Effect.logError(`the manager chat backfill sweep failed: ${causeKind(cause)}`),
+            SWEEP_FAILED_COUNTS,
+          ),
+    ),
+  );
 }
 
 /** The batch a request names: dry or not, where it starts, one Manager alone, and how many; none for a query that spells no batch. */
