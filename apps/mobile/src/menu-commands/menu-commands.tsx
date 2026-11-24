@@ -1,6 +1,6 @@
 // menu-commands.tsx -- the iPad menu bar's commands, routed: what stands in front told to the native menu, so each command is enabled and worded for it, and each press acted on as the screen's own press would.
 
-import { isUnread } from "@repo/features/inbox-list-model";
+import { holderTask, holderWorkspaceId, isUnread } from "@repo/features/inbox-list-model";
 import { REMIND_TIMES } from "@repo/features/inbox-remind-times";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import {
@@ -191,7 +191,9 @@ function useSubject(signedIn: boolean): Subject {
 
   const task = useTaskListRow(collections.tasks, taskNamed?.id ?? agent?.taskId ?? undefined);
 
-  const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
+  const workspaceId =
+    (thread === undefined ? undefined : holderWorkspaceId(thread.holder)) ?? task?.workspaceId;
+
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
 
   const linked = (place: LinkDestination) =>
@@ -212,7 +214,7 @@ function useSubject(signedIn: boolean): Subject {
   if (thread !== undefined) {
     address = linked({
       kind: LINK_DESTINATION.INBOX_ITEM,
-      taskId: thread.holder.task.id,
+      taskId: holderTask(thread.holder)?.id,
       itemId: thread.item.id,
     });
     enabled.push(MENU_COMMAND.TOGGLE_READ, ...REMIND_PRESETS.keys());

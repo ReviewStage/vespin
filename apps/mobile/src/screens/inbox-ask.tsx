@@ -332,7 +332,7 @@ export function ThreadComposer({
 }: {
   readonly item: InboxItem;
   /** The workspace and task the thread stands in, whose agents, tasks, people and pages an `@` offers. */
-  readonly place: { readonly workspaceId: string; readonly taskId: string };
+  readonly place: { readonly workspaceId: string; readonly taskId: string | undefined };
   readonly answer: ThreadAnswer;
   /** The thread's agent's name, which the new thread's switch names. */
   readonly agentName: string;

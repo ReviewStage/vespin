@@ -1,7 +1,7 @@
 // person-screens.tsx -- one person's page in the workspace the phone works in, as the panel's person page draws it: who they are there, then their agents at work, what waits on them, the tasks assigned to them and the rest they created, and their other agents, with Copy link, Copy email, and Manage in its ⋯.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { openItems, waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import { holderTask, openItems, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
@@ -307,7 +307,7 @@ function PersonPage({
               item.id,
               iosAppRouteOf({
                 kind: LINK_DESTINATION.INBOX_ITEM,
-                taskId: holder.task.id,
+                taskId: holderTask(holder)?.id,
                 itemId: item.id,
               }),
             ] as const,
