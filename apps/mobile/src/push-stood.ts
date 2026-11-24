@@ -1,7 +1,7 @@
 // push-stood.ts -- whether a pushed screen has finished coming in, so a write that redraws the list it was pushed from waits for the push to end.
 
 import { type NativeStackNavigationProp, useNavigation } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 /**
  * Whether the screen this is drawn in has finished coming in: false while
@@ -25,4 +25,33 @@ export function usePushStood(): boolean {
   );
 
   return stood;
+}
+
+/**
+ * Whether the screen this is drawn in has started coming in: false until
+ * the stack says its push's transition started (or ended, for a screen it
+ * shows with no animation), and true for good after, so what the screen's
+ * first frame needn't draw waits for the push to start rather than holding
+ * it. Note that it hears the stack from the commit it mounts in, so a push
+ * that starts at once is never missed.
+ */
+export function usePushStarted(): boolean {
+  const navigation = useNavigation<NativeStackNavigationProp<Record<string, undefined>>>();
+  const [started, setStarted] = useState(false);
+
+  useLayoutEffect(() => {
+    const start = (event: { readonly data: { readonly closing: boolean } }) => {
+      if (!event.data.closing) setStarted(true);
+    };
+
+    const stopStart = navigation.addListener("transitionStart", start);
+    const stopEnd = navigation.addListener("transitionEnd", start);
+
+    return () => {
+      stopStart();
+      stopEnd();
+    };
+  }, [navigation]);
+
+  return started;
 }
