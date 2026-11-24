@@ -97,7 +97,9 @@ const IOS = {
   AGENT_SESSION: notYet(
     "iOS's agent page leaves a fresh session and a restart of the agent's machine to the desktop and the web for now",
   ),
-  AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
+  AUTOMATIONS: notYet(
+    "iOS lists and edits automations from Settings and its editor; deleting one and picking the agent its runs land in come with its Automations tab",
+  ),
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
   ),
@@ -348,13 +350,13 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_PICTURE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PICTURE_FILE]: { desktop: PICTURE_BYTES, web: PICTURE_BYTES, ios: YES },
 
-  [PORT_ACT_KIND.AUTOMATIONS_CREATE]: panel(IOS.AUTOMATIONS),
-  [PORT_ACT_KIND.AUTOMATIONS_CHANGE]: panel(IOS.AUTOMATIONS),
+  [PORT_ACT_KIND.AUTOMATIONS_CREATE]: EVERYWHERE,
+  [PORT_ACT_KIND.AUTOMATIONS_CHANGE]: EVERYWHERE,
   [PORT_ACT_KIND.AUTOMATIONS_DELETE]: panel(IOS.AUTOMATIONS),
-  [PORT_ACT_KIND.AUTOMATIONS_RUN]: panel(IOS.AUTOMATIONS),
-  [PORT_ACT_KIND.AUTOMATIONS_NEW_WEBHOOK_SECRET]: panel(IOS.AUTOMATIONS),
-  [PORT_ACT_KIND.AUTOMATIONS_FOLLOW]: panel(IOS.AUTOMATIONS),
-  [PORT_ACT_KIND.AUTOMATIONS_RETRY]: panel(IOS.AUTOMATIONS),
+  [PORT_ACT_KIND.AUTOMATIONS_RUN]: EVERYWHERE,
+  [PORT_ACT_KIND.AUTOMATIONS_NEW_WEBHOOK_SECRET]: EVERYWHERE,
+  [PORT_ACT_KIND.AUTOMATIONS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.AUTOMATIONS_RETRY]: EVERYWHERE,
 
   [PORT_ACT_KIND.BROWSER_LIVE_ATTACH]: desktopOnly(WEB.LIVE_VIEW, IOS.DESK_TOOLS),
   [PORT_ACT_KIND.BROWSER_LIVE_DETACH]: desktopOnly(WEB.LIVE_VIEW, IOS.DESK_TOOLS),

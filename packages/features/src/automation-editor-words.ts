@@ -3,6 +3,7 @@
  */
 
 import { SCHEDULE_KIND, type ScheduleKind } from "./automation-draft-model.js";
+import { AUTOMATION_CALL_FAILURE, type AutomationCallFailure } from "./automation-view.js";
 import {
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -15,6 +16,7 @@ import {
   PULL_REQUEST_MOMENT,
   type PullRequestMoment,
 } from "./automation-wire.js";
+import { AUTOMATION_SAVE_REFUSAL_WORDS } from "./automation-words.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import {
   SENTRY_LEVEL,
@@ -22,6 +24,7 @@ import {
   type SentryLevel,
   type SentryTriggerEvent,
 } from "./trigger-catalog.js";
+import { IRREVERSIBLE_WORDS } from "./words.js";
 
 /** One choice an editor's menu or switch offers: its value, its name, and the words under its name where its name alone cannot say it. */
 interface EditorChoice<Value> {
@@ -133,6 +136,7 @@ export const AUTOMATION_EDITOR_WORDS = {
   /** Who may change it, where someone else made it. */
   ITS_CREATOR: "Its creator",
   TYPE: "Type",
+  EVENT: "Event",
   RUNS: "Runs",
   TIME: "Time",
   DAY: "Day",
@@ -169,6 +173,30 @@ export function workspaceOwnerDetail(workspaceName: string, changers: string): s
 export function nextRunWords(when: string): string {
   return `Next: ${when}`;
 }
+
+/** A webhook trigger's rows, as the desktop's editor says them: its address, its secret shown once, and New secret, which asks first. */
+export const WEBHOOK_WORDS = {
+  ADDRESS: "Address",
+  ADDRESS_DETAIL:
+    "POST with the secret as Authorization: Bearer. The body shows in the run's transcript, so keep secrets out of it.",
+  SAVE_FIRST: "Save to get its address and secret.",
+  COPY_ADDRESS: "Copy address",
+  SECRET: "Secret",
+  COPY_SECRET: "Copy secret",
+  SECRET_ONCE: "You won't be able to see this again. Copy it into your sender now.",
+  DONE: "Done",
+  NEW_SECRET: "New secret",
+  NEW_SECRET_TITLE: "Make a new secret?",
+  NEW_SECRET_BODY: `The secret your sender uses now stops working until you give it the new one, which ${PRODUCT_NAME} shows you once. ${IRREVERSIBLE_WORDS}`,
+  NEW_SECRET_VERB: "Make secret",
+  NEW_SECRET_RUNNING: "Making",
+} as const;
+
+/** Why New secret made none, as its question goes on saying. */
+export const NEW_SECRET_REFUSAL_WORDS = {
+  ...AUTOMATION_SAVE_REFUSAL_WORDS,
+  [AUTOMATION_CALL_FAILURE.UNANSWERED]: "The secret could not be made. Try again.",
+} as const satisfies Record<AutomationCallFailure, string>;
 
 /** The days of the week as cron numbers them, Sunday at 0. */
 export const WEEKDAYS = [
