@@ -1,4 +1,4 @@
-// split-view.tsx -- a regular window's columns side by side, as SwiftUI's own NavigationSplitView: the list and the detail, each column under a bar of its own.
+// split-view.tsx -- a regular window's columns, each under a bar of its own: the list and the detail side by side, as SwiftUI's own NavigationSplitView, or on an iPad each in a column of the system's split view at the root, its sidebar, its list, and its page.
 
 import {
   Divider,
@@ -7,6 +7,7 @@ import {
   Image,
   Menu,
   NavigationSplitView,
+  NavigationStack,
   Section,
   Button as SwiftUIButton,
   Text,
@@ -37,6 +38,7 @@ import {
   navigationTitle,
   overlay,
   searchable,
+  tint,
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
@@ -507,16 +509,19 @@ function Column({
   view,
   bar = {},
   sidebar = false,
+  system = false,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
   /** Whether it is the first column, whose search the system stands in the sidebar's own place. */
   readonly sidebar?: boolean | undefined;
+  /** Whether it stands in a column of UIKit's split view, which draws the columns' edges and widths itself. */
+  readonly system?: boolean | undefined;
 }) {
   const colors = useColors();
   const text = useSearchWords(bar.search);
-  // Note that the list ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own.
-  const ruled = sidebar;
+  // Note that the list ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own; a column of UIKit's split view stands its own edge.
+  const ruled = sidebar && !system;
 
   const stacked = (
     <ZStack
@@ -525,7 +530,7 @@ function Column({
         frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
         background(colors.GROUND),
         // Note that the list column is drawn at its own width, which a person drags its divider within, rather than the system's fixed one.
-        ...(sidebar ? [navigationSplitViewColumnWidth(LIST_COLUMN_WIDTH)] : []),
+        ...(ruled ? [navigationSplitViewColumnWidth(LIST_COLUMN_WIDTH)] : []),
         // Note that the list stands its title large under its bar, collapsing into it as the list scrolls, as Mail's list column does, rather than leading the bar (`inlineLarge`), because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [navigationTitle(bar.title), toolbarTitleDisplayMode(sidebar ? "large" : "inlineLarge")]
@@ -647,5 +652,68 @@ export function SplitView({
         <Column view={detail} bar={detailBar} />
       </NavigationSplitView.Detail>
     </NavigationSplitView>
+  );
+}
+
+/**
+ * A page under its own bar in a column of the system's split view, as an
+ * iPad stands the picked row's page beside its list: its view under its
+ * column's bar, a title, a path, acts and a menu as a split view's detail
+ * holds them.
+ */
+export function PageColumn({
+  view,
+  bar,
+}: {
+  readonly view: ReactNode;
+  readonly bar?: ColumnBar | undefined;
+}) {
+  return (
+    <NavigationStack>
+      <Column view={view} bar={bar} system />
+    </NavigationStack>
+  );
+}
+
+/**
+ * A tab's list as the middle column of the system's own split view on an
+ * iPad (UISplitViewController's supplementary column, between the sidebar
+ * and the picked row's page), as Mail stands a mailbox's messages between
+ * its mailboxes and the message: its rows under its bar, its title large,
+ * its search, ⋯ and acts as a split view's list column holds them. It is
+ * one SwiftUI host of its own, its bar its own navigation stack's.
+ */
+export function ListColumn({
+  view,
+  bar,
+}: {
+  readonly view: ReactNode;
+  readonly bar?: ColumnBar | undefined;
+}) {
+  const colors = useColors();
+
+  return (
+    <Host style={{ flex: 1 }} modifiers={[tint(colors.TEXT)]}>
+      <NavigationStack>
+        <Column view={view} bar={bar} sidebar system />
+      </NavigationStack>
+    </Host>
+  );
+}
+
+/**
+ * An iPad's sidebar as the content of the system's own sidebar column, the
+ * first of its split view at the root, whose own bar holds its toggle: its
+ * list alone, with no bar or ground of its own, so it stands on the
+ * system's sidebar glass.
+ */
+export function SidebarColumn({ view }: { readonly view: ReactNode }) {
+  const colors = useColors();
+
+  return (
+    // Note that the sidebar's list takes the brand's accent as its tint, which the system's own selection fills with, rather than the ink the screens take, which drew the selection a black capsule over its words.
+    <Host style={{ flex: 1 }} modifiers={[tint(colors.ACCENT)]}>
+      {view}
+    </Host>
   );
 }

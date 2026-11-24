@@ -92,7 +92,6 @@ import {
   type RowSubmenu,
   type Scope,
   Screen,
-  SplitView,
   StackBarMenu,
   THREAD_MEDIA,
   type ThreadMedia,
@@ -138,6 +137,7 @@ import { useReplyDrawnCount } from "../reply-drawn.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { TabColumns } from "../split-columns.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
@@ -1511,9 +1511,7 @@ function InboxSplitScreen({
     <>
       {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
       <Stack.Screen options={{ headerShown: false, title: INBOX_TITLE }} />
-      <Screen key={build}>
-        <SplitView {...first} detail={detail} detailBar={firstDetailBar} />
-      </Screen>
+      <TabColumns build={build} {...first} detail={detail} detailBar={firstDetailBar} />
     </>
   );
 }

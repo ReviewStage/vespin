@@ -59,7 +59,7 @@ import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.
 import { openInSafari } from "../open-link.js";
 import { SEARCH_FOCUS_PARAM } from "../search-field.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
-import { useSidebarShown } from "../sidebar-shown.js";
+import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
 import { useHeldTasksNamed } from "../tasks/use-found-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
@@ -346,9 +346,9 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const workspaceNames = workspaces.map(({ name }) => name);
   const chosenWorkspace = workspaces.findIndex(({ id }) => id === switcher?.chosen.id);
   const sidebar = useSidebarShown();
-  // Note that Show or Hide Sidebar acts in any regular window, on the list beside its detail, as a two-column split view's own button does.
+  // Note that Show or Hide Sidebar acts in any regular window, on the list beside its detail, as a two-column split view's own button does, but an iPad's, whose sidebar is the system's split view's own column, shown and hidden by its own button, swipe and command.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-  const sidebarStands = signedIn && regular;
+  const sidebarStands = signedIn && regular && !APP_SIDEBAR;
 
   // Note that Back pops a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
   const root: NavigatorState = useRootNavigationState();

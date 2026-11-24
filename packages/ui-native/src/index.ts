@@ -418,8 +418,11 @@ export {
   isBarMenu,
   isMenuEntry,
   menuOfGroups,
+  ListColumn,
   menuWithout,
   PATH_PART,
+  PageColumn,
+  SidebarColumn,
   SplitView,
   StackBarMenu,
 } from "./split-view.js";
@@ -464,6 +467,7 @@ export {
   LINK_ROW_TONE,
   LinkRow,
   type LinkRowTone,
+  PlaceRow,
   RelationRow,
   TaskHead,
   VERSION_WRITER,
@@ -556,6 +560,7 @@ export {
   type SwitcherLook,
   WorkspaceSwitcher,
   WorkspaceSwitcherItem,
+  WorkspaceSwitcherRow,
 } from "./workspace-switcher.js";
 
 export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";

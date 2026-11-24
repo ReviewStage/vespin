@@ -464,9 +464,18 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   compact window's icons alone read as empty (the developer, Nov 23, 2026),
   the round + alone an icon there through its `Label`'s own `hidden`, the
   Inbox count in copper, and the round + for New task; a regular window's
-  bar is
-  `sidebarAdaptable`, so iPadOS stands it as its own tab sidebar, as Apple's
-  tab guidance has it. A compact window hides it while a
+  bar, on an iPhone, is `sidebarAdaptable`, so the unfolded Duo stands it as
+  a sidebar rail. An iPad stands no tabs: the system's own three-column
+  split view stands at the app's root (UISplitViewController, expo-router's
+  `SplitView`), as Mail's does: its sidebar column the app's sidebar
+  (`SidebarColumn`, the system's sidebar list, `LIST_LOOK.SIDEBAR`, headed
+  by the workspace switcher with New task's glyph at its end,
+  `WorkspaceSwitcherRow`, whose menu holds the account and Settings, then a
+  `PlaceRow` for each place and the tasks), then the list of the place
+  picked (`ListColumn`, which the place's root hands up), then the picked
+  row's page (`PageColumn`) with every page pushed over it; the system draws
+  the sidebar's glass, selection, toggle and swipe, and the columns' edges a
+  person drags, the list's never folding away. A compact window hides it while a
   conversation stands in front (a thread, an agent's page, or a pull
   request it opened), as Messages does, so the composer stands alone at
   the foot (the developer, Nov 12, 2026).

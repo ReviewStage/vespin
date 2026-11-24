@@ -669,6 +669,9 @@ importers:
       '@formatjs/intl-segmenter':
         specifier: 12.3.2
         version: 12.3.2
+      '@gorhom/portal':
+        specifier: 1.0.14
+        version: 1.0.14(react-native@0.88.1)(react@19.3.0)
       '@orpc/client':
         specifier: 'catalog:'
         version: 2.0.0-beta.44
@@ -3581,6 +3584,12 @@ packages:
 
   '@formatjs/intl-supportedvaluesof@3.0.1':
     resolution: {integrity: sha512-+9TU+8tqsUqobFzQJEvfQ8Yukt1PYgL5WxYi/yW+hWVNx422wEo/TlVRLvIfdYqlVS048jfyu8piNagfhOV+2A==}
+
+  '@gorhom/portal@1.0.14':
+    resolution: {integrity: sha512-MXyL4xvCjmgaORr/rtryDNFy3kU4qUbKlwtQqqsygd0xX3mhKjOLn6mQK8wfu0RkoE0pBE0nAasRoHua+/QZ7A==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
 
   '@hono/node-server@2.1.8':
     resolution: {integrity: sha512-jdf7FHh6A1lzjpHHQUgxsg2GeER2vMetnAOfeActzcoli6jamlK+NAwL6Dsr5Fl3BS3tYUQzCdtZjU8Qxv7bEA==}
@@ -12801,6 +12810,12 @@ snapshots:
   '@formatjs/intl-supportedvaluesof@3.0.1':
     dependencies:
       '@formatjs/fast-memoize': 3.1.7
+
+  '@gorhom/portal@1.0.14(react-native@0.88.1)(react@19.3.0)':
+    dependencies:
+      nanoid: 3.3.18
+      react: 19.3.0
+      react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
 
   '@hono/node-server@2.1.8(hono@4.13.18)':
     dependencies:

@@ -3,6 +3,7 @@
 import { Button, HStack, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityIdentifier,
   background,
   buttonStyle,
   font,
@@ -23,6 +24,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How thick the card's edge is drawn. */
 const HAIRLINE = 0.5;
+
+/** What a flow finds a pull request's card by, wherever it stands, such as an agent's transcript or the task list. */
+const PULL_REQUEST_CARD_ID = "pull-request-card";
 
 /** One act a pull request offers under its card, such as Review or Merge. */
 export type PullRequestAct = {
@@ -82,6 +86,7 @@ export function PullRequestCard({
     <HStack
       spacing={SPACE.ROW}
       modifiers={[
+        accessibilityIdentifier(PULL_REQUEST_CARD_ID),
         padding({ horizontal: SPACE.EDGE - 4, vertical: SPACE.ROW }),
         background(
           colors.SURFACE,

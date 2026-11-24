@@ -6,6 +6,7 @@ import {
   Image,
   Menu,
   Section,
+  Spacer,
   Button as SwiftUIButton,
   Text,
   Toggle,
@@ -19,7 +20,11 @@ import {
   font,
   foregroundStyle,
   frame,
+  labelStyle,
   lineLimit,
+  listRowBackground,
+  listRowInsets,
+  listRowSeparator,
   menuIndicator,
   menuStyle,
 } from "@expo/ui/swift-ui/modifiers";
@@ -29,6 +34,7 @@ import { useColorScheme } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, letterTileGlyph } from "./glyph.js";
 import { actContent, menuActContent } from "./glyph-label.js";
+import { useRowInset } from "./layout-margin.js";
 import type { MenuPhotoFile } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -260,6 +266,48 @@ export const WorkspaceSwitcher = memo(function WorkspaceSwitcher(props: Workspac
     <Host matchContents>
       <WorkspaceSwitcherItem {...props} look={SWITCHER_LOOK.TILE} />
     </Host>
+  );
+});
+
+/**
+ * The switcher heading an iPad's own sidebar, as the panel's sidebar heads
+ * itself with the workspace: its tile, its name and ⌄ on the list's first
+ * row, its words where the rows' words start, which picks nothing itself
+ * and opens the switcher's menu, and New task's glyph at the row's end, as
+ * the panel's head ends in it.
+ */
+export const WorkspaceSwitcherRow = memo(function WorkspaceSwitcherRow({
+  compose,
+  ...props
+}: WorkspaceSwitcherProps & {
+  /** New task at the row's end, as the panel's sidebar ends its workspace's row with it. */
+  readonly compose?: SwitcherAction | undefined;
+}) {
+  const inset = useRowInset();
+
+  return (
+    <HStack
+      modifiers={[
+        listRowBackground("clear"),
+        listRowSeparator("hidden"),
+        listRowInsets({
+          leading: inset.lead,
+          trailing: inset.margin,
+          top: SPACE.ROW,
+          bottom: SPACE.ROW,
+        }),
+      ]}
+    >
+      <WorkspaceSwitcherItem {...props} look={SWITCHER_LOOK.NAMED} />
+      <Spacer />
+      {compose === undefined ? null : (
+        <SwiftUIButton
+          {...actContent(compose.label, compose.symbol)}
+          onPress={compose.onPress}
+          modifiers={[labelStyle("iconOnly"), buttonStyle("borderless")]}
+        />
+      )}
+    </HStack>
   );
 });
 

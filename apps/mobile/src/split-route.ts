@@ -2,8 +2,9 @@
 
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { showPickedPage } from "./split-columns.js";
 import { useOwnTab } from "./tab-route.js";
 
 /** A tab whose root stands a split view in a regular window, by its root route. */
@@ -21,6 +22,36 @@ function itemRoute(tab: SplitTab, id: string): string {
 
 /** Each tab's item as its root last selected it, beside its list. */
 const picked = new Map<SplitTab, string>();
+
+/** Who hears a tab's pick change, such as an iPad's sidebar, which stands the picked task selected. */
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function told(): void {
+  for (const listener of listeners) listener();
+}
+
+/** Keeps a tab's pick, or lets it go, telling whoever hears it. */
+function keepPick(tab: SplitTab, id: string | undefined): void {
+  if (picked.get(tab) === id) return;
+
+  if (id === undefined) picked.delete(tab);
+  else picked.set(tab, id);
+
+  told();
+}
+
+/** The item a tab's root last picked beside its list, as an iPad's sidebar stands it selected; none while its whole list stands. */
+export function useSplitPicked(tab: SplitTab): string | undefined {
+  return useSyncExternalStore(subscribe, () => picked.get(tab));
+}
 
 /** An item just picked from the list, and the selection the route held when it was. */
 type HeldPick = { readonly id: string; readonly over: string | undefined };
@@ -50,6 +81,7 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   const router = useRouter();
   const { selected } = useLocalSearchParams<{ selected?: string }>();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const navigation = useNavigation();
   const [held, hold] = useState<HeldPick | undefined>(undefined);
   const routed = selected ?? (regular ? picked.get(tab) : undefined);
 
@@ -57,7 +89,7 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   useEffect(() => hold(undefined), [routed]);
 
   useEffect(() => {
-    if (regular && selected !== undefined) picked.set(tab, selected);
+    if (regular && selected !== undefined) keepPick(tab, selected);
   }, [regular, selected, tab]);
 
   // Note that the root hears its focus through an effect rather than reading it, because a read draws the root and its whole list again on every tab switch and every page pushed over it or popped.
@@ -70,7 +102,7 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
 
       if (shown === undefined) return;
       // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
-      picked.delete(tab);
+      keepPick(tab, undefined);
 
       if (selected !== undefined) router.setParams({ selected: undefined });
       router.push(itemRoute(tab, shown));
@@ -81,8 +113,13 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
     selected: held !== undefined && held.over === routed ? held.id : routed,
     select: (id) => {
       hold({ id, over: routed });
-      picked.set(tab, id);
-      router.setParams({ selected: id });
+      keepPick(tab, id);
+
+      // Note that a pick from an iPad's list column under a page pushed over the root goes back to the root, as Mail's message list replaces the message, because the list stands beside every page of its place.
+      if (navigation.isFocused()) router.setParams({ selected: id });
+      else router.dismissTo({ pathname: tab, params: { selected: id } });
+
+      showPickedPage();
     },
   };
 }
