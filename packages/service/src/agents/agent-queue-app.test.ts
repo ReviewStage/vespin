@@ -10,6 +10,7 @@ import {
   readAgentQueue,
 } from "@repo/database/models/agent-queue-store";
 import { readAgent } from "@repo/database/models/agent-store";
+import { readManagerChatPage } from "@repo/database/models/manager-chat-messages";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { listTaskFollowers, unfollowTask } from "@repo/database/models/task-follower-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -629,6 +630,41 @@ it.layer(SUITE)("an agent's queue", (it) => {
         },
       ]);
     }),
+  );
+
+  it.effect(
+    "a member's message queued to a Manager lands in its chat beside its line as it goes, as a sent one does",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { agent, ask, owner } = yield* messagedAgent(agentSessions, { running: true });
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`update agent set kind = ${AGENT_KIND.MANAGER} where id = ${agent.id}`;
+
+        const [queued] = (yield* queueChanged(ask, owner, agent.id, {
+          change: QUEUE_CHANGE.ADD,
+          text: "Also the emails.",
+          id: randomUUID(),
+        })).messages;
+
+        assert.ok(queued !== undefined);
+
+        yield* queueChanged(ask, owner, agent.id, {
+          change: QUEUE_CHANGE.STEER,
+          messageId: queued.id,
+        });
+
+        const chat = yield* readManagerChatPage(owner, agent.id, { limit: 10 });
+
+        assert.deepEqual(
+          chat.map((message) => ({
+            authorUserId: message.authorUserId,
+            text: message.text,
+            linked: message.lineId !== null,
+          })),
+          [{ authorUserId: owner, text: "Also the emails.", linked: true }],
+        );
+      }),
   );
 
   /**

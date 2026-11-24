@@ -38,17 +38,13 @@
  * first and reads back only as far as it is scrolled.
  */
 
-import { randomBytes } from "node:crypto";
 import { middlewareGen } from "@orpc/experimental-effect";
 import { ORPCError } from "@orpc/server";
 import { type Agent, readAgent, readVisibleAgent } from "@repo/database/models/agent-store";
 import { childTitlesOf } from "@repo/database/models/child-titles";
 import { readRewoundRevision } from "@repo/database/models/conversation-rewind";
 import { childConversationId } from "@repo/database/models/ids";
-import {
-  readManagerChatMessage,
-  readManagerChatMessageByKey,
-} from "@repo/database/models/manager-chat-messages";
+import { readManagerChatMessageByKey } from "@repo/database/models/manager-chat-messages";
 import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
 import { listStandingVoiceCalls } from "@repo/database/models/voice-calls";
 import {
@@ -60,7 +56,6 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   AGENT_BOUNDS,
   AGENT_CURSOR_START,
-  AGENT_KIND,
   AGENT_STATUS,
   type AgentMessagesAnswer,
   type AgentNewestAnswer,
@@ -88,6 +83,7 @@ import {
 import { accountMiddleware, type HostedContext, hosted } from "../orpc/base.js";
 import { admitsPlanWriter, controlsAgent } from "./agent-reach.js";
 import { queueOnPage } from "./coder-host/agent-queue.js";
+import { chatOfLine } from "./coder-host/manager-chat-line.js";
 import { cutMessage, wholePartOf } from "./coder-host/part-cut.js";
 import { changeAgentQueue } from "./coder-host/queue-change.js";
 import { spokenLineMetadata } from "./coder-host/spoken-line.js";
@@ -326,47 +322,6 @@ function olderAnswer(older: TranscriptOlder, cut: boolean): AgentOlderAnswer {
   };
 }
 
-/** How many bytes a chat message's id is minted from: eight hex digits, short since the model repeats it. */
-const CHAT_ID_BYTES = 4;
-
-/** A fresh id for a person's chat message, unique within the chat but by a clash its write refuses, which a send again mints past. */
-function mintedChatId(): string {
-  return randomBytes(CHAT_ID_BYTES).toString("hex");
-}
-
-/**
- * The root of the thread a chat send replies in, as the chat holds it: the
- * message it names where that is a root, or that message's own root, so
- * every header the Manager reads names a root; none for a message of the
- * chat itself, and refused for one naming no message of the chat.
- */
-const threadRootOf = /* @__PURE__ */ Effect.fnUntraced(function* (
-  userId: string,
-  agentId: string,
-  named: string | undefined,
-) {
-  if (named === undefined) return null;
-
-  const parent = yield* hostedStoreOrUnavailable(readManagerChatMessage(userId, agentId, named));
-
-  if (Option.isNone(parent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-
-  return parent.value.threadRoot ?? parent.value.id;
-});
-
-/**
- * The chat message a person's line to a Manager is, as both sends write it
- * beside the line (`writer.ts`'s `AwaitingChatMessage`): a fresh id, in the
- * thread the send names.
- */
-const chatOfLine = /* @__PURE__ */ Effect.fnUntraced(function* (
-  userId: string,
-  agentId: string,
-  threadRoot: string | undefined,
-) {
-  return { id: mintedChatId(), threadRoot: yield* threadRootOf(userId, agentId, threadRoot) };
-});
-
 /**
  * The id a chat send's message stands under: the one minted for it where
  * this send wrote it or queued it, or, for a send repeated under its key,
@@ -493,18 +448,11 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
         // A delegation starts its turn on the caller's lines already recorded, rather than writing its words again.
         const line = lines === undefined ? spoken : { ...spoken, adopts: lines };
 
-        // Note that a typed line to a Manager is a message of its chat, as `chatSend` writes it, because released apps send
-        // a Manager's chat here; a line of a call, or a delegation of its lines, is the call's and no message of the chat.
-        const chat =
-          agent.kind === AGENT_KIND.MANAGER && metadata === undefined && lines === undefined
-            ? yield* chatOfLine(context.userId, agent.id, undefined)
-            : undefined;
-
         const { txid, outcome } = yield* steerMemberWords(
           writer,
           context.userId,
           agent,
-          chat === undefined ? line : { ...line, chat },
+          line,
           retry === true,
         );
 
@@ -524,12 +472,12 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       .use(tooLongMiddleware)
       .chatSend.effect(function* ({ input, context }) {
         const { agent } = yield* reachedAgent(context.userId, input.params.id);
+        const { retry, threadRoot, ...words } = input.body;
+        const sender = { kind: MESSAGE_SENDER.MEMBER, userId: context.userId } as const;
+        const chat = yield* chatOfLine(context.userId, agent, { sender }, threadRoot);
 
         // Note that only a Manager keeps a chat, so any other agent names none.
-        if (agent.kind !== AGENT_KIND.MANAGER) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-        const { retry, threadRoot, ...words } = input.body;
-
-        const chat = yield* chatOfLine(context.userId, agent.id, threadRoot);
+        if (chat === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
         const { txid, outcome } = yield* steerMemberWords(
           writer,
