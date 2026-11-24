@@ -477,13 +477,20 @@ const sendRun = Effect.fn("agent-runner/cursor/sendRun")(function* (
   yield* follow(launch, run);
 });
 
-/** Summarizes the conversation in the message's place, a run of its own. */
+/**
+ * Summarizes the conversation in the message's place, a run of its own; an
+ * agent with no conversation yet has nothing to summarize, so its turn is
+ * over at once, as Claude Code's `/compact` is. Answers the launch's outcome
+ * where that ends it.
+ */
 const startSummary = Effect.fn("agent-runner/cursor/startSummary")(function* (
   launch: CursorLaunch,
   outgoing: Outgoing,
 ) {
   // The line is taken before Cursor is asked, as a message's is, so a summary it refuses fails the turn with its words.
   yield* accepted(launch, outgoing.lines, undefined);
+
+  if (!launch.store.conversed(launch.session)) return yield* turnOver(launch);
 
   const run = yield* Effect.tryPromise({
     try: () => launch.agent.summarize(),
@@ -492,6 +499,8 @@ const startSummary = Effect.fn("agent-runner/cursor/startSummary")(function* (
 
   launch.state = { kind: LAUNCH_STATE.RUN, run, summary: true, stopping: false };
   yield* follow(launch, run);
+
+  return undefined;
 });
 
 /** Steers a message into the run going, Cursor's answer signaled once it comes, so a Stop meanwhile is not held up. */
@@ -563,8 +572,8 @@ const takeLine = Effect.fn("agent-runner/cursor/takeLine")(function* (
 
       // A summary waits for the run going to end, as Cursor summarizes no conversation at work.
       if (value.compact === true) {
-        if (state.kind === LAUNCH_STATE.IDLE) yield* startSummary(launch, outgoing);
-        else launch.compactNext = outgoing;
+        if (state.kind === LAUNCH_STATE.IDLE) return yield* startSummary(launch, outgoing);
+        launch.compactNext = outgoing;
 
         return undefined;
       }
@@ -665,9 +674,8 @@ const settle = Effect.fn("agent-runner/cursor/settle")(function* (launch: Cursor
 
   if (summary !== undefined) {
     launch.compactNext = undefined;
-    yield* startSummary(launch, summary);
 
-    return undefined;
+    return yield* startSummary(launch, summary);
   }
 
   return yield* turnOver(launch);

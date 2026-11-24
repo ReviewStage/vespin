@@ -165,6 +165,8 @@ export interface CursorStore {
   readonly store: LocalAgentStore;
   /** Whether the store holds the agent's row, so the launch resumes it rather than making it. */
   readonly holds: (agentId: string) => boolean;
+  /** Whether the agent's row names a checkpoint, so it holds a conversation to summarize. */
+  readonly conversed: (agentId: string) => boolean;
   /** Marks the checkpoint the agent stands at as the one before the line given, which opens its next run. */
   readonly markCut: (agentId: string, before: string) => void;
   /**
@@ -410,6 +412,7 @@ export function cursorStore(
   return {
     store,
     holds: (agentId) => agents.has(agentId),
+    conversed: (agentId) => agents.get(agentId)?.latestCheckpoint != null,
     markCut,
     cutBefore,
     instructionsDue: (agentId) => due.get(agentId) === true,

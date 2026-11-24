@@ -813,6 +813,7 @@ it.effect(
   "summarizes the conversation for a compact line, and leads the next message with the instructions the summary dropped",
   () =>
     Effect.gen(function* () {
+      fakeTranscripts(TWO_TURNS_HELD);
       const service = fakeService();
 
       const { cursor, write, run } = yield* launch(
@@ -820,11 +821,17 @@ it.effect(
         service,
       );
 
-      yield* write(CONFIG);
-      yield* write({ type: INPUT_LINE.MESSAGE, uuid: LINE.FIRST, content: [], compact: true });
-      yield* write(message("Go on.", LINE.SECOND));
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE_AFTER_REWIND,
+        content: [],
+        compact: true,
+      });
+      yield* write(message("Go on.", LINE_AFTER_SUMMARY));
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
       assert.deepEqual(cursor.summaries, [0]);
       assert.deepEqual(
         cursor.sent.map(({ message: sent }) => sent.text),
@@ -864,19 +871,45 @@ it.effect(
 );
 
 it.effect(
-  "takes a compact line before Cursor refuses to summarize an agent with no conversation, so its turn fails with Cursor's words rather than as a lost runner",
+  "ends the turn of a compact line on an agent with no conversation yet without asking Cursor, as Claude Code's does",
   () =>
     Effect.gen(function* () {
-      const refused = "Agent cursor-1 has no saved conversation to summarize yet.";
       const service = fakeService();
-      const { write, run } = yield* launch([{ messages: [], refused }], service);
+      const { cursor, write, run } = yield* launch([], service);
 
       yield* write(CONFIG);
       yield* write({ type: INPUT_LINE.MESSAGE, uuid: LINE.FIRST, content: [], compact: true });
 
-      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(cursor.summaries, []);
       assert.deepEqual(messagesOf(service.applied), [
         { type: RUNNER_EVENT.ACCEPTED, uuid: LINE.FIRST },
+        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+      ]);
+    }),
+);
+
+it.effect(
+  "takes a compact line before asking Cursor to summarize, so a summary it refuses fails the turn with its words rather than as a lost runner",
+  () =>
+    Effect.gen(function* () {
+      const refused = "Cursor could not summarize the conversation.";
+      fakeTranscripts(TWO_TURNS_HELD);
+      const service = fakeService();
+      const { write, run } = yield* launch([{ messages: [], refused }], service);
+
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE_AFTER_SUMMARY,
+        content: [],
+        compact: true,
+      });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      vi.restoreAllMocks();
+      assert.deepEqual(messagesOf(service.applied), [
+        { type: RUNNER_EVENT.ACCEPTED, uuid: LINE_AFTER_SUMMARY },
         { type: RUNNER_EVENT.END, reason: RUNNER_END.FAILED, detail: refused },
       ]);
     }),
