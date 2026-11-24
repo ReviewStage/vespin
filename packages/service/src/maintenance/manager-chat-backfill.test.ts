@@ -14,6 +14,7 @@ import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { noDatabase } from "@repo/database/testing/no-database";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
@@ -22,7 +23,7 @@ import { Effect, Option, Redacted } from "effect";
 import { NATIVE_CALL_KEY_WINDOW_MS, nativeCallDigest } from "../agents/workspace-mcp/call-key.js";
 import { ACTION_RESULT_STATUS, MESSAGE_ROLE } from "../core.js";
 import { MAINTENANCE_MANAGER_CHAT_BACKFILL_PATH } from "./maintenance-bounds.js";
-import { handleManagerChatBackfill } from "./manager-chat-backfill.js";
+import { handleManagerChatBackfill, sweepManagerChatBackfill } from "./manager-chat-backfill.js";
 
 /**
  * The one-time backfill of a Manager's chat over a real dialect: an old
@@ -428,4 +429,53 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
         );
       }),
   );
+
+  it.effect(
+    "the scheduled sweep backfills each Manager once, and reads none once all are marked",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { owner, agent } = yield* openManager;
+        const target = { userId: owner, conversationId: agent.conversationId };
+        const lineId = randomUUID();
+
+        yield* db
+          .insert(messages)
+          .values([memberLine(target, { id: lineId, seq: 101, text: "Ship the table?" })]);
+
+        let swept = yield* sweepManagerChatBackfill(TURN_END.getTime());
+
+        // Note that the file's other Managers are unmarked too, so the sweep runs until none is left.
+        for (let sweeps = 1; !swept.done && sweeps < 10; sweeps += 1) {
+          swept = yield* sweepManagerChatBackfill(TURN_END.getTime());
+        }
+
+        assert.equal(swept.done, true);
+
+        assert.deepEqual(
+          (yield* chatOf(owner, agent.id)).map(({ text, lineId }) => ({ text, lineId })),
+          [{ text: "Ship the table?", lineId }],
+        );
+
+        const after = yield* sweepManagerChatBackfill(TURN_END.getTime());
+
+        assert.deepEqual(
+          { managers: after.managers, written: after.written, done: after.done },
+          { managers: 0, written: 0, done: true },
+        );
+      }),
+  );
 });
+
+it.effect(
+  "a sweep over a store that refuses every statement, as before its table is migrated, answers failed and never fails the sweep",
+  () =>
+    Effect.gen(function* () {
+      const swept = yield* Effect.provide(sweepManagerChatBackfill(TURN_END.getTime()), noDatabase);
+
+      assert.deepEqual(
+        { managers: swept.managers, failed: swept.failed, done: swept.done },
+        { managers: 0, failed: 1, done: false },
+      );
+    }),
+);
