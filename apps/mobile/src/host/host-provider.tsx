@@ -7,6 +7,7 @@ import { selectTaskListDrawn } from "@repo/host/app-state-reads";
 import type { AppBridge } from "@repo/host/bridge";
 import type { ActPortClient } from "@repo/host/contract";
 import type { TaskListCollections } from "@repo/host/task-list-following";
+import { listenToRow } from "@repo/host/task-list-row-readers";
 import { type Collection, useLiveQuery } from "@tanstack/react-db";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
@@ -130,7 +131,8 @@ const LISTEN_TO_NOTHING = (): (() => void) => () => {};
 
 /**
  * The row `key` names in one of the task list's collections (`.get(key)`),
- * drawn again only when that row moves, and the same object until it does;
+ * drawn again only when that row moves, as the collection's one listener
+ * tells it (`listenToRow`), and the same object until it does;
  * none where the collection holds no such row, or no key is given.
  */
 export function useTaskListRow<Row extends object>(
@@ -141,11 +143,7 @@ export function useTaskListRow<Row extends object>(
     (heard: () => void) => {
       if (key === undefined) return LISTEN_TO_NOTHING();
 
-      const subscription = collection.subscribeChanges((changes) => {
-        if (changes.some((change) => change.key === key)) heard();
-      });
-
-      return () => subscription.unsubscribe();
+      return listenToRow(collection, key, heard);
     },
     [collection, key],
   );
@@ -190,13 +188,11 @@ export function useTaskListRowsOf<Row extends object>(
 
   const subscribe = useCallback(
     (heard: () => void) => {
-      const named = new Set(keys);
+      const stops = [...new Set(keys)].map((key) => listenToRow(collection, key, heard));
 
-      const subscription = collection.subscribeChanges((changes) => {
-        if (changes.some((change) => named.has(change.key))) heard();
-      });
-
-      return () => subscription.unsubscribe();
+      return () => {
+        for (const stop of stops) stop();
+      };
     },
     [collection, keys],
   );

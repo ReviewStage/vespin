@@ -15,6 +15,7 @@ import {
   type TaskNames,
 } from "@repo/features/tasks-model";
 import type { TaskListCollections } from "@repo/host/task-list-following";
+import { listenToRow, type RowHeard } from "@repo/host/task-list-row-readers";
 import {
   type Collection,
   caseWhen,
@@ -46,59 +47,6 @@ export const NAMED_ORDER = {
 } as const;
 
 export type NamedOrder = (typeof NAMED_ORDER)[keyof typeof NAMED_ORDER];
-
-/** Hears that one row moved. */
-type RowHeard = () => void;
-
-/** The readers of each collection's rows, by key, told through the one subscription each collection holds while it has any. */
-const rowReaders = new WeakMap<
-  object,
-  { readonly readers: Map<string, Set<RowHeard>>; stop: (() => void) | undefined }
->();
-
-/**
- * Listens for the row `key` names in `collection` to move. Every reader of
- * a collection shares one `subscribeChanges`, which routes each change to the
- * readers of its key alone, so a delivery costs the rows it moved rather than
- * the readers standing; it unsubscribes once its last reader goes.
- */
-function listenToRow<Row extends object>(
-  collection: Collection<Row, string>,
-  key: string,
-  heard: RowHeard,
-): () => void {
-  let held = rowReaders.get(collection);
-
-  if (held === undefined) {
-    held = { readers: new Map(), stop: undefined };
-    rowReaders.set(collection, held);
-  }
-
-  const { readers } = held;
-
-  if (held.stop === undefined) {
-    const subscription = collection.subscribeChanges((changes) => {
-      for (const change of changes) for (const hear of readers.get(change.key) ?? []) hear();
-    });
-
-    held.stop = () => subscription.unsubscribe();
-  }
-
-  const ofKey = readers.get(key) ?? new Set();
-  ofKey.add(heard);
-  readers.set(key, ofKey);
-  const standing = held;
-
-  return () => {
-    ofKey.delete(heard);
-
-    if (ofKey.size === 0) readers.delete(key);
-
-    if (readers.size > 0) return;
-    standing.stop?.();
-    standing.stop = undefined;
-  };
-}
 
 /** No name typed: what a read of the rows as listed draws over them. */
 const NO_NAMES_TYPED: TaskNames = new Map();
