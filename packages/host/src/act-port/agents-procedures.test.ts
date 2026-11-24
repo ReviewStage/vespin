@@ -78,6 +78,8 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_PART]: "Could not read the agent's output on this system.",
   [AGENT_ACT_KIND.AGENTS_TRANSCRIPT_OLDER]:
     "Could not read the agent's earlier messages on this system.",
+  [AGENT_ACT_KIND.AGENTS_MANAGER_CHAT_OLDER]:
+    "Could not read the Manager's earlier messages on this system.",
   [AGENT_ACT_KIND.AGENTS_MESSAGE]: "Could not message the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_CHAT_SEND]: "Could not message the Manager on this system.",
   [AGENT_ACT_KIND.AGENTS_CHOOSE]: "Could not change the agent's model on this system.",
@@ -148,6 +150,7 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_MESSAGES: { agentId: AGENT_ID, after: AGENT_CURSOR_START },
   AGENTS_PART: { agentId: AGENT_ID, messageId: "m-1", index: 0 },
   AGENTS_TRANSCRIPT_OLDER: { kind: TRANSCRIPT_KIND.AGENT, agentId: AGENT_ID, before: "40" },
+  AGENTS_MANAGER_CHAT_OLDER: { agentId: AGENT_ID, before: 40 },
   AGENTS_MESSAGE: { agentId: AGENT_ID, text: "Carry on.", clientKey: "send-1" },
   AGENTS_CHAT_SEND: { agentId: AGENT_ID, text: "Carry on.", clientKey: "send-1" },
   AGENTS_CHOOSE: { agentId: AGENT_ID, model: "anthropic/claude-opus-5.5", effort: "high" },

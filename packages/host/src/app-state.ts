@@ -42,6 +42,7 @@ import type { IntegrationToolsAnswer } from "@repo/features/integration-wire";
 import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
+import type { ManagerChatLiveMessage, ManagerChatPageView } from "@repo/features/manager-chat-live";
 import type { McpClientsAnswer } from "@repo/features/mcp-client-wire";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import type { MirrorStandings } from "@repo/features/mirror-steps";
@@ -702,6 +703,17 @@ export type AppHeldTasks = AppHeldById<HeldTask>;
  */
 export type AppHistories = AppHeldById<DescriptionRevisionsAnswer>;
 
+/**
+ * One Manager's chat as the host holds it for the windows
+ * (`manager-chat-follow.ts`): its newest page as its read stands, then the
+ * older pages read past it, newest first, and the `seq` the next older page
+ * is read before, absent once the chat's start is held.
+ */
+export type AppManagerChat = ManagerChatPageView;
+
+/** Each Manager's chat the host holds for the windows: those a window shows, and the few let go lately, by the agent's id, each as its own read stands. */
+export type AppManagerChats = AppHeldById<AppManagerChat>;
+
 /** The automations' held reads, by their names: each workspace's automations, each workspace's runs, and each automation's runs (`compose-automations.ts`). */
 export type AppAutomationReads = Pick<
   AppState,
@@ -785,6 +797,7 @@ export interface AppHostReads {
   [LIVE_READ.AUTOMATION_RUNS]: readonly AutomationRunSummary[];
   [LIVE_READ.DESCRIPTION_COMMENTS]: readonly DescriptionCommentThread[];
   [LIVE_READ.HISTORY]: DescriptionRevisionsAnswer;
+  [LIVE_READ.MANAGER_CHAT]: AppManagerChat;
   [LIVE_READ.HELD_TASK]: HeldTask;
 }
 
@@ -980,6 +993,8 @@ export interface AppState {
   [LIVE_READ.DESCRIPTION_COMMENTS]: AppDescriptionComments;
   /** Each task's description history the windows showed, held while a version history shows it and a while after: what the version history lists. */
   [LIVE_READ.HISTORY]: AppHistories;
+  /** Each Manager's chat the windows show, held while a window shows it and a while after: what the Manager's page draws. */
+  [LIVE_READ.MANAGER_CHAT]: AppManagerChats;
   /** Each task's description the windows opened, held while a window has it open and a while after: what the task's page, a section's chip, and a mention's saved text draw. */
   [LIVE_READ.HELD_TASK]: AppHeldTasks;
   machineCommands: AppMachineCommandsSlice;
@@ -1153,6 +1168,13 @@ export const HOST_READ_SLICE = {
   },
   // Note that a history crosses whole, since each save lands a newest page that replaces its head.
   [LIVE_READ.HISTORY]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  // Note that a chat crosses as the messages that moved, since each message lands, or is edited, alone while the rest stand.
+  [LIVE_READ.MANAGER_CHAT]: {
+    keys: READ_KEYS.ONE,
+    on: KEYS_ON.SLICE,
+    rowId: "id" satisfies keyof ManagerChatLiveMessage,
+    rowsAt: "messages" satisfies keyof AppManagerChat,
+  },
   [LIVE_READ.BROWSER_TABS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.DEVICE_PRESENCE]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.HOSTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },

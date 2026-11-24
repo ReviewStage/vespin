@@ -944,9 +944,10 @@ export const agentTranscriptOlderParamsSchema = EffectSchema.Struct({
 export type AgentTranscriptOlderParams = typeof agentTranscriptOlderParamsSchema.Type;
 
 /**
- * An older page of a held transcript, as the window hears it read: whether
- * the host laid it before the messages it holds, which it does only while
- * they still begin where the window asked; or why it was not read.
+ * An older page of a held transcript, or of a held Manager's chat, as the
+ * window hears it read: whether the host laid it past the messages it
+ * holds, which it does only while they still begin where the window asked;
+ * or why it was not read.
  */
 export const agentTranscriptOlderAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ landed: EffectSchema.Boolean }),
@@ -954,6 +955,14 @@ export const agentTranscriptOlderAnswerSchema = EffectSchema.Union([
 ]);
 
 export type AgentTranscriptOlderAnswer = typeof agentTranscriptOlderAnswerSchema.Type;
+
+/** The page of a held Manager's chat older than the messages it holds, as the window asks it: the agent, and the `seq` the page stands before, which the held chat names (`ManagerChatPageView.before`). */
+export const managerChatOlderParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  before: countedNumber,
+});
+
+export type ManagerChatOlderParams = typeof managerChatOlderParamsSchema.Type;
 
 /**
  * Messaging an agent, as the window asks it: the agent, and the message

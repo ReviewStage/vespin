@@ -51,6 +51,7 @@ import {
   type SealedLiveQueryWire,
   type TranscriptNowAnswer,
 } from "@repo/features/live-wire";
+import { MANAGER_CHAT_READ } from "@repo/features/manager-chat-live";
 import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -73,7 +74,12 @@ import { noNetwork } from "@repo/wire/testing";
 import { Duration, Effect, Exit, Predicate, Scope } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { TestClock } from "effect/testing";
-import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
+import {
+  type AppManagerChats,
+  type AppTranscript,
+  type AppTranscripts,
+  OWN_TRANSCRIPT,
+} from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
 import { type AgentClient, composeAgents, type PullRequestClient } from "../compose-agents.js";
 import type { FileDownloadSeam } from "../effect/seams.js";
@@ -271,6 +277,9 @@ function fakeService() {
     items: polledLive(ITEMS_PARTS),
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
+    // A Manager's chat: its newest page, followed; and the older page a read before a `seq` is answered at once, whatever `seq` it names.
+    managerChat: polledLive(["messages"]),
+    managerChatOlder: polledLive(["messages"]),
     hosts: polledLive(["hosts"]),
     // Note that the account stored no preferences and keeps no clip until a test sets a row, as a new account has none.
     preferences: polledLive(["preferences", "sounds", "soundChoices"], () => ({
@@ -437,6 +446,7 @@ function fakeService() {
         readonly call?: string;
         readonly userId?: string;
         readonly sync?: string;
+        readonly before?: string;
       },
       poll?: { readonly after?: string | undefined },
     ) =>
@@ -458,6 +468,16 @@ function fakeService() {
             if (poll === undefined) asked.push(`agent-origin-live:${params.id}`);
 
             return answered(live.origin);
+          case MANAGER_CHAT_READ.name:
+            if (params.before !== undefined) {
+              asked.push(`manager-chat-older:${params.id}:${params.before}`);
+
+              return answered(live.managerChatOlder);
+            }
+
+            if (poll === undefined) asked.push(`manager-chat-live:${params.id}`);
+
+            return answered(live.managerChat);
           case WORKSPACE_MEMORIES_READ.name:
             if (poll === undefined) asked.push(`memories-live:${params.workspaceId}`);
 
@@ -1493,6 +1513,10 @@ export function subject(
       told: () => toldLive(LIVE_READ.HOLDER_INBOX),
       /** Every telling of the agents' origins the host holds for the windows, whole, in order. */
       origins: () => toldLive(LIVE_READ.AGENT_ORIGINS),
+      /** Every telling of the Managers' chats the host holds for the windows, whole, in order. */
+      managerChats: () =>
+        // SAFETY: the held chats are the host's own, told as built.
+        toldLive(LIVE_READ.MANAGER_CHAT).map((held) => held as AppManagerChats),
       /** The account gate opening, as the host opens it. */
       open: Effect.andThen(composer.open, accountAsks.open),
       /** The account gate closing, as the host closes it. */

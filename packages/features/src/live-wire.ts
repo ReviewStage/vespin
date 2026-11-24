@@ -295,6 +295,8 @@ export const LIVE_READ = {
   DESCRIPTION_COMMENTS: "taskComments",
   /** One task's description history, by the task: the service's `taskHistoryLive` query for its newest page, then the older pages its version history read past it, held for the windows that show it and a few they showed lately. */
   HISTORY: "taskHistory",
+  /** One Manager's chat, by the agent: the service's `managerChat` query for its newest page, then the older pages its chat read past it, held for the windows that show the chat and a few they showed lately. */
+  MANAGER_CHAT: "managerChat",
   /** One task's cloud Browser tabs, every one of its agents', or one agent's, by what they are listed for: the service's `taskBrowserTabsLive` or `agentBrowserTabsLive` query, by its kind, held for the windows whose side panel lists them and a few they listed lately. */
   BROWSER_TABS: "browserTabs",
   /** The repositories the account reaches in one workspace, or in every one where a list names none, by the workspace: fetched by the host while a window holds it. */

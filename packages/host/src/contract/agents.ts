@@ -74,6 +74,7 @@ import {
   machineAskAnsweredViewSchema,
   machineAskAnswerParamsSchema,
   machineChangeParamsSchema,
+  managerChatOlderParamsSchema,
   replyButtonAnswerViewSchema,
   replyButtonParamsSchema,
   replyButtonPressAnswerViewSchema,
@@ -285,6 +286,14 @@ export const AGENT_ACTS = declaredActs({
     input: agentTranscriptOlderParamsSchema,
     output: agentTranscriptOlderAnswerSchema,
     refusal: "Could not read the agent's earlier messages on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_MANAGER_CHAT_OLDER: hostAct({
+    input: managerChatOlderParamsSchema,
+    output: agentTranscriptOlderAnswerSchema,
+    refusal: "Could not read the Manager's earlier messages on this system.",
     panelOnly: true,
     door: ACT.READ,
     unanswered: AGENT_UNANSWERED,
@@ -560,7 +569,7 @@ export const AGENT_ACTS = declaredActs({
   }),
 });
 
-/** The agents' live reads the host follows for the windows: the account's hosts and machines, the run that started an agent, the models, the devices' beats, a transcript, a pull request's parts, and an agent's own tools. */
+/** The agents' live reads the host follows for the windows: the account's hosts and machines, the run that started an agent, the models, the devices' beats, a transcript, a Manager's chat, a pull request's parts, and an agent's own tools. */
 export const AGENT_FOLLOWS = liveFollows({
   HOSTS_FOLLOW: liveFollow({
     slice: LIVE_READ.HOSTS,
@@ -629,6 +638,17 @@ export const AGENT_FOLLOWS = liveFollows({
     retry: {
       name: "AGENTS_TRANSCRIPT_RETRY",
       refusal: "Could not read the agent's transcript again on this system.",
+    },
+  }),
+  AGENTS_MANAGER_CHAT_FOLLOW: liveFollow({
+    slice: LIVE_READ.MANAGER_CHAT,
+    hold: HOLD.WINDOW,
+    key: agentPageParamsSchema,
+    refusal: "Could not follow the Manager's chat on this system.",
+    panelOnly: true,
+    retry: {
+      name: "AGENTS_MANAGER_CHAT_RETRY",
+      refusal: "Could not read the Manager's chat again on this system.",
     },
   }),
   AGENTS_PULL_REQUEST_FOLLOW: liveFollow({
