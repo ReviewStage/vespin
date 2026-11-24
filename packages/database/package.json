@@ -28,6 +28,7 @@
     "./models/attached-file-parts": "./src/models/attached-file-parts.js",
     "./models/chatgpt-device-login-store": "./src/models/chatgpt-device-login-store.js",
     "./models/child-titles": "./src/models/child-titles.js",
+    "./models/agent-follower-store": "./src/models/agent-follower-store.js",
     "./models/agent-store": "./src/models/agent-store.js",
     "./models/agent-pull-requests": "./src/models/agent-pull-requests.js",
     "./models/agent-repositories": "./src/models/agent-repositories.js",
