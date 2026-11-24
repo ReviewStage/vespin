@@ -30,7 +30,6 @@ import {
   personWords,
 } from "@repo/features/person-page-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { agentLastMovedAt } from "@repo/features/task-agents-model";
 import { ASSIGNED_TO } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { type Noun, TERM } from "@repo/features/words";
@@ -131,9 +130,10 @@ import {
 import { useManagerAgents } from "../tasks/workspace-managers.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
-import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
+import { AGENT_ROW_CELLS, AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
 import { STANDING_GLYPH } from "./automation-runs-panel.js";
+import { ManagerRow } from "./manager-row.js";
 
 import {
   PERSON_SECTION_FOLD,
@@ -162,11 +162,11 @@ import { useAutomations } from "./use-automations.js";
  * wherever the window names a member, the reader among them, or someone
  * who left. Its head is their face at the page's size, their name, and
  * their role and email as the members read lists them, or that they left.
- * Under it stand their agents at work, the Inbox
+ * Under it stand the Managers they started, each the sidebar's Manager
+ * row (`ManagerRow`), then their agents at work, the Inbox
  * items their agents wait on, the tasks assigned to them, the rest of the
- * tasks they created, their other
- * agents, and the Managers they started, each drawn as the sidebar's
- * Managers draw it, each from the listed workspace's task list and Inbox
+ * tasks they created, and their other
+ * agents, each from the listed workspace's task list and Inbox
  * (`@repo/features/person-page-model`), the workspace's automations they
  * made, and their machines, each by its platform's glyph wearing the Runs
  * on menu's dot for whether it is there now, its name, and its platform, a
@@ -443,13 +443,8 @@ function managerKey(agent: ListedAgent): string {
   return agent.id;
 }
 
-/**
- * One of their Managers as a row, the row the sidebar's Managers draw it
- * with (`SidebarManagerRow`): an `AgentListRow` saying nothing of where it
- * runs and naming no pull request, its menu the Manager's own, a press
- * opening its page, lining up with their agents' rows on tasks.
- */
-function ManagerRow({
+/** One of their Managers as a row, the sidebar's Manager row (`ManagerRow`), reading its own agent so a step of its turn draws it alone, its face wearing the working mark while it works. */
+function PersonManagerRow({
   handed,
   tasks,
   agents,
@@ -468,38 +463,23 @@ function ManagerRow({
   /** Where it stands in its section's run of rows (`VirtualTaskRows`). */
   place: VirtualRowPlace;
 }): React.JSX.Element {
-  // Note that the row reads its own agent, as an agent's row does, so a step of its turn draws it alone.
   const agent = useTaskListRow(useTaskListCollections().agents, handed.id) ?? handed;
-  const { models } = agents;
-  const at = agentLastMovedAt(agent);
-
-  const subject = listedRowSubject(agent, at, {
-    models,
-    me: tasks.me,
-    pullRequests: NO_PULL_REQUESTS,
-  });
 
   return (
-    <AgentListRow
+    <ManagerRow
       agent={agent}
       agents={agents}
+      me={tasks.me}
       shown={tasks.shown}
-      subject={subject}
-      at={at}
-      card={<AgentCard subject={subject} models={models} />}
-      pullRequest={undefined}
+      more={more}
+      current={false}
       chosen={chosen}
       place={place}
-      more={more}
-      runsOn={false}
-      onPress={() => tasks.agentView.onOpen(agent.id)}
-      onOpenPullRequest={() => tasks.agentView.onOpen(agent.id)}
+      look={AGENT_ROW_LOOK.LIST}
+      onOpen={tasks.agentView.onOpen}
     />
   );
 }
-
-/** No pull request, which a Manager's row never names, since a Manager opens none of its own. */
-const NO_PULL_REQUESTS: ReadonlyMap<string, AgentPullRequest> = new Map();
 
 /**
  * The section of their Managers, the workspace's agents on no task they
@@ -550,7 +530,7 @@ const PersonManagersSection = memo(function PersonManagersSection({
             const entry = drawn[index];
 
             return entry === undefined ? null : (
-              <ManagerRow
+              <PersonManagerRow
                 key={entry.key}
                 handed={entry.value}
                 tasks={tasks}
@@ -1366,6 +1346,9 @@ function PersonColumn({
               fold={PERSON_SECTION_FOLD}
             />
           ) : null}
+          {managers.length === 0 ? null : (
+            <PersonManagersSection managers={managers} tasks={tasks} />
+          )}
           {working.length === 0 ? null : (
             <PersonAgentsSection
               title={PERSON_PAGE_WORDS.WORKING}
@@ -1413,9 +1396,6 @@ function PersonColumn({
               tasks={tasks}
               pullRequests={pullRequests}
             />
-          )}
-          {managers.length === 0 ? null : (
-            <PersonManagersSection managers={managers} tasks={tasks} />
           )}
           {automations.length === 0 ? null : (
             <PersonSection title="Automations" count={automations.length} noun={AUTOMATION_NOUN}>
