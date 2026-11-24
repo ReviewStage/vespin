@@ -26,6 +26,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
+import {
+  BUBBLE_PADDING,
+  BUBBLE_SHARE,
+  CHAT_RUN,
+  CHAT_SIDE,
+  ChatBubble,
+  chatRunOf,
+} from "./chat-bubble.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
 import { GitHubLineCard } from "./github-line-card.js";
@@ -53,7 +61,7 @@ import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, ROLE_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
@@ -70,20 +78,15 @@ import {
 import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
-/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
 /** Who the reader's own line is from, as a picture's viewer names it. */
 const SENT_BY_YOU = "You";
 
+/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart, and in a Manager's chat `CHAT_RUN_GAP` twice, as Messages' do. */
 const RUN_GAP = 1;
+const CHAT_RUN_GAP = SPACE.ROW / 2;
 
 /** How far a row a fold or a group holds stands in, for each step it is held. */
 const DEPTH_INSET = 18;
-
-/** The most of its row a sent line's bubble spans, as Messages leaves the far side open. */
-const BUBBLE_SHARE = 0.82;
-
-/** How far a bubble's words stand in from its sides. */
-const BUBBLE_PADDING = SPACE.ROW + 4;
 
 /** How near its newest row, as a share of the list's height, the reader stands for a row that lands to be scrolled into view, as FlashList's chat lists keep their end. */
 const AUTOSCROLL_SHARE = 0.1;
@@ -167,12 +170,6 @@ const styles = StyleSheet.create({
   turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
-  said: {
-    maxWidth: `${BUBBLE_SHARE * 100}%`,
-    borderRadius: RADIUS.BUBBLE,
-    paddingHorizontal: BUBBLE_PADDING,
-    paddingVertical: SPACE.ROW,
-  },
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
   wrapped: { flexWrap: "wrap" },
@@ -270,7 +267,7 @@ function rowWidth(column: number, depth = 0): number {
 
 /** The widest a sent line's words stand inside its bubble, in a column of `column` points. */
 function bubbleWordsWidth(column: number): number {
-  return Math.floor(rowWidth(column) * BUBBLE_SHARE) - BUBBLE_PADDING * 2;
+  return Math.floor(rowWidth(column) * BUBBLE_SHARE) - BUBBLE_PADDING.HORIZONTAL * 2;
 }
 
 /**
@@ -871,6 +868,7 @@ function TranscriptRow({
             styles.row,
             styles.saidRow,
             item.received ? styles.received : null,
+            item.chat === true ? { paddingVertical: CHAT_RUN_GAP } : null,
             item.joinsAbove ? { paddingTop: RUN_GAP } : null,
             item.joinsBelow ? { paddingBottom: RUN_GAP } : null,
           ]}
@@ -924,18 +922,22 @@ function TranscriptRow({
             <MessageMenu
               words={item.words}
               at={item.at}
-              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id.
-              link={drawing.messageLink?.(item.place.row)}
-              more={drawing.messageMore?.(item)}
+              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id; a Manager's message offers no link or rewind, as the panel's offers none, since one after its turn's first stands under its call's id, which names no message.
+              link={item.manager === true ? undefined : drawing.messageLink?.(item.place.row)}
+              more={item.manager === true ? undefined : drawing.messageMore?.(item)}
               width={rowWidth(drawing.column)}
             >
               <View style={[styles.saidHeld, item.received ? styles.received : null]}>
-                <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
+                <ChatBubble
+                  side={item.received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
+                  run={chatRunOf(item.joinsAbove, item.joinsBelow)}
+                  accent={item.chat === true}
+                >
                   {/* Note that Select text selects the words in the bubble itself, as Messages does (`MessageWords`). */}
                   <MessageWords>
                     <Markdown
                       words={item.words}
-                      typed
+                      typed={item.manager !== true}
                       repository={drawing.repository}
                       onOpenLink={drawing.onOpenLink}
                       width={bubbleWordsWidth(drawing.column)}
@@ -943,7 +945,7 @@ function TranscriptRow({
                       wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
                     />
                   </MessageWords>
-                </View>
+                </ChatBubble>
               </View>
             </MessageMenu>
           )}
@@ -968,6 +970,24 @@ function TranscriptRow({
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:
+      // Note that a Manager's chat says it works in a bubble of the Manager's, as Messages shows the other side typing, and as the panel's chat draws its working line.
+      if (item.chat === true) {
+        return (
+          <View style={[styles.row, styles.received, { paddingVertical: CHAT_RUN_GAP * 2 }]}>
+            <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+              <Text
+                style={{
+                  fontSize: PROSE_SIZE,
+                  color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
+                }}
+              >
+                {item.words}
+              </Text>
+            </ChatBubble>
+          </View>
+        );
+      }
+
       // Note that the line is words alone, as the panel's Working line is, its mark left to the rows of what runs; and that an agent held for an answer says so in the attention ink, since it waits on the reader rather than working.
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>

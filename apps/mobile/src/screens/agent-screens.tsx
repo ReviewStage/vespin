@@ -37,6 +37,7 @@ import {
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
 import { managerChatLines } from "@repo/features/manager-chat";
+import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -882,8 +883,16 @@ const AgentConversation = memo(function AgentConversation({
         origin,
         suggestionAddress,
         waitingCalls,
+        chat,
+        // Note that the greeting stands over the chat's first line, so it waits until no older page is left to read, as the panel draws it above its first message.
+        greeting:
+          chat && shown !== undefined && transcript?.before === undefined
+            ? managerGreeting(shown.title)
+            : undefined,
       }),
     [
+      shown,
+      transcript?.before,
       waitingCalls,
       messages,
       sending,
