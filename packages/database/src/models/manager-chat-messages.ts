@@ -28,6 +28,7 @@ import {
   managerChatAttachmentSchema,
 } from "@repo/features/manager-chat-live";
 import { agentName } from "@repo/features/model-label";
+import { wellFormedSoFar, wellFormedText } from "@repo/wire/well-formed";
 import { and, asc, desc, eq, exists, inArray, isNull, lt, or, type SQL, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -277,6 +278,25 @@ const findMessages = SqlSchema.findAll({
     }),
 });
 
+/** An attachment with its words well formed (`wellFormedText`), as its jsonb column keeps them. */
+function keptAttachment(attachment: ManagerChatAttachment): ManagerChatAttachment {
+  if ("url" in attachment) return { ...attachment, name: wellFormedText(attachment.name) };
+  const { name, caption, ...rest } = attachment;
+
+  return {
+    ...rest,
+    ...(name === undefined ? undefined : { name: wellFormedText(name) }),
+    ...(caption === undefined ? undefined : { caption: wellFormedText(caption) }),
+  };
+}
+
+/**
+ * One message inserted in a chat, by every writer of one: a message sent, a
+ * call's line, and a message carried over. Its words are kept well formed,
+ * half a character (a lone surrogate, as a cut that split an emoji leaves)
+ * kept as the replacement character, since an attachment's jsonb refuses one
+ * outright (SQLSTATE 22P02) and the message would never land (STAG-3994).
+ */
 const insertMessage = SqlSchema.findAll({
   Request: Schema.Struct({
     agentId: Schema.String,
@@ -294,11 +314,17 @@ const insertMessage = SqlSchema.findAll({
     now: Schema.Date,
   }),
   Result: ManagerChatMessageSchema,
-  execute: ({ now, ...row }) =>
+  execute: ({ now, text, authorName, attachments, ...row }) =>
     Database.use((db) =>
       db
         .insert(managerChatMessage)
-        .values({ ...row, createdAt: now })
+        .values({
+          ...row,
+          text: wellFormedText(text),
+          authorName: wellFormedText(authorName),
+          attachments: attachments.map(keptAttachment),
+          createdAt: now,
+        })
         .onConflictDoNothing()
         .returning(MESSAGE_COLUMNS),
     ),
@@ -471,7 +497,9 @@ export function growManagerChatLine(
   userId: string,
   line: ManagerChatLineWrite,
 ): AgentStoreEffect<ManagerChatOutcome> {
-  const { conversationId, clientKey, text } = line;
+  const { conversationId, clientKey } = line;
+  // Note that the words may end on half a character the next words complete; it waits for them rather than standing as "�".
+  const text = wellFormedSoFar(line.text);
 
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -496,7 +524,7 @@ export function growManagerChatLine(
           return { status: MANAGER_CHAT_OUTCOME.DONE, message: grown ?? standing } as const;
         }
 
-        return yield* insertedLine(manager, line);
+        return yield* insertedLine(manager, { ...line, text });
       }),
     ),
   );

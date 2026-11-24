@@ -1559,10 +1559,9 @@ const ENTRY_WORDS = {
   SAID: "Said",
 } as const;
 
+/** An entry on one line, cut to the bound on a whole character, since half an emoji left by the cut is refused by the store its answer lands in (STAG-3994). */
 function cut(text: string, maximumChars: number): string {
-  const line = text.replace(/\s+/gu, " ").trim();
-
-  return line.length > maximumChars ? `${line.slice(0, maximumChars - 1)}…` : line;
+  return cutText(text.replace(/\s+/gu, " ").trim(), maximumChars);
 }
 
 /** One entry's words, whole, and the id of the call it says, where it is one. */
