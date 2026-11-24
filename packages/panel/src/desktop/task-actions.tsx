@@ -999,7 +999,9 @@ export function useTaskMenuItems(
   const sections = useSectionDialogs(tasks, tasks.shown && doors.drawn);
 
   const section =
-    task !== undefined ? moveToSectionEntry(task.id, task.workspaceId, sections, name) : undefined;
+    task !== undefined
+      ? moveToSectionEntry({ taskId: task.id }, task.workspaceId, sections, name)
+      : undefined;
 
   const standingDoor = useStandingDoor(tasks);
   const pins = usePinWrites(tasks.typedNamesNow);

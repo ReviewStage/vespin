@@ -1,3 +1,4 @@
+import { inPinOrder } from "@repo/features/pin-order";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DrawnTaskRow, TasksById } from "@repo/features/task-list-model";
 import {
@@ -11,15 +12,18 @@ import {
 } from "@repo/features/task-section-wire";
 import {
   type DrawnSection,
-  placeWrites,
+  placeMemberWrites,
   REMOVE_FROM_SECTION,
   restoreWrites,
   SECTION_DELETED,
+  type SectionEntry,
+  type SectionManager,
+  type SectionMember,
   sectionMoveWrites,
-  sectionOfTask,
-  sectionOrder,
+  sectionOfMember,
+  sectionRows,
   undeleteWrites,
-  unplaceAllWrites,
+  unplaceWrite,
   workspaceSections,
 } from "@repo/features/task-sections-model";
 import type { TaskSummary } from "@repo/features/task-wire";
@@ -77,6 +81,7 @@ import { listedSlot, movedBeside, nestsOf, siblingsAt, useNestedRows } from "./n
 import { NewTaskInButton } from "./new-task-button.js";
 import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-moves.js";
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
+import { SIDEBAR_ENTRY, type SidebarEntry, SidebarEntryRow } from "./sidebar-entries.js";
 import { SIDEBAR_SECTION_SLOT, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { type OpenMarks, type SidebarTasksControl, useUnreadAmong } from "./sidebar-open.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
@@ -98,10 +103,12 @@ import { useRowDrag, useRunRowDrag } from "./use-row-drag.js";
  * on all of them at once: Mark all as read while any task is unread, Status,
  * which sets its tasks all at one and asks nothing, as a repository's does,
  * and Move all to section, to another section or a new one, and Remove all
- * from section. Its rows stand in the order dragged, and a row is dragged within its
- * section, into another, onto Tasks, which takes it out of every section,
- * or onto Pinned, which pins it there and takes it out of every section too
- * (`use-row-drag.ts`'s drop zones); a section is dragged among the others
+ * from section. Its rows stand in the order dragged, the Managers the
+ * reader put in it among its tasks (`sidebar-entries.tsx`), and a row is
+ * dragged within its section, into another, onto Tasks, which takes it out
+ * of every section, a Manager's onto Managers too, or onto Pinned, which
+ * pins it there and takes it out of every section too (`use-row-drag.ts`'s
+ * drop zones); a section is dragged among the others
  * by its header. Every change is drawn at once and kept on the account
  * (`use-pin-writes.ts`'s `useSectionWrites`). Deleting a section deletes no task and
  * asks nothing: it happens at once, and its toast's Undo makes the section
@@ -149,12 +156,13 @@ export interface SectionDialogs {
   /** Deletes a section, focus going on from `from`, the control its menu was opened from, to the section after it, or the first. */
   askDelete: (section: TaskSection, from: HTMLElement | null) => void;
   /**
-   * Writes `writes`, which move `taskIds` into the section `movedTo`, or out
-   * of every section under null, and answers with one toast whose Undo puts
-   * each back where it stood. `taskIds` are only the tasks that move.
+   * Writes `writes`, which move `members`, tasks or Managers, into the
+   * section `movedTo`, or out of every section under null, and answers with
+   * one toast whose Undo puts each back where it stood. `members` are only
+   * those that move.
    */
   move: (
-    taskIds: readonly string[],
+    members: readonly SectionMember[],
     movedTo: string | null,
     writes: readonly TaskSectionWrite[],
   ) => void;
@@ -183,7 +191,7 @@ function answerWrites(ask: SectionAsk, title: string, icon: TaskSectionIcon | un
   return [made, ...(ask.after?.(made.id) ?? [])];
 }
 
-/** What New section says moves into the section it makes: a task by its name, or how many. */
+/** What New section says moves into the section it makes: a task or a Manager by its name, or how many tasks. */
 export function movesInto(count: number, name?: string): ReactNode {
   if (count === 1 && name !== undefined) {
     return (
@@ -196,7 +204,7 @@ export function movesInto(count: number, name?: string): ReactNode {
   return `${count} tasks move into it`;
 }
 
-/** What the toast says once rows were moved into the section titled, or out of every section where there is none. */
+/** What the toast says once rows were moved into the section titled, or out of every section where there is none: one by no noun, so a Manager's reads as a task's. */
 function movedNote(count: number, title: string | null): string {
   if (title === null) {
     return count === 1
@@ -225,9 +233,9 @@ interface SectionDeleted {
   readonly before: TaskSections;
 }
 
-/** Tasks moved into a section, or out of every section under null: the tasks that move, and the writes that move them. */
+/** Tasks or Managers moved into a section, or out of every section under null: those that move, and the writes that move them. */
 interface SectionMove {
-  readonly taskIds: readonly string[];
+  readonly members: readonly SectionMember[];
   readonly movedTo: string | null;
   readonly writes: readonly TaskSectionWrite[];
 }
@@ -273,13 +281,13 @@ const SECTION_UNDO = {
     void
   >,
   MOVE: {
-    words: ({ taskIds, title }) => movedNote(taskIds.length, title),
+    words: ({ members, title }) => movedNote(members.length, title),
     glyph: GLYPH.MOVE,
     // Note that a move out of every section names no section, so its words are all the app's own.
     unmasked: ({ title }) => title === null,
     kind: ACT_KIND.TASKS_WRITE_SECTION,
     read: (before, move) => {
-      if (move.taskIds.length === 0) return undefined;
+      if (move.members.length === 0) return undefined;
 
       const title =
         move.movedTo === null
@@ -289,12 +297,12 @@ const SECTION_UNDO = {
       return { ...move, before, title };
     },
     act: (send, { writes }) => sentWrites(send, writes),
-    undo: (send, { before, taskIds, movedTo }, now) =>
-      sentWrites(send, restoreWrites(before, now, taskIds, movedTo, Date.now())),
-    holds: (now, { taskIds, movedTo }) =>
-      taskIds.some((taskId) => (sectionOfTask(now, taskId) ?? null) === movedTo),
-    undone: (now, { before, taskIds }) =>
-      taskIds.every((taskId) => sectionOfTask(now, taskId) === sectionOfTask(before, taskId)),
+    undo: (send, { before, members, movedTo }, now) =>
+      sentWrites(send, restoreWrites(before, now, members, movedTo, Date.now())),
+    holds: (now, { members, movedTo }) =>
+      members.some((member) => (sectionOfMember(now, member) ?? null) === movedTo),
+    undone: (now, { before, members }) =>
+      members.every((member) => sectionOfMember(now, member) === sectionOfMember(before, member)),
     refused: () => undefined,
     surface: FAILURE_SURFACE.SECTION_WRITE,
   } satisfies UndoWrite<
@@ -451,8 +459,8 @@ export function useSectionDialogs(
       if (from !== null) nextRowOrHead(from)()?.focus({ preventScroll: true });
       void pressWrite(SECTION_UNDO.DELETE, doors, section);
     },
-    move: (taskIds, movedTo, writes) => {
-      void pressWrite(SECTION_UNDO.MOVE, doors, { taskIds, movedTo, writes });
+    move: (members, movedTo, writes) => {
+      void pressWrite(SECTION_UNDO.MOVE, doors, { members, movedTo, writes });
     },
     sections: taskSections,
     write: onWriteSections,
@@ -573,24 +581,24 @@ export function newSectionAction(onSelect: () => void): MenuAction {
 }
 
 /**
- * The Move to section of a task's menu: the task's workspace's sections,
- * the one it stands in checked, New section to make one with the task in
- * it, and Remove from section while it stands in one. A task moved here
+ * The Move to section of a task's menu, or a Manager's: its workspace's
+ * sections, the one it stands in checked, New section to make one with it
+ * in it, and Remove from section while it stands in one. One moved here
  * lands on top of its new section, as one dragged onto its header would,
  * and the toast it answers with offers Undo.
  */
 export function moveToSectionEntry(
-  taskId: string,
+  member: SectionMember,
   workspaceId: string,
   dialogs: Pick<SectionDialogs, "askNew" | "move" | "sections">,
-  /** The task's name, which New section's card names. */
+  /** Its name, which New section's card names. */
   name: string,
 ): MenuEntry {
   const state = dialogs.sections;
-  const standing = sectionOfTask(state, taskId);
+  const standing = sectionOfMember(state, member);
 
   const put = (sectionId: string) =>
-    placeWrites(sectionOrder(state, sectionId), taskId, sectionId, 0, Date.now());
+    placeMemberWrites(sectionRows(state, sectionId), member, sectionId, 0, Date.now());
 
   const sections = workspaceSections(state, workspaceId).map((section): MenuAction => {
     const glyph = sectionGlyph(section.icon);
@@ -602,7 +610,7 @@ export function moveToSectionEntry(
       ...(glyph === undefined ? undefined : { icon: glyph }),
       checked: section.id === standing,
       onSelect: () => {
-        if (section.id !== standing) dialogs.move([taskId], section.id, put(section.id));
+        if (section.id !== standing) dialogs.move([member], section.id, put(section.id));
       },
     };
   });
@@ -613,7 +621,7 @@ export function moveToSectionEntry(
       : [
           {
             label: REMOVE_FROM_SECTION,
-            onSelect: () => dialogs.move([taskId], null, unplaceAllWrites([taskId])),
+            onSelect: () => dialogs.move([member], null, [unplaceWrite(member)]),
           },
         ];
 
@@ -655,6 +663,10 @@ interface SectionContext {
   readonly runs: SidebarRunsPlace;
   /** Hears a row let go over another zone: a section by its id, Tasks, or Pinned. */
   readonly onDropRow: (task: TaskSummary, zone: string, at: number) => void;
+  /** Hears a Manager's row let go over another zone: a section by its id, Tasks or Managers, or Pinned. */
+  readonly onDropManager: (agentId: string, zone: string, at: number) => void;
+  /** Opens a Manager's page. */
+  readonly onOpenManager: (agentId: string) => void;
   /** Hears a row lifted into a drag and that drag ended, while which an empty Pinned stands to take it. */
   readonly onCarried: (carried: boolean) => void;
   /** Opens New task on a section, which files the task in it once it starts: its head's + and its menu's New task. */
@@ -716,30 +728,139 @@ function sectionActionGroups(
   return [start, [...edit, ...read], remove];
 }
 
+/** One row a section draws: a task's, a child task's nested under one, or a Manager's. */
+type SectionDrawn = SidebarEntry<DrawnTaskRow>;
+
+/** A row a section draws's key: its task's id, or its Manager's. */
+function sectionDrawnKey(row: SectionDrawn): string {
+  return row.kind === SIDEBAR_ENTRY.OWN ? row.own.task.id : row.agent.id;
+}
+
+/** How deep a row a section draws stands: a task's as it is nested, a Manager's at the top. */
+const sectionDepthOf = (row: SectionDrawn) => ({
+  depth: row.kind === SIDEBAR_ENTRY.OWN ? row.own.depth : 0,
+});
+
+/** The rows a section draws, each with its entry where the section keeps one, and those entries in the section's own order. */
+export interface SectionLayout {
+  readonly rows: readonly SectionDrawn[];
+  /** Each row's entry, one for one; none for a child task standing under a parent the section keeps, which it keeps no entry of. */
+  readonly entries: readonly (SectionEntry | undefined)[];
+  /** Every entry the section keeps, its tasks' and its Managers', in its own order, which a move or a drop is counted among. */
+  readonly order: readonly SectionEntry[];
+}
+
+/**
+ * The rows a section draws, in its order: each of its tasks' rows at the
+ * top, the child tasks nested under it after it (`nested`), and each of
+ * `managers` among them where its entry stands, its tasks' and its
+ * Managers' entries in one order (`sectionRows`); after them, any row at
+ * the top the section keeps no entry of, as a child task whose parent the
+ * view leaves out.
+ */
+export function sectionLayout(
+  drawn: DrawnSection,
+  nested: readonly DrawnTaskRow[],
+  managers: readonly SectionManager[],
+): SectionLayout {
+  const entryOf = new Map(drawn.tasks.map((task, at) => [task, drawn.entries[at]]));
+
+  interface Run {
+    readonly entry: SectionEntry | undefined;
+    readonly rows: { readonly row: SectionDrawn; readonly entry: SectionEntry | undefined }[];
+  }
+
+  const runs: Run[] = [];
+
+  for (const held of nested) {
+    const entry = entryOf.get(held.task);
+    const row = { row: { kind: SIDEBAR_ENTRY.OWN, own: held } as const, entry };
+    const last = runs.at(-1);
+
+    if (held.depth === 0 || last === undefined) runs.push({ entry, rows: [row] });
+    else last.rows.push(row);
+  }
+
+  const managerRuns = managers.map(
+    ({ entry, agent }): Run => ({
+      entry,
+      rows: [{ row: { kind: SIDEBAR_ENTRY.MANAGER, agent }, entry }],
+    }),
+  );
+
+  const placed = (run: Run): run is Run & { readonly entry: SectionEntry } =>
+    run.entry !== undefined;
+
+  const ordered = inPinOrder([...runs.filter(placed), ...managerRuns.filter(placed)], (run) => ({
+    position: run.entry.position,
+    at: run.entry.addedAt,
+  }));
+
+  const all = [...ordered, ...runs.filter((run) => !placed(run))].flatMap((run) => run.rows);
+
+  // Note that the order counts every row the section keeps, a child task folded away and a Manager under the fold among them, so a write places a row among them all.
+  const order = inPinOrder(
+    [...drawn.entries, ...drawn.managers.map(({ entry }) => entry)],
+    (entry: SectionEntry) => ({ position: entry.position, at: entry.addedAt }),
+  );
+
+  return { rows: all.map(({ row }) => row), entries: all.map(({ entry }) => entry), order };
+}
+
+/** Where a row let go at the drawn slot `at` lands in a section's own order: before the row at the top drawn next that it keeps, or last where none is. */
+export function layoutSlot(layout: SectionLayout, at: number): number {
+  const next = layout.rows.findIndex(
+    (row, index) =>
+      index >= at && sectionDepthOf(row).depth === 0 && layout.entries[index] !== undefined,
+  );
+
+  const entry = next < 0 ? undefined : layout.entries[next];
+
+  return entry === undefined ? layout.order.length : layout.order.indexOf(entry);
+}
+
+/** The writes that stand the entry `moving` among a section's rows, `order`, at the place of the entry `beside`. */
+function placeWritesWithin(
+  order: readonly SectionEntry[],
+  sectionId: string,
+  moving: SectionEntry,
+  beside: SectionEntry,
+): TaskSectionWrite[] {
+  return placeMemberWrites(order, moving, sectionId, order.indexOf(beside), Date.now());
+}
+
 /**
  * A section's rows as drawn open or folded: open, every row, dragged among
  * its own and out of it; folded, only the open one, which a drop over lands
  * on top of rather than among. A task's child tasks in the section stand
  * nested under it (`nested-rows.ts`), so a row moves among its siblings as
  * they are drawn, its child tasks with it, and never out from under its
- * parent.
+ * parent; a Manager stands at the top, among the tasks there, and moves
+ * among them as any of them does.
  */
 function SectionRows({
   drawn,
   context,
   tasks,
+  managers,
   folded,
 }: {
   drawn: DrawnSection;
   context: SectionContext;
   tasks: readonly TaskSummary[];
+  /** The Managers it draws among the tasks. */
+  managers: readonly SectionManager[];
   folded: boolean;
 }): React.JSX.Element {
   const nested = useNestedRows(tasks, context.opened, context.current, context.every);
+  const layout = useMemo(() => sectionLayout(drawn, nested, managers), [drawn, nested, managers]);
+  const { rows } = layout;
   // Note that a row on its way out has no place among the rows a drag or a menu moves.
-  const shown = useLeaving(nested, ({ task }) => task.id);
+  const shown = useLeaving(rows, sectionDrawnKey);
   const keys = useMemo(() => shown.map(({ key }) => key), [shown]);
-  const listedAt = new Map(nested.map(({ task }, at) => [task.id, at]));
+  const listedAt = new Map(rows.map((row, at) => [sectionDrawnKey(row), at]));
+  const depths = rows.map(sectionDepthOf);
+  const sectionId = drawn.section.id;
 
   // Note that a row is heard by its place among the rows drawn, rows on their way out among them, and found among those listed by its key, as the slot it is carried to is (`listedSlot`).
   const fromListed = (from: number) => {
@@ -748,16 +869,13 @@ function SectionRows({
     return key === undefined ? undefined : listedAt.get(key);
   };
 
-  const storedAt = (at: number) => {
-    const held = nested[at];
-
-    return held === undefined ? -1 : drawn.tasks.indexOf(held.task);
-  };
-
   // Note that a move lands the row's entry beside its sibling's, which alone orders the two as they are drawn.
   const besideSibling = (from: number, beside: number | undefined) => {
-    if (beside === undefined) return;
-    context.dialogs.write(placeWritesWithin(drawn, storedAt(from), storedAt(beside)));
+    const moving = layout.entries[from];
+    const by = beside === undefined ? undefined : layout.entries[beside];
+
+    if (moving === undefined || by === undefined) return;
+    context.dialogs.write(placeWritesWithin(layout.order, sectionId, moving, by));
   };
 
   const move = folded
@@ -766,26 +884,30 @@ function SectionRows({
         const at = fromListed(from);
 
         if (at !== undefined)
-          besideSibling(at, movedBeside(nested, at, listedSlot(shown, from, to)));
+          besideSibling(at, movedBeside(depths, at, listedSlot(shown, from, to)));
       };
 
   const drag = useRunRowDrag(move, {
     onDropOut: (from, zone, at) => {
       const held = shown[from]?.value;
 
-      if (held !== undefined) context.onDropRow(held.task, zone, at);
+      if (held === undefined) return;
+
+      if (held.kind === SIDEBAR_ENTRY.MANAGER) context.onDropManager(held.agent.id, zone, at);
+      else context.onDropRow(held.own.task, zone, at);
     },
     onCarried: context.onCarried,
   });
 
   const moveKeys = useRowMoveKeys(move);
-  const nests = nestsOf(shown.map(({ value }) => value));
+  const nests = nestsOf(shown.map(({ value }) => sectionDepthOf(value)));
+  const rowsShown = context.tasks.shown && context.inSight;
 
   const placeOf = (key: string) => {
     const at = listedAt.get(key);
 
     if (move === undefined || at === undefined) return undefined;
-    const siblings = siblingsAt(nested, at);
+    const siblings = siblingsAt(depths, at);
 
     return {
       at: siblings.indexOf(at),
@@ -809,9 +931,20 @@ function SectionRows({
       {(index, place) => {
         const entry = shown[index];
 
-        return entry === undefined ? null : (
+        if (entry === undefined) return null;
+        const nest = nests[index];
+
+        return (
           <RowPlaced key={entry.key} place={placeOf(entry.key)}>
-            {context.row(entry.value, nests[index], place)}
+            <SidebarEntryRow
+              entry={entry.value}
+              tasks={context.tasks}
+              shown={rowsShown}
+              place={place}
+              nest={nest}
+              onOpenManager={context.onOpenManager}
+              own={(held) => context.row(held, nest, place)}
+            />
           </RowPlaced>
         );
       }}
@@ -857,7 +990,7 @@ function SectionFoot({
   drawn: DrawnSection;
   tasks: SidebarTasksControl;
 }): React.JSX.Element | null {
-  if (drawn.tasks.length > 0 || tasks.listFailed) return null;
+  if (drawn.tasks.length > 0 || drawn.managers.length > 0 || tasks.listFailed) return null;
 
   if (!tasks.listRead) return <TaskRowsSkeleton widths={SECTION_SKELETON} />;
 
@@ -883,6 +1016,15 @@ function SidebarSection({
   const { tasks } = context;
   const folded = context.folded(section.id);
   const standing = drawn.tasks.filter(context.current);
+  const openManager = tasks.agentView.agentId;
+
+  // The open Manager's row stands under the fold, as the open task's does.
+  const standingManagers = useMemo(
+    () => drawn.managers.filter(({ agent }) => agent.id === openManager),
+    [drawn.managers, openManager],
+  );
+
+  const rowCount = drawn.tasks.length + drawn.managers.length;
   const menu = useMenu(tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
@@ -939,7 +1081,7 @@ function SidebarSection({
         {...sidebarHead({
           folded,
           onToggle: () => context.onToggle(section.id),
-          count: drawn.tasks.length,
+          count: rowCount,
           noun: TASK_NOUN,
         })}
         glyph={glyph}
@@ -947,8 +1089,14 @@ function SidebarSection({
         menuOpen={menu.open !== undefined}
         contextMenu={menu.contextMenu(ellipsis)}
         standing={
-          standing.length === 0 ? undefined : (
-            <SectionRows drawn={drawn} context={context} tasks={standing} folded />
+          standing.length === 0 && standingManagers.length === 0 ? undefined : (
+            <SectionRows
+              drawn={drawn}
+              context={context}
+              tasks={standing}
+              managers={standingManagers}
+              folded
+            />
           )
         }
         actions={
@@ -966,8 +1114,14 @@ function SidebarSection({
           </>
         }
       >
-        {drawn.tasks.length === 0 ? null : (
-          <SectionRows drawn={drawn} context={context} tasks={drawn.tasks} folded={false} />
+        {rowCount === 0 ? null : (
+          <SectionRows
+            drawn={drawn}
+            context={context}
+            tasks={drawn.tasks}
+            managers={drawn.managers}
+            folded={false}
+          />
         )}
         <SectionFoot drawn={drawn} tasks={context.tasks} />
       </GroupHeader>
@@ -982,15 +1136,6 @@ function SidebarSection({
       )}
     </div>
   );
-}
-
-/** The writes that stand the row at `from` in a section, as drawn, at `to`. */
-function placeWritesWithin(drawn: DrawnSection, from: number, to: number): TaskSectionWrite[] {
-  const entry = drawn.entries[from];
-
-  if (entry === undefined) return [];
-
-  return placeWrites(drawn.entries, entry.taskId, drawn.section.id, to, Date.now());
 }
 
 /** A section's key, by which it leaves the list. */

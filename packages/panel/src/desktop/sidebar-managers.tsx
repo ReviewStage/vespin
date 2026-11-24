@@ -15,8 +15,13 @@
  * Managers by recent activity, name, or date created, kept per workspace on
  * this machine (`manager-sort.ts`), newest started first until one is chosen. A Manager the reader pinned,
  * from its row's menu, stands under Pinned alone, not here, until Unpin, drawn as the
- * same row (`SidebarManagerRow`, `usePinnedManagers`) among the pinned
- * tasks, and dragged among them (`sidebar-entries.tsx`). It stands
+ * same row (`SidebarManagerRow`, `useManagersByPin`) among the pinned
+ * tasks, and dragged among them (`sidebar-entries.tsx`); and one the reader
+ * put in one of their sections, from its row's Move to section or by a
+ * drag, stands in that section alone, among its tasks, until it is taken
+ * out, dragged back here or onto Tasks, as a task leaves Tasks for a
+ * section. While the reader keeps sections, a row here is dragged into one,
+ * or into Pinned, which pins it, as a row of Tasks is. It stands
  * only where the workspace has the Managers experiment on, and says so
  * where it holds none; until the live list carries its agents it stands as
  * its head alone.
@@ -69,6 +74,7 @@ import type { FoldedGroups } from "./folded-groups.js";
 import { NEW_MANAGER, useNewManagerDialog } from "./new-manager-dialog.js";
 import { type CountNoun, sidebarHead } from "./sidebar-fold.js";
 import { type SidebarTasksControl, useSidebarOpen } from "./sidebar-open.js";
+import { useRowDrag } from "./use-row-drag.js";
 
 /** What the section is called, on its head and its list alike. */
 const MANAGERS_HEAD = "Managers";
@@ -95,6 +101,12 @@ const SORT_WORDS = {
 /** No Manager pinned, the same array every render. */
 const NO_MANAGERS: readonly PinnedManager[] = [];
 
+/** No Manager listed, the same array every render. */
+const NO_LISTED: readonly ListedAgent[] = [];
+
+/** The zone Managers is as a drop zone, which takes a Manager out of every section. */
+export const MANAGERS_DROP_ZONE = "managers";
+
 /** No pull request, which a Manager's row never names, since a Manager opens none of its own. */
 const NO_PULL_REQUESTS: ReadonlyMap<string, AgentPullRequest> = new Map();
 
@@ -111,17 +123,39 @@ function useListedManagers(tasks: SidebarTasksControl): ReturnType<typeof useWor
   };
 }
 
-/** The Managers the reader pinned, each with where its pin stands, by `taskAgentPins`, the reader's pins of agents, which Pinned draws among its pins (`pinnedManagersOf`); none while the Managers experiment is off. */
-export function usePinnedManagers(
+/** The workspace's Managers by the reader's pins: those pinned, which Pinned draws among its pins, and the rest, which the reader's sections may keep. */
+export interface ManagersByPin {
+  /** Each with where its pin stands (`pinnedManagersOf`). */
+  readonly pinned: readonly PinnedManager[];
+  /** Those no pin holds (`sectionedTasks`). */
+  readonly unpinned: readonly ListedAgent[];
+}
+
+/** No Manager, pinned or not, while the Managers experiment is off or the list is still read. */
+const NO_MANAGERS_BY_PIN: ManagersByPin = { pinned: NO_MANAGERS, unpinned: NO_LISTED };
+
+/** The workspace's Managers split by `taskAgentPins`, the reader's pins of agents, read once for Pinned and the sections alike; none while the Managers experiment is off. */
+export function useManagersByPin(
   tasks: SidebarTasksControl,
   taskAgentPins: readonly TaskAgentPin[],
-): readonly PinnedManager[] {
+): ManagersByPin {
   const { managers } = useListedManagers(tasks);
 
-  return useMemo(
-    () => (managers === undefined ? NO_MANAGERS : pinnedManagersOf(managers, taskAgentPins)),
-    [managers, taskAgentPins],
-  );
+  return useMemo(() => {
+    if (managers === undefined) return NO_MANAGERS_BY_PIN;
+    const pinned = pinnedManagersOf(managers, taskAgentPins);
+    const pinnedIds = new Set(pinned.map((each) => each.agent.id));
+
+    return { pinned, unpinned: managers.filter((agent) => !pinnedIds.has(agent.id)) };
+  }, [managers, taskAgentPins]);
+}
+
+/** Where the Managers section's rows go once dragged out of it, while the reader keeps sections. */
+export interface ManagersDrops {
+  /** Hears a Manager's row let go over a section, by its id, or Pinned, at the place among its rows it lands at. */
+  readonly onDropOut: (agentId: string, zone: string, at: number) => void;
+  /** Hears a row lifted into a drag and that drag ended, while which an empty Pinned stands to take it. */
+  readonly onCarried: (carried: boolean) => void;
 }
 
 /**
@@ -182,22 +216,43 @@ export function SidebarManagerRow({
   );
 }
 
-/** The Managers section's rows, each a `SidebarManagerRow` in a list of its own. */
-function ManagerRows({
+/** Managers' rows, each a `SidebarManagerRow` in a list of its own: the Managers section's, sorted as the reader chose, so a row is dragged only out of them, into a section or Pinned, and the open one standing under a folded head. */
+export function ManagerRows({
   managers,
   tasks,
   shown,
+  drops,
   onOpen,
 }: {
   managers: readonly ListedAgent[];
   tasks: SidebarTasksControl;
   /** Whether the rows are in sight, which their menus ask on. */
   shown: boolean;
+  /** Where a row dragged out goes; none while the reader keeps no sections. */
+  drops: ManagersDrops | undefined;
   onOpen: (agentId: string) => void;
 }): React.JSX.Element {
+  const drag = useRowDrag(undefined, {
+    onDropOut:
+      drops === undefined
+        ? undefined
+        : (from, zone, at) => {
+            const agent = managers[from];
+
+            if (agent !== undefined) drops.onDropOut(agent.id, zone, at);
+          },
+    onCarried: drops?.onCarried,
+  });
+
   return (
     <ReplayMask>
-      <List label={MANAGERS_HEAD} density={LIST_DENSITY.DENSE} joinsWalk moves>
+      <List
+        label={MANAGERS_HEAD}
+        density={LIST_DENSITY.DENSE}
+        joinsWalk
+        moves
+        onPointerDown={drops === undefined ? undefined : drag}
+      >
         {managers.map((agent) => (
           <SidebarManagerRow
             key={agent.id}
@@ -261,6 +316,8 @@ function ManagerViewOptions({
 export function SidebarManagers({
   tasks,
   taskAgentPins,
+  sectioned,
+  drops,
   folds,
   inSight,
   onOpen,
@@ -268,6 +325,10 @@ export function SidebarManagers({
   tasks: SidebarTasksControl;
   /** The reader's pins of agents, whose Managers stand under Pinned alone. */
   taskAgentPins: readonly TaskAgentPin[];
+  /** The Managers standing in one of the reader's sections, which stand there alone. */
+  sectioned: ReadonlySet<string>;
+  /** Where a row dragged out goes, and whether the section takes one dropped on it; none while the reader keeps no sections. */
+  drops: ManagersDrops | undefined;
   folds: FoldedGroups;
   /** Whether the sidebar is in sight, which its rows' menus ask on. */
   inSight: boolean;
@@ -279,16 +340,16 @@ export function SidebarManagers({
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const sorting = useManagerSort(tasks.workspace?.id, staged);
 
-  // Note that a pinned Manager stands under Pinned alone, as a pinned task does, and returns here on Unpin.
+  // Note that a pinned Manager stands under Pinned alone, as a pinned task does, and returns here on Unpin; and one in a section stands there alone, as a task leaves Tasks for one.
   const sorted = useMemo(() => {
     if (managers === undefined) return undefined;
     const pinned = new Set(pinnedManagersOf(managers, taskAgentPins).map((each) => each.agent.id));
 
     return sortedManagers(
-      managers.filter((agent) => !pinned.has(agent.id)),
+      managers.filter((agent) => !pinned.has(agent.id) && !sectioned.has(agent.id)),
       sorting.sort,
     );
-  }, [managers, taskAgentPins, sorting.sort]);
+  }, [managers, taskAgentPins, sectioned, sorting.sort]);
 
   if (!listed) return null;
 
@@ -300,11 +361,16 @@ export function SidebarManagers({
   const standing = listedManagers.filter((agent) => agent.id === openId);
 
   const rows = (drawn: readonly ListedAgent[]) => (
-    <ManagerRows managers={drawn} tasks={tasks} shown={shown} onOpen={onOpen} />
+    <ManagerRows managers={drawn} tasks={tasks} shown={shown} drops={drops} onOpen={onOpen} />
   );
 
   return (
-    <nav className="sidebar-group" aria-label={MANAGERS_HEAD} {...motionKey(MANAGERS_KEY)}>
+    <nav
+      className="sidebar-group"
+      aria-label={MANAGERS_HEAD}
+      data-row-drop={drops === undefined ? undefined : MANAGERS_DROP_ZONE}
+      {...motionKey(MANAGERS_KEY)}
+    >
       <GroupHeader
         {...sidebarHead({
           folded,
