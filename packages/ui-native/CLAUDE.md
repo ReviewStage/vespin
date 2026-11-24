@@ -469,10 +469,9 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   iPad stands no system tab sidebar and, in a regular window, no bar: the
   app's own sidebar stands beside the tabs (`SidebarFrame` holding a
   `SidebarPane`, floating in from the window's edges on the system's
-  Liquid Glass: Hide Sidebar in its bar, a plain list on no ground of its
-  own (`LIST_LOOK.SIDEBAR`; not the system's sidebar list style, which
-  outside a system split view draws its rows as inset cards) headed by the
-  workspace switcher with New task's glyph at its
+  Liquid Glass: Hide Sidebar in its bar, the system's sidebar list
+  (`LIST_LOOK.SIDEBAR`, its rows keeping the list's own selection
+  highlight) headed by the workspace switcher with New task's glyph at its
   end (`WorkspaceSwitcherRow`), a `PlaceRow` for each place, the tasks, and at
   its foot in the system's glass the account's photo and name opening its
   menu (`AccountMenuItem`) with Settings' gear, `ColumnBar`'s `bottom`, as

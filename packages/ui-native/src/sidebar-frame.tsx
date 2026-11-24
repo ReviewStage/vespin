@@ -6,7 +6,7 @@ import { useReduceMotion } from "./accessibility.js";
 import { useColors } from "./tokens/colors.js";
 
 /** How wide the sidebar stands, as the panel's sidebar stands beside its pages. */
-const SIDEBAR_WIDTH = 320;
+const SIDEBAR_WIDTH = 300;
 
 const styles = StyleSheet.create({
   frame: { flex: 1, flexDirection: "row" },
