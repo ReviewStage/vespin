@@ -6,6 +6,7 @@
 import { Base64 } from "effect/encoding";
 import { File, Paths } from "expo-file-system";
 import { downloadAsync } from "expo-file-system/legacy";
+import { Image } from "expo-image";
 import { Platform, Settings } from "react-native";
 
 /** A gap between ticks longer than this is the JS thread held by work. */
@@ -18,7 +19,13 @@ const START_AFTER_MS = 6_000;
 /** How many times each path runs, the first warming nothing but measured too. */
 const ROUNDS = 3;
 
-const PATH = { BASE64: "base64", DOWNLOAD: "download", KEPT: "kept" } as const;
+const PATH = {
+  BASE64: "base64",
+  DOWNLOAD: "download",
+  KEPT: "kept",
+  EXPO_IMAGE: "expoImage",
+  EXPO_IMAGE_KEPT: "expoImageKept",
+} as const;
 
 type Path = (typeof PATH)[keyof typeof PATH];
 
@@ -78,7 +85,28 @@ async function keptRead(_url: string, file: File): Promise<number> {
   return file.exists ? file.size : 0;
 }
 
-const READ = { [PATH.BASE64]: base64Read, [PATH.DOWNLOAD]: downloadRead, [PATH.KEPT]: keptRead };
+/** expo-image's read: downloaded and kept on disk by SDWebImage, as a picture's first draw reads it. */
+async function expoImageRead(url: string, _file: File): Promise<number> {
+  await Image.prefetch([url], { cachePolicy: "disk", headers: { authorization: "Bearer probe" } });
+  const path = await Image.getCachePathAsync(url);
+
+  return path === null ? 0 : new File(`file://${path}`).size;
+}
+
+/** expo-image's revisit: the picture looked up in its disk cache. */
+async function expoImageKeptRead(url: string, _file: File): Promise<number> {
+  const path = await Image.getCachePathAsync(url);
+
+  return path === null ? 0 : new File(`file://${path}`).size;
+}
+
+const READ = {
+  [PATH.BASE64]: base64Read,
+  [PATH.DOWNLOAD]: downloadRead,
+  [PATH.KEPT]: keptRead,
+  [PATH.EXPO_IMAGE]: expoImageRead,
+  [PATH.EXPO_IMAGE_KEPT]: expoImageKeptRead,
+};
 
 /** One path over every picture at once, as a transcript asks for the pictures on screen together. */
 async function phase(path: Path, round: number, urls: readonly string[]): Promise<Phase> {
@@ -87,7 +115,11 @@ async function phase(path: Path, round: number, urls: readonly string[]): Promis
       new File(Paths.cache, `probe-${path === PATH.KEPT ? PATH.DOWNLOAD : path}-${at}.png`),
   );
 
-  if (path !== PATH.KEPT) for (const file of files) if (file.exists) file.delete();
+  if (path === PATH.BASE64 || path === PATH.DOWNLOAD) {
+    for (const file of files) if (file.exists) file.delete();
+  }
+
+  if (path === PATH.EXPO_IMAGE) await Image.clearDiskCache();
 
   const start = performance.now();
 
@@ -124,8 +156,7 @@ async function run(base: string): Promise<void> {
     const phases: Phase[] = [];
 
     for (let round = 1; round <= ROUNDS; round += 1) {
-      for (const path of [PATH.BASE64, PATH.DOWNLOAD, PATH.KEPT])
-        phases.push(await phase(path, round, urls));
+      for (const path of Object.values(PATH)) phases.push(await phase(path, round, urls));
     }
 
     out.write(JSON.stringify({ pictures: names.length, phases }, null, 2));
