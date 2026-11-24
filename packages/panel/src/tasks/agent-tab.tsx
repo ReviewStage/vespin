@@ -258,6 +258,7 @@ import {
   looseApprovals,
   transcriptCallIds,
   useAgentApprovals,
+  useApprovingSend,
   useCallHeld,
 } from "./agent-approvals.js";
 import {
@@ -389,11 +390,7 @@ import {
   useUndeliveredLines,
   useUnsentLines,
 } from "./undelivered-mark.js";
-import {
-  type HeldComposer,
-  type MessageSender as MessageWriter,
-  useAgentComposer,
-} from "./use-agent-composer.js";
+import { type HeldComposer, useAgentComposer } from "./use-agent-composer.js";
 import { useAgentEndDoors } from "./use-agent-end-doors.js";
 import { useAgentPullRequest } from "./use-agent-pull-request.js";
 import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
@@ -4359,19 +4356,7 @@ function AgentTabBody({
 
   const starter = teammateStarter(agent.startedBy, control.me);
   const approvals = useAgentApprovals({ agent, write: control.onAnswerApproval });
-  const { messageSent } = approvals;
-  const { onMessage } = control;
-
-  // Note that a message sent while a call waits denies it, which its card then says.
-  const send = useCallback<MessageWriter>(
-    (...sent) => {
-      const answered = onMessage(...sent);
-      messageSent(answered);
-
-      return answered;
-    },
-    [messageSent, onMessage],
-  );
+  const send = useApprovingSend(control.onMessage, approvals);
 
   const sendSuggestion = useSuggestionSender();
 
