@@ -33,12 +33,19 @@ export interface FakeRun {
   readonly held?: boolean;
   /** What a steer into the run is answered; delivered where unscripted. */
   readonly steered?: SteerAckOutcome;
+  /** How many bytes the checkpoint the run ends on holds; a few where unscripted. */
+  readonly checkpointBytes?: number;
 }
 
 /** What the fake SDK was handed, in the order it was handed it. */
 interface CursorRecord {
   readonly created: AgentOptions[];
-  readonly resumed: { readonly agentId: string; readonly options: AgentOptions }[];
+  readonly resumed: {
+    readonly agentId: string;
+    readonly options: AgentOptions;
+    /** The checkpoint the agent's row names, as the store answered it. */
+    readonly checkpoint: Uint8Array | null;
+  }[];
   readonly sent: { readonly message: SDKUserMessage; readonly options: SendOptions }[];
   readonly steers: string[];
   readonly summaries: number[];
@@ -47,11 +54,13 @@ interface CursorRecord {
   closed: boolean;
 }
 
-/** The blob a run's end checkpoints, named for the run. */
-export function fakeBlobOf(run: number) {
+/** The blob a run's end checkpoints, named for the run, `bytes` long where given. */
+export function fakeBlobOf(run: number, bytes?: number) {
+  const words = new TextEncoder().encode(`conversation through run ${run}`);
+
   return {
     blobId: `blob-${run}`,
-    data: new TextEncoder().encode(`conversation through run ${run}`),
+    data: bytes === undefined ? words : new Uint8Array(bytes).map((_, at) => at % 251),
   };
 }
 
@@ -103,7 +112,7 @@ export function fakeCursor(
       const row = await store?.agents.get({ agentId });
 
       if (store === undefined || row === null || row === undefined) return;
-      const blob = fakeBlobOf(number);
+      const blob = fakeBlobOf(number, script.checkpointBytes);
       await store.checkpoints.create({ agentId, ...blob });
       await store.agents.update({
         agent: { ...row, latestCheckpoint: { schemaVersion: 1, rootBlobId: blob.blobId } },
@@ -177,8 +186,16 @@ export function fakeCursor(
       return agentOf(options, agentId);
     },
     resume: async (_sdk, agentId, options) => {
-      record.resumed.push({ agentId, options });
-      const row = await options.local?.store?.agents.get({ agentId });
+      const store = options.local?.store;
+      const row = await store?.agents.get({ agentId });
+      const root = row?.latestCheckpoint?.rootBlobId;
+
+      const checkpoint =
+        root === undefined
+          ? null
+          : ((await store?.checkpoints.get({ agentId, blobId: root })) ?? null);
+
+      record.resumed.push({ agentId, options, checkpoint });
 
       // The SDK reads only the rows naming the checkout it was asked in.
       if (row === null || row === undefined || row.cwd !== options.local?.cwd) {

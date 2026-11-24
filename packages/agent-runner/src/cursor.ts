@@ -26,7 +26,9 @@
  * A run that streams nothing for `RUNNER_UNANSWERED.SILENCE_MS` while none of
  * its tool calls runs ends the launch as `failed` too, its run canceled, so
  * a turn Cursor stopped answering ends rather than holding until a Stop or
- * the service's progress deadline (`watchSilence`).
+ * the service's progress deadline (`watchSilence`). A call the model wrote
+ * past no longer counts as running, since Cursor can leave one it gave up on
+ * running for good.
  * Cursor keeps no goal, so a line marked `goal` goes as words, as it does to
  * a runner from before the mark.
  *
@@ -42,7 +44,8 @@
  * place of it, which an account must be granted. So our coder instructions
  * lead the first message an agent made anew is sent, and the first after
  * its conversation is summarized, which drops them from what the model
- * reads.
+ * reads. Whether they are due is kept in the agent's store, so a launch
+ * that ends between a summary and the next message leaves them to the next.
  *
  * Skills. The SDK takes no folder of skills, so the member's installed
  * skills are linked into the checkout's `.agents/skills`, kept out of git,
@@ -81,6 +84,7 @@ import {
   Option,
   Queue,
   Result,
+  Schedule,
   Schema,
   type Scope,
   Stream,
@@ -138,8 +142,9 @@ const STORE_UNREAD = "the agent's Cursor store could not be read from the servic
 /** What a launch whose store the service would not take as it ended ends with. */
 const STORE_UNKEPT = "the agent's Cursor store could not be kept at the service";
 
-/** How many more times a launch's last mirror is sent where the service did not take it. */
+/** How many more times a launch's last mirror is sent where the service did not take it, and how long it waits before the first. */
 const STORE_RETRIES = 2;
+const STORE_RETRY_DELAY = Duration.seconds(1);
 
 /** What a launch with no key to run Cursor on ends with. */
 const NO_KEY = "no Cursor API key was handed to the launch";
@@ -233,8 +238,6 @@ interface CursorLaunch {
   /** Whether a run ended while steers were unanswered, so the last answer decides what comes next. */
   settling: boolean;
   model: CursorModelSelection;
-  /** Whether the next message sent leads with our instructions: the agent's first, a fork's first, and the first after a summary. */
-  instruct: { value: boolean };
   /** The service's lines this launch has said it took, each said once. */
   readonly accepted: Set<string>;
   /** Whether the agent's turn is under way, as the service holds it: a run that goes on for it records no checkout. */
@@ -353,6 +356,9 @@ const monotonicMillis = Effect.map(Clock.monotonicTimeNanos, (nanos) => Number(n
 function hear(heard: Heard, message: SDKMessage, now: number) {
   heard.at = now;
 
+  // Note that the model writes again only once it holds every call's answer, so a call still said running is one Cursor gave up on.
+  if (message.type === "thinking" || message.type === "assistant") heard.calls.clear();
+
   if (message.type !== "tool_call") return;
 
   if (message.status === TOOL_CALL_RUNNING) heard.calls.add(message.call_id);
@@ -400,7 +406,7 @@ const follow = Effect.fn("agent-runner/cursor/follow")(function* (
 
         // A summary written drops the instructions, so the next message leads with them again.
         if (message.type === "summary" && message.status === SUMMARY_COMPLETED) {
-          launch.instruct.value = true;
+          launch.store.dueInstructions(launch.session, true);
         }
 
         yield* launch.context.sink.emit(message);
@@ -452,7 +458,7 @@ const sendRun = Effect.fn("agent-runner/cursor/sendRun")(function* (
   launch.open = true;
   yield* accepted(launch, outgoing.lines, snapshot);
 
-  const text = launch.instruct.value
+  const text = launch.store.instructionsDue(launch.session)
     ? withInstructions(launch.context.config.instructions, outgoing.text)
     : outgoing.text;
 
@@ -466,7 +472,7 @@ const sendRun = Effect.fn("agent-runner/cursor/sendRun")(function* (
     catch: (cause) => new CursorFailed({ detail: detailOf(cause) }),
   });
 
-  launch.instruct.value = false;
+  launch.store.dueInstructions(launch.session, false);
   launch.state = { kind: LAUNCH_STATE.RUN, run, summary: false, stopping: false };
   yield* follow(launch, run);
 });
@@ -695,11 +701,12 @@ const takeRunEnded = Effect.fn("agent-runner/cursor/takeRunEnded")(function* (
 
   if (state.kind !== LAUNCH_STATE.RUN || state.run !== signal.run) return undefined;
   launch.state = IDLE;
-  // A mirror the service did not take goes again with the next run's, and at the launch's end.
+  // A mirror the service did not take goes again with the next run's, and at the launch's end; none holds up the controller.
   yield* launch.store.mirror.pipe(
     Effect.catch(() =>
       Effect.logWarning("agent-runner: the Cursor agent's store was not mirrored"),
     ),
+    Effect.forkScoped,
   );
 
   // A stopped run's own messages end with it; those sent since the stop go as the next run.
@@ -900,6 +907,9 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
     return ended(RUNNER_END.FAILED, opened.failure.detail);
   }
 
+  // Note that a fork resumes its source's conversation, which holds the source's instructions, never its own.
+  if (opened.success.made || config.fork === true) store.success.dueInstructions(session, true);
+
   const launch: CursorLaunch = {
     context,
     signals,
@@ -915,8 +925,6 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
     steering: 0,
     settling: false,
     model: config.model,
-    // Note that a fork resumes its source's conversation, which holds the source's instructions, never its own.
-    instruct: { value: opened.success.made || config.fork === true },
     accepted: new Set(),
     open: false,
     snapshot: (lineId) =>
@@ -965,7 +973,7 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
 
   // Note that a store the service never took leaves the next launch resuming an older conversation, so the launch fails rather than say its turn is kept.
   const kept = yield* launch.store.mirror.pipe(
-    Effect.retry({ times: STORE_RETRIES }),
+    Effect.retry({ times: STORE_RETRIES, schedule: Schedule.exponential(STORE_RETRY_DELAY) }),
     Effect.as(true),
     Effect.catch(() => Effect.succeed(false)),
   );

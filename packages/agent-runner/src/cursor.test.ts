@@ -15,6 +15,7 @@ import {
   INPUT_LINE,
   type InputLine,
   PERMISSION_MODE,
+  RUNNER_CONTROL,
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
@@ -196,12 +197,21 @@ function messagesOf(events: readonly RunnerEvent[]) {
   return events.map(({ message: posted }) => posted);
 }
 
+/** The most a call's body carries at the service, past which it refuses the call, as `runner-transcripts-app.ts` does. */
+const TRANSCRIPTS_MAX_BODY_BYTES = 4.5 * 1024 * 1024;
+
 /** The service's transcript store as `fetch` reaches it: every append kept, and a load answered with `held`. */
 function fakeTranscripts(held: readonly unknown[] = []) {
   const appended: { readonly key: unknown; readonly entries: readonly unknown[] }[] = [];
 
   vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
-    const call = JSON.parse(String(init?.body));
+    const body = String(init?.body);
+
+    if (Buffer.byteLength(body) > TRANSCRIPTS_MAX_BODY_BYTES) {
+      return new Response(null, { status: 413 });
+    }
+
+    const call = JSON.parse(body);
 
     if (call.call === RUNNER_TRANSCRIPTS.CALL.APPEND) {
       appended.push({ key: call.key, entries: call.entries });
@@ -341,6 +351,7 @@ const TWO_TURNS_HELD = [
 ];
 
 const LINE_AFTER_REWIND = "10000000-0000-4000-8000-000000000003";
+const LINE_AFTER_SUMMARY = "10000000-0000-4000-8000-000000000004";
 
 /** An agent row mirrored, read for the checkpoint it names alone. */
 const readRowCheckpoint = Schema.decodeUnknownOption(
@@ -467,6 +478,11 @@ it.effect(
       yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
       yield* write(message("Read the README.", LINE.FIRST));
 
+      // The launch's last mirror is sent again, a while apart, before the launch gives it up.
+      for (let step = 0; step < 50 && run.pollUnsafe() === undefined; step += 1) {
+        yield* TestClock.adjust(RUNNER_CONTROL.ANSWER_MS);
+      }
+
       assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
       vi.restoreAllMocks();
       assert.deepEqual(messagesOf(service.applied).at(-1), {
@@ -475,6 +491,89 @@ it.effect(
         detail: "the agent's Cursor store could not be kept at the service",
       });
     }),
+);
+
+it.effect(
+  "keeps a checkpoint larger than one call to the service can carry, and resumes the agent from it",
+  () =>
+    Effect.gen(function* () {
+      const bytes = 4 * 1024 * 1024;
+      const mirrored = fakeTranscripts();
+
+      const first = yield* launch(
+        [{ messages: RECORDED_TURN, checkpointBytes: bytes }],
+        fakeService(),
+      );
+
+      yield* first.write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+      yield* first.write(message("Read the README.", LINE.FIRST));
+      assert.equal(yield* Fiber.join(first.run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+
+      fakeTranscripts(mirrored.flatMap(({ entries }) => entries));
+      const second = yield* launch([{ messages: RECORDED_TURN }], fakeService());
+      yield* second.write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+      yield* second.write(message("And the second line?", LINE.SECOND));
+
+      assert.equal(yield* Fiber.join(second.run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+      const checkpoint = second.cursor.resumed[0]?.checkpoint;
+      assert.ok(checkpoint != null && Buffer.from(checkpoint).equals(fakeBlobOf(1, bytes).data));
+    }),
+);
+
+it.effect("sends the next run while a mirror of the store the service has not answered waits", () =>
+  Effect.gen(function* () {
+    let appends = 0;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+      const call = JSON.parse(String(init?.body));
+
+      if (call.call !== RUNNER_TRANSCRIPTS.CALL.APPEND) {
+        return Promise.resolve(new Response(JSON.stringify({ entries: [], next: null })));
+      }
+
+      appends += 1;
+
+      // The first mirror the service never answers.
+      return appends === 1 ? new Promise<Response>(() => {}) : Promise.resolve(new Response("{}"));
+    });
+
+    const service = fakeService("I");
+
+    const { cursor, release, write, run } = yield* launch(
+      [
+        { messages: RECORDED_TURN, held: true, steered: "revert_to_followup" },
+        { messages: RECORDED_TURN },
+      ],
+      service,
+    );
+
+    yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+    yield* write(message("Read the README.", LINE.FIRST));
+    yield* service.seen;
+    yield* write(message("And the second line?", LINE.SECOND));
+
+    for (let step = 0; step < 500 && cursor.steers.length === 0; step += 1) {
+      yield* Effect.yieldNow;
+    }
+
+    release();
+
+    for (let step = 0; step < 500 && cursor.sent.length < 2; step += 1) {
+      yield* Effect.yieldNow;
+    }
+
+    assert.equal(cursor.sent.length, 2);
+
+    // The mirror the service never answered gives up, and the launch's last one keeps the store.
+    for (let step = 0; step < 50 && run.pollUnsafe() === undefined; step += 1) {
+      yield* TestClock.adjust(RUNNER_CONTROL.ANSWER_MS);
+    }
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    vi.restoreAllMocks();
+  }),
 );
 
 it.effect(
@@ -626,6 +725,53 @@ it.effect(
     }),
 );
 
+it.effect(
+  "counts a run silent once the model wrote again after a tool call Cursor left running",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService("I");
+
+      const call = (id: string, status: "running" | "completed"): SDKMessage => ({
+        type: "tool_call",
+        ...IDS,
+        call_id: id,
+        name: "shell",
+        status,
+        args: { command: "rm -rf build" },
+      });
+
+      const { cursor, write, run } = yield* launch(
+        [
+          {
+            messages: [
+              { type: "status", ...IDS, status: "RUNNING" },
+              // Auto-review refused the call, which Cursor leaves running while the model tries again.
+              call("call-1", "running"),
+              { type: "thinking", ...IDS, text: "Refused; trying another way." },
+              call("call-2", "running"),
+              call("call-2", "completed"),
+              {
+                type: "assistant",
+                ...IDS,
+                message: { role: "assistant", content: [{ type: "text", text: "I" }] },
+              },
+            ],
+            held: true,
+          },
+        ],
+        service,
+      );
+
+      yield* write(CONFIG);
+      yield* write(message("Clean the build.", LINE.FIRST));
+      yield* service.seen;
+      yield* TestClock.adjust(RUNNER_UNANSWERED.SILENCE_MS);
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.equal(cursor.cancels, 1);
+    }),
+);
+
 it.effect("never counts a run silent while one of its tool calls runs", () =>
   Effect.gen(function* () {
     const service = fakeService("npm test");
@@ -682,6 +828,36 @@ it.effect(
       assert.deepEqual(cursor.summaries, [0]);
       assert.deepEqual(
         cursor.sent.map(({ message: sent }) => sent.text),
+        ["<coder_instructions>\nYou are a Vespin coding agent.\n</coder_instructions>\n\nGo on."],
+      );
+    }),
+);
+
+it.effect(
+  "leads the first message of a later launch with the instructions a summary dropped where the launch that summarized ended first",
+  () =>
+    Effect.gen(function* () {
+      const mirrored = fakeTranscripts(TWO_TURNS_HELD);
+      const first = yield* launch([{ messages: SUMMARY }], fakeService());
+      yield* first.write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+      yield* first.write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE_AFTER_REWIND,
+        content: [],
+        compact: true,
+      });
+      assert.equal(yield* Fiber.join(first.run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+
+      fakeTranscripts([...TWO_TURNS_HELD, ...mirrored.flatMap(({ entries }) => entries)]);
+      const second = yield* launch([{ messages: RECORDED_TURN }], fakeService());
+      yield* second.write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+      yield* second.write(message("Go on.", LINE_AFTER_SUMMARY));
+
+      assert.equal(yield* Fiber.join(second.run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+      assert.deepEqual(
+        second.cursor.sent.map(({ message: sent }) => sent.text),
         ["<coder_instructions>\nYou are a Vespin coding agent.\n</coder_instructions>\n\nGo on."],
       );
     }),
