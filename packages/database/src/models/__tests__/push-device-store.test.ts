@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { PUSH_ENVIRONMENT, PUSH_NOTIFY } from "@repo/features/push-device-wire";
+import { PUSH_ENVIRONMENT, PUSH_NOTIFY, PUSH_PROVIDER } from "@repo/features/push-device-wire";
 import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
@@ -83,6 +83,31 @@ it.layer(getTestDB())("the push device store", (it) => {
           [PUSH_ENVIRONMENT.SANDBOX],
         );
         assert.equal((yield* listPushDevices(other)).length, 1);
+      }),
+  );
+
+  it.effect(
+    "a phone is read as the push service it registered under, Apple's where it named none",
+    () =>
+      Effect.gen(function* () {
+        const { owner } = yield* openAccounts;
+        yield* registerPushDevice(owner, {
+          token: token(),
+          environment: PUSH_ENVIRONMENT.PRODUCTION,
+          bundleId: BUNDLE_ID,
+        });
+        yield* TestClock.adjust("1 minute");
+        yield* registerPushDevice(owner, {
+          token: `fcm-${randomUUID()}:APA91b${randomUUID()}`,
+          environment: PUSH_ENVIRONMENT.PRODUCTION,
+          bundleId: "dev.vespin.android",
+          provider: PUSH_PROVIDER.FCM,
+        });
+
+        assert.deepEqual(
+          (yield* listPushDevices(owner)).map((row) => row.provider),
+          [PUSH_PROVIDER.FCM, PUSH_PROVIDER.APNS],
+        );
       }),
   );
 

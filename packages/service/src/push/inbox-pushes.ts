@@ -64,9 +64,19 @@
  * threads waiting moved (`live-activities.ts`): an ask starting to wait at
  * high priority, the rest as routine.
  *
+ * Each phone is pushed through its own service (`PUSH_PROVIDER`): an iPhone
+ * or iPad through Apple (`apns.ts`), an Android phone through FCM
+ * (`fcm.ts`), which carries the same alert as the words Android draws and
+ * the same keys as one JSON text of its data (`fcmMessageOf`). Note
+ * that Android draws an FCM alert itself while the app is not in front, so
+ * it offers no buttons or reply until the app draws its own. Everything
+ * else here, "Notify me", the holds, and a settled thread's clearing push,
+ * reads a phone the same whichever service it is.
+ *
  * Every push is the caller's best effort, handed to `afterResponse`: a
- * runtime with no `ApnsSender`, such as most tests', or a member with no
- * phone registered, pushes nothing and reads nothing more.
+ * runtime with no sender, such as most tests', pushes no phone of that
+ * service, and a member with no phone registered is pushed nothing and read
+ * nothing more.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
@@ -99,7 +109,7 @@ import {
 import { clippedWords, markdownPlainText } from "@repo/features/markdown-plain-text";
 import { agentName } from "@repo/features/model-label";
 import { PRESENCE } from "@repo/features/presence-wire";
-import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
+import { PUSH_NOTIFY, PUSH_PROVIDER } from "@repo/features/push-device-wire";
 import { TURN_STATUS } from "@repo/wire";
 import { Clock, Effect, Option } from "effect";
 import { lastSaid } from "../agents/coder-host/starter-report.js";
@@ -112,6 +122,7 @@ import {
   readInboxItemHome,
 } from "../inbox/inbox-store.js";
 import { APNS_PUSH_TYPE, type ApnsPayload, ApnsSender } from "./apns.js";
+import { FCM_PRIORITY, type FcmMessage, FcmSender } from "./fcm.js";
 import { LIVE_ACTIVITY_CAUSE, refreshLiveActivity } from "./live-activities.js";
 import { markdownLeads } from "./markdown-leads.js";
 
@@ -123,6 +134,9 @@ const ALERT_BOUND = { TITLE_CHARS: 120, BODY_CHARS: 240 } as const;
  * room kept under it for what Apple's own encoding may add.
  */
 const PAYLOAD_BOUND = { BYTES: 4096, SPARE: 64 } as const;
+
+/** How long Google keeps trying to deliver: not at all past now, as Apple's expiration of none. */
+const FCM_NOW_OR_NEVER = "0s";
 
 /** What a failed run's alert says under the agent's name, as the desktop's notification says it. */
 const RUN_FAILED_BODY = "Your agent failed.";
@@ -221,23 +235,113 @@ function actionsOf(message: InboxMessage) {
   };
 }
 
-/** Sends the notification `compose` writes for the member's badge to each phone named; nothing for none, and the badge is counted only once one stands. */
+/** The FCM data key the app's own keys travel under, as one JSON text, so the app reads them with the reader an iPhone's payload goes through (`inboxPushOf`). */
+const FCM_PAYLOAD_KEY = "payload";
+
+/** The FCM data key the member's Inbox count travels under, which an iPhone's `aps.badge` carries. */
+const FCM_BADGE_KEY = "badge";
+
+/**
+ * The app's own keys as FCM data carries them: every FCM data value must be
+ * a string, so the keys go whole as one JSON text, typed as the iPhone's are,
+ * and the badge as its number's words beside them.
+ */
+function fcmDataOf(payload: ApnsPayload, badge: number | undefined): Record<string, string> {
+  const { aps: _aps, ...keys } = payload;
+  const data = { [FCM_PAYLOAD_KEY]: JSON.stringify(keys) };
+
+  return badge === undefined ? data : { ...data, [FCM_BADGE_KEY]: String(badge) };
+}
+
+/**
+ * The notification as FCM delivers it to an Android phone: an alert as the
+ * words Android draws, high priority, its collapse id as the tag that
+ * replaces it in the shade; a background push as data alone at normal
+ * priority, which wakes the app to clear what settled. The app's keys go
+ * as data either way (`fcmDataOf`), and Google keeps nothing for a
+ * phone that is off, as Apple keeps nothing (`ttl` of none).
+ */
+function fcmMessageOf(notification: MemberNotification): FcmMessage {
+  const { aps } = notification.payload;
+  const data = fcmDataOf(notification.payload, aps.badge);
+
+  if (notification.pushType === APNS_PUSH_TYPE.BACKGROUND || aps.alert === undefined) {
+    return { data, android: { priority: FCM_PRIORITY.NORMAL, ttl: FCM_NOW_OR_NEVER } };
+  }
+
+  return {
+    data,
+    notification: aps.alert,
+    android: {
+      priority: FCM_PRIORITY.HIGH,
+      ttl: FCM_NOW_OR_NEVER,
+      ...(notification.collapseId === undefined
+        ? undefined
+        : { collapse_key: notification.collapseId }),
+      notification: {
+        ...(notification.collapseId === undefined ? undefined : { tag: notification.collapseId }),
+        ...(aps.badge === undefined ? undefined : { notification_count: aps.badge }),
+        ...(aps.sound === undefined ? undefined : { sound: aps.sound }),
+      },
+    },
+  };
+}
+
+/** The deployment's senders as a push reads them, each optionally, so a runtime without one sends nothing through it. */
+const pushSenders = Effect.all({
+  apns: Effect.serviceOption(ApnsSender),
+  fcm: Effect.serviceOption(FcmSender),
+});
+
+type PushSenders = Effect.Success<typeof pushSenders>;
+
+/** Whether the runtime holds a sender for the phone's push service. */
+function sendable(senders: PushSenders, device: PushDevice): boolean {
+  return device.provider === PUSH_PROVIDER.FCM
+    ? Option.isSome(senders.fcm)
+    : Option.isSome(senders.apns);
+}
+
+/** The notification sent to the phone through its own push service; nothing where the runtime holds no sender for it. */
+function sendToDevice(
+  senders: PushSenders,
+  device: PushDevice,
+  notification: MemberNotification,
+): Effect.Effect<void, never, DatabaseServices> {
+  const { token, environment, bundleId } = device;
+
+  if (device.provider === PUSH_PROVIDER.FCM) {
+    return Option.match(senders.fcm, {
+      onNone: () => Effect.void,
+      onSome: (sender) =>
+        Effect.asVoid(
+          sender.send({ device: { token, environment }, message: fcmMessageOf(notification) }),
+        ),
+    });
+  }
+
+  return Option.match(senders.apns, {
+    onNone: () => Effect.void,
+    onSome: (sender) =>
+      Effect.asVoid(sender.send({ ...notification, device: { token, environment, bundleId } })),
+  });
+}
+
+/** Sends the notification `compose` writes for the member's badge to each phone named, each through its own push service; nothing for none, and the badge is counted only once one stands. */
 function sendToDevices(
   userId: string,
   devices: readonly PushDevice[],
   compose: (badge: number) => MemberNotification,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
-    const sender = yield* Effect.serviceOption(ApnsSender);
+    const senders = yield* pushSenders;
+    const reached = devices.filter((device) => sendable(senders, device));
 
-    if (Option.isNone(sender) || devices.length === 0) return;
+    if (reached.length === 0) return;
     const notification = compose(yield* inboxWaitingCount(userId, yield* Clock.currentTimeMillis));
-    yield* Effect.forEach(
-      devices,
-      ({ token, environment, bundleId }) =>
-        sender.value.send({ ...notification, device: { token, environment, bundleId } }),
-      { discard: true },
-    );
+    yield* Effect.forEach(reached, (device) => sendToDevice(senders, device, notification), {
+      discard: true,
+    });
   });
 }
 
@@ -272,12 +376,12 @@ function pushToMember(
   hold?: HoldSubject,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
-    const sender = yield* Effect.serviceOption(ApnsSender);
+    const senders = yield* pushSenders;
 
-    if (Option.isNone(sender)) return;
+    if (Option.isNone(senders.apns) && Option.isNone(senders.fcm)) return;
 
     const devices = (yield* listPushDevices(userId)).filter(
-      (device) => device.notify !== PUSH_NOTIFY.NEVER,
+      (device) => device.notify !== PUSH_NOTIFY.NEVER && sendable(senders, device),
     );
 
     if (devices.length === 0) return;

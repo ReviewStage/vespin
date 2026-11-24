@@ -21,7 +21,7 @@
  */
 
 import { Schema as EffectSchema } from "effect";
-import { pushDeviceTokenSchema, pushEnvironmentSchema } from "./push-device-wire.js";
+import { apnsTokenSchema, pushEnvironmentSchema } from "./push-device-wire.js";
 
 /** The activity's type as the widget's Swift names it, which a push-to-start's `attributes-type` says; its `attributes` are empty, since one activity covers every running agent. */
 export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = "AgentsActivityAttributes";
@@ -66,9 +66,9 @@ export type LiveActivityContentState = typeof liveActivityContentStateSchema.Typ
 
 /** A token registered for the phone's activity: the phone, by its device token and gateway, and the token ActivityKit handed it. */
 export const liveActivityTokenRequestSchema = EffectSchema.Struct({
-  deviceToken: pushDeviceTokenSchema,
+  deviceToken: apnsTokenSchema,
   environment: pushEnvironmentSchema,
-  token: pushDeviceTokenSchema,
+  token: apnsTokenSchema,
 });
 
 export type LiveActivityTokenRequest = typeof liveActivityTokenRequestSchema.Type;
@@ -81,7 +81,7 @@ export type LiveActivityTokenRequest = typeof liveActivityTokenRequestSchema.Typ
  * activity stands on the phone is forgotten.
  */
 export const liveActivityEndedRequestSchema = EffectSchema.Struct({
-  deviceToken: pushDeviceTokenSchema,
+  deviceToken: apnsTokenSchema,
   environment: pushEnvironmentSchema,
-  activityToken: EffectSchema.optionalKey(pushDeviceTokenSchema),
+  activityToken: EffectSchema.optionalKey(apnsTokenSchema),
 });

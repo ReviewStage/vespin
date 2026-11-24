@@ -13,16 +13,22 @@ import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
 import { inboxPushOf, inboxPushResponseOf, PUSH_KIND } from "@repo/features/inbox-push-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
-import { PUSH_ENVIRONMENT, PUSH_NOTIFY, type PushNotify } from "@repo/features/push-device-wire";
+import {
+  PUSH_ENVIRONMENT,
+  PUSH_NOTIFY,
+  PUSH_PROVIDER,
+  type PushNotify,
+} from "@repo/features/push-device-wire";
 import { RUN_STATUS } from "@repo/features/turn-run";
 import { TURN_ORIGIN, TURN_STATUS, unparsedWire } from "@repo/wire";
-import { Clock, Effect, Option } from "effect";
+import { Clock, Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { postToInbox } from "../agents/coder-host/inbox.js";
 import { TURN_FAILURE } from "../core.js";
 import { answerInboxAsk, taskInboxItems } from "../inbox/inbox-store.js";
 import { endedAt } from "../testing/agent-turns.js";
 import { recordingApnsSender } from "../testing/apns-fake.js";
+import { recordingFcmSender } from "../testing/fcm-fake.js";
 import { APNS_PUSH_TYPE } from "./apns.js";
 import { pushSettledTurn, pushThreadSettled, releaseHeldPushes } from "./inbox-pushes.js";
 
@@ -39,7 +45,9 @@ import { pushSettledTurn, pushThreadSettled, releaseHeldPushes } from "./inbox-p
  * always and is held for those set to away, never to those set to never;
  * once they have been idle two minutes the sweep sends what still waits,
  * and nothing for an ask answered meanwhile, or an agent that went on past
- * its failed turn.
+ * its failed turn. An Android phone takes the same alert and clear through
+ * FCM, as the words Android draws and the app's keys as string data, while
+ * an iPhone beside it still takes Apple's.
  *
  * Synthetic accounts, tasks, and device tokens throughout.
  */
@@ -64,6 +72,22 @@ const phoneOf = (userId: string) =>
     };
 
     yield* registerPushDevice(userId, phone);
+
+    return phone;
+  });
+
+/** An Android phone registered under the account, set to the "Notify me" given, its FCM token synthetic. */
+const androidPhoneOf = (userId: string, notify: PushNotify) =>
+  Effect.gen(function* () {
+    const phone = {
+      token: `${randomUUID()}:APA91b${randomUUID()}`,
+      environment: PUSH_ENVIRONMENT.PRODUCTION,
+      bundleId: "dev.vespin.android",
+      provider: PUSH_PROVIDER.FCM,
+    };
+
+    yield* registerPushDevice(userId, phone);
+    yield* setPushDeviceNotify(userId, phone, notify);
 
     return phone;
   });
@@ -524,6 +548,88 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         assert.equal(yield* walkAway, 1);
         assert.deepEqual(alertedTokens(sender), [phoneOfA.token]);
       }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
+  it.effect(
+    "an Android phone takes the same ask and its clear through FCM, as words Android draws and string data, while the iPhone beside it takes Apple's",
+    () => {
+      const apns = recordingApnsSender();
+      const fcm = recordingFcmSender();
+
+      return Effect.gen(function* () {
+        const { poster, phoneOfA } = yield* openWorkspaceAgent;
+        const android = yield* androidPhoneOf(poster.userId, PUSH_NOTIFY.AWAY);
+        yield* androidPhoneOf(poster.userId, PUSH_NOTIFY.NEVER);
+
+        yield* postToInbox(poster, decide("invite-queue", poster.userId), noSandbox);
+        const [item] = yield* taskInboxItems(poster.userId, poster.taskId);
+
+        const asking = item?.thread?.find(
+          (message) => message.ask?.status === INBOX_ASK_STATUS.OPEN,
+        );
+
+        assert.ok(item !== undefined && asking !== undefined);
+        assert.deepEqual(alertedTokens(apns), [phoneOfA.token]);
+
+        // The app reads FCM's payload with the iPhone's reader: the second button answers with the second option.
+        const androidAsk = fcm.sent[0]?.message.data?.payload;
+        assert.ok(androidAsk !== undefined);
+        assert.deepEqual(
+          inboxPushResponseOf(inboxPushOf(JSON.parse(androidAsk)), { actionId: "1" }),
+          {
+            route: `/inbox/${item.id}`,
+            press: { kind: "choose", itemId: item.id, messageId: asking.id, option: "Redis" },
+          },
+        );
+
+        assert.deepEqual(fcm.sent, [
+          {
+            device: { token: android.token, environment: PUSH_ENVIRONMENT.PRODUCTION },
+            message: {
+              data: {
+                payload: JSON.stringify({
+                  kind: "ask",
+                  itemId: item.id,
+                  messageId: asking.id,
+                  agentId: poster.agentId,
+                  taskId: poster.taskId,
+                  revision: item.revision,
+                  ask: "decide",
+                  options: ["Postgres outbox", "Redis"],
+                }),
+                badge: "1",
+              },
+              notification: {
+                title: "Which queue sends the invitation emails?",
+                body: "Pick one.",
+              },
+              android: {
+                priority: "HIGH",
+                ttl: "0s",
+                collapse_key: item.id,
+                notification: { tag: item.id, notification_count: 1, sound: "default" },
+              },
+            },
+          },
+        ]);
+
+        yield* answerInboxAsk(poster.userId, item.id, {
+          answers: { ask: asking.id, reply: INBOX_REPLY.CHOSE, choices: ["Redis"] },
+          text: "",
+          clientKey: randomUUID(),
+        });
+        yield* pushThreadSettled(item.id);
+        assert.deepEqual(fcm.sent.slice(1), [
+          {
+            device: { token: android.token, environment: PUSH_ENVIRONMENT.PRODUCTION },
+            message: {
+              data: { payload: JSON.stringify({ kind: "settled", itemId: item.id }), badge: "0" },
+              android: { priority: "NORMAL", ttl: "0s" },
+            },
+          },
+        ]);
+      }).pipe(Effect.provide(Layer.merge(apns.layer, fcm.layer)));
     },
   );
 });
