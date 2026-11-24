@@ -8,6 +8,7 @@ import {
   type MemorySource,
   WORKSPACE_MEMORIES,
 } from "@repo/database/models/memory-store";
+import { turnAsker } from "@repo/database/models/turn-asker";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import { dateTimeSchema } from "@repo/features/date-mention";
@@ -91,7 +92,10 @@ import { EXPERIMENT_OFF_REFUSAL, experimentOnIn } from "./workspace-experiment-o
  * it alone (`saveMemoryToolOf`), a correction staying where the memory it
  * corrects is kept, and its search, listing, and forget reach the
  * workspace's memories and its own. No other agent is offered the scope or
- * reads a Manager's own.
+ * reads a Manager's own. A Manager is shared by the workspace's members, so
+ * what it keeps is in the words of the member who asked for its turn under
+ * way (`turnAsker`), its owner standing in where no member did, wherever the
+ * memory is kept.
  */
 
 /** What a memory call acts in: the agent's workspace, the member whose words it keeps, and, for a coding agent's call, where it comes from. */
@@ -200,31 +204,41 @@ const MEMORY_REFUSAL = {
   UNAVAILABLE: "Memory is unavailable right now; carry on without it.",
 } as const;
 
+/** `save_memory`'s words, ending on whose name a correction is kept in. */
+const saveMemoryWords = (keeper: string) =>
+  "Keep a fact or convention for the workspace's later work, in any repository. Every member " +
+  "of the workspace shares what you keep: a decision the team settled, how the team builds, " +
+  "tests, or ships, a constraint someone stated, or a fact you confirmed in the code that a " +
+  "later agent would otherwise have to rediscover. Keep only what was settled, will still " +
+  "hold next time, and helps the team, never a guess, an idea still being weighed, this task's own " +
+  "detail, or a remark about one member. It is refused when it runs past " +
+  `${MEMORY_BOUNDS.MAX_CHARS} characters, when it looks like a credential, key, token, or ` +
+  "password, and on a turn an automation opened or one that read the web, drove the " +
+  "browser, or used the computer tool, so keep what was settled before you browse, or on a later turn a member's own " +
+  "words open. When what was said contradicts a " +
+  `memory ${AGENT_TOOL.SEARCH_MEMORY} answered, pass ` +
+  "that memory's id as replaces with the corrected statement, so the old one is rewritten " +
+  `rather than kept beside it, now in ${keeper} name, or folded into another memory that ` +
+  "already holds the corrected words. Do it quietly: never ask the developer whether to keep something and " +
+  "never mention a memory you kept unless they ask.";
+
 /** The tools as a coding agent is offered them: each its name, its words, and its input schema. */
 export const SAVE_MEMORY_TOOL = {
   name: AGENT_TOOL.SAVE_MEMORY,
-  description:
-    "Keep a fact or convention for the workspace's later work, in any repository. Every member " +
-    "of the workspace shares what you keep: a decision the team settled, how the team builds, " +
-    "tests, or ships, a constraint someone stated, or a fact you confirmed in the code that a " +
-    "later agent would otherwise have to rediscover. Keep only what was settled, will still " +
-    "hold next time, and helps the team, never a guess, an idea still being weighed, this task's own " +
-    "detail, or a remark about one member. It is refused when it runs past " +
-    `${MEMORY_BOUNDS.MAX_CHARS} characters, when it looks like a credential, key, token, or ` +
-    "password, and on a turn an automation opened or one that read the web, drove the " +
-    "browser, or used the computer tool, so keep what was settled before you browse, or on a later turn a member's own " +
-    "words open. When what was said contradicts a " +
-    `memory ${AGENT_TOOL.SEARCH_MEMORY} answered, pass ` +
-    "that memory's id as replaces with the corrected statement, so the old one is rewritten " +
-    "rather than kept beside it, now in your starter's name, or folded into another memory that " +
-    "already holds the corrected words. Do it quietly: never ask the developer whether to keep something and " +
-    "never mention a memory you kept unless they ask.",
+  description: saveMemoryWords("your starter's"),
   inputSchema: REMEMBER_INPUT,
 } as const;
 
-/** `save_memory` as an agent is listed it: a Manager's takes the scope a new memory is kept in. */
+/** `save_memory` as a Manager is listed it: kept in the asker's name, and taking the scope a new memory is kept in. */
+const MANAGER_SAVE_MEMORY_TOOL = {
+  name: AGENT_TOOL.SAVE_MEMORY,
+  description: saveMemoryWords("the asking member's"),
+  inputSchema: MANAGER_REMEMBER_INPUT,
+} as const;
+
+/** `save_memory` as an agent is listed it: a Manager's keeps in the asker's name and takes the scope a new memory is kept in. */
 export function saveMemoryToolOf(manager: boolean) {
-  return manager ? { ...SAVE_MEMORY_TOOL, inputSchema: MANAGER_REMEMBER_INPUT } : SAVE_MEMORY_TOOL;
+  return manager ? MANAGER_SAVE_MEMORY_TOOL : SAVE_MEMORY_TOOL;
 }
 
 export const SEARCH_MEMORY_TOOL = {
@@ -511,7 +525,8 @@ function runForget(
  * its starter, read from the service's record of the agent as every agent
  * tool reads them (`callerWorkspace`), then the call itself. An agent whose
  * workspace cannot be read for its starter now keeps and recalls nothing.
- * Note that one whose workspace has Memory off (`EXPERIMENT.MEMORY`) never
+ * The member the call acts as is its starter unless `member` reads another,
+ * as a Manager's keep reads its asker (`keeperOf`). Note that one whose workspace has Memory off (`EXPERIMENT.MEMORY`) never
  * reaches here, because the catalog refuses its call at the `MEMORY` gate
  * (`tool-catalog/catalog.ts`'s `callTool`).
  */
@@ -519,6 +534,9 @@ function agentMemory(
   call: AgentCall,
   run: (memory: MemoryCall) => Effect.Effect<WireRecord, never, DatabaseServices>,
   provenance: (agent: Agent) => Effect.Effect<MemoryProvenance, StoreFailure, DatabaseServices>,
+  member: (caller: AgentCall["caller"]) => Effect.Effect<string, StoreFailure, DatabaseServices> = (
+    caller,
+  ) => Effect.succeed(callerUserId(caller)),
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   return orUnavailable(
     Effect.gen(function* () {
@@ -526,7 +544,7 @@ function agentMemory(
         return rejected(EXPERIMENT_OFF_REFUSAL);
       }
 
-      const userId = callerUserId(call.caller);
+      const userId = yield* member(call.caller);
       // Provenance reads the calling agent's turn; a member's call is their own words, and has none.
       const agent = callerAgent(call.caller);
       const read = agent === undefined ? undefined : yield* provenance(agent);
@@ -554,12 +572,23 @@ const recallProvenance = (agent: Agent): Effect.Effect<MemoryProvenance, never, 
 const unguarded = (agent: Agent): Effect.Effect<MemoryProvenance, never, never> =>
   Effect.succeed({ refusal: undefined, source: { agentId: agent.id, messageId: null } });
 
-/** One call of `save_memory` from a coding agent, refused on a turn whose words are no member's, and kept as from the agent and its turn's line (`rememberProvenance`). */
+/** Whose words a keep holds: a Manager's asker for the turn under way (`turnAsker`), its owner standing in where no member asked; else the caller's member. */
+const keeperOf = (
+  caller: AgentCall["caller"],
+): Effect.Effect<string, StoreFailure, DatabaseServices> => {
+  const agent = callerAgent(caller);
+
+  if (agent?.kind !== AGENT_KIND.MANAGER) return Effect.succeed(callerUserId(caller));
+
+  return turnAsker({ userId: agent.userId, conversationId: agent.conversationId });
+};
+
+/** One call of `save_memory` from a coding agent, refused on a turn whose words are no member's, and kept as from the agent and its turn's line (`rememberProvenance`), in its keeper's words (`keeperOf`). */
 export function runAgentRemember(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
-  return agentMemory(call, (memory) => runRemember(memory, input), rememberProvenance);
+  return agentMemory(call, (memory) => runRemember(memory, input), rememberProvenance, keeperOf);
 }
 
 /** One call of `search_memory` from a coding agent, each memory it answers logged as recalled by the agent. */
