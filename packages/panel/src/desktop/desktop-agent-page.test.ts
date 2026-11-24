@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 
 /**
- * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; ⌘F finds in its conversation; its box offers Talk; and a page its words link opens in the panel beside it. Synthetic throughout.
+ * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; ⌘F finds in its conversation; its box offers Talk; a Manager's Settings stands as a button beside its ⋯, which no longer lists it; and a page its words link opens in the panel beside it. Synthetic throughout.
  */
 
 import assert from "node:assert/strict";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import { AGENT_RUNTIME, AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
+import {
+  AGENT_KIND,
+  AGENT_RUNTIME,
+  AGENT_STATUS,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -281,6 +286,39 @@ test("an agent on no task's box offers Talk, as an agent's tab on a task does", 
     container.querySelector('.agent-composer [aria-label="Talk"]'),
     "the box offers a call into the agent",
   );
+});
+
+test("a Manager's page stands Settings as a button beside its ⋯, which opens its card, and its ⋯ no longer lists it", async () => {
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const manager = { ...MANAGER, kind: AGENT_KIND.MANAGER };
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+  const container = await mountAgentPage(history, tasks);
+
+  const more =
+    container.querySelector<HTMLElement>('button[aria-label="Agent actions"]') ??
+    assert.fail("the head stands its ⋯");
+
+  act(() => more.click());
+
+  const items = [...document.querySelectorAll('[role="menuitem"]')].map(
+    (item) => item.textContent ?? "",
+  );
+
+  assert.ok(items.length > 0, "the ⋯ opens its menu");
+  assert.ok(!items.some((item) => item.includes("Settings")), "the ⋯ leaves Settings out");
+  act(() => more.click());
+
+  const settings =
+    container.querySelector<HTMLElement>('button[aria-label="Settings"]') ??
+    assert.fail("the head stands a Settings button");
+
+  act(() => settings.click());
+  await settleQueries();
+  assert.ok(document.querySelector('[role="dialog"]'), "Settings opens the Manager's card");
 });
 
 test("a page a Manager's words link opens in the panel beside its chat, read on its task, as a task's page opens one, the Manager's page still standing", async () => {

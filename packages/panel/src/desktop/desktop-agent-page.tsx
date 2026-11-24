@@ -55,14 +55,17 @@ import {
   ErrorState,
   FILL_ELEMENT,
   Fill,
+  IconButton,
   moreLabel,
   NOT_FOUND_THING,
   NotFound,
   PaneBar,
   Toolbar,
   type ToolbarTitleEdit,
+  Tooltip,
   useMenu,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { agentTab, pageTab, type StripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
@@ -144,6 +147,9 @@ const MANAGER_VIEWS: readonly ChoiceItem<ManagerView>[] = [
 
 /** What a Manager's page's tab row is called to a reader. */
 const MANAGER_VIEWS_LABEL = "Manager views";
+
+/** What a Manager's Settings button is named and hinted by. */
+const SETTINGS = "Settings";
 
 /** Where the agent of the page's address stands: on a task, on none, nowhere the reader may open, not read yet, or not read at all. */
 type AgentFound =
@@ -261,9 +267,11 @@ function useOwnAgentThreads(
 /**
  * The head of an agent on no task: a Manager's face leading it, as a
  * task's status leads a task's (`ManagerGlyph`), then its name, a right-click on which opens
- * its one menu and whose Rename turns it into the name's field (a
- * Manager's Settings… opens its card instead), and ⋯
- * holding the same menu; on a phone, its way back before them.
+ * its one menu and whose Rename turns it into the name's field, a Manager's
+ * Settings as a button of its own, which opens its card, and ⋯ holding the
+ * same menu, Settings left out of both menus there since its button stands
+ * beside them; on a phone, its way back before them, and Settings back in
+ * the ⋯, since a phone's bar holds one control a corner.
  */
 function OwnAgentHead({
   tasks,
@@ -309,7 +317,16 @@ function OwnAgentHead({
     FOCUSED_OFFER,
   );
 
+  const { onSettings } = actions.doors;
   const groups = agentMenuGroups({ ...actions.doors, subject: actions.subject });
+
+  // Note that the window's bar stands Settings as a button beside the ⋯, so its menus there leave it out.
+  const barGroups = agentMenuGroups({
+    ...actions.doors,
+    onSettings: undefined,
+    subject: actions.subject,
+  });
+
   const { rename } = actions;
   const editing = rename?.editing === true;
 
@@ -326,9 +343,16 @@ function OwnAgentHead({
     <PlaceMore
       thing={AGENT_THING}
       shown={shown}
-      groups={() => (away === undefined ? groups : [...phoneFindGroups(), ...groups])}
+      groups={() => (away === undefined ? barGroups : [...phoneFindGroups(), ...groups])}
     />
   );
+
+  const settings =
+    onSettings === undefined ? null : (
+      <Tooltip label={SETTINGS}>
+        <IconButton icon={<GLYPH.SETTINGS />} label={SETTINGS} onClick={onSettings} />
+      </Tooltip>
+    );
 
   return (
     <>
@@ -342,7 +366,12 @@ function OwnAgentHead({
           title={editing ? (rename.asked ?? label) : label}
           titleMenu={{ contextMenu: titleMenu.contextMenu(), keyMenu: titleMenu.keyMenu }}
           titleEdit={titleEdit}
-          actions={more}
+          actions={
+            <>
+              {settings}
+              {more}
+            </>
+          }
         />
       ) : (
         <PhoneHead
@@ -357,7 +386,7 @@ function OwnAgentHead({
         <ActionMenu
           label={moreLabel(AGENT_THING)}
           menu={titleMenu.drawn}
-          groups={groups}
+          groups={barGroups}
           onClose={titleMenu.close}
         />
       )}
