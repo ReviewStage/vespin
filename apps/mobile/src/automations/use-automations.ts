@@ -27,6 +27,7 @@ import {
 } from "@repo/features/automation-words";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -129,6 +130,29 @@ export function useWorkspaceRuns(
   }, [acts, workspaceId]);
 
   return { rows: held?.rows, failed: held?.failed === true, retry };
+}
+
+/** What the workspace's integrations say to the Automations pages: whether its Slack bot is connected, so a run's result may be sent on Slack, and its Sentry, through whose installation a Sentry trigger's events arrive; neither while the read is out or failed. */
+export interface WorkspaceIntegrations {
+  readonly slackBot: boolean;
+  readonly sentry: WorkspaceSentry | undefined;
+}
+
+/** The workspace's integrations as the Automations pages read them, followed while the caller is drawn. */
+export function useWorkspaceIntegrations(workspaceId: string): WorkspaceIntegrations {
+  const acts = useHostActs();
+  useLiveFollow(workspaceId, (id) =>
+    acts[ACT_KIND.WORKSPACE_INTEGRATIONS_FOLLOW]({ workspaceId: id }),
+  );
+
+  const select = useMemo(
+    () => (state: AppStateSnapshot) => state[LIVE_READ.WORKSPACE_INTEGRATIONS][workspaceId]?.rows,
+    [workspaceId],
+  );
+
+  const rows = useQuery({ ...appStateQuery, select }).data;
+
+  return { slackBot: rows?.slack.team !== undefined, sentry: rows?.sentry };
 }
 
 /** An automation's writes on the phone: Run now, its switch, Take over, and Delete. */

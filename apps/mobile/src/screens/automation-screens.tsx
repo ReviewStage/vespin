@@ -11,10 +11,12 @@ import {
   DEFAULT_AUTOMATIONS_ORDER,
   finishedAutomations,
 } from "@repo/features/automation-list-model";
+import { automationPreset } from "@repo/features/automation-presets";
 import type { AutomationSummary } from "@repo/features/automation-wire";
 import {
   AUTOMATION_DELETE_WORDS,
   AUTOMATION_PHONE_WORDS,
+  AUTOMATION_SUGGESTION_WORDS,
   AUTOMATION_TAKE_OVER_WORDS,
   automationDeleteTitle,
   automationLastRunWords,
@@ -25,8 +27,10 @@ import {
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { TASKS_VIEW_WORDS } from "@repo/features/tasks-page-model";
 import { sinceText } from "@repo/features/time-format";
+import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { selectWorkspaces } from "@repo/host/app-state-reads";
+import type { AppStateSnapshot } from "@repo/host/app-state";
+import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   AUTOMATION_ROW_LOOK,
   AutomationRow,
@@ -45,9 +49,14 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { newAutomationRoute } from "../automations/automation-editor-route.js";
 import { AUTOMATION_RUNS_ROUTE, automationRoute } from "../automations/automation-routes.js";
+import {
+  AUTOMATION_SUGGESTIONS,
+  type AutomationSuggestion,
+  takenPresets,
+} from "../automations/automation-suggestions.js";
 import { useAutomationsOrder } from "../automations/automations-order.js";
 import {
   type AutomationActs,
@@ -57,6 +66,7 @@ import {
   useAutomationActs,
   useAutomationMaker,
   useWorkspaceAutomations,
+  useWorkspaceIntegrations,
 } from "../automations/use-automations.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -237,6 +247,7 @@ function AutomationsList({
   const tokens = searchTokens(search);
   const automations = read.rows?.filter((automation) => found(automation, tokens));
   const groups = automations === undefined ? [] : automationGroups(automations, order);
+  const offered = useOfferedSuggestions(read.rows ?? NO_AUTOMATIONS, workspace.id);
   const finished = automations === undefined ? [] : finishedAutomations(automations, order);
 
   // Note that a Delete asked about one deleted elsewhere since withdraws its question.
@@ -259,6 +270,9 @@ function AutomationsList({
     />
   );
 
+  // Note that the suggestions stand only once the list is read and no search narrows it, so a preset already made is never offered.
+  const suggested = read.rows !== undefined && tokens.length === 0;
+
   const empty =
     automations === undefined ? (
       read.failed ? (
@@ -278,9 +292,16 @@ function AutomationsList({
       )
     ) : undefined;
 
+  // Note that with nothing listed but suggestions to offer, the suggestions stand in the empty state's place, as the desktop's list offers them under its line saying there are none.
+  const offering = suggested && offered.length > 0;
+
   return (
     <>
-      <RowList look={LIST_LOOK.PLAIN} searched={search} empty={empty}>
+      <RowList
+        look={LIST_LOOK.PLAIN}
+        searched={search}
+        empty={offering && automations?.length === 0 ? undefined : empty}
+      >
         {groups.map((group) => (
           <ListSection
             key={group.owner}
@@ -305,6 +326,7 @@ function AutomationsList({
             </RowForEach>
           </ListSection>
         )}
+        {suggested ? <SuggestedAutomations listed={read.rows ?? []} workspace={workspace} /> : null}
       </RowList>
       <ConfirmAsk
         title={automationDeleteTitle(asked?.name)}
@@ -321,6 +343,87 @@ function AutomationsList({
       />
     </>
   );
+}
+
+/** The suggestions the workspace's experiments allow that no listed automation already stands for. */
+function useOfferedSuggestions(
+  listed: readonly AutomationSummary[],
+  workspaceId: string,
+): readonly AutomationSuggestion[] {
+  const select = useMemo(
+    () => (state: AppStateSnapshot) =>
+      AUTOMATION_SUGGESTIONS.filter(
+        (each) =>
+          each.experiment === undefined ||
+          selectWorkspaceExperiment(workspaceId, each.experiment)(state),
+      ),
+    [workspaceId],
+  );
+
+  const allowed = useQuery({ ...appStateQuery, select }).data ?? NO_SUGGESTIONS;
+  const taken = takenPresets(listed);
+
+  return allowed.filter((each) => !taken.has(each.preset));
+}
+
+/** No automations, as before the list is read. */
+const NO_AUTOMATIONS: readonly AutomationSummary[] = [];
+
+/** No suggestions, as before the document is read. */
+const NO_SUGGESTIONS: readonly AutomationSuggestion[] = [];
+
+/**
+ * The automations the list suggests under its own, as the desktop's list
+ * does: each a row whose press opens New automation filled in from its
+ * preset, to look over and Create. One fired by Sentry while the workspace
+ * has none says so under its words: an owner or an admin is told to connect
+ * it, which the editor's Sentry section does; a member is told whom to ask,
+ * and the row takes no press. One fired by Sentry on a deployment that holds
+ * no Sentry integration, or while the read is out, is not offered.
+ */
+function SuggestedAutomations({
+  listed,
+  workspace,
+}: {
+  readonly listed: readonly AutomationSummary[];
+  readonly workspace: Workspace;
+}) {
+  const router = useRouter();
+  const offered = useOfferedSuggestions(listed, workspace.id);
+  const { sentry } = useWorkspaceIntegrations(workspace.id);
+  const manages = managesWorkspace(workspace);
+
+  const rows = offered.flatMap((suggestion) => {
+    if (suggestion.sentry === true && (sentry === undefined || !sentry.configured)) return [];
+
+    const needs = suggestion.sentry === true && sentry?.installations.length === 0;
+    const filled = automationPreset(suggestion.preset);
+
+    return [
+      <AutomationRow
+        key={suggestion.preset}
+        look={AUTOMATION_ROW_LOOK.LIST}
+        title={filled.name}
+        line={filled.description}
+        standing={AUTOMATION_RUN_STANDING.REST}
+        standingWords={
+          needs
+            ? manages
+              ? AUTOMATION_SUGGESTION_WORDS.CONNECT_SENTRY
+              : AUTOMATION_SUGGESTION_WORDS.ASK_SENTRY
+            : undefined
+        }
+        symbol={suggestion.symbol}
+        onPress={
+          needs && !manages ? undefined : () => router.push(newAutomationRoute(suggestion.preset))
+        }
+      />,
+    ];
+  });
+
+  if (rows.length === 0) return null;
+
+  return <ListSection title={AUTOMATION_SUGGESTION_WORDS.SUGGESTED}>{rows}</ListSection>;
 }
 
 /** An automation's row id in the list. */

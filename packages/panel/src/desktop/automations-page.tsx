@@ -27,6 +27,7 @@ import {
 } from "@repo/features/automation-wire";
 import {
   AUTOMATION_RUN_REFUSAL_WORDS,
+  AUTOMATION_SUGGESTION_WORDS,
   AUTOMATION_TAKE_OVER_WORDS,
   automationNarrowLine,
   automationNextText,
@@ -790,12 +791,6 @@ const SUGGESTIONS: readonly {
   },
 ];
 
-/** What a Sentry suggestion's foot says while the workspace has no Sentry: the press that connects it, or, for a member, whom to ask. */
-const SENTRY_NEEDS = {
-  CONNECT: "Connect Sentry",
-  ASK: "Ask an owner or admin to connect Sentry",
-} as const;
-
 /** The presets suggested where the window works in `workspaceId`: each whose experiment is on there, or that has none. */
 function useOfferedPresets(workspaceId: string | undefined): readonly AutomationPresetName[] {
   const experiments = useExperimentsIn(workspaceId);
@@ -832,8 +827,8 @@ function sentryNeeds(
   const mark = <ProviderMark provider={INTEGRATION_PROVIDER.SENTRY} />;
 
   return manages
-    ? { needs: { mark, words: SENTRY_NEEDS.CONNECT } }
-    : { needs: { mark, words: SENTRY_NEEDS.ASK }, asks: true };
+    ? { needs: { mark, words: AUTOMATION_SUGGESTION_WORDS.CONNECT_SENTRY } }
+    : { needs: { mark, words: AUTOMATION_SUGGESTION_WORDS.ASK_SENTRY }, asks: true };
 }
 
 /**
@@ -899,7 +894,7 @@ function SuggestedAutomations({
 
   return (
     <div className="automation-suggestions mt-page-section-gap">
-      <SuggestionCards title="Suggested">{cards}</SuggestionCards>
+      <SuggestionCards title={AUTOMATION_SUGGESTION_WORDS.SUGGESTED}>{cards}</SuggestionCards>
     </div>
   );
 }
