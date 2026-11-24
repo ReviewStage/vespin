@@ -41,7 +41,6 @@ import {
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
-  scrollEdgeEffectStyle,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { searchTokens } from "@repo/features/search-tokens";
@@ -94,7 +93,7 @@ const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 /** The least a section's + answers a press across, in points: Apple's least target, wider than it draws so a finger finds it beside the header's small words. */
 const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
 
-/** A plain list's header's own space above and below its words, as the system's header stood them (10 pt, measured against main on the iPhone and the iPad), now the header draws its cell's ground itself. */
+/** A plain list's header's own space above and below its words, as the system's header stood them (10 pt, measured against main on the iPhone and the iPad), since the header sets its cell's insets itself. */
 const HEADER_VERTICAL = SPACE.ROW;
 
 /**
@@ -347,9 +346,8 @@ export function RowList({
         ...(look === LIST_LOOK.DETAIL ? [listSectionSpacing("compact")] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
-        // Note that the stack's bar follows the list, so a tab root's large title collapses as it scrolls, and the rows fade under the bar's glass, as they do wherever a bar doesn't follow them, rather than meet a hard edge and a rule, which the bar drew once it followed them.
+        // Note that the stack's bar follows the list, so a tab root's large title collapses as it scrolls. Its top edge effect is the system's automatic one, as the HIG asks: soft where nothing pins, and the more opaque edge under a plain list's pinned section header, which the system draws attached to the bar, as Contacts' and Music's are. A forced soft edge left a pinned header standing over the rows under it.
         stackScrollEdge(),
-        scrollEdgeEffectStyle("soft", "top"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
         // Note that a ticked check is what the reader chose, so Select mode tints it copper, as Mail's checks take its accent, where the screen's ink drew a pale disc in dark.
         ...(choosing === undefined ? [] : [tint(colors.ACCENT)]),
@@ -847,7 +845,7 @@ export function ListSection({
     ...(foldable && !reduceMotion ? [animation(Animation.default, folded)] : []),
   ];
 
-  // Note that a plain list's header pins over the rows scrolling under it, as Mail's do, so it paints the list's ground across its whole cell itself, its insets its own: the list hides its scroll content's background to stand on the brand's ground, which left the pinned header clear and a scrolled row's words drawn through it, and a section's `listRowBackground` never reached the header. A page's grouped list never pins its headers.
+  // Note that a plain list's header pins under the bar as the system's do, its insets its own so its words line up with the rows', and paints no ground: the list's automatic top edge effect covers it and the rows scrolling under it, attached to the bar, where a ground of ours stood as a flat band over half-hidden rows. A page's grouped list never pins its headers.
   const grounded =
     header === undefined || look === LIST_LOOK.DETAIL ? (
       header
@@ -857,7 +855,6 @@ export function ListSection({
           listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
           padding({ horizontal: SPACE.EDGE, vertical: HEADER_VERTICAL }),
           frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-          background(colors.GROUND),
         ]}
       >
         {header}

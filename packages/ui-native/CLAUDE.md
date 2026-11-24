@@ -334,7 +334,10 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   count in the title's place with Done, and stands the acts in the bar at the
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
-  finished of all as `2/5` (`progress`); a `foldable` one folds in place on
+  finished of all as `2/5` (`progress`), and in a plain list pin under the
+  bar as the system's do, standing in the list's automatic top scroll edge
+  effect (the opaque edge iOS draws under a pinned header, attached to the
+  bar) on no ground of ours; a `foldable` one folds in place on
   a press, its chevron at the header's trailing end (before its +) as Mail's mailboxes and
   Reminders' groups fold, its rows easing away and back; one given a `glyph` leads its title
   with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
