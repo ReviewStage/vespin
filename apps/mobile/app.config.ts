@@ -286,6 +286,14 @@ const STOP_AGENT_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "StopAge
 const CALL_PRESS_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "CallPressIntent.swift" };
 const LIVE_ACTIVITY_INTENTS = [STOP_AGENT_INTENT, CALL_PRESS_INTENT] as const;
 
+// The intents the app alone runs: Start a task and Dictate a task, and the
+// App Shortcuts that offer them to Siri, Spotlight, and Shortcuts, which iOS
+// reads from the app's own target.
+const START_TASK_INTENT: ExtensionFile = { FROM: "app-intents", NAME: "StartTaskIntent.swift" };
+
+// Every intent built into the app's own target.
+const APP_TARGET_INTENTS = [...LIVE_ACTIVITY_INTENTS, START_TASK_INTENT] as const;
+
 // The widget extension that draws the member's running agents as a Live
 // Activity, a voice call as one of its own, and the Inbox widget from the
 // snapshot the app keeps in the App Group. Each activity's attributes are
@@ -746,16 +754,17 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
   });
 };
 
-// The Live Activities' intents built into the app's own target as well,
-// since iOS runs a Live Activity's intent in the app's process: copied
-// beside the app's sources and added to its target.
+// The intents built into the app's own target: the Live Activities' as
+// well as their widget's, since iOS runs a Live Activity's intent in the
+// app's process, and the app's own (`APP_TARGET_INTENTS`): copied beside
+// the app's sources and added to its target.
 const withLiveActivityIntents = (config: ExpoConfig): ExpoConfig => {
   const written = withDangerousMod(config, [
     "ios",
     (modConfig) => {
       const { projectRoot } = modConfig.modRequest;
 
-      for (const intent of LIVE_ACTIVITY_INTENTS) {
+      for (const intent of APP_TARGET_INTENTS) {
         copyFileSync(
           join(projectRoot, intent.FROM, intent.NAME),
           join(IOSConfig.Paths.getSourceRoot(projectRoot), intent.NAME),
@@ -769,7 +778,7 @@ const withLiveActivityIntents = (config: ExpoConfig): ExpoConfig => {
   return withXcodeProject(written, (modConfig) => {
     const projectName = IOSConfig.XcodeUtils.getProjectName(modConfig.modRequest.projectRoot);
 
-    for (const intent of LIVE_ACTIVITY_INTENTS) {
+    for (const intent of APP_TARGET_INTENTS) {
       const project = modConfig.modResults;
       const app = IOSConfig.XcodeUtils.getApplicationNativeTarget({ project, projectName });
       modConfig.modResults = IOSConfig.XcodeUtils.addBuildSourceFileToGroup({
