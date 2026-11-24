@@ -140,7 +140,6 @@ import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
-  PLUS_TAB,
   useComposeAction,
   useDetailColumnBar,
   useListColumn,
@@ -1337,8 +1336,8 @@ function InboxStackList(held: InboxHeld) {
             {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
         )}
-        {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
-        {choosing !== undefined || PLUS_TAB ? null : (
+        {/* Note that New task's compose ends the bar, as Messages' and Mail's stand, so it stands beside the tab bar's round + until that retires, and alone after. */}
+        {choosing !== undefined ? null : (
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
             accessibilityLabel={compose.label}
