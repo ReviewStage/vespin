@@ -1,11 +1,11 @@
-pinned to 5e7c9138fe
-== bundle PJjsidea base 5e7c9138fe
-  built 5e7c9138fe base app Vmain12.app ()
+pinned to fef16d88dd
+== bundle PJjsidea base fef16d88dd
+  built fef16d88dd base app Vmain12.app ()
   install 0
   typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
-  export 0
+  export 0 (simulator-bundle.sh)
   signed 0
 ipad27-land-light-1chk: fails 0 shots 1 
-ipad27-land-light: fails 1 shots 6 Tap on id: pull-request-card... FAILED
-ipad27-port-light: fails 1 shots 5 Tap on id: pull-request-card... FAILED
-ipad27-land-dark: fails 1 shots 6 Tap on id: pull-request-card... FAILED
+ipad27-land-light: fails 1 shots 8 Tap on "Tasks", Index: 0... FAILED
+ipad27-port-light: fails 0 shots 9 
+ipad27-land-dark: fails 1 shots 8 Tap on "Tasks", Index: 0... FAILED

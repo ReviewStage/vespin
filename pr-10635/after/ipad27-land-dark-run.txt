@@ -30,12 +30,20 @@ Take screenshot 3-task-page... COMPLETED
 Tap on "Build teammate invitations"... COMPLETED
 Wait for animation to end... COMPLETED
 Take screenshot 4-agent-page... COMPLETED
-Tap on id: pull-request-card... FAILED
+Tap on "#128.*"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 5-pull-request... COMPLETED
+Tap on "Hide Sidebar", Index: 0... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 6-pr-pane-hidden... COMPLETED
+Tap on "Show Sidebar", Index: 0... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Tasks", Index: 0... FAILED
 Set orientation PORTRAIT... COMPLETED
 
-Element not found: Id matching regex: pull-request-card
+Element not found: Text matching regex: Tasks, Index: 0
 
-Element with Id matching regex: pull-request-card not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+Element with Text matching regex: Tasks, Index: 0 not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
 
 Possible causes:
 - Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
@@ -44,4 +52,4 @@ Possible causes:
 
 ==== Debug output (logs & screenshots) ====
 
-/Users/deanstratakos/vespin-ipad-agent/out/sjsidea/ipad27-land-dark/2026-11-23_215956
+/Users/deanstratakos/vespin-ipad-agent/out/sjsidea/ipad27-land-dark/2026-11-23_222712
