@@ -17,6 +17,7 @@ import {
   STARTER_BOUNDS,
   STARTER_NEED,
   type Starter,
+  draftWithStarter,
   startersFor,
 } from "../tasks/starter-tasks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -29,7 +30,8 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
  * workspace is offered (`startersFor`), in their declared order, judged by
  * the repository it reaches, read as the repository chip reads it, and a
  * Mac of the member's among the devices Runs on offers. A press writes the
- * starter's words into New task's draft in the workspace, which the
+ * starter's words into New task's draft in the workspace, after what the
+ * member typed there (`draftWithStarter`), which the
  * composer above draws at once, and hands the words the caret
  * (`onFilled`), so the member reads what the agent will do and starts it
  * with Return; one run on a Mac picks that Mac in Runs on as well. One
@@ -94,7 +96,7 @@ export function HomeStarters({
     if (mac !== undefined && task.needs === STARTER_NEED.MAC) chooseDevice(mac.deviceId);
     writer.update({ kind: DRAFT_PLACE.NEW_TASK, workspaceId }, (was) => ({
       ...was,
-      text: task.prompt,
+      text: draftWithStarter(was.text, task),
     }));
     onFilled();
   };
