@@ -71,8 +71,11 @@ onFlowComplete:
       - assertVisible: "Settings"
       - assertVisible: "Manage"
       - takeScreenshot: ipad-switcher-settings
-      - tapOn:
-          point: "75%, 90%"
+      - tapOn: "Settings(, .*)?"
+      - waitForAnimationToEnd
+      - assertVisible: "Ada Lovelace"
+      - runFlow:
+          file: subflows/close-sheet.yaml
       - setOrientation: PORTRAIT
       - waitForAnimationToEnd
 # A compact window, the iPhone's, names its workspace as the Inbox's one
@@ -89,13 +92,15 @@ onFlowComplete:
       - assertVisible: "Settings"
       - assertVisible: "Manage"
       - takeScreenshot: switcher-settings
-      # Note that the switcher's list is a sheet at the window's foot, so it
-      # is put away by a tap above it, since one low on the window lands on
-      # its Settings row.
+      # Note that the switcher's menu is left by its own Settings, which
+      # opens Settings, closed again by a swipe down, rather than by a tap
+      # off the menu, which landed on its Relay row and switched the
+      # workspace (vjnatc2).
+      - tapOn: "Settings(, .*)?"
+      - waitForAnimationToEnd
+      - assertVisible: "Ada Lovelace"
       - runFlow:
-          file: subflows/dismiss.yaml
-          env:
-            POINT: "50%, 20%"
+          file: subflows/close-sheet.yaml
       - runFlow:
           file: subflows/tab.yaml
           env:
