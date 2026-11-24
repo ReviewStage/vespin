@@ -1,4 +1,6 @@
 // chat-bubble.tsx -- one message of a chat as Messages draws it: the reader's own at the trailing side in copper, everyone else's at the leading side in the raised fill, a sender's run standing tight with one tail under its last.
+//
+// Note that it is drawn of plain React Native views, its tail included, rather than a system piece, because neither iOS, SwiftUI, nor the Expo SDK offers a message bubble: a chat's bubble is the app's own content, as Messages' is Apple's.
 
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
