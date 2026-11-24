@@ -1,0 +1,41 @@
+# probe-tasks-touch.yaml -- PROBE ONLY, never merged: a cold launch's first touches of the Tasks list as a person makes them, run right after the rig's own launch: the Tasks tab the moment it stands, a scroll down the list and back, and a row opened.
+#
+# Note that the app is not launched here, since the rig launches it cold
+# with its own arguments and times it; the flow starts on whatever stands.
+appId: dev.vespin.ios
+---
+- runScript:
+    file: probe-tasks-touch-clock.js
+    env:
+      STEP: start
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runScript:
+    file: probe-tasks-touch-clock.js
+    env:
+      STEP: tasks-tapped
+- swipe:
+    direction: UP
+    duration: 400
+- runScript:
+    file: probe-tasks-touch-clock.js
+    env:
+      STEP: scrolled-down
+- swipe:
+    direction: DOWN
+    duration: 400
+- runScript:
+    file: probe-tasks-touch-clock.js
+    env:
+      STEP: scrolled-up
+- tapOn:
+    text: ".*so it holds under load.*"
+    index: 0
+- runScript:
+    file: probe-tasks-touch-clock.js
+    env:
+      STEP: row-tapped
+- waitForAnimationToEnd:
+    timeout: 3000

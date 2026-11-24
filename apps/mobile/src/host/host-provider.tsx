@@ -242,6 +242,9 @@ export function useWholeListRead(): boolean {
     if (reading) begin(true);
   }, [reading]);
 
+  // PROBE ONLY: when a tab first reads the whole task list.
+  if (reading) probeOnce("whole-list:begin");
+
   return reading;
 }
 
