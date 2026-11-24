@@ -171,6 +171,10 @@
     "dest": "/api/default.js?route=ios/app-site-association"
   },
   {
+    "src": "/api/maintenance/manager-chat-backfill",
+    "dest": "/api/default.js?route=maintenance/manager-chat-backfill"
+  },
+  {
     "src": "/api/maintenance/provider-keys-rewrap",
     "dest": "/api/default.js?route=maintenance/provider-keys-rewrap"
   },
