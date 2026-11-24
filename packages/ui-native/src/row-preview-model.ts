@@ -261,7 +261,7 @@ type PreviewGlyph = { readonly asset?: string | undefined; readonly system?: str
  * the working mark's grid; an agent's tile; a person's face, their photo or
  * their letter on their hue; or a hairline.
  */
-export type PreviewNode =
+type PreviewNode =
   | {
       readonly kind: typeof PREVIEW_NODE.COLUMN | typeof PREVIEW_NODE.ROW;
       readonly spacing: number;

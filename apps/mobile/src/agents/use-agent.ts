@@ -671,7 +671,7 @@ export function useWholeParts(agentId: string): WholeParts {
 }
 
 /** How a page's read stands: on its way, read with its HTML, or not answered. */
-export type PageRead =
+type PageRead =
   | { readonly reading: true }
   | { readonly html: string; readonly title: string }
   | { readonly failed: true };

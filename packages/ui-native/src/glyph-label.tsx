@@ -61,7 +61,7 @@ function MenuPhoto({ photo }: { readonly photo: string }) {
  * stands where a button or a menu would take `systemImage`, because that
  * reads an SF Symbol alone, and the app's glyphs are Lucide's custom symbols.
  */
-export function GlyphLabel({
+function GlyphLabel({
   title,
   glyph,
   textStyle,

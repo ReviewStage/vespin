@@ -115,7 +115,7 @@ export const MENU_ICON = {
  * has one; a photo, drawn round; or a picture of the catalog in its own
  * colors, an integration's mark or a Manager's face.
  */
-export type MenuIcon =
+type MenuIcon =
   | {
       readonly kind: typeof MENU_ICON.GLYPH;
       readonly asset?: string | undefined;

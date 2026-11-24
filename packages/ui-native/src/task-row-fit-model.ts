@@ -1,7 +1,7 @@
 // task-row-fit-model.ts -- how many of a task row's lesser end marks stand aside so its name reads whole, as Mail's rows give up their marks before the sender's name.
 
 /** What a row knows of a mark it may let go: its width with the gap before it, as last drawn, none before it has been, and whether it stands aside now. */
-export interface SparedMarkFit {
+interface SparedMarkFit {
   readonly width: number | undefined;
   readonly dropped: boolean;
 }

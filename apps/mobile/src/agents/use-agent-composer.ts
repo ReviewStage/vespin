@@ -208,7 +208,7 @@ export interface AgentComposer {
 }
 
 /** One of the member's sent lines opened to write again in its place: its id, its words, and what its send drops. */
-export interface MessageEdit {
+interface MessageEdit {
   readonly messageId: string;
   readonly words: string;
   /** Whether anything follows the line, which the send drops, so it asks first. */
@@ -225,7 +225,7 @@ interface Rewriting {
 }
 
 /** A queued message's Delete as `ConfirmAsk` asks it: the panel's words, whether it stands, and its answers. */
-export interface QueuedDeleteAsk {
+interface QueuedDeleteAsk {
   readonly title: string;
   readonly message: string;
   readonly act: string;

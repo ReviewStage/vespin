@@ -269,7 +269,7 @@ function useStatusWrites(tasks: readonly TaskSummary[]): UseStatusWritesResult {
 }
 
 /** A member a task is assigned to: their account id, and the name the host draws them by until the list carries them. */
-export interface Assignee {
+interface Assignee {
   readonly userId: string;
   readonly name: string;
 }
@@ -541,7 +541,7 @@ export interface TaskRowDoors {
 }
 
 /** A task at a glance: how many of its threads wait on the reader, and its agents not archived, in its Overview's order. */
-export interface TaskGlance {
+interface TaskGlance {
   readonly waiting: number;
   readonly agents: readonly ListedAgent[];
 }

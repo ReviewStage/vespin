@@ -39,7 +39,7 @@ function whoseMachines(face: FollowerFace): string {
   return face.you ? "your" : `${face.name}’s`;
 }
 
-export function useOpenFollowing(): (taskId: string) => void {
+function useOpenFollowing(): (taskId: string) => void {
   const router = useRouter();
 
   return (taskId) => router.push({ pathname: FOLLOWING_ROUTE, params: { task: taskId } });

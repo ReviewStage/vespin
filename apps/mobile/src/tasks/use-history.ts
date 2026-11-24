@@ -27,7 +27,7 @@ export const HISTORY_READ = {
   FAILED: "failed",
 } as const;
 
-export type HistoryRead = (typeof HISTORY_READ)[keyof typeof HISTORY_READ];
+type HistoryRead = (typeof HISTORY_READ)[keyof typeof HISTORY_READ];
 
 /** One task's history as its list draws it. */
 export interface TaskHistory {

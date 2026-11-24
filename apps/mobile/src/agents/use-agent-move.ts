@@ -43,7 +43,7 @@ import { useWrite } from "../use-write.js";
 import { useOfferedWorkspaceMachines } from "../workspace-machines.js";
 
 /** One place Move to offers: its name, its glyph, what it says under its name, and the move there. */
-export interface MovePlace {
+interface MovePlace {
   readonly key: string;
   readonly label: string;
   readonly glyph: Glyph;

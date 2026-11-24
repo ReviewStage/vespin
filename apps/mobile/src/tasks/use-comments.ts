@@ -622,12 +622,12 @@ export interface CommentStart {
 }
 
 /** A start sent and not yet answered as posted: its words, the key it went under, and the thread's id it named. */
-export interface SentStart extends SentReply {
+interface SentStart extends SentReply {
   readonly threadId: string;
 }
 
 /** A start the service refused or never answered: what was sent, and why it did not go. */
-export interface RefusedStart extends SentStart {
+interface RefusedStart extends SentStart {
   readonly note: string;
 }
 

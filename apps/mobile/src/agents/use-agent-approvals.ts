@@ -44,7 +44,7 @@ type Held = HeldAsk<HeldAnswer, string>;
 const NO_ASKS: readonly AgentPendingApproval[] = [];
 
 /** The banner over the composer while a call no row draws waits: how many wait, what the oldest such asks, and its answer's press. */
-export interface WaitingBanner {
+interface WaitingBanner {
   readonly waiting: string;
   readonly asks: string;
   readonly answering: HeldAnswer | undefined;
@@ -54,7 +54,7 @@ export interface WaitingBanner {
 }
 
 /** How many calls wait on the member, and the oldest whose row the transcript draws, which the composer's denial line scrolls to. */
-export interface Waiting {
+interface Waiting {
   /** As the panel's working line says it: "Waiting on you · 1 approval". */
   readonly words: string;
   /** How many calls wait, which the composer's Approval capsule counts. */
