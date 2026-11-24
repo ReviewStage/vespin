@@ -1,0 +1,150 @@
+heads: #10729 85a8407527 #10551 1728f52606 #10532 4d9951cde9 #10675 3f3f80509f #10676 f8183a5286 #10677 e00ec274dd #10693 decba745f2 #10694 32877e0fb9 #10566 fc80aa8da4 
+Auto-merging packages/ui-native/src/composer.tsx
+Auto-merging apps/mobile/modules/pill-field/ios/PillFieldModule.swift
+Auto-merging pnpm-lock.yaml
+Auto-merging pnpm-workspace.yaml
+Auto-merging apps/mobile/app.config.ts
+Auto-merging apps/mobile/app.config.ts
+Auto-merging apps/mobile/package.json
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging packages/features/package.json
+Auto-merging packages/host/src/contract/client-parity.ts
+Auto-merging packages/host/src/contract/kinds.ts
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/transcript-model.ts
+Auto-merging pnpm-lock.yaml
+Auto-merging pnpm-workspace.yaml
+Auto-merging apps/mobile/modules/pill-field/ios/PillFieldModule.swift
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging apps/mobile/src/tasks/use-tasks.ts
+Auto-merging packages/ui-native/src/glyph-label.tsx
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/row-menu-model.ts
+Auto-merging packages/ui-native/src/start-page.tsx
+Auto-merging pnpm-lock.yaml
+Auto-merging pnpm-workspace.yaml
+built main aab69d1d0f + #10729 85a8407527 #10551 1728f52606 #10532 4d9951cde9 #10675 3f3f80509f #10676 f8183a5286 #10677 e00ec274dd #10693 decba745f2 #10694 32877e0fb9 #10566 fc80aa8da4 as 2dc6cc3237
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 02:23:20 24242 MB
+curve 02:23:50 24207 MB
+curve 02:24:20 23113 MB
+curve 02:24:51 22187 MB
+curve 02:25:21 22074 MB
+curve 02:25:51 21785 MB
+curve 02:26:21 21760 MB
+curve 02:26:51 21732 MB
+curve 02:27:21 21670 MB
+curve 02:27:52 21665 MB
+curve 02:28:22 21485 MB
+curve 02:28:52 21402 MB
+curve 02:29:22 20367 MB
+curve 02:29:53 20363 MB
+curve 02:30:23 20213 MB
+curve 02:30:53 19962 MB
+curve 02:31:23 19841 MB
+curve 02:31:53 19695 MB
+curve 02:32:24 19854 MB
+curve 02:32:54 20293 MB
+curve 02:33:24 20276 MB
+curve 02:33:54 20215 MB
+curve 02:34:24 20188 MB
+curve 02:34:55 20025 MB
+curve 02:35:25 19886 MB
+curve 02:35:55 19808 MB
+curve 02:36:25 19805 MB
+curve 02:36:56 19734 MB
+curve 02:37:26 19716 MB
+curve 02:37:56 19704 MB
+curve 02:38:26 19629 MB
+curve 02:38:57 19597 MB
+curve 02:39:27 19548 MB
+curve 02:39:57 19507 MB
+curve 02:40:27 19493 MB
+curve 02:40:57 19478 MB
+curve 02:41:28 19411 MB
+curve 02:41:58 19379 MB
+curve 02:42:28 19371 MB
+curve 02:42:58 19320 MB
+curve 02:43:28 19132 MB
+curve 02:43:59 18866 MB
+curve 02:44:29 18834 MB
+curve 02:44:59 18823 MB
+curve 02:45:29 18794 MB
+curve 02:45:59 18779 MB
+curve 02:46:30 18756 MB
+curve 02:47:00 18706 MB
+curve 02:47:30 18673 MB
+curve 02:48:00 18516 MB
+curve 02:48:30 18450 MB
+curve 02:49:01 17933 MB
+curve 02:49:31 17847 MB
+curve 02:50:01 17811 MB
+curve 02:50:31 17753 MB
+curve 02:51:01 17625 MB
+curve 02:51:31 17439 MB
+curve 02:52:02 17361 MB
+curve 02:52:32 17272 MB
+curve 02:53:02 17234 MB
+curve 02:53:32 17139 MB
+curve 02:54:02 17072 MB
+curve 02:54:33 16990 MB
+curve 02:55:03 16869 MB
+curve 02:55:33 16865 MB
+curve 02:56:03 16809 MB
+curve 02:56:33 16780 MB
+curve 02:57:04 16756 MB
+curve 02:57:34 16648 MB
+curve 02:58:04 16646 MB
+curve 02:58:34 16645 MB
+curve 02:59:05 16644 MB
+curve 02:59:35 16600 MB
+curve 03:00:05 16440 MB
+BUILD EXIT 0 03:00:35
+sizes: Assets.car 24800088 bytes (main Vmain12.app 24800088), .app 152408 KB (main 121104 KB), zipped .app 50382660 bytes
+actool: 2 warnings or errors
+tree-sitter share: linked binary symbols: 37595577 bytes; tree-sitter + VespinDiffView: 24891622 bytes (23.74 MB, 66.2%)
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImage.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageAVIFCoder.framework SDWebImageSVGCoder.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework libavif.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnatc1.app: replacing existing signature
+p10616 hw keyboard 1; composer-field at NOT FOUND
+  p10616 still 0-no-composer
+p10616-ipad27-hwkeys: fails (composer-field not found)
+p10616 hw keyboard back to 0
+app size: main base Vmain12.app 121104 KB; this build 151676 KB
+p10551-iphone-light-pull-request-files: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+p10551-iphone-light-pull-request-files diffview: 
+p10551-iphone-dark-pull-request-files: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+p10551-iphone-dark-pull-request-files diffview: 
+p10551-ipad27-light-pull-request-files: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+p10551-ipad27-light-pull-request-files diffview: 
+p10551-ipad27-dark-pull-request-files: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+p10551-ipad27-dark-pull-request-files diffview: 
+p10566-iphone-light-menus: fails 0 shots 28 
+p10566-iphone-dark-menus: fails 0 shots 28 
+p10566-ipad27-light-menus: fails 0 shots 4 
+p10566-ipad27-dark-menus: fails 0 shots 4 
+p10532-iphone-light-compose: fails 1 shots 9 Assert that "Invite limits" is visible... FAILED
+  p10675 still 1-menu-light
+  p10675: the Vespin icon was not found on the Home Screen
+  p10675: the Vespin icon was not found on the Home Screen
+  p10675 still 4-background-new-task
+  p10675 still 5-search
+  p10675 still 6-inbox
+p10675-iphone-quick: 4 stills
+  p10676 still 1-spotlight-start-a-task
+  p10676: Spotlight shows no "Start a Task" element
+  p10676 still 3-shortcuts-app
+p10676-iphone-intents: 2 stills
+  p10677 NOT REACHED: no "Add a Control" (the edit mode's add button)
+  p10677 NOT REACHED: no "Vespin" (Vespin in the widget gallery)
+p10677-iphone-springboard: 4 stills (best effort)
+  p10693 still 1-invitations-agent
+  p10693 still 2-invitations-agent-up
+  p10693: no markdown-picture element on the invitations agent
+  p10693 still 6-digest-agent-mail
+p10693: kept the build as Vnatc1.app
+p10693-iphone-pictures: 3 stills
+p10694-iphone-light-pill-field: fails 1 shots 6 Assert that "(?s).*\*\*Ship\*\*.*" is visible... FAILED

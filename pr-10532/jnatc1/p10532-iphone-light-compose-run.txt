@@ -1,0 +1,89 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow .kbd-compose
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "2 queued" is visible... COMPLETED
+Swiping in LEFT direction on "#128"... COMPLETED
+Tap on "2 queued"... COMPLETED
+Assert that "Then add a Resend button beside each pending invite." is visible... COMPLETED
+Assert that "Steer" is visible... COMPLETED
+Assert that "Stop" is visible... COMPLETED
+Assert that "Add" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot compose-idle... COMPLETED
+Tap on id: composer-field... COMPLETED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text Show the invite's expiry in the email too.... COMPLETED
+Assert that "Send" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot compose-typed... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Stop" is visible... COMPLETED
+Assert that id: ask-note is not visible... COMPLETED
+Swipe from (50%, 25%) to (50%, 92%) in 600 ms... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot compose-sent... COMPLETED
+Tap on "Steer"... COMPLETED
+Assert that id: ask-note is not visible... COMPLETED
+Tap on "Add"... COMPLETED
+Assert that "Photos" is visible... COMPLETED
+Assert that "MCP servers" is visible... COMPLETED
+Assert that "Options" is not visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot compose-add-menu... COMPLETED
+Tap on "MCP servers"... COMPLETED
+Assert that "Linear" is visible... COMPLETED
+Assert that "Notion · Personal" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot compose-servers... COMPLETED
+Tap on "Notion · Personal"... COMPLETED
+Tap on id: agent-model-chip... COMPLETED
+Run subflows/full-sheet.yaml...
+  Swipe from (50%, 85%) to (50%, 15%) in 800 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/full-sheet.yaml... COMPLETED
+Scrolling DOWN until "Full access.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot compose-permissions... COMPLETED
+Tap on "Approve for me.*"... COMPLETED
+Assert that "Approve for me.*", selected is visible... COMPLETED
+Run subflows/dismiss.yaml when ${FLOATING_TABS == 'true'} is true...
+Run subflows/dismiss.yaml when false is true... SKIPPED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+  Scrolling UP until "Done" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Tap on "Done"... COMPLETED
+Run flow when true is true... COMPLETED
+Tap on id: composer-field... COMPLETED
+Input text /... COMPLETED
+Assert that "/release-notes" is visible... COMPLETED
+Assert that "/migrate" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot compose-skills... COMPLETED
+Input text rev... COMPLETED
+Assert that "/review" is visible... COMPLETED
+Assert that "/migrate" is not visible... COMPLETED
+Tap on "/review"... COMPLETED
+Assert that "/release-notes" is not visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot compose-skill-picked... COMPLETED
+Input text @Invite li... COMPLETED
+Assert that "Invite limits" is visible... FAILED
+
+Assertion is false: "Invite limits" is visible
+
+Assertion '"Invite limits" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjnatc1/p10532-iphone-light-compose/2026-11-24_033108
