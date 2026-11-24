@@ -2,7 +2,7 @@
  * toasts.tsx -- the passing notices in each tone, stacked as the window stacks
  * them, each stack on a Base UI manager of its own, every toast's × showing
  * under the pointer or focus: a copy led by its act's glyph, one with a
- * second line, and one carrying Undo and naming its agent as a pill; then
+ * second line, and one carrying Undo and naming its agent as a pill in its words; then
  * ones carrying an action, a status set naming its task, one led by a
  * provider's mark, and one opening a page; failures that offer
  * their details to copy, alone and beside a Retry; one whose work is under
@@ -48,8 +48,9 @@ interface CatalogNotice {
   readonly mark?: MarkProvider;
   /** The glyph it leads with in place of its tone's, naming the act. */
   readonly glyph?: () => React.JSX.Element;
-  /** The one thing it is about, as a pill under its words. */
+  /** The one thing it is about, as a pill in its words' line, and its words after the pill. */
   readonly chip?: ToastChip;
+  readonly afterChip?: string;
   /** Its action's label, and the page it opens, where it opens one. */
   readonly action?: { readonly label: string; readonly href?: string };
   readonly copy?: ToastCopy;
@@ -77,6 +78,7 @@ function CatalogToast({
       mark={notice.mark}
       words={notice.words}
       chip={notice.chip}
+      afterChip={notice.afterChip}
       detail={notice.detail}
       actions={
         <ToastActions
@@ -161,7 +163,7 @@ const STACKED: readonly CatalogNotice[] = [
     id: "archived",
     tone: STATUS_TONE.COMPLETE,
     glyph: GLYPH.ARCHIVE,
-    words: "Agent archived",
+    words: "Archived",
     chip: { glyph: <GLYPH.AGENT />, label: "Refactor auth middleware", kind: "agent" },
     action: { label: "Undo" },
   },
@@ -173,8 +175,9 @@ const ACTING: readonly CatalogNotice[] = [
     id: "status",
     tone: STATUS_TONE.COMPLETE,
     glyph: () => <TaskStatusMark status={TASK_STATUS.DONE} />,
-    words: "Marked done",
+    words: "Marked",
     chip: { glyph: <GLYPH.TASK />, label: "Fix the login redirect", kind: "task" },
+    afterChip: "done",
     action: { label: "Undo" },
   },
   {

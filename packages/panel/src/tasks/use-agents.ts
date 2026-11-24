@@ -2436,11 +2436,18 @@ export function useAgents(input: {
     const one = kept.length === 1 ? listedNow().find((agent) => agent.id === kept[0]) : undefined;
 
     if (said !== undefined) {
-      toast({
-        ...said,
-        glyph: archived ? GLYPH.ARCHIVE : GLYPH.UNARCHIVE,
-        chip: one === undefined ? undefined : toastChip(ENTITY_KIND.AGENT, agentName(one)),
-      });
+      const glyph = archived ? GLYPH.ARCHIVE : GLYPH.UNARCHIVE;
+      // Note that one agent is named as a pill in the toast's sentence ("Archived [agent]").
+      toast(
+        one === undefined
+          ? { ...said, glyph }
+          : {
+              ...said,
+              glyph,
+              words: words.named,
+              chip: toastChip(ENTITY_KIND.AGENT, agentName(one)),
+            },
+      );
     }
 
     return results;

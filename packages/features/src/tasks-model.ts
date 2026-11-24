@@ -451,35 +451,45 @@ export function settleOffered(task: Pick<TaskSummary, "status">, status: Settled
 const STATUS_NOTES = {
   [TASK_STATUS.BACKLOG]: {
     one: "Moved to Backlog",
+    namedBefore: "Moved",
+    namedAfter: "to Backlog",
     many: "tasks moved to Backlog",
     failedOne: "The task could not be moved to Backlog. Try again.",
     failedMany: "The tasks could not be moved to Backlog. Try again.",
   },
   [TASK_STATUS.TODO]: {
     one: "Moved to Todo",
+    namedBefore: "Moved",
+    namedAfter: "to Todo",
     many: "tasks moved to Todo",
     failedOne: "The task could not be moved to Todo. Try again.",
     failedMany: "The tasks could not be moved to Todo. Try again.",
   },
   [TASK_STATUS.IN_PROGRESS]: {
     one: "Moved to In progress",
+    namedBefore: "Moved",
+    namedAfter: "to In progress",
     many: "tasks moved to In progress",
     failedOne: "The task could not be moved to In progress. Try again.",
     failedMany: "The tasks could not be moved to In progress. Try again.",
   },
   [TASK_STATUS.DONE]: {
     one: "Marked done",
+    namedBefore: "Marked",
+    namedAfter: "done",
     many: "tasks marked done",
     failedOne: "The task could not be marked done. Try again.",
     failedMany: "The tasks could not be marked done. Try again.",
   },
   [TASK_STATUS.CANCELED]: {
     one: "Task canceled",
+    namedBefore: "Canceled",
+    namedAfter: undefined,
     many: "tasks canceled",
     failedOne: "The task could not be canceled. Try again.",
     failedMany: "The tasks could not be canceled. Try again.",
   },
-} as const satisfies Record<TaskStatus, Record<string, string>>;
+} as const satisfies Record<TaskStatus, Record<string, string | undefined>>;
 
 /**
  * What the toast says once tasks were set at a status, by how many the
@@ -490,6 +500,13 @@ export function settledNote(status: TaskStatus, landed: number, refused: number)
   const kept = landed === 1 ? notes.one : `${landed} ${notes.many}`;
 
   return refused === 0 ? kept : `${kept}, ${refused} could not be`;
+}
+
+/** What the toast says once one task was set at a status, around the task it names as a pill: "Marked [task] done", "Moved [task] to Backlog", "Canceled [task]". */
+export function settledNamedNote(status: TaskStatus) {
+  const notes = STATUS_NOTES[status];
+
+  return { before: notes.namedBefore, after: notes.namedAfter };
 }
 
 /** What the toast says when the service refused every task a press set at a status. */

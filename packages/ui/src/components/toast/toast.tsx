@@ -6,7 +6,12 @@ import { type MarkProvider, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks
 import { ReplayWords } from "../../session-replay-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
-import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
+import {
+  INLINE_REF_LOOK,
+  INLINE_REF_NAME,
+  InlineRef,
+  type InlineRefName,
+} from "../inline-ref/inline-ref.js";
 import { INLINE_REF_FIT } from "../inline-ref/inline-ref-fit.js";
 import { SpinnerRing } from "../spinner/spinner.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
@@ -14,9 +19,10 @@ import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 /**
  * toast.tsx -- one passing notice, drawn on Base UI's toast: a glyph for what it reports, its words, an optional second line under them, and at most one action, beside a failure's copy, at its end.
  *
- * A toast is a card of its words, each cut at two lines, and the thing it is
- * about, where it names one, as a pill under them (`chip`), as a mention
- * names it in prose, led by the glyph its
+ * A toast is a card of its words, each cut at two lines, naming the thing it
+ * is about, where it names one, as a pill in their line (`chip`), wrapping
+ * with them or kept whole by the rules every mention in running words
+ * keeps, led by the glyph its
  * tone picks, in its tone's ink: a check for what was done, an alert for
  * what was refused or needs the developer, and the spinner's ring for work
  * still under way; or by a `glyph` of its own where what it says has one
@@ -131,15 +137,24 @@ function ToneGlyph({ tone }: { tone: ToastTone }): React.JSX.Element {
   }
 }
 
-/** What a toast is about, drawn as a pill under its words as a mention is: the thing's glyph, its name, and what kind of thing it is, which a screen reader hears before the name. */
+/**
+ * What a toast is about, drawn as a pill in its words as a mention is in
+ * running words: the thing's glyph, its name, what kind of thing it is,
+ * which a screen reader hears before the name, and what its name is, which
+ * says whether it wraps with the words (a title) or is kept whole (a pull
+ * request's key), as every mention's does.
+ */
 export interface ToastChip {
   readonly glyph: ReactNode;
   readonly label: string;
   readonly kind?: string | undefined;
+  readonly name?: InlineRefName | undefined;
 }
 
-/** The pill's row under the words, its pill cut at the column's end. */
-const TOAST_CHIP = "ui-toast-chip flex min-w-0 pt-ui-4";
+/** Its words' line, cut at two lines, or three where they name a thing as a pill, which wraps with them, so the words after a long name are still read. */
+function wordsClass(named: boolean): string {
+  return `ui-toast-words wrap-anywhere ${named ? "line-clamp-3" : "line-clamp-2"}`;
+}
 
 /** Which ways a toast is swiped away: off either side, as it stands at the window's edge. */
 const SWIPE_AWAY: ("left" | "right")[] = ["right", "left"];
@@ -152,6 +167,7 @@ export function Toast({
   mark,
   words,
   chip,
+  afterChip,
   detail,
   replayUnmasked = false,
   actions,
@@ -163,9 +179,12 @@ export function Toast({
   glyph?: (() => React.JSX.Element) | undefined;
   /** The provider whose mark it leads with in place of its tone's glyph, where what it says is about that provider's connection. */
   mark?: MarkProvider | undefined;
+  /** Its words, or where it names what it is about, its words up to that pill. */
   words: string;
-  /** What it is about, drawn as a pill under its words: the task, agent, or pull request it names. */
+  /** What it is about, drawn as a pill after `words`, in their line: the task, agent, Inbox item, or pull request it names. */
   chip?: ToastChip | undefined;
+  /** Its words after the pill, where the sentence goes on past it ("Marked [task] done"). */
+  afterChip?: string | undefined;
   /** A second line under the words. */
   detail?: string | undefined;
   /** Whether its words and detail are the app's own, which a screen recording shows as they read; a toast that quotes a person's words, a name, or a refusal's words leaves them masked. */
@@ -196,25 +215,30 @@ export function Toast({
         )}
       </span>
       <span className={TOAST_TEXT}>
-        <BaseToast.Title render={<span className="ui-toast-words line-clamp-2 wrap-anywhere" />}>
+        <BaseToast.Title render={<span className={wordsClass(chip !== undefined)} />}>
           <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.SPAN}>
             <ReplayWords unmasked={replayUnmasked}>{words}</ReplayWords>
+            {chip === undefined ? null : (
+              <>
+                {" "}
+                <ReplayWords unmasked={false}>
+                  <InlineRef
+                    look={INLINE_REF_LOOK.PILL}
+                    fit={INLINE_REF_FIT.FLOW}
+                    name={chip.name ?? INLINE_REF_NAME.NAME}
+                    glyph={chip.glyph}
+                    label={chip.label}
+                    kind={chip.kind}
+                    hint={false}
+                  />
+                </ReplayWords>
+              </>
+            )}
+            {afterChip === undefined ? null : (
+              <ReplayWords unmasked={replayUnmasked}>{` ${afterChip}`}</ReplayWords>
+            )}
           </Text>
         </BaseToast.Title>
-        {chip === undefined ? null : (
-          <span className={TOAST_CHIP}>
-            <ReplayWords unmasked={false}>
-              <InlineRef
-                look={INLINE_REF_LOOK.PILL}
-                fit={INLINE_REF_FIT.LINE}
-                glyph={chip.glyph}
-                label={chip.label}
-                kind={chip.kind}
-                hint={false}
-              />
-            </ReplayWords>
-          </span>
-        )}
         {detail === undefined ? null : (
           <BaseToast.Description
             render={<span className="ui-toast-detail line-clamp-2 wrap-anywhere" />}

@@ -21,7 +21,7 @@ import { afterEach, test } from "vitest";
 import { fakeActPort } from "../testing/app-bridge.js";
 import { handState, stateWith } from "../testing/app-state.js";
 import { settledWrites, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
-import { newestToastSays, standingToastWords } from "../testing/toast.js";
+import { standingToastWords } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { UNDO_RAN, undoLast } from "../undo-stack.js";
 import { type InboxReadMarks, type MarkSaying, useInboxReadMarks } from "./use-inbox-read-marks.js";
@@ -231,12 +231,7 @@ test("Undo after marking a notice read takes its Got it back at the service by i
   const hook = marks();
   hook.mark(notice(item(Y, true)), false);
   await settle();
-  assert.deepEqual(hook.toasts(), ["Got it"]);
-  assert.match(
-    newestToastSays() ?? "",
-    /Alert at 80%\?/u,
-    "the toast names the notice in its pill",
-  );
+  assert.deepEqual(hook.toasts(), ["Got it: Inbox item Alert at 80%?"]);
   await act(() => undoLast());
   assert.deepEqual(hook.tookBack, [`taken back:${Y}`]);
   assert.deepEqual(

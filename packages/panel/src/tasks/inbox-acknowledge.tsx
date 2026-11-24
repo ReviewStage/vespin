@@ -78,7 +78,7 @@ function refusalWords(answer: NodAnswer): string | undefined {
  * as a resolve is.
  */
 const ACKNOWLEDGE_WRITE = {
-  words: ({ items }) => (items.length === 1 ? ACKNOWLEDGED_ONE : acknowledgedWords(items)),
+  words: ({ items }) => (items.length === 1 ? `${ACKNOWLEDGED_ONE}:` : acknowledgedWords(items)),
   chip: ({ items }) => inboxItemChip(items),
   // Note that its words are the app's own, the one item's title standing in its chip, which a screen recording masks.
   unmasked: () => true,

@@ -26,6 +26,8 @@ export const REMIND_WORDS = {
   CLEAR: "Clear reminder",
   CLEAR_ALL: "Clear reminders",
   CLEARED: "Reminders cleared",
+  /** What a toast says before when a reminder was set for, or before the one item it names as a pill and then when: "Reminder set for [item] tomorrow at 9:00 AM". */
+  SET: "Reminder set for",
   PAST: "Pick a time after now to be reminded",
   /** What a row's due time is heard as, where it says when a reminder comes back in its age's place. */
   DUE: "Reminder",

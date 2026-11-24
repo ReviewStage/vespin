@@ -25,6 +25,7 @@ import {
   type StatusChange,
   type StopAgentsWords,
   settleChanges,
+  settledNamedNote,
   settledNote,
   settleFailedNote,
   settleStopWords,
@@ -195,13 +196,24 @@ export function useStandingWrites(typedNames: () => TaskNames): StandingWrites {
       const words = settledNote(status, landed.length, refused);
       const said = pressed.keep(words, (taskId) => landed.includes(taskId));
       const [one, ...more] = standingTasksOf(standingDoors.rows(), landed);
+      const glyph = () => <TaskStatusGlyph status={status} />;
 
       if (said === undefined) return;
+
+      // Note that one task set, with none refused, is named as a pill in the toast's sentence ("Marked [task] done").
+      if (one === undefined || more.length > 0 || refused > 0) {
+        toast({ ...said, glyph });
+
+        return;
+      }
+
+      const named = settledNamedNote(status);
       toast({
         ...said,
-        glyph: () => <TaskStatusGlyph status={status} />,
-        chip:
-          one === undefined || more.length > 0 ? undefined : toastChip(ENTITY_KIND.PLAN, one.name),
+        glyph,
+        words: named.before,
+        chip: toastChip(ENTITY_KIND.PLAN, one.name),
+        afterChip: named.after,
       });
     });
   };

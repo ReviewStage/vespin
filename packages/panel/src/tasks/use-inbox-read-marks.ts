@@ -6,7 +6,7 @@ import {
   isUnread,
   settledOnRead,
 } from "@repo/features/inbox-list-model";
-import { remindWords } from "@repo/features/inbox-remind-times";
+import { REMIND_WORDS, remindWords } from "@repo/features/inbox-remind-times";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure";
@@ -208,11 +208,13 @@ export function useInboxReadMarks({
           }
 
           if (pressed !== undefined && until !== null) {
-            const words = `Reminder set for ${remindWords(until, Date.now())}`;
-            const said = pressed.keep(words);
+            const when = remindWords(until, Date.now());
+            const said = pressed.keep(`${REMIND_WORDS.SET} ${when}`);
             const chip = inboxItemChip([item]);
 
-            if (said !== undefined) toast({ ...said, glyph: GLYPH.TIME, chip });
+            if (said !== undefined) {
+              toast({ ...said, glyph: GLYPH.TIME, words: REMIND_WORDS.SET, chip, afterChip: when });
+            }
           }
 
           return KEPT;

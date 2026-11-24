@@ -194,10 +194,8 @@ export function useRemindMany(onRemind: InboxReminder | undefined): InboxRemindM
       if (onRemind === undefined || touched.length === 0) return;
       const pressed = remind(touched, until);
 
-      const words =
-        until === null
-          ? REMIND_WORDS.CLEARED
-          : `Reminder set for ${remindWords(until, Date.now())}`;
+      const when = until === null ? undefined : remindWords(until, Date.now());
+      const words = when === undefined ? REMIND_WORDS.CLEARED : `${REMIND_WORDS.SET} ${when}`;
 
       void Promise.all(touched.map((item) => onRemind(item, until, QUIET))).then((taken) => {
         const kept = new Set(
@@ -208,7 +206,14 @@ export function useRemindMany(onRemind: InboxReminder | undefined): InboxRemindM
         const said = pressed.keep(words, (id) => kept.has(id));
         const chip = inboxItemChip(touched.filter(({ id }) => kept.has(id)));
 
-        if (said !== undefined) toast({ ...said, glyph: GLYPH.TIME, chip });
+        if (said === undefined) return;
+
+        // Note that a reminder set on one item names it as a pill in the toast's sentence ("Reminder set for [item] tomorrow at 9:00 AM").
+        toast(
+          chip === undefined || when === undefined
+            ? { ...said, glyph: GLYPH.TIME }
+            : { ...said, glyph: GLYPH.TIME, words: REMIND_WORDS.SET, chip, afterChip: when },
+        );
       });
     },
     [onRemind, remind, toast],

@@ -9,8 +9,8 @@
  * waiting on its restart or the app updated to one (`update-toast.ts`); what happened elsewhere, an agent's
  * turn ended, an Inbox item posted, or an automation's run that failed, is
  * said by the window's own marks and counts instead. Each is a
- * card of its words, the one thing it is about as a pill under them where it
- * names one (a task, an agent, an Inbox item), as a mention names it, an
+ * card of its words, naming the one thing it is about as a pill in their line
+ * where it names one (a task, an agent, an Inbox item), as a mention names it, an
  * optional second line under them, each cut at two lines, and at most one action, such as Undo, at its end, beside a failure's copy.
  *
  * Their life is Base UI's (`ToastStack`): up to three stand at once, newest
@@ -111,8 +111,10 @@ export type ToastNotice = {
   readonly glyph?: (() => React.JSX.Element) | undefined;
   /** The provider whose mark it leads with, where it is about one of the account's connections (`Toast`'s `mark`). */
   readonly mark?: MarkProvider;
-  /** What it is about, drawn as a pill under its words, where it names one task, agent, or pull request (`Toast`'s `chip`); its name is never said in `words` too. */
+  /** What it is about, drawn as a pill after `words` in their line, where it names one task, agent, Inbox item, or pull request (`Toast`'s `chip`); its name is never said in `words` too. */
   readonly chip?: ToastChip | undefined;
+  /** Its words after the pill, where the sentence goes on past it ("Marked [task] done"). */
+  readonly afterChip?: string | undefined;
   readonly detail?: string;
   readonly subject?: string;
   /** Whether its words and detail are the app's own, which a screen recording shows as they read; one that quotes a name, a person's words, or a refusal's words leaves this off. */
@@ -193,11 +195,11 @@ function removed(id: string, notice: KeptNotice): void {
   notice.onGone?.();
 }
 
-/** What is said aloud after a notice's words: the name its pill shows, then its second line. */
-function spokenDetail(notice: KeptNotice): string | undefined {
-  const said = [notice.chip?.label, notice.detail].filter((part) => part !== undefined);
-
-  return said.length === 0 ? undefined : said.join(". ");
+/** A notice's sentence as it is said aloud: its words, the name its pill shows, and its words after the pill. */
+function spokenWords(notice: KeptNotice): string {
+  return [notice.words, notice.chip?.label, notice.afterChip]
+    .filter((part) => part !== undefined)
+    .join(" ");
 }
 
 /**
@@ -208,8 +210,8 @@ function spokenDetail(notice: KeptNotice): string | undefined {
  */
 function toastOptions(id: string, notice: KeptNotice) {
   return {
-    title: notice.words,
-    description: spokenDetail(notice),
+    title: spokenWords(notice),
+    description: notice.detail,
     priority: notice.tone === STATUS_TONE.DANGER ? ("high" as const) : ("low" as const),
     timeout: standsOn(notice) ? 0 : undefined,
     type: notice.tone === STATUS_TONE.WORKING ? TOAST_TYPE.WORKING : undefined,
@@ -384,6 +386,7 @@ function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.El
       mark={notice.mark}
       words={notice.words}
       chip={notice.chip}
+      afterChip={notice.afterChip}
       detail={notice.detail}
       replayUnmasked={notice.replayUnmasked}
       actions={

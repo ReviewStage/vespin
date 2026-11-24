@@ -674,18 +674,22 @@ export const SERVERS_FAILED = "The agent's MCP servers could not be changed. Try
 /** What an agent's archive says once it landed, and what it says refused. */
 const ARCHIVED_WORDS = {
   done: "Agent archived",
+  named: "Archived",
   refused: "The agent could not be archived. Try again.",
 } as const;
 
 /** What an agent's unarchive says once it landed, and what it says refused. */
 const UNARCHIVED_WORDS = {
   done: "Agent unarchived",
+  named: "Unarchived",
   refused: "The agent could not be unarchived. Try again.",
 } as const;
 
 /** What the toast says once an agent's archive, or its undoing, landed or was refused, by which way it was asked. */
 export function archiveWords(archived: boolean): {
   readonly done: string;
+  /** What the toast says before the one agent it names as a pill: "Archived [agent]". */
+  readonly named: string;
   readonly refused: string;
 } {
   return archived ? ARCHIVED_WORDS : UNARCHIVED_WORDS;

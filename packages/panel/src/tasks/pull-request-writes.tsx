@@ -6,7 +6,6 @@ import {
   type AgentPullRequestWriteAnswerView,
 } from "@repo/features/agent-view";
 import { type AgentPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
-import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { saidWords } from "@repo/features/integration-health";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -82,7 +81,7 @@ import { confirmFailure, failureShown } from "../failure-report.js";
 import { useGitHubConnection } from "../github-connect.js";
 import { OPEN_SETTINGS_LABEL, useOpenSettings } from "../open-settings.js";
 import { useToast, useWithdrawToast } from "../toast.js";
-import { toastChip } from "../toast-chip.js";
+import { pullRequestChip } from "../toast-chip.js";
 import { PULL_REQUEST_TONE, PullRequestMark } from "./pull-request-mark.js";
 import { usePullRequestSource, writeScopeOf } from "./pull-request-source.js";
 import { useOpenWorkspaceGitHub } from "./repository-remedy.js";
@@ -532,9 +531,9 @@ export function PullRequestStateMenu({
         ? () =>
             toast({
               replayUnmasked: true,
-              words: CLOSE_WORDS.CLOSED,
+              words: CLOSE_WORDS.CLOSED_NAMED,
               tone: STATUS_TONE.COMPLETE,
-              chip: toastChip(ENTITY_KIND.PULL_REQUEST, `#${pullRequest.number}`),
+              chip: pullRequestChip(pullRequest.number),
               subject: toastSubject,
               action: {
                 label: CLOSE_WORDS.REOPEN,
