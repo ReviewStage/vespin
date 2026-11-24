@@ -149,6 +149,8 @@ describe("a route opened from a tab", () => {
     ["/inbox/item-1", "tasks", "/(tasks)/inbox/item-1"],
     ["/tasks/task-1", undefined, "/(tasks)/tasks/task-1"],
     ["/inbox", "tasks", "/(inbox)/inbox"],
+    ["/automations/automation-1", "inbox", "/(inbox)/automations/automation-1"],
+    ["/automations", "tasks", "/(automations)/automations"],
     ["/start-task", "inbox", "/start-task"],
   ] as const)("%s from %s opens at %s", (route, standing, opened) => {
     expect(iosRouteOnTab(route, standing)).toBe(opened);

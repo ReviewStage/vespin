@@ -23,7 +23,11 @@ const SPLIT_ROOT = {
 const SPLIT_ROOTS: ReadonlySet<string> = new Set(Object.values(SPLIT_ROOT));
 
 /** Every tab's root, by its route in the stack: the split roots and Search's, the screens that stand a large title. */
-const TAB_ROOT = { ...SPLIT_ROOT, SEARCH: "search/index" } as const;
+const TAB_ROOT = {
+  ...SPLIT_ROOT,
+  SEARCH: "search/index",
+  AUTOMATIONS: "automations/index",
+} as const;
 
 const TAB_ROOTS: ReadonlySet<string> = new Set(Object.values(TAB_ROOT));
 

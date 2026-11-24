@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: labeled glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, which an iPad folds away rather than moving to the top, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: labeled glass tabs for Inbox with its count, Tasks, Automations, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, which an iPad folds away rather than moving to the top, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import {
   IOS_TAB,
@@ -102,7 +102,7 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // Pinned, Following, and the member's sections as groups atop its list.
 // Tabs stay mounted across a fold, a rotation, or a resize, so each keeps
 // the open thread or task.
-// Each tab carries an id of its own (`inbox-tab`, `tasks-tab`, `search-tab`),
+// Each tab carries an id of its own (`inbox-tab`, `tasks-tab`, `automations-tab`, `search-tab`),
 // since a list's title, a back button, and a split view's search field
 // share their names, and a flow taps a tab by it.
 //
@@ -172,6 +172,14 @@ export default function TabsLayout() {
       <NativeTabs.Trigger name="(tasks)" accessibilityLabel="Tasks" testID="tasks-tab">
         <NativeTabs.Trigger.Icon xcasset={GLYPH.TASK} />
         <NativeTabs.Trigger.Label>Tasks</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger
+        name="(automations)"
+        accessibilityLabel="Automations"
+        testID="automations-tab"
+      >
+        <NativeTabs.Trigger.Icon xcasset={GLYPH.AUTOMATION} />
+        <NativeTabs.Trigger.Label>Automations</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger
         name="(search)"
