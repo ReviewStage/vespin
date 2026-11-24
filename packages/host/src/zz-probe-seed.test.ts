@@ -5,6 +5,7 @@
 // items and 2 workspaces, every word invented, at the row sizes a busy account keeps (plan ~0.9 KB,
 // agent ~2.3 KB, Inbox item ~4.8 KB), through the host's own writer, so its schema hash is the build's.
 
+import { mkdirSync, writeFileSync } from "node:fs";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { AGENT_ARCHIVER, AGENT_BRIEF } from "@repo/features/agent-wire";
@@ -18,6 +19,8 @@ import {
   type InboxMessage,
   inboxItemSchema,
 } from "@repo/features/inbox-wire";
+import { INBOX_ITEMS_READ, inboxInOrder, inboxOfLiveRows } from "@repo/features/inbox-live";
+import { LIVE_POLL_URL } from "@repo/features/live-wire";
 import { TASK_LIST_READ, taskSummaryOf } from "@repo/features/task-list-live";
 import { TASK_PRIORITY, TASK_STATUS } from "@repo/features/task-wire";
 import { workspaceSchema } from "@repo/features/workspace-wire";
@@ -289,6 +292,134 @@ const WORKSPACES = [
   },
 ];
 
+
+/**
+ * PROBE: the service's answers a launch reads past its kept rows, written as
+ * the bodies the stub serves (`stub-auth-server.ts`, `-probeAnswers true`):
+ * the Inbox items read whole, as a phone that kept only the first 1 MB of a
+ * larger Inbox reads it at every launch, and the task list past the sync id
+ * its kept rows were read at, a small delta. The sync ids must match the
+ * stub's (`PROBE_SYNC`).
+ */
+const PROBE_SYNC = { TASKS_KEPT: 1000, INBOX: 2000 } as const;
+
+/** The Inbox items the host keeps on disk: the first, in its list's order, whose JSON fits in 1 MB (`account-items-follow.ts`'s `KEPT_CHARACTERS`). */
+const KEPT_INBOX_CHARACTERS = 1_000_000;
+
+/** One part of a sealed answer as the service writes it, its rows inline. */
+function sealedPart(name: string, rows: readonly unknown[], sync: { past?: string; next: string }) {
+  return {
+    capability: "probe",
+    queryFingerprint: name,
+    expiresAt: 4_000_000_000_000,
+    digest: `probe-${sync.next}`,
+    rows,
+    sync,
+    ...(sync.past === undefined ? undefined : { gone: [] }),
+  };
+}
+
+/** The Inbox items read answered whole, as the service answers a reader that kept only part of it. */
+function inboxWholeBody(inbox: readonly { readonly item: InboxItem; readonly taskId: string }[]): string {
+  const sync = { next: String(PROBE_SYNC.INBOX) };
+  const stamps = inbox.map(({ item, taskId }) => ({
+    id: item.id,
+    taskId,
+    agentId: item.agentId,
+    revision: item.revision,
+    version: item.version,
+    status: item.status,
+    updatedAt: item.updatedAt,
+    unread: false,
+    remindAt: null,
+    waitsOn: ME.userId,
+    messages: item.thread.length,
+  }));
+  const items = inbox.map(({ item }) => {
+    const { thread, startedBy: _startedBy, waitsOn: _waitsOn, ...rest } = item;
+    const openAsk = thread.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
+
+    return {
+      ...rest,
+      startedBy: ME.userId,
+      startedByName: ME.name,
+      waitsOn: ME.userId,
+      waitsOnName: ME.name,
+      answeredBy: null,
+      answeredByName: null,
+      closedReason: null,
+      closedBy: null,
+      closedByName: null,
+      openAskMessageId: openAsk?.id ?? null,
+      settledAt: null,
+      unread: false,
+      remindAt: null,
+    };
+  });
+  const messages = inbox.flatMap(({ item }) =>
+    item.thread.map((message) => {
+      const member = (message as { member?: { userId: string; name: string } }).member;
+
+      return {
+        id: message.id,
+        itemId: item.id,
+        author: message.author,
+        userId: member?.userId ?? null,
+        name: member?.name ?? null,
+        text: message.text,
+        ask: message.ask ?? null,
+        answers: null,
+        clientKey: null,
+        createdAt: message.createdAt,
+      };
+    }),
+  );
+  const answer = {
+    url: LIVE_POLL_URL,
+    queries: {
+      stamps: sealedPart("stamps", stamps, sync),
+      items: sealedPart("items", items, sync),
+      messages: sealedPart("messages", messages, sync),
+      files: sealedPart("files", [], sync),
+    },
+  };
+  // Note that the body is checked as the app reads it: every row of every part decodes, and the threads join whole.
+  const body = Schema.encodeSync(INBOX_ITEMS_READ.answer)(answer as never) as { queries: Record<string, { rows: string }> };
+  const back = Schema.decodeUnknownSync(INBOX_ITEMS_READ.answer)(body) as { queries: Record<string, { rows: readonly unknown[] }> };
+  const rows = Schema.decodeUnknownSync(INBOX_ITEMS_READ.rows)(
+    Object.fromEntries(Object.entries(back.queries).map(([part, query]) => [part, query.rows])),
+  ) as { stamps: readonly unknown[]; items: readonly unknown[]; messages: readonly unknown[]; files: readonly unknown[] };
+  const joined = inboxOfLiveRows(rows as never);
+  if (rows.stamps.length !== stamps.length || rows.items.length !== items.length || rows.messages.length !== messages.length || joined.length !== inbox.length || joined.some((item) => item.thread.length !== 8)) {
+    throw new Error(`probe seed: the Inbox answer lost rows: ${rows.stamps.length}/${stamps.length} stamps, ${rows.items.length}/${items.length} items, ${rows.messages.length}/${messages.length} messages, ${joined.length} joined`);
+  }
+
+  return JSON.stringify(body);
+}
+
+/** The task list read past its kept sync id: the five newest agents moved, as a busy account's list moves between launches. */
+function tasksDeltaBody(agents: readonly AgentRow[]): string {
+  const sync = { past: String(PROBE_SYNC.TASKS_KEPT), next: String(PROBE_SYNC.TASKS_KEPT + 1) };
+  const moved = agents.slice(0, 5).map((agent) => ({ ...agent, saidAt: NOW - MINUTE }));
+  const answer = {
+    url: LIVE_POLL_URL,
+    queries: {
+      tasks: sealedPart("tasks", [], sync),
+      agents: sealedPart("agents", moved, sync),
+      issues: sealedPart("issues", [], sync),
+    },
+    taskWorkspaces: [WORKSPACE_TEAM, WORKSPACE_OWN],
+  };
+  const body = Schema.encodeSync(TASK_LIST_READ.answer)(answer as never) as object;
+  const back = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(body) as { queries: Record<string, { rows: readonly unknown[] }> };
+  const rows = Schema.decodeUnknownSync(TASK_LIST_READ.rows)(
+    Object.fromEntries(Object.entries(back.queries).map(([part, query]) => [part, query.rows])),
+  ) as { agents: readonly unknown[] };
+  if (rows.agents.length !== moved.length) throw new Error(`probe seed: the task list delta lost rows: ${rows.agents.length}/${moved.length}`);
+
+  return JSON.stringify(body);
+}
+
 const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeSqliteDriverLayer);
 
 it.effect("writes the probe's synthetic local database", () =>
@@ -299,6 +430,16 @@ it.effect("writes the probe's synthetic local database", () =>
       (one, other) => other.createdAt - one.createdAt,
     );
     const inbox = Array.from({ length: SCALE.INBOX }, (_, n) => inboxAt(n));
+    // Note that the host keeps only the first of a large Inbox, in its list's order, within 1 MB, so the seed keeps what the phone keeps.
+    const taskOf = new Map(inbox.map(({ item, taskId }) => [item.id, taskId]));
+    let keptChars = 0;
+    const keptInbox = inboxInOrder(inbox.map(({ item }) => item))
+      .filter((item) => {
+        keptChars += JSON.stringify(item).length;
+
+        return keptChars <= KEPT_INBOX_CHARACTERS;
+      })
+      .map((item) => ({ item, taskId: taskOf.get(item.id) as string }));
 
     // Note that every row is checked against the shape the service delivers, so the app reads it as a real one.
     Schema.decodeUnknownSync(TASK_LIST_READ.rows)({ tasks: plans, agents, issues: [] });
@@ -328,24 +469,29 @@ it.effect("writes the probe's synthetic local database", () =>
           WORKSPACES.map((row) => ({ key: row.id, row })),
           undefined,
         );
+        // Note that the list is kept at a sync id, as the host keeps it, so the first read asks past it (`task-list-collections.ts`'s `taskListKeptSchema`).
+        const listKept = {
+          at: String(PROBE_SYNC.TASKS_KEPT),
+          taskWorkspaces: [WORKSPACE_TEAM, WORKSPACE_OWN],
+        };
         yield* write(
           KEPT_LIST.TASK_LIST_PLANS,
           plans.map((row) => ({ key: row.id, row })),
-          undefined,
+          listKept,
         );
         yield* write(
           KEPT_LIST.TASK_LIST_AGENTS,
           agents.map((row) => ({ key: row.id, row })),
-          undefined,
+          listKept,
         );
         yield* write(
           KEPT_LIST.INBOX,
-          inbox.map(({ item }) => ({ key: item.id, row: item })),
+          keptInbox.map(({ item }) => ({ key: item.id, row: item })),
           {
-            plans: Object.fromEntries(inbox.map(({ item, taskId }) => [item.id, taskId])),
+            plans: Object.fromEntries(keptInbox.map(({ item, taskId }) => [item.id, taskId])),
             ...(process.env.PROBE_SEED_HOLDERS === "1"
               ? {
-                  holders: [...new Set(inbox.map(({ taskId }) => taskId))]
+                  holders: [...new Set(keptInbox.map(({ taskId }) => taskId))]
                     .slice(0, 250)
                     .map((taskId) =>
                       taskSummaryOf(plans.find((plan) => plan.id === taskId) as PlanRow, undefined),
@@ -355,6 +501,15 @@ it.effect("writes the probe's synthetic local database", () =>
           },
         );
       }),
+    );
+
+    const answers = `${root}/probe-answers`;
+    mkdirSync(answers, { recursive: true });
+    const inboxBody = inboxWholeBody(inbox);
+    writeFileSync(`${answers}/inbox-whole.json`, inboxBody);
+    writeFileSync(`${answers}/tasks-delta.json`, tasksDeltaBody(agents));
+    console.log(
+      `probe seed: kept ${keptInbox.length} of ${inbox.length} Inbox items (${keptChars > KEPT_INBOX_CHARACTERS ? "capped" : "whole"}); answers at ${answers}: inbox-whole ${inboxBody.length} chars`,
     );
 
     const size = (list: readonly unknown[]) =>

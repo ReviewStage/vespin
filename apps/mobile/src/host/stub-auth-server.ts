@@ -23,12 +23,103 @@
 
 import { AUTH_SESSION_END, type AuthSession } from "@repo/credentials";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
+import { INBOX_ITEMS_READ } from "@repo/features/inbox-live";
 import { LIVE_POLL, LIVE_POLL_URL } from "@repo/features/live-wire";
+import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import type { WireRecord } from "@repo/wire";
+import { File, Paths } from "expo-file-system";
 import { Settings } from "react-native";
+import { probe } from "../launch-probe.js";
 
 /** PROBE ONLY: whether the stub leaves the kept workspaces standing, so a seeded local copy draws as it was kept. */
 const PROBE_KEEP_ROWS = Settings.get("probeKeepRows") === "true";
+
+/**
+ * PROBE ONLY: whether the stub answers the Inbox items read and the task list
+ * as the service answered the developer's launches: the Inbox whole after
+ * `PROBE_TIMING.INBOX_WHOLE_MS`, since a phone that kept only the first 1 MB
+ * of a larger Inbox reads it whole at every launch, and the task list past its
+ * kept sync id with a small delta; each poll after is held, then answered
+ * with nothing moved past a sync id that moves, as the service's does. The
+ * bodies are the seed's (`zz-probe-seed.test.ts`), read from the state root.
+ */
+const PROBE_ANSWERS = Settings.get("probeAnswers") === "true";
+
+/** The sync ids the seed kept the task list at and answered the Inbox at (the seed's `PROBE_SYNC`). */
+const PROBE_SYNC = { TASKS_KEPT: 1000, INBOX: 2000 } as const;
+
+/** How long the stub takes to answer, as the service took on the developer's launch: the Inbox whole about 3 s, a small delta a few hundred ms, and a held poll until it ends with nothing moved. */
+const PROBE_TIMING = { INBOX_WHOLE_MS: 3000, TASKS_DELTA_MS: 300, HELD_MS: 20_000 } as const;
+
+/** Where the seed's answer bodies stand: beside the account's local database, under the host's state root. */
+const PROBE_ANSWERS_DIR = "host/probe-answers";
+
+/** Resolves after `ms`. */
+function probeWait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
+/** The seed's answer body `name`, answered no sooner than `ms` after `askedAt`. */
+async function probeAnswerFile(name: string, askedAt: number, ms: number): Promise<Response> {
+  const text = await new File(Paths.document, `${PROBE_ANSWERS_DIR}/${name}`).text();
+  await probeWait(ms - (performance.now() - askedAt));
+  probe(`stub:answer:${name}`, { chars: text.length, ms: Math.round(performance.now() - askedAt) });
+
+  return new Response(text, { status: 200, headers: { "content-type": "application/json" } });
+}
+
+/** A held poll past `past` ended with nothing moved, every part of `parts` empty, past a sync id one on, as the service's settled id moves. */
+async function probeHeldStill(parts: readonly string[], past: number, read: string): Promise<Response> {
+  await probeWait(PROBE_TIMING.HELD_MS);
+  const sync = { past: String(past), next: String(past + 1) };
+  probe(`stub:held:${read}`, { past });
+
+  return json({
+    url: LIVE_POLL_URL,
+    queries: Object.fromEntries(
+      parts.map((part) => [
+        part,
+        {
+          capability: "probe",
+          queryFingerprint: part,
+          expiresAt: 4_000_000_000_000,
+          digest: `probe-${sync.next}`,
+          rows: "[]",
+          sync,
+          gone: [],
+        },
+      ]),
+    ),
+  });
+}
+
+/** The Inbox items read: whole where it asks past no sync id of the stub's, held where it asks past one. */
+function probeInboxAnswer(sync: string | null, askedAt: number): Promise<Response> {
+  const past = Number(sync);
+
+  if (Number.isInteger(past) && past >= PROBE_SYNC.INBOX) {
+    return probeHeldStill(Object.keys(INBOX_ITEMS_READ.parts), past, "inbox");
+  }
+  probe("stub:asked:inbox-whole", { sync });
+
+  return probeAnswerFile("inbox-whole.json", askedAt, PROBE_TIMING.INBOX_WHOLE_MS);
+}
+
+/** The task list read: the seed's delta past its kept sync id, held past a later one, and not found asked whole, which a launch with the list kept never asks. */
+function probeTasksAnswer(sync: string | null, askedAt: number): Promise<Response> {
+  const past = Number(sync);
+
+  if (past === PROBE_SYNC.TASKS_KEPT) {
+    return probeAnswerFile("tasks-delta.json", askedAt, PROBE_TIMING.TASKS_DELTA_MS);
+  }
+
+  if (Number.isInteger(past) && past > PROBE_SYNC.TASKS_KEPT) {
+    return probeHeldStill(Object.keys(TASK_LIST_READ.parts), past, "tasks");
+  }
+  probe("stub:asked:tasks-whole", { sync });
+
+  return Promise.resolve(new Response(null, { status: 404 }));
+}
 
 /** The account the stub signs in, as its identity answers it. */
 export const STUB_ACCOUNT = {
@@ -121,6 +212,14 @@ export const stubAuthFetch: typeof globalThis.fetch = (input, init) => {
       return Promise.resolve(json(STUB_ACCOUNT));
     case STUB_PATH.REVOKE:
       return Promise.resolve(json({}));
+    case HOSTED_SERVICE_PATH.LIVE_INBOX_ITEMS:
+      if (!PROBE_ANSWERS) return Promise.resolve(new Response(null, { status: 404 }));
+
+      return probeInboxAnswer(url.searchParams.get(LIVE_POLL.SYNC), performance.now());
+    case HOSTED_SERVICE_PATH.LIVE_TASKS:
+      if (!PROBE_ANSWERS) return Promise.resolve(new Response(null, { status: 404 }));
+
+      return probeTasksAnswer(url.searchParams.get(LIVE_POLL.SYNC), performance.now());
     case HOSTED_SERVICE_PATH.LIVE_WORKSPACES:
       if (PROBE_KEEP_ROWS) return Promise.resolve(new Response(null, { status: 404 }));
 
