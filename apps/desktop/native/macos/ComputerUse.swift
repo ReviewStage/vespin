@@ -185,19 +185,23 @@ private func permissions() -> [String: Any] {
     ["screen_recording": CGPreflightScreenCaptureAccess(), "accessibility": AXIsProcessTrusted()]
 }
 
-/// One grant: the Privacy & Security pane of System Settings where it is switched on, its name there, and whether macOS holds it now.
+/// One grant: the Privacy & Security pane of System Settings where it is switched on, its name there, whether macOS
+/// asks to quit the app once it is switched on, and whether macOS holds it now.
 private struct Grant: Sendable {
     let pane: String
     let name: String
+    let asksToQuit: Bool
     let held: @Sendable () -> Bool
 }
 
+// Note that macOS asks to quit an app it has just let record the screen, but this helper reads and uses the grant at
+// once without restarting, so the panel says to answer Later.
 private let SCREEN_RECORDING = Grant(
     pane: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
-    name: "Screen Recording", held: { CGPreflightScreenCaptureAccess() })
+    name: "Screen Recording", asksToQuit: true, held: { CGPreflightScreenCaptureAccess() })
 private let ACCESSIBILITY = Grant(
     pane: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-    name: "Accessibility", held: { AXIsProcessTrusted() })
+    name: "Accessibility", asksToQuit: false, held: { AXIsProcessTrusted() })
 
 /// Opens the pane of the first grant the app lacks, with the app beside it to drag into the list, since the switch
 /// is the developer's to flip there. Note that macOS's own prompts are not raised as well, because each would stand
@@ -244,7 +248,7 @@ private let GRANT_PANEL_GAP: CGFloat = 12
 private let GRANT_ROW_SIZE = NSSize(width: 190, height: 46)
 private let GRANT_ROW_RADIUS: CGFloat = 10
 private let GRANT_ICON_EDGE: CGFloat = 28
-/// How often the panel follows System Settings' window and reads the grant: often enough to move with the window.
+/// How often the panel reads System Settings' window and the grant.
 private let GRANT_CHECK_NANOSECONDS: UInt64 = 100_000_000
 /// How many checks the panel waits for System Settings to come forward before it gives up.
 private let GRANT_WAIT_CHECKS = 50
@@ -354,7 +358,10 @@ private final class GrantPanel: NSObject {
         guard let app = responsibleAppURL else { return }
         let name = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
         // Note that the words name the list and the grant, as Codex's do, so the panel says where the app goes.
-        words.stringValue = "Drag \(name) to the list to allow \(grant.name)"
+        words.stringValue =
+            grant.asksToQuit
+            ? "Drag \(name) to the list to allow \(grant.name), then choose Later if macOS asks to quit it"
+            : "Drag \(name) to the list to allow \(grant.name)"
         let card = contents(app: app, name: name)
         let made = NSPanel(
             contentRect: NSRect(origin: .zero, size: card.fittingSize),
@@ -421,26 +428,32 @@ private final class GrantPanel: NSObject {
         return card
     }
 
-    /// Stands the panel beside System Settings' window while System Settings is in front, following the window as
-    /// it moves until the developer moves the panel themselves, and hides it while another app is in front, as other
-    /// Mac apps' panels do; closes it once the grant is held or System Settings has gone.
+    /// Stands the panel beside System Settings' window while System Settings is in front, and hides it while another
+    /// app is in front, as other Mac apps' panels do; closes it once the grant is held or System Settings has gone.
+    /// Note that it hides while the window moves and stands again beside it once it settles, rather than trailing
+    /// behind it, because without Accessibility the window's frame can only be read a few times a second; once the
+    /// developer moves the panel themselves, it stays where they put it.
     private func check(_ grant: Grant, panel: NSPanel) async {
         var placedAt: NSPoint?
+        var lastWindow: NSRect?
         var moved = false
         var checks = 0
         while !Task.isCancelled, !grant.held() {
             let settings = NSRunningApplication.runningApplications(withBundleIdentifier: SYSTEM_SETTINGS_BUNDLE_ID).first
             if settings == nil, placedAt != nil || checks >= GRANT_WAIT_CHECKS { break }
             let inFront = settings != nil && NSWorkspace.shared.frontmostApplication?.processIdentifier == settings?.processIdentifier
-            if inFront, let window = systemSettingsFrame() {
-                if let placedAt, panel.frame.origin != placedAt { moved = true }
+            let window = inFront ? systemSettingsFrame() : nil
+            let settled = window != nil && window == lastWindow
+            lastWindow = window
+            if let placedAt, panel.isVisible, panel.frame.origin != placedAt { moved = true }
+            if let window, moved || settled {
                 if !moved {
                     let origin = grantPanelOrigin(panel.frame.size, beside: window)
                     panel.setFrameOrigin(origin)
                     placedAt = origin
                 }
                 if !panel.isVisible { panel.orderFrontRegardless() }
-            } else if panel.isVisible {
+            } else if panel.isVisible, window == nil || !moved {
                 panel.orderOut(nil)
             }
             checks += 1
