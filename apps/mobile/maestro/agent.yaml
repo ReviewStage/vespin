@@ -351,24 +351,24 @@ env:
 - inputText: "Invite by email"
 - tapOn: "Rename"
 - assertVisible: "Invite by email"
-# Pinned, Unpin stands in its place. Note that a landscape iPad's sidebar
-# leads its Pinned row with a glyph heard as "Pin" too, which comes first in
-# the tree, so there the bar's Pin is found right of that row; a window with
-# no Pinned row standing holds one "Pin" alone.
+# Pinned, Unpin stands in its place. Note that an iPad's sidebar and list
+# lead their Pinned groups with a glyph heard as "Pin" too, so there the bar's
+# Pin is found by the Archive beside it, which only the bar holds; a compact
+# window's ⋯ holds one "Pin" alone.
 - runFlow:
     file: subflows/bar-act.yaml
     env:
       ACT: Pin
 - runFlow:
     when:
-      visible: "Pinned"
+      true: ${FLOATING_TABS == 'true'}
     commands:
       - tapOn:
           text: "Pin"
-          rightOf: "Pinned"
+          rightOf: "Archive"
 - runFlow:
     when:
-      notVisible: "Pinned"
+      true: ${FLOATING_TABS != 'true'}
     commands:
       - tapOn: "Pin"
 - runFlow:
