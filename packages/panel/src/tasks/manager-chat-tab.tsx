@@ -66,7 +66,7 @@ import {
 } from "@repo/ui";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
@@ -82,6 +82,7 @@ import { Message, RECEIVED_MESSAGE_CLASS } from "../ai-elements/message.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
 import { usePerson } from "../member-directory.js";
+import { keepPictureRead } from "../picture-query.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import {
@@ -127,6 +128,7 @@ import { TranscriptWords } from "./transcript-blocks.js";
 import { OlderReadFailed, TranscriptReadFailed } from "./transcript-read-failed.js";
 import { UndeliveredLines, UndeliveredMark, useSentLineMarks } from "./undelivered-mark.js";
 import {
+  fileUrl,
   type MessageSender,
   type MessageUnsender,
   useAgentComposer,
@@ -393,7 +395,7 @@ function SendingLine({ line }: { line: SentLine }): ReactNode {
   const mark = refused ? <UndeliveredMark messageId={line.id} /> : null;
 
   const files = line.attachments.map(
-    (file): MessageFileChip => ({ name: file.name, mediaType: file.mediaType, url: file.data }),
+    (file): MessageFileChip => ({ name: file.name, mediaType: file.mediaType, url: fileUrl(file) }),
   );
 
   return (
@@ -442,16 +444,41 @@ function ChatWorking({
 /** A message's files by the ids this window keeps their bytes under, by the key the message went under, which its Retry carries again. */
 type SentFiles = Map<string, NonNullable<SendingMessage["files"]>>;
 
-/** The reader's messages on their way to the chat, as the box's lines read them: each under its key, which its Retry sends again with the files this window keeps the bytes of, and its Delete lets go by. */
+/**
+ * A message's files by the ids this window keeps their bytes under: those
+ * kept as it went, else the bytes the host's record of the send carries,
+ * kept now under ids of their own, as once its tab closed and opened again,
+ * so its Retry and Edit carry them whole.
+ */
+function filesOf(
+  client: QueryClient,
+  agentId: string,
+  kept: SentFiles,
+  message: ManagerChatSending,
+): SendingMessage["files"] {
+  const sent = kept.get(message.clientKey);
+
+  if (sent !== undefined || message.attachments === undefined) return sent;
+
+  const files = message.attachments.map((file) => {
+    const id = crypto.randomUUID();
+    keepPictureRead(client, agentId, id, fileUrl(file));
+
+    return { name: file.name, mediaType: file.mediaType, id };
+  });
+
+  kept.set(message.clientKey, files);
+
+  return files;
+}
+
+/** The reader's messages on their way to the chat, as the box's lines read them: each under its key, which its Retry sends again with its files (`files`), and its Delete lets go by. */
 function sendingLinesOf(
   sending: readonly ManagerChatSending[] | undefined,
-  files: SentFiles,
+  files: (message: ManagerChatSending) => SendingMessage["files"],
 ): readonly SendingMessage[] {
   return (sending ?? []).map((message) => {
-    // Note that a message whose bytes this window no longer keeps, as once its tab closed, still names each of its files, so its Retry and Edit find them missing and send nothing short of them.
-    const held =
-      files.get(message.clientKey) ??
-      message.attachments?.map(({ name, mediaType }) => ({ name, mediaType }));
+    const held = files(message);
 
     return {
       id: message.clientKey,
@@ -577,6 +604,7 @@ export function ManagerChatTab({
 
   // Note that the chat is sent no file's id, so the window keeps which bytes each message's files are under itself, for its Retry.
   const sentFiles = useRef<SentFiles>(new Map());
+  const queryClient = useQueryClient();
 
   /** Keeps a message's files by the ids this window holds their bytes under, as the host keeps a message to the agent's. */
   const keepFiles = (clientKey: string, message: Parameters<MessageSender>[1]) => {
@@ -636,8 +664,11 @@ export function ManagerChatTab({
     taskId: agent.taskId,
     messages: transcript.messages,
     sending: useMemo(
-      () => sendingLinesOf(chat?.sending ?? NONE_SENDING, sentFiles.current),
-      [chat?.sending],
+      () =>
+        sendingLinesOf(chat?.sending ?? NONE_SENDING, (message) =>
+          filesOf(queryClient, agent.id, sentFiles.current, message),
+        ),
+      [chat?.sending, queryClient, agent.id],
     ),
     running: agent.status === AGENT_STATUS.RUNNING,
     send,
