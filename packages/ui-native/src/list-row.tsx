@@ -62,6 +62,7 @@ import { GLYPH, glyphImage } from "./glyph.js";
 import { actContent, emojiContent, markContent, menuActContent } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink, rowHeard, rowMenu, rowSwipes } from "./interactions.js";
+import { type RowInset, useRowInset } from "./layout-margin.js";
 import {
   Avatar,
   type Face,
@@ -376,8 +377,10 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
 }
 
 /**
- * Where a row stands in its list: on the list's own ground, inset so the
- * unread dot stands in the margin, its hairline starting under the words.
+ * Where a row stands in its list: on the list's own ground, its content
+ * between the system's layout margins (`useRowInset`), the unread dot
+ * standing in the leading one, its trailing edge on the margin, as Mail's
+ * does, and its hairline starting under the words.
  * Note that a selected row stands on the `SELECTED` gray, as iOS's own
  * selection does, since a clear row ground leaves the system no fill to draw,
  * so an iPad's selected row showed only the keyboard focus's black outline.
@@ -396,18 +399,30 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
  */
 export function rowPlacement(
   colors: BrandColors,
-  selected = false,
-  vertical: number = ROW_INSET.VERTICAL,
-  indent = 0,
-  leading: number = ROW_INSET.LEADING,
-  reach = 0,
+  inset: RowInset,
+  {
+    selected = false,
+    vertical = ROW_INSET.VERTICAL,
+    indent = 0,
+    dot = true,
+    reach = 0,
+  }: {
+    readonly selected?: boolean | undefined;
+    readonly vertical?: number | undefined;
+    readonly indent?: number | undefined;
+    /** Whether the row draws the unread dot's column, which stands in the margin; a task's row, which draws none, starts its lead at `inset.lead`. */
+    readonly dot?: boolean | undefined;
+    readonly reach?: number | undefined;
+  } = {},
 ) {
+  const leading = dot ? inset.dotted : inset.lead;
+
   return [
     listRowBackground("clear"),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({
       leading: leading - ROW_INSET.FILL,
-      trailing: SPACE.EDGE - ROW_INSET.FILL,
+      trailing: inset.margin - ROW_INSET.FILL,
       top: vertical,
       bottom: vertical,
     }),
@@ -425,7 +440,7 @@ export function rowPlacement(
       : []),
     padding({ horizontal: ROW_INSET.FILL }),
     listRowSeparatorTint(colors.CHIP_EDGE),
-    alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT + indent),
+    alignmentGuide("listRowSeparatorLeading", inset.text + indent),
   ];
 }
 
@@ -507,7 +522,7 @@ export function RowFrame({
   question,
   vertical,
   indent,
-  leading,
+  dot,
   now,
 }: RowActs & {
   readonly id: string;
@@ -516,12 +531,13 @@ export function RowFrame({
   readonly vertical?: number | undefined;
   /** How far past the list's text column the row's words start, where it stands in deeper, a second mark leads it, or its lead grows, so its hairline starts under them. */
   readonly indent?: number | undefined;
-  /** The row's leading inset: the unread dot's margin where none is given, or the list's edge for a row that draws no dot (`ROW_INSET.PLAIN`). */
-  readonly leading?: number | undefined;
+  /** Whether the row draws the unread dot's column, as it does where none is said; a task's row draws none, its lead standing where a dotted row's does. */
+  readonly dot?: boolean | undefined;
   /** What its preview's times count from: its list's minute, where the row reads one; the moment it draws otherwise. */
   readonly now?: number | undefined;
 }) {
   const colors = useColors();
+  const inset = useRowInset();
   const fills = useSystemColors();
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
@@ -588,14 +604,13 @@ export function RowFrame({
   // Note that a heard row is one element whose children's own acts are left out, the swipes' and the menu's, which VoiceOver listed twice and each submenu's items with no verb; its Actions are read once from its menu's tree instead (`rowHeard`), and Select mode offers none, as it offers no long press.
   const frameModifiers = [
     tag(id),
-    ...rowPlacement(
-      colors,
+    ...rowPlacement(colors, inset, {
       selected,
       vertical,
       indent,
-      leading,
-      disclosed ? SPACE.EDGE + chevronRoom : 0,
-    ),
+      dot,
+      reach: disclosed ? inset.margin + chevronRoom : 0,
+    }),
     ...(heard === undefined
       ? []
       : [
@@ -797,7 +812,7 @@ export function RowHead({
   if (!dot) return line;
 
   return (
-    <HStack spacing={SPACE.TIGHT} alignment={stacked ? "firstTextBaseline" : "center"}>
+    <HStack spacing={ROW_INSET.GUTTER} alignment={stacked ? "firstTextBaseline" : "center"}>
       <UnreadDot unread={unread} faded={faded} />
       {line}
     </HStack>
@@ -858,7 +873,7 @@ function TaskLine({
   );
 
   return (
-    <HStack spacing={SPACE.TIGHT} alignment={stacked ? "firstTextBaseline" : "center"}>
+    <HStack spacing={ROW_INSET.GUTTER} alignment={stacked ? "firstTextBaseline" : "center"}>
       <UnreadDot unread={unread} faded={done} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
         <HStack modifiers={[frame({ width: leadWidth })]}>
@@ -887,7 +902,7 @@ function TaskLine({
  */
 function FlushLine({ children }: { readonly children: ReactNode }) {
   return (
-    <HStack spacing={SPACE.TIGHT} alignment="center">
+    <HStack spacing={ROW_INSET.GUTTER} alignment="center">
       <UnreadDot unread={false} />
       {children}
       <Spacer />
@@ -937,7 +952,7 @@ function ThreadLine(props: ListRowProps & { readonly flush: boolean }) {
   }
 
   return (
-    <HStack spacing={SPACE.TIGHT} alignment="center">
+    <HStack spacing={ROW_INSET.GUTTER} alignment="center">
       <UnreadDot unread={false} />
       <HStack spacing={SPACE.ROW} alignment="center">
         <HStack modifiers={[frame({ width: leadWidth })]}>{null}</HStack>
@@ -1237,13 +1252,15 @@ export function RowDisclosure({
   readonly label: ReactNode;
   readonly children: ReactNode;
 }) {
+  const inset = useRowInset();
+
   // Note that the disclosure, not its label, is the list's row, so it takes the row's ground and its insets here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's and drawing the list's selection in the screen's ink behind it; its trailing inset keeps the chevron off the column's edge, and the system sets its rows in under the parent's name. A selected label's fill reaches on under the chevron (`RowDisclosedContext`), since a view modifier here would fall on every row nested under it too.
   return (
     <DisclosureGroup
       isExpanded={open}
       onIsExpandedChange={onOpenChange}
       modifiers={[
-        listRowInsets({ leading: 0, trailing: SPACE.EDGE, top: 0, bottom: 0 }),
+        listRowInsets({ leading: 0, trailing: inset.margin, top: 0, bottom: 0 }),
         listRowBackground("clear"),
         // Note that the system heads a disclosure's label as a heading, which stood a parent task in VoiceOver's Headings rotor beside the list's sections; a parent is a row like any other, and the rows under it are no headings either, so the trait is taken off the whole disclosure.
         accessibilityRemoveTraits(["isHeader"]),
@@ -1421,8 +1438,8 @@ export function useNestColumn(): number {
  * as a ring and "2/5", one mark for its agents (failed, at work, or its pull
  * request), the face of who is on it where that is someone other than the
  * reader or the dashed mark where no one is, and how long ago it last moved.
- * Its ring stands at the list's edge, where an Inbox row's ring stands past
- * the dot's margin, so the two lists' marks and words line up. A task with
+ * It draws no unread dot, its ring standing where an Inbox row's stands past
+ * the dot and its gutter, so the two lists' marks and words line up. A task with
  * sub-tasks stands as the label of its caller's `RowDisclosure`, whose
  * chevron, at the line's trailing edge as Files and Notes stand theirs,
  * folds them; the row offers Show and Hide sub-tasks in its long press too
@@ -1432,6 +1449,7 @@ export function TaskRow(props: TaskRowProps) {
   const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
 
   const colors = useColors();
+  const inset = useRowInset();
   const minute = useMinute();
   const lead = useScaledSize(MARK_SIZE.LEAD);
   const column = useNestColumn();
@@ -1452,7 +1470,7 @@ export function TaskRow(props: TaskRowProps) {
         dot={false}
         unread={unread}
         faded={finished}
-        lead={<StatusRing status={status} menu={props.statusMenu} edge={ROW_INSET.PLAIN} />}
+        lead={<StatusRing status={status} menu={props.statusMenu} edge={inset.lead} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
         fit={spared.fit}
@@ -1514,7 +1532,7 @@ export function TaskRow(props: TaskRowProps) {
       id={id}
       row={row}
       indent={indent}
-      leading={ROW_INSET.PLAIN}
+      dot={false}
       menuActions={[...foldActions(fold, SUB_TASK_FOLD), ...(props.menuActions ?? [])]}
       heard={props.heard ?? taskHeard(props, minute)}
       now={minute}
