@@ -1922,7 +1922,8 @@ test("a pinned Manager stands among the pinned tasks, and dragged between two of
     taskSections: SECTIONS,
     taskAgentPins: [{ agentId: PINNED_MANAGER.id, taskId: null, pinnedAt: 6 }],
   });
-  await settle();
+  // Note that the document's observers hear the pin on Query's notify tick, a timer, which no count of microtasks waits out.
+  await settleQueries(settle);
   layOutRows();
 
   const pins = pinnedGroup(sidebar) ?? assert.fail("Pinned stands");
