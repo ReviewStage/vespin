@@ -395,6 +395,31 @@ test("a /name typed or read later becomes its chip once the caret has left it, a
   assert.deepEqual(later.drafts, [], "the words are the same words");
 });
 
+test("a picture's marker typed or pasted as words beside a held picture of that name stays words and is sent escaped, while words laid in whole make chips of their markers and lay an escaped one back in as typed", () => {
+  const drawn = new Set<HTMLElement>();
+
+  const box = mounted("Like [Picture 1] not \\[Picture 1]", {
+    files: new Set(["Picture 1"]),
+    drawFile: (element, name) => {
+      element.textContent = name;
+      drawn.add(element);
+
+      return () => drawn.delete(element);
+    },
+  });
+
+  assert.equal(drawn.size, 1, "the marker laid in whole is its chip, the escaped one words");
+  typeInComposer(box.host, " or [Picture 1]");
+  paste(box.host, " nor [Picture 1]");
+  box.handle.setFiles(new Set(["Picture 1"]));
+
+  assert.equal(drawn.size, 1, "no marker typed or pasted became a chip");
+  assert.equal(
+    box.drafts.at(-1),
+    "Like [Picture 1] not \\[Picture 1] or \\[Picture 1] nor \\[Picture 1]",
+  );
+});
+
 test("a chip copied from a box is a chip again where its skill is known, and words where it is not", () => {
   const box = mounted("");
   const copied = (name: string) => `<p>Run <span data-chip="skill">/${name}</span> now</p>`;

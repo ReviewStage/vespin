@@ -1,5 +1,5 @@
 import { REWIND_ACTION, type RewindAction } from "@repo/features/agent-rewind-model";
-import { fileMarkers } from "@repo/features/file-marker";
+import { fileMarkers, unescapedMarkers } from "@repo/features/file-marker";
 import { BUTTON_SIZE, CopyButton, HeldMessageAction, MessageActions } from "@repo/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { LinkIcon } from "lucide-react";
@@ -59,7 +59,7 @@ function useMessageCopy(): (words: string) => Promise<void> {
   return (words) => {
     const carried = carriedFiles(words, files);
 
-    if (carried.size === 0) return copyThroughShell(words);
+    if (carried.size === 0) return copyThroughShell(unescapedMarkers(words));
 
     const write = (editor: DescriptionEditorModule) =>
       copyRichThroughShell(editor.messageClipboard(words, carried));

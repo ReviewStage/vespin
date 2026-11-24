@@ -97,6 +97,12 @@ test.each([
     order: ["Rename `[Picture 1]` here.", "Picture 1"],
   },
   {
+    case: "a marker escaped into words left as words, its picture placed by the marker after it",
+    words: "not \\[Picture 1] but [Picture 1]",
+    files: ["Picture 1"],
+    order: ["not \\[Picture 1] but [Picture 1]", "Picture 1"],
+  },
+  {
     case: "a PDF and a text file right after their markers, and a text file no marker names after the words as ever",
     words: "read [File: spec.pdf] then [File: notes.txt]",
     files: ["notes.txt", "spec.pdf", "log.txt"],

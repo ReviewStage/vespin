@@ -9,7 +9,14 @@ import {
 } from "@repo/features/composer-markdown";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import { fenceAfter } from "@repo/features/description-sections";
-import { fileMarker, fileMarkers, isPictureName } from "@repo/features/file-marker";
+import {
+  escapedLiteralMarkers,
+  escapedMarkers,
+  fileMarker,
+  fileMarkers,
+  isPictureName,
+  unescapedMarkers,
+} from "@repo/features/file-marker";
 import {
   cutReply,
   MESSAGE_BLOCK,
@@ -120,7 +127,11 @@ import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
  * A file's chip is an atom too, read out as its marker, `[Picture 1]` or
  * `[File: spec.pdf]` (`@repo/features/file-marker`), laid in where the owner
  * marked the caret as the file was handed (`ComposerMark.insertFiles`), and
- * made of a marker naming a file the box holds wherever the words are laid in.
+ * made of a marker naming a file the box holds where words are laid in whole
+ * with their files, as a kept draft, Retry, or Edit lays them. A chip comes
+ * only with its file: a marker typed or pasted as words stays words, which
+ * the message sends escaped (`\[Picture 1]`), so it names no file there
+ * either, and which are laid back in as typed.
  * A copy carries each chip's file in the clipboard's HTML (`./copied-files.ts`),
  * so a chip pasted into a box that does not hold its file comes with it, taken
  * by the box as a file handed to it is (`ComposerFileCopies`).
@@ -177,6 +188,9 @@ const NO_COMMANDS: ReadonlySet<string> = new Set();
 
 /** Where a mention chip's rule stands among the rules a paste is read by: before the link mark's, at ProseMirror's default. */
 const MENTION_RULE_PRIORITY = 60;
+
+/** No file, for words laid in among others, which name none. */
+const NO_FILES: ReadonlySet<string> = new Set();
 
 /** No skill, as a copy of a sent message's words knows none. */
 const NO_SKILLS: ReadonlySet<string> = new Set();
@@ -268,9 +282,26 @@ function copiedText(slice: Slice): string {
   return fragmentText(insideQuote ? only.content : slice.content);
 }
 
-/** The words the document stands for, as the message sends them. */
+/** The words the document stands for, each marker as it stands, typed or a chip: what its places in the words are counted in. */
 function textOf(doc: PmNode): string {
   return fragmentText(doc.content);
+}
+
+/**
+ * The words the document stands for as the message sends them: where the
+ * box takes files into its words, each marker typed as words escaped, so it
+ * names no file, and each chip's left naming its file
+ * (`escapedLiteralMarkers`); elsewhere the words as they stand.
+ */
+function sentText(doc: PmNode, escapes: boolean): string {
+  const text = textOf(doc);
+
+  if (!escapes) return text;
+  const runs = textRuns(doc);
+
+  return escapedLiteralMarkers(text, (at) =>
+    runs.some((run) => at >= run.offset && at < run.offset + run.length),
+  );
 }
 
 /** Where a character of a quote's line stands once the line is quoted: past the `> ` (or, on an empty line, `>`) of its own line and of each line a break opened before it. */
@@ -379,12 +410,13 @@ interface ChipToken {
   readonly node: (schema: Schema) => PmNode;
 }
 
-/** What words are made chips of: the skills a `/name` names, the commands the message's first word may name, the files a marker names, and whether the box takes mentions. */
+/** What words are made chips of: the skills a `/name` names, the commands the message's first word may name, the files a marker names, whether the box takes mentions, and whether a marker escaped into words is laid in as the words typed, which a box that takes files into its words writes (`sentText`). */
 interface Chipping {
   readonly skills: ReadonlySet<string>;
   readonly commands: ReadonlySet<string>;
   readonly files: ReadonlySet<string>;
   readonly mentions: boolean;
+  readonly escapes: boolean;
 }
 
 /** Each marker of a file the box holds, as the range it stands in. */
@@ -401,7 +433,7 @@ function fileTokens(text: string, files: ReadonlySet<string>): readonly ChipToke
 /** Every chip the words spell, in order: each `/name` of a known skill, and each mention written as its link where the box takes mentions, none overlapping another. */
 function chipTokens(
   text: string,
-  { skills, commands, files, mentions: takesMentions }: Chipping,
+  { skills, commands, files, mentions: takesMentions, escapes }: Chipping,
 ): readonly ChipToken[] {
   // Note that a box that takes no mentions keeps a mention's link as the words it is, which it can edit.
   const mentions = (takesMentions ? mentionTokens(text) : []).map(
@@ -439,7 +471,18 @@ function chipTokens(
     (token) => !mentions.some((each) => token.start < each.end && token.end > each.start),
   );
 
-  return [...mentions, ...commanded, ...skilled, ...filed].sort(
+  // A marker escaped into words is laid in as the words typed, without the backslash the box wrote before it.
+  const typed = (escapes ? escapedMarkers(text) : [])
+    .filter((token) => !mentions.some((each) => token.start < each.end && token.end > each.start))
+    .map(
+      (token): ChipToken => ({
+        start: token.start,
+        end: token.end,
+        node: (schema) => schema.text(text.slice(token.start + 1, token.end)),
+      }),
+    );
+
+  return [...mentions, ...commanded, ...skilled, ...filed, ...typed].sort(
     (first, second) => first.start - second.start,
   );
 }
@@ -520,18 +563,21 @@ function documentOf(schema: Schema, text: string, chipping: Chipping): PmNode {
 
 /** The words as a slice that lays in where a caret or a selection stands, its first and last lines joining the lines around them. */
 function sliceOf(schema: Schema, text: string, chipping: Chipping): Slice {
-  // Note that words laid in among others open no message, so a command among them stays words.
-  return Slice.maxOpen(documentOf(schema, text, { ...chipping, commands: NO_COMMANDS }).content);
+  // Note that words laid in among others open no message, so a command among them stays words, and name no file, so a marker among them stays words: a chip comes only with its file.
+  return Slice.maxOpen(
+    documentOf(schema, text, { ...chipping, commands: NO_COMMANDS, files: NO_FILES }).content,
+  );
 }
 
 /**
- * Each `/name` of a known skill and each marker of a held file that
- * still stands as words made its chip, but the one the caret ends where it
- * is asked to be spared; nothing where there is none.
+ * Each `/name` of a known skill that still stands as words made its chip,
+ * but the one the caret ends where it is asked to be spared; nothing where
+ * there is none. Note that a marker typed as words is never made a file's
+ * chip, whatever file the box holds, since a chip comes only with its file.
  */
 function chipped(
   state: EditorState,
-  chipping: Pick<Chipping, "skills" | "commands" | "files">,
+  chipping: Pick<Chipping, "skills" | "commands">,
   spareCaret: boolean,
 ): Transaction | undefined {
   const { doc, selection, schema } = state;
@@ -560,10 +606,6 @@ function chipped(
         node: (place: { from: number; to: number }) =>
           schema.node(SKILL_NODE, { name: doc.textBetween(place.from + 1, place.to) }),
       })),
-    ...fileTokens(text, chipping.files).map((token) => ({
-      ...token,
-      node: () => token.node(schema),
-    })),
   ];
 
   const places = tokens
@@ -946,6 +988,8 @@ interface ComposerState {
   mentionTrigger: ReturnType<typeof triggerAt>;
   /** Whether the box takes mentions, as it was mounted. */
   readonly mentions: boolean;
+  /** Whether the box takes files into its words, as it was mounted, so a marker typed is escaped into words as it is written (`sentText`). */
+  readonly escapes: boolean;
   /** Each mark's place, carried through every change the document takes. */
   readonly marks: Map<symbol, number>;
 }
@@ -986,9 +1030,9 @@ function guardPlugin(state: ComposerState, props: ComposerEditorProps): Plugin {
 
       if (state.input === COMPOSER_INPUT.READ_ONLY && tr.getMeta(COMMAND_META) !== true)
         return false;
-      const length = textOf(tr.doc).length;
+      const length = sentText(tr.doc, state.escapes).length;
 
-      return length <= props.maxLength || length <= textOf(before.doc).length;
+      return length <= props.maxLength || length <= sentText(before.doc, state.escapes).length;
     },
     appendTransaction: (transactions, _old, now) => {
       const chipping = transactions.some((tr) => tr.getMeta(CHIPPED_META) === true);
@@ -1179,8 +1223,8 @@ function pasted(
 
   // Note that what goes over is read off the words as the paste would leave them, since a selection inside a mark leaves its delimiters standing around what replaces it.
   const over = (pasting: string) =>
-    textOf(view.state.tr.replaceSelection(sliceOf(schema, pasting, state)).doc).length -
-    props.maxLength;
+    sentText(view.state.tr.replaceSelection(sliceOf(schema, pasting, state)).doc, state.escapes)
+      .length - props.maxLength;
 
   // An address of our own or a page of an integration's pasted whole, outside code, is laid in as its mention, where its link has room.
   const mention = props.mentions?.pasted(words);
@@ -1365,7 +1409,8 @@ function insertedAt(
   const $pos = doc.resolve(pos);
   const lead = needsSpace($pos.nodeBefore, false) ? SPACE : "";
   const trail = needsSpace($pos.nodeAfter, true) ? SPACE : "";
-  const room = Math.max(0, maxLength - textOf(doc).length - lead.length - trail.length);
+  const used = sentText(doc, state.escapes).length + lead.length + trail.length;
+  const room = Math.max(0, maxLength - used);
   const fitting = words.slice(0, room).trim();
 
   if (fitting === "") return false;
@@ -1408,7 +1453,7 @@ function insertedFilesAt(
   const laid = editor.state.tr.insert(pos, chips);
   const tr = spacedChip(laid, pos, laid.mapping.map(pos));
 
-  if (textOf(tr.doc).length > maxLength) return false;
+  if (sentText(tr.doc, state.escapes).length > maxLength) return false;
   editor.view.dispatch(tr.setMeta(COMMAND_META, true).setMeta(CHIPPED_META, true).scrollIntoView());
   editor.view.focus();
 
@@ -1464,7 +1509,7 @@ function laidInMention(
   const chip = editor.schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
   const tr = chipOverSelection(editor.state, chip);
 
-  if (textOf(tr.doc).length > maxLength) return;
+  if (sentText(tr.doc, state.escapes).length > maxLength) return;
   editor.view.dispatch(tr.scrollIntoView());
   editor.view.focus();
 }
@@ -1510,8 +1555,9 @@ function laidInQuote(
   let kept = words;
 
   while (kept !== "") {
-    const tr = quotedAt(editor, state, kept);
-    const over = textOf(tr.doc).length - maxLength;
+    // Note that a quote's words name no file of this box's, so a marker among them stays words.
+    const tr = quotedAt(editor, { ...state, files: NO_FILES }, kept);
+    const over = sentText(tr.doc, state.escapes).length - maxLength;
 
     if (over <= 0) {
       editor.view.dispatch(tr.scrollIntoView());
@@ -1593,6 +1639,7 @@ export function messageClipboard(
     commands: NO_COMMANDS,
     files: new Set(files.keys()),
     mentions: true,
+    escapes: true,
   });
 
   const host = document.createElement("div");
@@ -1603,7 +1650,7 @@ export function messageClipboard(
     `${String(open(doc.firstChild))} ${String(open(doc.lastChild))} []`,
   );
 
-  return { html: host.innerHTML, text: words };
+  return { html: host.innerHTML, text: unescapedMarkers(words) };
 }
 
 /**
@@ -1624,6 +1671,7 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     mentionReported: undefined,
     mentionTrigger: undefined,
     mentions: props.mentions !== undefined,
+    escapes: props.files !== undefined,
     marks: new Map(),
   };
 
@@ -1649,7 +1697,7 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
 
   editor.on("transaction", ({ transaction }) => {
     for (const [mark, pos] of state.marks) state.marks.set(mark, transaction.mapping.map(pos));
-    const text = textOf(editor.state.doc);
+    const text = sentText(editor.state.doc, state.escapes);
 
     if (!transaction.docChanged || text === state.emitted) return;
     state.emitted = text;
@@ -1689,11 +1737,9 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
 
       if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },
+    // Note that the files are what words laid in whole name, never words already standing, since a chip comes only with its file.
     setFiles: (files) => {
       state.files = files;
-      const tr = chipped(editor.state, state, true);
-
-      if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },
     removeFiles: (names) => removedFiles(editor, names),
     setInput: (input) => {
