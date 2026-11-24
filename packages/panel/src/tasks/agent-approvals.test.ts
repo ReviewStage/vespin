@@ -15,7 +15,12 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { fakeAppBridge } from "../testing/app-bridge.js";
-import { editorBundleLanded, installEditorLayout, typeInComposer } from "../testing/composer.js";
+import {
+  editorBundleLanded,
+  installEditorLayout,
+  pressInComposer,
+  typeInComposer,
+} from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
@@ -28,6 +33,7 @@ import { AgentTab } from "./agent-tab.js";
  * Always allow names the command's first words where the harness proposed
  * them;
  * Deny opens a box for why, whose words go to the agent with the denial;
+ * a message sent while a call waits denies it;
  * a Claude Code agent's model chip and a Codex agent's both name their mode
  * off Full access.
  */
@@ -104,6 +110,8 @@ async function settle(): Promise<void> {
 
 /** The agent's tab over its transcript, its answers heard as `answered` and answered with the status the answer names. */
 async function drawnTab(agent: AgentSummary) {
+  // A message sent never answers, so its line stays on its way.
+  const onMessage = () => new Promise<never>(() => undefined);
   fakeAppBridge({});
   pushedTranscripts(() => [
     { messages: [...MESSAGES], cursor: "2:0", status: agent.status, title: null },
@@ -117,33 +125,46 @@ async function drawnTab(agent: AgentSummary) {
 
       return Promise.resolve({ approval: { id: approvalId, status: "allowed" } });
     },
+    onMessage,
   });
 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () =>
-    root.render(
-      withQueryClient(
-        createElement(
-          "div",
-          null,
-          createElement(AgentTab, {
-            agent,
-            control,
-            shown: true,
-            onOpenSubagent: () => undefined,
-            onOpenTarget: () => undefined,
-            onHeld: () => undefined,
-          }),
-          createElement(ToastHost),
+
+  const draw = (drawn: AgentSummary) =>
+    act(async () =>
+      root.render(
+        withQueryClient(
+          createElement(
+            "div",
+            null,
+            createElement(AgentTab, {
+              agent: drawn,
+              control,
+              shown: true,
+              onOpenSubagent: () => undefined,
+              onOpenTarget: () => undefined,
+              onHeld: () => undefined,
+            }),
+            createElement(ToastHost),
+          ),
         ),
       ),
-    ),
-  );
+    );
+
+  await draw(agent);
   await settle();
 
-  return { container, answered };
+  return {
+    container,
+    answered,
+    /** Draws the tab again over the agent's row as it now reads. */
+    redraw: async (drawn: AgentSummary) => {
+      await draw(drawn);
+      await settle();
+    },
+  };
 }
 
 /** The button reading `words` in `container`, or none. */
@@ -174,6 +195,18 @@ test("Allow on a held call's row sends the answer, and the row says it was allow
   assert.deepEqual(answered, [{ answer: "allow" }]);
   assert.equal(buttonReading(container, "Allow"), undefined);
   assert.ok(call.textContent?.includes("Allowed"));
+});
+
+test("a message sent while a call waits denies it, which its row says once the call stops waiting", async () => {
+  const { container, redraw } = await drawnTab(CLAUDE_AGENT);
+  typeInComposer(container, "Skip the tests");
+  pressInComposer(container, "Enter");
+  await settle();
+
+  await redraw({ ...CLAUDE_AGENT, pendingApprovals: [] });
+
+  const call = container.querySelector(`[data-call-id="${CALL}"]`) ?? assert.fail("the call");
+  assert.ok(call.textContent?.includes("Denied"), call.textContent ?? "");
 });
 
 test("a subagent's held call, which no row of the transcript holds, reads as the harness's tool of its kind", async () => {

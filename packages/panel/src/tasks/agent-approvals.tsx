@@ -64,6 +64,7 @@ import { showToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 import { MessageBox, useMessageBox } from "./message-box.js";
 import type { HeldCall } from "./transcript-blocks.js";
+import type { MessageSender } from "./use-agent-composer.js";
 
 /**
  * agent-approvals.tsx -- how a Claude Code agent's tool calls are answered, as its tab draws it: the permission mode the model chip's menu offers, a card on each call the agent holds for an answer, and how many wait.
@@ -318,6 +319,27 @@ export interface AgentApprovalsControl {
   readonly waiting: number;
   /** Says a message went while asks waited, which the service denies them with once it takes the message; a refused send takes that back. */
   readonly messageSent: (sent: Promise<AgentActAnswer>) => void;
+}
+
+/**
+ * The box's send, which says each message it sends to the asks: a message
+ * sent while a call waits denies it, which its card then says.
+ */
+export function useApprovingSend(
+  onMessage: MessageSender,
+  approvals: Pick<AgentApprovalsControl, "messageSent">,
+): MessageSender {
+  const { messageSent } = approvals;
+
+  return useCallback<MessageSender>(
+    (...sent) => {
+      const answered = onMessage(...sent);
+      messageSent(answered);
+
+      return answered;
+    },
+    [messageSent, onMessage],
+  );
 }
 
 /**
