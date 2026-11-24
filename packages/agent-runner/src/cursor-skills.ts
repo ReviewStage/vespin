@@ -14,7 +14,10 @@
  * stands and the member's is not linked, as the repository's own skills win
  * in the other harnesses. A link of ours from an earlier launch is left as it
  * stands and a line already excluded is not written again, so a relaunch in
- * the same checkout changes nothing.
+ * the same checkout changes nothing. A link of ours to a skill the member has
+ * since uninstalled is taken out, with its line in `info/exclude`. A link is
+ * ours only where it leads to the installed folder's skill of its own name,
+ * as `linkedAt` makes it, so nothing else there is ever touched.
  */
 
 import {
@@ -28,9 +31,10 @@ import {
   realpathSync,
   statSync,
   symlinkSync,
+  unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { installedSkillsPath } from "./launch.js";
 import { INSTALLED_SKILLS } from "./protocol.js";
 
 /** The checkout's folder of skills Cursor's SDK reads, of those it reads the one every harness shares. */
@@ -62,6 +66,15 @@ function excludeFileOf(cwd: string): string | undefined {
   return join(shared, "info", "exclude");
 }
 
+/** The names of the skills installed under `skills`; none where the folder is gone. */
+function installedIn(skills: string): readonly string[] {
+  if (!existsSync(skills)) return [];
+
+  return readdirSync(skills, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+}
+
 /** Whether the skill stands linked at `link` once this returns: linked where nothing stood, ours from an earlier launch kept, and false where the repository holds the name. */
 function linkedAt(target: string, link: string): boolean {
   const standing = lstatSync(link, { throwIfNoEntry: false });
@@ -73,6 +86,27 @@ function linkedAt(target: string, link: string): boolean {
   }
 
   return standing.isSymbolicLink() && readlinkSync(link) === target;
+}
+
+/** Takes out each link of ours in `folder` to a skill no longer among `installed`, and answers their names. */
+function unlinkedStale(folder: string, skills: string, installed: readonly string[]): string[] {
+  const stale = readdirSync(folder, { withFileTypes: true })
+    .filter((entry) => entry.isSymbolicLink() && !installed.includes(entry.name))
+    .map((entry) => entry.name)
+    .filter((name) => readlinkSync(join(folder, name)) === join(skills, name));
+
+  for (const name of stale) unlinkSync(join(folder, name));
+
+  return stale;
+}
+
+/** Each pattern listed in the exclude file at `file` taken out of it, where the file lists any. */
+function unexcluded(file: string, patterns: readonly string[]): void {
+  if (patterns.length === 0 || !existsSync(file)) return;
+  const lines = readFileSync(file, "utf8").split("\n");
+  const kept = lines.filter((line) => !patterns.includes(line.trim()));
+
+  if (kept.length < lines.length) writeFileSync(file, kept.join("\n"));
 }
 
 /** Each pattern listed in the exclude file at `file` where it is not already, the file and its folder made where missing. */
@@ -90,32 +124,33 @@ function excluded(file: string, patterns: readonly string[]): void {
 
 /**
  * The installed skills under `installedSkills` (`INSTALLED_SKILLS`) linked
- * into the checkout at `cwd`, as above; nothing where the config names no
- * folder or the member installed no skills. The links are excluded where
- * they really stand, so a `.agents/skills` the repository links to another
- * folder of its own excludes them there, and one that leads out of the
- * checkout is left alone, since git could not exclude a link there.
+ * into the checkout at `cwd`, and our links to skills since uninstalled
+ * taken out, as above; nothing where the config names no folder, or the
+ * member installed no skills and the checkout has no folder of them. The
+ * links are excluded where they really stand, so a `.agents/skills` the
+ * repository links to another folder of its own excludes them there, and
+ * one that leads out of the checkout is left alone, since git could not
+ * exclude a link there.
  */
 export function linkInstalledSkills(cwd: string, installedSkills: string | undefined): void {
-  const skills = installedSkillsPath(installedSkills, INSTALLED_SKILLS.SKILLS);
-
-  if (skills === undefined) return;
+  if (installedSkills === undefined) return;
+  const skills = join(installedSkills, INSTALLED_SKILLS.SKILLS);
+  const installed = installedIn(skills);
   const folder = join(cwd, ...PROJECT_SKILLS);
+
+  if (installed.length === 0 && !existsSync(folder)) return;
   mkdirSync(folder, { recursive: true });
   const within = relative(realpathSync(cwd), realpathSync(folder));
 
   if (within.startsWith("..") || isAbsolute(within)) return;
 
-  const linked = readdirSync(skills, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => linkedAt(join(skills, name), join(folder, name)));
-
+  // Our links to skills since uninstalled are taken out, then each installed skill is linked.
+  const stale = unlinkedStale(folder, skills, installed);
+  const linked = installed.filter((name) => linkedAt(join(skills, name), join(folder, name)));
   const exclude = excludeFileOf(cwd);
 
-  if (exclude === undefined || linked.length === 0) return;
-  excluded(
-    exclude,
-    linked.map((name) => `/${[...within.split(sep), name].join("/")}`),
-  );
+  if (exclude === undefined) return;
+  const patternOf = (name: string) => `/${[...within.split(sep), name].join("/")}`;
+  unexcluded(exclude, stale.map(patternOf));
+  excluded(exclude, linked.map(patternOf));
 }

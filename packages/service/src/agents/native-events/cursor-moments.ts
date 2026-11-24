@@ -1,20 +1,3 @@
-import {
-  CURSOR_TOOL,
-  claudeCodeWorkspaceTool,
-  WORKSPACE_MCP_SERVER_NAMES,
-} from "@repo/features/agent-tools";
-import type { ToolCallSettlement } from "@repo/features/turn-run";
-import { isRecord, type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
-import { Option, Schema } from "effect";
-import { storedServerCall } from "../../integrations/connection-tools.js";
-import { NATIVE_MOMENT, type NativeHeld, type NativeMoment } from "./native-moments.js";
-import {
-  FAILURE_CHARS,
-  PICTURE_STAND_IN,
-  runnerMoments,
-  toolAnswerSettlement,
-} from "./runner-moments.js";
-
 /**
  * cursor-moments.ts -- Cursor's SDK messages, as its runner posts them, read as the moments of a native run.
  *
@@ -42,6 +25,23 @@ import {
  * read with a schema of the fields this reads alone, so a field Cursor adds
  * changes nothing here, and a message no schema fits is no moment.
  */
+
+import {
+  CURSOR_TOOL,
+  claudeCodeWorkspaceTool,
+  WORKSPACE_MCP_SERVER_NAMES,
+} from "@repo/features/agent-tools";
+import type { ToolCallSettlement } from "@repo/features/turn-run";
+import { isRecord, type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
+import { Option, Schema } from "effect";
+import { storedServerCall } from "../../integrations/connection-tools.js";
+import { NATIVE_MOMENT, type NativeHeld, type NativeMoment } from "./native-moments.js";
+import {
+  FAILURE_CHARS,
+  PICTURE_STAND_IN,
+  runnerMoments,
+  toolAnswerSettlement,
+} from "./runner-moments.js";
 
 /** The message types read here, as the SDK spells them. */
 const MESSAGE = {
