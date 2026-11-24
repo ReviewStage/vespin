@@ -1,0 +1,21 @@
+pinned to d94f3bbdf6
+== bundle PJjsplit3 base d94f3bbdf60
+  built d94f3bbdf60 base app Vjnatc2.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+ipad27-light-fsplit-p: fails 0 shots 15 
+  ipad27-light-fsplit-p toggles: 2
+ipad27-light-landscape-inbox: fails 2 shots 4   Assert that ".*walked the invite flow.*" is visible... FAILED
+  ipad27-light-landscape-inbox toggles: 1
+ipad27-light-landscape-keep: fails 2 shots 2   Assert that ".*walked the invite flow.*" is visible... FAILED
+  ipad27-light-landscape-keep toggles: 1
+ipad27-light-portrait-agent: fails 2 shots 22   Assert that "Unpin" is visible... FAILED
+  ipad27-light-portrait-agent toggles: 1
+iphone-light-tasks: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+  iphone-light-tasks toggles: 0
+  iphone-light-tasks stall probe: 
+iphone-light-navigation: fails NOSTART (steps 2, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+  iphone-light-navigation toggles: 0
+  iphone-light-navigation stall probe: 
