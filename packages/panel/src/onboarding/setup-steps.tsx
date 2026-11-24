@@ -46,6 +46,7 @@ import { GitHubSetup } from "./setup-github.js";
 import { SurveyQuestions, useSurvey } from "./setup-survey.js";
 import { TeamForm, useTeamForm } from "./setup-team.js";
 import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";
+import { SetupUsageData } from "./setup-usage-data.js";
 
 /**
  * setup-steps.tsx -- a new account's setup, alone in the window after sign-in: who it is for, a few questions about the person, a team's workspace where there is one, an agent, GitHub, and the tools, one card each.
@@ -59,7 +60,10 @@ import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";
  * once made, its step coming back holds it to change rather than make again,
  * and setup finished as Just me deletes it, asking first, in red, where
  * anyone else joined it, and offering to keep it.
- * The survey and GitHub may be skipped, and the tools need nothing done. Where setup
+ * The survey and GitHub may be skipped, and the tools need nothing done.
+ * Setup's first card, Welcome or an invited account's survey, says what
+ * usage data the app sends, with its switch under it (`setup-usage-data.tsx`).
+ * Where setup
  * stands is kept on the account (`APP_SETTING_SCHEMA.setupPlace`), so setup
  * left partway resumes at the same step on another machine or on the web,
  * and a team's workspace made is not offered to be made again. Finish lets
@@ -271,6 +275,8 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   const at = Math.min(Math.max(place.at, 0), steps.length - 1);
   const step = steps[at] ?? SETUP_STEP.TOOLS;
   const last = at === steps.length - 1;
+  // Note that the usage data note stands on the first card whichever it is, since an invited account's setup has no Welcome.
+  const usageData = at === 0 ? <SetupUsageData /> : null;
   // The team's workspace setup made and then left for Just me, which Finish deletes or asks about; none otherwise.
   const leftTeam = audience === SETUP_AUDIENCE.ME ? team : undefined;
 
@@ -381,6 +387,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
             if (chosen !== undefined) setAudience(chosen);
           }}
         />
+        {usageData}
       </AuthPage>
     );
   }
@@ -420,6 +427,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         }
       >
         <SurveyQuestions survey={survey} />
+        {usageData}
       </AuthPage>
     );
   }
