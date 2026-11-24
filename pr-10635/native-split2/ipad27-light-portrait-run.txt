@@ -1,0 +1,75 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow fsplit-p
+  > On Flow Complete
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Set orientation PORTRAIT... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 1-launch-inbox... COMPLETED
+Swipe from (1%, 50%) to (60%, 50%) in 600 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 6-edge-swipe-sidebar... COMPLETED
+Run flow when "Merge queue" is visible...
+  Tap on point (95%, 50%)... COMPLETED
+  Wait for animation to end... COMPLETED
+Run flow when "Merge queue" is visible... COMPLETED
+Take screenshot 6b-after-dismiss... COMPLETED
+Tap on (Optional) "Recorded the invite flow"... WARNED
+Assert that (Optional) "invite-test-plan\.pdf.*" is visible... WARNED
+Run flow when "invite-test-plan\.pdf.*" is not visible...
+  Take screenshot 2x-thread-not-open... COMPLETED
+Run flow when "invite-test-plan\.pdf.*" is not visible... COMPLETED
+Take screenshot 2-thread-open... COMPLETED
+Tap on (Optional) ".*[Ss]idebar.*"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 3a-after-toggle-1... COMPLETED
+Tap on (Optional) ".*[Ss]idebar.*"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 3b-after-toggle-2... COMPLETED
+Run flow when "Merge queue" is not visible...
+Run flow when "Merge queue" is not visible... SKIPPED
+Run flow when "Merge queue" is not visible...
+Run flow when "Merge queue" is not visible... SKIPPED
+Tap on (Optional) "Teammate invit.*", Left of "Search inbox"... WARNED
+Wait for animation to end... COMPLETED
+Run flow when "Build teammate invitations" is not visible...
+  Take screenshot 4x-task-not-open-first-try... COMPLETED
+  Run flow when "Merge queue" is not visible...
+  Run flow when "Merge queue" is not visible... SKIPPED
+  Run flow when "Merge queue" is not visible...
+  Run flow when "Merge queue" is not visible... SKIPPED
+  Tap on (Optional) "Teammate invit.*", Index: 0... COMPLETED
+  Wait for animation to end... COMPLETED
+Run flow when "Build teammate invitations" is not visible... COMPLETED
+Take screenshot 4a-task-page... COMPLETED
+Tap on (Optional) "Build teammate invitations"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 4b-agent-page... COMPLETED
+Tap on (Optional) "#128.*"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 4c-pull-request... COMPLETED
+Run flow when "Merge queue" is not visible...
+Run flow when "Merge queue" is not visible... SKIPPED
+Run flow when "Merge queue" is not visible...
+Run flow when "Merge queue" is not visible... SKIPPED
+Tap on (Optional) "Tasks", Index: 0... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 5a-tasks... COMPLETED
+Run flow when "Merge queue" is not visible...
+Run flow when "Merge queue" is not visible... SKIPPED
+Run flow when "Merge queue" is not visible...
+Run flow when "Merge queue" is not visible... SKIPPED
+Tap on (Optional) "Search", Index: 0... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 5b-search... COMPLETED
+Run flow when "Merge queue" is not visible...
+Run flow when "Merge queue" is not visible... SKIPPED
+Run flow when "Merge queue" is not visible...
+Run flow when "Merge queue" is not visible... SKIPPED
+Tap on (Optional) "Merge queue"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 5c-merge-queue... COMPLETED
+Set orientation PORTRAIT... COMPLETED

@@ -1,0 +1,14 @@
+pinned to 1f3eadb32f
+== bundle PJjsplit2 base 1f3eadb32f
+  built 1f3eadb32f base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+ipad27-light-probe-landscape-launch: fails 0 shots 1 
+ipad27-light-probe-landscape-toggled: fails 0 shots 1 
+ipad27-light-landscape: fails 0 shots 13 
+ipad27-light-probe-portrait-launch: fails 0 shots 1 
+ipad27-light-probe-portrait-edge: fails 0 shots 1 
+ipad27-light-portrait: fails 0 shots 17 
+ipad27-dark-landscape: fails 0 shots 1 
