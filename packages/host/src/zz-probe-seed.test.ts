@@ -28,7 +28,8 @@ import { localRows } from "./local-rows.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import type { AgentRow, PlanRow } from "./task-list-rows.js";
 
-const SCALE = { PLANS: 3240, AGENTS: 4831, INBOX: 205 } as const;
+// Note that the Inbox is the developer's first whole read's size, 639 threads at about 4 MB, all of it invented.
+const SCALE = { PLANS: 3240, AGENTS: 4831, INBOX: 639 } as const;
 const NOW = Date.now();
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -208,7 +209,7 @@ function agentAt(index: number): AgentRow {
     sandboxOpen: false,
     permissionMode: "full_access",
     pendingApprovals: [],
-    sandboxState: archived ? "stopped" : "running",
+    sandboxState: archived ? "off" : "running",
     sandboxStateAt: created + 41 * MINUTE,
   } as AgentRow;
 }
@@ -242,6 +243,8 @@ function inboxAt(n: number): { readonly item: InboxItem; readonly taskId: string
     said(n * 10 + 2, ago - 20 * MINUTE, "agent"),
     said(n * 10 + 3, ago - 25 * MINUTE, "member"),
     said(n * 10 + 5, ago - 27 * MINUTE, "agent"),
+    said(n * 10 + 6, ago - 28 * MINUTE, "agent"),
+    said(n * 10 + 7, ago - 29 * MINUTE, "agent"),
     said(n * 10 + 4, ago - 30 * MINUTE, "agent", {
       type: INBOX_ASK.ANSWER,
       status: INBOX_ASK_STATUS.OPEN,
