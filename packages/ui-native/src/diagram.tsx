@@ -7,7 +7,6 @@ import {
   diagramAlt,
   diagramThemeVariablesOf,
 } from "@repo/features/mermaid-diagram";
-import mermaidSource from "mermaid/dist/mermaid.min.js";
 import {
   createContext,
   type ReactElement,
@@ -203,9 +202,20 @@ function drawingQueue() {
 /** The sealed page, built from Mermaid's 3.5 MB of source once the app first draws a diagram (`diagramDocument`), and kept for every later one. */
 let sealedDocument: string | undefined;
 
+/**
+ * Mermaid's one-file build as its words (`mermaid-source.d.ts`), required
+ * as the first diagram draws rather than imported, since an import ran its
+ * module, and made its 3.5 MB string, in every launch, before the first
+ * frame, through the screens that import this package.
+ */
+function mermaidSource(): string {
+  // SAFETY: the app's Babel config makes this module's value Mermaid's words, one string (`apps/mobile/babel.config.js`).
+  return require("mermaid/dist/mermaid.min.js") as string;
+}
+
 /** The sealed page, built on its first ask, since reading Mermaid's whole source into it took a task's page some 300 ms on every open. */
 function sealedPage(): string {
-  sealedDocument ??= diagramDocument(mermaidSource);
+  sealedDocument ??= diagramDocument(mermaidSource());
 
   return sealedDocument;
 }
