@@ -24,7 +24,11 @@
  * The rows are drawn on their own `transform` and the copy on its own, and
  * the stylesheet (desktop.css) times every slide from the motion tokens, so
  * reduced motion and a capture run hold them still as they hold the rest.
- * Only the drop reaches the list's owner, as one move. It is pointer events
+ * Only the drop reaches the list's owner, as one move, heard in the draw
+ * the drag comes down in (`flushSync`): an owner draws its rows through
+ * `useDroppedOrder` (`dropped-order.ts`), so they stand in their new order in
+ * that draw though the order it is handed arrives later, and the drag comes
+ * down over rows already where it put them. It is pointer events
  * with the pointer captured, never the browser's drag and drop, for the
  * reasons the strip's gives, and the captured pointer's own click lands on
  * the list rather than on the row, so a drop opens nothing.

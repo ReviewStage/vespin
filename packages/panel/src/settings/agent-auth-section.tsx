@@ -108,6 +108,7 @@ import { actMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
+import { useDroppedOrder } from "../desktop/dropped-order.js";
 import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import { providerKeysQuery, providerKeysRetryMutation } from "../live-reads.js";
@@ -727,6 +728,11 @@ type UseCredentialOrderResult = {
   refused: string | undefined;
 };
 
+/** A credential's key, its id. */
+function credentialKey(credential: Credential): string {
+  return credential.id;
+}
+
 /**
  * The harness's credentials in the order the account keeps, a reorder drawn
  * at once and sent as the whole order, its key's place among it; the list
@@ -748,7 +754,7 @@ function useCredentialOrder(
       : undefined;
 
   // Note that a credential added or removed meanwhile is drawn where the service says, after those sent.
-  const ordered =
+  const sent =
     sentOrder === undefined
       ? credentials
       : [
@@ -759,6 +765,9 @@ function useCredentialOrder(
   // Note that the service orders a provider's credentials whatever kind is named, and a harness with no plan orders its keys alone.
   const kind = keepsPlan(provider) ? HARNESS_PLAN[provider].plan : PROVIDER_KEY_KIND.API_KEY;
 
+  // Note that a drag's order is drawn in the drop's own draw, since the reorder's `variables` reach the page a microtask after it (`dropped-order.ts`).
+  const { drawn: ordered, move: standMoved } = useDroppedOrder(sent, credentialKey);
+
   const move = (from: number, to: number) => {
     const ids = ordered.map((credential) => credential.id);
     const [moved] = ids.splice(from, 1);
@@ -766,6 +775,7 @@ function useCredentialOrder(
     if (moved === undefined || from === to) return;
     ids.splice(to, 0, moved);
     reordering.mutate({ provider, kind, subscriptionIds: ids });
+    standMoved(from, to);
   };
 
   return { ordered, move, refused };

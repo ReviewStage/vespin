@@ -78,6 +78,7 @@ import { useRef, useState } from "react";
 import { actFailureWords, askAct, sendAct } from "../act.js";
 import { useTypedCodeColoring } from "../code-coloring.js";
 import { useConfirmAct } from "../confirm-act.js";
+import { useDroppedOrder } from "../desktop/dropped-order.js";
 import { SectionIconWell, sectionGlyph } from "../desktop/section-icon-picker.js";
 import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure, refusalShown } from "../failure-report.js";
@@ -825,6 +826,11 @@ type UseRunActionOrderResult = {
   move: (from: number, to: number) => void;
 };
 
+/** A run action's key, its id. */
+function runActionKey(action: RunAction): string {
+  return action.id;
+}
+
 /**
  * A repository's run actions in the order the service keeps, a drag drawn
  * at once and saved as the whole list: while any save of the list is out,
@@ -846,10 +852,13 @@ function useRunActionOrder(
   // Note that the actions the save names fill their own places in the order it asks for, and one it leaves out, as a removal does or one added meanwhile, keeps its place.
   const named = sent?.flatMap((id) => byId.get(id) ?? []) ?? [];
 
-  const ordered =
+  const saved =
     sent === undefined
       ? actions
       : actions.map((action) => (sent.includes(action.id) ? (named.shift() ?? action) : action));
+
+  // Note that a drag's order is drawn in the drop's own draw, since the save's order reaches the page a microtask after it (`dropped-order.ts`).
+  const { drawn: ordered, move: standMoved } = useDroppedOrder(saved, runActionKey);
 
   const move = (from: number, to: number) => {
     const moved = [...ordered];
@@ -858,6 +867,7 @@ function useRunActionOrder(
     if (one === undefined || from === to) return;
     moved.splice(to, 0, one);
     saving.mutate({ repository, actions: moved.map(writtenOf) });
+    standMoved(from, to);
   };
 
   return { ordered, move };

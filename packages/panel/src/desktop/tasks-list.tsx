@@ -130,6 +130,7 @@ import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { keptKey, useKept } from "../use-kept.js";
+import { useDroppedOrder } from "./dropped-order.js";
 import { useFittedColumns } from "./fitted-columns.js";
 import { groupNewTaskWords, NewTaskInButton, quickAddInto } from "./new-task-button.js";
 import { useTasksWaiting } from "./places-waiting.js";
@@ -791,7 +792,7 @@ interface ListRunsPlace {
  * within it, where it keeps an order, and out of it.
  */
 function TasksListGroup({
-  group,
+  group: listed,
   head,
   folded,
   onToggle,
@@ -825,12 +826,26 @@ function TasksListGroup({
   /** What each group's run measured, by the group's key, held across the page's visits. */
   measured: Map<string, VirtualRowMeasurements> | undefined;
 }): React.JSX.Element {
-  const runKey = groupKey(group.head);
+  const runKey = groupKey(listed.head);
+  // Note that the rows stand in the order a move asked for from the move's own draw, since main's state reaches the panel a moment after it (`dropped-order.ts`).
+  const { drawn: standing, move: standMoved } = useDroppedOrder(listed.tasks, taskIdOf);
+  const group = standing === listed.tasks ? listed : { ...listed, tasks: standing };
   const keys = useMemo(() => group.tasks.map(taskIdOf), [group.tasks]);
   const run = useRef<VirtualRowsHandle>(null);
   const { holdRun } = place;
   useLayoutEffect(() => holdRun(run), [holdRun]);
-  const move = folded ? undefined : drops.move(group);
+  const moving = folded ? undefined : drops.move(group);
+
+  const move =
+    moving === undefined
+      ? undefined
+      : (taskId: string, to: number) => {
+          moving(taskId, to);
+          standMoved(
+            group.tasks.findIndex((task) => task.id === taskId),
+            to,
+          );
+        };
 
   const drag = useTaskDrag(move, {
     handle: ROW_HANDLE,

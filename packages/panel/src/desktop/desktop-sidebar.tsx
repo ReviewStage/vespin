@@ -211,6 +211,7 @@ import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";
 import { hadTasks, useListsTask } from "./desktop-welcome.js";
+import { useDroppedOrder } from "./dropped-order.js";
 import { useFailedRunsMark } from "./failed-runs.js";
 import { withoutFinishedRunTasks } from "./finished-runs.js";
 import { type FoldedGroups, useFoldedGroups } from "./folded-groups.js";
@@ -1188,7 +1189,7 @@ function PinnedRows({
   context,
   onOpenTab,
   onOpenManager,
-  movable,
+  onMovePin,
   onDropOut,
 }: {
   rows: readonly PinnedRow[];
@@ -1198,21 +1199,17 @@ function PinnedRows({
   onOpenTab: (pin: SidebarPin) => void;
   /** Opens a Manager's page. */
   onOpenManager: (agentId: string) => void;
-  /** Whether a row is dragged to another place among them, which a fold drawing only some of them forbids. */
-  movable: boolean;
+  /** Stands the pin at `from` among `rows` at `to`; none where a row is never moved among them, as a fold drawing only some of them forbids. */
+  onMovePin: ((from: number, to: number) => void) | undefined;
   /** Hears a row let go over a section or Tasks, while the account keeps sections; none while it does not. */
   onDropOut: ((row: PinnedRow, zone: string, at: number) => void) | undefined;
 }): React.JSX.Element {
-  const movePin = movable
-    ? (from: number, to: number) => movePinned(rows, from, to, context.tasks)
-    : undefined;
-
   const keys = useMemo(() => drawn.map(pinnedDrawnKey), [drawn]);
   // Note that a drag counts the rows drawn, child tasks among them, so a pin lands beside the pin it was let go among.
   const depths = drawn.map(depthOf);
 
   const move =
-    movePin === undefined
+    onMovePin === undefined
       ? undefined
       : (from: number, to: number) => {
           const beside = movedBeside(depths, from, to);
@@ -1220,7 +1217,7 @@ function PinnedRows({
           const by = beside === undefined ? undefined : drawn[beside]?.pin;
 
           if (moved !== undefined && by !== undefined) {
-            movePin(rows.indexOf(moved), rows.indexOf(by));
+            onMovePin(rows.indexOf(moved), rows.indexOf(by));
           }
         };
 
@@ -1245,9 +1242,9 @@ function PinnedRows({
 
     return keptPlace(
       key,
-      movePin === undefined || at === undefined
+      onMovePin === undefined || at === undefined
         ? undefined
-        : { at, count: rows.length, onMove: movePin },
+        : { at, count: rows.length, onMove: onMovePin },
     );
   };
 
@@ -1259,7 +1256,7 @@ function PinnedRows({
     <SidebarRun
       place={context.runs}
       keys={keys}
-      drops={onDropOut !== undefined && movable}
+      drops={onDropOut !== undefined && onMovePin !== undefined}
       onPointerDown={drag}
       block={moveKeys}
     >
@@ -1362,7 +1359,7 @@ function PinnedRows({
  * is; carried out onto Tasks, one is unpinned.
  */
 function PinnedSection({
-  rows,
+  rows: listed,
   onOpenManager,
   adopted,
   folds,
@@ -1384,6 +1381,8 @@ function PinnedSection({
   /** Whether a row is carried, which an empty Pinned stands for, as the slot it lands in. */
   carried: boolean;
 }): React.JSX.Element {
+  // Note that the pins stand in the order a move asked for from the move's own draw, since main's state reaches the panel a moment after it (`dropped-order.ts`).
+  const { drawn: rows, move } = useDroppedOrder(listed, pinnedRowKey);
   const folded = folds.pinnedFolded;
   const { taskOpened } = folds;
   const drawn = pinnedDrawn(rows, adopted, taskOpened, context.currentTask, context.every);
@@ -1455,7 +1454,7 @@ function PinnedSection({
               context={context}
               onOpenTab={onOpenTab}
               onOpenManager={onOpenManager}
-              movable={false}
+              onMovePin={undefined}
               onDropOut={onDropOut}
             />
           )
@@ -1470,7 +1469,10 @@ function PinnedSection({
             context={context}
             onOpenTab={onOpenTab}
             onOpenManager={onOpenManager}
-            movable
+            onMovePin={(from, to) => {
+              movePinned(rows, from, to, context.tasks);
+              move(from, to);
+            }}
             onDropOut={onDropOut}
           />
         )}

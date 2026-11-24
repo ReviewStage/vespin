@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
+import { useDroppedOrder } from "./dropped-order.js";
 import { type RowMove, useRowDrag, useRunRowDrag } from "./use-row-drag.js";
 
 /**
@@ -57,6 +58,12 @@ function drawn(count: number, onMove: RowMove, places?: readonly number[]): HTML
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(List)));
+
+  return laidOut(container);
+}
+
+/** The list drawn in `container`, its rows laid out a row's height apart in the order they stand. */
+function laidOut(container: HTMLElement): HTMLElement {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     if (this.matches("ul")) return DOMRect.fromRect({ y: -scrolled, width: 200 });
     const list = this.parentElement;
@@ -75,6 +82,9 @@ function drawn(count: number, onMove: RowMove, places?: readonly number[]): HTML
 
 const at = (type: string, y: number) =>
   new PointerEvent(type, { bubbles: true, button: 0, clientY: y, pointerId: 1 });
+
+/** A row's name, which a list keys it by. */
+const nameOf = (name: string) => name;
 
 /** The button on the row at `index`, which a press lands on. */
 function grip(list: HTMLElement, index: number): HTMLElement {
@@ -161,6 +171,60 @@ test("a row let go off to the side lands its copy on the row's place on both axe
   act(() => finish?.());
   assert.equal(document.querySelector("[data-carried]"), null);
   assert.equal(list.querySelector("li")?.getAttribute("data-dragging"), null);
+});
+
+test("a row let go in a list drawn through its dropped order stands at its new place as the drag comes down, the copy landing there, while the order handed still has it where it was", () => {
+  const plays: Keyframe[][] = [];
+  // jsdom plays no animation; the copy's landing is taken as the window would start it.
+  Object.defineProperty(HTMLElement.prototype, "animate", {
+    configurable: true,
+    value(keyframes: Keyframe[]) {
+      plays.push(keyframes);
+
+      return { onfinish: () => undefined };
+    },
+  });
+  const handed = ["Row 0", "Row 1", "Row 2", "Row 3"];
+
+  // Note that the move is written nowhere, as main's state reaches the list only after the drop.
+  function List() {
+    const { drawn: names, move } = useDroppedOrder(handed, nameOf);
+
+    return createElement(
+      "ul",
+      { onPointerDown: useRowDrag(move) },
+      names.map((name) =>
+        createElement("li", { key: name }, createElement("button", { type: "button" }, name)),
+      ),
+    );
+  }
+
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(createElement(List)));
+  const list = laidOut(container);
+  list.style.setProperty("--ui-duration-fast", "180ms");
+  list.style.setProperty("--ui-spring-fast", "ease-out");
+  act(() => {
+    grip(list, 0).dispatchEvent(at("pointerdown", 10));
+    window.dispatchEvent(at("pointermove", 40));
+    window.dispatchEvent(at("pointermove", 72));
+    window.dispatchEvent(at("pointerup", 72));
+  });
+  Reflect.deleteProperty(HTMLElement.prototype, "animate");
+  const rows = [...list.querySelectorAll("li")];
+  assert.deepEqual(
+    rows.map((row) => row.textContent),
+    ["Row 1", "Row 2", "Row 0", "Row 3"],
+  );
+  assert.deepEqual(
+    rows.map((row) => row.style.transform),
+    ["", "", "", ""],
+  );
+  assert.deepEqual(plays, [
+    [{ transform: "translate(0px, 62px)" }, { transform: "translate(0px, 60px)" }],
+  ]);
 });
 
 test("a row of a run that also draws the row holding the keyboard far above it lands at the place among every row of the row it passed", () => {

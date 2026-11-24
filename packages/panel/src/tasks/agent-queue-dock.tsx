@@ -27,6 +27,7 @@ import { GLYPH } from "@repo/ui/icons";
 import type { ActionResult } from "@repo/wire";
 import { useState } from "react";
 import { ActorRef } from "../actor-ref.js";
+import { useDroppedOrder } from "../desktop/dropped-order.js";
 import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure } from "../failure-report.js";
 import { type Directory, useMemberDirectory } from "../member-directory.js";
@@ -58,6 +59,11 @@ import { SentWords } from "./skill-chip.js";
  * over its rows, after a Stop in the quiet tone and after a refusal in the
  * danger one, with Resume. Nothing is drawn while none is queued.
  */
+
+/** A queued message's key, its id. */
+function queuedKey(message: QueuedMessage): string {
+  return message.id;
+}
 
 /** A queued message's files as a line's chips: each by its name, read by the id the queue names it under where it names one. */
 function queuedFileChips(message: QueuedMessage) {
@@ -110,7 +116,7 @@ const DELETE_QUESTION: DialogQuestion = {
 
 /** The dock: the paused header where the queue stands paused, then a row per queued message. */
 export function AgentQueueDock({
-  messages,
+  messages: listed,
   controls,
   paused,
   editing,
@@ -138,7 +144,15 @@ export function AgentQueueDock({
   onDelete: (message: QueuedMessage) => Promise<ActionResult>;
   onResume: () => void;
 }): React.JSX.Element | null {
-  const drag = useRowDrag(onMove, { handle: "[data-queue-handle]" });
+  // Note that a drag's order is drawn in the drop's own draw, since the host's queue reaches the panel a moment after it (`dropped-order.ts`).
+  const { drawn: messages, move: standMoved } = useDroppedOrder(listed, queuedKey);
+
+  const move = (from: number, to: number) => {
+    onMove(from, to);
+    standMoved(from, to);
+  };
+
+  const drag = useRowDrag(move, { handle: "[data-queue-handle]" });
   const directory = useMemberDirectory();
   const [doomed, setDoomed] = useState<QueuedMessage>();
   // The question goes with its message, which a hand-off may send while it is asked.

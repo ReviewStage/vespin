@@ -75,6 +75,7 @@ import { useReadMark } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
+import { useDroppedOrder } from "./dropped-order.js";
 import { movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
 import { NewTaskInButton } from "./new-task-button.js";
 import {
@@ -823,6 +824,44 @@ export function layoutSlot(layout: SectionLayout, at: number): number {
   return entry === undefined ? layout.order.length : layout.order.indexOf(entry);
 }
 
+/** An entry's key among a section's: its task's id, or its Manager's. */
+function entryKeyOf(entry: SectionEntry): string {
+  return "taskId" in entry ? entry.taskId : entry.agentId;
+}
+
+/**
+ * A section's layout drawn in `order`, the section's entries in the order a
+ * move asked for (`useDroppedOrder`): each run of rows under an entry, a
+ * task's child tasks with it, in the order of their entries, and the rows
+ * under no entry after them as they stood.
+ */
+function inEntryOrder(layout: SectionLayout, order: readonly SectionEntry[]): SectionLayout {
+  if (order === layout.order) return layout;
+  const runs: { entry: SectionEntry | undefined; at: number[] }[] = [];
+
+  layout.rows.forEach((row, at) => {
+    const entry = layout.entries[at];
+    const last = runs.at(-1);
+
+    if (entry !== undefined || sectionDepthOf(row).depth === 0 || last === undefined) {
+      runs.push({ entry, at: [at] });
+    } else last.at.push(at);
+  });
+
+  const placeOf = (run: (typeof runs)[number]) =>
+    run.entry === undefined ? order.length : order.indexOf(run.entry);
+
+  const drawn = runs
+    .toSorted((one, other) => placeOf(one) - placeOf(other))
+    .flatMap((run) => run.at);
+
+  return {
+    rows: drawn.flatMap((at) => layout.rows[at] ?? []),
+    entries: drawn.map((at) => layout.entries[at]),
+    order,
+  };
+}
+
 /** The writes that stand the entry `moving` among a section's rows, `order`, at the place of the entry `beside`. */
 function placeWritesWithin(
   order: readonly SectionEntry[],
@@ -857,7 +896,10 @@ function SectionRows({
   folded: boolean;
 }): React.JSX.Element {
   const nested = useNestedRows(tasks, context.opened, context.current, context.every);
-  const layout = useMemo(() => sectionLayout(drawn, nested, managers), [drawn, nested, managers]);
+  const listed = useMemo(() => sectionLayout(drawn, nested, managers), [drawn, nested, managers]);
+  // Note that the rows stand in the order a move asked for from the move's own draw, since main's state reaches the panel a moment after it (`dropped-order.ts`).
+  const { drawn: order, move: standMoved } = useDroppedOrder(listed.order, entryKeyOf);
+  const layout = useMemo(() => inEntryOrder(listed, order), [listed, order]);
   const { rows } = layout;
   const keys = useMemo(() => rows.map(sectionDrawnKey), [rows]);
   const listedAt = new Map(keys.map((key, at) => [key, at]));
@@ -871,6 +913,7 @@ function SectionRows({
 
     if (moving === undefined || by === undefined) return;
     context.dialogs.write(placeWritesWithin(layout.order, sectionId, moving, by));
+    standMoved(layout.order.indexOf(moving), layout.order.indexOf(by));
   };
 
   const move = folded
@@ -1140,7 +1183,7 @@ function SidebarSection({
  * name typed, makes nothing.
  */
 export function SidebarSections({
-  sections,
+  sections: listed,
   workspaceId,
   context,
 }: {
@@ -1149,10 +1192,14 @@ export function SidebarSections({
   workspaceId: string | undefined;
   context: SectionContext;
 }): React.JSX.Element | null {
+  // Note that the sections stand in the order a move asked for from the move's own draw, since main's state reaches the panel a moment after it (`dropped-order.ts`).
+  const { drawn: sections, move: standMoved } = useDroppedOrder(listed, sectionKeyOf);
   const order = sections.map((drawn) => drawn.section);
 
-  const move = (from: number, to: number) =>
+  const move = (from: number, to: number) => {
     context.dialogs.write(sectionMoveWrites(order, from, to));
+    standMoved(from, to);
+  };
 
   const drag = useRowDrag(move, { handle: SECTION_HANDLE });
   const keys = useRowMoveKeys(move);
