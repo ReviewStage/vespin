@@ -630,9 +630,10 @@ export const PRODUCT_PAGE_VERSION = {
 
 export type ProductPageVersion = (typeof PRODUCT_PAGE_VERSION)[keyof typeof PRODUCT_PAGE_VERSION];
 
-/** Where a picture drawn came from: the copy an earlier read left on the phone, or a read through the service. */
+/** Where a picture drawn came from: the copy an earlier read left on the phone, a read through the service downloaded straight into a file, or one read as its bytes. */
 export const PRODUCT_PICTURE_FROM = {
   KEPT: "kept",
+  DOWNLOADED: "downloaded",
   READ: "read",
 } as const;
 
