@@ -98,7 +98,7 @@ const IOS = {
     "iOS's agent page leaves a fresh session and a restart of the agent's machine to the desktop and the web for now",
   ),
   AUTOMATIONS: notYet(
-    "iOS lists and edits automations from Settings and its editor; deleting one and picking the agent its runs land in come with its Automations tab",
+    "iOS lists and edits automations from Settings and its editor; deleting one comes with its Automations tab",
   ),
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",

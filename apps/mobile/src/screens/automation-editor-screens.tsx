@@ -1,5 +1,7 @@
 // automation-editor-screens.tsx -- New automation and an automation's Edit, as a sheet of the desktop's automation editor: its name, who owns it, what fires it, its prompt, and where its runs work; and the time zone its schedule is read in, pushed over it in the sheet.
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
+import { handedServers, switchedServers } from "@repo/features/agent-servers-model";
 import {
   type AutomationDraft,
   automationDraft,
@@ -7,16 +9,21 @@ import {
   createRequestOf,
   DRAFT_FIELD,
   type DraftDefaults,
+  type DraftProblems,
   draftNextRuns,
   draftProblems,
   draftRepositories,
   draftTrigger,
+  filterAdmitted,
+  filterValuesOf,
   type GitHubTriggerSettings,
   repositoryHeld,
   SCHEDULE_KIND,
   type ScheduleDraft,
   sameDraft,
   withGithubEvent,
+  withIntegrationEvent,
+  withIntegrationFilters,
   withRepository,
   withScheduleKind,
 } from "@repo/features/automation-draft-model";
@@ -34,7 +41,11 @@ import {
   nextRunWords,
   PULL_REQUEST_EVENTS,
   PULL_REQUEST_MOMENTS,
+  RUNS_AGENT_WORDS,
   SCHEDULE_KINDS,
+  SENTRY_EVENTS,
+  SENTRY_LEVELS,
+  SENTRY_WORDS,
   WEBHOOK_WORDS,
   WEEKDAYS,
   workspaceOwnerDetail,
@@ -48,6 +59,7 @@ import {
   type AutomationSummary,
   GITHUB_TRIGGER_EVENT,
   type GitHubTriggerEvent,
+  type IntegrationTriggerFilters,
 } from "@repo/features/automation-wire";
 import {
   AUTOMATION_PHONE_WORDS,
@@ -56,15 +68,25 @@ import {
   READING_AUTOMATIONS,
 } from "@repo/features/automation-words";
 import { readerZone } from "@repo/features/date-mention";
+import { INTEGRATION_NAME, integrationConnectionOf } from "@repo/features/integration-wire";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { effortFor, effortsOf } from "@repo/features/model-effort";
+import { agentName } from "@repo/features/model-label";
 import { type CatalogModel, type ModelChoice, standardModelIdOf } from "@repo/features/models-wire";
+import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { dayAndTimeText, timeZoneNames } from "@repo/features/time-format";
-import { ACT_UNREACHED_WORDS, readingWords } from "@repo/features/words";
+import { ACT_UNREACHED_WORDS, andList, MCP_SERVER_LABEL, readingWords } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectAgentDefault, selectWorkspaces } from "@repo/host/app-state-reads";
+import {
+  selectAccount,
+  selectAgentDefault,
+  selectIntegrations,
+  selectWorkspaces,
+} from "@repo/host/app-state-reads";
+import { SETTINGS_PAGE } from "@repo/settings";
 import {
   ActionRow,
   BAR_TITLE,
@@ -81,7 +103,6 @@ import {
   ListSection,
   LoadingRow,
   MenuPickRow,
-  NoteRow,
   PickRows,
   PUSH_ROW_GOES,
   PushRow,
@@ -104,8 +125,9 @@ import { useWorkspaceAutomations } from "../automations/use-automations.js";
 import { useZonePick, useZonePicked } from "../automations/zone-pick.js";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useListedAgents } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { openInSafari } from "../open-link.js";
 import {
   atSpeed,
   effortOptions,
@@ -119,8 +141,6 @@ import { DISCARD_CHANGES_WORDS, DISCARD_WORDS, useKeptWords } from "../use-kept-
 /** What the sheet says where the editor itself has no word for it. */
 const WORDS = {
   CANCEL: "Cancel",
-  /** A trigger this sheet does not edit yet, said under its sentence. */
-  TRIGGER_ELSEWHERE: "Change this trigger on the desktop or the web for now.",
   /** Where a schedule's custom cron is typed, as its field says before anything is. */
   CRON_PLACEHOLDER: "0 9 * * 1-5",
 } as const;
@@ -130,6 +150,26 @@ const NO_REPOSITORY_ID = "none";
 
 /** How many of a schedule's next runs its footer names. */
 const NEXT_RUNS_SHOWN = 3;
+
+/** The agent picker's choice of the one its first run starts. Note that no agent's id is this word, so it never names one. */
+const FIRST_RUN_ID = "first-run";
+
+/** What the MCP servers' section says where the editor has no word of the desktop's to share. */
+const SERVER_WORDS = {
+  ALL_BUT: "All but",
+  THEIRS: "Runs use its creator's connections, so only its creator can change them.",
+  NONE: "No MCP servers are connected. Connect one in Settings › Integrations.",
+} as const;
+
+/** A switched-off server's connection as its row names it: its provider, and which of its accounts after the first. */
+function switchedOffName(connection: string): string {
+  const account = integrationConnectionOf(connection);
+
+  if (account === undefined) return connection;
+  const name = INTEGRATION_NAME[account.provider];
+
+  return account.place === 1 ? name : `${name} (account ${account.place})`;
+}
 
 /** What a flow finds the name field by. */
 const NAME_FIELD_ID = "automation-name";
@@ -184,20 +224,27 @@ function choiceAt(
   return effort === undefined ? undefined : { model, effort };
 }
 
-/** Whether the workspace's Slack bot is connected, so a run's result may be sent on Slack, followed while the sheet stands; not while its read is out or failed. */
-function useSlackBot(workspaceId: string): boolean {
+/** What the workspace's integrations say to the editor: whether its Slack bot is connected, so a run's result may be sent on Slack, and its Sentry, through whose installation a Sentry trigger's events arrive; neither while the read is out or failed. */
+interface EditorIntegrations {
+  readonly slackBot: boolean;
+  readonly sentry: WorkspaceSentry | undefined;
+}
+
+/** The workspace's integrations as the editor reads them, followed while the sheet stands. */
+function useEditorIntegrations(workspaceId: string): EditorIntegrations {
   const acts = useHostActs();
   useLiveFollow(workspaceId, (id) =>
     acts[ACT_KIND.WORKSPACE_INTEGRATIONS_FOLLOW]({ workspaceId: id }),
   );
 
   const select = useMemo(
-    () => (state: AppStateSnapshot) =>
-      state[LIVE_READ.WORKSPACE_INTEGRATIONS][workspaceId]?.rows?.slack.team !== undefined,
+    () => (state: AppStateSnapshot) => state[LIVE_READ.WORKSPACE_INTEGRATIONS][workspaceId]?.rows,
     [workspaceId],
   );
 
-  return useQuery({ ...appStateQuery, select }).data === true;
+  const rows = useQuery({ ...appStateQuery, select }).data;
+
+  return { slackBot: rows?.slack.team !== undefined, sentry: rows?.sentry };
 }
 
 /** The sheet's bar: its title, the system's ✕ (Cancel to VoiceOver), and its act, lit while none is out. */
@@ -498,6 +545,212 @@ function GitHubRows({
   );
 }
 
+/**
+ * One of a Sentry trigger's filters, under its own heading: its values
+ * written comma-separated, read back into the draft as they are typed.
+ * Note that the words typed stand in the field's own state, so a comma
+ * still to be followed by a value is not taken away.
+ */
+function FilterSection({
+  title,
+  detail,
+  values,
+  problem,
+  onValues,
+}: {
+  readonly title: string;
+  readonly detail: string;
+  readonly values: readonly string[];
+  readonly problem: string | undefined;
+  readonly onValues: (values: readonly string[]) => void;
+}) {
+  return (
+    <ListSection title={title} footer={problem ?? detail} footerTone={footerToneOf(problem)}>
+      <WordsField
+        look={WORDS_LOOK.LINE}
+        label={title}
+        placeholder={SENTRY_WORDS.ALL}
+        initialWords={values.join(", ")}
+        verbatim
+        onWords={(typed) => onValues(filterValuesOf(typed))}
+      />
+    </ListSection>
+  );
+}
+
+/**
+ * A Sentry trigger's sections after its Trigger section, as the desktop's
+ * rows: the projects and environments it keeps to, and its levels, a switch
+ * each, none on for every level. Where the workspace has no Sentry
+ * installed, a section says so in their place, its press opening the
+ * workspace's Settings page on the web, where Sentry is installed.
+ */
+function SentrySections({
+  draft,
+  sentry,
+  workspace,
+  problems,
+  onDraft,
+}: {
+  readonly draft: AutomationDraft;
+  readonly sentry: WorkspaceSentry | undefined;
+  readonly workspace: Workspace;
+  readonly problems: DraftProblems;
+  readonly onDraft: (patch: Partial<AutomationDraft>) => void;
+}) {
+  // Note that a read still out, or one that failed, installs nothing, so a saved trigger stays editable.
+  if (sentry !== undefined && sentry.installations.length === 0) {
+    return (
+      <ListSection title={SENTRY_WORDS.NOT_INSTALLED} footer={SENTRY_WORDS.INSTALL_DETAIL}>
+        <PushRow
+          label={SENTRY_WORDS.INSTALL}
+          goes={PUSH_ROW_GOES.OUT}
+          onPress={() =>
+            openInSafari(
+              linkOf(
+                { kind: LINK_DESTINATION.SETTINGS, page: SETTINGS_PAGE.WORKSPACE },
+                workspace.slug ?? workspace.id,
+              ),
+            )
+          }
+        />
+      </ListSection>
+    );
+  }
+
+  const filters = draft.integrationTrigger.filters;
+  const filter = (next: IntegrationTriggerFilters) => onDraft(withIntegrationFilters(draft, next));
+  const problem = problems[DRAFT_FIELD.FILTERS];
+  const levels = filters?.level ?? [];
+
+  return (
+    <>
+      <FilterSection
+        title={SENTRY_WORDS.PROJECTS}
+        detail={SENTRY_WORDS.PROJECTS_DETAIL}
+        values={filters?.project ?? []}
+        problem={filterAdmitted(filters?.project) ? undefined : problem}
+        onValues={(project) => filter({ project })}
+      />
+      <FilterSection
+        title={SENTRY_WORDS.ENVIRONMENTS}
+        detail={SENTRY_WORDS.ENVIRONMENTS_DETAIL}
+        values={filters?.environment ?? []}
+        problem={filterAdmitted(filters?.environment) ? undefined : problem}
+        onValues={(environment) => filter({ environment })}
+      />
+      <ListSection title={SENTRY_WORDS.LEVELS} footer={SENTRY_WORDS.LEVELS_DETAIL}>
+        {SENTRY_LEVELS.map((choice) => (
+          <ToggleRow
+            key={choice.value}
+            label={choice.label}
+            on={levels.includes(choice.value)}
+            onChange={(on) => filter({ level: toggled(levels, choice.value, on) })}
+          />
+        ))}
+      </ListSection>
+    </>
+  );
+}
+
+/**
+ * The agent a same-agent automation's runs go to: the one its first run
+ * starts, or one of the agents the app lists in its workspace, by name; one
+ * it was saved with that the app no longer lists stays picked under words
+ * that say so.
+ */
+function RunsAgentRow({
+  agentId,
+  workspaceId,
+  onAgent,
+}: {
+  readonly agentId: string | null;
+  readonly workspaceId: string;
+  readonly onAgent: (agentId: string | null) => void;
+}) {
+  const agents = useListedAgents();
+
+  const listed = agents
+    .filter((agent) => agent.workspaceId === workspaceId)
+    .map((agent) => ({ id: agent.id, label: agentName(agent) }));
+
+  const options = [
+    { id: FIRST_RUN_ID, label: RUNS_AGENT_WORDS.FIRST_RUN },
+    ...(agentId === null || listed.some((option) => option.id === agentId)
+      ? []
+      : [{ id: agentId, label: RUNS_AGENT_WORDS.NO_LONGER_LISTED }]),
+    ...listed,
+  ];
+
+  return (
+    <MenuPickRow
+      label={RUNS_AGENT_WORDS.AGENT}
+      options={options}
+      picked={agentId ?? FIRST_RUN_ID}
+      onPick={(id) => onAgent(id === FIRST_RUN_ID ? null : id)}
+    />
+  );
+}
+
+/**
+ * Which of the owner's connected MCP servers a run's new agent is handed,
+ * a switch each, every one on until switched off, as the agent box's
+ * servers popover offers them. A run starts on its creator's connections,
+ * so only its creator switches them; anyone else reads which were switched
+ * off. A server not connected is connected in Settings.
+ */
+function ServerSections({
+  mine,
+  disabled,
+  onDisabled,
+}: {
+  readonly mine: boolean;
+  readonly disabled: readonly string[];
+  readonly onDisabled: (disabled: readonly string[]) => void;
+}) {
+  const acts = useHostActs();
+  const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+  useLiveFollow(signedInAccountId(account), () => acts[ACT_KIND.INTEGRATIONS_FOLLOW]());
+  const answer = useQuery({ ...appStateQuery, select: selectIntegrations }).data?.rows;
+
+  if (!mine) {
+    return (
+      <ListSection title={MCP_SERVER_LABEL.many} footer={SERVER_WORDS.THEIRS}>
+        <ValueRow
+          label={MCP_SERVER_LABEL.many}
+          value={
+            disabled.length === 0
+              ? SENTRY_WORDS.ALL
+              : `${SERVER_WORDS.ALL_BUT} ${andList(disabled.map(switchedOffName))}`
+          }
+        />
+      </ListSection>
+    );
+  }
+
+  const servers = answer === undefined ? undefined : handedServers(answer, disabled);
+
+  return (
+    <ListSection
+      title={MCP_SERVER_LABEL.many}
+      footer={servers?.length === 0 ? SERVER_WORDS.NONE : undefined}
+    >
+      {servers === undefined ? (
+        <LoadingRow words={readingWords("your MCP servers")} />
+      ) : (
+        servers.map((server) => (
+          <ToggleRow
+            key={server.connection}
+            label={server.name}
+            on={server.on}
+            onChange={(on) => onDisabled(switchedServers(disabled, server.connection, on))}
+          />
+        ))
+      )}
+    </ListSection>
+  );
+}
+
 /** A webhook's secret as the write that minted it answered it, which this sheet alone holds, and the address its sender posts it to. */
 interface MintedSecret {
   readonly secret: string;
@@ -630,7 +883,7 @@ function EditorForm({
 }) {
   const acts = useHostActs();
   const repositories = useRepositoryPick(workspace);
-  const slackBot = useSlackBot(workspace.id);
+  const { slackBot, sentry } = useEditorIntegrations(workspace.id);
   const saving = useAsyncAction(() => ACT_UNREACHED_WORDS);
 
   const [defaults] = useState<DraftDefaults>(() => ({
@@ -715,11 +968,15 @@ function EditorForm({
     );
   };
 
-  // Note that Sentry is edited on the desktop and the web for now, so it is offered only where it was saved so.
+  // Note that Sentry is offered only where this deployment holds the integration, or where it was saved so, as the desktop's menu marks it unpickable.
   const triggers = AUTOMATION_TRIGGERS.filter(
     (trigger) =>
-      trigger.value !== AUTOMATION_TRIGGER.INTEGRATION || trigger.value === saved?.triggerKind,
+      trigger.value !== AUTOMATION_TRIGGER.INTEGRATION ||
+      sentry?.configured !== false ||
+      trigger.value === saved?.triggerKind,
   );
+
+  const integration = draft.triggerKind === AUTOMATION_TRIGGER.INTEGRATION;
 
   const webhook = draft.triggerKind === AUTOMATION_TRIGGER.WEBHOOK;
   const github = draft.triggerKind === AUTOMATION_TRIGGER.GITHUB;
@@ -829,7 +1086,8 @@ function EditorForm({
                     ? automation?.trigger.kind === AUTOMATION_TRIGGER.WEBHOOK
                       ? WEBHOOK_WORDS.ADDRESS_DETAIL
                       : WEBHOOK_WORDS.SAVE_FIRST
-                    : WORDS.TRIGGER_ELSEWHERE)
+                    : SENTRY_EVENTS.find((each) => each.value === draft.integrationTrigger.event)
+                        ?.detail)
             }
             footerTone={footerToneOf(scheduleProblem)}
           >
@@ -857,15 +1115,27 @@ function EditorForm({
             ) : webhook ? (
               <WebhookRows automation={automation} onMinted={setMinted} />
             ) : (
-              <NoteRow
-                symbol={GLYPH.AUTOMATION}
-                words={automationTriggerText(draftTrigger(draft), automation?.repositories ?? [])}
-                line={
-                  AUTOMATION_TRIGGERS.find((each) => each.value === draft.triggerKind)?.label ?? ""
-                }
+              <MenuPickRow
+                label={AUTOMATION_EDITOR_WORDS.EVENT}
+                options={SENTRY_EVENTS.map((each) => ({ id: each.value, label: each.label }))}
+                picked={draft.integrationTrigger.event}
+                onPick={(id) => {
+                  const picked = SENTRY_EVENTS.find((each) => each.value === id)?.value;
+
+                  if (picked !== undefined) edit(withIntegrationEvent(draft, picked));
+                }}
               />
             )}
           </ListSection>
+          {integration ? (
+            <SentrySections
+              draft={draft}
+              sentry={sentry}
+              workspace={workspace}
+              problems={shown}
+              onDraft={edit}
+            />
+          ) : null}
           <ListSection
             title={AUTOMATION_EDITOR_SECTION.PROMPT}
             footer={shown[DRAFT_FIELD.PROMPT]}
@@ -924,7 +1194,13 @@ function EditorForm({
                 })
               }
             />
-            {draft.target === AUTOMATION_TARGET.SAME_AGENT ? null : (
+            {draft.target === AUTOMATION_TARGET.SAME_AGENT ? (
+              <RunsAgentRow
+                agentId={draft.agentId}
+                workspaceId={workspace.id}
+                onAgent={(agentId) => edit({ agentId })}
+              />
+            ) : (
               <>
                 <ModelRows choice={draft.choice} onChoice={(choice) => edit({ choice })} />
                 <ToggleRow
@@ -943,6 +1219,13 @@ function EditorForm({
               />
             ) : null}
           </ListSection>
+          {draft.target === AUTOMATION_TARGET.SAME_AGENT ? null : (
+            <ServerSections
+              mine={mine}
+              disabled={draft.disabledServers}
+              onDisabled={(disabledServers) => edit({ disabledServers })}
+            />
+          )}
         </SettingsForm>
       </Screen>
     </>
