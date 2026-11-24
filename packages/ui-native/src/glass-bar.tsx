@@ -404,7 +404,8 @@ export function GlassBar({
   const pill = field ? ground : [];
   const lowering = useLowerDrag(onLower);
   const [aboveTall, setAboveTall] = useState(0);
-  const [barWide, setBarWide] = useState(320);
+  const { width: windowWide } = useWindowDimensions();
+  const barWide = Math.min(windowWide, READING_WIDTH) - BAR_MARGIN * 2;
   // Note that a float stands down over what stands above the bar, which keeps its room under it, so the float coming and going moves nothing; the float meets the bar a gap above it, as the piece did.
   const covers = float !== undefined && above !== undefined;
 
@@ -449,11 +450,7 @@ export function GlassBar({
 
   // PROTOTYPE: the float as the system's popover anchored to the bar's top, its arrow down at the field, the bar left pressable behind it; it wraps the bar whenever the bar's head may come and go, so presenting it never re-parents the field.
   const bar = (
-    <Host
-      matchContents={{ vertical: true }}
-      style={[styles.content, styles.bar]}
-      onLayout={(event: LayoutChangeEvent) => setBarWide(event.nativeEvent.layout.width)}
-    >
+    <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
       {heads ? (
         <Popover
           isPresented={float !== undefined}
