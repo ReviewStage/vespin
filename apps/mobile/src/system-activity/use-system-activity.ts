@@ -25,9 +25,10 @@ import {
   spotlightItems,
 } from "@repo/features/ios-system-activity";
 import { OPENABLE_LINK, openableLinkOf } from "@repo/features/link-grammar";
+import type { TaskSummary } from "@repo/features/task-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
-import { eq, useLiveQuery } from "@tanstack/react-db";
+import type { Collection } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -89,6 +90,9 @@ interface SpotlightReads {
   readonly readerId: string | undefined;
 }
 
+/** What a build reads beside the tasks, as the hook last heard it. */
+type SpotlightLists = Omit<SpotlightReads, "tasks">;
+
 /**
  * How long the Spotlight index waits after the lists first move before it is
  * built, and so how often at most. Note that it is built off the render and
@@ -112,39 +116,45 @@ function spotlightItemsOf(read: SpotlightReads): readonly SpotlightItem[] {
 /** The keeper of the app's Spotlight index for this launch. */
 const spotlightIndex = spotlightIndexKeeper(systemActivityModule, refused("The Spotlight index"));
 
+/** The chosen workspace's tasks as Spotlight lists them, read off the task list as they stand, in no order. */
+function spotlightTasksOf(
+  tasks: Collection<TaskSummary, string>,
+  workspaceId: string,
+): readonly SpotlightTask[] {
+  const listed: SpotlightTask[] = [];
+
+  for (const task of tasks.values()) {
+    if (task.workspaceId !== workspaceId) continue;
+    listed.push({
+      id: task.id,
+      name: task.name,
+      status: task.status,
+      workspaceId: task.workspaceId,
+    });
+  }
+
+  return listed;
+}
+
 /**
  * Holds the app's Spotlight index to the chosen workspace's lists while an
  * account is signed in, built at most once each `SPOTLIGHT_SETTLE_MS` from
  * the lists as they then stand, and empties it at once when none is. Note
  * that its tasks are read only once the launch's first screen stands, and
- * as the workspace's alone, in no order, with only what an item shows,
- * since an index has no order, and a read of every task sorted held the
- * launch's first frame at an account's size.
+ * only as a build runs, off the task list as it then stands, rather than
+ * through a live query: a query held every one of the workspace's tasks and
+ * took each delivery's moves through it, which at an account's size, the
+ * launch's own deliveries among them, cost the JS thread more than the build
+ * it fed. A move to the list only arms the next build.
  */
 function useSpotlightIndex(signedIn: boolean): void {
   const workspace = useTasksWorkspace();
   const collections = useTaskListCollections();
   const drawn = useSplashReleased();
-  const workspaceId = workspace?.id;
-
-  const tasks = useLiveQuery((q) =>
-    !drawn || workspaceId === undefined
-      ? undefined
-      : q
-          .from({ task: collections.tasks })
-          .where(({ task }) => eq(task.workspaceId, workspaceId))
-          .select(({ task }) => ({
-            id: task.id,
-            name: task.name,
-            status: task.status,
-            workspaceId: task.workspaceId,
-          })),
-  ).data;
-
   const groups = useInboxGroupsIn(workspace?.id);
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const latest = useRef<SpotlightReads | undefined>(undefined);
+  const latest = useRef<SpotlightLists | undefined>(undefined);
   const settling = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (!signedIn) {
@@ -155,18 +165,27 @@ function useSpotlightIndex(signedIn: boolean): void {
       return;
     }
 
-    if (tasks === undefined) return;
-    latest.current = { workspace, tasks, groups, readerId };
+    if (!drawn || workspace === undefined) return;
+    latest.current = { workspace, groups, readerId };
 
-    // Note that a build already waiting takes these lists when it runs, so lists moving every second still build once each pause.
-    if (settling.current !== undefined) return;
-    settling.current = setTimeout(() => {
-      settling.current = undefined;
-      const read = latest.current;
+    // Note that a build already waiting takes the lists as they stand when it runs, so lists moving every second still build once each pause.
+    const arm = () => {
+      if (settling.current !== undefined) return;
+      settling.current = setTimeout(() => {
+        settling.current = undefined;
+        const read = latest.current;
 
-      if (read !== undefined) spotlightIndex(true, spotlightItemsOf(read));
-    }, SPOTLIGHT_SETTLE_MS);
-  }, [signedIn, workspace, tasks, groups, readerId]);
+        if (read?.workspace === undefined) return;
+        const tasks = spotlightTasksOf(collections.tasks, read.workspace.id);
+        spotlightIndex(true, spotlightItemsOf({ ...read, tasks }));
+      }, SPOTLIGHT_SETTLE_MS);
+    };
+
+    arm();
+    const moved = collections.tasks.subscribeChanges(arm);
+
+    return () => moved.unsubscribe();
+  }, [signedIn, drawn, workspace, groups, readerId, collections.tasks]);
   useEffect(() => () => clearTimeout(settling.current), []);
 }
 
