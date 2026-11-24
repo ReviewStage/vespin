@@ -1758,11 +1758,8 @@ function withoutTab(held: HeldState, tab: SidePanelTab, drawn: DrawnTabs): HeldS
   const closed = withTabLetGo(held, tab, drawn);
 
   if (closed === undefined) return held;
-  const forgotten = withoutOwner(
-    withoutViewed(closed, placeOf(drawn.task), tab),
-    placeOf(drawn.task),
-    tab,
-  );
+  const place = placeOf(drawn.task);
+  const forgotten = withoutOwner(withoutViewed(closed, place, tab), place, tab);
   const left = stripOf(forgotten, drawn);
 
   // Note that only a close that empties the strip shuts the panel, because a
