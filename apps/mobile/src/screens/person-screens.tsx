@@ -1,4 +1,4 @@
-// person-screens.tsx -- one person's page in the workspace the phone works in, as the panel's person page draws it: who they are there, then their agents at work, what waits on them, the tasks assigned to them and the rest they created, and their other agents, with Copy link, Copy email, and Manage in its ⋯.
+// person-screens.tsx -- one person's page in the workspace the phone works in, as the panel's person page draws it: who they are there, then the Managers they started, their agents at work, what waits on them, the tasks assigned to them and the rest they created, and their other agents, with Copy link, Copy email, and Manage in its ⋯.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { holderTask, openItems, waitsOnReaderNow } from "@repo/features/inbox-list-model";
@@ -77,6 +77,7 @@ import { heldPeople } from "../workspace-people.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows } from "./inbox-screens.js";
 import {
+  ManagerTaskRow,
   StatusQuestionAsk,
   TaskAgentRow,
   TaskRows,
@@ -240,10 +241,9 @@ function PersonPage({
     [listedTasks, workspaceId],
   );
 
-  // Note that the app lists no person's Managers yet, so it reads none.
   const page = useMemo(
-    () => personPage(userId, tasks, listedAgents, undefined),
-    [userId, tasks, listedAgents],
+    () => personPage(userId, tasks, listedAgents, workspaceId),
+    [userId, tasks, listedAgents, workspaceId],
   );
 
   // Named as the members read names them, else as the list does, else as who left; nobody's name until one does.
@@ -315,6 +315,7 @@ function PersonPage({
         ...[...page.working, ...page.agents].map(
           ({ agent }) => [agent.id, iosAgentRoute(agent.id)] as const,
         ),
+        ...page.managers.map((agent) => [agent.id, iosAgentRoute(agent.id)] as const),
       ]),
     [page, waiting],
   );
@@ -429,6 +430,13 @@ function PersonPage({
               line={headLine(member, left !== undefined)}
             />
           </ListSection>
+          {page.managers.length === 0 ? null : (
+            <ListSection title={PERSON_PAGE_WORDS.MANAGERS} count={page.managers.length}>
+              {page.managers.map((agent) => (
+                <ManagerTaskRow key={agent.id} agent={agent} asking={asking} />
+              ))}
+            </ListSection>
+          )}
           {page.working.length === 0 ? null : (
             <ListSection title={PERSON_PAGE_WORDS.WORKING} count={page.working.length}>
               {agentRows(page.working)}
