@@ -97,8 +97,8 @@ const IOS = {
   AGENT_SESSION: notYet(
     "iOS's agent page leaves a fresh session and a restart of the agent's machine to the desktop and the web for now",
   ),
-  AUTOMATIONS: notYet(
-    "iOS lists and edits automations from Settings and its editor; deleting one comes with its Automations tab",
+  AUTOMATION_AGENT_PICK: byDesign(
+    "iOS picks the agent a same-agent automation's runs go to from the agents it lists in the workspace, rather than searching the workspace's",
   ),
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
@@ -287,7 +287,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.HOSTS_PAIRING_APPROVE]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_PAIRING_DENY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_LIST]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_WORKSPACE_LIST]: panel(IOS.AUTOMATIONS),
+  [PORT_ACT_KIND.AGENTS_WORKSPACE_LIST]: panel(IOS.AUTOMATION_AGENT_PICK),
   [PORT_ACT_KIND.AGENTS_START]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CREATE_MANAGER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MESSAGES]: EVERYWHERE,
