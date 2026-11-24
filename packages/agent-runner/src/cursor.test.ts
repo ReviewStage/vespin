@@ -864,6 +864,25 @@ it.effect(
 );
 
 it.effect(
+  "takes a compact line before Cursor refuses to summarize an agent with no conversation, so its turn fails with Cursor's words rather than as a lost runner",
+  () =>
+    Effect.gen(function* () {
+      const refused = "Agent cursor-1 has no saved conversation to summarize yet.";
+      const service = fakeService();
+      const { write, run } = yield* launch([{ messages: [], refused }], service);
+
+      yield* write(CONFIG);
+      yield* write({ type: INPUT_LINE.MESSAGE, uuid: LINE.FIRST, content: [], compact: true });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.deepEqual(messagesOf(service.applied), [
+        { type: RUNNER_EVENT.ACCEPTED, uuid: LINE.FIRST },
+        { type: RUNNER_EVENT.END, reason: RUNNER_END.FAILED, detail: refused },
+      ]);
+    }),
+);
+
+it.effect(
   "hands our server's tools to Cursor under the names Claude Code knows them by, and runs each call at the service under the runner's bearer",
   () =>
     Effect.gen(function* () {

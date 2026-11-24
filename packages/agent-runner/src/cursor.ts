@@ -482,13 +482,15 @@ const startSummary = Effect.fn("agent-runner/cursor/startSummary")(function* (
   launch: CursorLaunch,
   outgoing: Outgoing,
 ) {
+  // The line is taken before Cursor is asked, as a message's is, so a summary it refuses fails the turn with its words.
+  yield* accepted(launch, outgoing.lines, undefined);
+
   const run = yield* Effect.tryPromise({
     try: () => launch.agent.summarize(),
     catch: (cause) => new CursorFailed({ detail: detailOf(cause) }),
   });
 
   launch.state = { kind: LAUNCH_STATE.RUN, run, summary: true, stopping: false };
-  yield* accepted(launch, outgoing.lines, undefined);
   yield* follow(launch, run);
 });
 
