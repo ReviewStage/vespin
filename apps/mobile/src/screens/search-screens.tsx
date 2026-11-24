@@ -40,6 +40,7 @@ import {
   glyphSymbol,
   LIST_LOOK,
   LinkRow,
+  ListColumn,
   type ListScopes,
   ListSection,
   RowForEach,
@@ -50,7 +51,7 @@ import {
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter, useSegments } from "expo-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { AUTOMATIONS_ROUTE } from "../automations/automation-routes.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -67,7 +68,6 @@ import {
 } from "../search/use-search.js";
 import { SEARCH_FOCUS_PARAM, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton, useOpenSettings } from "../settings-button.js";
-import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { TabColumns } from "../split-columns.js";
 import { tabGroupOf, useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
@@ -686,35 +686,37 @@ function SearchStackScreen(words: SearchWords) {
 }
 
 /**
- * Search on an iPad, as its sidebar's Search opens it: the system's field
- * over the column beside the sidebar, and under it what the query finds or,
+ * Search's list on an iPad, in the middle column beside the sidebar: the
+ * system's field over the column, and under it what the query finds or,
  * with nothing typed, the recents, each drawn as the Stack's Search draws
  * it; a pick opens on its own place, as a regular window opens it. Note
  * that both are read here, under one column, so the first key typed swaps
  * the column's rows rather than building the column and its field anew,
  * which dropped the keyboard.
  */
-function SearchSidebarScreen(words: SearchWords) {
+export function SearchListColumn() {
+  const words = useContext(SearchWordsContext);
+
+  if (words === undefined) throw new Error("An iPad's Search stands under SearchWordsProvider.");
+
+  return <SearchColumnRows {...words} />;
+}
+
+/** What Search's middle column draws for its words: what the query finds, or the recents. */
+function SearchColumnRows(words: SearchWords) {
   const { query, setQuery, scope } = words;
-  const compose = useComposeAction();
-  const build = useSplitBuild();
   const found = useSearchScreen(words, undefined);
   const recent = useRecentScreen(undefined);
   const shown = query.trim() !== "" ? found : recent;
 
   return (
     <>
-      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over it names its back button by it. */}
-      <Stack.Screen options={{ headerShown: false, title: SEARCH_TITLE }} />
-      <TabColumns
-        build={build}
-        sidebar={shown.results}
-        sidebarBar={{
+      <ListColumn
+        view={shown.results}
+        bar={{
           title: SEARCH_TITLE,
           search: { placeholder: searchPlaceholder(scope), text: query, onChange: setQuery },
         }}
-        detail={null}
-        detailBar={{ lead: [compose] }}
       />
       <StatusQuestionAsk question={shown.status} />
       <StatusQuestionAsk question={shown.deletion} />
@@ -724,20 +726,51 @@ function SearchSidebarScreen(words: SearchWords) {
   );
 }
 
-/** The Search tab's root screen, under the Stack's bar, the query and its scope held here. */
-export function SearchScreen() {
+/** Search's page on an iPad, beside its list in the middle column: nothing picked, New task leading its bar. */
+function SearchPageScreen() {
+  const compose = useComposeAction();
+  const build = useSplitBuild();
+
+  return (
+    <>
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over it names its back button by it. */}
+      <Stack.Screen options={{ headerShown: false, title: SEARCH_TITLE }} />
+      <TabColumns build={build} sidebar={null} detail={null} detailBar={{ lead: [compose] }} />
+    </>
+  );
+}
+
+/** Search's query and scope, held above an iPad's split view for its list column; none elsewhere, where Search's root holds its own. */
+const SearchWordsContext = createContext<SearchWords | undefined>(undefined);
+
+/** Search's query and the scope it searches, as a root holds them. */
+function useSearchWords(): SearchWords {
   const [query, setQuery] = useState("");
   const [chosen, setScope] = useState<SearchScope>(SEARCH_SCOPE.ALL);
   const inboxShown = useInboxShown();
   // Note that the Inbox's scope, chosen before the member turned the Inbox off, stands as All for the field and the results alike, since no scope offers it then.
   const scope = inboxShown || chosen !== SEARCH_SCOPE.INBOX ? chosen : SEARCH_SCOPE.ALL;
 
-  const words = { query, setQuery, scope, setScope };
+  return { query, setQuery, scope, setScope };
+}
+
+/** What an iPad's Search holds above the system's split view, so its query outlives a turn to another place and back, as Mail keeps its search. */
+export function SearchWordsProvider({ children }: { readonly children: ReactNode }) {
+  return <SearchWordsContext value={useSearchWords()}>{children}</SearchWordsContext>;
+}
+
+/** The Search tab's root screen, under the Stack's bar, the query and its scope held here. */
+export function SearchScreen() {
+  const shared = useContext(SearchWordsContext);
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
 
-  return APP_SIDEBAR && regular ? (
-    <SearchSidebarScreen {...words} />
-  ) : (
-    <SearchStackScreen {...words} />
-  );
+  if (shared !== undefined)
+    return regular ? <SearchPageScreen /> : <SearchStackScreen {...shared} />;
+
+  return <SearchOwnRoot />;
+}
+
+/** Search's root holding its own query and scope, where nothing above it holds them, as on an iPhone. */
+function SearchOwnRoot() {
+  return <SearchStackScreen {...useSearchWords()} />;
 }

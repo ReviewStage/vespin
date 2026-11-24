@@ -41,6 +41,7 @@ import {
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
+  ListColumn,
   ListSection,
   NoSelection,
   ROW_ACTION_TONE,
@@ -52,7 +53,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
 import { newAutomationRoute } from "../automations/automation-editor-route.js";
 import {
   AUTOMATION_RUNS_ROUTE,
@@ -180,23 +181,16 @@ function found(automation: AutomationSummary, tokens: readonly string[]): boolea
  * workspace, so nothing of one workspace's list stands over another's.
  */
 export function AutomationsScreen() {
-  return APP_SIDEBAR ? <AutomationsColumnsScreen /> : <AutomationsStackScreen />;
+  return APP_SIDEBAR ? <AutomationsPageScreen /> : <AutomationsStackScreen />;
 }
 
 /**
- * The Automations tab's root on an iPad: its automations listed in the
- * column beside the sidebar, under its title, search, View options, Runs and
- * New automation, and an automation opened beside them, pushed on its own
- * stack, as Mail stands a message beside its mailbox. Note that the sidebar
- * holds the workspace switcher, so the list's bar stands none.
+ * The Automations tab's root on an iPad: an automation opened beside its
+ * list, pushed on its own stack, as Mail stands a message beside its
+ * mailbox, and none before one is, New task leading its bar; the list
+ * stands in the middle column (`AutomationsListColumn`).
  */
-function AutomationsColumnsScreen() {
-  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const { chosen } = useChosenWorkspace(workspaces);
-  const { order, setOrder } = useAutomationsOrder();
-  const [search, setSearch] = useState("");
-  const router = useRouter();
-  const onOwnTab = useOnOwnTab();
+function AutomationsPageScreen() {
   const compose = useComposeAction();
   const build = useSplitBuild();
 
@@ -206,32 +200,71 @@ function AutomationsColumnsScreen() {
       <Stack.Screen options={{ headerShown: false, title: AUTOMATION_PHONE_WORDS.TITLE }} />
       <TabColumns
         build={build}
-        sidebar={
-          chosen === undefined ? null : (
-            <AutomationsList key={chosen.id} workspace={chosen} order={order} search={search} />
-          )
-        }
-        sidebarBar={{
-          title: AUTOMATION_PHONE_WORDS.TITLE,
-          menu: viewMenu(order, setOrder),
-          acts: [
-            {
-              label: RUNS,
-              symbol: GLYPH.HISTORY,
-              onPress: () => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE)),
-            },
-            {
-              label: NEW_AUTOMATION,
-              symbol: GLYPH.ADD,
-              onPress: () => router.push(newAutomationRoute()),
-            },
-          ],
-          search: { placeholder: SEARCH_AUTOMATIONS, text: search, onChange: setSearch },
-        }}
+        sidebar={null}
         detail={<NoSelection title={NO_AUTOMATION_SELECTED} />}
         detailBar={{ lead: [compose] }}
       />
     </>
+  );
+}
+
+/** The automations' search, held above an iPad's split view for its list column, so it outlives a turn to another place and back. */
+const AutomationsSearchContext = createContext<
+  { readonly search: string; readonly setSearch: (search: string) => void } | undefined
+>(undefined);
+
+/** What an iPad's Automations holds above the system's split view: its list's search. */
+export function AutomationsSearchProvider({ children }: { readonly children: ReactNode }) {
+  const [search, setSearch] = useState("");
+  const held = useMemo(() => ({ search, setSearch }), [search]);
+
+  return <AutomationsSearchContext value={held}>{children}</AutomationsSearchContext>;
+}
+
+/**
+ * The automations in an iPad's middle column, beside the sidebar: the
+ * workspace's automations under who owns them, under the column's title,
+ * search, View options, Runs and New automation. Note that the sidebar
+ * holds the workspace switcher, so the list's bar stands none.
+ */
+export function AutomationsListColumn() {
+  const held = useContext(AutomationsSearchContext);
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const { chosen } = useChosenWorkspace(workspaces);
+  const { order, setOrder } = useAutomationsOrder();
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+
+  if (held === undefined)
+    throw new Error("An iPad's automations stand under AutomationsSearchProvider.");
+
+  const { search, setSearch } = held;
+
+  return (
+    <ListColumn
+      view={
+        chosen === undefined ? null : (
+          <AutomationsList key={chosen.id} workspace={chosen} order={order} search={search} />
+        )
+      }
+      bar={{
+        title: AUTOMATION_PHONE_WORDS.TITLE,
+        menu: viewMenu(order, setOrder),
+        acts: [
+          {
+            label: RUNS,
+            symbol: GLYPH.HISTORY,
+            onPress: () => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE)),
+          },
+          {
+            label: NEW_AUTOMATION,
+            symbol: GLYPH.ADD,
+            onPress: () => router.push(newAutomationRoute()),
+          },
+        ],
+        search: { placeholder: SEARCH_AUTOMATIONS, text: search, onChange: setSearch },
+      }}
+    />
   );
 }
 

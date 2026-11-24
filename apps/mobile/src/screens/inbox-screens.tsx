@@ -76,6 +76,7 @@ import {
   glyphSymbol,
   isBarMenu,
   LIST_LOOK,
+  ListColumn,
   type ListLook,
   ListRow,
   type ListScopes,
@@ -104,7 +105,17 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  memo,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
@@ -135,7 +146,13 @@ import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { TabColumns } from "../split-columns.js";
-import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
+import {
+  SPLIT_TAB,
+  useHandToSplit,
+  usePickInPlace,
+  useSplitPicked,
+  useSplitSelection,
+} from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 
@@ -1231,11 +1248,15 @@ type InboxHeld = {
   readonly search: string;
   readonly setSearch: (search: string) => void;
   readonly remind: ReturnType<typeof useRemind>;
+  readonly scope: ReturnType<typeof useInboxScope>;
 };
 
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
-function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
-  const { show, choose } = useInboxScope();
+function useInboxScreen(
+  { search, setSearch, remind, scope }: InboxHeld,
+  chosen?: string | undefined,
+) {
+  const { show, choose } = scope;
   const listing = useInboxListing({ show, search, chosen });
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
@@ -1420,35 +1441,18 @@ function InboxStackList(held: InboxHeld) {
   );
 }
 
-// A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
-// under its scopes' menu picker, since the column cuts segments short, with
-// its search and ⋯ menu in its bar and the selected thread beside it, in the
-// tab's own split view beside the system's tab sidebar, as Mail stands a
-// mailbox's mail beside a message. The Stack's header steps aside, since the split view draws each column's
-// navigation bar itself.
-function InboxSplitScreen({
-  selected,
-  select,
-  held,
-}: {
-  readonly selected: string | undefined;
-  readonly select: (id: string) => void;
-  readonly held: InboxHeld;
-}) {
+/**
+ * The Inbox's list as a regular window's list column draws it: the threads
+ * under the column's title, its ⋯ and its search, or Select mode's count,
+ * Select all, Done and acts, the thread picked standing selected.
+ */
+function inboxListColumn(
+  screen: ReturnType<typeof useInboxScreen>,
+  selected: string | undefined,
+  select: (id: string) => void,
+) {
   const { show, choose, search, setSearch, listing, acts, menu, remind, choosing, chooseStart } =
-    useInboxScreen(held, selected);
-
-  useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
-
-  // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen; only while the Inbox's root is focused, never under a page pushed over it on the tab's stack.
-  const focused = useIsFocused();
-  const shownIds = listing.listed.map(({ item }) => item.id);
-  const at = selected === undefined ? -1 : shownIds.indexOf(selected);
-  useStandFrontSteps(
-    at < 0 ? {} : { previous: shownIds[at - 1], next: shownIds[at + 1] },
-    select,
-    focused && at >= 0,
-  );
+    screen;
 
   const rows = (
     <InboxRows
@@ -1478,7 +1482,7 @@ function InboxSplitScreen({
     />
   );
 
-  const list = {
+  return {
     chosen: selected !== undefined,
     view: rows,
     // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
@@ -1496,6 +1500,39 @@ function InboxSplitScreen({
             foot: choosing.acts,
           },
   };
+}
+
+// A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
+// under its scopes' menu picker, since the column cuts segments short, with
+// its search and ⋯ menu in its bar and the selected thread beside it, in the
+// tab's own split view beside the system's tab sidebar, as Mail stands a
+// mailbox's mail beside a message. The Stack's header steps aside, since the split view draws each column's
+// navigation bar itself.
+function InboxSplitScreen({
+  selected,
+  select,
+  held,
+}: {
+  readonly selected: string | undefined;
+  readonly select: (id: string) => void;
+  readonly held: InboxHeld;
+}) {
+  const screen = useInboxScreen(held, selected);
+  const { listing, remind } = screen;
+
+  useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
+
+  // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen; only while the Inbox's root is focused, never under a page pushed over it on the tab's stack.
+  const focused = useIsFocused();
+  const shownIds = listing.listed.map(({ item }) => item.id);
+  const at = selected === undefined ? -1 : shownIds.indexOf(selected);
+  useStandFrontSteps(
+    at < 0 ? {} : { previous: shownIds[at - 1], next: shownIds[at + 1] },
+    select,
+    focused && at >= 0,
+  );
+
+  const list = inboxListColumn(screen, selected, select);
 
   const detail =
     selected === undefined ? (
@@ -1551,23 +1588,79 @@ function useThreadSteps(id: string): ThreadSteps {
  * in it, so a picker open on a thread stays open across the swap.
  */
 export function InboxListScreen() {
-  const sizeClass = useWindowSizeClass();
-  const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
-  const [search, setSearch] = useState("");
-  const remind = useRemind();
+  const shared = useContext(InboxHeldContext);
 
-  const held = { search, setSearch, remind };
+  return shared === undefined ? <InboxOwnRoot /> : <InboxLayouts held={shared} />;
+}
+
+/** The Inbox's root holding its own search, scope and Remind me sheet, where nothing above it holds them, as on an iPhone. */
+function InboxOwnRoot() {
+  const held = useInboxHeld();
 
   return (
     <>
-      {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-        <InboxSplitScreen selected={selected} select={select} held={held} />
-      ) : (
-        <InboxStackList {...held} />
-      )}
-      {remind.sheet}
+      <InboxLayouts held={held} />
+      {held.remind.sheet}
     </>
   );
+}
+
+/** The Inbox's root laid out by the window's size class. */
+function InboxLayouts({ held }: { readonly held: InboxHeld }) {
+  const sizeClass = useWindowSizeClass();
+  const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
+
+  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+    <InboxSplitScreen selected={selected} select={select} held={held} />
+  ) : (
+    <InboxStackList {...held} />
+  );
+}
+
+/** What the Inbox's root keeps across its layouts: its search, its scope, and Remind me's sheet. */
+function useInboxHeld(): InboxHeld {
+  const [search, setSearch] = useState("");
+  const remind = useRemind();
+  const scope = useInboxScope();
+
+  return { search, setSearch, remind, scope };
+}
+
+/** The Inbox's search, scope and Remind me sheet, held above an iPad's split view for its list column and its page alike; none elsewhere, where the Inbox's root holds its own. */
+const InboxHeldContext = createContext<InboxHeld | undefined>(undefined);
+
+/**
+ * What an iPad's Inbox holds above the system's split view, so its list in
+ * the middle column (`InboxListColumn`) and its root in the last one, which
+ * draws the picked thread, read one search, one scope, and one Remind me
+ * sheet, as columns under one root share it.
+ */
+export function InboxHeldProvider({ children }: { readonly children: ReactNode }) {
+  const held = useInboxHeld();
+
+  return (
+    <InboxHeldContext value={held}>
+      {children}
+      {held.remind.sheet}
+    </InboxHeldContext>
+  );
+}
+
+/**
+ * The Inbox's list in an iPad's middle column, beside the sidebar and the
+ * picked thread: what the Inbox holds above the split view, the thread its
+ * root picked standing selected, and a pick handed to that root.
+ */
+export function InboxListColumn() {
+  const held = useContext(InboxHeldContext);
+  const selected = useSplitPicked(SPLIT_TAB.INBOX);
+  const pick = usePickInPlace(SPLIT_TAB.INBOX);
+
+  if (held === undefined) throw new Error("An iPad's Inbox list stands under InboxHeldProvider.");
+
+  const list = inboxListColumn(useInboxScreen(held, selected), selected, pick);
+
+  return <ListColumn view={list.view} bar={list.bar} />;
 }
 
 /** The Inbox's pushed screen: one thread, named by the route's `id`, its path small in the bar over its heading. */

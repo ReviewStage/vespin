@@ -138,6 +138,7 @@ import {
   LINK_ROW_TONE,
   LIST_LOOK,
   LinkRow,
+  ListColumn,
   type ListLook,
   ListRow,
   ListSection,
@@ -221,7 +222,13 @@ import { SettingsBarButton } from "../settings-button.js";
 import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { SidebarTasksContext } from "../sidebar-tasks.js";
 import { TabColumns } from "../split-columns.js";
-import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
+import {
+  SPLIT_TAB,
+  useHandToSplit,
+  usePickInPlace,
+  useSplitPicked,
+  useSplitSelection,
+} from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
@@ -3588,28 +3595,20 @@ function useTaskDetail(
   return { detail, detailBar };
 }
 
-// A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
-// and the picked task side by side in the tab's own split view, beside the
-// system's tab sidebar. The Stack's header steps aside, since the split view
-// draws each column's navigation bar itself.
-function TasksSplitScreen({
-  selected,
-  select,
-  screen,
-  hold,
-}: {
-  readonly selected: string | undefined;
-  readonly select: (id: string) => void;
-  readonly screen: TasksScreenState;
-  readonly hold: TreeHold;
-}) {
+/**
+ * The task tree as a regular window's list column draws it, under the
+ * column's title, its View options and its search, the task picked standing
+ * selected.
+ */
+function tasksListColumn(
+  screen: TasksScreenState,
+  hold: TreeHold,
+  selected: string | undefined,
+  select: (id: string) => void,
+) {
   const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
 
-  // What the detail holds of its description edited in place, so its Done stands in the detail's bar and what an `@` offers docks over the keyboard in its column.
-  const chrome = useInlineChrome();
-  const { detail, detailBar } = useTaskDetail(selected, listing, chrome);
-
-  const list = {
+  return {
     chosen: selected !== undefined,
     view: (
       <TasksTree
@@ -3628,6 +3627,27 @@ function TasksSplitScreen({
       search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
     },
   };
+}
+
+// A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
+// and the picked task side by side in the tab's own split view, beside the
+// system's tab sidebar. The Stack's header steps aside, since the split view
+// draws each column's navigation bar itself.
+function TasksSplitScreen({
+  selected,
+  select,
+  screen,
+  hold,
+}: {
+  readonly selected: string | undefined;
+  readonly select: (id: string) => void;
+  readonly screen: TasksScreenState;
+  readonly hold: TreeHold;
+}) {
+  // What the detail holds of its description edited in place, so its Done stands in the detail's bar and what an `@` offers docks over the keyboard in its column.
+  const chrome = useInlineChrome();
+  const { detail, detailBar } = useTaskDetail(selected, screen.listing, chrome);
+  const list = tasksListColumn(screen, hold, selected, select);
 
   const first = useListColumn(list);
   const firstDetailBar = useDetailColumnBar(detailBar);
@@ -3646,6 +3666,25 @@ function TasksSplitScreen({
       />
     </>
   );
+}
+
+/**
+ * The task tree in an iPad's middle column, beside the sidebar and the
+ * picked task: the list read once above the split view
+ * (`SidebarTasksProvider`), the task Tasks' root picked standing selected,
+ * and a pick handed to that root.
+ */
+export function TasksListColumn() {
+  const shared = useContext(SharedTasksContext);
+  const selected = useSplitPicked(SPLIT_TAB.TASKS);
+  const pick = usePickInPlace(SPLIT_TAB.TASKS);
+
+  if (shared === undefined)
+    throw new Error("An iPad's task list stands under SidebarTasksProvider.");
+
+  const list = tasksListColumn(shared.screen, shared.hold, selected, pick);
+
+  return <ListColumn view={list.view} bar={list.bar} />;
 }
 
 /** The Tasks list's state an iPad reads once for every tab, its sidebar's tasks and the Tasks tab alike. */
