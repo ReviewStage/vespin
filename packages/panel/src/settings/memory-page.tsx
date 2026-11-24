@@ -372,7 +372,7 @@ function MemoryUse({ memory }: { memory: MemorySummary }): React.JSX.Element {
   );
 }
 
-/** Who saved a memory and when, as Always allowed says who added a command: "Saved 2h ago by" its keeper, "from" the agent it came from. */
+/** Who saved a memory and when, as Always allowed says who added a command: "Saved 2h ago by" its keeper, "from" the agent it came from, or "via" the Manager, on no task, that kept it for them. */
 function SavedLine({
   shown,
   workspaceStep,
@@ -394,7 +394,7 @@ function SavedLine({
       {source === undefined ? null : (
         <ActorLine>
           {/* Note that the space between the parts leads this one's words, since a flex line drops a run of spaces standing alone. */}
-          {` ${MEMORY_SAVED_WORDS.FROM} `}
+          {` ${source.taskId === undefined ? MEMORY_SAVED_WORDS.VIA : MEMORY_SAVED_WORDS.FROM} `}
           <SourceChip source={source} workspaceStep={workspaceStep} />
         </ActorLine>
       )}
