@@ -19,9 +19,8 @@ import { usePageShownCount } from "../page-shown.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
 
-/** What stands in a page's place while it is read, and where it could not be. */
+/** What stands in a page's place where it could not be read. */
 const PAGE_WORDS = {
-  READING: "Reading the page",
   FAILED: "The page could not be read.",
   MORE: "More",
   TRY_AGAIN: "Try again",
@@ -97,16 +96,11 @@ export function PageScreen({ workspaceId, taskId, pageId, version: asked, title 
   const named = "title" in read && read.title !== "" ? read.title : title;
   const shown = usePageShownCount(asked !== undefined, "html" in read);
 
-  const empty = (
+  const failed = (
     <EmptyState
-      title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
-      symbol={"failed" in read ? GLYPH.FAILED : GLYPH.PAGE}
-      loading={!("failed" in read)}
-      action={
-        "failed" in read
-          ? { label: PAGE_WORDS.TRY_AGAIN, onPress: again, look: BUTTON_LOOK.BORDERED }
-          : undefined
-      }
+      title={PAGE_WORDS.FAILED}
+      symbol={GLYPH.FAILED}
+      action={{ label: PAGE_WORDS.TRY_AGAIN, onPress: again, look: BUTTON_LOOK.BORDERED }}
     />
   );
 
@@ -126,10 +120,11 @@ export function PageScreen({ workspaceId, taskId, pageId, version: asked, title 
         </Stack.Toolbar>
       )}
       {/* Note that the page stands as the screen's root, outside its SwiftUI host, since the web view sizes itself to the screen. */}
-      {"html" in read ? (
-        <SealedPage html={read.html} title={named} onLoaded={shown} />
+      {/* Note that the web view is drawn while the page is still read, its loading ground over it, so WebKit starts beside the read rather than after it. */}
+      {"failed" in read ? (
+        <Screen>{failed}</Screen>
       ) : (
-        <Screen>{empty}</Screen>
+        <SealedPage html={"html" in read ? read.html : undefined} title={named} onLoaded={shown} />
       )}
     </>
   );
