@@ -298,6 +298,9 @@ patchedDependencies:
   expo-symbols@58.0.4:
     hash: 3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c
     path: patches/expo-symbols@58.0.4.patch
+  metro-runtime@0.87.3:
+    hash: 5488904b1c3fd8ab667a15e49d5e656dc3cd3e006802d4bb346d7dfb1717fb11
+    path: patches/metro-runtime@0.87.3.patch
   react-native-screens@4.30.1:
     hash: 713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32
     path: patches/react-native-screens@4.30.1.patch
@@ -13889,7 +13892,7 @@ snapshots:
       '@react-native/js-polyfills': 0.88.1
       '@react-native/metro-babel-transformer': 0.88.1(@babel/core@7.29.7)
       metro-config: 0.87.3
-      metro-runtime: 0.87.3
+      metro-runtime: 0.87.3(patch_hash=5488904b1c3fd8ab667a15e49d5e656dc3cd3e006802d4bb346d7dfb1717fb11)
     transitivePeerDependencies:
       - '@babel/core'
       - bufferutil
@@ -18194,7 +18197,7 @@ snapshots:
       metro: 0.87.3
       metro-cache: 0.87.3
       metro-core: 0.87.3
-      metro-runtime: 0.87.3
+      metro-runtime: 0.87.3(patch_hash=5488904b1c3fd8ab667a15e49d5e656dc3cd3e006802d4bb346d7dfb1717fb11)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -18259,7 +18262,7 @@ snapshots:
       '@babel/runtime': 7.29.10
       flow-enums-runtime: 0.0.6
 
-  metro-runtime@0.87.3:
+  metro-runtime@0.87.3(patch_hash=5488904b1c3fd8ab667a15e49d5e656dc3cd3e006802d4bb346d7dfb1717fb11):
     dependencies:
       '@babel/runtime': 7.29.10
       flow-enums-runtime: 0.0.6
@@ -18447,7 +18450,7 @@ snapshots:
       metro-core: 0.87.3
       metro-file-map: 0.87.3
       metro-resolver: 0.87.3
-      metro-runtime: 0.87.3
+      metro-runtime: 0.87.3(patch_hash=5488904b1c3fd8ab667a15e49d5e656dc3cd3e006802d4bb346d7dfb1717fb11)
       metro-source-map: 0.87.3
       metro-symbolicate: 0.87.3
       metro-transform-plugins: 0.87.3
@@ -19490,7 +19493,7 @@ snapshots:
       hermes-compiler: 260318099.0.5
       invariant: 2.2.4
       memoize-one: 5.2.1
-      metro-runtime: 0.87.3
+      metro-runtime: 0.87.3(patch_hash=5488904b1c3fd8ab667a15e49d5e656dc3cd3e006802d4bb346d7dfb1717fb11)
       metro-source-map: 0.87.3
       nullthrows: 1.1.1
       pretty-format: 29.7.0

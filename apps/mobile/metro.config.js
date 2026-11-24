@@ -114,10 +114,39 @@ function workspaceConfig(projectRoot, options) {
 // which is what Sentry matches a Hermes stack trace to its uploaded map by.
 // The SDK's web replay and feedback widget are left out of the bundle, and
 // no options file is read, since the app passes its options to `init`.
-module.exports = getSentryExpoConfig(__dirname, {
+/**
+ * PROBE ONLY, never merged: numeric module ids as Expo's own factory gives
+ * them, each written beside the app as `module-ids.tsv` (id, path from the
+ * repository root), so the launch probe's per-module times name their files.
+ */
+function probeModuleIdFactory() {
+  const mapPath = process.env.PROBE_MODULE_MAP ?? path.join(__dirname, "module-ids.tsv");
+  const ids = new Map();
+  let next = 0;
+
+  fs.writeFileSync(mapPath, "");
+
+  return (modulePath) => {
+    let id = ids.get(modulePath);
+
+    if (id === undefined) {
+      id = next++;
+      ids.set(modulePath, id);
+      fs.appendFileSync(mapPath, `${id}\t${path.relative(REPOSITORY_ROOT, modulePath)}\n`);
+    }
+
+    return id;
+  };
+}
+
+const sentryConfig = getSentryExpoConfig(__dirname, {
   getDefaultConfig: workspaceConfig,
   includeWebReplay: false,
   includeWebFeedback: false,
   injectReleaseForWeb: false,
   optionsFile: false,
 });
+
+sentryConfig.serializer.createModuleIdFactory = probeModuleIdFactory;
+
+module.exports = sentryConfig;

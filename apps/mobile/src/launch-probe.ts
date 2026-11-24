@@ -76,6 +76,21 @@ function tick(): void {
 
 setTimeout(tick, TICK_MS);
 
+/** Each module factory's own evaluation as the patched Metro runtime timed it (`__moduleProbeTimes`): the 400 slowest by self time, and the totals. */
+function moduleTimes(at: (t: number) => number) {
+  const times =
+    ((globalThis as Record<string, unknown>).__moduleProbeTimes as
+      | Array<[number, number, number, number]>
+      | undefined) ?? [];
+  const selfTotal = times.reduce((sum, [, self]) => sum + self, 0);
+  const slowest = [...times]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 400)
+    .map(([id, self, total, start]) => [id, Math.round(self * 100) / 100, Math.round(total * 10) / 10, at(start)]);
+
+  return { count: times.length, selfTotal: Math.round(selfTotal), all: times.map(([id, self, , start]) => [id, Math.round(self * 100) / 100, at(start)]), slowest };
+}
+
 /** Writes everything noted so far, over what an earlier flush wrote. */
 export function probeFlush(reason: string): void {
   try {
@@ -95,6 +110,7 @@ export function probeFlush(reason: string): void {
       ),
       marks: marks.map((mark) => ({ ...mark, t: at(mark.t) })),
       stalls: stalls.map(([from, to]) => [at(from), at(to), Math.round(to - from)]),
+      modules: moduleTimes(at),
     });
 
     const file = new File(Paths.document, "launch-probe.json");
