@@ -92,6 +92,7 @@ export function useDroppedOrder<Item>(
 ): DroppedOrder<Item> {
   const [kept, keep] = useState<KeptOrder | undefined>(undefined);
   const keys = useMemo(() => listed.map(keyOf), [listed, keyOf]);
+
   const order = useMemo(
     () => (kept === undefined ? undefined : keptKeys(keys, kept)),
     [keys, kept],
