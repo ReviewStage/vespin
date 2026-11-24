@@ -1,0 +1,13 @@
+pinned to d94f3bbdf6
+== bundle PJjsplit3b base d94f3bbdf60
+  built d94f3bbdf60 base app Vjnatc2.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-tasks: fails TIMEOUT (watchdog; steps 273, shots 28) 
+  iphone-light-tasks toggles: 0
+  iphone-light-tasks stall probe: 09:32:04 t=360s Vespin pid 24160 cpu 10.3% 09:32:35 t=390s Vespin pid 24160 cpu 38.1% 09:33:06 t=420s Vespin pid 24160 cpu 7.2% ; app log kept (   19109 lines)
+iphone-light-navigation: fails NOSTART (steps 2, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+  iphone-light-navigation toggles: 0
+  iphone-light-navigation stall probe: 09:34:21 t=30s Vespin pid ? cpu ?% 09:34:52 t=60s Vespin pid 42748 cpu 123.8% 

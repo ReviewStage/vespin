@@ -1,0 +1,31 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow navigation
+  > On Flow Complete
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible...Set orientation PORTRAIT...
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjsplit3b/iphone-light-navigation/2026-11-24_093338
+Exception in thread "Thread-5" java.lang.IllegalStateException: An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):
+Unable to lookup in current state: Shutting Down
+
+	at util.CommandLineUtils.runCommand(CommandLineUtils.kt:50)
+	at util.CommandLineUtils.runCommand$default(CommandLineUtils.kt:16)
+	at util.LocalSimulatorUtils.terminate(LocalSimulatorUtils.kt:186)
+	at device.SimctlIOSDevice.stop(SimctlIOSDevice.kt:102)
+	at device.SimctlIOSDevice.close(SimctlIOSDevice.kt:201)
+	at xcuitest.installer.LocalXCTestInstaller.close(LocalXCTestInstaller.kt:253)
+	at xcuitest.XCTestDriverClient.close(XCTestDriverClient.kt:224)
+	at ios.xctest.XCTestIOSDevice.close(XCTestIOSDevice.kt:197)
+	at ios.LocalIOSDevice.close(LocalIOSDevice.kt:151)
+	at maestro.drivers.IOSDriver.close$lambda$4(IOSDriver.kt:105)
+	at maestro.utils.Metrics.measured(Metrics.kt:48)
+	at maestro.utils.Metrics.measured$default(Metrics.kt:42)
+	at maestro.drivers.IOSDriver.close(IOSDriver.kt:101)
+	at maestro.Maestro.close(Maestro.kt:606)
+	at maestro.cli.session.MaestroSessionManager$MaestroSession.close(MaestroSessionManager.kt:471)
+	at maestro.cli.session.MaestroSessionManager.newSession$lambda$2(MaestroSessionManager.kt:129)
+	at kotlin.concurrent.ThreadsKt$thread$thread$1.run(Thread.kt:30)
