@@ -23,7 +23,8 @@ import { SetupSteps } from "./setup-steps.js";
  * finishes as Just me, which deletes it while nobody else joined it, as the
  * service checks, and asks first where someone did, offering to keep it.
  * And its survey, kept on the
- * account once for each set of answers setup goes on with. Synthetic
+ * account once for each set of answers setup goes on with. And its first
+ * card's word on usage data, whose switch is Settings' own. Synthetic
  * throughout.
  */
 
@@ -355,4 +356,39 @@ test("the survey keeps every answer picked on the account, Other's words among t
 
   act(() => buttonStarting(container, "Skip").click());
   await vi.waitFor(() => assert.deepEqual(kept, [answers, answers, {}]));
+});
+
+test("setup's first card offers Share usage data, and turning it off there turns it off on this device", async () => {
+  const place = JSON.stringify({ audience: "me", at: 0 });
+
+  writeAppState(
+    stateWith(
+      {},
+      { settings: appSettingsWire(settingsView({ setupPlace: place, usageData: true })) },
+    ),
+  );
+
+  const written: unknown[] = [];
+
+  fakeActPort({
+    [SETTINGS_ACT_KIND.SETTING_UPDATE]: (payload) => {
+      written.push(payload);
+
+      return new Promise(() => undefined);
+    },
+  });
+
+  const container = setupDrawn();
+  const usageSwitch = container.querySelector<HTMLElement>(
+    '[role="switch"][aria-label="Share usage data"]',
+  );
+  assert.ok(usageSwitch, container.textContent ?? "");
+  assert.ok(
+    container.querySelector('a[href="https://vespin.dev/privacy"]'),
+    "the policy is linked",
+  );
+
+  act(() => usageSwitch.click());
+
+  await vi.waitFor(() => assert.deepEqual(written, [{ field: "usageData", value: false }]));
 });
