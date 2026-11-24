@@ -47,6 +47,7 @@ import {
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
+import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -67,6 +68,7 @@ import {
   Avatar,
   type Face,
   FailedMark,
+  ManagerFace,
   NeedsYouDot,
   SubTaskProgress,
   subTasksHeard,
@@ -243,37 +245,55 @@ export type RowFold = { readonly open: boolean; readonly onToggle: () => void };
 /** What a fold's chevron and its menu item are heard as, folded and open: "Show sub-tasks", "Hide sub-tasks". */
 export type FoldWords = { readonly show: string; readonly hide: string };
 
-type TaskRowProps = RowActs & {
-  readonly id: string;
-  readonly name: string;
-  readonly status: TaskStatus;
-  /** Whether the task has news unread, which sets its name in semibold, as the panel's task rows say it, with no dot. */
-  readonly unread?: boolean | undefined;
-  /** Whether the task is done or canceled, which mutes its name, as a search finds one. */
-  readonly finished?: boolean | undefined;
-  /** Whether a thread of it waits on the reader, which its end says before anything of its agents. */
-  readonly needsYou?: boolean | undefined;
-  /** What its agents say at the line's end, as the panel's row end says it: failed, at work, or its pull request. */
-  readonly agents?: TaskAgentsStatus | undefined;
-  /** Whether a task it waits on is still open, which its end marks with a stop sign in the muted ink and says as Blocked, as the panel's rows do. */
-  readonly blocked?: boolean | undefined;
-  /** How many of its sub-tasks are finished, of all of them, as a ring and "2/5"; none where it has none. */
-  readonly subTasks?: { readonly finished: number; readonly total: number } | undefined;
-  /** The face of who is on it, where someone other than the reader is. */
-  readonly assignee?: Face | undefined;
-  /** Whether no one is on it, which its end marks with the dashed unassigned mark, as the panel's sidebar row does. */
-  readonly unassigned?: boolean | undefined;
-  /** When it last moved, said at the line's end ("18m"), as the panel's sidebar row ends. */
-  readonly at?: number | undefined;
-  /** Its key, `ACME-42`, which ends the line, where a search's finds draw it, as ⌘K's do. */
-  readonly taskKey?: string | undefined;
-  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its long press's Show or Hide sub-tasks does, the chevron being its caller's `RowDisclosure`'s. */
-  readonly fold?: RowFold | undefined;
-  /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
-  readonly depth?: number | undefined;
-  /** Its status as a menu its ring opens, each status by its mark in its tone, as the panel's row opens its status chip; none where the row only reads, where the ring is its mark alone. */
-  readonly statusMenu?: RowSubmenu | undefined;
-};
+/**
+ * What leads a task's row: its status ring, which opens its Status menu
+ * where it has one, or, for a Manager the Tasks list stands beside its
+ * tasks, the Manager's face, livelier while it works, as the panel's
+ * sidebar leads a Manager's row with it in a task's status glyph's place.
+ */
+type TaskRowLead =
+  | {
+      readonly status: TaskStatus;
+      /** Its status as a menu its ring opens, each status by its mark in its tone, as the panel's row opens its status chip; none where the row only reads, where the ring is its mark alone. */
+      readonly statusMenu?: RowSubmenu | undefined;
+      readonly manager?: undefined;
+    }
+  | {
+      readonly status?: undefined;
+      readonly statusMenu?: undefined;
+      /** The Manager's face, and whether it works, which the face wears. */
+      readonly manager: { readonly face: ManagerFaceValue; readonly working: boolean };
+    };
+
+type TaskRowProps = RowActs &
+  TaskRowLead & {
+    readonly id: string;
+    readonly name: string;
+    /** Whether the task has news unread, which sets its name in semibold, as the panel's task rows say it, with no dot. */
+    readonly unread?: boolean | undefined;
+    /** Whether the task is done or canceled, which mutes its name, as a search finds one. */
+    readonly finished?: boolean | undefined;
+    /** Whether a thread of it waits on the reader, which its end says before anything of its agents. */
+    readonly needsYou?: boolean | undefined;
+    /** What its agents say at the line's end, as the panel's row end says it: failed, at work, or its pull request. */
+    readonly agents?: TaskAgentsStatus | undefined;
+    /** Whether a task it waits on is still open, which its end marks with a stop sign in the muted ink and says as Blocked, as the panel's rows do. */
+    readonly blocked?: boolean | undefined;
+    /** How many of its sub-tasks are finished, of all of them, as a ring and "2/5"; none where it has none. */
+    readonly subTasks?: { readonly finished: number; readonly total: number } | undefined;
+    /** The face of who is on it, where someone other than the reader is. */
+    readonly assignee?: Face | undefined;
+    /** Whether no one is on it, which its end marks with the dashed unassigned mark, as the panel's sidebar row does. */
+    readonly unassigned?: boolean | undefined;
+    /** When it last moved, said at the line's end ("18m"), as the panel's sidebar row ends. */
+    readonly at?: number | undefined;
+    /** Its key, `ACME-42`, which ends the line, where a search's finds draw it, as ⌘K's do. */
+    readonly taskKey?: string | undefined;
+    /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its long press's Show or Hide sub-tasks does, the chevron being its caller's `RowDisclosure`'s. */
+    readonly fold?: RowFold | undefined;
+    /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
+    readonly depth?: number | undefined;
+  };
 
 /** A row's act as a button of its long press menu or its swipe: red where it takes something away, through the system's destructive role where `roled`, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
 export function actionButton(
@@ -1093,6 +1113,7 @@ function taskHeard(props: TaskRowProps, moment: number): RowHeard {
   const {
     name,
     status,
+    manager,
     unread = false,
     needsYou = false,
     blocked = false,
@@ -1109,7 +1130,8 @@ function taskHeard(props: TaskRowProps, moment: number): RowHeard {
     label: name,
     value: [
       unread && UNREAD_WORDS,
-      TASK_STATUS_WORDS[status],
+      status === undefined ? undefined : TASK_STATUS_WORDS[status],
+      manager?.working === true && GLYPH_STATE_WORDS[GLYPH_STATE.WORKING],
       blocked && BLOCKED_WORDS,
       needsYou && NEEDS_YOU.LABEL,
       subTasks === undefined ? undefined : subTasksHeard(subTasks.finished, subTasks.total),
@@ -1443,10 +1465,13 @@ export function useNestColumn(): number {
  * sub-tasks stands as the label of its caller's `RowDisclosure`, whose
  * chevron, at the line's trailing edge as Files and Notes stand theirs,
  * folds them; the row offers Show and Hide sub-tasks in its long press too
- * (`fold`), and says which.
+ * (`fold`), and says which. A Manager the list stands beside its tasks is
+ * drawn by the same row, its face in the ring's place (`manager`), so its
+ * height, insets, words, and end line up with the tasks under it, as the
+ * panel's sidebar draws its Managers in a task row's anatomy.
  */
 export function TaskRow(props: TaskRowProps) {
-  const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
+  const { id, name, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
 
   const colors = useColors();
   const inset = useRowInset();
@@ -1470,7 +1495,13 @@ export function TaskRow(props: TaskRowProps) {
         dot={false}
         unread={unread}
         faded={finished}
-        lead={<StatusRing status={status} menu={props.statusMenu} edge={inset.lead} />}
+        lead={
+          props.manager === undefined ? (
+            <StatusRing status={props.status} menu={props.statusMenu} edge={inset.lead} />
+          ) : (
+            <ManagerFace face={props.manager.face} size={lead} working={props.manager.working} />
+          )
+        }
         title={name}
         ink={titleInk(colors, unread, finished)}
         fit={spared.fit}
