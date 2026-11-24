@@ -1,5 +1,5 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
-import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
+import { NO_ITEMS, taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   LINK_DESTINATION,
@@ -1413,8 +1413,9 @@ function DescriptionDocument({
       <AgentThreads
         key={tabAgent}
         agentId={tabAgent}
-        task={listed}
+        holder={taskHolder(listed)}
         tasks={tasks}
+        agentsOf={tasks.agents}
         inbox={inbox}
         chosen={threadsShown.itemId}
         shown={tasks.shown && !sidePanel.fullScreen}

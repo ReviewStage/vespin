@@ -8,9 +8,7 @@ import {
   inboxGroup,
   listedItems,
   NOTHING_HERE,
-  taskHolder,
 } from "@repo/features/inbox-list-model";
-import type { TaskSummary } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BackButton, FILL_ELEMENT, Fill, Toolbar, useMinute } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -27,7 +25,7 @@ import {
 import { InboxList, InboxListNote, InboxPaneEmpty } from "../tasks/inbox-list.js";
 import { useInboxPager } from "../tasks/inbox-pager.js";
 import { InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
-import { useTaskAgents } from "../tasks/use-agents.js";
+import { type AgentsSource, useTaskAgents } from "../tasks/use-agents.js";
 import { useHeldInboxList } from "../tasks/use-held-inbox-list.js";
 import { useInboxReadMarks, useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
 import type { TaskInboxControl } from "../tasks/use-task-inbox.js";
@@ -56,7 +54,10 @@ import { paneDoors, startedThreads } from "./desktop-inbox.js";
  * started from the box opens in the card (`startedThreads`). Opening an item
  * reads it, and a notice is acknowledged as it opens, as in the Inbox. Too
  * narrow for both, the card shows one at a time as the Inbox does
- * (`inbox-columns.ts`).
+ * (`inbox-columns.ts`). A Manager's page, its agent on no task, draws the
+ * same as its Inbox tab (`desktop-agent-page.tsx`), held by the Manager
+ * rather than a task, with no way back, since its transcript is a sibling
+ * tab rather than the step behind.
  *
  * Each agent keeps whether its card shows its threads, and which
  * (`tasks/agent-thread-views.ts`), so going to another agent's tab and back
@@ -79,7 +80,7 @@ const AGENT_LISTS = { show: INBOX_SHOW.ALL, whose: EVERYONES } as const;
  */
 function agentPaneDoors(
   tasks: TasksControl,
-  listed: InboxListed,
+  listed: InboxListed<InboxAnyHolder>,
   agentId: string,
   onBack: () => void,
 ): InboxPaneDoors {
@@ -97,20 +98,24 @@ function agentPaneDoors(
 /** The agent's threads in its card: the Inbox's list of its items beside the one chosen. */
 export function AgentThreads({
   agentId,
-  task,
+  holder,
   tasks,
+  agentsOf,
   inbox,
   chosen,
   shown,
   active,
   onChoose,
   onBack,
+  tabbed,
 }: {
   agentId: string;
-  /** The task the agent works on, as the list names it, which holds its items. */
-  task: TaskSummary;
+  /** What holds the agent's items, as the list names it: the task it works on, or the agent itself on no task. */
+  holder: InboxAnyHolder;
   tasks: TasksControl;
-  /** The task's own held read, which the task's page holds, and which answers its items. */
+  /** The agents the card reads: the task's, or the page's own where the agent is on no task. */
+  agentsOf: AgentsSource;
+  /** The holder's own held read, which its page holds, and which answers its items. */
   inbox: TaskInboxControl;
   /** The id of the item shown; none while the list stands alone. */
   chosen: string | undefined;
@@ -119,11 +124,14 @@ export function AgentThreads({
   /** Whether the card holds the keys, for K, J, and Escape, and an item opened to be read. */
   active: boolean;
   onChoose: (itemId: string | undefined) => void;
+  /** Goes back to the agent's transcript, as its crumb in a thread does. */
   onBack: () => void;
+  /** Whether the transcript is a sibling tab rather than the step behind, so the list leads with no ‹ Transcript and Escape leaves it be. */
+  tabbed?: boolean | undefined;
 }): React.JSX.Element {
   const { me } = tasks;
   // Note that the card draws the task's agents' threads, so it reads their rows while it stands.
-  const agents = useTaskAgents(tasks.agents);
+  const agents = useTaskAgents(agentsOf);
   const { open, settled } = inbox.board;
   // Note that a reminder is weighed on the window's clock, as the Inbox weighs it.
   const now = useMinute();
@@ -133,13 +141,13 @@ export function AgentThreads({
       inboxAtNow(
         [
           inboxGroup(
-            taskHolder(task),
+            holder,
             [...open, ...settled].filter((item) => item.agentId === agentId),
           ),
         ],
         now,
       ),
-    [task, open, settled, agentId, now],
+    [holder, open, settled, agentId, now],
   );
 
   const filter = useMemo(() => ({ ...AGENT_LISTS, readerId: me }), [me]);
@@ -167,13 +175,13 @@ export function AgentThreads({
     onChoose(each.item.id);
   };
 
-  const step = (each: InboxListed) => {
+  const step = (each: InboxListed<InboxAnyHolder>) => {
     columns.onStep();
     onChoose(each.item.id);
   };
 
   const pager = useInboxPager(steps, list, chosen, step, { shown: active });
-  useAppCommand(APP_COMMAND.EXIT_AGENT_THREADS, active ? onBack : undefined);
+  useAppCommand(APP_COMMAND.EXIT_AGENT_THREADS, active && tabbed !== true ? onBack : undefined);
   const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: me });
   const resolveItems = useInboxResolver();
   // The item shown is read as it opens, as the Inbox reads it, only while the card holds the keys.
@@ -187,16 +195,18 @@ export function AgentThreads({
   // Note that the task's page holds its read with its cards' drafts, so the pane takes it whole.
   useNodOnOpen({ shown: opened, readerId: me, control: inbox });
 
-  const back = (
-    <ReplayUnmask>
-      <BackButton
-        label={TRANSCRIPT.LABEL}
-        place={TRANSCRIPT.PLACE}
-        command={APP_COMMAND.EXIT_AGENT_THREADS}
-        onBack={onBack}
-      />
-    </ReplayUnmask>
-  );
+  // Note that a tab's list still heads itself in the card's bar, its title alone, as `null` asks.
+  const back =
+    tabbed === true ? null : (
+      <ReplayUnmask>
+        <BackButton
+          label={TRANSCRIPT.LABEL}
+          place={TRANSCRIPT.PLACE}
+          command={APP_COMMAND.EXIT_AGENT_THREADS}
+          onBack={onBack}
+        />
+      </ReplayUnmask>
+    );
 
   return (
     <Fill as={FILL_ELEMENT.SECTION} className="agent-threads" data-popover-room="">
