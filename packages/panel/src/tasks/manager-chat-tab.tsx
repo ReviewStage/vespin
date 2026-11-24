@@ -23,6 +23,7 @@
 
 import { endLineReason } from "@repo/features/agent-continue-model";
 import { computerAppsOf } from "@repo/features/agent-parts";
+import type { ShownPicture } from "@repo/features/agent-pictures-model";
 import { REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
 import type {
   AgentChatSendParams,
@@ -35,6 +36,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { keptPictureSchema } from "@repo/features/conversation-picture-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { type ManagerChatLine, managerChatView } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
@@ -59,6 +61,7 @@ import {
 } from "@repo/ui";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Option, Schema } from "effect";
 import { type ReactNode, useMemo, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
 import { actMutation } from "../act-mutations.js";
@@ -87,7 +90,12 @@ import {
   teammateStarter,
   workingLineWords,
 } from "./agent-model.js";
-import { AgentPicturesProvider, KeptFileChips, useAgentPictureDoor } from "./agent-pictures.js";
+import {
+  AgentPicturesProvider,
+  KeptFileChips,
+  KeptShownSet,
+  useAgentPictureDoor,
+} from "./agent-pictures.js";
 import type { DelegationDoors } from "./agent-tab.js";
 import { TurnWorkRows } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
@@ -163,14 +171,45 @@ function useWorkToggle(): ChatWorkToggle {
   return { shown, onToggle: () => setShown((was) => !was) };
 }
 
-/** A message's files as chips, each named by its caption, else its type, its thumbnail read through the agent's pictures. */
-function fileChipsOf(message: ManagerChatLiveMessage): readonly MessageFileChip[] {
-  return message.attachments.map((file) => ({
-    name: file.caption ?? file.mediaType,
-    mediaType: file.mediaType,
-    url: "",
-    pictureId: file.id,
-  }));
+/** A kept picture as the transcript names one, where a file of a message is one kept with its size; none for any other file. */
+const keptPictureOf = Schema.decodeUnknownOption(keptPictureSchema);
+
+/** The pictures of a message kept with their size, drawn as a shown set, each under its caption. */
+function shownOf(message: ManagerChatLiveMessage): readonly ShownPicture[] {
+  return message.attachments.flatMap((file): ShownPicture[] => {
+    if (!("id" in file)) return [];
+    const { id, mediaType, width, height, byteCount } = file;
+    const picture = keptPictureOf({ id, mediaType, width, height, byteCount });
+
+    if (Option.isNone(picture)) return [];
+    const caption = file.caption ?? "";
+
+    return [{ picture: picture.value, name: file.name ?? caption, caption }];
+  });
+}
+
+/**
+ * A message's files as chips, but for the pictures `shown` draws as a set:
+ * a kept picture read through the agent's pictures by its id, named by its
+ * file's name, else its caption, else its type; any other file by its
+ * bytes and its name.
+ */
+function fileChipsOf(
+  message: ManagerChatLiveMessage,
+  shown: readonly ShownPicture[],
+): readonly MessageFileChip[] {
+  const drawn = new Set(
+    shown.flatMap((each) => (each.picture === undefined ? [] : [each.picture.id])),
+  );
+
+  return message.attachments.flatMap((file): MessageFileChip[] => {
+    if (!("id" in file)) return [{ name: file.name, mediaType: file.mediaType, url: file.url }];
+
+    if (drawn.has(file.id)) return [];
+    const name = file.name ?? file.caption ?? file.mediaType;
+
+    return [{ name, mediaType: file.mediaType, url: "", pictureId: file.id }];
+  });
 }
 
 /** The Manager's greeting, drawn as its first message though no one sent it and nothing stores it (`@repo/features/manager-greeting`). */
@@ -212,12 +251,20 @@ function ManagerMessage({
   const toggle = useWorkToggle();
   const offered = work === null ? undefined : toggle;
   const menu = useChatMessageMenu(message.text, offered);
-  const files = fileChipsOf(message);
+  // Note that the Manager's pictures kept with their size stand as the set it showed, as the transcript draws a shown set.
+  const shown = shownOf(message);
+  const files = fileChipsOf(message, shown);
 
   return (
     <Message from="assistant" className={RECEIVED_MESSAGE_CLASS} data-message-id={message.id}>
       {place.opens ? <ManagerHead manager={doors.manager} /> : null}
-      {files.length === 0 ? null : <KeptFileChips files={files} />}
+      {shown.length === 0 && files.length === 0 ? null : (
+        // Note that what the Manager showed stands at its bubbles' inset, past its face, as the work under a message does.
+        <ChatAside inset={chatInset(face)}>
+          <KeptShownSet shown={shown} />
+          {files.length === 0 ? null : <KeptFileChips files={files} />}
+        </ChatAside>
+      )}
       {message.text === "" ? null : (
         <ChatBubble
           side={CHAT_SIDE.RECEIVED}
@@ -271,7 +318,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
       : { userId: message.authorUserId, name: message.authorName },
   );
 
-  const files = fileChipsOf(message);
+  const files = fileChipsOf(message, NONE_SHOWN);
   const lineId = own ? (message.lineId ?? undefined) : undefined;
   const ownLine = lineId === undefined ? undefined : doors.lines.get(lineId);
   const editor = useMessageEdit(lineId ?? "");
@@ -405,6 +452,9 @@ function runsOf(lines: readonly ManagerChatLine[]): readonly (readonly ManagerCh
 
   return runs;
 }
+
+/** No pictures drawn as a set, as a person's message draws its files as chips. */
+const NONE_SHOWN: readonly ShownPicture[] = [];
 
 /** No message on its way. */
 const NONE_SENDING: readonly ManagerChatSending[] = [];
