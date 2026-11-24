@@ -1241,18 +1241,35 @@ function remoteToolView(
   };
 }
 
-/** How a native harness names a tool of an MCP server: Claude Code's `mcp__<server>__<tool>`. */
-const CLAUDE_CODE_MCP = /^mcp__(.+?)__(.+)$/u;
+/** How Claude Code names a tool of an MCP server: `mcp__<server>__<tool>`, the server up to the first `__` after its first character. */
+const CLAUDE_CODE_MCP = { LEAD: "mcp__", SEPARATOR: "__" } as const;
 
 /** How Codex's MCP calls are named by `native-tool-calls.ts`: the server, a dot, and the tool. */
 const CODEX_MCP = /^([^.]+)\.(.+)$/u;
+
+/**
+ * A Claude Code MCP tool's name split into its server and its tool, as
+ * `/^mcp__(.+?)__(.+)$/` would split it, but read in one pass, since that
+ * pattern backtracks for a long while over a name of many `__`; none for
+ * any other name.
+ */
+function claudeCodeMcpParts(tool: string): readonly [string, string] | undefined {
+  const { LEAD, SEPARATOR } = CLAUDE_CODE_MCP;
+
+  if (!tool.startsWith(LEAD)) return undefined;
+  const rest = tool.slice(LEAD.length);
+  const at = rest.indexOf(SEPARATOR, 1);
+  const name = at === -1 ? "" : rest.slice(at + SEPARATOR.length);
+
+  return at === -1 || name === "" ? undefined : [rest.slice(0, at), name];
+}
 
 /** A call of a tool of an MCP server a native harness made, as it names it: the server by the name its card gives and the tool's own name; nothing for any other tool. */
 function nativeMcpCall(
   tool: string,
 ): { readonly server: string; readonly connection: string; readonly name: string } | undefined {
-  const match = CLAUDE_CODE_MCP.exec(tool) ?? CODEX_MCP.exec(tool);
-  const [, connection, name] = match ?? [];
+  const codex = CODEX_MCP.exec(tool);
+  const [connection, name] = claudeCodeMcpParts(tool) ?? [codex?.[1], codex?.[2]];
 
   return connection === undefined || name === undefined
     ? undefined
