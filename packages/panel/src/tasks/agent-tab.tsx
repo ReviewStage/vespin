@@ -141,8 +141,7 @@ import {
 } from "@repo/features/voice-call-lines";
 import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire";
 import { replyFromWords } from "@repo/features/words";
-import type { AppStateSnapshot } from "@repo/host/app-state";
-import { AGENT_ENTER, EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT } from "@repo/settings";
 import {
   ANNOUNCE,
   announce,
@@ -248,7 +247,7 @@ import {
   useTaskListRowAs,
 } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { useVoiceCall } from "../voice-call.js";
 import {
@@ -269,7 +268,8 @@ import {
   type FirstHeld,
 } from "./agent-boot-line.js";
 import { type AgentBox, useAgentBox } from "./agent-box.js";
-import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
+import { COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
+import { AgentComposerDock, boxTakesWords } from "./agent-composer-dock.js";
 import { AgentEndRow, useTurnEndSaid } from "./agent-end-row.js";
 import { useForwardToast } from "./agent-forward.js";
 import { GoalConditions, GoalDock, GoalNoticeView } from "./agent-goal.js";
@@ -285,7 +285,6 @@ import {
   lineSender,
   macOwnerOf,
   messageSender,
-  offersStop,
   planPayerOf,
   providerOf,
   SENT_LINE_STATE,
@@ -317,7 +316,6 @@ import { SendingAgent } from "./agent-ref.js";
 import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
-import { ArchivedComposerNote } from "./archived-note.js";
 import { ReplyMessageAction, useChatMessageMenu } from "./chat-reply.js";
 import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { ComputerDock } from "./computer-dock.js";
@@ -327,7 +325,7 @@ import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
 import { FollowOfferDock } from "./follow-offer-dock.js";
-import { ForkedToLine, SuggestionChip, useForkOffered } from "./fork-action.js";
+import { ForkedToLine, useForkOffered } from "./fork-action.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
 import { sameEntries, sameFields, sameIds, sameSet, useKept, useSteady } from "./kept-draws.js";
 import {
@@ -351,7 +349,12 @@ import {
 import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
 import { OutOfMemoryOffer } from "./out-of-memory-offer.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
-import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
+import {
+  REPLY_SCOPE,
+  ReplyDoorProvider,
+  ReplyToSelection,
+  useBoxReplyDoor,
+} from "./reply-to-selection.js";
 import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { type SentLine as RailSentLine, sentLineOf } from "./sent-lines.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
@@ -504,10 +507,6 @@ function blankAgentLine(callStands: boolean, ownStage: VoiceCallStage | undefine
 
 /** The description's own tab, which a task's name over its description's card opens. */
 const TASK_TARGET: ToolTarget = { kind: TOOL_TARGET.DESCRIPTION };
-
-/** Whether Enter queues a message while the agent works, as Settings say; until the first document arrives it sends. */
-const selectEnterQueues = (state: AppStateSnapshot): boolean =>
-  selectAppSettingsView(state)?.agentEnter === AGENT_ENTER.QUEUE;
 
 /** The height a transcript's row is taken to have before it is drawn and measured, in pixels: a short turn's, with the log's step before it (`--ui-space-12`), which a row holds itself (tasks.css's `.agent-log-row-next`). */
 const ROW_ESTIMATE_PX = 172;
@@ -3793,7 +3792,6 @@ function AgentTabView({
   const pictures = useAgentPictureDoor(agent.id);
   const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
   const queueEditing = useQueueEditing(composer, queue, pictures);
-  const enterQueues = useQuery({ ...appStateQuery, select: selectEnterQueues }).data === true;
   const startedByReader = starter === undefined;
   // Any member who may message the agent changes its queue, every message in it, as the service holds (`controlsAgent`): an
   // agent on its starter's Mac is theirs alone. Note that one on the starter's own GitHub token is theirs alone too, which the
@@ -3801,8 +3799,11 @@ function AgentTabView({
   const controlsQueue = startedByReader || agent.machine !== AGENT_MACHINE.DEVICE;
 
   // A rewind writes in the box, so it is offered only while the box takes words.
-  const boxOpen =
-    onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined;
+  const boxOpen = boxTakesWords({
+    archived: onUnarchive !== undefined,
+    continued: continuedNote !== undefined,
+    closed: composer.closed,
+  });
 
   // Note that nothing is rewound under a call into the agent, which the service refuses too (`rewind.ts`).
   const rewinds = boxOpen && transcript.calls.length === 0;
@@ -3917,16 +3918,15 @@ function AgentTabView({
   const bootFailed = bootLine?.kind === BOOT_LINE.FAILED;
 
   // Note that the sign-in card's Retry is offered only where the box stands, as Try again is.
-  const signIn: GitHubSignInDoors | undefined =
-    onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined
-      ? {
-          host: agent.mac,
-          repository: published?.repository ?? undefined,
-          onRetry,
-          onMoveToCloud: onMoveToCloud === undefined ? undefined : () => onMoveToCloud(),
-          copy: copyThroughShell,
-        }
-      : undefined;
+  const signIn: GitHubSignInDoors | undefined = boxOpen
+    ? {
+        host: agent.mac,
+        repository: published?.repository ?? undefined,
+        onRetry,
+        onMoveToCloud: onMoveToCloud === undefined ? undefined : () => onMoveToCloud(),
+        copy: copyThroughShell,
+      }
+    : undefined;
 
   const name = agentName(agent, models);
   const keyProvider = providerOf(agent.model);
@@ -3952,16 +3952,9 @@ function AgentTabView({
   const briefSender = startingAgent ?? (starter === undefined ? undefined : starterActor);
   const wholeParts = useWholePartDoor(agent.id);
   const { members, former } = useMemberDirectory();
-  // The door the box hands Reply, which lays a quote in at its caret.
-  const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
-  const replyThroughBox = useCallback((words: string) => replyDoor.current?.(words), []);
-
+  const { door: replyDoor, reply: replyThroughBox } = useBoxReplyDoor();
   // Note that Reply stands only while the box takes a change, as a file's + does.
-  const replies =
-    onUnarchive === undefined &&
-    continuedNote === undefined &&
-    composer.closed === undefined &&
-    !composer.sending;
+  const replies = boxOpen && !composer.sending;
 
   const macOwner = useKept(macOwnerOf(agent.startedBy, members, readerId, former), sameFields);
   const callRoute = useCallRoute(agent.id);
@@ -4192,69 +4185,24 @@ function AgentTabView({
             onResume={() => queue.change({ change: QUEUE_CHANGE.RESUME })}
           />
         </AgentPicturesProvider>
-        {onUnarchive !== undefined ? (
-          <ArchivedComposerNote
-            onUnarchive={onUnarchive}
-            stop={offersStop(agent) ? onStop : undefined}
-          />
-        ) : continuedNote !== undefined ? (
-          continuedNote
-        ) : (
-          <>
-            {composer.suggestion === undefined ? null : (
-              <SuggestionChip
-                suggestion={composer.suggestion}
-                source={undefined}
-                cards={cards}
-                onDrop={composer.dropSuggestion}
-              />
-            )}
-            {/* Note that the box's `@` reads whose Mac the agent uses, to list that Mac's apps or else the ones the reader's machines allow, named and drawn as the agent's calls kept them. */}
-            <CallPlaceProvider owner={macOwner} route={callRoute}>
-              <AgentPicturesProvider value={pictures}>
-                <ComputerAppsProvider value={computerApps}>
-                  <AgentComposer
-                    {...box}
-                    talksIn={agent.taskId}
-                    composer={composer}
-                    usage={transcript.usage}
-                    payer={transcript.payer}
-                    payerSubscriptionId={transcript.payerSubscriptionId}
-                    // Note that the tab counts the asks its own cards hold, which drop the moment one is answered here, before the row says so.
-                    approvalsWaiting={approvals.waiting}
-                    context={transcript.context}
-                    brief={agent.brief}
-                    onStop={onStop}
-                    // Note that a started agent's conversation always opens on its description or
-                    // task, so the box takes a follow up even before the transcript is read.
-                    followsUp
-                    keywords={keywords}
-                    skills={skills}
-                    replyDoor={replyDoor}
-                    closedRemedy={closedRemedy}
-                    onContinueInCloud={onMoveToCloud}
-                    // Note that a box filled in from a suggestion queues nothing, because its words go once, through the suggestion.
-                    queueing={
-                      agent.runtime === undefined ||
-                      !controlsQueue ||
-                      composer.suggestion !== undefined
-                        ? undefined
-                        : {
-                            working: standing.working,
-                            enterQueues,
-                            onQueue: queueEditing.queue,
-                            editing: queueEditing.editing !== undefined,
-                            onSave: queueEditing.save,
-                            onSteer: queueEditing.steer,
-                            onCancel: queueEditing.cancel,
-                          }
-                    }
-                  />
-                </ComputerAppsProvider>
-              </AgentPicturesProvider>
-            </CallPlaceProvider>
-          </>
-        )}
+        <AgentComposerDock
+          agent={agent}
+          box={box}
+          composer={composer}
+          transcript={transcript}
+          approvalsWaiting={approvals.waiting}
+          onStop={onStop}
+          onUnarchive={onUnarchive}
+          continuedNote={continuedNote}
+          cards={cards}
+          keywords={keywords}
+          skills={skills}
+          replyDoor={replyDoor}
+          closedRemedy={closedRemedy}
+          onMoveToCloud={onMoveToCloud}
+          queue={{ controls: controlsQueue, working: standing.working, editing: queueEditing }}
+          place={{ owner: macOwner, route: callRoute, pictures, computerApps }}
+        />
       </AgentTabFoot>
       {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
     </AgentTabFrame>
