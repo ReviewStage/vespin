@@ -1,0 +1,27 @@
+== bundle PJj10537b base 5417a479dd
+  built 5417a479dd base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-large-agent-empty: fails 0 shots 1 
+iphone-light-large-agent-lines: fails 0 shots 1 
+iphone-light-large-newtask: fails 1 shots 1 Assert that id: composer-field is visible... FAILED
+ipad27-light-large-agent-empty: fails 0 shots 1 
+ipad27-light-large-agent-lines: fails 0 shots 1 
+ipad27-light-large-newtask: fails 1 shots 1 Assert that id: composer-field is visible... FAILED
+ipad27-light-large-ipadsplit: fails 0 shots 1 
+iphone-light-ax3-agent-empty: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-agent-empty: fails 0 shots 1 
+iphone-light-ax3-agent-lines: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-agent-lines: fails 0 shots 1 
+iphone-light-ax3-newtask: AXCHECK ok: Inbox title 86 pt at accessibility-extra-large
+iphone-light-ax3-newtask: fails 1 shots 2 Assert that id: composer-field is visible... FAILED
+ipad27-light-ax3-agent-empty: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-agent-empty: fails 0 shots 1 
+ipad27-light-ax3-agent-lines: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-agent-lines: fails 0 shots 1 
+ipad27-light-ax3-newtask: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-newtask: fails 1 shots 2 Assert that id: composer-field is visible... FAILED
+ipad27-light-ax3-ipadsplit: AXCHECK ok: Inbox title 129 pt at accessibility-extra-large
+ipad27-light-ax3-ipadsplit: fails 1 shots 1 Assert that "Teammate invitations" is visible... FAILED
