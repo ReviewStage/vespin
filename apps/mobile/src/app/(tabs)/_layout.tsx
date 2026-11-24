@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, which an iPad folds away rather than moving to the top, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: labeled glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, which an iPad folds away rather than moving to the top, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import {
   IOS_TAB,
@@ -67,10 +67,10 @@ function useInboxListStands(segments: readonly string[]): boolean {
 
 // Note that nothing here draws the bar: the system draws it in Liquid Glass
 // and minimizes it as a list scrolls down, and, on iOS 26 alone, floats it at the top of a
-// portrait iPad. In a compact window its
-// tabs are icons alone, their labels hidden through NativeTabs' own `hidden`
-// and heard still as each tab's accessibility label; a regular window's
-// bar, floating or a rail, keeps them. The selected tab is tinted in the brand's copper,
+// portrait iPad. Every tab keeps its label in any window, as Apple's own
+// apps do, since a bar of icons alone read as empty; the round + alone is an
+// icon in a compact window, its label heard still as its accessibility
+// label, since it is an act rather than a place. The selected tab is tinted in the brand's copper,
 // and the Inbox carries the panel's count of what waits on you, hidden at
 // none, its fill the attention fill, the light copper in either theme, since
 // the system's white figures read at under 3:1 on the dark theme's accent,
@@ -159,7 +159,7 @@ export default function TabsLayout() {
         testID="inbox-tab"
       >
         <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
-        <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
         {waiting === 0 ? null : (
           <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>
@@ -167,7 +167,7 @@ export default function TabsLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(tasks)" accessibilityLabel="Tasks" testID="tasks-tab">
         <NativeTabs.Trigger.Icon xcasset={GLYPH.TASK} />
-        <NativeTabs.Trigger.Label hidden={iconOnly}>Tasks</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger
         name="(search)"
@@ -177,7 +177,7 @@ export default function TabsLayout() {
       >
         {/* Note that Search keeps the system's magnifier, since a search tab is iOS's own chrome. */}
         <NativeTabs.Trigger.Icon sf="magnifyingglass" />
-        <NativeTabs.Trigger.Label hidden={iconOnly}>Search</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Search</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger
         name="new-task"
