@@ -277,7 +277,13 @@ which thread, task, or agent it was, and, each time a page an agent showed
 opens, how long it took to read and to show, on those same steps, whether
 it opened at a version its opener named or at the newest, whether it was the
 first page since the app started, and the app's build number, never which
-page it was or what it held. They go through the Service, as the Mac
+page it was or what it held, and, each time a picture an agent showed
+reaches the screen, how long it took from being asked for to being in hand,
+on those same steps, whether it came from the copy the app kept on the phone
+or was read from the Service, whose picture it was (an agent's, a thread's,
+a description's, or a comment's), its size rounded to a step (under 100 KB,
+500 KB, 1 MB, 3 MB, or larger), and the app's build number, never which
+picture it was or what it showed. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.
 
 While you are signed in, the Mac app and the web app record how you use

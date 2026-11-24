@@ -30,9 +30,11 @@ import {
 import {
   type AgentPullRequest,
   type AgentStatus,
+  base64Bytes,
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
+import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
@@ -61,6 +63,7 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "../host/host-provider.js";
+import { type PictureShown, usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
@@ -341,11 +344,18 @@ async function agentMediaSource(
   acts: ReturnType<typeof useHostActs>,
   agentId: string,
   pictureId: string,
+  shown: PictureShown,
 ): Promise<string> {
+  const askedAt = performance.now();
   // Note that one shown before draws from the file its first read wrote, asking the host nothing.
   const kept = keptMedia(AGENT_MEDIA_PREFIX, pictureId);
 
-  if (kept !== undefined) return kept;
+  if (kept !== undefined) {
+    if (kept.picture) shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
+
+    return kept.uri;
+  }
+
   // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.
   const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
 
@@ -357,6 +367,8 @@ async function agentMediaSource(
 
   // Note that a picture is written to the app's caches and drawn from its file, so the page holds its address rather than its bytes, and the system's image cache holds what it decodes; a type no file can be named for keeps its `data:` address.
   const written = await cachedPicture(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64);
+
+  shown(PRODUCT_PICTURE_FROM.READ, askedAt, base64Bytes(read.base64));
 
   return written ?? `data:${read.contentType};base64,${read.base64}`;
 }
@@ -387,6 +399,7 @@ export interface AgentMedia {
  */
 export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMedia {
   const acts = useHostActs();
+  const pictureShown = usePictureShownCount(PRODUCT_PICTURE_KIND.AGENT);
 
   const [shown, setShown] = useState<{
     readonly agentId: string;
@@ -409,7 +422,7 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
   // Note that the agent's reads stand while its page does, and are let go as another agent's page stands or the page leaves, so none that lands after is drawn.
   useEffect(() => {
     const standing = mediaReads({
-      read: (pictureId) => agentMediaSource(acts, agentId, pictureId),
+      read: (pictureId) => agentMediaSource(acts, agentId, pictureId, pictureShown),
       landed: (pictureId, source) => stand(pictureId, source),
       // Note that a read whose every try failed stands failed, so it says so with Try again rather than spinning on.
       failed: (pictureId, cause, again) => {
@@ -423,7 +436,7 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
     setReads(standing);
 
     return () => standing.stop();
-  }, [acts, agentId]);
+  }, [acts, agentId, pictureShown]);
 
   useEffect(() => reads?.ask(ids), [reads, ids]);
 

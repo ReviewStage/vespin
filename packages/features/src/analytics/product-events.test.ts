@@ -7,6 +7,9 @@ import {
   PRODUCT_EXPERIMENT_SCOPE,
   PRODUCT_OPEN_ORDER,
   PRODUCT_PAGE_VERSION,
+  PRODUCT_PICTURE_BYTES,
+  PRODUCT_PICTURE_FROM,
+  PRODUCT_PICTURE_KIND,
   PRODUCT_REPLY_KIND,
   PRODUCT_SETTING_VALUE,
   PRODUCT_SURFACE,
@@ -316,6 +319,30 @@ test("a page's open travels its waits on rungs with its kind and order, never wh
         [PRODUCT_EVENT_PROPERTY.SHOWN_MS]: 1750,
         [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: PRODUCT_PAGE_VERSION.NEWEST,
         [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: PRODUCT_OPEN_ORDER.FIRST,
+      },
+    },
+  );
+  // A picture drawn travels its wait on the same rungs, where it came from, its kind, and its size on a rung, never which picture.
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.PICTURE_SHOWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.READ_MS]: 900,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_FROM]: PRODUCT_PICTURE_FROM.READ,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: PRODUCT_PICTURE_KIND.AGENT,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: PRODUCT_PICTURE_BYTES.UNDER_3M,
+        pictureId: "9a0d2c1e-6f3b-4e8a-b2d4-1c7e5f9a3b6d",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.PICTURE_SHOWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.READ_MS]: 900,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_FROM]: PRODUCT_PICTURE_FROM.READ,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: PRODUCT_PICTURE_KIND.AGENT,
+        [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: PRODUCT_PICTURE_BYTES.UNDER_3M,
       },
     },
   );
