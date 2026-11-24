@@ -45,7 +45,7 @@ import {
   shownPicturesOf,
 } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
-import type { SendingMessage } from "@repo/features/agent-view";
+import type { ManagerChatSending, SendingMessage } from "@repo/features/agent-view";
 import {
   type AgentOrigin,
   type AgentPullRequest,
@@ -66,11 +66,12 @@ import { fileName } from "@repo/features/code-ref-words";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { fileMarkers } from "@repo/features/file-marker";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import {
-  type ManagerChatRuns,
-  type ManagerChatWork,
-  managerChatRuns,
-} from "@repo/features/manager-chat";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
+import type {
+  ChatRunPlace,
+  ManagerChatLine,
+  ManagerChatView,
+} from "@repo/features/manager-chat-view";
 import { messageFileChips } from "@repo/features/message-files";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
@@ -163,7 +164,7 @@ export interface TranscriptPlace {
   readonly row: string;
   readonly member: number | undefined;
   readonly piece: TranscriptPiece;
-  /** Which work of a Manager's chat it stands in, opened under a message or the working line (`managerChatWork`); none for a row of the transcript's own. */
+  /** Which work of a Manager's chat it stands in, opened under a message or the working line (`managerChatView`); none for a row of the transcript's own. */
   readonly work?: ChatWorkPlace | undefined;
 }
 
@@ -252,7 +253,7 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly sender: string | undefined;
       /** Whether anyone but the reader sent it (another agent, a teammate, the app, an automation, GitHub), so it stands at the column's leading edge, as the panel stands a received line at its left; the reader's own alone stand trailing. */
       readonly received: boolean;
-      /** Whether the Manager whose chat this is said it (`managerChatLines`), or greeted with it, so it stands among the people's lines as their bubbles do. */
+      /** Whether the Manager whose chat this is said it, or greeted with it, so it stands among the people's lines as their bubbles do. */
       readonly manager?: boolean | undefined;
       /** Whether it stands in a Manager's chat, where the reader's own bubble stands in copper and runs stand as Messages spaces them. */
       readonly chat?: boolean | undefined;
@@ -388,12 +389,14 @@ interface TranscriptReading {
   readonly suggestionAddress?: ((agentId: string) => string | undefined) | undefined;
   /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
   readonly waitingCalls?: ReadonlySet<string> | undefined;
-  /** Whether the messages are a Manager's chat (`managerChatLines`), its messages drawn as bubbles in the runs the panel groups them in (`managerChatRuns`), with no turn's foot. */
-  readonly chat?: boolean | undefined;
-  /** The greeting a Manager's chat opens on, drawn as its first bubble (`managerGreeting`); none for any other agent, or while older pages are still unread. */
+}
+
+/** How a Manager's chat is read for its list: as a transcript is, and the greeting it opens on. */
+interface ChatReading extends Omit<TranscriptReading, "origin"> {
+  /** The greeting a Manager's chat opens on, drawn as its first bubble (`managerGreeting`); none while older pages are still unread. */
   readonly greeting?: string | undefined;
-  /** The work a Manager's chat keeps a press away (`managerChatWork`), read from its whole transcript; none for any other agent. */
-  readonly chatWork?: ManagerChatWork | undefined;
+  /** The reader's messages on their way to the chat, oldest sent first, as the host draws them until their rows land (`AppManagerChat.sending`). */
+  readonly sending?: readonly ManagerChatSending[] | undefined;
 }
 
 /** What the items are read with: the page's reading, and the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`). */
@@ -1100,13 +1103,13 @@ function joinsRun(last: SaidItem, next: SaidItem): boolean {
  * tight under one sender's name, and the day and time stand centered over
  * the first line with a time and over one sent after a pause of
  * `STAMP_PAUSE_MS` since the line before it, rather than under every line.
- * A Manager's chat (`chatRuns`) runs its lines as the panel does
- * (`managerChatRuns`), its own messages among them.
+ * A Manager's chat (`chatRuns`) runs its messages as the panel does
+ * (`managerChatView`), by each one's place in its run.
  */
 function inRuns(
   items: readonly TranscriptItem[],
   now: number,
-  chatRuns: ManagerChatRuns | undefined,
+  chatRuns: ReadonlyMap<string, ChatRunPlace> | undefined,
 ): readonly TranscriptItem[] {
   let lastSent: number | undefined;
 
@@ -1120,7 +1123,7 @@ function inRuns(
       before?.kind === TRANSCRIPT_ITEM.SAID &&
       (chatRuns === undefined
         ? joinsRun(before, item)
-        : chatRuns.places.get(item.place.message)?.opens === false);
+        : chatRuns.get(item.place.message)?.opens === false);
 
     const paused =
       item.at !== undefined && (lastSent === undefined || item.at - lastSent >= STAMP_PAUSE_MS);
@@ -1169,51 +1172,6 @@ export function withSending(
 
 /** The place a Manager's greeting stands under, which no message of its chat holds. */
 const GREETING_PLACE = linePlace("greeting", "greeting");
-
-/** A Manager's words as one of its chat's bubbles, sent as its turn began (`managerChatRuns` times it so), its pictures and anything else as they stand. */
-function managerSaid(item: TranscriptItem, message: AgentTranscriptMessage): TranscriptItem {
-  if (item.kind !== TRANSCRIPT_ITEM.WORDS) return item;
-
-  return {
-    place: item.place,
-    depth: item.depth,
-    kind: TRANSCRIPT_ITEM.SAID,
-    words: item.words,
-    sender: undefined,
-    received: true,
-    manager: true,
-    by: undefined,
-    at: message.sentAt ?? message.startedAt,
-    stamp: undefined,
-    joinsAbove: false,
-    joinsBelow: false,
-  };
-}
-
-/**
- * A Manager's message with the work it came of (`managerChatWork`): the
- * rows a turn draws, set in a step under its bubble once the reader opens
- * it, as the panel opens it under the bubble on Show work; the item alone
- * for any other, or one that came of no work.
- */
-function managerSaidWithWork(
-  item: TranscriptItem,
-  reading: ItemsReading,
-): readonly TranscriptItem[] {
-  const parts =
-    item.kind === TRANSCRIPT_ITEM.SAID && item.manager === true
-      ? reading.chatWork?.work.get(item.place.message)
-      : undefined;
-
-  if (parts === undefined || parts.length === 0 || item.kind !== TRANSCRIPT_ITEM.SAID)
-    return [item];
-  const shown = reading.toggles.work.has(item.place.message);
-  const said = { ...item, workShown: shown };
-
-  if (!shown) return [said];
-
-  return [said, ...workItems(parts, item.place.message, CHAT_WORK_PLACE.MESSAGE, false, reading)];
-}
 
 /** A stretch of a Manager's work as the rows a turn draws (`workRows`), set a step in, each in the work's place, so it keys and folds apart from the chat's own rows. */
 function workItems(
@@ -1308,11 +1266,6 @@ export function transcriptItems(
 
     const { startedAt, finishedAt } = message;
 
-    // Note that a Manager's chat draws its messages alone, each a bubble of its own, with no foot, as the panel's chat draws it, the work each came of under it once the reader opens it.
-    if (reading.chat === true) {
-      return turn.flatMap((item) => managerSaidWithWork(managerSaid(item, message), read));
-    }
-
     // Note that a turn that finished ends on how long it worked, as the panel's turn does.
     const foot: readonly TranscriptItem[] =
       moving || startedAt === undefined || finishedAt === undefined
@@ -1332,13 +1285,9 @@ export function transcriptItems(
   });
 
   const last = placed.at(-1)?.message.id;
-  const chatRuns = reading.chat === true ? managerChatRuns(messages, reading.readerId) : undefined;
-  const runs = inRuns([...greetingItems(reading.greeting), ...items], reading.now, chatRuns);
+  const runs = inRuns(items, reading.now, undefined);
 
   if (!reading.writing || last === undefined) return runs;
-
-  const live = reading.chat === true ? (reading.chatWork?.live ?? []) : [];
-  const liveShown = live.length > 0 && reading.toggles.liveWork;
 
   return [
     ...runs,
@@ -1347,11 +1296,211 @@ export function transcriptItems(
       depth: 0,
       kind: TRANSCRIPT_ITEM.WORKING,
       words: WORKING_LINE,
-      chat: reading.chat,
-      workShown: live.length === 0 ? undefined : liveShown,
+    },
+  ];
+}
+
+/** What a picture, a recording, or a sound clip a chat message carried is heard as where it has no caption, since a chat's row keeps no file's name. */
+const CHAT_MEDIA_WORDS = {
+  [SHOWN_MEDIA.PICTURE]: "Picture",
+  [SHOWN_MEDIA.VIDEO]: "Recording",
+  [SHOWN_MEDIA.AUDIO]: "Sound clip",
+} as const satisfies Record<ShownMediaKind, string>;
+
+/** The files a Manager's message showed, by the ids they were kept under, as a set it showed stands. */
+function chatShownMedia(attachments: readonly ManagerChatAttachment[]): readonly ShownMedia[] {
+  return attachments.map((file) => {
+    const kind = shownKindOf(file.mediaType);
+    const caption = file.caption ?? "";
+
+    return { id: file.id, caption, label: caption === "" ? CHAT_MEDIA_WORDS[kind] : caption, kind };
+  });
+}
+
+/** The files a person's chat message carried, as its line draws them. */
+interface ChatSentFiles {
+  readonly pictures: readonly SaidPicture[];
+  readonly files: readonly SaidFile[];
+}
+
+/** The files a person's chat message carried, as a sent line's stand: each picture over its words by the id it was kept under, and any other file as its chip named by its caption or its type, since a chat's row keeps no file's name or bytes. */
+function chatSentFiles(attachments: readonly ManagerChatAttachment[]): ChatSentFiles {
+  const pictures = attachments.flatMap((file): SaidPicture[] =>
+    PICTURE_TYPES.has(file.mediaType)
+      ? [{ key: file.id, name: file.caption ?? "", url: undefined, pictureId: file.id }]
+      : [],
+  );
+
+  const files = attachments.flatMap((file): SaidFile[] =>
+    PICTURE_TYPES.has(file.mediaType)
+      ? []
+      : [
+          {
+            key: file.id,
+            name: file.caption ?? file.mediaType,
+            mediaType: file.mediaType,
+            base64: undefined,
+            size: undefined,
+          },
+        ],
+  );
+
+  return { pictures, files };
+}
+
+/**
+ * One message of a Manager's chat as its items: a person's as their line,
+ * the reader's own trailing; the Manager's words as its bubble and what it
+ * showed as the set's pictures under them; and, on the Manager's last
+ * message of a finished turn, the turn's work set a step in under its
+ * bubble once the reader opens it (Show work), as the panel opens it.
+ */
+function chatLineItems(
+  line: ManagerChatLine,
+  view: ManagerChatView,
+  reading: ItemsReading,
+): readonly TranscriptItem[] {
+  const { message } = line;
+  const base = { place: linePlace(message.id, message.id), depth: 0 };
+
+  const said = {
+    ...base,
+    kind: TRANSCRIPT_ITEM.SAID,
+    words: message.text,
+    at: message.createdAt,
+    stamp: undefined,
+    joinsAbove: false,
+    joinsBelow: false,
+  } as const;
+
+  if (message.authorKind === MANAGER_CHAT_AUTHOR.PERSON) {
+    const own = message.authorUserId !== null && message.authorUserId === reading.readerId;
+
+    return [
+      {
+        ...said,
+        ...chatSentFiles(message.attachments),
+        sender: own ? undefined : message.authorName,
+        received: !own,
+        by: own ? undefined : (message.authorUserId ?? undefined),
+      },
+    ];
+  }
+
+  const work = line.work === undefined ? [] : (view.work.get(line.work) ?? []);
+  const shown = work.length > 0 && reading.toggles.work.has(message.id);
+  const words = message.text.trim() === "" ? [] : [message.text];
+  const media = chatShownMedia(message.attachments);
+
+  return [
+    ...words.map(
+      (text): TranscriptItem => ({
+        ...said,
+        words: text,
+        sender: undefined,
+        received: true,
+        manager: true,
+        by: undefined,
+        workShown: work.length === 0 ? undefined : shown,
+      }),
+    ),
+    ...(media.length === 0
+      ? []
+      : [
+          {
+            ...base,
+            place: pieceOf(base.place, TRANSCRIPT_PIECE.MEDIA),
+            kind: TRANSCRIPT_ITEM.MEDIA,
+            media,
+          },
+        ]),
+    // Note that the work opens under the bubble that offers it, so a turn that showed only a set offers none.
+    ...(shown && words.length > 0
+      ? workItems(work, message.id, CHAT_WORK_PLACE.MESSAGE, false, reading)
+      : []),
+  ];
+}
+
+/**
+ * The reader's messages on their way to a Manager's chat as their own lines
+ * after its messages, each under the key it went under, so the page marks
+ * one refused Not delivered by it (`AgentTranscript`'s `undelivered`), each
+ * joining the run of the reader's own line before it, as the panel draws
+ * them.
+ */
+function chatSendingItems(
+  sending: readonly ManagerChatSending[],
+  lastOwn: boolean,
+): readonly { readonly item: TranscriptItem; readonly place: ChatRunPlace }[] {
+  return sending.map((line, index) => ({
+    item: {
+      place: linePlace(line.clientKey, line.clientKey),
+      depth: 0,
+      kind: TRANSCRIPT_ITEM.SAID,
+      words: line.text,
+      sender: undefined,
+      received: false,
+      by: undefined,
+      at: line.sentAt,
+      stamp: undefined,
+      joinsAbove: false,
+      joinsBelow: false,
+    },
+    place: { opens: index === 0 && !lastOwn, closes: index === sending.length - 1 },
+  }));
+}
+
+/**
+ * A Manager's chat as the list's items, oldest first, as the panel's chat
+ * draws it from its rows (`managerChatView`): the greeting it opens on, each
+ * message as a bubble of its own in the runs the panel groups them in, with
+ * no turn's foot, and while the Manager may still write, its working line,
+ * the turn under way's work under it once the reader opens it. The
+ * transcript is read only for the work its turns did.
+ */
+export function managerChatItems(
+  view: ManagerChatView,
+  transcript: readonly AgentTranscriptMessage[],
+  reading: ChatReading,
+): readonly TranscriptItem[] {
+  const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
+  const items = view.messages.flatMap((line) => chatLineItems(line, view, read));
+  const newest = view.messages.at(-1)?.message;
+
+  const lastOwn =
+    newest !== undefined &&
+    newest.authorKind === MANAGER_CHAT_AUTHOR.PERSON &&
+    newest.authorUserId === reading.readerId;
+
+  const sending = chatSendingItems(reading.sending ?? [], lastOwn);
+
+  const runs = new Map<string, ChatRunPlace>([
+    ...view.messages.map((line) => [line.message.id, line.place] as const),
+    ...sending.map(({ item, place }) => [item.place.message, place] as const),
+  ]);
+
+  const drawn = inRuns(
+    [...greetingItems(reading.greeting), ...items, ...sending.map(({ item }) => item)],
+    reading.now,
+    runs,
+  );
+
+  if (!reading.writing) return drawn;
+  const last = reading.sending?.at(-1)?.clientKey ?? newest?.id ?? GREETING_PLACE.message;
+  const liveShown = view.live.length > 0 && reading.toggles.liveWork;
+
+  return [
+    ...drawn,
+    {
+      place: { ...linePlace(last, last), piece: TRANSCRIPT_PIECE.WORKING },
+      depth: 0,
+      kind: TRANSCRIPT_ITEM.WORKING,
+      words: WORKING_LINE,
+      chat: true,
+      workShown: view.live.length === 0 ? undefined : liveShown,
     },
     // Note that the turn under way's work stands under its working line, still moving, as the panel opens it there.
-    ...(liveShown ? workItems(live, last, CHAT_WORK_PLACE.LIVE, true, read) : []),
+    ...(liveShown ? workItems(view.live, last, CHAT_WORK_PLACE.LIVE, true, read) : []),
   ];
 }
 

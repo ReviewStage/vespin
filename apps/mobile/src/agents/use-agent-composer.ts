@@ -1,8 +1,13 @@
 /**
  * use-agent-composer.ts -- an agent's composer as its page holds and sends it: the words and the pictures attached, a send that steers or queues as the member's Follow-up behavior says, Stop while the agent works, and the queue's Steer and Delete.
  *
- * Each send is the act the panel's box sends on the host's act port. While
- * no turn runs, Send opens one (`AGENTS_MESSAGE`); while one runs, it steers
+ * Each send is the act the panel's box sends on the host's act port. A
+ * Manager's message is its chat's own row (`AGENTS_CHAT_SEND`), which the
+ * host draws on its way on the chat and keeps there marked Not delivered
+ * where the service refused it, its Retry sending it again under its key
+ * and its Edit and Delete letting it go (`AGENTS_CHAT_UNSEND`); it never
+ * queues, since the Manager takes each line as it stands. To any other
+ * agent, while no turn runs, Send opens one (`AGENTS_MESSAGE`); while one runs, it steers
  * that turn, or, where the member's Follow-up behavior is Queue, waits
  * behind it (`AGENTS_QUEUE`'s `add`), as the panel's Enter does. The queue
  * rides on the agent's own transcript (`AppTranscript.word.queue`), which
@@ -49,9 +54,11 @@ import { editSendAsk } from "@repo/features/agent-rewind-model";
 import {
   AGENT_CALL_FAILURE,
   type AgentCallFailure,
+  type ManagerChatSending,
   type SendingMessage,
 } from "@repo/features/agent-view";
 import {
+  AGENT_KIND,
   type AgentAttachment,
   type AgentQueueChange,
   type AgentStatus,
@@ -71,6 +78,7 @@ import {
   type FollowedAgent,
   selectAppSettingsView,
   selectInboxReader,
+  selectManagerChat,
 } from "@repo/host/app-state-reads";
 import { AGENT_ENTER } from "@repo/settings";
 import {
@@ -83,7 +91,7 @@ import {
 import { sentLineId } from "@repo/wire/host-ids";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { type HeldPicture, useAttachedPictures } from "../use-attached-pictures.js";
@@ -334,6 +342,11 @@ export function useAgentComposer(
 
   // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
   const sendQueues = suggested === undefined && writing && enterQueues && controlsQueue;
+  // Whether the agent is a Manager, whose messages are its chat's rows (`AGENTS_CHAT_SEND`), drawn on their way on its chat as the host holds it.
+  const chat = suggested === undefined && agent?.kind === AGENT_KIND.MANAGER;
+  const chatSelect = useMemo(() => selectManagerChat(agentId), [agentId]);
+  const { data: chatHeld } = useQuery({ ...appStateQuery, select: chatSelect });
+  const chatSending = chatHeld?.rows?.sending;
   const taskId = agent?.taskId ?? undefined;
   const skills = useSkillOffer(words, setWords, taskId === undefined ? undefined : { taskId });
   // The field, which draws each mention and each file attached as its pill.
@@ -426,6 +439,27 @@ export function useAgentComposer(
       }).then(() => {
         setSuggestionOut(false);
       });
+
+      return;
+    }
+
+    // Note that a Manager's chat takes every message as a row of its own, the Manager taking it in as a turn's line or a steer as it stands, so it neither queues nor steers here; the host draws it on its way on the chat, and keeps one refused there marked Not delivered.
+    if (chat) {
+      heldSends.set(sent.id, sent);
+      write(
+        () =>
+          acts[ACT_KIND.AGENTS_CHAT_SEND]({ agentId, text, clientKey: sent.id, ...attachments }),
+        {
+          ...saying,
+          inPlace: (refusal: string) => {
+            if (mounted.current) setNote(refusal);
+          },
+          done: () => heldSends.delete(sent.id),
+          refused: (answer) =>
+            "failure" in answer ? messageFailureWords(answer.failure) : undefined,
+          unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+        },
+      );
 
       return;
     }
@@ -526,8 +560,58 @@ export function useAgentComposer(
   const refusedLine = (lineId: string): SendingMessage | undefined =>
     transcript?.sending?.find((line) => line.id === lineId && line.refused !== undefined);
 
+  /** The message of the member's to a Manager's chat the service refused, by the key it went under; none for any other. */
+  const refusedChat = (clientKey: string): ManagerChatSending | undefined =>
+    chatSending?.find((line) => line.clientKey === clientKey && line.refused !== undefined);
+
+  // Note that a refused chat message goes again under its key with the files it carried, so one whose answer was lost lands in the chat once; the host draws it on its way again in the refusal's place.
+  const retryChat = (clientKey: string) => {
+    const line = refusedChat(clientKey);
+
+    if (line === undefined) return;
+    setNote(undefined);
+    write(
+      () =>
+        acts[ACT_KIND.AGENTS_CHAT_SEND]({
+          agentId,
+          text: line.text,
+          clientKey,
+          ...(line.attachments === undefined ? undefined : { attachments: line.attachments }),
+          retry: true,
+        }),
+      {
+        went: BUZZ.SUCCESS,
+        inPlace: (refusal: string) => {
+          if (mounted.current) setNote(refusal);
+        },
+        done: () => heldSends.delete(clientKey),
+        refused: (answer) =>
+          "failure" in answer ? messageFailureWords(answer.failure) : undefined,
+        unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+      },
+    );
+  };
+
+  /** A refused chat message let go, its words and pictures laid back in the field where `edits`. */
+  const unsendChat = (clientKey: string, edits: boolean) => {
+    const line = refusedChat(clientKey);
+
+    if (line === undefined) return;
+    const held = heldSends.get(clientKey);
+    heldSends.delete(clientKey);
+    void acts[ACT_KIND.AGENTS_CHAT_UNSEND]({ agentId, clientKey }).catch(() => undefined);
+
+    if (edits) {
+      handBack(
+        { id: clientKey, words: held?.words ?? line.text, pictures: held?.pictures ?? [] },
+        undefined,
+      );
+    }
+  };
+
   // Note that a refused line goes again under its key, so one whose answer was lost reaches the agent once, taking the agent back first where it was a line written again; the host draws it on its way in the refusal's place, and a refusal again marks it again.
   const retryLine = (lineId: string) => {
+    if (chat) return retryChat(lineId);
     const line = refusedLine(lineId);
 
     if (line === undefined || !undeliveredWhole(line)) return;
@@ -566,6 +650,7 @@ export function useAgentComposer(
 
   // Note that the words go back as typed, their files' markers among them, and the pictures this phone still holds with them, so each stands as the pill it was.
   const editLine = (lineId: string) => {
+    if (chat) return unsendChat(lineId, true);
     const line = refusedLine(lineId);
 
     if (line === undefined) return;
@@ -579,6 +664,8 @@ export function useAgentComposer(
   };
 
   const dropLine = (lineId: string) => {
+    if (chat) return unsendChat(lineId, false);
+
     if (refusedLine(lineId) === undefined) return;
     heldSends.delete(lineId);
     void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId }).catch(() => undefined);

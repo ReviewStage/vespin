@@ -21,7 +21,6 @@ import {
   type AgentOverviewPullRequest,
   type AgentPullRequest,
   type AgentStatus,
-  type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -36,7 +35,7 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { managerChatLines, managerChatWork } from "@repo/features/manager-chat";
+import { managerChatView } from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
@@ -89,6 +88,7 @@ import {
   MentionSuggestions,
   MenuRow,
   type MenuRowAct,
+  managerChatItems,
   menuOfGroups,
   NO_GROUND,
   NO_TOGGLES,
@@ -141,6 +141,9 @@ import {
   useAgentPullRequests,
   useAgentTranscript,
   useFollowedAgent,
+  useManagerChat,
+  useManagerChatRetry,
+  useOlderChatPages,
   useOlderPages,
   useSentFiles,
   useShownAgent,
@@ -243,14 +246,6 @@ const RENAME_WORDS = {
 
 /** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
-
-/** A transcript's messages as its page draws them: a Manager's as its chat (`managerChatLines`), any other agent's whole. */
-function chatOrTranscript(
-  messages: readonly AgentTranscriptMessage[],
-  chat: boolean,
-): readonly AgentTranscriptMessage[] {
-  return chat ? managerChatLines(messages) : messages;
-}
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
@@ -870,9 +865,11 @@ const AgentConversation = memo(function AgentConversation({
     ],
   );
 
-  // Note that a Manager's page is its chat, never its transcript, as the panel draws it (`managerChatLines`): people's lines, its `send_to_user` words, and its `show_media` sets alone.
+  // Note that a Manager's page is its chat, never its transcript, as the panel draws it: the chat's own rows (`managerChat`), its transcript read only for the work each turn did.
   const chat = shown?.kind === AGENT_KIND.MANAGER;
   useManagerChatLooks(shown);
+  const chatHeld = useManagerChat(id, chat);
+  const chatPage = chatHeld?.rows;
 
   // The calls the agent holds for the member's answer, whose folds stand open so their rows draw them; a subagent's call has no row of its own.
   const pending = agent?.pendingApprovals;
@@ -885,53 +882,83 @@ const AgentConversation = memo(function AgentConversation({
     [pending],
   );
 
-  // Note that a Manager's work stays a press away from its chat, read from its whole transcript, the turn under way's under its working line.
-  const chatWork = useMemo(
+  const writing = status !== undefined && agentStillWriting(status);
+  // Note that the turn under way is the agent's newest while it may still write, whose work stands under the chat's working line rather than under a message.
+  const running = writing ? (agent?.turnId ?? undefined) : undefined;
+
+  // Note that a Manager's chat is its rows alone, with the work of each turn a press away, read from the transcript held beside it.
+  const chatItems = useMemo(
     () =>
-      chat && messages !== undefined
-        ? managerChatWork(messages, status !== undefined && agentStillWriting(status))
+      chat && chatPage !== undefined
+        ? managerChatItems(
+            managerChatView(chatPage.messages, messages ?? [], { running }),
+            messages ?? [],
+            {
+              writing,
+              readerId,
+              toggles,
+              now: Date.now(),
+              pullRequests,
+              wholePart: whole.read,
+              suggestionAddress,
+              waitingCalls,
+              sending: chatPage.sending,
+              // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
+              greeting:
+                shown !== undefined && chatPage.before === undefined
+                  ? managerGreeting(shown.title)
+                  : undefined,
+            },
+          )
         : undefined,
-    [chat, messages, status],
+    [
+      chat,
+      chatPage,
+      messages,
+      running,
+      writing,
+      readerId,
+      toggles,
+      pullRequests,
+      whole.read,
+      suggestionAddress,
+      waitingCalls,
+      shown,
+    ],
   );
 
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
-  const items = useMemo(
+  const transcriptRows = useMemo(
     () =>
-      transcriptItems(chatOrTranscript(withSending(messages ?? [], sending ?? []), chat), {
-        writing: status !== undefined && agentStillWriting(status),
-        readerId,
-        toggles,
-        now: Date.now(),
-        pullRequests,
-        wholePart: whole.read,
-        origin,
-        suggestionAddress,
-        waitingCalls,
-        chat,
-        chatWork,
-        // Note that the greeting stands over the chat's first line, so it waits until no older page is left to read, as the panel draws it above its first message.
-        greeting:
-          chat && shown !== undefined && transcript?.before === undefined
-            ? managerGreeting(shown.title)
-            : undefined,
-      }),
+      chat
+        ? undefined
+        : transcriptItems(withSending(messages ?? [], sending ?? []), {
+            writing,
+            readerId,
+            toggles,
+            now: Date.now(),
+            pullRequests,
+            wholePart: whole.read,
+            origin,
+            suggestionAddress,
+            waitingCalls,
+          }),
     [
-      shown,
-      transcript?.before,
-      chatWork,
+      chat,
       waitingCalls,
       messages,
       sending,
-      status,
+      writing,
       readerId,
       toggles,
       pullRequests,
       whole.read,
       origin,
       suggestionAddress,
-      chat,
     ],
   );
+
+  const items = chatItems ?? transcriptRows ?? NONE_SHOWN;
 
   // A call opened on an answer its page carried cut reads it whole.
   const cuts = useMemo(() => openCuts(items), [items]);
@@ -977,8 +1004,25 @@ const AgentConversation = memo(function AgentConversation({
   const undeliveredActs = useRef<UndeliveredActs | undefined>(undefined);
 
   // A line of the member's the service refused, marked Not delivered where it went, with why and what mends it, as the panel keeps it.
+  const chatSending = chatPage?.sending;
+
   const undelivered = useCallback(
     (lineId: string): UndeliveredLine | undefined => {
+      // Note that a Manager's chat marks its messages the service refused by the key each went under, the host keeping the files each carried, so each is sent again whole.
+      if (chat) {
+        const sent = chatSending?.find((each) => each.clientKey === lineId);
+
+        return sent?.refused === undefined
+          ? undefined
+          : {
+              why: messageFailureWords(sent.refused.failure),
+              newThread: false,
+              onRetry: () => undeliveredActs.current?.retry(lineId),
+              onEdit: () => undeliveredActs.current?.edit(lineId),
+              onDelete: () => undeliveredActs.current?.drop(lineId),
+            };
+      }
+
       const line = sending?.find((each) => each.id === lineId);
 
       if (line?.refused === undefined) return undefined;
@@ -992,7 +1036,7 @@ const AgentConversation = memo(function AgentConversation({
         onDelete: () => undeliveredActs.current?.drop(lineId),
       };
     },
-    [sending],
+    [chat, chatSending, sending],
   );
 
   const composer = useMemo(
@@ -1004,8 +1048,12 @@ const AgentConversation = memo(function AgentConversation({
   );
 
   const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId ?? undefined);
-  const older = useOlderPages(id, transcript?.before);
-  const retry = useTranscriptRetry(id);
+  const transcriptOlder = useOlderPages(id, chat ? undefined : transcript?.before);
+  const chatOlder = useOlderChatPages(id, chat ? chatPage?.before : undefined);
+  const older = chat ? chatOlder : transcriptOlder;
+  const transcriptRetry = useTranscriptRetry(id);
+  const chatRetry = useManagerChatRetry(id);
+  const retry = chat ? chatRetry : transcriptRetry;
   const media = useAgentMedia(id, mediaIds);
 
   // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
@@ -1031,7 +1079,10 @@ const AgentConversation = memo(function AgentConversation({
       ? undefined
       : { kind: SEARCH_FOUND_KIND.AGENTS, id, workspaceId: shown.workspaceId },
   );
-  const failed = held?.failed === true || transcript?.failure !== undefined;
+
+  const failed = chat
+    ? chatHeld?.failed === true
+    : held?.failed === true || transcript?.failure !== undefined;
 
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
