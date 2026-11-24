@@ -26,6 +26,7 @@ import { jsonRoundTrip } from "@repo/wire";
 import { describeWire, emitJsonSchema } from "@repo/wire/effect";
 import {
   generateText,
+  type JSONSchema7,
   jsonSchema,
   type LanguageModel,
   NoObjectGeneratedError,
@@ -250,7 +251,8 @@ function askStructured<A>(
         system: ask.system,
         prompt: ask.prompt,
         output: Output.object({
-          schema: jsonSchema<unknown>(jsonRoundTrip(emitJsonSchema(ask.schema))),
+          // SAFETY: `emitJsonSchema` emits one JSON Schema object, so its plain-object form is the SDK's `JSONSchema7`, which `jsonRoundTrip`'s `WireValue` is wider than.
+          schema: jsonSchema<unknown>(jsonRoundTrip(emitJsonSchema(ask.schema)) as JSONSchema7),
         }),
         maxOutputTokens: ask.maxOutputTokens,
         providerOptions: {

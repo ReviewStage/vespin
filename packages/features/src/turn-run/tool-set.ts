@@ -6,7 +6,7 @@ import {
   type WireBoundaryInput,
 } from "@repo/wire";
 import { emitJsonSchema, readEither } from "@repo/wire/effect";
-import { jsonSchema, type Tool, tool } from "ai";
+import { type JSONSchema7, jsonSchema, type Tool, tool } from "ai";
 import { Result, type Schema } from "effect";
 
 /**
@@ -22,7 +22,8 @@ function validatedInput(schema: Schema.Codec<unknown, UnparsedWireValue>) {
   return jsonSchema<unknown>(
     // The wire schema's node is JSON Schema in the strict form a function tool takes; a
     // round trip is its plain-object form, which is what the SDK's schema type names.
-    jsonRoundTrip(emitJsonSchema(schema)),
+    // SAFETY: `emitJsonSchema` emits one JSON Schema object, so its plain-object form is the SDK's `JSONSchema7`, which `jsonRoundTrip`'s `WireValue` is wider than.
+    jsonRoundTrip(emitJsonSchema(schema)) as JSONSchema7,
     {
       validate: (value) => {
         // SAFETY: the SDK hands the part's input back as it was stored, which is JSON; the read is the validation.
