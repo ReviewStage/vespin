@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, which an iPad folds away rather than moving to the top, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import {
   IOS_TAB,
@@ -66,7 +66,7 @@ function useInboxListStands(segments: readonly string[]): boolean {
 }
 
 // Note that nothing here draws the bar: the system draws it in Liquid Glass
-// and minimizes it as a list scrolls down, and floats it at the top of a
+// and minimizes it as a list scrolls down, and, on iOS 26 alone, floats it at the top of a
 // portrait iPad. In a compact window its
 // tabs are icons alone, their labels hidden through NativeTabs' own `hidden`
 // and heard still as each tab's accessibility label; a regular window's
@@ -92,8 +92,11 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // The bar is `sidebarAdaptable` everywhere, as Apple's tab sidebar guidance
 // has it: folded, iOS 27 stands the Duo's tabs as a glass rail on the outer
 // display, unfolded the bar becomes a sidebar rail, and on an iPad the
-// system draws its own tab sidebar, shown or folded into the floating bar
-// by the window, its toggle, and the person. Each tab's root stands its own
+// system draws its own tab sidebar. Note that an iPad prefers the sidebar
+// (`preferredPlacement`, iOS 27), so hiding it folds it away rather than
+// moving the tabs into a floating bar over the page, which the developer ruled out
+// (Nov 23, 2026); its placement is read by the device's idiom, as the + is,
+// so nothing mounts again as the window turns or resizes. Each tab's root stands its own
 // list beside its detail in a regular window (`SplitView`), and Tasks keeps
 // Pinned, Following, and the member's sections as groups atop its list.
 // Tabs stay mounted across a fold, a rotation, or a resize, so each keeps
@@ -138,6 +141,7 @@ export default function TabsLayout() {
       hidden={iconOnly && (conversation || choosing)}
       minimizeBehavior="onScrollDown"
       sidebarAdaptable
+      {...(PLUS_TAB ? {} : { preferredPlacement: "sidebar" })}
       tintColor={colors.ACCENT}
       badgeBackgroundColor={colors.ATTENTION_FILL}
       badgeTextColor={colors.ON_ACCENT}
