@@ -168,6 +168,7 @@ import {
   SplitView,
   STATUS_MARK_SYMBOL,
   STATUS_TONE,
+  StackBarMenu,
   type StandingMenus,
   sectionEmoji,
   sectionGlyph,
@@ -215,7 +216,6 @@ import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
-import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 
@@ -3416,9 +3416,9 @@ function TasksStackList({
       <SettingsBarButton switcher={switcher} />
       {/* Note that View options stands at the bar's edge, as Mail's filter stands by its list, and New task's compose ends the bar, as Messages' and Mail's stand. */}
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={glyphSymbol(viewMenu.symbol)} accessibilityLabel={viewMenu.label}>
-          {stackMenuItems(viewMenu)}
-        </Stack.Toolbar.Menu>
+        <Stack.Toolbar.View>
+          <StackBarMenu menu={viewMenu} />
+        </Stack.Toolbar.View>
         {/* Note that Merge queue stands beside View options while the account has it on, as the desktop's sidebar offers its row, since a compact window has no sidebar; an iPad's sidebar offers its own row. */}
         {mergeQueueOn ? (
           <Stack.Toolbar.Button
@@ -3722,9 +3722,9 @@ export function TaskScreen() {
       <InlineBar chrome={chrome}>
         {menu === undefined || overview === undefined ? null : (
           <Stack.Toolbar placement="right">
-            <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-              {stackMenuItems(menu)}
-            </Stack.Toolbar.Menu>
+            <Stack.Toolbar.View>
+              <StackBarMenu menu={menu} />
+            </Stack.Toolbar.View>
             {/* Note that New agent stands as a glyph before ⋯, as a split view's detail bar stands a page's main act; it is written after ⋯ because a right bar's first item stands at its edge. */}
             <Stack.Toolbar.Button
               icon={glyphSymbol(GLYPH.AGENT)}

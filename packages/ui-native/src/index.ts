@@ -397,6 +397,7 @@ export {
   menuWithout,
   PATH_PART,
   SplitView,
+  StackBarMenu,
 } from "./split-view.js";
 
 export {

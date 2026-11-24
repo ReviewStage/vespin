@@ -46,6 +46,7 @@ import {
   RowForEach,
   RowList,
   Screen,
+  StackBarMenu,
   useMinute,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -77,7 +78,6 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
-import { stackMenuItems } from "../stack-bar-menu.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
@@ -200,9 +200,9 @@ export function AutomationsScreen() {
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-          {stackMenuItems(menu)}
-        </Stack.Toolbar.Menu>
+        <Stack.Toolbar.View>
+          <StackBarMenu menu={menu} />
+        </Stack.Toolbar.View>
         {/* Note that Runs stands beside View options, as the desktop's page stands its Runs tab beside the list, since every run's agent is found there. */}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.HISTORY)}

@@ -283,7 +283,12 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
   button is the chevron alone, and a column's ⋯ is its glyph alone
-  (`BarMenuItem`), never a menu's own button inside the bar's glass. One button leads every tab's root bar, as
+  (`BarMenuItem`), never a menu's own button inside the bar's glass. In a
+  compact window's stack, a bar's menu, such as View options or a page's ⋯,
+  is the same SwiftUI menu hosted as the bar's item (`StackBarMenu`), as the
+  switcher stands, so its choices lead with their own marks (a status's ring
+  in its tone, a person's photo), which UIKit's menu built from a symbol's
+  name drew as gray templates. One button leads every tab's root bar, as
   Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
   at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
   screen's title keeps its place beside it, as the App Store's photo does), whose menu, the
