@@ -14,8 +14,9 @@ import type { SettingRefusal } from "./row-write.js";
  *
  * The two grants macOS holds against the app, Screen Recording to see an
  * app's window and Accessibility to click and type in it, each say whether
- * they stand; one that does not offers Allow, which raises macOS's own
- * prompt, as only macOS may grant them. They are read again as the window
+ * they stand; one that does not offers Allow, which opens its System
+ * Settings pane beside a panel holding the app to drag into the list, as only
+ * macOS may grant them. They are read again as the window
  * comes back to the front, since the developer grants them in System
  * Settings. The switch that lets agents use apps, and the apps they use
  * without asking, stand under this Mac on Settings › Machines.
@@ -51,8 +52,8 @@ const COMPUTER_USE_GRANTS = [
 
 /**
  * The two grants as This Mac's Permissions lists them, each as every
- * permission reads (`PermissionRow`): Allow… raises macOS's own prompt or
- * pane for the first one still missing, read again as it answers and as the
+ * permission reads (`PermissionRow`): Allow… opens the pane, and the panel
+ * to drag the app from, for the first one still missing, read again as it answers and as the
  * window comes back to the front, and an ask that never reached macOS says
  * why under that row.
  */

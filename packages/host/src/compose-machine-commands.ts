@@ -1969,7 +1969,7 @@ export function composeMachineCommands(
       );
     };
 
-    /** macOS asked for the grants the Mac lacks, by its own prompts and the pane of the first missing; nothing where it has both. */
+    /** The pane of the first grant the Mac lacks opened, with the app to drag into its list; nothing where it has both. */
     const grantsAsked = Effect.flatMap(
       permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
       (granted) =>
@@ -2072,7 +2072,7 @@ export function composeMachineCommands(
       /** One app's icon, for a row of the @ list that names an app installed but not running. */
       COMPUTER_USE_APP_ICON: ({ app }) =>
         computer === undefined ? Effect.succeed({}) : appIcon(computer, app),
-      /** macOS asked for the grants it lacks, by its own prompts, and the grants as they stand once it was asked; refused where it could not be asked. */
+      /** The pane of the first grant it lacks opened, with the app to drag into its list, and the grants as they stand then; refused where the helper could not open it. */
       COMPUTER_USE_ASK_PERMISSIONS: permissionsAsked,
     };
 
