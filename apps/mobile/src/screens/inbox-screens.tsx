@@ -6,6 +6,10 @@ import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
   ANSWER_TONE,
+  holderName,
+  holderRepository,
+  holderTask,
+  holderWorkspaceId,
   INBOX_MEDIA,
   INBOX_NOT_READ,
   INBOX_READ_MARK,
@@ -14,6 +18,7 @@ import {
   INBOX_SHOW_EMPTY,
   INBOX_SHOW_LABEL,
   INBOX_WHOSE,
+  type InboxAnyHolder,
   type InboxCounts,
   type InboxListed,
   type InboxShow,
@@ -213,7 +218,7 @@ function askFileKind(mediaType: string) {
 
 type InboxRowsProps = {
   readonly look: ListLook;
-  readonly listed: readonly InboxListed[];
+  readonly listed: readonly InboxListed<InboxAnyHolder>[];
   readonly readerId: string | undefined;
   readonly selected?: string | undefined;
   readonly onSelect: (id: string) => void;
@@ -291,10 +296,13 @@ function InboxRows({
  */
 type InboxRowThread = {
   readonly item: InboxItem;
-  readonly taskId: string;
+  /** Its task, which its link names; none for a thread on no task, a Manager's, whose link names the thread alone. */
+  readonly taskId: string | undefined;
   readonly workspaceId: TaskSummary["workspaceId"];
+  /** What holds it: its task's name, or its agent's. */
   readonly taskName: string;
-  readonly taskStatus: TaskSummary["status"];
+  /** Its task's status, whose ring leads the name; none for an agent, named alone. */
+  readonly taskStatus: TaskSummary["status"] | undefined;
 };
 
 type InboxRowActs = {
@@ -317,7 +325,7 @@ type InboxRowActs = {
 export function InboxItemRows({
   listed,
   ...acts
-}: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
+}: InboxRowActs & { readonly listed: readonly InboxListed<InboxAnyHolder>[] }) {
   return (
     <RowForEach data={listed} keyOf={(each) => each.item.id}>
       {(each) => <InboxItemRow listed={each} {...acts} />}
@@ -325,21 +333,20 @@ export function InboxItemRows({
   );
 }
 
-/** One Inbox item's row, under its task, as every list of Inbox items draws it, Search's Recent among them, where it stands among other kinds' rows. */
+/** One Inbox item's row, under its task, or the agent on no task that posted it, a Manager, as every list of Inbox items draws it, Search's Recent among them, where it stands among other kinds' rows. */
 export function InboxItemRow({
-  listed: {
-    holder: { task },
-    item,
-  },
+  listed: { holder, item },
   ...acts
-}: InboxRowActs & { readonly listed: InboxListed }) {
+}: InboxRowActs & { readonly listed: InboxListed<InboxAnyHolder> }) {
+  const task = holderTask(holder);
+
   return (
     <InboxRow
       item={item}
-      taskId={task.id}
-      workspaceId={task.workspaceId}
-      taskName={task.name}
-      taskStatus={task.status}
+      taskId={task?.id}
+      workspaceId={holderWorkspaceId(holder)}
+      taskName={holderName(holder)}
+      taskStatus={task?.status}
       {...acts}
     />
   );
@@ -553,7 +560,7 @@ function scopeChoices(scopes: readonly Scope[]): BarMenu["choices"] {
 /** The Inbox's ⋯ menu: its scopes, the one shown checked, then Select, which turns the list to Select mode as Mail's menu does, and Mark all as read. */
 function moreMenu(
   scopes: readonly Scope[],
-  listed: readonly InboxListed[],
+  listed: readonly InboxListed<InboxAnyHolder>[],
   markAll: (items: readonly InboxItem[]) => void,
   select: { readonly listed: boolean; readonly onSelect: () => void },
 ): BarMenu {
@@ -721,14 +728,17 @@ function ThreadDetail({
   readerId,
   place,
 }: {
-  readonly listed: InboxListed;
+  readonly listed: InboxListed<InboxAnyHolder>;
   readonly readerId: string | undefined;
   readonly place: ThreadPlace;
 }) {
   const colors = useColors();
   const { holder, item } = listed;
+  // Note that a thread on no task, a Manager's, stands in its agent's workspace and names no task, as the panel's Inbox draws it under its agent alone.
+  const task = holderTask(holder);
+  const workspaceId = holderWorkspaceId(holder);
   // Note that a pull request a thread names opens in the app by its task's workspace.
-  const openLink = useOpenLink(holder.task.workspaceId);
+  const openLink = useOpenLink(workspaceId);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 
@@ -743,11 +753,11 @@ function ThreadDetail({
   const hostActs = useHostActs();
 
   // Note that the closers are named from the thread's own workspace's members, followed here, since a link may open a thread outside the workspace the phone works in.
-  useLiveFollow(holder.task.workspaceId, (id) =>
+  useLiveFollow(workspaceId, (id) =>
     hostActs[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId: id }),
   );
 
-  const memberFace = useMemberFaces(holder.task.workspaceId);
+  const memberFace = useMemberFaces(workspaceId);
 
   // What happened to the thread, its members named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
   const events = useMemo(
@@ -798,16 +808,11 @@ function ThreadDetail({
   );
 
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const { workspaceId } = holder.task;
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
 
   // A video the system's player cannot read opens with its thread on vespin.dev in Safari, which plays it.
   const openOnWeb = () => {
-    const place = {
-      kind: LINK_DESTINATION.INBOX_ITEM,
-      taskId: holder.task.id,
-      itemId: item.id,
-    } as const;
+    const place = { kind: LINK_DESTINATION.INBOX_ITEM, taskId: task?.id, itemId: item.id } as const;
 
     openInSafari(linkOf(place, workspaceStep));
   };
@@ -825,7 +830,7 @@ function ThreadDetail({
   useNoteOpened({
     kind: SEARCH_FOUND_KIND.INBOX,
     id: item.id,
-    workspaceId: holder.task.workspaceId,
+    workspaceId,
   });
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -874,7 +879,7 @@ function ThreadDetail({
     onCopyLink: () =>
       keeping.copyWords(
         linkOf(
-          { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
+          { kind: LINK_DESTINATION.INBOX_ITEM, taskId: task?.id, itemId: item.id },
           workspaceStep,
         ),
       ),
@@ -884,22 +889,27 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread on the stack it stands on, in any window, as the panel's crumbs open them, where the window stands a split view, the path heading the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
-  const pathActions = [
-    {
-      label: PATH_OPENS.TASK,
-      symbol: GLYPH.TASK,
-      onPress: () =>
-        router.push(
-          onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id })),
-        ),
-    },
-    {
-      label: PATH_OPENS.AGENT,
-      symbol: GLYPH.AGENT,
-      onPress: () => router.push(onOwnTab(iosAgentRoute(item.agentId))),
-    },
-  ] as const;
+  // Note that the path opens its task and its agent as pages pushed over the thread on the stack it stands on, in any window, as the panel's crumbs open them, where the window stands a split view, the path heading the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path. A thread on no task opens its agent alone.
+  const openAgent = {
+    label: PATH_OPENS.AGENT,
+    symbol: GLYPH.AGENT,
+    onPress: () => router.push(onOwnTab(iosAgentRoute(item.agentId))),
+  } as const;
+
+  const pathActions =
+    task === undefined
+      ? [openAgent]
+      : [
+          {
+            label: PATH_OPENS.TASK,
+            symbol: GLYPH.TASK,
+            onPress: () =>
+              router.push(
+                onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: task.id })),
+              ),
+          },
+          openAgent,
+        ];
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
@@ -996,24 +1006,24 @@ function ThreadDetail({
     };
   };
 
-  const path = [holder.task.name, agentName];
+  const path = task === undefined ? [holderName(holder)] : [task.name, agentName];
 
   // A chip's pull request in the thread is read through its task's own workspace, as the panel's Inbox reads it.
   const linkStanding = useLinkStandings(
     messageWords,
-    holder.task.repository,
+    holderRepository(holder),
     workspaces.find((each) => each.id === workspaceId),
   );
 
   const page = (
     <ThreadPage
       path={path}
-      status={holder.task.status}
+      status={task?.status}
       pathActions={pathActions}
       title={cardTitle(item.title)}
       messages={drawn}
       opening={events.get(-1)}
-      repository={holder.task.repository}
+      repository={holderRepository(holder)}
       onOpenLink={openLink}
       pictureSource={pictureSource}
       onRetryPicture={retryPicture}
@@ -1054,7 +1064,7 @@ function ThreadDetail({
                 item={item}
                 answer={answer}
                 agentName={agentName}
-                place={{ workspaceId: holder.task.workspaceId, taskId: holder.task.id }}
+                place={{ workspaceId, taskId: task?.id }}
                 inColumn
               />
             ),
@@ -1118,7 +1128,7 @@ function ThreadDetail({
             item={item}
             answer={answer}
             agentName={agentName}
-            place={{ workspaceId: holder.task.workspaceId, taskId: holder.task.id }}
+            place={{ workspaceId, taskId: task?.id }}
           />
         }
       >

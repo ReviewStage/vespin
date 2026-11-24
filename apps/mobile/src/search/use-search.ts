@@ -12,7 +12,7 @@
  * into that list, so a finished or older task is found here too.
  */
 
-import { INBOX_SHOW, type InboxListed } from "@repo/features/inbox-list-model";
+import { INBOX_SHOW, type InboxAnyHolder, type InboxListed } from "@repo/features/inbox-list-model";
 import {
   agentSearchSubject,
   inboxSearchSubject,
@@ -61,7 +61,7 @@ function selectListStatus(state: AppStateSnapshot): TasksRead {
 /** What a query finds: each kind's rows best first, the Tasks listing their rows are drawn and acted on through, and the reader the Inbox's rows are read for. */
 export interface SearchFound {
   readonly tasks: readonly TaskSummary[];
-  readonly inbox: readonly InboxListed[];
+  readonly inbox: readonly InboxListed<InboxAnyHolder>[];
   readonly agents: readonly TaskAgentLine[];
   readonly listing: ReadListing;
   readonly readerId: string | undefined;
@@ -159,7 +159,7 @@ export function useSearchFound(typed: string): SearchFound {
 }
 
 /** A row Search's Recent lists: a task, an Inbox thread, or an agent's line. */
-export type SearchRecentRow = RecentRow<TaskSummary, InboxListed, TaskAgentLine>;
+export type SearchRecentRow = RecentRow<TaskSummary, InboxListed<InboxAnyHolder>, TaskAgentLine>;
 
 /** What Search lists before anything is typed: the chosen workspace's openings its lists still hold, newest first, and what their rows are drawn and acted on through. */
 export interface SearchRecent {

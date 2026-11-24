@@ -14,7 +14,7 @@
  * and a link the app draws no screen for opens in Safari.
  */
 
-import type { InboxGroup } from "@repo/features/inbox-list-model";
+import type { InboxAnyHolder, InboxGroup } from "@repo/features/inbox-list-model";
 import {
   type ContinuedActivity,
   type IosActivity,
@@ -85,7 +85,7 @@ export function useScreenActivity(
 interface SpotlightReads {
   readonly workspace: Workspace | undefined;
   readonly tasks: readonly SpotlightTask[];
-  readonly groups: readonly InboxGroup[];
+  readonly groups: readonly InboxGroup<InboxAnyHolder>[];
   readonly readerId: string | undefined;
 }
 

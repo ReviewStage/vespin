@@ -5,10 +5,12 @@
  * (`@repo/host/app-state-reads`' `selectInboxHoldings`), and the tasks
  * themselves the task list's collections', each read by its id
  * (`useTaskListRowsOf`), so the grouping reads no list of the document's
- * own, and none of the account's other tasks.
+ * own, and none of the account's other tasks. A thread on no task, a
+ * Manager's, is grouped under the agent that posted it, read from the
+ * list's agents by its id the same way, as the panel's Inbox lists it.
  */
 
-import type { InboxGroup } from "@repo/features/inbox-list-model";
+import type { InboxAnyHolder, InboxGroup } from "@repo/features/inbox-list-model";
 import { inboxGroupsIn, selectInboxHoldings } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
@@ -17,7 +19,7 @@ import { useTaskListCollections, useTaskListRowsOf } from "../host/host-provider
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 
 /** No holder grouped: what a read before the document lands answers. */
-const NO_GROUPS: readonly InboxGroup[] = [];
+const NO_GROUPS: readonly InboxGroup<InboxAnyHolder>[] = [];
 
 /** No task holds items: what a read before the document lands names. */
 const NO_HOLDERS: readonly string[] = [];
@@ -29,17 +31,25 @@ const NO_HOLDERS: readonly string[] = [];
  * the document lands. Grouped again only as the feed, what holds items, or
  * a task holding items moves.
  */
-export function useInboxGroupsIn(workspaceId: string | undefined): readonly InboxGroup[] {
+export function useInboxGroupsIn(
+  workspaceId: string | undefined,
+): readonly InboxGroup<InboxAnyHolder>[] {
   const { data: holdings } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
-  const { tasks } = useTaskListCollections();
+  const { tasks, agents } = useTaskListCollections();
 
   const holders = useMemo(
     () => holdings?.tasks.map(({ taskId }) => taskId) ?? NO_HOLDERS,
     [holdings],
   );
 
+  const agentHolders = useMemo(
+    () => (holdings === undefined ? NO_HOLDERS : Object.keys(holdings.agents)),
+    [holdings],
+  );
+
   // Note that only the tasks holding items are read, which is all the grouping looks up, so a task that holds none moving, as a working agent's turn moves its task, groups nothing again.
   const listed = useTaskListRowsOf(tasks, holders);
+  const listedAgents = useTaskListRowsOf(agents, agentHolders);
   const read = holdings !== undefined;
 
   // Note that the launch notes when a screen first grouped the Inbox, so `app:ready` says how much of its wait came after.
@@ -48,7 +58,10 @@ export function useInboxGroupsIn(workspaceId: string | undefined): readonly Inbo
   }, [read]);
 
   return useMemo(
-    () => (holdings === undefined ? NO_GROUPS : inboxGroupsIn(holdings, listed, workspaceId)),
-    [holdings, listed, workspaceId],
+    () =>
+      holdings === undefined
+        ? NO_GROUPS
+        : inboxGroupsIn(holdings, listed, workspaceId, listedAgents),
+    [holdings, listed, workspaceId, listedAgents],
   );
 }

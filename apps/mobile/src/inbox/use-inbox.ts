@@ -19,6 +19,7 @@ import { base64PictureSize, type ImageDimensions } from "@repo/features/image-si
 import {
   INBOX_MEDIA,
   INBOX_SHOW,
+  type InboxAnyHolder,
   type InboxCounts,
   type InboxGroup,
   type InboxListed,
@@ -110,7 +111,7 @@ const CLOSE_WENT = {
 } as const;
 
 type UseChosenInboxResult = {
-  readonly groups: readonly InboxGroup[];
+  readonly groups: readonly InboxGroup<InboxAnyHolder>[];
   readonly chosen: Workspace | undefined;
   readonly workspaces: number;
 };
@@ -132,7 +133,7 @@ export function useChosenInbox(): UseChosenInboxResult {
 }
 
 /** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`). */
-function useInboxGroups(): readonly InboxGroup[] {
+function useInboxGroups(): readonly InboxGroup<InboxAnyHolder>[] {
   return useChosenInbox().groups;
 }
 
@@ -162,7 +163,7 @@ export function useInboxScope(): UseInboxScopeResult {
 
 /** What the Inbox lists: its rows in the list's order, what each scope counts, whether any row is unread, the reader they were read for, and where the feed they come from stands. */
 export interface InboxListing {
-  readonly listed: readonly InboxListed[];
+  readonly listed: readonly InboxListed<InboxAnyHolder>[];
   readonly feed: InboxFeed;
   readonly counts: InboxCounts;
   readonly readerId: string | undefined;
@@ -292,7 +293,7 @@ export function useInboxBadge(): number {
 }
 
 type UseInboxThreadResult = {
-  readonly listed: InboxListed | undefined;
+  readonly listed: InboxListed<InboxAnyHolder> | undefined;
   readonly readerId: string | undefined;
   readonly feed: InboxFeed;
   /** Reads again what the thread waits on where it failed: where it stands, its task's own inbox, or the feed and the task list. */
@@ -389,11 +390,11 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 /** The thread `id` names among `groups`, with what holds it; none where none holds it. */
 function listedIn(
   groups: readonly {
-    readonly holder: InboxListed["holder"];
+    readonly holder: InboxListed<InboxAnyHolder>["holder"];
     readonly items: readonly InboxItem[];
   }[],
   id: string | undefined,
-): InboxListed | undefined {
+): InboxListed<InboxAnyHolder> | undefined {
   for (const { holder, items } of groups) {
     const item = items.find((each) => each.id === id);
 
@@ -462,13 +463,13 @@ function useItemHome(id: string | undefined, asked: boolean): ItemHome {
 
 /** A task's own inbox as one group, where its read stands, and how to read it again. */
 interface HomeGroups {
-  readonly groups: readonly InboxGroup[];
+  readonly groups: readonly InboxGroup<InboxAnyHolder>[];
   readonly read: InboxFeed;
   readonly again: () => void;
 }
 
 /** No group of a task's own inbox. */
-const NO_HOME_GROUPS: readonly InboxGroup[] = [];
+const NO_HOME_GROUPS: readonly InboxGroup<InboxAnyHolder>[] = [];
 
 /**
  * The inbox of the task `taskId` names, followed while it is named, as one
@@ -837,7 +838,7 @@ export function useInboxActs(): {
  * nothing. Its notifications still shown are removed as it opens, read or
  * not, since the thread is on screen.
  */
-export function useReadOnOpen(listed: InboxListed | undefined): void {
+export function useReadOnOpen(listed: InboxListed<InboxAnyHolder> | undefined): void {
   const acts = useHostActs();
   const id = listed?.item.id;
   const unread = listed !== undefined && isUnread(listed.item);

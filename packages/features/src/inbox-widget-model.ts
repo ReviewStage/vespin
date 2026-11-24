@@ -19,7 +19,9 @@
 
 import { Schema as EffectSchema, Option } from "effect";
 import {
+  holderName,
   INBOX_LINE,
+  type InboxAnyHolder,
   type InboxGroup,
   inboxAtNow,
   inboxLineKind,
@@ -87,7 +89,7 @@ const readSnapshotJson = EffectSchema.decodeUnknownOption(snapshotJsonSchema);
 export interface InboxWidgetSource {
   readonly workspace: string;
   readonly workspaces: number;
-  readonly groups: readonly InboxGroup[];
+  readonly groups: readonly InboxGroup<InboxAnyHolder>[];
   readonly readerId: string | undefined;
   readonly now: number;
 }
@@ -113,7 +115,7 @@ export function inboxWidgetSnapshot(source: InboxWidgetSource): InboxWidgetSnaps
   const rows = waiting.slice(0, INBOX_WIDGET_BOUNDS.MAX_ROWS).map(({ holder, item }) => ({
     id: item.id,
     title: clipped(cardTitle(item.title)),
-    task: clipped(holder.task.name),
+    task: clipped(holderName(holder)),
     ...rowAsk(inboxLineKind(item)),
   }));
 

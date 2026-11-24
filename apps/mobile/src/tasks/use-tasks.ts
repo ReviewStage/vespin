@@ -10,7 +10,7 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
-import { waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import { holderTask, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { LINK_DESTINATION, taskNumberOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
@@ -163,7 +163,10 @@ export function useWaiting(workspaceId: string | undefined): {
 
       for (const item of waiting) byAgent.set(item.agentId, (byAgent.get(item.agentId) ?? 0) + 1);
 
-      if (waiting.length > 0) byTask.set(holder.task.id, waiting.length);
+      const task = holderTask(holder);
+
+      // Note that a Manager's threads, on no task, count toward their agent alone.
+      if (waiting.length > 0 && task !== undefined) byTask.set(task.id, waiting.length);
     }
 
     return { byTask, byAgent };

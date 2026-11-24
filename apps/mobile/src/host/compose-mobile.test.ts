@@ -111,7 +111,12 @@ const inboxGroupsOver = (bridge: Parameters<typeof followAppStateInto>[0]) =>
 
     return state === undefined
       ? []
-      : inboxGroupsIn(selectInboxHoldings(state), following.taskList.tasks.toArray, undefined);
+      : inboxGroupsIn(
+          selectInboxHoldings(state),
+          following.taskList.tasks.toArray,
+          undefined,
+          following.taskList.agents.toArray,
+        );
   });
 
 /** A folder of this test's own for the host's files, gone with the scope. */

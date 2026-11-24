@@ -50,6 +50,8 @@ import {
 import {
   acknowledgedOnOpen,
   awaitsNod,
+  holderTask,
+  type InboxAnyHolder,
   type InboxListed,
   knownAsk,
 } from "@repo/features/inbox-list-model";
@@ -497,7 +499,7 @@ const starting = new Set<string>();
  * to send.
  */
 export function useThreadAnswer(
-  listed: InboxListed,
+  listed: InboxListed<InboxAnyHolder>,
   readerId: string | undefined,
   onStarted?: (itemId: string) => void,
 ): ThreadAnswer {
@@ -566,7 +568,7 @@ export function useThreadAnswer(
 
     const line = {
       key,
-      taskId: listed.holder.task.id,
+      taskId: holderTask(listed.holder)?.id ?? null,
       itemId,
       text: sent.text,
       attachments: sent.attachments,
@@ -776,7 +778,7 @@ export function useThreadAnswer(
           if (readerId === undefined) return;
           keepUndelivered(readerId, {
             key,
-            taskId: listed.holder.task.id,
+            taskId: holderTask(listed.holder)?.id ?? null,
             itemId,
             text,
             attachments,
