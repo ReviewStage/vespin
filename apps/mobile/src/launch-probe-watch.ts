@@ -5,7 +5,7 @@ import { TurboModuleRegistry } from "react-native";
 import { probe } from "./launch-probe.js";
 
 /** How long after the bundle's start the watch keeps its entries and the profile runs: past the first ten seconds after the first frame. */
-const WATCH_MS = 22_000;
+const WATCH_MS = 40_000;
 
 type Entry = { readonly name: string; readonly startTime: number; readonly duration: number };
 
@@ -136,7 +136,7 @@ function profileAgain(): void {
 // Note that the mark runs after the profile starts, once the bundle's own evaluation is done.
 setTimeout(probeClockMark, 50);
 setTimeout(() => written("launch-watch.json", "launch-profile.json"), WATCH_MS);
-// Note that a minute in, a second profile runs for ten seconds, and the long tasks and events are kept to 76 s.
-setTimeout(profileAgain, 55_000);
+// Note that the first profile runs to 40 s, past a Tasks tap and its paint; a second runs from 45 to 65 s, and the long tasks and events are kept to 76 s.
+setTimeout(profileAgain, 45_000);
 setTimeout(() => written("launch-watch-65.json", "launch-profile-60.json"), 65_000);
 setTimeout(() => written("launch-watch-76.json", "launch-profile-unused.json"), 76_000);
