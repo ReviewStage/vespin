@@ -338,7 +338,11 @@ function Face({
     case ACTOR_KIND.AGENT:
       // A Manager wears its own face, as its row and its chat do, rather than its harness's mark.
       return actor.face !== undefined ? (
-        <ManagerFace face={actor.face} size={MANAGER_FACE_OF_SIZE[size]} />
+        <ManagerFace
+          face={actor.face}
+          size={MANAGER_FACE_OF_SIZE[size]}
+          working={actor.state === ACTOR_STATE.WORKING}
+        />
       ) : (
         <GlyphSquare
           name={actorName(actor)}
@@ -418,6 +422,18 @@ export function commentAuthor(actor: Actor): CommentAuthor {
             state={GLYPH_OF_STATE[actor.state]}
           />
         ),
+        // A Manager's comment stands its own face, livelier while it works, where another agent's stands its square.
+        ...(actor.face === undefined
+          ? undefined
+          : {
+              face: (
+                <ManagerFace
+                  face={actor.face}
+                  size={MANAGER_FACE_SIZE.ROW}
+                  working={actor.state === ACTOR_STATE.WORKING}
+                />
+              ),
+            }),
       };
     case ACTOR_KIND.AUTOMATION:
       return {
@@ -538,7 +554,7 @@ export function ActorMark({
 /**
  * An actor as a chip's glyph: an agent's mark or an automation's alone,
  * wearing where its work stands, at the size of every glyph beside it in the
- * line; anyone else as their mark (`ActorMark`). Note that an agent and an
+ * line, a Manager by its face; anyone else as their mark (`ActorMark`). Note that an agent and an
  * automation stand bare here rather than on their square, because a bare
  * square draws no ground of its own and only shrinks its glyph to its share,
  * which reads in a chip as a glyph too small and set off from its name.
@@ -546,7 +562,14 @@ export function ActorMark({
 export function ActorGlyph({ actor }: { actor: Actor }): React.JSX.Element {
   switch (actor.kind) {
     case ACTOR_KIND.AGENT:
-      return (
+      // A Manager wears its face among the words, livelier while it works, as its mention's chip does.
+      return actor.face !== undefined ? (
+        <ManagerFace
+          face={actor.face}
+          size={MANAGER_FACE_SIZE.WORDS}
+          working={actor.state === ACTOR_STATE.WORKING}
+        />
+      ) : (
         <StateGlyph
           glyph={<AgentMark provider={actor.provider} />}
           state={GLYPH_OF_STATE[actor.state]}

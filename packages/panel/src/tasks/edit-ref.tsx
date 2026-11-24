@@ -102,7 +102,11 @@ function writerOf(edit: DescriptionLastEdit, place: EditPlace): Actor | undefine
   const found: EditAgent | undefined =
     agent === undefined
       ? undefined
-      : { provider: providerOf(agent.model), state: ACTOR_OF_GLYPH[agentGlyphState(agent.status)] };
+      : {
+          provider: providerOf(agent.model),
+          state: ACTOR_OF_GLYPH[agentGlyphState(agent.status)],
+          ...(agent.face === undefined ? undefined : { face: agent.face }),
+        };
 
   return editActor(edit, place.reader, found);
 }
