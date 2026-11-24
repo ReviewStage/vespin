@@ -1334,6 +1334,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             });
 
             yield* connectPlan(ask, owner);
+            const [plan] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+            assert.ok(plan, "the plan is connected");
             yield* TestClock.adjust("5 minutes");
             const now = new Date(yield* Clock.currentTimeMillis);
             // A turn that met the limit before Codex reported a reset names none, so no reset lifts it.
@@ -1345,6 +1347,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
               undefined,
               now,
               now,
+              plan.id,
             );
 
             return keysOf(yield* ask(request(owner))).subscriptions?.[0]?.status;
