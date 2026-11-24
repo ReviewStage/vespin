@@ -1,0 +1,10 @@
+== bundle PJj10664 base c4c80c1508
+  built c4c80c1508 base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-managers: fails 0 shots 7 
+ipad27-light-managers: fails 0 shots 7 
+iphone-dark-managers: fails 0 shots 7 
+ipad27-dark-managers: fails 0 shots 7 

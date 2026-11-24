@@ -1,0 +1,80 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow .kbd-managers
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Managers" is visible... COMPLETED
+Assert that "Release manager" is visible... COMPLETED
+Assert that "Pinned" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot managers-list... COMPLETED
+Tap on "New Manager"... COMPLETED
+Assert that "Repositories" is visible... COMPLETED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text Launch captain... COMPLETED
+Scrolling DOWN until "Machine" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot managers-new... COMPLETED
+Tap on "Cancel"... COMPLETED
+Assert that "Release manager" is visible... COMPLETED
+Tap on "Release manager"... COMPLETED
+Assert that "Left before it ships.*" is visible... COMPLETED
+Assert that "On it. The invitations agent has its pull request open.*" is visible... COMPLETED
+Assert that "Reading the invitations task before I answer." is not visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot managers-chat... COMPLETED
+Tap on "More"... COMPLETED
+Tap on "Settings…"... COMPLETED
+Assert that "Fixed once the Manager is made." is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot managers-settings... COMPLETED
+Tap on "Pink planet"... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot managers-settings-face... COMPLETED
+Tap on "Cancel"... COMPLETED
+Tap on "Overview"... COMPLETED
+Assert that "At a glance" is visible... COMPLETED
+Assert that "2 agents working.*" is visible... COMPLETED
+Assert that "Build teammate invitations" is visible... COMPLETED
+Scrolling DOWN until "Invite a teammate by email" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot managers-overview... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... SKIPPED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Run flow when "Search Vespin" is not visible...
+Run flow when "Search Vespin" is not visible... SKIPPED
+Tap on "Search Vespin"... COMPLETED
+Input text release manager... COMPLETED
+Assert that "Release manager" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot managers-search... COMPLETED
