@@ -91,9 +91,10 @@ builds a control of its own.
   opening the thread it names), its pull request ("#128", opening its
   page), and its queue ("2 queued", opening its `QueuedLines`, with Steer
   and Delete, under the row, held open while one is edited), the row
-  scrolling sideways where it outruns the column and stepping aside while
-  a `/` offers its list; over it all floats the `MentionSuggestions` an
-  `@` offers, in a glass of its own (`Composer`'s `float`, `BarFloat`), as
+  scrolling sideways where it outruns the column; over it all floats the
+  `SkillSuggestions` a `/` offers or the `MentionSuggestions` an `@`
+  offers, the one list a composer floats (`SuggestionPanel`), in a glass
+  of its own (`Composer`'s `float`, `BarFloat`), as
   Messages and Slack float theirs, covering the page's foot and the row of
   capsules, which keeps its room under it, so nothing under it moves as
   the list comes, goes or filters (the panel's groups and words, each row
@@ -101,8 +102,8 @@ builds a control of its own.
   listing Suggested then Browse, a row per kind with iOS's chevron, and a
   list narrowed to one kind, `@people:`, standing under its crumb, whose ‹
   widens it, its rows scrolling inside it past the room over the keyboard,
-  `useFloatRoom`); and its head, inside the same glass, holds the
-  `SkillSuggestions` a `/` offers, its `AttachedPictures`, an `EditingLine` with Cancel while the field
+  `useFloatRoom`); and its head, inside the same glass, holds its
+  `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
   taking the keyboard through `focusAsk`), an `AskNote`, and an agent's
   `ContinueLine` (why its turn failed and Continue in new agent, where only a

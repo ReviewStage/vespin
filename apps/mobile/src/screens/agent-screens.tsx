@@ -458,26 +458,20 @@ function AgentComposerBar({
   useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
   // Note that a message sent now denies the calls waiting only where Send would not queue it behind the turn.
   const denies = waiting !== undefined && !composer.sendQueues;
-  // Note that while a `/` offers its list, the row of capsules over the composer steps aside, so the list stands alone over the field, as Messages' and Slack's suggestions do, and comes back once a pick closes it; what an `@` offers floats over the row instead, which keeps its room under it, so nothing moves.
-  const picking = composer.skills !== undefined;
 
-  const dock = useAgentDock(
-    {
-      composer,
-      approvals,
-      denies,
-      onShowWaiting,
-      threads,
-      pullRequest,
-      onOpenPullRequest,
-      apps,
-    },
-    picking,
-  );
+  const dock = useAgentDock({
+    composer,
+    approvals,
+    denies,
+    onShowWaiting,
+    threads,
+    pullRequest,
+    onOpenPullRequest,
+    apps,
+  });
 
   const head =
     composer.cancelMessageEdit === undefined &&
-    composer.skills === undefined &&
     otherCall === undefined &&
     ending === undefined &&
     note === undefined ? undefined : (
@@ -485,13 +479,6 @@ function AgentComposerBar({
         {ending}
         {otherCall === undefined ? null : (
           <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
-        )}
-        {composer.skills === undefined ? null : (
-          <SkillSuggestions
-            skills={composer.skills.skills}
-            empty={composer.skills.empty}
-            onPick={composer.skills.pick}
-          />
         )}
         {composer.cancelMessageEdit === undefined ? null : (
           <EditingLine onCancel={composer.cancelMessageEdit} />
@@ -517,8 +504,15 @@ function AgentComposerBar({
     call,
     head,
     above: dock ?? undefined,
+    // Note that what a `/` or an `@` offers floats over the composer and the row of capsules, which keeps its room under it, so nothing moves as the list comes, goes or filters.
     float:
-      composer.mentions === undefined ? undefined : (
+      composer.skills !== undefined ? (
+        <SkillSuggestions
+          skills={composer.skills.skills}
+          empty={composer.skills.empty}
+          onPick={composer.skills.pick}
+        />
+      ) : composer.mentions === undefined ? undefined : (
         <MentionSuggestions
           groups={composer.mentions.groups}
           empty={composer.mentions.empty}

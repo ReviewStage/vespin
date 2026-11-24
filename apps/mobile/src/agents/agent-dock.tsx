@@ -216,11 +216,11 @@ function queueChip(
  * its pull request, its queue), and the
  * one a press opened in place standing under the row: the queue's messages
  * with Steer and Delete, or the banner of a call no row draws. A message
- * being edited holds the queue open, so its Cancel stays in reach. Note that
- * the row steps aside while a `/` or an `@` offers its list, so the list
- * stands alone over the field, and that nothing stands while nothing waits.
+ * being edited holds the queue open, so its Cancel stays in reach. Note
+ * that nothing stands while nothing waits, and that the list a `/` or an
+ * `@` offers floats over the row, which keeps its room under it.
  */
-export function useAgentDock(reading: AgentDockReading, picking: boolean): ReactNode {
+export function useAgentDock(reading: AgentDockReading): ReactNode {
   const [open, setOpen] = useState<Opens | undefined>(undefined);
   const toggle = (opens: Opens) => setOpen((was) => (was === opens ? undefined : opens));
   const { composer, approvals } = reading;
@@ -254,7 +254,5 @@ export function useAgentDock(reading: AgentDockReading, picking: boolean): React
     </DockPanel>
   );
 
-  if (picking && opened === undefined) return undefined;
-
-  return <DockChips chips={picking ? [] : chips} opened={opened} />;
+  return <DockChips chips={chips} opened={opened} />;
 }

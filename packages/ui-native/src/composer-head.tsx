@@ -13,6 +13,7 @@ import {
   lineLimit,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
 import { useFloatRoom } from "./glass-bar.js";
@@ -175,9 +176,6 @@ export type SkillSuggestion = {
   readonly word: string;
   readonly detail: string;
 };
-
-/** The most suggestions the head stands at once before it scrolls them, so the field stays in sight over the keyboard. */
-const SUGGESTIONS_SHOWN = 4;
 
 /** How tall one suggestion stands at least, in points: a list row's, as iOS's rows stand. */
 const SUGGESTION_HEIGHT = PRESS_SIZE;
@@ -390,11 +388,65 @@ export type MentionSuggestionGroup = {
   readonly rows: readonly MentionSuggestion[];
 };
 
-/** How far what an `@` offers stands in from its float's edges, where the bar's field stands its words. */
-const MENTION_INSET = { horizontal: SPACE.ROW + 2 } as const;
+/** How far a float's list stands in from its glass's edges, where the bar's field stands its words. */
+const SUGGESTION_INSET = { horizontal: SPACE.ROW + 2 } as const;
 
 /** How far apart the groups an `@` offers stand, as a grouped list's sections stand apart, their headings over them. */
 const MENTION_GROUP_GAP = SPACE.ROW;
+
+/**
+ * The one list a composer floats over its field, whatever it offers (a
+ * `/`'s skills, an `@`'s mentions): what heads it standing still, such as
+ * a narrowed list's crumb, over its rows, or over what stands where there
+ * are none in the muted ink. Note that its rows stand in one scroll whose
+ * frame caps it at the room over the keyboard (`useFloatRoom`) and whose
+ * fixed size stands it as tall as its rows below that, in SwiftUI's own
+ * layout, so a short list hugs its rows and a long one scrolls, the float
+ * shrinking and growing in the frame the words land in, never a frame
+ * later, and never swapped for a view of another kind, which drew every
+ * row anew; a drag over it scrolls the rows and leaves the keyboard
+ * standing, as Messages' suggestions do.
+ */
+function SuggestionPanel({
+  head,
+  empty,
+  children,
+}: {
+  readonly head?: ReactNode;
+  /** What stands in the rows' place, such as no result matching; the rows stand where none is given. */
+  readonly empty: string | undefined;
+  readonly children: ReactNode;
+}) {
+  const colors = useColors();
+  const room = useFloatRoom();
+
+  return (
+    <VStack alignment="leading" spacing={0} modifiers={[SwiftModifiers.padding(SUGGESTION_INSET)]}>
+      {head}
+      {empty === undefined ? (
+        <ScrollView
+          modifiers={[
+            SwiftModifiers.scrollDismissesKeyboard("never"),
+            frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: room, alignment: "topLeading" }),
+            SwiftModifiers.fixedSize({ horizontal: false, vertical: true }),
+          ]}
+        >
+          {children}
+        </ScrollView>
+      ) : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            frame({ minHeight: SUGGESTION_HEIGHT, alignment: "leading" }),
+          ]}
+        >
+          {empty}
+        </Text>
+      )}
+    </VStack>
+  );
+}
 
 /**
  * What an `@` being typed offers, as the panel's mention picker groups it:
@@ -405,13 +457,9 @@ const MENTION_GROUP_GAP = SPACE.ROW;
  * address and a task's key under the name, and the row picked written into
  * the message; what stands where nothing matches said in the muted ink. It
  * floats over the composer in a glass of its own (`BarFloat`), as Messages,
- * Slack and the panel's popover float theirs, its crumb standing still
- * over rows that scroll inside it once they would stand taller than the
- * room over the keyboard leaves (`useFloatRoom`). Note that the scroll
- * stands as tall as its rows up to that room, in SwiftUI's own layout, so
- * the float shrinks and grows with the words typed in the frame they land
- * in, never a frame later, and is never swapped for a view of another kind,
- * which drew every row anew.
+ * Slack and the panel's popover float theirs, in the one list a composer
+ * floats (`SuggestionPanel`), a narrowed list's crumb standing still over
+ * its rows.
  */
 export function MentionSuggestions({
   groups,
@@ -427,23 +475,12 @@ export function MentionSuggestions({
   readonly onPick: (group: string, id: string) => void;
 }) {
   const colors = useColors();
-  const room = useFloatRoom();
   const head = crumb === undefined ? null : <MentionCrumbRow crumb={crumb} />;
 
-  const rows =
-    groups.length === 0 ? (
-      empty === undefined ? null : (
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE }),
-            foregroundStyle(colors.TEXT_MUTED),
-            frame({ minHeight: SUGGESTION_HEIGHT, alignment: "leading" }),
-          ]}
-        >
-          {empty}
-        </Text>
-      )
-    ) : (
+  if (groups.length === 0 && empty === undefined) return head;
+
+  return (
+    <SuggestionPanel head={head} empty={groups.length === 0 ? empty : undefined}>
       <VStack alignment="leading" spacing={MENTION_GROUP_GAP}>
         {groups.map((group) => (
           <VStack key={group.title} alignment="leading" spacing={0}>
@@ -474,34 +511,17 @@ export function MentionSuggestions({
           </VStack>
         ))}
       </VStack>
-    );
-
-  // Note that the scroll's frame caps it at the room and its fixed size stands it as tall as its rows below that, so a short list hugs its rows and a long one scrolls; a drag over it scrolls the rows and leaves the keyboard standing, as Messages' suggestions do.
-  return (
-    <VStack alignment="leading" spacing={0} modifiers={[SwiftModifiers.padding(MENTION_INSET)]}>
-      {head}
-      {rows === null ? null : (
-        <ScrollView
-          modifiers={[
-            SwiftModifiers.scrollDismissesKeyboard("never"),
-            frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: room, alignment: "topLeading" }),
-            SwiftModifiers.fixedSize({ horizontal: false, vertical: true }),
-          ]}
-        >
-          {rows}
-        </ScrollView>
-      )}
-    </VStack>
+    </SuggestionPanel>
   );
 }
 
 /**
- * The skills a `/` being typed offers, as a list over the field inside the
- * composer's glass, right above the keyboard, as Messages offers its
- * suggestions: each its `/name` and a muted line of what it is for, written
- * into the message on a press; what stands in their place where there are
- * none, such as why they could not be read, said in the muted ink. It
- * scrolls past a few, so the field stays in sight.
+ * The skills a `/` being typed offers, floating over the composer as what
+ * an `@` offers floats (`SuggestionPanel`), as Messages offers its
+ * suggestions: each its `/name` and a muted line of what it is for,
+ * written into the message on a press; what stands in their place where
+ * there are none, such as why they could not be read, said in the muted
+ * ink. Its rows scroll inside it past the room over the keyboard.
  */
 export function SkillSuggestions({
   skills,
@@ -513,42 +533,22 @@ export function SkillSuggestions({
   readonly empty: string | undefined;
   readonly onPick: (name: string) => void;
 }) {
-  const colors = useColors();
-  // Note that at an accessibility size the list stands whole, since four rows of a fixed height showed about two.
-  const large = useAccessibilitySize();
-
-  if (skills.length === 0) {
-    if (empty === undefined) return null;
-
-    return (
-      <Text
-        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-      >
-        {empty}
-      </Text>
-    );
-  }
-
-  const rows = (
-    <VStack alignment="leading" spacing={0}>
-      {skills.map((skill) => (
-        <SuggestionRow
-          key={skill.name}
-          glyph={GLYPH.SKILL}
-          title={skill.word}
-          detail={skill.detail}
-          onPress={() => onPick(skill.name)}
-        />
-      ))}
-    </VStack>
-  );
-
-  if (large || skills.length <= SUGGESTIONS_SHOWN) return rows;
+  if (skills.length === 0 && empty === undefined) return null;
 
   return (
-    <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
-      {rows}
-    </ScrollView>
+    <SuggestionPanel empty={skills.length === 0 ? empty : undefined}>
+      <VStack alignment="leading" spacing={0}>
+        {skills.map((skill) => (
+          <SuggestionRow
+            key={skill.name}
+            glyph={GLYPH.SKILL}
+            title={skill.word}
+            detail={skill.detail}
+            onPress={() => onPick(skill.name)}
+          />
+        ))}
+      </VStack>
+    </SuggestionPanel>
   );
 }
 
