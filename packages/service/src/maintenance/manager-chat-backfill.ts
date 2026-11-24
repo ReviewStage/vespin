@@ -160,11 +160,15 @@ function wordsOf(message: AgentTranscriptMessage): string {
   return messageWords(message).trim();
 }
 
-/** The pictures a person's line carries, by the ids they were kept as, as a person's live write keeps them. */
+/** Every file a person's line carries, under its name, a kept picture by its id and any other file by its `data:` URL, as a person's live write keeps them. */
 function lineAttachments(line: AgentTranscriptMessage): readonly ManagerChatAttachment[] {
-  return messageFileChips(line).flatMap((chip) =>
-    chip.pictureId === undefined ? [] : [{ id: chip.pictureId, mediaType: chip.mediaType }],
-  );
+  return messageFileChips(line).flatMap((chip): ManagerChatAttachment[] => {
+    if (chip.pictureId !== undefined) {
+      return [{ id: chip.pictureId, mediaType: chip.mediaType, name: chip.name }];
+    }
+
+    return chip.url === "" ? [] : [{ name: chip.name, mediaType: chip.mediaType, url: chip.url }];
+  });
 }
 
 /** The set a `show_media` call showed, each picture by its kept id with the caption it was shown under, as the live write keeps it. */

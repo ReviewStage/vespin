@@ -163,7 +163,19 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
         const lineId = randomUUID();
 
         yield* db.insert(messages).values([
-          memberLine(target, { id: lineId, seq: 101, text: "Ship the table?" }),
+          {
+            ...memberLine(target, { id: lineId, seq: 101, text: "Ship the table?" }),
+            parts: [
+              { type: "text", text: "Ship the table?" },
+              // A pasted text file, its bytes ("hello") on the line as the journal keeps them.
+              {
+                type: "file",
+                mediaType: "text/plain",
+                filename: "notes.txt",
+                url: "data:text/plain;base64,aGVsbG8=",
+              },
+            ],
+          },
           {
             ...target,
             seq: 102,
@@ -242,7 +254,13 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
               authorKind: MANAGER_CHAT_AUTHOR.PERSON,
               authorUserId: owner,
               text: "Ship the table?",
-              attachments: [],
+              attachments: [
+                {
+                  name: "notes.txt",
+                  mediaType: "text/plain",
+                  url: "data:text/plain;base64,aGVsbG8=",
+                },
+              ],
               turnId: turn.id,
               lineId,
             },

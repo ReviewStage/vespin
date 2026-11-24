@@ -31,6 +31,7 @@ import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { inboxItem } from "@repo/database/schemas/inbox";
+import { managerChatMessage } from "@repo/database/schemas/manager-chat-message";
 import { conversations } from "@repo/database/schemas/storage";
 import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -2186,6 +2187,122 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           agentSessions.sent.map((each) => each.message.message),
           [handed, handed],
         );
+      }),
+  );
+
+  it.effect(
+    "a person's typed message sent as any message, as released apps send a Manager's chat, lands in a Manager's chat beside its line and is handed under the chat's header, while one to an agent that is no Manager writes no chat",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const opened = yield* openTask({ agentSessions });
+        const { owner, ask } = opened;
+        const manager = (yield* agentStartedOn(opened, agentSessions, { running: false })).agent;
+        const coder = (yield* agentStartedOn(opened, agentSessions, { running: false })).agent;
+        const db = yield* Database;
+        yield* db.update(user).set({ name: "Ada Lovelace" }).where(eq(user.id, owner));
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, manager.id));
+
+        const sends = agentSessions.sent.length;
+
+        for (const agent of [manager, coder]) {
+          readAnswer(
+            agentMessageAnswerSchema,
+            HOSTED_HTTP_STATUS.ACCEPTED,
+            yield* ask(
+              messageAs(owner, agent.id, { text: "Ship the invites.", clientKey: randomUUID() }),
+            ),
+          );
+        }
+
+        const [written] = yield* readManagerChatPage(owner, manager.id, { limit: 10 });
+        assert.ok(written, "the Manager's chat holds the message");
+
+        assert.deepEqual(
+          {
+            authorKind: written.authorKind,
+            authorUserId: written.authorUserId,
+            text: written.text,
+            linked: written.lineId !== null,
+          },
+          {
+            authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+            authorUserId: owner,
+            text: "Ship the invites.",
+            linked: true,
+          },
+        );
+
+        assert.deepEqual(
+          agentSessions.sent.slice(sends).map((each) => each.message.message),
+          [
+            [text(`Ada Lovelace, message ${written.id}:`), text("Ship the invites.")],
+            "Ship the invites.",
+          ],
+        );
+
+        assert.deepEqual(
+          yield* db
+            .select({ id: managerChatMessage.id })
+            .from(managerChatMessage)
+            .where(eq(managerChatMessage.agentId, coder.id)),
+          [],
+        );
+      }),
+  );
+
+  it.effect(
+    "every file of a person's message to a Manager lands in the chat's message under its name, by the reference its line keeps it under: a pasted text file by its bytes, a picture by the id it was kept as",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+
+        const { owner, agent, ask, target } = yield* messagedAgent(agentSessions, {
+          running: false,
+        });
+
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        readAnswer(
+          agentMessageAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            messageAs(owner, agent.id, {
+              text: "Read this.",
+              clientKey: randomUUID(),
+              attachments: [
+                // "hello" in base64.
+                { name: "notes.txt", mediaType: AGENT_ATTACHMENT_TYPE.TEXT, data: "aGVsbG8=" },
+                {
+                  name: "flow.png",
+                  mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+                  data: Buffer.from(SIZED_PNG).toString("base64"),
+                },
+              ],
+            }),
+          ),
+        );
+
+        const [written] = yield* readManagerChatPage(owner, agent.id, { limit: 10 });
+
+        const kept = yield* db
+          .select({ id: attachment.id })
+          .from(attachment)
+          .where(eq(attachment.conversationId, target.conversationId));
+
+        assert.deepEqual(written?.attachments, [
+          { name: "notes.txt", mediaType: "text/plain", url: "data:text/plain;base64,aGVsbG8=" },
+          { id: kept[0]?.id, mediaType: "image/png", name: "flow.png" },
+        ]);
       }),
   );
 

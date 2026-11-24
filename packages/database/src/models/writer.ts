@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { VOICE_SPEAKER, type VoiceSpeaker } from "@repo/features/agent-wire";
 import { type AutomationFiring, FIRING_HANDS_OUTSIDE_WORDS } from "@repo/features/automation-wire";
 import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
-import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
 import {
   RUN_EVENT,
   RUN_STATUS,
@@ -101,7 +101,7 @@ import {
 } from "../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER, messageSenderSchema } from "../storage-vocabulary.js";
 import { expireTurnApprovals } from "./agent-approvals.js";
-import { type HandedFile, lineParts, receivedPartsOf } from "./attached-file-parts.js";
+import { dataUrl, type HandedFile, lineParts, receivedPartsOf } from "./attached-file-parts.js";
 import { EpochMillisColumnSchema, InstantColumnSchema, nullable } from "./columns.js";
 import {
   DispatchClaimHeld,
@@ -2538,7 +2538,7 @@ const claimLine = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * The person's chat message written beside their line, in the line's
- * transaction: their words and kept pictures, under the line's key, naming
+ * transaction: their words and every file, under the line's key, naming
  * the line and the turn it awaits. One that does not land fails the write,
  * so the line goes with it. Note that the chat's write locks the Manager's
  * row while the conversation's lock is held, the one order every
@@ -2552,10 +2552,12 @@ const chatMessageOfLine = /* @__PURE__ */ Effect.fnUntraced(function* (
   lineId: string,
   awaited: AwaitedTurn | undefined,
 ): Effect.fn.Return<void, StoreFailure | ChatMessageRefused, DatabaseServices> {
-  const attachments = (line.attachments ?? []).flatMap((file) =>
-    file.kept !== undefined && "id" in file.kept
-      ? [{ id: file.kept.id, mediaType: file.mediaType }]
-      : [],
+  // Note that every file the line carries goes with the message, by the reference the line keeps it under (`lineParts`).
+  const attachments = (line.attachments ?? []).map(
+    (file): ManagerChatAttachment =>
+      file.kept !== undefined && "id" in file.kept
+        ? { id: file.kept.id, mediaType: file.mediaType, name: file.name }
+        : { name: file.name, mediaType: file.mediaType, url: dataUrl(file.mediaType, file.data) },
   );
 
   const written = yield* writeManagerChatMessage(chat.userId, {

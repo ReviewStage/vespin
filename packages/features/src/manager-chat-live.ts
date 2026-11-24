@@ -39,12 +39,26 @@ export type ManagerChatAuthor = (typeof MANAGER_CHAT_AUTHOR)[keyof typeof MANAGE
 /** How many messages one page of a Manager's chat holds. */
 export const MANAGER_CHAT_PAGE = 50;
 
-/** A file a message carries, by the id it was kept under: a file a person sent, or a picture of a set the Manager showed. */
-export const managerChatAttachmentSchema = EffectSchema.Struct({
-  id: EffectSchema.String,
-  mediaType: EffectSchema.String,
-  caption: EffectSchema.optionalKey(EffectSchema.String),
-});
+/**
+ * A file a message carries, by the reference its line keeps it under, and
+ * named as it was sent: a picture by the id it was kept under, a person's
+ * under its file's name or one of a set the Manager showed under its
+ * caption; and any other file a person sent (a text file, a PDF, a picture
+ * not kept) by its bytes as a `data:` URL, as their line carries it.
+ */
+export const managerChatAttachmentSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    id: EffectSchema.String,
+    mediaType: EffectSchema.String,
+    name: EffectSchema.optionalKey(EffectSchema.String),
+    caption: EffectSchema.optionalKey(EffectSchema.String),
+  }),
+  EffectSchema.Struct({
+    name: EffectSchema.String,
+    mediaType: EffectSchema.String,
+    url: EffectSchema.String,
+  }),
+]);
 
 export type ManagerChatAttachment = typeof managerChatAttachmentSchema.Type;
 
