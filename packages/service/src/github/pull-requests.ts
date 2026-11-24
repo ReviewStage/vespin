@@ -2888,20 +2888,52 @@ const ViewerRightsAnswerSchema = Schema.Struct({
   ),
 });
 
-/** What the member reading may do to a pull request: edit its description, and merge it without waiting for its base's rules. */
+/** Whether the member reading administers the repository, as REST's own `permissions` answers on their token. */
+const RepositoryRoleSchema = Schema.Struct({
+  permissions: Schema.optionalKey(Schema.Struct({ admin: Schema.Boolean })),
+});
+
+/** What the member reading may do to a pull request: edit its description, merge it without waiting for its base's rules, and whether they administer its repository. */
 export interface ViewerRights {
   readonly canEditDescription: boolean;
   readonly canBypassRules: boolean;
+  readonly isRepositoryAdmin: boolean;
 }
 
 /** What a member may do where GitHub would not say: nothing. */
-export const NO_VIEWER_RIGHTS: ViewerRights = { canEditDescription: false, canBypassRules: false };
+export const NO_VIEWER_RIGHTS: ViewerRights = {
+  canEditDescription: false,
+  canBypassRules: false,
+  isRepositoryAdmin: false,
+};
+
+/**
+ * Whether the member administers the repository, read on their own token.
+ * Note that we read REST's role rather than trust `viewerCanMergeAsAdmin`
+ * alone, because a GitHub App user token may answer that false for a real
+ * admin where the App holds no Administration permission, while the role
+ * still says admin. False where GitHub would not answer, said in the log.
+ */
+function viewerAdministers(bearer: GitHubBearer, fullName: string): Effect.Effect<boolean> {
+  return githubRead(
+    bearer.client.request("GET /repos/{owner}/{repo}", repositoryParts(fullName)),
+    RepositoryRoleSchema,
+  ).pipe(
+    Effect.map((repository) => repository.permissions?.admin === true),
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`the member's role in ${fullName} was not read: ${failure._tag}`),
+        false,
+      ),
+    ),
+  );
+}
 
 /**
  * What the member may do to the pull request, read on their own token,
  * since a read on the App's token answers for the App's bot: edit its
- * description, and merge it past its base's rules, as GitHub's own bypass
- * offers an admin. Nothing where GitHub would not answer them, which
+ * description, merge it past its base's rules, as GitHub's own bypass
+ * offers an admin, and whether they administer its repository. Nothing where GitHub would not answer them, which
  * leaves the description unedited and the rules standing rather than
  * failing the read, said once in the log.
  */
@@ -2912,7 +2944,7 @@ export function viewerRightsOf(
 ): Effect.Effect<ViewerRights> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  return bearer.client
+  const rights = bearer.client
     .graphql(VIEWER_RIGHTS_QUERY, { owner, name, number }, ViewerRightsAnswerSchema)
     .pipe(
       Effect.map((answer) => {
@@ -2932,6 +2964,11 @@ export function viewerRightsOf(
         ),
       ),
     );
+
+  return Effect.map(
+    Effect.all([rights, viewerAdministers(bearer, fullName)], { concurrency: "unbounded" }),
+    ([read, isRepositoryAdmin]) => ({ ...read, isRepositoryAdmin }),
+  );
 }
 
 /** The repository's labels, as its pickers list them. */

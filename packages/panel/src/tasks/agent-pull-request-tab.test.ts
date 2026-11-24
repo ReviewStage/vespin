@@ -2288,6 +2288,23 @@ function mergeCases() {
         "A required review is missing, so it can't be merged yet",
       ),
     ],
+    [
+      "review required, for a repository admin GitHub won't let bypass here",
+      merging(
+        MERGE_STATE.BLOCKED,
+        { review: REVIEW_DECISION.REVIEW_REQUIRED, autoMergeAllowed: false },
+        false,
+        true,
+      ),
+      {
+        chip: "Review required",
+        tone: "attention",
+        sentence: "A required review is missing",
+        press: "Merge on GitHub",
+        look: "outline",
+        chevron: false,
+      },
+    ],
     ["checks failing", merging(MERGE_STATE.BLOCKED, { checks: CHECK_SUMMARY.FAILING }), undefined],
     [
       "checks failing and a review required",

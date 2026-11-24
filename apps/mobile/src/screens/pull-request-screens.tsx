@@ -232,8 +232,9 @@ function mergePressOf(
         request: { action: PULL_REQUEST_ACTION.DEQUEUE },
         ask: { title: MERGE_WORDS.DEQUEUE_QUESTION, message: QUEUE_WARNING },
       };
-    // Note that the page offers no bypass of the base's rules, which asks first; GitHub's own does.
+    // Note that the page offers no bypass of the base's rules, which asks first, nor a way to it; GitHub's own does.
     case MERGE_ACTION.BYPASS:
+    case MERGE_ACTION.MERGE_ON_GITHUB:
     case undefined:
       return undefined;
   }

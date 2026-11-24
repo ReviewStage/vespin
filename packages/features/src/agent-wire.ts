@@ -2227,8 +2227,8 @@ export type PullRequestStackEntry = typeof stackEntrySchema.Type;
  * the first of the overview's three reads, each of which lands on its own:
  * where it stands, its title, number, and page; its description as
  * written and as GitHub renders it (`body_html`), each empty where it has
- * none, and whether the member reading may edit it, and merge it past its
- * base's rules; the branch it merges
+ * none, and whether the member reading may edit it, merge it past its
+ * base's rules, and administers its repository; the branch it merges
  * into and the one it merges from, with the account whose fork that one
  * stands on where it is not the repository's own (absent from a service
  * before it); when it was opened, and merged where it
@@ -2254,6 +2254,8 @@ export const agentOverviewPullRequestAnswerSchema = EffectSchema.Struct({
       canEditDescription: EffectSchema.optionalKey(EffectSchema.Boolean),
       /** Whether the member reading may merge it without waiting for its base's rules, as GitHub lets an admin, on their own GitHub sign-in; absent from a service before it. */
       canBypassRules: EffectSchema.optionalKey(EffectSchema.Boolean),
+      /** Whether the member reading administers its repository, as GitHub's REST role answers on their own GitHub sign-in; absent from a service before it. */
+      isRepositoryAdmin: EffectSchema.optionalKey(EffectSchema.Boolean),
       base: overviewName,
       head: overviewName,
       headOwner: EffectSchema.optionalKey(overviewName),

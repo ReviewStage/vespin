@@ -30,6 +30,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   BUTTON_VARIANT,
   Button,
+  ButtonLink,
   type ButtonVariant,
   ChipName,
   CONFIRM_LOSS,
@@ -52,10 +53,12 @@ import {
 import { Schema } from "effect";
 import { CircleXIcon, GitMergeIcon, TriangleAlertIcon, UserRoundIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { appPlatform } from "../app-platform.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { confirmFailure } from "../failure-report.js";
 import { keptKey, useKept } from "../use-kept.js";
 import type { PullRequestWrites } from "./pull-request-writes.js";
+import { linkPressOf } from "./use-open-link.js";
 
 /**
  * merge-box.tsx -- the merge control at the end of an open pull request's title row, as stage-cli's merge status is: a chip saying what holds the merge up, and beside it the one press that may be made now.
@@ -93,7 +96,10 @@ import type { PullRequestWrites } from "./pull-request-writes.js";
  *   member GitHub lets merge past the base's rules as it lets an admin,
  *   Bypass rules and merge… by the method chosen, its chevron choosing it
  *   too, which asks first, naming what it bypasses, and merges as
- *   `gh pr merge --admin` does.
+ *   `gh pr merge --admin` does;
+ * - there, for an admin of the repository GitHub answers may not bypass
+ *   here, Merge on GitHub ↗, a link to the pull request's page, where
+ *   GitHub's own bypass stands.
  *
  * The method is kept per repository across launches, in this window's own
  * storage as the sidebar's folds are (`folded-groups.ts`); the first the
@@ -567,6 +573,17 @@ export function MergeControl({
             width={width}
             onChoose={choose}
           />
+        );
+      case MERGE_ACTION.MERGE_ON_GITHUB:
+        return (
+          <ButtonLink
+            variant={BUTTON_VARIANT.OUTLINE}
+            href={pullRequest.url}
+            external
+            onClick={linkPressOf((href) => appPlatform().openGitHub(href), pullRequest.url)}
+          >
+            {MERGE_WORDS.MERGE_ON_GITHUB}
+          </ButtonLink>
         );
       default:
         return null;
