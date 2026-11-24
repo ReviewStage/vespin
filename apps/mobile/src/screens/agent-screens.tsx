@@ -458,8 +458,8 @@ function AgentComposerBar({
   useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
   // Note that a message sent now denies the calls waiting only where Send would not queue it behind the turn.
   const denies = waiting !== undefined && !composer.sendQueues;
-  // Note that while a `/` or an `@` offers its list, the row of capsules over the composer steps aside, so the list stands alone over the field, as Messages' and Slack's suggestions do, and comes back once a pick closes it.
-  const picking = composer.skills !== undefined || composer.mentions !== undefined;
+  // Note that while a `/` offers its list, the row of capsules over the composer steps aside, so the list stands alone over the field, as Messages' and Slack's suggestions do, and comes back once a pick closes it; what an `@` offers floats over the row instead, which keeps its room under it, so nothing moves.
+  const picking = composer.skills !== undefined;
 
   const dock = useAgentDock(
     {
@@ -478,7 +478,6 @@ function AgentComposerBar({
   const head =
     composer.cancelMessageEdit === undefined &&
     composer.skills === undefined &&
-    composer.mentions === undefined &&
     otherCall === undefined &&
     ending === undefined &&
     note === undefined ? undefined : (
@@ -492,14 +491,6 @@ function AgentComposerBar({
             skills={composer.skills.skills}
             empty={composer.skills.empty}
             onPick={composer.skills.pick}
-          />
-        )}
-        {composer.mentions === undefined ? null : (
-          <MentionSuggestions
-            groups={composer.mentions.groups}
-            empty={composer.mentions.empty}
-            crumb={composer.mentions.crumb}
-            onPick={composer.mentions.pick}
           />
         )}
         {composer.cancelMessageEdit === undefined ? null : (
@@ -526,6 +517,15 @@ function AgentComposerBar({
     call,
     head,
     above: dock ?? undefined,
+    float:
+      composer.mentions === undefined ? undefined : (
+        <MentionSuggestions
+          groups={composer.mentions.groups}
+          empty={composer.mentions.empty}
+          crumb={composer.mentions.crumb}
+          onPick={composer.mentions.pick}
+        />
+      ),
     saving: composer.saving,
     focusAsk: composer.focusAsk,
     pills: composer.pills,

@@ -367,21 +367,23 @@ export function ThreadComposer({
   // Note that the thread's own agent, whom the reply goes to, is left out of what an `@` offers, as on its own page.
   const mentions = useMentionOffer({ ...place, agentId: item.agentId }, pillField.mentions);
 
-  // Note that the box's head holds what an `@` offers, then what the picker refused, then why the last send didn't go.
+  // Note that the box's head holds what the picker refused, then why the last send didn't go; what an `@` offers floats over the box.
   const head =
-    mentions === undefined && pictureNote === undefined && sendNote === undefined ? undefined : (
+    pictureNote === undefined && sendNote === undefined ? undefined : (
       <>
-        {mentions === undefined ? null : (
-          <MentionSuggestions
-            groups={mentions.groups}
-            empty={mentions.empty}
-            crumb={mentions.crumb}
-            onPick={mentions.pick}
-          />
-        )}
         {pictureNote === undefined ? null : <AskNote words={pictureNote} />}
         {sendNote === undefined ? null : <AskNote words={sendNote} />}
       </>
+    );
+
+  const float =
+    mentions === undefined ? undefined : (
+      <MentionSuggestions
+        groups={mentions.groups}
+        empty={mentions.empty}
+        crumb={mentions.crumb}
+        onPick={mentions.pick}
+      />
     );
 
   const placeholder = asNew
@@ -401,6 +403,7 @@ export function ThreadComposer({
     sendAs: nods ? GOT_IT_SEND : undefined,
     // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
     head,
+    float,
     addMenu: {
       actions: [{ ...ATTACH_PHOTOS, onPress: attach }],
       switches: [

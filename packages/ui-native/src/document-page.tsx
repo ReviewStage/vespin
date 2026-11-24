@@ -15,7 +15,6 @@ import {
   BAR_EDGE,
   BAR_GLASS,
   BAR_MARGIN,
-  BarHead,
   GlassBar,
   GlassDock,
   useDockKeyboard,
@@ -112,10 +111,11 @@ export function DocumentPage({ ref, ...props }: DocumentPageProps) {
 
 /**
  * What an `@` typed in a document's words offers, docked over the keyboard
- * over the page that holds the words, as a composer's head offers it: in
- * the head a composer's offer stands in, which scrolls past its share of the
- * room over the keyboard, so a long list never runs up under the page's bar;
- * nothing while no `@` word stands.
+ * over the page that holds the words, as a composer's float offers it: the
+ * same list, which scrolls inside itself past its share of the room over
+ * the keyboard, so a long list never runs up under the page's bar; nothing
+ * while no `@` word stands. Note that here it stands in the dock's bar
+ * rather than floating, since the words it covers would hold the caret.
  */
 export function MentionDock({
   mentions,
@@ -127,14 +127,12 @@ export function MentionDock({
   const bar =
     mentions === undefined ? null : (
       <GlassBar>
-        <BarHead>
-          <MentionSuggestions
-            groups={mentions.groups}
-            empty={mentions.empty}
-            crumb={mentions.crumb}
-            onPick={mentions.onPick}
-          />
-        </BarHead>
+        <MentionSuggestions
+          groups={mentions.groups}
+          empty={mentions.empty}
+          crumb={mentions.crumb}
+          onPick={mentions.onPick}
+        />
       </GlassBar>
     );
 
@@ -164,21 +162,19 @@ export function MentionFoot({
         <VStack
           alignment="leading"
           modifiers={[
-            padding({ all: BAR_EDGE }),
+            padding({ vertical: BAR_EDGE * 2 }),
             ...BAR_GLASS,
             padding({ horizontal: BAR_MARGIN, bottom: SPACE.ROW }),
-            // Note that the offer takes its own height before the page takes the rest, since a short column, such as a landscape iPad's over the keyboard, otherwise cut its last row; it caps itself and scrolls inside past that (`BarHead`).
+            // Note that the offer takes its own height before the page takes the rest, since a short column, such as a landscape iPad's over the keyboard, otherwise cut its last row; it caps itself and scrolls inside past that (`useFloatRoom`).
             layoutPriority(1),
           ]}
         >
-          <BarHead>
-            <MentionSuggestions
-              groups={mentions.groups}
-              empty={mentions.empty}
-              crumb={mentions.crumb}
-              onPick={mentions.onPick}
-            />
-          </BarHead>
+          <MentionSuggestions
+            groups={mentions.groups}
+            empty={mentions.empty}
+            crumb={mentions.crumb}
+            onPick={mentions.onPick}
+          />
         </VStack>
       )}
     </VStack>

@@ -15,6 +15,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
+import { useFloatRoom } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar, AvatarPhoto, HarnessMark } from "./marks.js";
 import { toneColor, useColors } from "./tokens/colors.js";
@@ -178,8 +179,11 @@ export type SkillSuggestion = {
 /** The most suggestions the head stands at once before it scrolls them, so the field stays in sight over the keyboard. */
 const SUGGESTIONS_SHOWN = 4;
 
-/** How tall one suggestion stands, in points: a press's least, as Apple's guidelines ask. */
-const SUGGESTION_HEIGHT = PRESS_SIZE + 6;
+/** How tall one suggestion stands at least, in points: a list row's, as iOS's rows stand. */
+const SUGGESTION_HEIGHT = PRESS_SIZE;
+
+/** How far a suggestion's words stand from its top and bottom, so a row of two lines stands as Mail's recipient suggestions do and one of a line stands a list row's 44 pt. */
+const SUGGESTION_VERTICAL = 6;
 
 /**
  * What a suggestion's row leads with, in a square the size of a row's
@@ -231,10 +235,13 @@ function SuggestionMark({
 }
 
 /**
- * One row a composer's head offers over the field, as a `/` offers a skill
- * and an `@` a mention: its glyph, its words, and a muted line after them,
- * the row's whole width taking the press. Note that at an accessibility
- * size its words wrap rather than cut.
+ * One row a composer offers over the field, as a `/` offers a skill and an
+ * `@` a mention, in a list row's metrics: its mark centered in the column
+ * a row's lead mark stands in, its title in the body style over a muted
+ * line in the subheadline style, as Mail's recipient suggestions stand, at
+ * least a row's 44 pt, the row's whole width taking the press, which dims
+ * it while held as the system's plain buttons dim. Note that at an
+ * accessibility size its words wrap rather than cut.
  */
 function SuggestionRow({
   glyph,
@@ -255,6 +262,7 @@ function SuggestionRow({
   const large = useAccessibilitySize();
   const lines = large ? [] : [lineLimit(1)];
   const colors = useColors();
+  const column = useScaledSize(MARK_SIZE.LEAD);
 
   return (
     <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(title)]}>
@@ -262,6 +270,7 @@ function SuggestionRow({
       <HStack
         spacing={SPACE.ROW}
         modifiers={[
+          SwiftModifiers.padding({ vertical: SUGGESTION_VERTICAL }),
           frame({
             minHeight: SUGGESTION_HEIGHT,
             maxWidth: Number.POSITIVE_INFINITY,
@@ -270,11 +279,13 @@ function SuggestionRow({
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
-        <SuggestionMark glyph={glyph} mark={mark} />
+        <ZStack modifiers={[frame({ width: column })]}>
+          <SuggestionMark glyph={glyph} mark={mark} />
+        </ZStack>
         <VStack alignment="leading" spacing={1}>
           <Text
             modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
+              font({ textStyle: TYPE_ROLE.ROW_TITLE }),
               foregroundStyle(colors.TEXT),
               ...lines,
             ]}
@@ -379,18 +390,28 @@ export type MentionSuggestionGroup = {
   readonly rows: readonly MentionSuggestion[];
 };
 
+/** How far what an `@` offers stands in from its float's edges, where the bar's field stands its words. */
+const MENTION_INSET = { horizontal: SPACE.ROW + 2 } as const;
+
+/** How far apart the groups an `@` offers stand, as a grouped list's sections stand apart, their headings over them. */
+const MENTION_GROUP_GAP = SPACE.ROW;
+
 /**
  * What an `@` being typed offers, as the panel's mention picker groups it:
  * each group under its small muted heading, its rows led by the mark of
  * the entity each names, as the chip a pick writes leads with it (a
  * person's face, a task's status, an agent's harness, a pull request's
  * state, a thread's ask), else their kind's glyph, a person's "You" or
- * address and a task's key after the name, and
- * the row picked written into the message; what stands where nothing
- * matches said in the muted ink. It stands over the field inside the
- * composer's glass, as Messages and Slack stand theirs right over the
- * keyboard, its rows scrolling with the head they stand in, so the field
- * stays in sight.
+ * address and a task's key under the name, and the row picked written into
+ * the message; what stands where nothing matches said in the muted ink. It
+ * floats over the composer in a glass of its own (`BarFloat`), as Messages,
+ * Slack and the panel's popover float theirs, its crumb standing still
+ * over rows that scroll inside it once they would stand taller than the
+ * room over the keyboard leaves (`useFloatRoom`). Note that the scroll
+ * stands as tall as its rows up to that room, in SwiftUI's own layout, so
+ * the float shrinks and grows with the words typed in the frame they land
+ * in, never a frame later, and is never swapped for a view of another kind,
+ * which drew every row anew.
  */
 export function MentionSuggestions({
   groups,
@@ -406,36 +427,33 @@ export function MentionSuggestions({
   readonly onPick: (group: string, id: string) => void;
 }) {
   const colors = useColors();
+  const room = useFloatRoom();
   const head = crumb === undefined ? null : <MentionCrumbRow crumb={crumb} />;
 
-  if (groups.length === 0) {
-    if (empty === undefined) return head;
-
-    return (
-      <VStack alignment="leading" spacing={0}>
-        {head}
+  const rows =
+    groups.length === 0 ? (
+      empty === undefined ? null : (
         <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            frame({ minHeight: SUGGESTION_HEIGHT, alignment: "leading" }),
+          ]}
         >
           {empty}
         </Text>
-      </VStack>
-    );
-  }
-
-  // Note that the rows scroll with the composer's head, its one scroller (`BarHead`), never in a scroller of their own inside it, which cut a row through and scrolled inside a scroll; a narrowed list's crumb stands over them.
-  return (
-    <VStack alignment="leading" spacing={0}>
-      {head}
-      <VStack alignment="leading" spacing={SPACE.TIGHT}>
+      )
+    ) : (
+      <VStack alignment="leading" spacing={MENTION_GROUP_GAP}>
         {groups.map((group) => (
           <VStack key={group.title} alignment="leading" spacing={0}>
             {/* Note that a narrowed list's crumb already names its one group. */}
             {crumb === undefined ? (
               <Text
                 modifiers={[
-                  font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
+                  font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "semibold" }),
                   foregroundStyle(colors.TEXT_MUTED),
+                  SwiftModifiers.padding({ top: SPACE.TIGHT }),
                   SwiftModifiers.accessibilityAddTraits(["isHeader"]),
                 ]}
               >
@@ -456,6 +474,23 @@ export function MentionSuggestions({
           </VStack>
         ))}
       </VStack>
+    );
+
+  // Note that the scroll's frame caps it at the room and its fixed size stands it as tall as its rows below that, so a short list hugs its rows and a long one scrolls; a drag over it scrolls the rows and leaves the keyboard standing, as Messages' suggestions do.
+  return (
+    <VStack alignment="leading" spacing={0} modifiers={[SwiftModifiers.padding(MENTION_INSET)]}>
+      {head}
+      {rows === null ? null : (
+        <ScrollView
+          modifiers={[
+            SwiftModifiers.scrollDismissesKeyboard("never"),
+            frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: room, alignment: "topLeading" }),
+            SwiftModifiers.fixedSize({ horizontal: false, vertical: true }),
+          ]}
+        >
+          {rows}
+        </ScrollView>
+      )}
     </VStack>
   );
 }

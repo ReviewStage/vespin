@@ -60,6 +60,7 @@ import {
   BAR_GLASS,
   BAR_MARGIN,
   BAR_ROW_SPACING,
+  BarFloat,
   BarHead,
   GlassBar,
   useKeyboardHeight,
@@ -225,6 +226,8 @@ type ComposerProps = {
   readonly head?: ReactNode;
   /** SwiftUI standing over the composer in a glass of its own, as the panel stands an agent's queue over its box: the messages queued behind the turn. */
   readonly above?: ReactNode;
+  /** SwiftUI floating over the composer and what stands above it, in a glass of its own, such as what an `@` offers (`MentionSuggestions`), covering the page's foot rather than lifting it (`GlassBar`'s `float`). */
+  readonly float?: ReactNode;
   /** A queued message's words being edited in the field: Send stands as Save, and, where it may steer, held it offers Steer, as the panel's held Send steers an edit. */
   readonly saving?: ComposerSaving | undefined;
   /** Whether the field takes the keyboard as it stands, as a new comment's field does once opened for its words. */
@@ -1201,6 +1204,7 @@ export function Composer(props: ComposerProps) {
       heads={props.pills !== undefined}
       foot={rowed ? foot : undefined}
       above={oneLine ? undefined : props.above}
+      float={props.float}
       // Note that on one line no transcript stands over the bar to drag the keyboard down by, so the bar takes the drag itself.
       onLower={oneLine ? parts.lower : undefined}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
@@ -1264,8 +1268,14 @@ export function ComposerFoot(props: ComposerProps) {
     );
 
   // Note that the composer keeps its place under what stands over it whether or not anything stands there, so its field is never drawn anew as the queue comes and goes.
+  // Note that at a column's foot what floats stands over the composer in the column itself, since no SwiftUI view here stands over the page above it.
   return (
     <VStack spacing={SPACE.TIGHT * 2}>
+      {props.float === undefined ? null : (
+        <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>
+          <BarFloat>{props.float}</BarFloat>
+        </VStack>
+      )}
       {props.above === undefined ? null : (
         <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>{props.above}</VStack>
       )}

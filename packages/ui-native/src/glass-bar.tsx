@@ -76,6 +76,18 @@ const LOWER_DRAG = PRESS_SIZE / 2;
 /** The most of the window's height above the keyboard what heads a bar takes before it scrolls inside the bar, so the content under the bar stays in reach at the largest text sizes and with the keyboard up. */
 const HEAD_SHARE = 0.35;
 
+/** The most a float over a bar stands, in points, before it scrolls: about five rows and a half, as Mail's recipient suggestions stand over its keyboard, so the last row shows cut and says the list goes on. */
+const FLOAT_MOST = 300;
+
+/** The least a float over a bar stands before it scrolls, in points: two rows, even where the window over the keyboard is shorter, such as a landscape iPhone's, where it may stand over the screen's bar. */
+const FLOAT_LEAST = 100;
+
+/** What a float leaves clear over it, in points: the screen's own bar under the top safe area, so it never runs up under the bar's buttons where there is room. */
+const FLOAT_TOP_CLEAR = PRESS_SIZE + SPACE.ROW;
+
+/** How tall a float over the dock's bar may stand before it scrolls, as the dock works it out from the room the keyboard and the bar leave; none outside a dock's float. */
+const FloatRoom = createContext<number | undefined>(undefined);
+
 const styles = StyleSheet.create({
   // The bar's own gap above the tab bar, or the keyboard.
   gap: { paddingBottom: SPACE.ROW },
@@ -89,6 +101,10 @@ const styles = StyleSheet.create({
   // A row with no bar stands in from the screen's edges as far as a bar does.
   // What stands over a bar in a glass of its own, as far in as the bar and apart from it.
   above: { marginHorizontal: BAR_MARGIN, marginBottom: SPACE.TIGHT * 2 },
+  // A float stands over what it overlaps of the bar's column.
+  float: { zIndex: 1 },
+  // What stands above the bar while a float covers it: its room kept, so nothing moves, but neither seen nor pressed.
+  covered: { opacity: 0 },
   // The bar stands in from the screen's edges, its glass drawn by its SwiftUI.
   bar: { marginHorizontal: BAR_MARGIN },
 });
@@ -220,29 +236,106 @@ export function BarHead({
 }
 
 /**
+ * How tall a list floating over a bar may stand before it scrolls inside
+ * itself: as the dock it floats in works it out, from the window the
+ * keyboard and the bar leave; elsewhere, such as at a SwiftUI column's
+ * foot, the share of the window over the keyboard a bar's head takes.
+ */
+export function useFloatRoom(): number {
+  const told = useContext(FloatRoom);
+  const { height: window } = useWindowDimensions();
+  const keyboard = useKeyboardHeight(false);
+
+  return told ?? Math.min(FLOAT_MOST, Math.round(Math.max(0, window - keyboard) * HEAD_SHARE));
+}
+
+/**
+ * A float over a bar, such as what an `@` offers, in a glass of its own as
+ * wide as the bar's, as Messages and Slack float their suggestions over the
+ * field: what it holds is clipped to its rounded shape, so a row pressed at
+ * its corner never draws past the glass.
+ */
+export function BarFloat({ children }: { readonly children: ReactNode }) {
+  return (
+    <VStack
+      alignment="leading"
+      spacing={0}
+      modifiers={[
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        padding({ vertical: BAR_EDGE * 2 }),
+        SwiftModifiers.clipShape("roundedRectangle", BAR_RADIUS),
+        ...BAR_GLASS,
+      ]}
+    >
+      {children}
+    </VStack>
+  );
+}
+
+/**
  * What a dock pins at its foot, standing in the screen's bottom safe area,
  * and telling its dock how tall it stands, its gap with it, as it grows and
  * shrinks, so the content under it scrolls clear of all of it.
  */
-function DockedFoot({ children }: { readonly children: ReactNode }) {
-  const keyboard = useKeyboardHeight() > 0;
+function DockedFoot({
+  children,
+  float,
+  overlap = 0,
+}: {
+  readonly children: ReactNode;
+  readonly float?: ReactNode;
+  /** How far down over the measured view the float stands, over what stands above the bar with its gap, so that piece keeps its room while the float covers it; none where nothing stands there. */
+  readonly overlap?: number;
+}) {
+  const keyboard = useKeyboardHeight();
   const lifted = useContext(DockLifted);
   const inset = useContext(DockInset);
   const measure = useContext(DockMeasure);
+  const { height: window } = useWindowDimensions();
+  const { top } = useSafeAreaInsets();
+  const [tall, setTall] = useState(0);
   // Note that inside the native dock the foot pads by the bottom safe area the dock tells, the one its lift is less by, rather than one React Native reads for itself, since on a page presented full screen, such as New task, the two differed by the home indicator and the bar stood that far short of the keyboard.
   const told = lifted && inset !== undefined;
 
-  const onLayout =
-    measure === undefined
-      ? undefined
-      : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
+  const onLayout = (event: LayoutChangeEvent) => {
+    const { height } = event.nativeEvent.layout;
+    setTall(height);
+    measure?.(height + SPACE.ROW);
+  };
+
+  // The room over the bar a float may take: the window's, less the keyboard, the bar and its gap, and the screen's bar under the top safe area.
+  const room = Math.round(
+    Math.min(
+      FLOAT_MOST,
+      Math.max(
+        FLOAT_LEAST,
+        window - keyboard - (tall - overlap) - top - FLOAT_TOP_CLEAR - SPACE.ROW * 2,
+      ),
+    ),
+  );
 
   // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one. The native dock lifts the bar only as far past that safe area as the keyboard stands, so the bar keeps it throughout, and a drag that pulls the keyboard down lowers the bar without a jump at its end.
+  // Note that a float stands over the measured view rather than in it, so it covers the content's foot as it comes, goes and changes height, and the content, which leaves room for the bar alone, never moves under it.
   return (
     <SafeAreaView
-      edges={told || (keyboard && !lifted) ? ["left", "right"] : ["bottom", "left", "right"]}
+      edges={told || (keyboard > 0 && !lifted) ? ["left", "right"] : ["bottom", "left", "right"]}
       style={told ? [styles.gap, { paddingBottom: SPACE.ROW + inset }] : styles.gap}
     >
+      {float === undefined ? null : (
+        <FloatRoom value={room}>
+          <Host
+            matchContents={{ vertical: true }}
+            style={[
+              styles.content,
+              styles.above,
+              styles.float,
+              { marginBottom: SPACE.TIGHT * 2 - overlap },
+            ]}
+          >
+            <BarFloat>{float}</BarFloat>
+          </Host>
+        </FloatRoom>
+      )}
       <View onLayout={onLayout}>{children}</View>
     </SafeAreaView>
   );
@@ -287,8 +380,11 @@ export function GlassBar({
   field = false,
   heads = false,
   onLower,
+  float,
 }: {
   readonly children: ReactNode;
+  /** SwiftUI floating over the bar and over what stands above it in a glass of its own, such as what an `@` offers, as Messages and Slack float their suggestions over the field: it covers the content's foot rather than lifting it, so the content never moves as it comes, goes or changes height; nothing where none is given. */
+  readonly float?: ReactNode;
   /** What stands under the row inside the same glass, such as the capsules saying where a start runs; nothing where none is given. */
   readonly foot?: ReactNode;
   /** SwiftUI standing over the bar in a glass of its own, such as an agent's queued messages, as the panel stands its queue over its box; nothing where none is given. */
@@ -307,6 +403,9 @@ export function GlassBar({
   const ground = useFieldGround(PRESS_SIZE / 2);
   const pill = field ? ground : [];
   const lowering = useLowerDrag(onLower);
+  const [aboveTall, setAboveTall] = useState(0);
+  // Note that a float stands down over what stands above the bar, which keeps its room under it, so the float coming and going moves nothing; the float meets the bar a gap above it, as the piece did.
+  const covers = float !== undefined && above !== undefined;
 
   // Note that the glass spans the bar's width whatever its row holds, as the bar always has.
   const glass = [
@@ -352,11 +451,18 @@ export function GlassBar({
   );
 
   return (
-    <DockedFoot>
+    <DockedFoot float={float} overlap={covers ? aboveTall : 0}>
       {above === undefined ? null : (
-        <Host matchContents={{ vertical: true }} style={[styles.content, styles.above]}>
-          {above}
-        </Host>
+        <View
+          style={covers && styles.covered}
+          pointerEvents={covers ? "none" : "auto"}
+          onLayout={(event: LayoutChangeEvent) => setAboveTall(event.nativeEvent.layout.height)}
+          collapsable={false}
+        >
+          <Host matchContents={{ vertical: true }} style={[styles.content, styles.above]}>
+            {above}
+          </Host>
+        </View>
       )}
       {/* Note that the bar stands in this view whether or not it takes the drag, and the view is never flattened away, since a view flattened while it took no drag became a view of its own once it took one, which moved the bar into it and drew the field anew, letting go of the keyboard that turned the drag on. */}
       <View collapsable={false} {...lowering}>
