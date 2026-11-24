@@ -61,6 +61,7 @@ import {
   cachedPicture,
   cachedPlayed,
   downloadedMedia,
+  KEPT_MEDIA,
   keptMedia,
 } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -358,7 +359,7 @@ async function agentMediaSource(
   const kept = keptMedia(AGENT_MEDIA_PREFIX, pictureId);
 
   if (kept !== undefined) {
-    if (kept.picture) shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
+    if (kept.kind === KEPT_MEDIA.PICTURE) shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
 
     return kept.uri;
   }
@@ -371,7 +372,8 @@ async function agentMediaSource(
   );
 
   if (downloaded !== undefined) {
-    if (downloaded.picture) shown(PRODUCT_PICTURE_FROM.DOWNLOADED, askedAt, downloaded.bytes);
+    if (downloaded.kind === KEPT_MEDIA.PICTURE)
+      shown(PRODUCT_PICTURE_FROM.DOWNLOADED, askedAt, downloaded.bytes);
 
     return downloaded.uri;
   }

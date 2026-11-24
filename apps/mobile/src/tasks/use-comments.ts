@@ -18,7 +18,8 @@
  * caches for its chip to open.
  */
 
-import type { AgentAttachment } from "@repo/features/agent-wire";
+import { type AgentAttachment, base64Bytes } from "@repo/features/agent-wire";
+import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
@@ -35,6 +36,7 @@ import {
 import { markersAsNames } from "@repo/features/file-marker";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
+import { formatBytes } from "@repo/features/number-format";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -42,11 +44,12 @@ import { BUZZ, buzz, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { cachedFile, cachedPicture } from "../cached-media.js";
+import { cachedFile, cachedPicture, KEPT_MEDIA, keptMedia } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import type { PictureOf } from "../member-pictures.js";
+import { usePictureShownCount } from "../picture-shown.js";
 import {
   type AttachedPictures,
   type HeldPicture,
@@ -341,6 +344,7 @@ export function useCommentMedia(
   thread: DescriptionCommentThread | undefined,
 ): CommentMedia {
   const acts = useHostActs();
+  const shown = usePictureShownCount(PRODUCT_PICTURE_KIND.COMMENT);
   const [read, setRead] = useState<CommentFilesRead>(NOTHING_READ);
   const [round, setRound] = useState(0);
   // The files asked for, by attachment, so each is asked for once while the page stands.
@@ -367,6 +371,15 @@ export function useCommentMedia(
 
       if (asked.current.has(id)) continue;
       asked.current.add(id);
+      const askedAt = performance.now();
+      // Note that a picture shown before draws from the file its first read wrote, asking the host nothing; any other file stands under its own name, so it is read as before.
+      const kept = pictured(file) ? keptMedia(COMMENT_MEDIA_PREFIX, id) : undefined;
+
+      if (kept?.kind === KEPT_MEDIA.PICTURE) {
+        landed(id, { source: kept.uri, size: formatBytes(kept.bytes) });
+        shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
+        continue;
+      }
 
       acts[ACT_KIND.TASKS_PICTURE_READ]({ taskId, attachmentId: id })
         .then(async (answer) => {
@@ -380,6 +393,8 @@ export function useCommentMedia(
           if (!("base64" in answer)) throw new Error(`The file was not read: ${answer.failure}.`);
           const chip = { name: file.name, mediaType: file.mediaType, url: "" };
           landed(id, { source: await sourceOf(file, answer), size: chipSize(chip, answer.base64) });
+
+          if (pictured(file)) shown(PRODUCT_PICTURE_FROM.READ, askedAt, base64Bytes(answer.base64));
         })
         .catch((cause: unknown) => {
           console.error("A comment's file was not read.", cause);
@@ -387,7 +402,7 @@ export function useCommentMedia(
         });
     }
     // Note that `round` is read so a Try again, which forgets the file's ask, reads it anew.
-  }, [acts, taskId, thread, round]);
+  }, [acts, taskId, thread, round, shown]);
 
   return useMemo(
     () => ({
