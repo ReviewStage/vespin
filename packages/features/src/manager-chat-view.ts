@@ -33,6 +33,12 @@ import { isAgentTurn } from "./voice-call-lines.js";
 /** The longest pause, in milliseconds, between two messages of one sender that still stand in one run. */
 const CHAT_RUN_GAP_MS = 10 * 60 * 1000;
 
+/** What Show work says beside a message or in its menu, by whether its work stands open under it. */
+const CHAT_WORK_WORDS = {
+  SHOW: "Show work",
+  HIDE: "Hide work",
+} as const;
+
 /** Where a message stands in its sender's run: whether it opens it, under its sender's name where one is drawn, and whether it closes it, over the run's one time. */
 export interface ChatRunPlace {
   readonly opens: boolean;
@@ -99,6 +105,11 @@ function turnWork(
   }
 
   return { work, live };
+}
+
+/** What the press that opens a message's work under it, or folds it away, says, by whether it stands open. */
+export function chatWorkWords(shown: boolean): string {
+  return shown ? CHAT_WORK_WORDS.HIDE : CHAT_WORK_WORDS.SHOW;
 }
 
 /**

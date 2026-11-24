@@ -3,21 +3,17 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { AGENT_KIND, VOICE_SPEAKER } from "@repo/features/agent-wire";
 import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
-import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
-import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.js";
 import { getTestDB, openWorkspace } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import {
   deleteDroppedManagerChat,
-  listManagersForBackfill,
   MANAGER_CHAT_OUTCOME,
   type ManagerChatOutcome,
   type ManagerChatWrite,
-  markManagerChatBackfilled,
   readManagerChatMessage,
   readManagerChatPage,
   readManagerChatThread,
@@ -359,38 +355,5 @@ it.layer(getTestDB())("a Manager's chat", (it) => {
       });
       assert.equal(Option.isSome(yield* readManagerChatMessage(owner, agentId, root.id)), true);
     }),
-  );
-
-  it.effect(
-    "the backfill lists a Manager until it is marked, and a mark on a Manager gone is none",
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* openAccount;
-        const agentId = yield* openManager(owner);
-        const gone = yield* openManager(owner);
-
-        const unmarked = (agent: string) =>
-          Effect.map(
-            listManagersForBackfill({ after: null, agent, unmarked: true, limit: 5 }),
-            (managers) => managers.map((manager) => manager.id),
-          );
-
-        const before = yield* unmarked(agentId);
-        yield* markManagerChatBackfilled(agentId, SENT_AT);
-        yield* markManagerChatBackfilled(agentId, SENT_AT);
-        yield* (yield* Database).delete(agentTable).where(eq(agentTable.id, gone));
-        yield* markManagerChatBackfilled(gone, SENT_AT);
-
-        assert.deepEqual(before, [agentId]);
-        assert.deepEqual(yield* unmarked(agentId), []);
-        assert.deepEqual(
-          Array.from(
-            yield* listManagersForBackfill({ after: null, agent: agentId, limit: 5 }),
-            (manager) => manager.id,
-          ),
-          [agentId],
-          "a marked Manager is still listed where the batch does not ask for unmarked ones",
-        );
-      }),
   );
 });

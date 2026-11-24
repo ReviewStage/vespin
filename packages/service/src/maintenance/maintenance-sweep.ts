@@ -10,7 +10,6 @@ import {
   HOSTED_HTTP_STATUS,
   jsonResponse,
 } from "../http/http.js";
-import type { ManagerChatBackfillSwept } from "./manager-chat-backfill.js";
 
 /**
  * The scheduled sweep: once a minute, Vercel's cron ends what no request
@@ -45,8 +44,6 @@ interface MaintenanceSweeps {
   pruneMachineAsks: (now: number) => SweepRead<number>;
   /** Queues the release of the cloud agents' sandboxes unused past their keep, and of those whose release stands unfinished, a sweep's worth, or only logs them where deleting is off (`agents/session-sandboxes.ts`'s `releaseUnusedSandboxes`). */
   releaseSandboxes: (now: number) => SweepRead<SandboxReleaseSweep>;
-  /** Backfills the next Managers whose old chat still stands only in their transcript, a sweep's worth, and marks them, answering its counts (`manager-chat-backfill.ts`'s `sweepManagerChatBackfill`). */
-  backfillManagerChats: (now: number) => SweepRead<ManagerChatBackfillSwept>;
 }
 
 /**
@@ -89,8 +86,6 @@ interface MaintenanceSweepAnswer {
   machineAsks: Swept<number>;
   /** Cloud agents' sandboxes due for release, and the releases published. */
   sandboxReleases: Swept<SandboxReleaseSweep>;
-  /** Managers whose old chat was backfilled this sweep, and its counts. */
-  managerChats: Swept<ManagerChatBackfillSwept>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -137,7 +132,6 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     commandsAway: yield* isolated("markCommandsAway", sweeps.markCommandsAway(now)),
     machineAsks: yield* isolated("pruneMachineAsks", sweeps.pruneMachineAsks(now)),
     sandboxReleases: yield* isolated("releaseSandboxes", sweeps.releaseSandboxes(now)),
-    managerChats: yield* isolated("backfillManagerChats", sweeps.backfillManagerChats(now)),
   };
 });
 

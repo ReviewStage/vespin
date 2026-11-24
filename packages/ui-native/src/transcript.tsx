@@ -4,7 +4,7 @@ import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import { chatWorkWords } from "@repo/features/manager-chat";
+import { chatWorkWords } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";

@@ -17,9 +17,6 @@ export const WORKSPACE_DRIVE_CLEANUP_PATH = "/api/maintenance/workspace-drives";
 /** The rotation's rewrap of every stored provider key (`provider-key-rewrap.ts`), asked by hand under the same secret. */
 export const MAINTENANCE_PROVIDER_KEYS_REWRAP_PATH = "/api/maintenance/provider-keys-rewrap";
 
-/** The one-time backfill of every Manager's chat from its transcript (`manager-chat-backfill.ts`), asked by hand under the same secret. */
-export const MAINTENANCE_MANAGER_CHAT_BACKFILL_PATH = "/api/maintenance/manager-chat-backfill";
-
 export const CRON_ENVIRONMENT = {
   /**
    * Vercel sends this as the bearer on every scheduled call once it is set.

@@ -10,7 +10,7 @@
  * it away again, so a finished chat draws no more than its messages.
  */
 
-import { chatWorkWords } from "@repo/features/manager-chat";
+import { chatWorkWords } from "@repo/features/manager-chat-view";
 import { MessageActions } from "@repo/ui";
 import { ListTreeIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";

@@ -938,8 +938,8 @@ export function agentRows(
 }
 
 /**
- * A stretch of a turn's parts, such as the work that led to one of a
- * Manager's chat messages (`managerChatWork`), as the rows every transcript
+ * A stretch of a turn's parts, such as a Manager's turn's work folded over
+ * its chat (`manager-chat-view.ts`), as the rows every transcript
  * draws, folded as the turn's own would be. Each part keeps the cut it was
  * read with, so a cut answer still reads its whole from the turn it is of.
  */

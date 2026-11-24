@@ -99,7 +99,6 @@ const DECLARED_TABLES = [
   "machine_command_ask",
   "machine_command_device_listener",
   "machine_command_listener",
-  "manager_chat_backfill",
   "manager_chat_message",
   "memory",
   "memory_recall",
