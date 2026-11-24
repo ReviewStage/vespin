@@ -71,6 +71,13 @@ interface NativePillFieldProps {
   readonly onWords: (event: NativeSyntheticEvent<NativeWords>) => void;
   readonly onHeight: (event: NativeSyntheticEvent<{ readonly height: number }>) => void;
   readonly onFocusChange: (event: NativeSyntheticEvent<{ readonly focused: boolean }>) => void;
+  /** Whether a list floats over the field, whose rows a hardware keyboard's ↑ and ↓ move through rather than the caret. */
+  readonly listKeys?: boolean | undefined;
+  /** Whether an arrow has chosen one of the list's rows, which Return then picks rather than breaking the line. */
+  readonly listPicks?: boolean | undefined;
+  readonly onListKey?:
+    | ((event: NativeSyntheticEvent<{ readonly key: string }>) => void)
+    | undefined;
 }
 
 /** The name the native module registers under, which its Swift names too. */

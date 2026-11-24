@@ -1,6 +1,16 @@
 // composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place.
 
-import { Button, HStack, Image, ScrollView, Spacer, Text, VStack, ZStack } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  ScrollView,
+  Spacer,
+  Text,
+  useNativeState,
+  VStack,
+  ZStack,
+} from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -13,14 +23,15 @@ import {
   lineLimit,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
 import { useFloatRoom } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar, AvatarPhoto, HarnessMark } from "./marks.js";
+import { useSuggestionKeys } from "./suggestion-keys.js";
 import { toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** A picture's thumbnail over a composer's field, as Messages draws one: a square cropped from it, its corners rounded as a card's; a pasted text file stands as a tile of the same size. */
@@ -180,6 +191,9 @@ export type SkillSuggestion = {
 /** How tall one suggestion stands at least, in points: a list row's, as iOS's rows stand. */
 const SUGGESTION_HEIGHT = PRESS_SIZE;
 
+/** How far a chosen row's fill reaches past its words on either side, into the list's inset. */
+const CHOSEN_REACH = SPACE.TIGHT * 2;
+
 /** How far a suggestion's words stand from its top and bottom, so a row of two lines stands as Mail's recipient suggestions do and one of a line stands a list row's 44 pt. */
 const SUGGESTION_VERTICAL = 6;
 
@@ -247,6 +261,8 @@ function SuggestionRow({
   title,
   detail,
   opens = false,
+  place,
+  chosen = false,
   onPress,
 }: {
   readonly glyph: Glyph;
@@ -255,6 +271,10 @@ function SuggestionRow({
   readonly detail?: string | undefined;
   /** Whether a press opens a narrower list rather than writing the row, which its trailing chevron says, as a row that goes on does in iOS's lists. */
   readonly opens?: boolean | undefined;
+  /** Where the row stands in its list, which a hardware keyboard's arrows scroll to (`useSuggestionKeys`). */
+  readonly place: number;
+  /** Whether a hardware keyboard's arrows have chosen the row, which Return picks: it stands on the selected row's rounded fill, as the desktop's highlight does. */
+  readonly chosen?: boolean | undefined;
   readonly onPress: () => void;
 }) {
   const large = useAccessibilitySize();
@@ -275,6 +295,14 @@ function SuggestionRow({
             alignment: "leading",
           }),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          // Note that the chosen row's fill reaches past its words into the list's inset, as a selected row's fill stands round its words, and every row carries it, clear where not chosen, so a key moving the choice redraws no row's shape.
+          SwiftModifiers.padding({ horizontal: CHOSEN_REACH }),
+          SwiftModifiers.background(
+            chosen ? colors.SELECTED : "transparent",
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
+          ),
+          SwiftModifiers.padding({ horizontal: -CHOSEN_REACH }),
+          SwiftModifiers.id(String(place)),
         ]}
       >
         <ZStack modifiers={[frame({ width: column })]}>
@@ -410,15 +438,24 @@ const MENTION_GROUP_GAP = SPACE.ROW;
 function SuggestionPanel({
   head,
   empty,
+  chosen,
   children,
 }: {
   readonly head?: ReactNode;
   /** What stands in the rows' place, such as no result matching; the rows stand where none is given. */
   readonly empty: string | undefined;
+  /** The place of the row a hardware keyboard's arrows have chosen, which the scroll brings into sight; none while none is. */
+  readonly chosen?: number | undefined;
   readonly children: ReactNode;
 }) {
   const colors = useColors();
   const room = useFloatRoom();
+  const scrolled = useNativeState<string | null>(null);
+
+  // Note that the scroll follows the row the arrows choose, so the choice never moves out of sight past the float's room.
+  useEffect(() => {
+    if (chosen !== undefined) scrolled.value = String(chosen);
+  }, [chosen, scrolled]);
 
   return (
     <VStack alignment="leading" spacing={0} modifiers={[SwiftModifiers.padding(SUGGESTION_INSET)]}>
@@ -427,11 +464,14 @@ function SuggestionPanel({
         <ScrollView
           modifiers={[
             SwiftModifiers.scrollDismissesKeyboard("never"),
+            SwiftModifiers.scrollPosition(scrolled, { anchor: "center" }),
             frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: room, alignment: "topLeading" }),
             SwiftModifiers.fixedSize({ horizontal: false, vertical: true }),
           ]}
         >
-          {children}
+          <VStack alignment="leading" spacing={0} modifiers={[SwiftModifiers.scrollTargetLayout()]}>
+            {children}
+          </VStack>
         </ScrollView>
       ) : (
         <Text
@@ -477,12 +517,25 @@ export function MentionSuggestions({
   const colors = useColors();
   const head = crumb === undefined ? null : <MentionCrumbRow crumb={crumb} />;
 
+  // Each row by its place in the whole list, which the arrows step through across its groups.
+  const starts = groups.map((_, at) =>
+    groups.slice(0, at).reduce((sum, group) => sum + group.rows.length, 0),
+  );
+
+  const rows = groups.flatMap((group) => group.rows.map((row) => ({ group: group.title, row })));
+
+  const chosen = useSuggestionKeys(rows.length, (place) => {
+    const picked = rows[place];
+
+    if (picked !== undefined) onPick(picked.group, picked.row.id);
+  });
+
   if (groups.length === 0 && empty === undefined) return head;
 
   return (
-    <SuggestionPanel head={head} empty={groups.length === 0 ? empty : undefined}>
+    <SuggestionPanel head={head} empty={groups.length === 0 ? empty : undefined} chosen={chosen}>
       <VStack alignment="leading" spacing={MENTION_GROUP_GAP}>
-        {groups.map((group) => (
+        {groups.map((group, at) => (
           <VStack key={group.title} alignment="leading" spacing={0}>
             {/* Note that a narrowed list's crumb already names its one group. */}
             {crumb === undefined ? (
@@ -497,7 +550,7 @@ export function MentionSuggestions({
                 {group.title}
               </Text>
             ) : null}
-            {group.rows.map((row) => (
+            {group.rows.map((row, index) => (
               <SuggestionRow
                 key={row.id}
                 glyph={row.glyph}
@@ -505,6 +558,8 @@ export function MentionSuggestions({
                 title={row.name}
                 detail={row.detail}
                 opens={row.opens}
+                place={(starts[at] ?? 0) + index}
+                chosen={chosen === (starts[at] ?? 0) + index}
                 onPress={() => onPick(group.title, row.id)}
               />
             ))}
@@ -533,17 +588,25 @@ export function SkillSuggestions({
   readonly empty: string | undefined;
   readonly onPick: (name: string) => void;
 }) {
+  const chosen = useSuggestionKeys(skills.length, (place) => {
+    const picked = skills[place];
+
+    if (picked !== undefined) onPick(picked.name);
+  });
+
   if (skills.length === 0 && empty === undefined) return null;
 
   return (
-    <SuggestionPanel empty={skills.length === 0 ? empty : undefined}>
+    <SuggestionPanel empty={skills.length === 0 ? empty : undefined} chosen={chosen}>
       <VStack alignment="leading" spacing={0}>
-        {skills.map((skill) => (
+        {skills.map((skill, place) => (
           <SuggestionRow
             key={skill.name}
             glyph={GLYPH.SKILL}
             title={skill.word}
             detail={skill.detail}
+            place={place}
+            chosen={chosen === place}
             onPress={() => onPick(skill.name)}
           />
         ))}

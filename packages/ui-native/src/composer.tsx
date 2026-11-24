@@ -70,6 +70,11 @@ import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
 import { PillField, type PillFieldHandle } from "./pill-field.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
+import {
+  type ListKeysField,
+  SuggestionKeysDoor,
+  useSuggestionKeysHost,
+} from "./suggestion-keys.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -199,6 +204,8 @@ export interface ComposerPills {
   readonly files?: ReadonlySet<string> | undefined;
   /** Told as the field takes and lets go of the keyboard, so what an `@` offers can be read before one is typed. */
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
+  /** The list floating over the field, whose rows a hardware keyboard's keys move through, which the composer hands its field itself (`useSuggestionKeysHost`). */
+  readonly listKeys?: ListKeysField | undefined;
 }
 
 type ComposerProps = {
@@ -678,6 +685,7 @@ function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts 
     files: pillFiles,
     onAtWord: onPillAtWord,
     onFocusChange: onPillFocus,
+    listKeys: pillListKeys,
   } = pills ?? {};
 
   // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
@@ -770,6 +778,7 @@ function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts 
             maxLines={lines}
             onAtWord={onPillAtWord}
             onFocusChange={onPillFocus}
+            listKeys={pillListKeys}
             autoFocus={props.autoFocus === true}
             testID={testIds?.field ?? "composer-field"}
           />
@@ -1182,6 +1191,11 @@ function FieldLine({
   );
 }
 
+/** The composer's props with its field of pills handed the keys of the list floating over it, where it draws pills. */
+function withListKeys(props: ComposerProps, listKeys: ListKeysField | undefined): ComposerProps {
+  return props.pills === undefined ? props : { ...props, pills: { ...props.pills, listKeys } };
+}
+
 /**
  * A composer in the system's Liquid Glass at the screen's foot, above the tab
  * bar: the + for what a message carries, the field, which grows with its
@@ -1196,7 +1210,9 @@ function FieldLine({
  * holder's `onDropPictures`. It stands in a React Native bar (`GlassBar`),
  * docked over a compact window's screen (`GlassDock`).
  */
-export function Composer(props: ComposerProps) {
+export function Composer(given: ComposerProps) {
+  const keys = useSuggestionKeysHost();
+  const props = withListKeys(given, keys.field);
   const { onDropPictures } = props;
   const oneLine = useOneLine(props);
   const parts = useComposerParts(props, oneLine);
@@ -1206,24 +1222,26 @@ export function Composer(props: ComposerProps) {
   const foot = oneLine ? null : <ComposerRow props={props} parts={parts} />;
 
   return (
-    <GlassBar
-      // Note that a field over a row of controls stands on the glass alone, as the desktop's box stands its field and its row on one ground, with no filled box of ours behind the words.
-      field={!rowed}
-      head={props.head}
-      heads={props.pills !== undefined}
-      foot={rowed ? foot : undefined}
-      above={oneLine ? undefined : props.above}
-      float={props.float}
-      // Note that on one line no transcript stands over the bar to drag the keyboard down by, so the bar takes the drag itself.
-      onLower={oneLine ? parts.lower : undefined}
-      modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
-    >
-      {rowed ? (
-        <FieldLine props={props} parts={parts} oneLine={oneLine} />
-      ) : (
-        <RowPieces parts={parts} />
-      )}
-    </GlassBar>
+    <SuggestionKeysDoor door={keys.door}>
+      <GlassBar
+        // Note that a field over a row of controls stands on the glass alone, as the desktop's box stands its field and its row on one ground, with no filled box of ours behind the words.
+        field={!rowed}
+        head={props.head}
+        heads={props.pills !== undefined}
+        foot={rowed ? foot : undefined}
+        above={oneLine ? undefined : props.above}
+        float={props.float}
+        // Note that on one line no transcript stands over the bar to drag the keyboard down by, so the bar takes the drag itself.
+        onLower={oneLine ? parts.lower : undefined}
+        modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
+      >
+        {rowed ? (
+          <FieldLine props={props} parts={parts} oneLine={oneLine} />
+        ) : (
+          <RowPieces parts={parts} />
+        )}
+      </GlassBar>
+    </SuggestionKeysDoor>
   );
 }
 
@@ -1233,7 +1251,9 @@ export function Composer(props: ComposerProps) {
  * system's own glass, rounded as the bar is (`BAR_GLASS`), taking pictures
  * dropped on it as the bar does.
  */
-export function ComposerFoot(props: ComposerProps) {
+export function ComposerFoot(given: ComposerProps) {
+  const keys = useSuggestionKeysHost();
+  const props = withListKeys(given, keys.field);
   const { onDropPictures } = props;
   const parts = useComposerParts(props);
   const rowed = stacked(props);
@@ -1279,16 +1299,18 @@ export function ComposerFoot(props: ComposerProps) {
   // Note that the composer keeps its place under what stands over it whether or not anything stands there, so its field is never drawn anew as the queue comes and goes.
   // Note that at a column's foot what floats stands over the composer in the column itself, since no SwiftUI view here stands over the page above it.
   return (
-    <VStack spacing={SPACE.TIGHT * 2}>
-      {props.float === undefined ? null : (
-        <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>
-          <BarFloat>{props.float}</BarFloat>
-        </VStack>
-      )}
-      {props.above === undefined ? null : (
-        <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>{props.above}</VStack>
-      )}
-      {foot}
-    </VStack>
+    <SuggestionKeysDoor door={keys.door}>
+      <VStack spacing={SPACE.TIGHT * 2}>
+        {props.float === undefined ? null : (
+          <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>
+            <BarFloat>{props.float}</BarFloat>
+          </VStack>
+        )}
+        {props.above === undefined ? null : (
+          <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>{props.above}</VStack>
+        )}
+        {foot}
+      </VStack>
+    </SuggestionKeysDoor>
   );
 }
