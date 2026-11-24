@@ -62,9 +62,7 @@ import type { TaskSectionIcon } from "@repo/features/task-section-wire";
 import { MOVE_TO_SECTION, REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
-  TASK_PRIORITY_WORDS,
   TASK_RELATION_WORDS,
-  TASK_STATUS_TONE,
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
@@ -125,6 +123,8 @@ import {
   BUTTON_LOOK,
   BUZZ,
   buzz,
+  CHOICE_MARK,
+  type ChoiceMark,
   type ColumnBar,
   ConfirmAsk,
   DocumentField,
@@ -144,15 +144,16 @@ import {
   type LongPressGroup,
   MentionDock,
   MentionFoot,
+  type MenuChoice,
   type MenuPhotoFile,
   managerFaceMenu,
   menuWithout,
   NoSelection,
   PATH_PART,
   PRIORITY_MARK_SYMBOL,
-  PRIORITY_MARK_TONE,
   ProblemLine,
-  priorityMarkUnder,
+  personChoice,
+  priorityChoice,
   QUIET_ROW_QUESTION,
   RelationRow,
   ROW_ACTION_TONE,
@@ -168,16 +169,16 @@ import {
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
-  STATUS_TONE,
   StackBarMenu,
   type StandingMenus,
   sectionEmoji,
   sectionGlyph,
   sectionGlyphColor,
+  statusChoice,
   TaskHead,
   TaskRow,
   taskPreview,
-  UNASSIGNED_UNDER,
+  unassignedChoice,
   useColors,
   useDockRoom,
   useMinute,
@@ -399,14 +400,13 @@ function statusSubmenu(
   return {
     label: WORDS.STATUS,
     symbol: GLYPH.STATUS,
-    choices: STATUS_ORDER.map((status) => ({
-      label: TASK_STATUS_WORDS[status],
-      heard: `${WORDS.SET_STATUS}: ${TASK_STATUS_WORDS[status]}`,
-      symbol: STATUS_MARK_SYMBOL[status],
-      tone: TASK_STATUS_TONE[status],
-      on: task.status === status,
-      onPress: () => setStatus(task.id, status),
-    })),
+    choices: STATUS_ORDER.map((status) =>
+      statusChoice(status, {
+        heard: `${WORDS.SET_STATUS}: ${TASK_STATUS_WORDS[status]}`,
+        on: task.status === status,
+        onPress: () => setStatus(task.id, status),
+      }),
+    ),
   };
 }
 
@@ -442,12 +442,14 @@ function settleSwipes(
 function sectionChoiceLead(
   title: string,
   icon: TaskSectionIcon | undefined,
-): { readonly label: string; readonly symbol?: Glyph | undefined; readonly emoji?: string } {
+):
+  | { readonly label: string; readonly symbol: Glyph }
+  | { readonly label: string; readonly mark: ChoiceMark } {
   const emoji = sectionEmoji(icon);
 
   return emoji === undefined
     ? { label: title, symbol: sectionGlyph(icon) }
-    : { label: title, emoji };
+    : { label: title, mark: { kind: CHOICE_MARK.EMOJI, emoji } };
 }
 
 /**
@@ -1787,15 +1789,16 @@ function standingMenus(
 }
 
 /** A task's priorities as its Priority menu offers them, the most pressing first, the one it holds checked. */
-function priorityChoices(task: TaskSummary, setPriority: TaskWrites["setPriority"]) {
-  return TASK_PRIORITY_ORDER.map((priority) => ({
-    label: TASK_PRIORITY_WORDS[priority],
-    symbol: PRIORITY_MARK_SYMBOL[priority],
-    tone: PRIORITY_MARK_TONE[priority],
-    under: priorityMarkUnder(priority),
-    on: task.priority === priority,
-    onPress: () => setPriority(task.id, priority),
-  }));
+function priorityChoices(
+  task: TaskSummary,
+  setPriority: TaskWrites["setPriority"],
+): readonly MenuChoice[] {
+  return TASK_PRIORITY_ORDER.map((priority) =>
+    priorityChoice(priority, {
+      on: task.priority === priority,
+      onPress: () => setPriority(task.id, priority),
+    }),
+  );
 }
 
 /**
@@ -1809,27 +1812,21 @@ function assigneeChoices(
   members: readonly ListedMember[],
   photoOf: (userId: string) => MenuPhotoFile | undefined,
   setAssignee: TaskWrites["setAssignee"],
-) {
+): readonly MenuChoice[] {
   const assigneeId = task.assignee?.userId;
 
   return [
-    {
-      label: NO_ASSIGNEE_WORDS,
-      symbol: GLYPH.UNASSIGNED,
-      // Note that the tone puts the ring in the muted ink the chip draws it in, and the patch composes the faint seat only under a glyph given its own color.
-      tone: STATUS_TONE.NEUTRAL,
-      under: UNASSIGNED_UNDER,
+    unassignedChoice(NO_ASSIGNEE_WORDS, {
       on: assigneeId === undefined,
       onPress: () => setAssignee(task.id, null),
-    },
-    ...members.map((member) => ({
-      label: member.name,
-      detail: member.you ? FOLLOWING_WORDS.YOU : member.email,
-      symbol: GLYPH.PERSON,
-      photo: photoOf(member.userId),
-      on: member.userId === assigneeId,
-      onPress: () => setAssignee(task.id, member),
-    })),
+    }),
+    ...members.map((member) =>
+      personChoice(member.name, photoOf(member.userId), {
+        detail: member.you ? FOLLOWING_WORDS.YOU : member.email,
+        on: member.userId === assigneeId,
+        onPress: () => setAssignee(task.id, member),
+      }),
+    ),
   ];
 }
 

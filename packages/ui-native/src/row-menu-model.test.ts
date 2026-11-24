@@ -1,6 +1,8 @@
+import { TASK_STATUS } from "@repo/features/task-wire";
 import { describe, expect, it } from "vitest";
 import { GLYPH, glyphImage } from "./glyph.js";
 import {
+  CHOICE_MARK,
   type LongPressGroup,
   MENU_ICON,
   MENU_NODE,
@@ -45,8 +47,7 @@ describe("menuTree", () => {
           choices: [
             {
               label: "Backlog",
-              symbol: GLYPH.STATUS_BACKLOG,
-              tone: "neutral",
+              mark: { kind: CHOICE_MARK.STATUS, status: TASK_STATUS.BACKLOG },
               on: true,
               onPress: () => pressed.push("Backlog"),
               heard: "Set status: Backlog",
@@ -67,7 +68,7 @@ describe("menuTree", () => {
           choices: [
             {
               label: "Garden",
-              emoji: "🌱",
+              mark: { kind: CHOICE_MARK.EMOJI, emoji: "🌱" },
               detail: "3 tasks",
               on: false,
               onPress: () => pressed.push("Garden"),
