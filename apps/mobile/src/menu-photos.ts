@@ -1,9 +1,9 @@
 // menu-photos.ts -- a picture as a file in the app's caches, which a system menu draws round in a choice's glyph place: each member's sign-in picture, and a workspace's photo.
 
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
-import { MARK_SIZE } from "@repo/ui-native";
+import { MARK_SIZE, type MenuPhotoFile, menuPhotoFile } from "@repo/ui-native";
 import { File, Paths } from "expo-file-system";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppState, PixelRatio } from "react-native";
 import type { PictureOf } from "./member-pictures.js";
 
@@ -113,7 +113,7 @@ export function menuAddress(
 
 /** A menu's pictures as files on this device: each address's file once written, and whether it is still on its way rather than failed. */
 export interface MenuPictures {
-  readonly fileOf: (address: string) => string | undefined;
+  readonly fileOf: (address: string) => MenuPhotoFile | undefined;
   /** Whether the address's file is still being downloaded or written, so its choice shows nothing rather than its fallback meanwhile. */
   readonly coming: (address: string) => boolean;
 }
@@ -172,7 +172,11 @@ export function useMenuPictures(addresses: readonly string[]): MenuPictures {
   // Note that the readers stand still while nothing landed, so a memo drawn from them does too.
   return useMemo(
     () => ({
-      fileOf: (address: string) => files.get(address)?.uri,
+      fileOf: (address: string) => {
+        const uri = files.get(address)?.uri;
+
+        return uri === undefined ? undefined : menuPhotoFile(uri);
+      },
       coming: (address: string) => !files.has(address) && !missed.has(address),
     }),
     [files, missed],
@@ -182,7 +186,7 @@ export function useMenuPictures(addresses: readonly string[]): MenuPictures {
 /** Each picture address's file on this device, for a menu that draws them; none while one is still on its way, or failed (`useMenuPictures`). */
 export function useMenuPictureFiles(
   addresses: readonly string[],
-): (address: string) => string | undefined {
+): (address: string) => MenuPhotoFile | undefined {
   return useMenuPictures(addresses).fileOf;
 }
 
@@ -190,7 +194,7 @@ export function useMenuPictureFiles(
 export function useMenuPhotos(
   pictureOf: PictureOf,
   userIds: readonly string[],
-): (userId: string) => string | undefined {
+): (userId: string) => MenuPhotoFile | undefined {
   const byUser = useMemo(() => {
     const addresses = new Map<string, string>();
 
@@ -206,9 +210,13 @@ export function useMenuPhotos(
   const addresses = useMemo(() => [...byUser.values()], [byUser]);
   const fileOf = useMenuPictureFiles(addresses);
 
-  return (userId) => {
-    const address = byUser.get(userId);
+  // Note that the reader stands still while no photo landed, so a list memoized on it isn't built anew on every draw.
+  return useCallback(
+    (userId: string) => {
+      const address = byUser.get(userId);
 
-    return address === undefined ? undefined : fileOf(address);
-  };
+      return address === undefined ? undefined : fileOf(address);
+    },
+    [byUser, fileOf],
+  );
 }

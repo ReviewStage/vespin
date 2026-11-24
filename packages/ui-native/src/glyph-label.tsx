@@ -6,6 +6,7 @@ import type { IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReactElement, ReactNode } from "react";
 import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
+import type { MenuPhotoFile } from "./row-menu-model.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
 /** The text style a glyph stands at beside an act's words, as SwiftUI sizes a symbol by its text. */
@@ -52,7 +53,7 @@ export function GlyphImage({
  * round at a menu glyph's size and kept as it is (`photoSize`, from the app's
  * `@expo/ui` patch), because a menu templates any other image in its ink.
  */
-function MenuPhoto({ photo }: { readonly photo: string }) {
+function MenuPhoto({ photo }: { readonly photo: MenuPhotoFile }) {
   return <Image uiImage={photo} photoSize={MARK_SIZE.MENU_PHOTO} />;
 }
 
@@ -127,7 +128,7 @@ export function PickOption({
   readonly value: string;
   readonly glyph?: Glyph | undefined;
   readonly color?: string | undefined;
-  readonly photo?: string | undefined;
+  readonly photo?: MenuPhotoFile | undefined;
 }) {
   const tagged = [tag(value)];
 
@@ -151,7 +152,7 @@ export function actContent(
   glyph: Glyph | undefined,
   textStyle?: GlyphTextStyle,
   color?: string,
-  photo?: string,
+  photo?: MenuPhotoFile,
   under?: MarkLayer,
 ): { readonly label: string } | { readonly children: ReactElement } {
   if (photo !== undefined)
@@ -183,7 +184,7 @@ export function menuActContent(
   glyph: Glyph | undefined,
   detail: string | undefined,
   color?: string,
-  photo?: string,
+  photo?: MenuPhotoFile,
 ): { readonly label: string } | { readonly children: ReactElement } {
   if (detail === undefined) return actContent(label, glyph, undefined, color, photo);
 

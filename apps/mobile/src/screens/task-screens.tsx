@@ -144,6 +144,7 @@ import {
   type LongPressGroup,
   MentionDock,
   MentionFoot,
+  type MenuPhotoFile,
   managerFaceMenu,
   menuWithout,
   NoSelection,
@@ -737,6 +738,7 @@ type RowListing = Pick<
   | "setAssignee"
   | "members"
   | "pictureOf"
+  | "menuPhotoOf"
   | "relations"
   | "placing"
   | "follow"
@@ -802,7 +804,7 @@ function rowActs(
         {
           label: WORDS.ASSIGNEE,
           symbol: GLYPH.PERSON,
-          choices: assigneeChoices(task, listing.members, listing.pictureOf, listing.setAssignee),
+          choices: assigneeChoices(task, listing.members, listing.menuPhotoOf, listing.setAssignee),
         },
       ],
       [{ ...pin, tone: ROW_ACTION_TONE.NEUTRAL }, moreSubmenu(task, listing, openRelation)],
@@ -1770,7 +1772,7 @@ function agentState(status: AgentStatus): AgentRowState {
 function standingMenus(
   overview: TaskOverview,
   members: readonly ListedMember[],
-  photoOf: (userId: string) => string | undefined,
+  photoOf: (userId: string) => MenuPhotoFile | undefined,
 ): StandingMenus {
   const { task } = overview;
 
@@ -1805,7 +1807,7 @@ function priorityChoices(task: TaskSummary, setPriority: TaskWrites["setPriority
 function assigneeChoices(
   task: TaskSummary,
   members: readonly ListedMember[],
-  photoOf: (userId: string) => string | undefined,
+  photoOf: (userId: string) => MenuPhotoFile | undefined,
   setAssignee: TaskWrites["setAssignee"],
 ) {
   const assigneeId = task.assignee?.userId;
@@ -1997,6 +1999,12 @@ function useRelatedRowsListing(
   const follow = useFollowWrite();
   const members = useListedMembers(workspace?.id);
   const pictureOf = useMemberPictures();
+
+  const menuPhotoOf = useMenuPhotos(
+    pictureOf,
+    useMemo(() => members.map(({ userId }) => userId), [members]),
+  );
+
   const placing = useTaskPlacing(workspace?.id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const { setStatus, workingAgents, rename, setPriority, setAssignee, relations } = overview;
@@ -2010,6 +2018,7 @@ function useRelatedRowsListing(
       readerId,
       members,
       pictureOf,
+      menuPhotoOf,
       placing,
       setStatus,
       workingAgents,
@@ -2026,6 +2035,7 @@ function useRelatedRowsListing(
       readerId,
       members,
       pictureOf,
+      menuPhotoOf,
       placing,
       setStatus,
       workingAgents,

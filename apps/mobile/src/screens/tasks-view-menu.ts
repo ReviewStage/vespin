@@ -28,7 +28,7 @@ import {
   TASKS_ORDER_WORDS,
   TASKS_VIEW_WORDS,
 } from "@repo/features/tasks-page-model";
-import { type BarMenu, GLYPH, STATUS_MARK_SYMBOL } from "@repo/ui-native";
+import { type BarMenu, GLYPH, type MenuPhotoFile, STATUS_MARK_SYMBOL } from "@repo/ui-native";
 import type { ListedMember } from "../member-pictures.js";
 
 /** One choice a menu checks. */
@@ -55,7 +55,7 @@ export interface TasksViewMenuInput {
   readonly setView: (view: TaskTreeView) => void;
   readonly shared: boolean;
   readonly members: readonly ListedMember[];
-  readonly photoOf: (userId: string) => string | undefined;
+  readonly photoOf: (userId: string) => MenuPhotoFile | undefined;
 }
 
 /** Whether two Assigned to's name the same tasks. */

@@ -5,6 +5,7 @@ import {
   MENU_ICON,
   MENU_NODE,
   type MenuInks,
+  menuPhotoFile,
   menuPressAt,
   menuTree,
   ROW_ACTION_TONE,
@@ -187,5 +188,15 @@ describe("menuTree", () => {
       "Garden",
       "Permanently delete",
     ]);
+  });
+});
+
+describe("menuPhotoFile", () => {
+  // Note that a system menu reads a photo only from a file on this device, so a picture's web address drew no icon at all.
+  it.each([
+    { address: "file:///caches/menu-photo-1a2b", photo: "file:///caches/menu-photo-1a2b" },
+    { address: "https://avatars.githubusercontent.com/u/1?s=60", photo: undefined },
+  ])("takes $address as $photo", ({ address, photo }) => {
+    expect(menuPhotoFile(address)).toBe(photo);
   });
 });
