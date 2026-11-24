@@ -98,6 +98,8 @@ export type BarMenuGroup = {
   /** What heads the group, as a compact thread's ⋯ heads its task and agent with the thread's path; a rule alone where none is given. */
   readonly title?: string | undefined;
   readonly choices?: readonly MenuChoice[] | undefined;
+  /** Menus standing before its acts, as an agent's ⋯ stands Move to before Archive, as the panel's does. */
+  readonly leadingSubmenus?: readonly BarMenu[] | undefined;
   readonly actions: readonly BarMenuAction[];
   readonly submenus?: readonly BarMenu[] | undefined;
 };
@@ -120,6 +122,43 @@ export type BarMenu = {
   /** Groups after its acts and menus, each set apart by a rule, such as a task's ⋯ setting Permanently delete apart. */
   readonly groups?: readonly BarMenuGroup[] | undefined;
 };
+
+/**
+ * A menu of groups, each set apart by the system's rule, as a page's ⋯ groups
+ * its acts in the panel's order: the groups that hold anything, the first
+ * standing at the menu's head and each after it behind a rule; none where no
+ * group holds anything.
+ */
+export function menuOfGroups(
+  label: string,
+  symbol: Glyph,
+  groups: readonly BarMenuGroup[],
+): BarMenu | undefined {
+  const held = groups.filter(
+    (group) =>
+      group.actions.length > 0 ||
+      (group.leadingSubmenus ?? []).length > 0 ||
+      (group.submenus ?? []).length > 0 ||
+      (group.choices ?? []).length > 0,
+  );
+
+  const [head, ...rest] = held;
+
+  if (head === undefined) return undefined;
+
+  // Note that a head with menus before its acts stands as the first group instead, since the menu's own head draws its acts first.
+  if ((head.leadingSubmenus ?? []).length > 0)
+    return { label, symbol, choices: [], actions: [], groups: held };
+
+  return {
+    label,
+    symbol,
+    choices: head.choices ?? [],
+    actions: head.actions,
+    submenus: head.submenus,
+    groups: rest,
+  };
+}
 
 /** A list's search, the system's field over its column: what it says before anything is typed, what is typed now, and what is called with each change. */
 export type BarSearch = {
@@ -182,7 +221,13 @@ type SplitViewProps = {
 
 /** What a group is told apart by, since it has no name of its own: the words of its first act, of its first menu, or of its first switch. */
 export function groupKey(group: BarMenuGroup): string {
-  return group.actions[0]?.label ?? group.submenus?.[0]?.label ?? group.choices?.[0]?.label ?? "";
+  return (
+    group.leadingSubmenus?.[0]?.label ??
+    group.actions[0]?.label ??
+    group.submenus?.[0]?.label ??
+    group.choices?.[0]?.label ??
+    ""
+  );
 }
 
 /** A menu's switches, acts, and the menus within it, as SwiftUI's toggles, buttons, and menus. */
@@ -198,6 +243,9 @@ function MenuActs({ group }: { readonly group: BarMenuGroup }) {
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
+      ))}
+      {(group.leadingSubmenus ?? []).map((submenu) => (
+        <BarMenuButton key={submenu.label} menu={submenu} />
       ))}
       {group.actions.map((action) => (
         <SwiftUIButton
@@ -338,6 +386,7 @@ export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMen
   const kept = (group: BarMenuGroup): BarMenuGroup => ({
     title: group.title,
     choices: group.choices,
+    leadingSubmenus: group.leadingSubmenus?.filter((submenu) => !barred.has(submenu.label)),
     actions: group.actions.filter((action) => !barred.has(action.label)),
     submenus: group.submenus?.filter((submenu) => !barred.has(submenu.label)),
   });
@@ -347,6 +396,7 @@ export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMen
     .filter(
       (group) =>
         group.actions.length > 0 ||
+        (group.leadingSubmenus ?? []).length > 0 ||
         (group.submenus ?? []).length > 0 ||
         (group.choices ?? []).length > 0,
     );

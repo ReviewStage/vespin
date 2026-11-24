@@ -415,6 +415,7 @@ export {
   type ColumnBar,
   groupKey,
   isBarMenu,
+  menuOfGroups,
   menuWithout,
   PATH_PART,
   SplitView,
