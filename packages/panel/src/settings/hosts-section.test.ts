@@ -536,8 +536,19 @@ const LAPTOP: MachineLine = {
   settings: { commandMode: MACHINE_COMMAND_MODE.NEVER, computerUse: false, alwaysAllowedApps: [] },
 };
 
+/** A Linux server that takes agents' commands, whose app ships no computer-use helper. */
+const SERVER: MachineLine = {
+  id: "7c9e1a3d-5f7b-4c8d-0e2f-4a6b8c0d2e33",
+  name: "Server",
+  platform: DEVICE_PLATFORM.LINUX,
+  host: false,
+  listening: true,
+  isDefault: false,
+  settings: { commandMode: MACHINE_COMMAND_MODE.ALWAYS, computerUse: true, alwaysAllowedApps: [] },
+};
+
 /**
- * The Studio as a host and the laptop as a Mac that only runs the app, laid
+ * The Studio as a host, the laptop as a Mac that only runs the app, and a Linux server, laid
  * with their settings as the host holds them, Computer use on; answers with
  * every change and Remove the page sent, as the host was asked them.
  */
@@ -565,7 +576,7 @@ async function machinesWithSettings(landingAt?: string): Promise<unknown[]> {
           ...settings,
           experiments: { ...settings.experiments, [EXPERIMENT.COMPUTER_USE]: true },
         },
-        [LIVE_READ.MACHINES]: { [account.id]: { rows: [STUDIO, LAPTOP] } },
+        [LIVE_READ.MACHINES]: { [account.id]: { rows: [STUDIO, LAPTOP, SERVER] } },
       };
     },
   });
@@ -601,13 +612,16 @@ async function machinesWithSettings(landingAt?: string): Promise<unknown[]> {
   return sent;
 }
 
-test("a machine's apps switch and an app's Remove are sent for that machine alone", async () => {
+test("a machine's apps switch, on a Mac alone, and an app's Remove are sent for that machine alone", async () => {
   const sent = await machinesWithSettings();
 
   await vi.waitFor(() => assert.ok(pageText().includes("Notes")));
   removeOf("Notes");
 
   const switches = [...document.querySelectorAll<HTMLElement>('[aria-label="Computer use"]')];
+
+  // Note that only the Macs offer computer use, the Linux server none.
+  assert.equal(switches.length, 2);
 
   // The laptop's switch, its machine's second, is off; pressing it turns that machine's on.
   await act(async () => switches[1]?.click());
