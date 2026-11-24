@@ -41,7 +41,7 @@ const NOTICE = "acceptInvite can add a member twice";
 /** A picture's bytes as a reply carries them: a PNG's signature alone, which no reader here draws. */
 const PICTURE = "iVBORw0KGgo=";
 
-/** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front, a Keychain that keeps no tokens, a sign-in sheet closed at once, and no share token kept. */
+/** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front, a network NetInfo has not read, a Keychain that keeps no tokens, a sign-in sheet closed at once, and no share token kept. */
 const testDevice: DeviceSeams = {
   fileSystem: NodeFileSystem.layer,
   createId: () => crypto.randomUUID(),
@@ -49,6 +49,7 @@ const testDevice: DeviceSeams = {
   openSheet: () => Promise.resolve(),
   openSocket: () => Effect.succeed({ unreachable: true }),
   onAppActiveChanged: () => () => undefined,
+  onNetworkChanged: () => () => undefined,
   tokenVault: { read: Effect.succeed(undefined), write: () => Effect.void, clear: Effect.void },
   authSession: {
     open: () => Promise.resolve({ end: AUTH_SESSION_END.CLOSED }),
@@ -149,6 +150,29 @@ it.effect(
         expect(state.tasks.listStatus).toBe(TASKS_READ.READY);
       }),
     ),
+);
+
+it.effect("a phone whose network is down stands offline in the document at once", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const root = yield* ownFolder;
+
+      const { bridge } = yield* standingHost(root, undefined, {
+        ...testDevice,
+        onNetworkChanged: (listener) => {
+          listener(false);
+
+          return () => undefined;
+        },
+      });
+
+      // Note that the network watch writes from a fiber of its own, so the host is given turns to run it first.
+      yield* settledVersion(bridge);
+      const state = yield* Effect.promise(() => bridge.requestAppState());
+
+      expect(state.network.online).toBe(false);
+    }),
+  ),
 );
 
 it.effect(

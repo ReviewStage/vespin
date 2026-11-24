@@ -1,11 +1,12 @@
 /**
- * device-seams.ts -- what the host reads of the device, answered by Expo and React Native: its files, its ids, how an address opens, its socket, whether the app is in the foreground, the sign-in's authentication session, the share sheet's token, the local database's SQLite, and where the host's own lines are kept for a crash report.
+ * device-seams.ts -- what the host reads of the device, answered by Expo and React Native: its files, its ids, how an address opens, its socket, whether the app is in the foreground, whether the device has a network, the sign-in's authentication session, the share sheet's token, the local database's SQLite, and where the host's own lines are kept for a crash report.
  *
  * `compose-mobile.ts` takes these as one value rather than reaching for the
  * device itself, so a test composes the same host over a folder and seams of
  * its own, on Node, where no Expo module loads.
  */
 
+import NetInfo from "@react-native-community/netinfo";
 import { type AccountRenewalWindow, renewalHeldBy } from "@repo/credentials";
 import { randomUUID } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
@@ -44,6 +45,18 @@ function onAppActiveChanged(listener: (active: boolean) => void): () => void {
 }
 
 /**
+ * Whether the device has a network, as NetInfo says it: its reading now, as
+ * NetInfo answers a new listener at once, then each change. Note that a
+ * reading NetInfo does not yet know (`null`), as early in a launch, counts
+ * as online, since an answer of offline is the reliable one and the
+ * service's reach still catches a network that answers nothing. The host's
+ * network watch and the screens' queries both read this, so the two agree.
+ */
+export function onNetworkChanged(listener: (online: boolean) => void): () => void {
+  return NetInfo.addEventListener((state) => listener(state.isConnected !== false));
+}
+
+/**
  * When the account may renew: while the app is not in the background, as
  * React Native's `AppState` says it, since iOS may suspend a background wake
  * mid-request and the rotated refresh token it was answered would then be
@@ -77,6 +90,7 @@ export function deviceSeams(): DeviceSeams {
     openSheet: openSheetUntilClosed,
     openSocket: openRelaySocket,
     onAppActiveChanged,
+    onNetworkChanged,
     tokenVault: keychainTokens,
     authSession: webAuthSession,
     keepShareToken,
