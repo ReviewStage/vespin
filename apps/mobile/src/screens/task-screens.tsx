@@ -1631,7 +1631,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
     ],
     groups: [
       {
-        actions: [
+        items: [
           {
             label: WORDS.RENAME,
             symbol: GLYPH.RENAME,
@@ -1643,7 +1643,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         ],
       },
       {
-        actions: [
+        items: [
           {
             label: WORDS.NEW_SUB_TASK,
             symbol: GLYPH.ADD,
@@ -1654,14 +1654,14 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
             symbol: action.symbol,
             onPress: action.onPress,
           })),
+          ...[
+            relationSubmenu(task, doors.openRelation),
+            ...placingSubmenus(task, overview.placing),
+          ].map(barSubmenu),
         ],
-        submenus: [
-          relationSubmenu(task, doors.openRelation),
-          ...placingSubmenus(task, overview.placing),
-        ].map(barSubmenu),
       },
       {
-        actions: [
+        items: [
           {
             label: WORDS.DELETE,
             symbol: GLYPH.DELETE,

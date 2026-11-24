@@ -152,7 +152,7 @@ function personMenu({
   const manages =
     manage === undefined
       ? []
-      : [{ actions: [{ label: PERSON_PAGE_WORDS.MANAGE, symbol: GLYPH.PEOPLE, onPress: manage }] }];
+      : [{ items: [{ label: PERSON_PAGE_WORDS.MANAGE, symbol: GLYPH.PEOPLE, onPress: manage }] }];
 
   if (copies.length === 0 && manages.length === 0) return undefined;
 

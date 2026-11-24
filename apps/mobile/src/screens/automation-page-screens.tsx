@@ -185,7 +185,7 @@ function automationMenu(
     ],
     groups: [
       {
-        actions: [
+        items: [
           {
             label: AUTOMATION_PHONE_WORDS.COPY_LINK,
             symbol: GLYPH.LINK,
@@ -195,7 +195,7 @@ function automationMenu(
         ],
       },
       {
-        actions: [
+        items: [
           {
             label: AUTOMATION_PHONE_WORDS.DELETE,
             symbol: GLYPH.DELETE,
