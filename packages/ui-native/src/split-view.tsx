@@ -168,14 +168,14 @@ export type ColumnBar = {
   readonly search?: BarSearch | undefined;
   /** The acts at its foot, each a button or a menu, such as Select mode's Remind me. */
   readonly foot?: readonly BarFootItem[] | undefined;
-  /** What stands pinned at its foot in the system's glass, such as an iPad sidebar's workspace and account, which the column's rows scroll under. */
+  /** What stands pinned at its foot in the system's glass, such as an iPad sidebar's account and Settings, which the column's rows scroll under. */
   readonly bottom?: BarBottom | undefined;
 };
 
-/** A column's foot: a view at its leading edge, such as the workspace switcher, and one at its trailing edge, such as the account's photo. */
+/** A column's foot: a view at its leading edge, such as the account's menu, and an act at its trailing edge, such as Settings' gear. */
 export type BarBottom = {
   readonly leading: ReactNode;
-  readonly trailing?: ReactNode | undefined;
+  readonly trailing?: BarAction | undefined;
 };
 
 /** What a bar's foot holds: an act, or a menu that opens from its glyph (from its words at a list column's foot), such as Remind me's times. */
@@ -556,7 +556,7 @@ function Column({
         )}
         {bar.bottom?.trailing === undefined ? null : (
           <ToolbarItem placement="bottomBar" spacerBefore>
-            {bar.bottom.trailing}
+            <BarActionButton action={bar.bottom.trailing} />
           </ToolbarItem>
         )}
       </BarContent>

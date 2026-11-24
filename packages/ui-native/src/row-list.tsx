@@ -107,6 +107,8 @@ const HEADER_VERTICAL = SPACE.ROW;
 export const LIST_LOOK = {
   PLAIN: "plain",
   DETAIL: "grouped",
+  /** An iPad's own sidebar, the system's sidebar list, so it keeps the system's sidebar metrics, keyboard focus and arrow keys, and pointer hover. */
+  SIDEBAR: "sidebar",
 } as const;
 
 export type ListLook = (typeof LIST_LOOK)[keyof typeof LIST_LOOK];

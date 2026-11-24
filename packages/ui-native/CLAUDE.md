@@ -468,9 +468,12 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   a sidebar rail. An
   iPad stands no system tab sidebar and, in a regular window, no bar: the
   app's own sidebar stands beside the tabs (`SidebarFrame` holding a
-  `SidebarPane`: Hide Sidebar heading it, a `PlaceRow` for each place, the
-  tasks, and the workspace switcher and the account's photo at its foot in
-  the system's glass, `ColumnBar`'s `bottom`), so every page, a pushed one
+  `SidebarPane`: Hide Sidebar in its bar, the system's sidebar list
+  (`LIST_LOOK.SIDEBAR`) headed by the workspace switcher
+  (`WorkspaceSwitcherRow`), a `PlaceRow` for each place, the tasks, and at
+  its foot in the system's glass the account's photo and name opening its
+  menu (`AccountMenuItem`) with Settings' gear, `ColumnBar`'s `bottom`, as
+  the panel's sidebar stands them), so every page, a pushed one
   included, keeps it beside it; it folds away rather than moving the tabs
   to a floating bar over the page, a root's column or a pushed page's
   header then standing Show Sidebar (`sidebarAction`,

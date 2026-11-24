@@ -4,6 +4,7 @@ import { IOS_TAB, type IosTab, iosTabOfGroup } from "@repo/features/ios-app-link
 import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import {
   AccountBarItem,
+  AccountMenuItem,
   type BarAction,
   type ColumnBar,
   GLYPH,
@@ -18,6 +19,7 @@ import {
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
   WorkspaceSwitcherItem,
+  WorkspaceSwitcherRow,
 } from "@repo/ui-native";
 import { useIsFocused, useRouter, useSegments } from "expo-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -54,6 +56,12 @@ const PLACE_WORDS = {
   [SIDEBAR_PLACE.AUTOMATIONS]: "Automations",
   [SIDEBAR_PLACE.MERGE_QUEUE]: MERGE_QUEUE_PAGE_WORDS.TITLE,
 } as const satisfies Record<SidebarPlace, string>;
+
+/** What the sidebar's foot says, as the panel's foot says it. */
+const FOOT_WORDS = {
+  SETTINGS: "Settings",
+  FEEDBACK: "Send feedback",
+} as const;
 
 /** The list a tab's split view stands beside its detail, and its bar: its title, its menu, and its search. */
 type ListColumn = {
@@ -161,9 +169,12 @@ export function useSidebarShowAction(): BarAction | undefined {
  * what waits on the reader, Tasks, Automations, which opens Settings' list
  * of them, and Merge queue, while the account has it on); then the tasks, as the Tasks list draws them, read once
  * above the tabs (`useSidebarTasks`); the place or task in front standing
- * selected (`useSidebarHere`); and at its foot, in the system's glass, the
- * workspace switcher with the account's photo opening Settings beside it,
- * as the panel's foot holds the account. A place opens its tab; Tasks opens
+ * selected (`useSidebarHere`), under the workspace switcher heading the
+ * list, as the panel's sidebar heads itself; and at its foot, in the
+ * system's glass, the account's photo and name opening its menu (Settings,
+ * Send feedback) with Settings' gear at its end, as the panel's foot holds
+ * them. Its list is the system's sidebar list, so it keeps the system's
+ * keyboard focus, arrow keys and pointer hover. A place opens its tab; Tasks opens
  * on its whole list, and a task beside the sidebar on Tasks, as a link to
  * it does. It is drawn once, by the tabs' layout, and only on an iPad.
  */
@@ -201,22 +212,45 @@ export function AppSidebarPane() {
     router.navigate({ pathname: SPLIT_TAB.TASKS, params: { selected: id } });
   };
 
-  // Note that the switcher's menu ends in Settings too, so the account's photo beside it stands only once the workspaces are read, and the photo alone stands until then.
+  // Note that the foot stands the account as the panel's does, its photo and name opening its menu, with Settings' gear at its end.
   const bottom =
-    switcher !== undefined
-      ? {
-          leading: <WorkspaceSwitcherItem {...switcher} look={SWITCHER_LOOK.NAMED} />,
-          trailing: account === undefined ? undefined : <AccountBarItem {...account} />,
-        }
-      : account === undefined
-        ? undefined
-        : { leading: <AccountBarItem {...account} /> };
+    account === undefined
+      ? undefined
+      : {
+          leading: (
+            <AccountMenuItem
+              name={account.name}
+              picture={account.picture}
+              actions={[
+                {
+                  label: FOOT_WORDS.SETTINGS,
+                  symbol: GLYPH.SETTINGS,
+                  onPress: () => openSettings(),
+                },
+                {
+                  label: FOOT_WORDS.FEEDBACK,
+                  symbol: GLYPH.FEEDBACK,
+                  onPress: () => openSettings(SETTINGS_ROUTE.FEEDBACK),
+                },
+              ]}
+            />
+          ),
+          trailing: {
+            label: FOOT_WORDS.SETTINGS,
+            symbol: GLYPH.SETTINGS,
+            onPress: () => openSettings(),
+          },
+        };
 
   return (
     <SidebarPane
       bar={{ lead: [sidebarAction(true, toggle)], bottom }}
       view={
-        <RowList look={LIST_LOOK.PLAIN} selected={here} onSelect={go}>
+        <RowList look={LIST_LOOK.SIDEBAR} selected={here} onSelect={go}>
+          {/* Note that the workspace heads the sidebar, as the panel's does, its menu holding the workspaces and Manage; the account and Settings stand at the foot instead. */}
+          {switcher === undefined ? null : (
+            <WorkspaceSwitcherRow {...switcher} account={undefined} />
+          )}
           <ListSection>
             <PlaceRow
               id={SIDEBAR_PLACE.SEARCH}

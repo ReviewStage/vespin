@@ -2,7 +2,13 @@
 
 export { useAnnounced, useReduceTransparency } from "./accessibility.js";
 
-export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
+export {
+  AccountBarItem,
+  AccountButton,
+  type AccountMenuAction,
+  AccountMenuItem,
+  type BarAccount,
+} from "./account-button.js";
 
 export { ArchivedBar, ContinueLine } from "./agent-end.js";
 
@@ -538,6 +544,7 @@ export {
   type SwitcherLook,
   WorkspaceSwitcher,
   WorkspaceSwitcherItem,
+  WorkspaceSwitcherRow,
 } from "./workspace-switcher.js";
 
 export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";

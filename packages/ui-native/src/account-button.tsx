@@ -1,9 +1,21 @@
-// account-button.tsx -- the signed-in account's photo at the leading edge of a tab's bar, the button that opens Settings.
+// account-button.tsx -- the signed-in account's photo at the leading edge of a tab's bar, the button that opens Settings, and its photo and name at an iPad sidebar's foot, opening the account's menu.
 
-import { Host, Button as SwiftUIButton } from "@expo/ui/swift-ui";
-import { accessibilityLabel, buttonStyle } from "@expo/ui/swift-ui/modifiers";
+import { Host, HStack, Menu, Section, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
+import {
+  accessibilityLabel,
+  buttonStyle,
+  font,
+  foregroundStyle,
+  lineLimit,
+  menuIndicator,
+  menuStyle,
+} from "@expo/ui/swift-ui/modifiers";
+import type { Glyph } from "./glyph.js";
+import { menuActContent } from "./glyph-label.js";
 import { Avatar } from "./marks.js";
-import { MARK_SIZE } from "./tokens/space.js";
+import { useColors } from "./tokens/colors.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The account a bar's photo button draws, and where pressing it goes. */
 export type BarAccount = {
@@ -40,5 +52,71 @@ export function AccountButton(account: BarAccount) {
     <Host matchContents>
       <AccountBarItem {...account} />
     </Host>
+  );
+}
+
+/** An act an account's menu holds, such as Settings or Sign out. */
+export type AccountMenuAction = {
+  readonly label: string;
+  readonly symbol: Glyph;
+  /** Whether it takes something away, such as Sign out, which the system draws red and sets apart. */
+  readonly destructive?: boolean | undefined;
+  readonly onPress: () => void;
+};
+
+/**
+ * The signed-in account at the foot of an iPad's own sidebar, as the panel's
+ * sidebar foot stands it: its photo and name, opening the system's menu of
+ * what the account does, such as Settings and Send feedback, with what takes
+ * something away, such as Sign out, set apart last.
+ */
+export function AccountMenuItem({
+  name,
+  picture,
+  actions,
+}: {
+  readonly name: string;
+  readonly picture?: string | undefined;
+  readonly actions: readonly AccountMenuAction[];
+}) {
+  const colors = useColors();
+  const kept = actions.filter((action) => action.destructive !== true);
+  const away = actions.filter((action) => action.destructive === true);
+
+  const item = (action: AccountMenuAction) => (
+    <SwiftUIButton
+      key={action.label}
+      {...menuActContent(action.label, action.symbol, undefined)}
+      onPress={action.onPress}
+      {...(action.destructive === true ? { role: "destructive" } : {})}
+    />
+  );
+
+  return (
+    <Menu
+      label={
+        <HStack spacing={SPACE.TIGHT + 2}>
+          <Avatar name={name} picture={picture} size={MARK_SIZE.BAR_FACE} />
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+              foregroundStyle(colors.TEXT),
+              lineLimit(1),
+            ]}
+          >
+            {name}
+          </Text>
+        </HStack>
+      }
+      modifiers={[
+        menuStyle("button"),
+        buttonStyle("plain"),
+        menuIndicator("hidden"),
+        accessibilityLabel(name),
+      ]}
+    >
+      <Section>{kept.map(item)}</Section>
+      {away.length === 0 ? null : <Section>{away.map(item)}</Section>}
+    </Menu>
   );
 }

@@ -6,6 +6,7 @@ import {
   Image,
   Menu,
   Section,
+  Spacer,
   Button as SwiftUIButton,
   Text,
   Toggle,
@@ -20,6 +21,9 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
+  listRowBackground,
+  listRowInsets,
+  listRowSeparator,
   menuIndicator,
   menuStyle,
 } from "@expo/ui/swift-ui/modifiers";
@@ -29,6 +33,7 @@ import { useColorScheme } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, letterTileGlyph } from "./glyph.js";
 import { actContent, menuActContent } from "./glyph-label.js";
+import { useRowInset } from "./layout-margin.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -259,6 +264,36 @@ export const WorkspaceSwitcher = memo(function WorkspaceSwitcher(props: Workspac
     <Host matchContents>
       <WorkspaceSwitcherItem {...props} look={SWITCHER_LOOK.TILE} />
     </Host>
+  );
+});
+
+/**
+ * The switcher heading an iPad's own sidebar, as the panel's sidebar heads
+ * itself with the workspace: its tile, its name and ⌄ on the list's first
+ * row, its words where the rows' words start, which picks nothing itself
+ * and opens the switcher's menu.
+ */
+export const WorkspaceSwitcherRow = memo(function WorkspaceSwitcherRow(
+  props: WorkspaceSwitcherProps,
+) {
+  const inset = useRowInset();
+
+  return (
+    <HStack
+      modifiers={[
+        listRowBackground("clear"),
+        listRowSeparator("hidden"),
+        listRowInsets({
+          leading: inset.lead,
+          trailing: inset.margin,
+          top: SPACE.ROW,
+          bottom: SPACE.ROW,
+        }),
+      ]}
+    >
+      <WorkspaceSwitcherItem {...props} look={SWITCHER_LOOK.NAMED} />
+      <Spacer />
+    </HStack>
   );
 });
 
