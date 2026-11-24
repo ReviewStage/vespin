@@ -91,9 +91,12 @@ import type { PullRequestWrites } from "./pull-request-writes.js";
  *   queue may hold up the pull requests behind it;
  * - blocked by a rule or behind its base, with nothing else to offer, for a
  *   member GitHub lets merge past the base's rules as it lets an admin,
- *   Bypass rules and merge… by the method chosen, its chevron choosing it
- *   too, which asks first, naming what it bypasses, and merges as
- *   `gh pr merge --admin` does.
+ *   Bypass rules and merge by the method chosen, outlined as Enable
+ *   auto-merge is, its chevron choosing it too, which asks first, naming
+ *   what it bypasses, its act in red, and merges as `gh pr merge --admin`
+ *   does. Note that its words take no ellipsis, as Remove from queue's
+ *   take none: a press that only asks to be sure needs nothing more of the
+ *   member, and in a narrow header an ellipsis reads as words cut off.
  *
  * The method is kept per repository across launches, in this window's own
  * storage as the sidebar's folds are (`folded-groups.ts`); the first the
@@ -337,8 +340,10 @@ interface BypassAsked {
 
 /**
  * The press a member who may bypass the base's rules is offered where they
- * hold the merge up: Bypass rules and merge… by the method chosen, outlined
- * in red, its chevron choosing the method as a merge's does. It asks first,
+ * hold the merge up: Bypass rules and merge by the method chosen, outlined
+ * rather than red, since it is the one merge they may make there and the
+ * question it asks first says the risk in red; its chevron chooses the
+ * method as a merge's does. It asks first,
  * then merges at the head it asked about, so GitHub refuses a head pushed
  * since. The question goes once a read finds another head or another
  * base, so it never merges a head, or into a base, the member was not asked
@@ -387,8 +392,8 @@ function BypassPress({
   return (
     <>
       <MethodPress
-        variant={BUTTON_VARIANT.DANGER_OUTLINE}
-        words={`${MERGE_WORDS.BYPASS}…`}
+        variant={BUTTON_VARIANT.OUTLINE}
+        words={MERGE_WORDS.BYPASS}
         methods={methods}
         method={method}
         busy={busy}

@@ -2369,7 +2369,7 @@ test("a pull request ready to merge offers the first method the repository allow
   ]);
 });
 
-test("auto-merge is offered while checks run, and turned off once on; a merge queue's base offers Merge when ready; each is asked of the service for the agent at once, and Remove from queue asks first, as Bypass rules and merge… does, naming what it bypasses, for a member GitHub lets merge a blocked pull request past its base's rules", async () => {
+test("auto-merge is offered while checks run, and turned off once on; a merge queue's base offers Merge when ready; each is asked of the service for the agent at once, and Remove from queue asks first, as Bypass rules and merge does, naming what it bypasses, for a member GitHub lets merge a blocked pull request past its base's rules", async () => {
   const queueQuestion = {
     answer: "Remove from queue",
     says: /could impact other pull requests in the queue/u,
@@ -2425,7 +2425,7 @@ test("auto-merge is offered while checks run, and turned off once on; a merge qu
             },
           }),
       }),
-      "Bypass rules and merge…",
+      "Bypass rules and merge",
       {
         answer: "Bypass rules and merge",
         says: /A required review is missing\. This merges it into main now by squash/u,
