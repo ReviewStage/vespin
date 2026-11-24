@@ -1719,7 +1719,7 @@ summary button[data-tool-agent-ref]:focus-visible {
    whose subject is any child makes the browser restyle the whole window for
    every element added under it. */
 .is-user[data-undelivered] > :not(.message-beside, .ui-message-line, .ui-chat-bubble-row),
-.is-user[data-undelivered] > .ui-chat-bubble-row > .ui-chat-bubble {
+.is-user[data-undelivered] > .ui-chat-bubble-row > .ui-chat-bubble-hold > .ui-chat-bubble {
   opacity: 0.6;
 }
 
