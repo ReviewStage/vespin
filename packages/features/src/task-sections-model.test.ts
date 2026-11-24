@@ -12,10 +12,13 @@ import {
   entryMoveWrites,
   NO_TASK_SECTIONS,
   placeAllWrites,
+  placeMemberWrites,
   placeWrites,
   restoreWrites,
   sectionMoveWrites,
   sectionOrder,
+  sectionRows,
+  undeleteWrites,
   unplaceAllWrites,
   workspaceSections,
 } from "./task-sections-model.js";
@@ -222,8 +225,10 @@ describe("an Undo of tasks moved together", () => {
   it("puts each back in its section under the rows it stood under, though none had a place of its own", () => {
     const state = launchWithThree();
     const taskIds = [TASK(3), TASK(1)];
+    const members = taskIds.map((taskId) => ({ taskId }));
     const moved = applyAll(state, placeAllWrites(state, taskIds, LATER, 20), 20);
-    const undone = applyAll(moved, restoreWrites(state, moved, taskIds, LATER, 30), 30);
+    const undone = applyAll(moved, restoreWrites(state, moved, members, LATER, 30), 30);
+
     assert.deepEqual(tasksIn(undone, LAUNCH), [TASK(1), TASK(2), TASK(3)]);
     assert.deepEqual(tasksIn(undone, LATER), []);
   });
@@ -231,6 +236,7 @@ describe("an Undo of tasks moved together", () => {
   it("leaves a task moved again since where it was moved, and takes one from no section back out", () => {
     const state = applyAll(launchWithThree(), [create(TASK(50), "Today")], 3);
     const taskIds = [TASK(2), TASK(9)];
+    const members = taskIds.map((taskId) => ({ taskId }));
     const moved = applyAll(state, placeAllWrites(state, taskIds, LATER, 20), 20);
 
     const again = applyAll(
@@ -239,9 +245,34 @@ describe("an Undo of tasks moved together", () => {
       21,
     );
 
-    const undone = applyAll(again, restoreWrites(state, again, taskIds, LATER, 30), 30);
+    const undone = applyAll(again, restoreWrites(state, again, members, LATER, 30), 30);
+
     assert.deepEqual(tasksIn(undone, TASK(50)), [TASK(2)]);
     assert.deepEqual(tasksIn(undone, LATER), []);
     assert.deepEqual(tasksIn(undone, LAUNCH), [TASK(1), TASK(3)]);
+  });
+});
+
+describe("a Manager in a section", () => {
+  const MANAGER = "0a1b2c3d-0000-4000-8000-200000000001";
+
+  const rowsIn = (state: TaskSections, sectionId: string) =>
+    sectionRows(state, sectionId).map((entry) =>
+      "taskId" in entry ? entry.taskId : entry.agentId,
+    );
+
+  it("dropped between two tasks stands between them, and stands there again once its section's delete is undone", () => {
+    const state = launchWithThree();
+    const member = { agentId: MANAGER };
+    const writes = placeMemberWrites(sectionRows(state, LAUNCH), member, LAUNCH, 1, 20);
+    const placed = applyAll(state, writes, 20);
+
+    assert.deepEqual(rowsIn(placed, LAUNCH), [TASK(1), MANAGER, TASK(2), TASK(3)]);
+
+    const launch = placed.sections.find((section) => section.id === LAUNCH) ?? assert.fail();
+    const deleted = applyAll(placed, [{ kind: TASK_SECTION_WRITE.DELETE, id: LAUNCH }], 30);
+    const undone = applyAll(deleted, undeleteWrites(placed, deleted, launch, 40), 40);
+
+    assert.deepEqual(rowsIn(undone, LAUNCH), [TASK(1), MANAGER, TASK(2), TASK(3)]);
   });
 });

@@ -11,7 +11,7 @@ import {
   type TaskSectionWrite,
 } from "@repo/features/task-section-wire";
 import { applySectionWrite } from "@repo/features/task-section-writes";
-import { sectionTaskIds, workspaceSections } from "@repo/features/task-sections-model";
+import { sectionRows, sectionTaskIds, workspaceSections } from "@repo/features/task-sections-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { type PinMove, TASK_MARK, type TaskMark } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
@@ -302,9 +302,11 @@ function sectionHeader(sidebar: HTMLElement, title: string): HTMLElement {
 
 /** Opens the row named `name`'s menu, then the item listing the sections: a task's Move to, an agent's Move to section. */
 function openMoveToSection(sidebar: HTMLElement, name: string, label = "Move to"): void {
-  const row = [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find(
-    (each) => each.textContent?.includes(name),
+  const rows = sidebar.querySelectorAll<HTMLElement>(
+    '.sidebar-tasks > li > button, nav[aria-label="Managers"] .ui-list > li > button',
   );
+
+  const row = [...rows].find((each) => each.textContent?.includes(name));
 
   assert.ok(row);
   act(() => {
@@ -1189,6 +1191,9 @@ interface Asked {
   writes: TaskSectionWrite[];
 }
 
+/** The Managers section's list, whose rows are dragged as a run's are. */
+const MANAGERS_LIST = 'nav[aria-label="Managers"] .ui-list';
+
 /**
  * Lays the sidebar out down one column, as jsdom does not: each row, and
  * each empty section's word, a row's height below the one before, and
@@ -1197,7 +1202,9 @@ interface Asked {
  */
 function layOutRows(): void {
   const slots = () => [
-    ...document.querySelectorAll(".sidebar-tasks > li, .sidebar-section-slot, .ui-drop-slot"),
+    ...document.querySelectorAll(
+      `.sidebar-tasks > li, ${MANAGERS_LIST} > li, .sidebar-section-slot, .ui-drop-slot`,
+    ),
   ];
 
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
@@ -1217,7 +1224,7 @@ function layOutRows(): void {
   });
 
   // jsdom captures no pointer; a drag asks its list to, as the window's would.
-  for (const list of document.querySelectorAll(".sidebar-tasks")) {
+  for (const list of document.querySelectorAll(`.sidebar-tasks, ${MANAGERS_LIST}`)) {
     Object.assign(list, { setPointerCapture: () => undefined });
   }
 }
@@ -1940,6 +1947,101 @@ test("a pinned Manager stands among the pinned tasks, and dragged between two of
 
   const position = asked.moves[0]?.position ?? "";
   assert.ok(position > PINNED.pinPosition && position < SECOND_PIN.pinPosition, position);
+});
+
+/** A Manager the reader keeps in a section, as the live task list carries it. */
+const KEPT_MANAGER: ListedAgent = {
+  ...PINNED_MANAGER,
+  id: "0a1b2c3d-0000-4000-8000-00000000000b",
+  title: "Launch Manager",
+};
+
+/** Launch holding Invite expiry, and under it the Manager, put there before it. */
+const MANAGER_IN_LAUNCH: TaskSections = {
+  ...SECTIONS,
+  agentEntries: [{ agentId: KEPT_MANAGER.id, sectionId: LAUNCH, addedAt: 1 }],
+};
+
+/** The sidebar listing both tasks and the kept Manager over `sections`, laid out down one column, what a drag asks heard by `asked`. */
+async function mountWithManager(sections: TaskSections, asked: Asked): Promise<HTMLElement> {
+  handState({ [EXPERIMENT.MANAGERS]: true });
+
+  const sidebar = await mountDraggable([INVITES, RETRIES], sections, asked, {
+    listedAgents: [KEPT_MANAGER],
+  });
+
+  // The list's agents land once it is written after the window follows it.
+  writeListedTasks({ taskSections: sections });
+  await settle();
+  layOutRows();
+
+  return sidebar;
+}
+
+/** The ids of a section's rows, its tasks' and its Managers', in the order it keeps them. */
+const rowIdsIn = (state: TaskSections, sectionId: string) =>
+  sectionRows(state, sectionId).map((entry) => ("taskId" in entry ? entry.taskId : entry.agentId));
+
+test("a Manager kept in a section stands among its tasks there and not under Managers, and dragged above Invite expiry stands above it", async () => {
+  const asked = noneAsked();
+  const sidebar = await mountWithManager(MANAGER_IN_LAUNCH, asked);
+
+  assert.deepEqual(namesIn(sidebar, "Sections"), ["Invite expiry", "Launch Manager"]);
+  assert.deepEqual(namesIn(sidebar, "Managers"), []);
+
+  // Lifted, the row draws an empty Pinned on top, so Launch's first row stands one row down.
+  drag(sidebar, "Launch Manager", ROW_HEIGHT + 4);
+  await settle();
+
+  assert.deepEqual(rowIdsIn(applied(MANAGER_IN_LAUNCH, asked.writes), LAUNCH), [
+    KEPT_MANAGER.id,
+    INVITES.id,
+  ]);
+});
+
+test("a Manager's Move to section puts it on top of the section chosen, and Remove from section takes it out", async () => {
+  const asked = noneAsked();
+  const sidebar = await mountWithManager(SECTIONS, asked);
+
+  openMoveToSection(sidebar, "Launch Manager", "Move to section");
+  await act(async () => item("Launch").click());
+
+  assert.deepEqual(asked.writes, [
+    { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: KEPT_MANAGER.id, sectionId: LAUNCH },
+  ]);
+
+  const out = noneAsked();
+  const kept = await mountWithManager(MANAGER_IN_LAUNCH, out);
+  openMoveToSection(kept, "Launch Manager", "Move to section");
+  await act(async () => item("Remove from section").click());
+
+  assert.deepEqual(out.writes, [
+    { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: KEPT_MANAGER.id, sectionId: null },
+  ]);
+});
+
+test("a Manager dragged from Managers into a section lands where it was let go, and one dragged out of its section onto Tasks leaves it, back under Managers", async () => {
+  const asked = noneAsked();
+  const sidebar = await mountWithManager(SECTIONS, asked);
+
+  // Down the column, once it is lifted: Launch Manager under Managers, the empty Pinned, Invite expiry under Launch, Retry audit under Tasks.
+  drag(sidebar, "Launch Manager", 3 * ROW_HEIGHT - 4);
+  await settle();
+
+  assert.deepEqual(rowIdsIn(applied(SECTIONS, asked.writes), LAUNCH), [
+    INVITES.id,
+    KEPT_MANAGER.id,
+  ]);
+
+  const out = noneAsked();
+  const kept = await mountWithManager(MANAGER_IN_LAUNCH, out);
+  // Once lifted: the empty Pinned, Invite expiry and Launch Manager under Launch, Retry audit under Tasks.
+  drag(kept, "Launch Manager", 4 * ROW_HEIGHT - 4);
+  await settle();
+
+  assert.deepEqual(out.writes, [
+    { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: KEPT_MANAGER.id, sectionId: null },
+  ]);
 });
 
 test("with a mouse, a pin's menu offers its move too, with its chord", async () => {

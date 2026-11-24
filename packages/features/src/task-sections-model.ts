@@ -7,9 +7,11 @@
  * lands where it was let go before the service's word comes back. The
  * sections stand in the order dragged, a
  * section never dragged on top, newest made first, as Pinned's pins do
- * (`pin-order.ts`), and so do the rows in each.
+ * (`pin-order.ts`), and so do the rows in each: a section's tasks and the
+ * Managers kept in it in one order, each entry's place in the one key space.
  */
 
+import type { ListedAgent } from "./agent-wire.js";
 import {
   inPinOrder,
   type PinPlace,
@@ -18,6 +20,7 @@ import {
 } from "./pin-order.js";
 import { taskFinished } from "./task-list-model.js";
 import {
+  type AgentSectionEntry,
   TASK_SECTION_WRITE,
   type TaskSection,
   type TaskSectionEntry,
@@ -42,11 +45,37 @@ export const SECTION_WRITE_FAILED_NOTE = "Your sections could not be changed. Tr
 /** No sections and no tasks in any, as before the first read lands. */
 export const NO_TASK_SECTIONS: TaskSections = { sections: [], entries: [], agentEntries: [] };
 
-/** The write that puts the task in a section at a place, or by its instant, or, under null, in none. */
-function placeWrite(taskId: string, sectionId: string | null, position?: string): TaskSectionWrite {
+/** One row a section keeps: a task's entry, or an agent's, a Manager as the sidebar draws it. */
+export type SectionEntry = TaskSectionEntry | AgentSectionEntry;
+
+/** What a section keeps, by its id: a task, or an agent. An entry names its own. */
+export type SectionMember = { readonly taskId: string } | { readonly agentId: string };
+
+/** Whether two members are one task, or one agent. */
+function sameMember(a: SectionMember, b: SectionMember): boolean {
+  return "taskId" in a
+    ? "taskId" in b && a.taskId === b.taskId
+    : "agentId" in b && a.agentId === b.agentId;
+}
+
+/** The write that puts a task or an agent in a section at a place, or by its instant, or, under null, in none. */
+function placeWrite(
+  member: SectionMember,
+  sectionId: string | null,
+  position?: string,
+): TaskSectionWrite {
   const where = position === undefined ? undefined : { position };
 
-  return { kind: TASK_SECTION_WRITE.PLACE, taskId, sectionId, ...where };
+  return "taskId" in member
+    ? { kind: TASK_SECTION_WRITE.PLACE, taskId: member.taskId, sectionId, ...where }
+    : { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: member.agentId, sectionId, ...where };
+}
+
+/** A member's entry in a section, put there at `addedAt`, with no place of its own yet. */
+function memberEntry(member: SectionMember, sectionId: string, addedAt: number): SectionEntry {
+  return "taskId" in member
+    ? entryFor(member.taskId, sectionId, addedAt)
+    : { agentId: member.agentId, sectionId, addedAt };
 }
 
 /** Where a section stands among the others. */
@@ -55,8 +84,8 @@ const sectionPlace = (section: TaskSection): PinPlace => ({
   at: section.createdAt,
 });
 
-/** Where an entry stands among its section's rows. */
-const entryPlace = (entry: TaskSectionEntry): PinPlace => ({
+/** Where an entry stands among its section's rows, a task's and an agent's alike. */
+const entryPlace = (entry: SectionEntry): PinPlace => ({
   position: entry.position,
   at: entry.addedAt,
 });
@@ -79,10 +108,32 @@ export function sectionOfTask(state: TaskSections, taskId: string): string | und
   return state.entries.find((entry) => entry.taskId === taskId)?.sectionId;
 }
 
-/** A section's entries, in the order the sidebar draws its rows. */
+/** The section the agent stands in, where it stands in one. */
+export function sectionOfAgent(state: TaskSections, agentId: string): string | undefined {
+  return state.agentEntries.find((entry) => entry.agentId === agentId)?.sectionId;
+}
+
+/** The section a task or an agent stands in, where it stands in one. */
+export function sectionOfMember(state: TaskSections, member: SectionMember): string | undefined {
+  return "taskId" in member
+    ? sectionOfTask(state, member.taskId)
+    : sectionOfAgent(state, member.agentId);
+}
+
+/** A section's tasks' entries, in the order the sidebar draws its rows. */
 export function sectionOrder(state: TaskSections, sectionId: string): TaskSectionEntry[] {
   return inPinOrder(
     state.entries.filter((entry) => entry.sectionId === sectionId),
+    entryPlace,
+  );
+}
+
+/** A section's entries, its tasks' and its agents' together, in the order the sidebar draws its rows. */
+export function sectionRows(state: TaskSections, sectionId: string): SectionEntry[] {
+  const held = (entry: SectionEntry) => entry.sectionId === sectionId;
+
+  return inPinOrder(
+    [...state.entries.filter(held), ...state.agentEntries.filter(held)],
     entryPlace,
   );
 }
@@ -112,44 +163,87 @@ export function sectionMoveWrites(
  * no row the pointer passed.
  */
 export function entryMoveWrites(
-  order: readonly TaskSectionEntry[],
+  order: readonly SectionEntry[],
   sectionId: string,
   from: number,
   to: number,
 ): TaskSectionWrite[] {
   return [...pinPositionsForMove(order, from, to, entryPlace)].map(([entry, position]) =>
-    placeWrite(entry.taskId, sectionId, position),
+    placeWrite(entry, sectionId, position),
   );
 }
 
 /**
- * The writes that put the task in the section at `to`
+ * The writes that put a task or an agent, `member`, in the section at `to`
  * among the rows it draws, `order`, the row left out of the count, from
  * another section or from none; a row already among them is moved within
  * it. The row's own write comes first, so it stands in the section before
  * any neighbor is given a new place beside it. A row new to the section
  * dropped on top needs no place, since one never dragged stands on top.
  */
+export function placeMemberWrites(
+  order: readonly SectionEntry[],
+  member: SectionMember,
+  sectionId: string,
+  to: number,
+  now: number,
+): TaskSectionWrite[] {
+  const from = order.findIndex((entry) => sameMember(entry, member));
+  const at = Math.max(0, Math.min(to, order.length - (from < 0 ? 0 : 1)));
+
+  if (from >= 0) return entryMoveWrites(order, sectionId, from, at);
+  const moving = memberEntry(member, sectionId, now);
+  const positions = pinPositionsForMove([moving, ...order], 0, at, entryPlace);
+  const first = placeWrite(member, sectionId, positions.get(moving));
+
+  const rest = [...positions].flatMap(([entry, position]) =>
+    entry === moving ? [] : [placeWrite(entry, sectionId, position)],
+  );
+
+  return [first, ...rest];
+}
+
+/** The writes that put the task in the section at `to` among the rows it draws, `order` (`placeMemberWrites`). */
 export function placeWrites(
-  order: readonly TaskSectionEntry[],
+  order: readonly SectionEntry[],
   taskId: string,
   sectionId: string,
   to: number,
   now: number,
 ): TaskSectionWrite[] {
-  const from = order.findIndex((entry) => entry.taskId === taskId);
-  const at = Math.max(0, Math.min(to, order.length - (from < 0 ? 0 : 1)));
+  return placeMemberWrites(order, { taskId }, sectionId, to, now);
+}
 
-  if (from >= 0) return entryMoveWrites(order, sectionId, from, at);
-  const moving = entryFor(taskId, sectionId, now);
-  const positions = pinPositionsForMove([moving, ...order], 0, at, entryPlace);
-  const first = placeWrite(taskId, sectionId, positions.get(moving));
-
-  const rest = [...positions].flatMap(([entry, position]) =>
-    entry === moving ? [] : [placeWrite(entry.taskId, sectionId, position)],
+/** The writes that put each member, in its order, on top of a section, in an order of their own (`placeAllWrites`). */
+function placeAllMembers(
+  state: TaskSections,
+  members: readonly SectionMember[],
+  sectionId: string,
+  now: number,
+): TaskSectionWrite[] {
+  let order = sectionRows(state, sectionId).filter(
+    (entry) => !members.some((member) => sameMember(entry, member)),
   );
 
-  return [first, ...rest];
+  const writes: TaskSectionWrite[] = [];
+
+  for (const member of [...members].reverse()) {
+    const entry = memberEntry(member, sectionId, now);
+    const positions = pinPositionsForInsert(order, entry, 0, entryPlace);
+    // Note that the order is kept here rather than read back from the state, because a section just made is in none yet.
+    order = [entry, ...order].map((each) => {
+      const position = positions.get(each);
+
+      return position === undefined ? each : { ...each, position };
+    });
+
+    // The moving row stands first in the answer, so its own write goes ahead of its neighbors'.
+    for (const [each, position] of positions) {
+      writes.push(placeWrite(each, sectionId, position));
+    }
+  }
+
+  return writes;
 }
 
 /**
@@ -166,69 +260,55 @@ export function placeAllWrites(
   sectionId: string,
   now: number,
 ): TaskSectionWrite[] {
-  let order = sectionOrder(state, sectionId).filter((entry) => !taskIds.includes(entry.taskId));
-  const writes: TaskSectionWrite[] = [];
-
-  for (const taskId of [...taskIds].reverse()) {
-    const entry = entryFor(taskId, sectionId, now);
-    const positions = pinPositionsForInsert(order, entry, 0, entryPlace);
-    // Note that the order is kept here rather than read back from the state, because a section just made is in none yet.
-    order = [entry, ...order].map((each) => {
-      const position = positions.get(each);
-
-      return position === undefined ? each : { ...each, position };
-    });
-
-    // The moving row stands first in the answer, so its own write goes ahead of its neighbors'.
-    for (const [each, position] of positions) {
-      writes.push(placeWrite(each.taskId, sectionId, position));
-    }
-  }
-
-  return writes;
+  return placeAllMembers(
+    state,
+    taskIds.map((taskId) => ({ taskId })),
+    sectionId,
+    now,
+  );
 }
 
 /**
- * The writes an Undo of moving `taskIds` into `movedTo`, or out of every
- * section under null, asks: each task still standing where the move put
- * it goes back where it stood in `before`, in its section after the rows
- * that stood above it there and still do, or in none. One moved anywhere
- * since stays, since that was chosen anew. Note that each is given a
- * position, as `placeAllWrites` gives one, because one put back by its
+ * The writes an Undo of moving `members`, tasks or agents, into `movedTo`,
+ * or out of every section under null, asks: each still standing where the
+ * move put it goes back where it stood in `before`, in its section after the
+ * rows that stood above it there and still do, or in none. One moved
+ * anywhere since stays, since that was chosen anew. Note that each is given
+ * a position, as `placeAllWrites` gives one, because one put back by its
  * instant alone would stand above the rows it stood under.
  */
 export function restoreWrites(
   before: TaskSections,
   current: TaskSections,
-  taskIds: readonly string[],
+  members: readonly SectionMember[],
   movedTo: string | null,
   now: number,
 ): TaskSectionWrite[] {
-  const due = taskIds.filter((taskId) => (sectionOfTask(current, taskId) ?? null) === movedTo);
+  const due = members.filter((member) => (sectionOfMember(current, member) ?? null) === movedTo);
   const writes: TaskSectionWrite[] = [];
-  const orders = new Map<string, TaskSectionEntry[]>();
+  const orders = new Map<string, SectionEntry[]>();
 
-  const back = due.map((taskId) => {
-    const from = sectionOfTask(before, taskId);
-    const was = from === undefined ? [] : sectionOrder(before, from);
+  const back = due.map((member) => {
+    const from = sectionOfMember(before, member);
+    const was = from === undefined ? [] : sectionRows(before, from);
 
-    return { taskId, from, was, at: was.findIndex((entry) => entry.taskId === taskId) };
+    return { member, from, was, at: was.findIndex((entry) => sameMember(entry, member)) };
   });
 
   // Note that each section's rows go back from the top down, so each lands under those put back before it.
-  for (const { taskId, from, was, at } of back.sort((a, b) => a.at - b.at)) {
+  for (const { member, from, was, at } of back.sort((a, b) => a.at - b.at)) {
     if (from === undefined) {
-      writes.push(placeWrite(taskId, null));
+      writes.push(placeWrite(member, null));
       continue;
     }
 
-    const order = orders.get(from) ?? sectionOrder(current, from);
+    const order = orders.get(from) ?? sectionRows(current, from);
 
     const above = was
       .slice(0, at)
-      .filter((entry) => order.some((each) => each.taskId === entry.taskId)).length;
+      .filter((entry) => order.some((each) => sameMember(each, entry))).length;
 
-    const entry = entryFor(taskId, from, now);
+    const entry = memberEntry(member, from, now);
     const positions = pinPositionsForInsert(order, entry, above, entryPlace);
     const next = [...order];
     next.splice(Math.min(above, order.length), 0, entry);
@@ -242,7 +322,7 @@ export function restoreWrites(
     );
 
     for (const [each, position] of positions) {
-      writes.push(placeWrite(each.taskId, from, position));
+      writes.push(placeWrite(each, from, position));
     }
   }
 
@@ -281,45 +361,73 @@ export function undeleteWrites(
   const at = Math.min(Math.max(was, 0), order.length - 1);
   const moved = from === at ? [] : sectionMoveWrites(order, from, at);
 
-  const taskIds = sectionOrder(before, id)
-    .map((entry) => entry.taskId)
-    .filter((taskId) => sectionOfTask(current, taskId) === undefined);
+  const members = sectionRows(before, id).filter(
+    (entry) => sectionOfMember(current, entry) === undefined,
+  );
 
-  return [made, ...moved, ...placeAllWrites(remade, taskIds, id, now)];
+  return [made, ...moved, ...placeAllMembers(remade, members, id, now)];
 }
 
 /** The writes that take `taskIds` out of every section, as a section's Remove tasks from section asks. */
 export function unplaceAllWrites(taskIds: readonly string[]): TaskSectionWrite[] {
-  return taskIds.map((taskId) => placeWrite(taskId, null));
+  return taskIds.map((taskId) => placeWrite({ taskId }, null));
 }
 
-/** One section's rows as the sidebar draws them: the entries in its order, each with the task the list holds, one for one. */
+/** The write that takes a task or an agent out of every section. */
+export function unplaceWrite(member: SectionMember): TaskSectionWrite {
+  return placeWrite(member, null);
+}
+
+/** A Manager a section keeps, with its entry. */
+export interface SectionManager {
+  readonly entry: AgentSectionEntry;
+  readonly agent: ListedAgent;
+}
+
+/**
+ * One section's rows as the sidebar draws them: its tasks' entries in its
+ * order, each with the task the list holds, one for one, and the Managers
+ * it keeps, each with its entry, in the same order, which stand among the
+ * tasks by their entries' places (`sectionRows`).
+ */
 export interface DrawnSection {
   readonly section: TaskSection;
   readonly entries: readonly TaskSectionEntry[];
   readonly tasks: readonly TaskSummary[];
+  readonly managers: readonly SectionManager[];
 }
 
-/** The listed workspace's sections as the sidebar draws them, and the tasks standing in any of them, which Tasks leaves out. */
+/** The listed workspace's sections as the sidebar draws them, and the tasks and Managers standing in any of them, which Tasks and Managers leave out. */
 export interface SectionedTasks {
   readonly sections: readonly DrawnSection[];
   readonly taskIds: ReadonlySet<string>;
+  readonly agentIds: ReadonlySet<string>;
 }
+
+/** No section drawn, and nothing standing in one. */
+const NOTHING_SECTIONED: SectionedTasks = {
+  sections: [],
+  taskIds: new Set(),
+  agentIds: new Set(),
+};
 
 /**
  * The account's sections in the workspace, each with the tasks of `free`,
- * the listed tasks no pin holds, it keeps, in its order. A task in a
- * section that stands elsewhere, pinned or archived, is no row of it, and
- * comes back to it once it stands free again. None while the account keeps
- * no sections here.
+ * the listed tasks no pin holds, it keeps, in its order, and the Managers of
+ * `managers`, those no pin holds, it keeps. A task or a Manager in a section
+ * that stands elsewhere, pinned or archived, is no row of it, and comes back
+ * to it once it stands free again. None while the account keeps no sections
+ * here.
  */
 export function sectionedTasks(
   state: TaskSections,
   workspaceId: string | undefined,
   free: readonly TaskSummary[],
+  managers: readonly ListedAgent[] = [],
 ): SectionedTasks {
-  if (workspaceId === undefined) return { sections: [], taskIds: new Set() };
+  if (workspaceId === undefined) return NOTHING_SECTIONED;
   const byId = new Map(free.map((task) => [task.id, task]));
+  const agentsById = new Map(managers.map((agent) => [agent.id, agent]));
 
   const sections = workspaceSections(state, workspaceId).map((section): DrawnSection => {
     const held = sectionOrder(state, section.id).flatMap((entry) => {
@@ -328,16 +436,30 @@ export function sectionedTasks(
       return task === undefined ? [] : [{ entry, task }];
     });
 
+    const kept = inPinOrder(
+      state.agentEntries.filter((entry) => entry.sectionId === section.id),
+      entryPlace,
+    ).flatMap((entry): SectionManager[] => {
+      const agent = agentsById.get(entry.agentId);
+
+      return agent === undefined ? [] : [{ entry, agent }];
+    });
+
     return {
       section,
       entries: held.map(({ entry }) => entry),
       tasks: held.map(({ task }) => task),
+      managers: kept,
     };
   });
 
   const taskIds = new Set(sections.flatMap((drawn) => drawn.tasks.map((task) => task.id)));
 
-  return { sections, taskIds };
+  const agentIds = new Set(
+    sections.flatMap((drawn) => drawn.managers.map(({ agent }) => agent.id)),
+  );
+
+  return { sections, taskIds, agentIds };
 }
 
 /**

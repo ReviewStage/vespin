@@ -617,7 +617,14 @@ function listDrops(
       }
 
       if (leaving.length === 0) return;
-      const writes = restoreWrites(before, now.taskSections, [task.id], null, Date.now());
+
+      const writes = restoreWrites(
+        before,
+        now.taskSections,
+        [{ taskId: task.id }],
+        null,
+        Date.now(),
+      );
 
       if (writes.length > 0) now.onWriteSections(writes);
     };

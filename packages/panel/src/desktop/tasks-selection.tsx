@@ -86,7 +86,7 @@ function moveToSection(
   const entries = sectionEntries(before);
   const moving = taskIds.filter((taskId) => (entries.get(taskId)?.sectionId ?? null) !== sectionId);
   move(
-    moving,
+    moving.map((taskId) => ({ taskId })),
     sectionId,
     sectionId === null
       ? unplaceAllWrites(moving)

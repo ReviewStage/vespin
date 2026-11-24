@@ -1,4 +1,5 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -37,11 +38,15 @@ import {
 import type { TaskSectionWrite } from "@repo/features/task-section-wire";
 import {
   type DrawnSection,
+  placeMemberWrites,
   placeWrites,
+  type SectionMember,
   sectionedTasks,
+  sectionOfAgent,
   sectionOfTask,
   sectionWithoutSettled,
   unplaceAllWrites,
+  unplaceWrite,
 } from "@repo/features/task-sections-model";
 import { FOLLOWING_HEAD } from "@repo/features/task-tree-model";
 import {
@@ -213,14 +218,7 @@ import { withoutFinishedRunTasks } from "./finished-runs.js";
 import { type FoldedGroups, useFoldedGroups } from "./folded-groups.js";
 import { type HoverPane, useHoverPane } from "./hover-pane.js";
 import { MacResourcesButton } from "./mac-resources.js";
-import {
-  childTasksFold,
-  listedSlot,
-  movedBeside,
-  nestsOf,
-  storedSlot,
-  useNestedRows,
-} from "./nested-rows.js";
+import { childTasksFold, listedSlot, movedBeside, nestsOf, useNestedRows } from "./nested-rows.js";
 import { NewTaskButton, NewTaskInButton } from "./new-task-button.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
@@ -232,7 +230,12 @@ import { ownOf, SIDEBAR_ENTRY, type SidebarEntry, SidebarEntryRow } from "./side
 import { type CountNoun, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { SidebarFoot } from "./sidebar-foot.js";
 import { SidebarInboxRow } from "./sidebar-inbox-row.js";
-import { SidebarManagers, usePinnedManagers } from "./sidebar-managers.js";
+import {
+  MANAGERS_DROP_ZONE,
+  SidebarManagers,
+  usePinnedManagers,
+  useUnpinnedManagers,
+} from "./sidebar-managers.js";
 import {
   type OpenMarks,
   openMarks,
@@ -248,9 +251,11 @@ import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
   LIST_SKELETON,
+  layoutSlot,
   NEW_SECTION,
   PINNED_DROP_ZONE,
   SidebarSections,
+  sectionLayout,
   TASKS_DROP_ZONE,
   TaskRowsSkeleton,
   useSectionDialogs,
@@ -871,6 +876,14 @@ function pinnedPlanOf(row: PinnedRow): TaskSummary | undefined {
   return own === undefined || own.pin !== undefined ? undefined : own.task;
 }
 
+/** What a section would keep of a row under Pinned: its plan, or its Manager; none for a tab's or an agent's on a plan. */
+function pinnedMemberOf(row: PinnedRow): SectionMember | undefined {
+  if (row.kind === SIDEBAR_ENTRY.MANAGER) return { agentId: row.agent.id };
+  const plan = pinnedPlanOf(row);
+
+  return plan === undefined ? undefined : { taskId: plan.id };
+}
+
 /** A row under Pinned's key: its plan's id, an agent's drawn as its tab or a Manager's by the agent's, or where a pinned tab's pin stands. */
 function pinnedRowKey(row: PinnedRow): string {
   if (row.kind === SIDEBAR_ENTRY.MANAGER) return row.agent.id;
@@ -1026,6 +1039,18 @@ function pinAt(
 ): void {
   const moving = onTaskRow(task, undefined, { at: Date.now() });
   tasks.onMarkTask(task.id, TASK_MARK.PIN);
+  placePins(pinPositionsForInsert(rows, moving, at, placeOf), tasks);
+}
+
+/** Pins a Manager's row carried into Pinned at `at` among the rows it draws, as `pinAt` pins a plan's. */
+function pinManagerAt(
+  rows: readonly PinnedRow[],
+  agent: ListedAgent,
+  at: number,
+  tasks: SidebarTasks,
+): void {
+  const moving: PinnedRow = { kind: SIDEBAR_ENTRY.MANAGER, agent, place: { at: Date.now() } };
+  tasks.onPinAgent(agent.id, true);
   placePins(pinPositionsForInsert(rows, moving, at, placeOf), tasks);
 }
 
@@ -2625,10 +2650,13 @@ function SidebarColumn({
 
   const sectionedIn = sectionsShown ? tasks.workspace?.id : undefined;
 
+  // The Managers no pin holds, which the sections may keep, as they keep the tasks no pin holds.
+  const unpinnedManagers = useUnpinnedManagers(tasks, tasks.taskAgentPins);
+
   // Note that every list below is derived once per move of what it reads, so a render that moves nothing in the lists walks none of them.
   const sectioned = useMemo(
-    () => sectionedTasks(tasks.taskSections, sectionedIn, listedTasks.unpinned),
-    [tasks.taskSections, sectionedIn, listedTasks.unpinned],
+    () => sectionedTasks(tasks.taskSections, sectionedIn, listedTasks.unpinned, unpinnedManagers),
+    [tasks.taskSections, sectionedIn, listedTasks.unpinned, unpinnedManagers],
   );
 
   // A section is the reader's own choice, which the view's filters never thin, as they never thin a pin: it draws every task put in it but the settled ones.
@@ -2639,15 +2667,14 @@ function SidebarColumn({
   const sectionDialogs = useSectionDialogs(tasks, tasks.shown && overlay.inSight);
   const sectionEdits = useSectionEdits();
 
-  // A slot a row is let go at in an open section, counted among its rows as drawn, child tasks nested, read back in the section's own order; a folded one takes it on top.
-  const sectionSlot = (target: DrawnSection, at: number) =>
-    folds.sectionFolded(target.section.id)
-      ? at
-      : storedSlot(
-          target.tasks,
-          drawnTaskRows(target.tasks, folds.taskOpened, currentTask, everyTask),
-          at,
-        );
+  // Where a row let go at the drawn slot `at` in a section lands: among every row it keeps, its tasks' and its Managers', at the slot counted among its rows as drawn, child tasks nested, read back in the section's own order; a folded one takes it on top.
+  const sectionDrop = (target: DrawnSection, at: number) => {
+    const nested = drawnTaskRows(target.tasks, folds.taskOpened, currentTask, everyTask);
+    const layout = sectionLayout(target, nested, target.managers);
+    const slot = folds.sectionFolded(target.section.id) ? at : layoutSlot(layout, at);
+
+    return { order: layout.order, slot };
+  };
 
   // Note that the drops read the sections and Pinned as drawn, child tasks standing under their parents, once the lists below are homed.
   // Note that the sidebar draws a task in one place, so a row dragged into
@@ -2672,16 +2699,45 @@ function SidebarColumn({
     const target = homedSections.find((drawn) => drawn.section.id === zone);
 
     if (target === undefined) return;
-    tasks.onWriteSections(
-      placeWrites(target.entries, taskId, zone, sectionSlot(target, at), Date.now()),
-    );
+    const { order, slot } = sectionDrop(target, at);
+    tasks.onWriteSections(placeWrites(order, taskId, zone, slot, Date.now()));
   };
 
-  // A tab pinned to the sidebar is no task, nor is a Manager, so neither goes into a section, though Tasks unpins it as any pin.
+  // A Manager goes where a task would, and back under Managers, its home, as a task goes back under Tasks.
+  const dropManager = (agentId: string, zone: string, at: number) => {
+    const agent = unpinnedManagers.find((each) => each.id === agentId);
+
+    const leave =
+      sectionOfAgent(tasks.taskSections, agentId) === undefined ? [] : [unplaceWrite({ agentId })];
+
+    if (zone === PINNED_DROP_ZONE) {
+      if (agent === undefined) return;
+      tasks.onWriteSections(leave);
+      pinManagerAt(pinnedSection, agent, pinSlot(pinnedDrawnRows, at), tasks);
+
+      return;
+    }
+
+    if (zone === TASKS_DROP_ZONE || zone === MANAGERS_DROP_ZONE) {
+      tasks.onWriteSections(leave);
+
+      return;
+    }
+
+    const target = homedSections.find((drawn) => drawn.section.id === zone);
+
+    if (target === undefined) return;
+    const { order, slot } = sectionDrop(target, at);
+    tasks.onWriteSections(placeMemberWrites(order, { agentId }, zone, slot, Date.now()));
+  };
+
+  // A tab pinned to the sidebar is no task, so it goes into no section, though Tasks unpins it as any pin; a Manager goes into one as a task does, and Managers unpins it.
   const dropPinned = (row: PinnedRow, zone: string, at: number) => {
     const taskId = pinnedPlanOf(row)?.id;
+    const agentId = row.kind === SIDEBAR_ENTRY.MANAGER ? row.agent.id : undefined;
 
-    if (zone === TASKS_DROP_ZONE) {
+    if (zone === TASKS_DROP_ZONE || zone === MANAGERS_DROP_ZONE) {
+      if (zone === MANAGERS_DROP_ZONE && agentId === undefined) return;
       unpin(row, tasks);
 
       if (taskId !== undefined) tasks.onWriteSections(leaveSection(tasks, taskId));
@@ -2690,12 +2746,15 @@ function SidebarColumn({
     }
 
     const target = homedSections.find((drawn) => drawn.section.id === zone);
+    const member = pinnedMemberOf(row);
 
-    if (target === undefined || taskId === undefined) return;
+    if (target === undefined || member === undefined) return;
     unpin(row, tasks);
+    const { order, slot } = sectionDrop(target, at);
+
     tasks.onWriteSections([
-      ...leaveSection(tasks, taskId),
-      ...placeWrites(target.entries, taskId, zone, sectionSlot(target, at), Date.now()),
+      ...(taskId === undefined ? [] : leaveSection(tasks, taskId)),
+      ...placeMemberWrites(order, member, zone, slot, Date.now()),
     ]);
   };
 
@@ -3131,6 +3190,12 @@ function SidebarColumn({
                     <SidebarManagers
                       tasks={tasks}
                       taskAgentPins={tasks.taskAgentPins}
+                      sectioned={sectioned.agentIds}
+                      drops={
+                        sectionsShown
+                          ? { onDropOut: dropManager, onCarried: setCarrying }
+                          : undefined
+                      }
                       folds={folds}
                       inSight={overlay.inSight}
                       onOpen={chosen(openManager)}
@@ -3260,6 +3325,8 @@ function SidebarColumn({
                               );
                             },
                             onDropRow: dropRow,
+                            onDropManager: dropManager,
+                            onOpenManager: chosen(openManager),
                             runs: runsPlace,
                             onCarried: setCarrying,
                             onNewTaskIn: chosen(newTaskInSection),

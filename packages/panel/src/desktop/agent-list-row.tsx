@@ -1,5 +1,6 @@
 import {
   AGENT_BOUNDS,
+  AGENT_KIND,
   type AgentPullRequest,
   type AgentSummary,
   type ListedAgent,
@@ -48,11 +49,12 @@ import { RunsOnPlace } from "../tasks/runs-on.js";
 import { AgentGlyph, agentEndMark, ManagerGlyph } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useAgentPinWrite } from "../tasks/use-pin-writes.js";
-import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
+import { appStateQuery, selectFixtureStaged, selectSignedIn } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
 import { useRowPlace, withRowMoves } from "./row-moves.js";
+import { moveToSectionEntry, type SectionDialogs, useSectionDialogs } from "./sidebar-sections.js";
 import { SIDEBAR_ROW_TIME } from "./task-card.js";
 import { WaitingCount } from "./task-row-parts.js";
 import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
@@ -135,17 +137,30 @@ export const AGENT_ROW_CELLS = [
 /** What an agent's row is, naming its ⋯ and menu "Agent actions". */
 const AGENT_THING = "Agent";
 
-/** Pin or Unpin, whichever the agent is not yet, in a group of its own, for an unarchived agent; none for an archived one, whose pin stands nowhere. */
+/**
+ * Pin or Unpin, whichever the agent is not yet, in a group of its own, for
+ * an unarchived agent, and beside it a Manager's Move to section, as a
+ * task's stands beside its Pin; none for an archived one, whose pin stands
+ * nowhere and which no section keeps.
+ */
 function pinGroups(
-  agent: AgentSummary,
+  agent: AgentSummary & Partial<Pick<ListedAgent, "workspaceId">>,
   pinned: boolean,
   onPin: (agentId: string, pinned: boolean) => void,
   subject: Parameters<typeof commandAction>[2],
+  sections: { readonly dialogs: SectionDialogs; readonly name: string },
 ): MenuEntry[][] {
   if (agent.archivedAt !== undefined) return [];
   const command = pinned ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.PIN_AGENT;
+  const { workspaceId } = agent;
+  const manager = agent.kind === AGENT_KIND.MANAGER && agent.taskId === null;
 
-  return [[commandAction(command, () => onPin(agent.id, !pinned), subject)]];
+  const section =
+    !manager || workspaceId === undefined
+      ? []
+      : [moveToSectionEntry({ agentId: agent.id }, workspaceId, sections.dialogs, sections.name)];
+
+  return [[commandAction(command, () => onPin(agent.id, !pinned), subject), ...section]];
 }
 
 /** One agent's row; see the module's head. */
@@ -228,6 +243,8 @@ export function AgentListRow({
   const selectPinned = useMemo(() => selectAgentPinned(agent.id), [agent.id]);
   const pinned = useQuery({ ...appStateQuery, select: selectPinned }).data === true;
   const onPin = useAgentPinWrite();
+  const signedIn = useQuery({ ...appStateQuery, select: selectSignedIn }).data !== undefined;
+  const sections = useSectionDialogs({ signedIn }, shown);
   const rowPlace = useRowPlace();
 
   // Note that the developer's machines' asks for the agent count as needing them beside its threads.
@@ -312,7 +329,7 @@ export function AgentListRow({
           AGENT_THING,
           withRowMoves(
             [
-              ...pinGroups(agent, pinned, onPin, actions.subject),
+              ...pinGroups(agent, pinned, onPin, actions.subject, { dialogs: sections, name }),
               ...agentMenuGroups(rowDoors(actions.doors)),
             ],
             rowPlace,
@@ -368,6 +385,7 @@ export function AgentListRow({
           fold={fold}
         />
         {actions.dialog}
+        {sections.dialog}
       </>
     ) : (
       <TaskRow
@@ -403,6 +421,7 @@ export function AgentListRow({
         fold={fold}
       >
         {actions.dialog}
+        {sections.dialog}
       </TaskRow>
     );
 
