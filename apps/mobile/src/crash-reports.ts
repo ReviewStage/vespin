@@ -180,7 +180,8 @@ function sentryOptions(enabled: boolean): Parameters<typeof init>[0] {
     beforeSend: eventWithoutAccessTokens,
     // Note that every launch is traced and profiled, and nothing else: the SDK's automatic tracing is left out, so no request, screen, or press becomes a span, and no request carries a trace header.
     tracesSampleRate: 1,
-    profilesSampleRate: 1,
+    // PROBE ONLY: Hermes's one sampling profiler is the launch watch's (`launch-probe-watch.ts`).
+    profilesSampleRate: 0,
     integrations: (defaults) => defaults.filter(({ name }) => !UNTRACED.has(name)),
     tracePropagationTargets: [],
     _experiments: { enableStandaloneAppStartTracing: true },
