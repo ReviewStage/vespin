@@ -1,90 +1,55 @@
-import { type ChatReply, chatWorkWords } from "@repo/features/manager-chat";
-import { plainWords } from "@repo/features/plain-words";
-import type { ChatBubbleQuote, ContextMenuProps } from "@repo/ui";
-import { CopyIcon, ONE_LINE_END, OneLine, useMenu } from "@repo/ui";
+import { chatWorkWords } from "@repo/features/manager-chat";
+import { replyOf } from "@repo/features/reply-quote";
+import type { ContextMenuProps } from "@repo/ui";
+import { CopyIcon, useMenu } from "@repo/ui";
 import { ListTreeIcon, ReplyIcon } from "@repo/ui/icons";
-import { createContext, type ReactNode, useContext } from "react";
+import type { ReactNode } from "react";
 import { MessageAction } from "../ai-elements/message.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import type { ChatWorkToggle } from "./chat-work.js";
-import { DraftStarterCard } from "./fork-action.js";
-import type { ChatReplyTarget } from "./use-agent-composer.js";
+import { useReplyDoor } from "./reply-to-selection.js";
 
 /**
- * chat-reply.tsx -- a reply to one of a Manager's messages, as a chat app's Reply: the press on the message, its right-click menu, the chip over the box naming what the next send answers, and the quote's press back to the message answered.
+ * chat-reply.tsx -- a reply to one of a Manager's messages: Reply beside the message and in the menu a right-click or a long press on it opens, which quotes the whole message into the box as Reply over words selected does.
  *
- * A Manager's message offers Reply beside its Copy and in the menu a
- * right-click or a long press on it opens, which makes the box's next send
- * answer it (`use-agent-composer.ts`'s `replyTo`) and puts the caret in the
- * box. The box names the message over itself with an × that lets the reply
- * go, its words kept. The send carries the message quoted over the words
- * (`@repo/features/manager-chat`'s `chatReplyText`), and the chat draws
- * that line's bubble opening on the quote, whose press brings the message
- * answered into view and lights it, as a link to a message does.
+ * A Manager's message offers Reply beside its Copy and in its menu. Reply
+ * does what Reply over words selected in a message does
+ * (`reply-to-selection.tsx`), with the whole message as the words: it lays
+ * them into the box as a quote block where the caret stands, through the
+ * same door (`useReplyDoor`), and hands the box the caret under it. Nothing
+ * stands over the box, and nothing of the message is cut but by the
+ * message's own bound. The Manager reads the quote at the head of the line
+ * it is sent, as a Markdown blockquote, so it knows which message is
+ * answered, and the chat draws the line as any line with a quote. Reply is
+ * offered only where a box takes the quote, as Reply over a selection is.
  */
 
-/** The words of a reply's presses and its chip. */
+/** The words of a Manager's message's presses and its menu. */
 const REPLY_WORDS = {
   ACTION: "Reply",
   COPY: "Copy",
   COPIED: "Message copied",
   MENU: "Message actions",
-  CHIP_LEAD: "Replying to",
-  DROP: "Drop the reply",
-  JUMP: "Show the message this answers",
 } as const;
 
-/** What a Manager's chat hands its messages: the press that makes the box's next send answer one, none while the box takes none, and the press that brings one into view. */
-interface ChatReplyDoors {
-  readonly replyTo: ((target: ChatReplyTarget) => void) | undefined;
-  readonly show: ((messageId: string) => void) | undefined;
+/** The press that quotes a Manager's message, `words` its Markdown, into the box; none where no box takes a quote or the message has no words yet. */
+function useQuoteMessage(words: string): (() => void) | undefined {
+  const reply = useReplyDoor();
+
+  if (reply === undefined || words === "") return undefined;
+
+  return () => reply(replyOf(words));
 }
 
-const ChatReplyContext = createContext<ChatReplyDoors | undefined>(undefined);
+/** The press beside a Manager's message's Copy that quotes the whole message into the box; none where no box takes a quote. */
+export function ReplyMessageAction({ words }: { words: string }): ReactNode {
+  const quote = useQuoteMessage(words);
 
-/** Hands a Manager's chat drawn under it the press that makes the box's next send answer a message; none while the box takes none. */
-export function ChatReplyProvider({
-  replyTo,
-  children,
-}: {
-  replyTo: ((target: ChatReplyTarget) => void) | undefined;
-  children: ReactNode;
-}): React.JSX.Element {
-  const show = useContext(ChatReplyContext)?.show;
+  if (quote === undefined) return null;
 
   return (
-    <ChatReplyContext.Provider value={{ replyTo, show }}>{children}</ChatReplyContext.Provider>
-  );
-}
-
-/** Hands a Manager's chat drawn under it the press that brings one of its messages into view, beside the reply press handed from over it. */
-export function ChatShowProvider({
-  show,
-  children,
-}: {
-  show: (messageId: string) => void;
-  children: ReactNode;
-}): React.JSX.Element {
-  const replyTo = useContext(ChatReplyContext)?.replyTo;
-
-  return (
-    <ChatReplyContext.Provider value={{ replyTo, show }}>{children}</ChatReplyContext.Provider>
-  );
-}
-
-/** The press beside a Manager's message's Copy that makes the box's next send answer it; none where the box takes no reply. */
-export function ReplyMessageAction({ target }: { target: ChatReplyTarget }): ReactNode {
-  const replyTo = useContext(ChatReplyContext)?.replyTo;
-
-  if (replyTo === undefined) return null;
-
-  return (
-    <MessageAction
-      label={REPLY_WORDS.ACTION}
-      tooltip={REPLY_WORDS.ACTION}
-      onClick={() => replyTo(target)}
-    >
+    <MessageAction label={REPLY_WORDS.ACTION} tooltip={REPLY_WORDS.ACTION} onClick={quote}>
       <ReplyIcon />
     </MessageAction>
   );
@@ -96,30 +61,24 @@ interface ChatMessageMenu {
   readonly menu: ReactNode;
 }
 
-/** A Manager's message's right-click menu, Reply and Copy, and Show work where the message keeps work of its own (`work`). */
+/** A Manager's message's right-click menu, Reply and Copy of its Markdown `words`, and Show work where the message keeps work of its own (`work`). */
 export function useChatMessageMenu(
-  target: ChatReplyTarget,
+  words: string,
   work?: ChatWorkToggle | undefined,
 ): ChatMessageMenu {
-  const replyTo = useContext(ChatReplyContext)?.replyTo;
+  const quote = useQuoteMessage(words);
   const copy = useCopyToast();
   const menu = useMenu(true);
-  const offered = target.words !== "";
+  const offered = words !== "";
 
   const items = [
-    ...(replyTo === undefined
+    ...(quote === undefined
       ? []
-      : [
-          {
-            label: REPLY_WORDS.ACTION,
-            icon: <ReplyIcon aria-hidden="true" />,
-            onSelect: () => replyTo(target),
-          },
-        ]),
+      : [{ label: REPLY_WORDS.ACTION, icon: <ReplyIcon aria-hidden="true" />, onSelect: quote }]),
     {
       label: REPLY_WORDS.COPY,
       icon: <CopyIcon aria-hidden="true" />,
-      onSelect: () => copy(target.words, REPLY_WORDS.COPIED),
+      onSelect: () => copy(words, REPLY_WORDS.COPIED),
     },
     ...(work === undefined
       ? []
@@ -145,40 +104,4 @@ export function useChatMessageMenu(
         />
       ),
   };
-}
-
-/** The quote a reply's bubble opens on, whose press brings the message it answers into view; none for a line that answers none. */
-export function useChatReplyQuote(reply: ChatReply | undefined): ChatBubbleQuote | undefined {
-  const show = useContext(ChatReplyContext)?.show;
-
-  if (reply === undefined) return undefined;
-
-  return {
-    words: reply.quote,
-    label: REPLY_WORDS.JUMP,
-    onPress: show === undefined ? undefined : () => show(reply.to),
-  };
-}
-
-/** The chip over the box naming the Manager's message its next send answers, and the × that lets the reply go. */
-export function ReplyChip({
-  target,
-  onDrop,
-}: {
-  target: ChatReplyTarget;
-  onDrop: () => void;
-}): React.JSX.Element {
-  return (
-    <DraftStarterCard
-      glyph={<ReplyIcon className="draft-fork-glyph" aria-hidden="true" />}
-      marks={{ "data-reply-chip": "" }}
-      drop={REPLY_WORDS.DROP}
-      onDrop={onDrop}
-    >
-      <span className="draft-fork-lead">{REPLY_WORDS.CHIP_LEAD}</span>
-      <OneLine end={ONE_LINE_END.ELLIPSIS} className="draft-fork-quote">
-        {`“${plainWords(target.words)}”`}
-      </OneLine>
-    </DraftStarterCard>
-  );
 }

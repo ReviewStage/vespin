@@ -257,7 +257,7 @@ export function ForkedToLine({ messageId }: { messageId: string }): ReactNode {
 const DROP_SUGGESTION = "Drop the suggestion";
 
 /** The card a draft's chip stands in over its box: the glyph it wears where it wears one, what it names, and the × that lets it go. */
-export function DraftStarterCard({
+function DraftStarterCard({
   glyph,
   marks,
   drop,
