@@ -10,6 +10,7 @@ import {
   updateAgentBranch,
   type WithRepository,
 } from "@repo/database/models/agent-store";
+import { type ManagerAssignee, managerAssigneeOf } from "@repo/database/models/manager-assignee";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_AUTHOR, type AgentAuthor } from "@repo/features/agent-wire";
@@ -20,7 +21,7 @@ import {
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { ACTION_RESULT_STATUS, EXCESS_KEYS, type UnparsedWireValue } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
-import { Effect, Result, Schema } from "effect";
+import { Effect, Option, Result, Schema } from "effect";
 import {
   recordServerEvent,
   SERVER_EVENT,
@@ -78,6 +79,17 @@ import { agentPublished } from "./published.js";
  * agent's set, against the base it names, and its head is written on that
  * repository's row rather than the agent's (`recordAgentRepositoryHead`),
  * so GitHub's deliveries about it find the agent as they find its own.
+ *
+ * An agent a Manager started, on a task assigned to another member of its
+ * workspace than the Manager's owner (`managerAssigneeOf`), opens its pull
+ * request as that assignee, on their own sign-in's token, read in the
+ * service as the developer's is above and never handed to the sandbox. So
+ * whoever may assign a task a Manager's agent works on may have a pull
+ * request opened under the assignee's GitHub account, on the agent's one
+ * repository. Where their sign-in yields nothing GitHub takes, the App opens
+ * it, its description ending on "Requested by" them, and nothing is
+ * recorded on the agent's row, whose author stays the owner's. Commits, the
+ * agent's account, and who pays are unchanged.
  */
 
 /** GitHub's own bounds on what a pull request carries. */
@@ -173,10 +185,19 @@ export const PULL_REQUEST_UNAVAILABLE = PULL_REQUEST_REFUSAL.UNAVAILABLE;
 /** Who a pull request the service opened is by. */
 const OPENED_AS = {
   DEVELOPER: "developer",
+  /** The member a Manager's agent's task is assigned to. */
+  ASSIGNEE: "assignee",
   APP: "app",
 } as const;
 
 type OpenedAs = (typeof OPENED_AS)[keyof typeof OPENED_AS];
+
+/** Who opened it, as the counted event names them. */
+const OPENER_EVENT = {
+  [OPENED_AS.DEVELOPER]: SERVER_PULL_REQUEST_OPENER.DEVELOPER,
+  [OPENED_AS.ASSIGNEE]: SERVER_PULL_REQUEST_OPENER.ASSIGNEE,
+  [OPENED_AS.APP]: SERVER_PULL_REQUEST_OPENER.APP,
+} as const satisfies Record<OpenedAs, string>;
 
 /** What a call answers, as the model reads it: the pull request opened and as whom, or why none was. */
 export type PullRequestToolResult =
@@ -283,6 +304,39 @@ const attempt = /* @__PURE__ */ Effect.fn("web/openPullRequestAttempt")(function
 });
 
 /**
+ * The attempt on a member's own GitHub sign-in: the developer's, or the
+ * assignee of the task a Manager's agent works on. A sign-in that yields no token is
+ * refused as their token would be; any other failure to read it refuses
+ * the call, to be made again.
+ */
+const attemptAsMember = /* @__PURE__ */ Effect.fn("web/openPullRequestAsMember")(function* (
+  target: ConversationTarget,
+  userId: string,
+  fullName: string,
+  pullRequest: PullRequestAsked,
+): Effect.fn.Return<Attempt, never, CheckoutServices> {
+  const app = yield* GitHubApp;
+
+  return yield* app.userToken(userId).pipe(
+    Effect.flatMap((bearer) => attempt(bearer, fullName, pullRequest)),
+    Effect.catchTag("GitHubSignInRequired", () =>
+      Effect.succeed<Attempt>({
+        kind: ATTEMPT.TOKEN_REFUSED,
+        reason: AGENT_AUTHOR.APP_UNLINKED,
+      }),
+    ),
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(
+          `A member's GitHub token for conversation ${target.conversationId} was not read: ${failure._tag}`,
+        ),
+        { kind: ATTEMPT.REFUSED, reason: PULL_REQUEST_REFUSAL.UNAVAILABLE } satisfies Attempt,
+      ),
+    ),
+  );
+});
+
+/**
  * The attempt as the developer, where the agent writes as them, on their
  * own token; nothing for an agent that writes as the App. A sign-in that
  * yields no token is one GitHub no longer honors, and is refused as their
@@ -300,25 +354,54 @@ const attemptAsDeveloper = /* @__PURE__ */ Effect.fn("web/openPullRequestAsDevel
   pullRequest: PullRequestAsked,
 ): Effect.fn.Return<Attempt | undefined, never, CheckoutServices> {
   if (agent.author !== AGENT_AUTHOR.DEVELOPER) return undefined;
-  const app = yield* GitHubApp;
 
-  return yield* app.userToken(target.userId).pipe(
-    Effect.flatMap((bearer) => attempt(bearer, fullName, pullRequest)),
-    Effect.catchTag("GitHubSignInRequired", () =>
-      Effect.succeed<Attempt>({
-        kind: ATTEMPT.TOKEN_REFUSED,
-        reason: AGENT_AUTHOR.APP_UNLINKED,
-      }),
-    ),
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `The developer's GitHub token for conversation ${target.conversationId} was not read: ${failure._tag}`,
-        ),
-        { kind: ATTEMPT.REFUSED, reason: PULL_REQUEST_REFUSAL.UNAVAILABLE } satisfies Attempt,
-      ),
-    ),
+  return yield* attemptAsMember(target, target.userId, fullName, pullRequest);
+});
+
+/** The pull request with the line naming the assignee it was requested for at its foot, for the App to open in their place. */
+function withRequestedBy(
+  pullRequest: PullRequestAsked,
+  assignee: ManagerAssignee,
+): PullRequestAsked {
+  const line = `Requested by ${assignee.name}.`;
+  const body = pullRequest.body === "" ? line : `${pullRequest.body}\n\n${line}`;
+
+  return { ...pullRequest, body };
+}
+
+/** What the agent is told where the App opened a Manager's agent's pull request in its assignee's place. */
+function assigneeFallbackNote(assignee: ManagerAssignee): string {
+  return (
+    `Opened as ${PRODUCT_NAME}'s GitHub App, the description ending on "Requested by ${assignee.name}.": ` +
+    `their GitHub sign-in was refused or may not open a pull request on this repository. Tell them; signing in with GitHub again lets a later pull request open as them.`
   );
+}
+
+/**
+ * A Manager's agent's opening, where its task is for another member than the
+ * Manager's owner (`managerAssigneeOf`): on the assignee's own sign-in where
+ * GitHub takes it, and as the App otherwise, its description ending on who
+ * it was requested by. Note that nothing is recorded on the agent's row,
+ * because its author is the owner's standing, which the assignee's sign-in
+ * says nothing of.
+ */
+const attemptForAssignee = /* @__PURE__ */ Effect.fn("web/openPullRequestForAssignee")(function* (
+  target: ConversationTarget,
+  assignee: ManagerAssignee,
+  app: GitHubBearer,
+  fullName: string,
+  pullRequest: PullRequestAsked,
+): Effect.fn.Return<PullRequestToolResult, never, CheckoutServices> {
+  const asAssignee = yield* attemptAsMember(target, assignee.userId, fullName, pullRequest);
+
+  if (asAssignee.kind !== ATTEMPT.TOKEN_REFUSED) return answerOf(asAssignee, OPENED_AS.ASSIGNEE);
+  const asApp = yield* attempt(app, fullName, withRequestedBy(pullRequest, assignee));
+
+  if (asApp.kind === ATTEMPT.TOKEN_REFUSED) {
+    return pullRequestRejected(PULL_REQUEST_REFUSAL.UNAVAILABLE);
+  }
+
+  return answerOf(asApp, OPENED_AS.APP, assigneeFallbackNote(assignee));
 });
 
 /** The pull request GitHub is asked to open: the agent's branch against the base it named, its description as the agent wrote it. */
@@ -372,6 +455,14 @@ const attemptOpening = /* @__PURE__ */ Effect.fn("web/attemptPullRequestOpening"
     return asMember.kind === ATTEMPT.TOKEN_REFUSED
       ? pullRequestRejected(PULL_REQUEST_REFUSAL.TOKEN_REFUSED)
       : answerOf(asMember, OPENED_AS.DEVELOPER);
+  }
+
+  const assignee = yield* Effect.result(managerAssigneeOf(target.userId, agent.id));
+
+  if (Result.isFailure(assignee)) return pullRequestRejected(PULL_REQUEST_REFUSAL.UNAVAILABLE);
+
+  if (Option.isSome(assignee.success)) {
+    return yield* attemptForAssignee(target, assignee.success.value, bearer, fullName, pullRequest);
   }
 
   const asDeveloper = yield* attemptAsDeveloper(target, agent, fullName, pullRequest);
@@ -483,10 +574,7 @@ export const openPullRequest = /* @__PURE__ */ Effect.fn("web/openPullRequest")(
       SERVER_EVENT.PULL_REQUEST_CREATE,
       { userId: target.userId, workspaceId: agent.organizationId },
       {
-        opened_as:
-          result.openedAs === OPENED_AS.DEVELOPER
-            ? SERVER_PULL_REQUEST_OPENER.DEVELOPER
-            : SERVER_PULL_REQUEST_OPENER.APP,
+        opened_as: OPENER_EVENT[result.openedAs],
         is_draft: read.success.draft,
       },
     );
