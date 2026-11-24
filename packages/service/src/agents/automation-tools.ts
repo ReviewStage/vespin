@@ -9,8 +9,10 @@ import {
 import { type Device, devicesSeenSince } from "@repo/database/models/device-store";
 import { workspaceIntegrationInstallations } from "@repo/database/models/integration-installation-store";
 import { workspaceSlackInstallation } from "@repo/database/models/slack-installation-store";
+import { turnAsker } from "@repo/database/models/turn-asker";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
+  AGENT_KIND,
   AGENT_MACHINE,
   disabledServersSchema,
   type PersonalRunsOn,
@@ -90,7 +92,11 @@ import { workspaceAgent } from "./workspace-agents.js";
  * installation reaches, and the same access, so a personal automation is
  * its creator's to change and a workspace's its creator's, owners', and
  * admins'. A run starts as the automation's creator, so an automation an
- * agent makes runs as the member who started that agent. A webhook trigger
+ * agent makes runs as the member who started that agent. A Manager's is made
+ * instead by the member who asked for its turn under way (`turnAsker`), so it
+ * stands on their Automations page, is checked against their devices, and runs
+ * as them; a run sent to the Manager still opens a turn its owner pays for. A
+ * webhook trigger
  * is never made or set here: its secret is shown once, in the window that
  * minted it (`AGENTS.md`), and no agent's answer may carry it. A Sentry
  * trigger is refused where this deployment configures no Sentry integration
@@ -835,6 +841,23 @@ const landingNamed = (
   );
 };
 
+/**
+ * The member an automation the caller makes is made by: a Manager's asker,
+ * read from the rows of its turn under way (`turnAsker`), with its owner
+ * standing in only where no member asked; else the caller's member.
+ */
+const automationCreator = (
+  caller: AgentCall["caller"],
+): Effect.Effect<string, StoreFailure, DatabaseServices> => {
+  const agent = callerAgent(caller);
+
+  if (agent === undefined || agent.kind !== AGENT_KIND.MANAGER) {
+    return Effect.succeed(callerUserId(caller));
+  }
+
+  return turnAsker({ userId: agent.userId, conversationId: agent.conversationId });
+};
+
 /** An automation of the caller's workspace that its member may read, or nothing: one of another workspace is none of the caller's. */
 const workspaceAutomation = (userId: string, workspaceId: string, id: string) =>
   Effect.map(readAutomation(userId, id), (found) =>
@@ -902,7 +925,7 @@ export function runListAutomations(
   );
 }
 
-/** One call of `create_automation`: an automation made for the caller's member in the caller's workspace, once under the call's key. */
+/** One call of `create_automation`: an automation made for the caller's member, or a Manager's asker, in the caller's workspace, once under the call's key. */
 export function runCreateAutomation(
   call: AgentCall,
   input: UnparsedWireValue,
@@ -935,7 +958,7 @@ export function runCreateAutomation(
       const workspace = yield* callerWorkspace(call.caller);
 
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
-      const userId = callerUserId(call.caller);
+      const userId = yield* automationCreator(call.caller);
       const id = calledId(userId, call.clientKey);
       // A call run again finds the automation it made first, as it was made.
       const already = yield* workspaceAutomation(userId, workspace.value, id);

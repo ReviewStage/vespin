@@ -18,6 +18,7 @@ import {
   claimAutomationRun,
   createAutomation,
   deleteAutomation,
+  readAutomation,
   recordAutomationRun,
 } from "@repo/database/models/automation-store";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
@@ -65,6 +66,7 @@ import {
   joinWorkspace,
   leaveWorkspace,
   openHostedStoreTestDatabase,
+  openRunningTurn,
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
@@ -5702,6 +5704,53 @@ test("list_automations, create_automation, update_automation, and delete_automat
   assert.equal(
     automationChanges.filter((each) => "action" in each && each.action === "delete").length,
     1,
+  );
+});
+
+test("a Manager's create_automation in a turn a teammate opened makes the teammate's automation, aimed at the Manager", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const { caller: manager, teammates } = agents;
+  const agentSessions = await fakeCoderSessions(workspaceId);
+
+  await database.run(
+    Effect.flatMap(Database, (db) =>
+      Effect.andThen(
+        db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, manager.id)),
+        openRunningTurn(manager, [{ member: teammates.userId }]),
+      ),
+    ),
+  );
+  const call = await peerCaller(hostOf(), manager, agentSessions.services);
+
+  const created = await call(
+    AGENT_TOOL.CREATE_AUTOMATION,
+    {
+      name: "Morning sweep",
+      prompt: "Look over what changed overnight.",
+      trigger: { kind: "schedule", cron: "0 9 * * 1", timezone: "Europe/London" },
+      repositories: [],
+      model: OPUS,
+      effort: "high",
+      scope: "personal",
+      archiveSuccessful: true,
+      slackDelivery: false,
+      runsOn: { machine: AGENT_MACHINE.VERCEL },
+      agentId: manager.id,
+    },
+    "manager-make",
+  );
+
+  assert.equal(created.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(created));
+  const id = isRecord(created.automation) ? created.automation.id : undefined;
+  assert.ok(isWireString(id));
+  const kept = await database.run(readAutomation(teammates.userId, id));
+
+  assert.deepEqual(
+    Option.map(kept, (automation) => [automation.userId, automation.targetAgentId]),
+    Option.some([teammates.userId, manager.id]),
   );
 });
 
