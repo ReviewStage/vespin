@@ -2,6 +2,7 @@ import { githubUserAvatarUrl } from "@repo/features/account-picture";
 import type { GitHubPerson } from "@repo/features/agent-wire";
 import type { AutomationFiring, AutomationTrigger } from "@repo/features/automation-wire";
 import { githubLoginName, isBotLogin } from "@repo/features/github-login";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
@@ -92,6 +93,8 @@ export type Actor =
       readonly name: string;
       readonly provider: ModelProvider | undefined;
       readonly state: ActorState;
+      /** The face a Manager wears, which its mark is in place of its harness's; none for every other agent, and where the place naming it knows none. */
+      readonly face?: ManagerFace | undefined;
     }
   | {
       readonly kind: typeof ACTOR_KIND.AUTOMATION;
