@@ -126,6 +126,48 @@ export function keptMedia(prefix: string, id: string): KeptMedia | undefined {
   return undefined;
 }
 
+/** What in a download's own name follows the file it becomes, so no lookup (`keptMedia`) takes it for a whole file. */
+const DOWNLOADING_SUFFIX = ".downloading";
+
+/**
+ * A picture, a video, or a clip of `id` downloaded straight into the app's
+ * caches by `download`, which writes its bytes to the file it is handed
+ * and answers the type they were served as, or none where it read nothing:
+ * the bytes never reach JavaScript. Written under a name of its own, then
+ * moved into place as `<prefix>-<id>.<extension>` for its type, as
+ * `cachedPicture` and `cachedPlayed` name one, so the next read finds it
+ * (`keptMedia`); none where the download read nothing or its type names no
+ * extension, its partial file deleted, so the caller reads it another way.
+ * Note that each download stands under a name of its own, so one that lands
+ * after its caller gave up on it, as a request past its deadline does,
+ * never writes over another's file.
+ */
+export async function downloadedMedia(
+  prefix: string,
+  id: string,
+  partName: string,
+  download: (path: string) => Promise<string | undefined>,
+): Promise<KeptMedia | undefined> {
+  const partial = new File(Paths.cache, `${prefix}-${id}.${partName}${DOWNLOADING_SUFFIX}`);
+  const contentType = await download(partial.uri).catch(() => undefined);
+
+  const extension =
+    contentType === undefined
+      ? undefined
+      : (pictureExtension(contentType) ?? PLAYED_EXTENSION.get(contentType));
+
+  if (extension === undefined || !partial.exists) {
+    if (partial.exists) partial.delete();
+
+    return undefined;
+  }
+
+  const file = new File(Paths.cache, `${prefix}-${id}.${extension}`);
+  await partial.move(file, { overwrite: true });
+
+  return { uri: file.uri, bytes: file.size, picture: PICTURE_FILE_EXTENSIONS.includes(extension) };
+}
+
 /**
  * Where a picture's bytes were written for its row to draw from: a file of
  * the app's caches named `<prefix>-<id>.<extension>`, written once as a video

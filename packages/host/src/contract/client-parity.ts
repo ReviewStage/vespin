@@ -187,6 +187,11 @@ const PHONE_PUSH = byDesign("Only a phone takes pushes; a desktop or web client 
 /** Offered by the iOS app alone, the desktop and the web having no place for it. */
 const PHONE_ONLY: ClientParityRow = { desktop: PHONE_PUSH, web: PHONE_PUSH, ios: YES };
 
+/** A window draws a picture from the bytes the host hands it; only the phone's host downloads one straight into a file (`PlatformFileDownload`). */
+const PICTURE_BYTES = byDesign(
+  "The desktop and the web draw a picture from its bytes (AGENTS_PICTURE); only the phone downloads one straight into a file",
+);
+
 /** The panel draws a page in a frame of the service's, so it never reads the page's HTML itself. */
 const PANEL_PAGE_FRAME = byDesign("The panel frames a page through the service (pageFrameUrl)");
 
@@ -341,6 +346,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PICTURE]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_PICTURE_FILE]: { desktop: PICTURE_BYTES, web: PICTURE_BYTES, ios: YES },
 
   [PORT_ACT_KIND.AUTOMATIONS_CREATE]: panel(IOS.AUTOMATIONS),
   [PORT_ACT_KIND.AUTOMATIONS_CHANGE]: panel(IOS.AUTOMATIONS),

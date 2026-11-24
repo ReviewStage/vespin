@@ -402,6 +402,8 @@ export const AGENT_INBOX_ACT_KIND = {
   /** One image of an inbox item, fetched by the host under the account, so the window holds no bearer and no address. */
   AGENTS_INBOX_ATTACHMENT: "agents.inboxAttachment",
   AGENTS_PICTURE: "agents.picture",
+  /** One picture a tool answered an agent, fetched by the host under the account straight into a file of the device, where the platform downloads to a file, so its bytes never reach the window's JavaScript. */
+  AGENTS_PICTURE_FILE: "agents.pictureFile",
 } as const;
 
 /**
@@ -1218,6 +1220,7 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_READ_ALL: ACT_USE.WRITE,
   AGENTS_INBOX_ATTACHMENT: ACT_USE.FETCH,
   AGENTS_PICTURE: ACT_USE.FETCH,
+  AGENTS_PICTURE_FILE: ACT_USE.FETCH,
 
   AUTOMATIONS_CREATE: ACT_USE.WRITE,
   AUTOMATIONS_CHANGE: ACT_USE.WRITE,

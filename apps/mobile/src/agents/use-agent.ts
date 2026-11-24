@@ -53,9 +53,16 @@ import {
   transcriptItems,
 } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { randomUUID } from "expo-crypto";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedFile, cachedPicture, cachedPlayed, keptMedia } from "../cached-media.js";
+import {
+  cachedFile,
+  cachedPicture,
+  cachedPlayed,
+  downloadedMedia,
+  keptMedia,
+} from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -354,6 +361,19 @@ async function agentMediaSource(
     if (kept.picture) shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
 
     return kept.uri;
+  }
+
+  // Note that one read the first time is downloaded by the phone straight into its file, its bytes never crossing into JavaScript; a host that downloads none, or a download that read nothing, reads it as bytes below.
+  const downloaded = await downloadedMedia(AGENT_MEDIA_PREFIX, pictureId, randomUUID(), (path) =>
+    acts[ACT_KIND.AGENTS_PICTURE_FILE]({ agentId, pictureId, playable: MP4_TYPE, path }).then(
+      (answer) => ("contentType" in answer ? answer.contentType : undefined),
+    ),
+  );
+
+  if (downloaded !== undefined) {
+    if (downloaded.picture) shown(PRODUCT_PICTURE_FROM.DOWNLOADED, askedAt, downloaded.bytes);
+
+    return downloaded.uri;
   }
 
   // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.

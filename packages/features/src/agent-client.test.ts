@@ -19,6 +19,7 @@ import {
 } from "./provider-key-wire.js";
 import { REPOSITORY_UNREACHED } from "./repository-reach-wire.js";
 import { HOSTED_API_ERROR, IDEMPOTENCY_KEY } from "./service-wire.js";
+import { PLAYABLE_VIDEO_TYPE } from "./video-signature.js";
 
 const TASK_ID = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 const AGENT_ID = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
@@ -714,6 +715,46 @@ it.effect(
       assert.deepEqual(read, { contentType: "image/png", base64: "iVBORw==" });
       assert.deepEqual(worker, read);
       assert.deepEqual(unexpected, { failure: AGENT_CALL_FAILURE.UNANSWERED });
+    }),
+);
+
+it.effect(
+  "reads an agent's picture into a file under the account as the type the service named, never its body, and a missing one as not found",
+  () =>
+    Effect.gen(function* () {
+      const pictureId = "3ea06f44-b05d-4182-ad94-6f7a8b9cadb4";
+
+      // A client that wrote the body to a file answers its status and headers alone, as the phone's download does.
+      const written = recordingHttpClient(
+        () => new Response(null, { status: 200, headers: { "content-type": "video/mp4" } }),
+      );
+
+      const read = yield* Effect.provide(
+        client().agentPictureFile(AGENT_ID, pictureId, undefined, PLAYABLE_VIDEO_TYPE.MP4),
+        written.layer,
+      );
+
+      const missing = yield* Effect.provide(
+        client().agentPictureFile(AGENT_ID, pictureId),
+        recordingHttpClient(() => Response.json({ error: "not_found" }, { status: 404 })).layer,
+      );
+
+      assert.deepEqual(read, { contentType: "video/mp4" });
+      assert.deepEqual(
+        written.requests.map(({ pathname, authorization, accept }) => ({
+          pathname,
+          authorization,
+          accept,
+        })),
+        [
+          {
+            pathname: `/api/agents/${AGENT_ID}/pictures/${pictureId}`,
+            authorization: "Bearer token-1",
+            accept: "video/mp4",
+          },
+        ],
+      );
+      assert.deepEqual(missing, { failure: AGENT_CALL_FAILURE.NOT_FOUND });
     }),
 );
 
