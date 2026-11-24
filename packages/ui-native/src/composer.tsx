@@ -185,6 +185,8 @@ export interface ComposerPills {
   readonly field: RefObject<PillFieldHandle | null>;
   readonly onAtWord: (word: CaretAtWord | undefined) => void;
   readonly files?: ReadonlySet<string> | undefined;
+  /** Told as the field takes and lets go of the keyboard, so what an `@` offers can be read before one is typed. */
+  readonly onFocusChange?: ((focused: boolean) => void) | undefined;
 }
 
 type ComposerProps = {
@@ -652,7 +654,13 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   const text = useNativeState(held ?? "");
   const field = useRef<TextFieldRef>(null);
   const { focusAsk, pills } = props;
-  const { field: pillDoor, files: pillFiles, onAtWord: onPillAtWord } = pills ?? {};
+
+  const {
+    field: pillDoor,
+    files: pillFiles,
+    onAtWord: onPillAtWord,
+    onFocusChange: onPillFocus,
+  } = pills ?? {};
 
   // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
   const [opened] = useState(() => (held ?? "").length);
@@ -737,6 +745,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
             placeholder={placeholder}
             maxLines={lines}
             onAtWord={onPillAtWord}
+            onFocusChange={onPillFocus}
             autoFocus={props.autoFocus === true}
             testID={testIds?.field ?? "composer-field"}
           />
