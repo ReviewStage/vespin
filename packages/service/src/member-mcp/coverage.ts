@@ -369,6 +369,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     agentOrigin: SCREEN_ONLY,
     taskHistory: SCREEN_ONLY,
     taskComments: SCREEN_ONLY,
+    managerChat: SCREEN_ONLY,
     taskBrowserTabs: SCREEN_ONLY,
     agentBrowserTabs: SCREEN_ONLY,
     tasks: SCREEN_ONLY,

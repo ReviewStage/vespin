@@ -148,6 +148,7 @@
     "./schemas/workspace-experiment": "./src/schemas/workspace-experiment.js",
     "./schemas/workspace-sandbox-size": "./src/schemas/workspace-sandbox-size.js",
     "./schemas/description-comment": "./src/schemas/description-comment.js",
+    "./schemas/manager-chat-message": "./src/schemas/manager-chat-message.js",
     "./schemas/task": "./src/schemas/task.js",
     "./schemas/task-block": "./src/schemas/task-block.js",
     "./schemas/task-page": "./src/schemas/task-page.js",

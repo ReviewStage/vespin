@@ -18,7 +18,7 @@ import {
   writeManagerChatMessage,
 } from "@repo/database/models/manager-chat-messages";
 import { latestTurnsOf } from "@repo/database/models/message-reads";
-import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/database/schemas";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
 import { agentName } from "@repo/features/model-label";
 import { Clock, Effect, Option } from "effect";
 

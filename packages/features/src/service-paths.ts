@@ -191,6 +191,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_TASK_BROWSER_TABS: "/api/live/task-browser-tabs",
   /** One coding agent's Browser tabs under `?id=`, on the terms a task's are. */
   LIVE_AGENT_BROWSER_TABS: "/api/live/agent-browser-tabs",
+  /** One page of a Manager's chat under `?id=`, its newest messages or with `&before=` those older than a `seq`, sealed for following over Neon Realtime (GET), or with `?poll=true` their rows inline; or `not-found`. `manager-chat-live.ts` declares the answer. */
+  LIVE_MANAGER_CHAT: "/api/live/manager-chat",
   /** One agent's transcript under `?id=`, or one of its workers' under `&call=`, sealed for following over Neon Realtime (GET): what its pages are read from, or `not-found` or `unavailable`. */
   LIVE_AGENT_TRANSCRIPT: "/api/live/agent-transcript",
   /** One task's inbox under `?id=`, sealed for following over Neon Realtime (GET): its open and latest settled items, or `not-found` or `unavailable`. */

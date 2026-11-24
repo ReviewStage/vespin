@@ -238,6 +238,7 @@
     "./description-comment-anchor": "./src/description-comment-anchor.js",
     "./description-comment-notes": "./src/description-comment-notes.js",
     "./description-comment-live": "./src/description-comment-live.js",
+    "./manager-chat-live": "./src/manager-chat-live.js",
     "./description-comment-wire": "./src/description-comment-wire.js",
     "./description-sections": "./src/description-sections.js",
     "./description-version-diff": "./src/description-version-diff.js",

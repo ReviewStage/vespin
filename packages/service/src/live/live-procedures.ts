@@ -55,6 +55,9 @@
  * threads, their entries, and the files their comments carry
  * (`reads/task-comments.ts`), the same way and woken the same way
  * (`taskCommentsRead`).
+ * `GET /api/live/manager-chat?id=` answers one page of a Manager's chat,
+ * its newest messages or with `&before=` those older than a `seq`, as one
+ * statement, woken by a write that names the agent (`managerChatRead`).
  * `GET /api/live/task-browser-tabs?id=` answers its Browser tabs as one
  * statement, the agent's pointer on each among them, woken by a write that
  * names the task, so a window draws the pointer moving within a moment of
@@ -253,6 +256,7 @@ import { integrationStatusesRead } from "./reads/integration-statuses.js";
 import { machineAsksRead } from "./reads/machine-asks.js";
 import { machineCommandsRead } from "./reads/machine-commands.js";
 import { machinesRead } from "./reads/machines.js";
+import { managerChatRead } from "./reads/manager-chat.js";
 import { agentPagesRead, taskPagesRead } from "./reads/pages.js";
 import {
   pullRequestChaptersRead,
@@ -984,6 +988,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     agentOrigin: signedIn.agentOrigin.effect(answerBoundRead(agentOriginRead)),
     taskHistory: signedIn.taskHistory.effect(answerBoundRead(taskHistoryRead)),
     taskComments: signedIn.taskComments.effect(answerBoundRead(taskCommentsRead)),
+    managerChat: signedIn.managerChat.effect(answerBoundRead(managerChatRead)),
     taskBrowserTabs: signedIn.taskBrowserTabs.effect(answerBoundRead(taskBrowserTabsRead)),
     agentBrowserTabs: signedIn.agentBrowserTabs.effect(answerBoundRead(agentBrowserTabsRead)),
     macCommands: signedIn.macCommands.effect(answerBoundRead(machineCommandsRead)),

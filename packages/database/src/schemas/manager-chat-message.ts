@@ -1,3 +1,8 @@
+import {
+  MANAGER_CHAT_AUTHOR,
+  type ManagerChatAttachment,
+  type ManagerChatAuthor,
+} from "@repo/features/manager-chat-live";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -29,21 +34,6 @@ import { turns } from "./storage.js";
  * thread's root, never another reply, so no reader walks a chain. A write
  * sent again under the same key lands once.
  */
-
-/** Who wrote a message of a Manager's chat: a person, or the Manager itself. */
-export const MANAGER_CHAT_AUTHOR = {
-  PERSON: "person",
-  AGENT: "agent",
-} as const;
-
-export type ManagerChatAuthor = (typeof MANAGER_CHAT_AUTHOR)[keyof typeof MANAGER_CHAT_AUTHOR];
-
-/** A file a message carries, by the id it was kept under: a file a person sent, or a picture of a set the Manager showed. */
-export interface ManagerChatAttachment {
-  readonly id: string;
-  readonly mediaType: string;
-  readonly caption?: string;
-}
 
 export const managerChatMessage = pgTable(
   "manager_chat_message",

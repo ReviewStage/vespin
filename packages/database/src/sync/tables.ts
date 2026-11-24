@@ -53,6 +53,7 @@ import { integrationConnection } from "../schemas/integration.js";
 import { integrationInstallation } from "../schemas/integration-installation.js";
 import { machineCommand } from "../schemas/machine-command.js";
 import { machineCommandAsk } from "../schemas/machine-command-ask.js";
+import { managerChatMessage } from "../schemas/manager-chat-message.js";
 import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
@@ -249,6 +250,14 @@ export const agentBootSync = defineSyncTable(agentBootTable, {
 export const voiceCallSync = defineSyncTable(voiceCallTable, {
   topics: [{ kind: TOPIC.AGENT, column: voiceCallTable.agentId }],
   ignore: [voiceCallTable.leaseEpoch, voiceCallTable.leaseUntil, voiceCallTable.toldSeq],
+});
+
+/**
+ * A message of a Manager's chat, on the Manager's topic, so the chat's live
+ * read (`managerChat`) hears a message written, edited, or deleted.
+ */
+export const managerChatMessageSync = defineSyncTable(managerChatMessage, {
+  topics: [{ kind: TOPIC.AGENT, column: managerChatMessage.agentId }],
 });
 
 /** An account's membership of a workspace, on the workspace's topic and the account's. */
@@ -972,6 +981,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentSandboxSync,
   agentBootSync,
   voiceCallSync,
+  managerChatMessageSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
   descriptionCommentThreadSync,

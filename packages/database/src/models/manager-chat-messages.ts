@@ -22,6 +22,11 @@
 
 import { createHash } from "node:crypto";
 import { AGENT_KIND } from "@repo/features/agent-wire";
+import {
+  MANAGER_CHAT_AUTHOR,
+  type ManagerChatAttachment,
+  managerChatAttachmentSchema,
+} from "@repo/features/manager-chat-live";
 import { agentName } from "@repo/features/model-label";
 import { and, asc, desc, eq, exists, inArray, isNull, lt, or, type SQL, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
@@ -29,11 +34,7 @@ import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, queryBuilder } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { user } from "../schemas/auth.js";
-import {
-  MANAGER_CHAT_AUTHOR,
-  type ManagerChatAttachment,
-  managerChatMessage,
-} from "../schemas/manager-chat-message.js";
+import { managerChatMessage } from "../schemas/manager-chat-message.js";
 import { agentAutomationNameSql } from "./agent-name.js";
 import { type AgentStoreEffect, containing } from "./agent-store.js";
 import { InstantColumnSchema } from "./columns.js";
@@ -50,12 +51,6 @@ export const MANAGER_CHAT_OUTCOME = {
 /** How many hex digits a message's id holds: few enough for the model to repeat, enough that a chat's messages seldom share one. */
 const MESSAGE_ID_DIGITS = 8;
 
-const AttachmentSchema = Schema.Struct({
-  id: Schema.String,
-  mediaType: Schema.String,
-  caption: Schema.optionalKey(Schema.String),
-});
-
 const ManagerChatMessageSchema = Schema.Struct({
   id: Schema.String,
   seq: Schema.Number,
@@ -63,7 +58,7 @@ const ManagerChatMessageSchema = Schema.Struct({
   authorUserId: Schema.NullOr(Schema.String),
   authorName: Schema.String,
   text: Schema.String,
-  attachments: Schema.Array(AttachmentSchema),
+  attachments: Schema.Array(managerChatAttachmentSchema),
   threadRoot: Schema.NullOr(Schema.String),
   broadcast: Schema.Boolean,
   turnId: Schema.NullOr(Schema.String),
@@ -268,7 +263,7 @@ const insertMessage = SqlSchema.findAll({
     authorUserId: Schema.NullOr(Schema.String),
     authorName: Schema.String,
     text: Schema.String,
-    attachments: Schema.Array(AttachmentSchema),
+    attachments: Schema.Array(managerChatAttachmentSchema),
     threadRoot: Schema.NullOr(Schema.String),
     broadcast: Schema.Boolean,
     turnId: Schema.NullOr(Schema.String),
