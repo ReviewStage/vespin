@@ -6,9 +6,11 @@ import {
   EmptyState,
   MoreButton,
   PlugIcon,
+  SETTINGS_PAGE_LOOK,
   SETTINGS_PAGE_WIDTH,
   SETTINGS_SECTION_FRAME,
   SettingsPage,
+  SettingsPageColumn,
   SettingsRow,
   SettingsSection,
   Switch,
@@ -31,8 +33,10 @@ import { CatalogSection } from "../section";
  * in a frame narrower than the 480px a desktop page insets less under, its
  * long title pushing the Reset below it; the page on a phone, its way back
  * and a ⋯ holding its Reset in its bar's corners; a page whose content is an empty
- * state, standing in the room under its title; and a page at the wide
- * measure holding a table of records, its head following it.
+ * state, standing in the room under its title; a page at the wide
+ * measure holding a table of records, its head following it; and a page's
+ * column alone in a dialog's look, as a settings dialog's section stands, its
+ * top at the card's inset and its title in the dialog's role.
  */
 
 function HeldSwitch({ label, describedBy }: { label: string; describedBy: string | undefined }) {
@@ -172,6 +176,20 @@ function SettingsPages(): React.JSX.Element {
           <SettingsPage title="Experimental">
             <EmptyState icon={<PlugIcon />}>Nothing to try out right now.</EmptyState>
           </SettingsPage>
+        </div>
+      </CatalogSection>
+      <CatalogSection id="settings-page-dialog-look" title="A page's column in a dialog's look">
+        <div className="catalog-settings-frame">
+          <SettingsPageColumn
+            title="People"
+            look={SETTINGS_PAGE_LOOK.DIALOG}
+            actions={<Button variant={BUTTON_VARIANT.QUIET}>Reset</Button>}
+          >
+            <SettingsSection title="Followers">
+              <SwitchRow label="You" description="Let this Manager use my machines" />
+              <SwitchRow label="Alan Turing" description="Let this Manager use my machines" />
+            </SettingsSection>
+          </SettingsPageColumn>
         </div>
       </CatalogSection>
       <CatalogSection

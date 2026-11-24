@@ -9,7 +9,7 @@ import { GAP, LAYOUT_ELEMENT, Stack } from "../layout/layout.js";
 import { NAV_CURRENT, NavItem } from "../nav-item/nav-item.js";
 import { useRovingKeys } from "../roving-keys/roving-keys.js";
 import { SCROLL_FADE, ScrollArea } from "../scroll-area/scroll-area.js";
-import { SettingsPageColumn } from "../settings-page/settings-page.js";
+import { SETTINGS_PAGE_LOOK, SettingsPageColumn } from "../settings-page/settings-page.js";
 import {
   type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
@@ -29,8 +29,10 @@ import { TOOLBAR_INSET, TOOLBAR_LOOK, Toolbar } from "../toolbar/toolbar.js";
  * card, with one place for each section (`NavItem`), its glyph and name, the
  * one shown lit and announced as the page, one Tab stop the arrows walk, as
  * Settings' list of pages is; beside it, the section chosen as a settings
- * page's column (`SettingsPageColumn`), at the page's inset and Settings'
- * measure, its name the page's title with the card's close at its end, over
+ * page's column (`SettingsPageColumn`) in a dialog's look, its top at the
+ * card's own inset level with the list's and its name in the dialog's role,
+ * as every dialog names itself, at the page's sides and Settings' measure,
+ * the card's close at the name's end, over
  * its `SettingsSection`s a page's gap apart, scrolling under its top edge as
  * a page does, an empty state filling the room under the title. The card
  * holds its height as the reader turns from one section to the next, so the
@@ -111,12 +113,13 @@ const GRID =
 
 /**
  * The list's column, on the sidebar's ground at the sidebar's inset, a
- * hairline at its end, its top level with the section's title; on a phone
+ * hairline at its end, its top at the card's own inset, level with the
+ * section's title; on a phone
  * the card's whole room while it shows, on the card's own ground under its
  * bar, as Settings' list of pages stands under a phone's.
  */
 const LIST =
-  "ui-settings-dialog-list flex min-h-0 min-w-0 flex-col gap-tight-gap border-e border-border bg-sidebar px-column-inset pt-page-inset pb-column-inset room-narrow:border-e-0 room-narrow:bg-transparent room-narrow:pt-title-under-bar room-narrow:group-data-[listed=false]/settings-dialog:hidden";
+  "ui-settings-dialog-list flex min-h-0 min-w-0 flex-col gap-tight-gap border-e border-border bg-sidebar px-column-inset pt-dialog-inset pb-column-inset room-narrow:border-e-0 room-narrow:bg-transparent room-narrow:pt-title-under-bar room-narrow:group-data-[listed=false]/settings-dialog:hidden";
 
 /**
  * The room the list scrolls in, reaching past the list's inset by a focus
@@ -132,11 +135,11 @@ const PAGE =
 
 /**
  * The list's label, the card's name, over its places as Settings heads a
- * group of pages (`GroupHeader`): in the group's role, a row's height, its
- * words where the places' glyphs start; on a phone the list's bar names the
+ * group of pages (`GroupHeader`): in the group's role, its words where the
+ * places' glyphs start, its top level with the section's title; on a phone the list's bar names the
  * card instead.
  */
-const LABEL = "flex min-h-control min-w-0 items-center px-row-inset room-narrow:hidden";
+const LABEL = "flex min-w-0 items-center px-row-inset room-narrow:hidden";
 
 /** A phone's bar over the list, as a phone heads every page (`Toolbar`'s phone look): the card's name centered, its close in the end corner; drawn only while the list shows. */
 const LIST_BAR = "hidden room-narrow:group-data-[listed=true]/settings-dialog:block";
@@ -296,6 +299,7 @@ export function SettingsDialog<Id extends string>({
               titleId={pageTitleId}
               actions={close}
               titledWhenNarrow
+              look={SETTINGS_PAGE_LOOK.DIALOG}
             >
               {children}
             </SettingsPageColumn>

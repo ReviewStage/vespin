@@ -2,7 +2,7 @@ import { type ReactNode, useRef, useState } from "react";
 import { said } from "../../said.js";
 import { type PageScroll, PageScrollContext } from "../page-frame/page-scroll.js";
 import { useHeadingAway } from "../page-header/heading-away.js";
-import { PAGE_HEADER_END, PageHeader } from "../page-header/page-header.js";
+import { PAGE_HEADER_END, PAGE_HEADER_LOOK, PageHeader } from "../page-header/page-header.js";
 import { RevealArea, revealArea } from "../reveal/reveal.js";
 import {
   type SettingsSectionSkeletonLayout,
@@ -110,6 +110,7 @@ export function SettingsPageColumn({
   width = SETTINGS_PAGE_WIDTH.MEASURE,
   titled = false,
   titledWhenNarrow = false,
+  look = SETTINGS_PAGE_LOOK.PAGE,
   scroller,
   head,
   children,
@@ -128,6 +129,8 @@ export function SettingsPageColumn({
   titled?: boolean | undefined;
   /** Whether that bar stands only where the room is narrow (`room-narrow`), as a settings dialog's does, which answers the room in what it draws rather than in what it is handed: there the head gives way to the bar as `titled`'s does. */
   titledWhenNarrow?: boolean | undefined;
+  /** How it stands: a page's, unless it stands in a dialog's card. */
+  look?: SettingsPageLook | undefined;
   /** The scroller, for an owner that watches it; one of its own where none is handed. */
   scroller?: React.RefObject<HTMLDivElement | null> | undefined;
   /** The head, for an owner that watches it scroll away. */
@@ -144,6 +147,7 @@ export function SettingsPageColumn({
     <div
       ref={page}
       data-width={width}
+      data-look={look}
       className="ui-settings-page @container/ui-settings-page box-border min-h-0 min-w-0 grow basis-0 overflow-x-clip overflow-y-auto overscroll-contain scroll-py-page-inset [scrollbar-gutter:stable]"
     >
       <div
@@ -176,6 +180,9 @@ export function SettingsPageColumn({
               description={description}
               actions={actions}
               end={PAGE_HEADER_END.WORDS}
+              look={
+                look === SETTINGS_PAGE_LOOK.DIALOG ? PAGE_HEADER_LOOK.DIALOG : PAGE_HEADER_LOOK.PAGE
+              }
             />
           </div>
         )}
@@ -192,6 +199,20 @@ export function SettingsPageColumn({
     </div>
   );
 }
+
+/**
+ * How a settings page's column stands: a page's, at the page's inset all
+ * round under its title in the title's role; or a page in a dialog's card
+ * (a settings dialog's section), its top and foot at the card's own inset and
+ * its title in the dialog's role, as every dialog names itself, its sides
+ * and measure still a page's, so its rows read as Settings' do.
+ */
+export const SETTINGS_PAGE_LOOK = {
+  PAGE: "page",
+  DIALOG: "dialog",
+} as const;
+
+export type SettingsPageLook = (typeof SETTINGS_PAGE_LOOK)[keyof typeof SETTINGS_PAGE_LOOK];
 
 /** A column of `children`, one section each, under `title` and its `description`, beside them `actions`, or on a phone under a bar ending with them. */
 export function SettingsPage({
