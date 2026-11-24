@@ -1,7 +1,6 @@
 // settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a script read whole, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, a connection such as an integration, and an automation or one of its runs.
 
 import {
-  ContextMenu,
   Form,
   HStack,
   Image,
@@ -1546,23 +1545,15 @@ export function ConnectionRow({
 
   if (menu.length === 0) return <HStack modifiers={placed}>{drawn}</HStack>;
 
-  const items = menu.map((each) => (
-    <SwiftUIButton
-      key={each.label}
-      label={each.label}
-      role={each.destructive === true ? "destructive" : "default"}
-      onPress={each.onPress}
-    />
-  ));
+  const acts: readonly RowAction[] = menu.map((each) => ({
+    label: each.label,
+    symbol: each.symbol,
+    tone: each.destructive === true ? ROW_ACTION_TONE.DESTRUCTIVE : ROW_ACTION_TONE.NEUTRAL,
+    onPress: each.onPress,
+  }));
 
   const swiped = menu.filter((each) => each.destructive === true);
-
-  const held = (
-    <ContextMenu>
-      <ContextMenu.Items>{items}</ContextMenu.Items>
-      <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
-    </ContextMenu>
-  );
+  const held = <LongPressMenu groups={[acts]}>{drawn}</LongPressMenu>;
 
   if (swiped.length === 0) return <HStack modifiers={placed}>{held}</HStack>;
 
