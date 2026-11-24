@@ -91,7 +91,7 @@
       "ignore": ["src/codex-protocol/**"]
     },
     "tools/bench": {
-      "entry": ["bench.ts"],
+      "entry": ["bench.ts", "host-bench.ts", "host-worker.ts"],
       "ignoreDependencies": ["playwright"]
     },
     "tools/claude-code-probe": {
