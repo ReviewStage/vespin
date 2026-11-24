@@ -160,7 +160,7 @@ const FIELD_TRAILING = SPACE.TIGHT;
 const FIELD_LINES = { REGULAR: 6, LARGE: 3, ONE_LINE: 1 } as const;
 
 /** The least width the field keeps on the composer's one line (`useOneLine`), in points: four presses' widths, room for a few words, so what is picked beside it gives way, its name cut, before the field does. */
-const ONE_LINE_FIELD_MIN = PRESS_SIZE * 4;
+export const ONE_LINE_FIELD_MIN = PRESS_SIZE * 4;
 
 /** What the + is named by, whether it opens one act or a menu. */
 export const ADD_LABEL = "Add";
@@ -719,7 +719,6 @@ function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts 
 
   // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so its text view is sized at that one width as its words change, rather than asking its ideal width too.
   const span = frame({
-    ...(oneLine && { minWidth: ONE_LINE_FIELD_MIN }),
     minHeight: PRESS_SIZE,
     maxWidth: Number.POSITIVE_INFINITY,
     alignment: "leading",
