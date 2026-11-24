@@ -42,6 +42,7 @@ import {
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  NoSelection,
   ROW_ACTION_TONE,
   RowForEach,
   RowList,
@@ -78,9 +79,11 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { APP_SIDEBAR } from "../sidebar-shown.js";
+import { TabColumns } from "../split-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
+import { PLUS_TAB, useComposeAction, useSplitBuild } from "./app-sidebar.js";
 
 /** What the list's field says before anything is typed. */
 const SEARCH_AUTOMATIONS = "Search automations";
@@ -96,6 +99,9 @@ const NEW_AUTOMATION = "New automation";
 
 /** What the workspace's runs are called, on the bar's button that opens them, as the desktop's tab names them. */
 const RUNS = "Runs";
+
+/** What an iPad's page column says before an automation is opened beside the list. */
+const NO_AUTOMATION_SELECTED = "No automation selected";
 
 /** What View options is called, on its button and to VoiceOver. */
 const VIEW_OPTIONS = "View options";
@@ -174,6 +180,63 @@ function found(automation: AutomationSummary, tokens: readonly string[]): boolea
  * workspace, so nothing of one workspace's list stands over another's.
  */
 export function AutomationsScreen() {
+  return APP_SIDEBAR ? <AutomationsColumnsScreen /> : <AutomationsStackScreen />;
+}
+
+/**
+ * The Automations tab's root on an iPad: its automations listed in the
+ * column beside the sidebar, under its title, search, View options, Runs and
+ * New automation, and an automation opened beside them, pushed on its own
+ * stack, as Mail stands a message beside its mailbox. Note that the sidebar
+ * holds the workspace switcher, so the list's bar stands none.
+ */
+function AutomationsColumnsScreen() {
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const { chosen } = useChosenWorkspace(workspaces);
+  const { order, setOrder } = useAutomationsOrder();
+  const [search, setSearch] = useState("");
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+  const compose = useComposeAction();
+  const build = useSplitBuild();
+
+  return (
+    <>
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over it names its back button by it. */}
+      <Stack.Screen options={{ headerShown: false, title: AUTOMATION_PHONE_WORDS.TITLE }} />
+      <TabColumns
+        build={build}
+        sidebar={
+          chosen === undefined ? null : (
+            <AutomationsList key={chosen.id} workspace={chosen} order={order} search={search} />
+          )
+        }
+        sidebarBar={{
+          title: AUTOMATION_PHONE_WORDS.TITLE,
+          menu: viewMenu(order, setOrder),
+          acts: [
+            {
+              label: RUNS,
+              symbol: GLYPH.HISTORY,
+              onPress: () => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE)),
+            },
+            {
+              label: NEW_AUTOMATION,
+              symbol: GLYPH.ADD,
+              onPress: () => router.push(newAutomationRoute()),
+            },
+          ],
+          search: { placeholder: SEARCH_AUTOMATIONS, text: search, onChange: setSearch },
+        }}
+        detail={<NoSelection title={NO_AUTOMATION_SELECTED} />}
+        detailBar={{ lead: [compose] }}
+      />
+    </>
+  );
+}
+
+/** The Automations tab's root under the Stack's bar, on an iPhone. */
+function AutomationsStackScreen() {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
   const switcher = useWorkspaceSwitcher();

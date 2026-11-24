@@ -167,7 +167,6 @@ import {
   type RowSubmenu,
   type RowSwipe,
   Screen,
-  SplitView,
   STATUS_MARK_SYMBOL,
   StackBarMenu,
   type StandingMenus,
@@ -192,8 +191,10 @@ import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   type ComponentProps,
+  createContext,
   type ReactElement,
   type ReactNode,
+  useContext,
   useDeferredValue,
   useMemo,
   useRef,
@@ -217,11 +218,13 @@ import { usePushStarted, usePushStood } from "../push-stood.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { APP_SIDEBAR } from "../sidebar-shown.js";
+import { SidebarTasksContext } from "../sidebar-tasks.js";
+import { TabColumns } from "../split-columns.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-
-import { useOnOwnTab } from "../tab-route.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import {
   threadComments,
   threadOpen,
@@ -1432,6 +1435,37 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
 
   return (
     <RowList look={look} selected={selected} onSelect={open} onRefresh={onRefresh}>
+      <TreeSections
+        listing={listing}
+        hold={hold}
+        managers={managers}
+        managersListed={managersListed}
+      />
+    </RowList>
+  );
+}
+
+/**
+ * The tree's sections inside a list: Managers, Pinned, Following, the
+ * member's sections, and the repository groups, as the Tasks list and an
+ * iPad's sidebar both draw them, as the panel's sidebar does.
+ */
+function TreeSections({
+  listing,
+  hold,
+  managers,
+  managersListed,
+}: {
+  readonly listing: TasksListing;
+  readonly hold: TreeHold;
+  readonly managers: readonly ListedAgent[];
+  /** Whether the workspace has the Managers experiment on. */
+  readonly managersListed: boolean;
+}) {
+  const { tree } = listing;
+
+  return (
+    <>
       <ManagersSection listed={managersListed} managers={managers} hold={hold} />
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
@@ -1445,7 +1479,7 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
-    </RowList>
+    </>
   );
 }
 
@@ -3223,7 +3257,7 @@ function InlineSplitView({
   chrome,
   detailBar,
   ...split
-}: ComponentProps<typeof SplitView> & { readonly chrome: InlineChrome }) {
+}: ComponentProps<typeof TabColumns> & { readonly chrome: InlineChrome }) {
   const editing = useInlineEditing(chrome);
 
   const bar =
@@ -3236,7 +3270,7 @@ function InlineSplitView({
         }
       : detailBar;
 
-  return <SplitView {...split} detailBar={bar} />;
+  return <TabColumns {...split} detailBar={bar} />;
 }
 
 /** What an `@` typed in the page's description offers, docked over the keyboard over the page, read from its `chrome` so only the dock draws again. */
@@ -3603,21 +3637,106 @@ function TasksSplitScreen({
     <>
       {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
       <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />
-      <Screen key={build}>
-        <InlineSplitView {...first} detail={detail} detailBar={firstDetailBar} chrome={chrome} />
-      </Screen>
+      <InlineSplitView
+        build={build}
+        {...first}
+        detail={detail}
+        detailBar={firstDetailBar}
+        chrome={chrome}
+      />
     </>
+  );
+}
+
+/** The Tasks list's state an iPad reads once for every tab, its sidebar's tasks and the Tasks tab alike. */
+type SharedTasks = { readonly screen: TasksScreenState; readonly hold: TreeHold };
+
+/** The Tasks list's state the tabs' layout holds on an iPad; none elsewhere, where the Tasks tab holds its own. */
+const SharedTasksContext = createContext<SharedTasks | undefined>(undefined);
+
+/**
+ * The task list an iPad reads once, above its tabs: the Tasks tab's search,
+ * listing, and the parents opened and groups folded, which every tab's
+ * sidebar lists under its places (`SidebarTasksContext`) and the Tasks tab
+ * draws whole, so an account's thousands of tasks are read once rather than
+ * once for each tab, and a group folded in one tab's sidebar stands folded
+ * in every tab's; and the questions a row's status or delete asks, asked
+ * once for all. A Manager's row pressed in a sidebar opens its page; a
+ * task's opens on Tasks (`AppSidebarPane`).
+ */
+export function SidebarTasksProvider({ children }: { readonly children: ReactNode }) {
+  const router = useRouter();
+  const onTab = useOnTab();
+  const [search, setSearch] = useState("");
+  const screen = useTasksScreen({ search, setSearch });
+  const hold = useTreeHoldState();
+  const workspaceId = screen.listing.workspace?.id;
+  const managers = useWorkspaceManagers(workspaceId);
+  const managersListed = useManagersListed(workspaceId);
+  const shared = useMemo(() => ({ screen, hold }), [screen, hold]);
+
+  const tasks = {
+    sections: (
+      <TreeSections
+        listing={screen.listing}
+        hold={hold}
+        managers={managers}
+        managersListed={managersListed}
+      />
+    ),
+    opens: (id: string) => {
+      if (!managers.some((agent) => agent.id === id)) return false;
+
+      router.push(onTab(iosAgentRoute(id)));
+
+      return true;
+    },
+  };
+
+  return (
+    <SharedTasksContext value={shared}>
+      <SidebarTasksContext value={tasks}>{children}</SidebarTasksContext>
+      <StatusQuestionAsk question={screen.status} />
+      <StatusQuestionAsk question={screen.deletion} />
+    </SharedTasksContext>
+  );
+}
+
+/**
+ * The Tasks tab's root screen on an iPad: the list the tabs' layout reads
+ * once (`SidebarTasksProvider`), laid out by the window's size class, its
+ * questions asked by the layout.
+ */
+function TasksSharedRoot() {
+  const shared = useContext(SharedTasksContext);
+  const sizeClass = useWindowSizeClass();
+  const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
+
+  if (shared === undefined) throw new Error("An iPad's Tasks stands under SidebarTasksProvider.");
+
+  const { screen, hold } = shared;
+
+  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+    <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
+  ) : (
+    <TasksStackList screen={screen} hold={hold} />
   );
 }
 
 /**
  * The Tasks tab's root screen: its tree, laid out by the window's size
- * class. Note that what the reader set is held here, above the two layouts,
+ * class, from the list the tabs' layout reads once on an iPad, whose
+ * sidebar lists it too, or its own elsewhere. Note that what the reader set is held here, above the two layouts,
  * so a rotation or a fold of the iPhone Duo, which swaps one layout for the
  * other, keeps it: the search, the parents opened and the groups folded
  * (`TreeHold`), and a status or a delete question standing open.
  */
 export function TasksListScreen() {
+  return APP_SIDEBAR ? <TasksSharedRoot /> : <TasksOwnRoot />;
+}
+
+/** The Tasks tab's root screen where it holds its own list, as on an iPhone. */
+function TasksOwnRoot() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
   const [search, setSearch] = useState("");
