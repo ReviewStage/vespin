@@ -7,6 +7,7 @@ import {
   Image,
   Menu,
   NavigationSplitView,
+  Section,
   Button as SwiftUIButton,
   Text,
   Toggle,
@@ -47,6 +48,7 @@ import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { MANAGER_FACE_SEAT, ManagerFace, TaskStatusMark } from "./marks.js";
+import type { MenuLead } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -80,11 +82,9 @@ export type BarAction = {
   readonly onPress: () => void;
 };
 
-/** An act a menu holds, by its words and its glyph. */
-export type BarMenuAction = {
+/** An act a menu holds, by its words and what leads it: its glyph, or the mark of the entity it opens, such as Open task's status ring; none for an act that stands as words alone, such as a reminder's time. */
+export type BarMenuAction = MenuLead & {
   readonly label: string;
-  /** Its glyph; none for an act that stands as words alone, such as a reminder's time. */
-  readonly symbol?: Glyph | undefined;
   /** What the menu says under its words, such as when a reminder's time comes due. */
   readonly detail?: string | undefined;
   readonly disabled?: boolean | undefined;
@@ -95,6 +95,8 @@ export type BarMenuAction = {
 
 /** One group of a menu's acts, set apart from the rest by the system's rule, as Mail's ⋯ groups Reply apart from Move: its switches, such as a list's Show sub-tasks, checked as the system checks them, then its acts, then the menus within it. */
 export type BarMenuGroup = {
+  /** What heads the group, as a compact thread's ⋯ heads its task and agent with the thread's path; a rule alone where none is given. */
+  readonly title?: string | undefined;
   readonly choices?: readonly MenuChoice[] | undefined;
   readonly actions: readonly BarMenuAction[];
   readonly submenus?: readonly BarMenu[] | undefined;
@@ -200,7 +202,9 @@ function MenuActs({ group }: { readonly group: BarMenuGroup }) {
       {group.actions.map((action) => (
         <SwiftUIButton
           key={action.label}
-          {...menuActContent(action.label, action.symbol, action.detail)}
+          {...(action.mark === undefined
+            ? menuActContent(action.label, action.symbol, action.detail)
+            : choiceContent(action, colors))}
           onPress={action.onPress}
           modifiers={[disabled(action.disabled === true)]}
           {...(action.destructive === true ? { role: "destructive" } : {})}
@@ -248,12 +252,18 @@ export const BarMenuButton = memo(function BarMenuButton({
       ))}
       {menu.actions.length === 0 ? null : <Divider />}
       <MenuActs group={{ actions: menu.actions, submenus: menu.submenus }} />
-      {(menu.groups ?? []).map((group) => (
-        <Fragment key={groupKey(group)}>
-          <Divider />
-          <MenuActs group={group} />
-        </Fragment>
-      ))}
+      {(menu.groups ?? []).map((group) =>
+        group.title === undefined ? (
+          <Fragment key={groupKey(group)}>
+            <Divider />
+            <MenuActs group={group} />
+          </Fragment>
+        ) : (
+          <Section key={groupKey(group)} title={group.title}>
+            <MenuActs group={group} />
+          </Section>
+        ),
+      )}
     </Menu>
   );
 });
@@ -326,6 +336,7 @@ export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMen
   const barred = new Set(acts.map((act) => act.label));
 
   const kept = (group: BarMenuGroup): BarMenuGroup => ({
+    title: group.title,
     choices: group.choices,
     actions: group.actions.filter((action) => !barred.has(action.label)),
     submenus: group.submenus?.filter((submenu) => !barred.has(submenu.label)),
@@ -438,7 +449,9 @@ export function PathTitle({
       {actions.map((action) => (
         <SwiftUIButton
           key={action.label}
-          {...actContent(action.label, action.symbol)}
+          {...(action.mark === undefined
+            ? actContent(action.label, action.symbol)
+            : choiceContent(action, colors))}
           onPress={action.onPress}
           modifiers={[disabled(action.disabled === true)]}
         />
