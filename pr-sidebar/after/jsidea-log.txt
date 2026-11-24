@@ -1,0 +1,10 @@
+pinned to 29e4cee2a9
+== bundle PJjsidea base 29e4cee2a9
+  built 29e4cee2a9 base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+ipad27-land-light: fails 1 shots 5 Tap on "#43 .*", Index: 0... FAILED
+ipad27-port-light: fails 1 shots 5 Tap on "#43 .*", Index: 0... FAILED
+ipad27-land-dark: fails 1 shots 5 Tap on "#43 .*", Index: 0... FAILED
