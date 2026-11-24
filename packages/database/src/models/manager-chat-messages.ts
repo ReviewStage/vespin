@@ -585,6 +585,8 @@ export interface ManagerChatQuery {
   readonly beforeSeq?: number;
   readonly afterSeq?: number;
   readonly oldestFirst?: boolean;
+  /** How many of the messages the read takes to pass over first, for a page past them. */
+  readonly offset?: number;
   readonly limit: number;
 }
 
@@ -600,6 +602,7 @@ const findQueried = SqlSchema.findAll({
     beforeSeq: Schema.optionalKey(Schema.Number),
     afterSeq: Schema.optionalKey(Schema.Number),
     oldestFirst: Schema.Boolean,
+    offset: Schema.optionalKey(Schema.Number),
     limit: Schema.Number,
   }),
   Result: ManagerChatMessageSchema,
@@ -648,7 +651,8 @@ const findQueried = SqlSchema.findAll({
           ),
         )
         .orderBy(query.oldestFirst ? asc(managerChatMessage.seq) : desc(managerChatMessage.seq))
-        .limit(query.limit);
+        .limit(query.limit)
+        .offset(query.offset ?? 0);
     }),
 });
 

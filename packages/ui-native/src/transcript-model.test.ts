@@ -908,6 +908,8 @@ describe("managerChatItems", () => {
     const items = managerChatItems(
       {
         messages: lines,
+        top: lines,
+        threads: new Map(),
         work: new Map(),
         live: [],
       },
@@ -974,6 +976,8 @@ describe("managerChatItems", () => {
       managerChatItems(
         {
           messages: [{ message: said, place: run(true, true), work: "turn" }],
+          top: [{ message: said, place: run(true, true), work: "turn" }],
+          threads: new Map(),
           work: new Map([["turn", agentParts(turn)]]),
           live: [],
         },

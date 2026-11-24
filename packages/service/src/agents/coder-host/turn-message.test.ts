@@ -363,6 +363,34 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
           [again.message_id, reply.message_id],
         );
 
+        // Newest first pages through every match, a page at a time.
+        const firstPage = yield* runSearchChat(
+          callOf(agent),
+          unparsedWire({ keywords: "nightly", sort: "timestamp", limit: 1 }),
+        );
+
+        assert.deepEqual(
+          idsOf(firstPage).map(([id]) => id),
+          [again.message_id],
+        );
+        assert.ok(Predicate.isString(firstPage.next_cursor), JSON.stringify(firstPage));
+
+        const secondPage = yield* runSearchChat(
+          callOf(agent),
+          unparsedWire({
+            keywords: "nightly",
+            sort: "timestamp",
+            limit: 1,
+            cursor: firstPage.next_cursor,
+          }),
+        );
+
+        assert.deepEqual(
+          idsOf(secondPage).map(([id]) => id),
+          [reply.message_id],
+        );
+        assert.equal(secondPage.next_cursor, undefined);
+
         // Another Manager's chat holds none of it, and its sends reach none of it.
         const strangers = yield* runReadChatMessages(callOf(other.agent), unparsedWire({}));
         assert.deepEqual(strangers.messages, []);

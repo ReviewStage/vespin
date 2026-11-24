@@ -59,9 +59,11 @@ import {
   DisclosureBody,
   DisclosureSummary,
   GlyphSlot,
+  TEXT_BUTTON_TONE,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  TextButton,
   TIME_LOOK,
   Time,
 } from "@repo/ui";
@@ -325,7 +327,10 @@ function ManagerMessage({
         continues={!place.opens}
         contextMenu={menu.contextMenu}
         actions={
-          message.text === "" ? null : (
+          // Note that a message of files alone has no words to copy or quote, so it offers its thread alone.
+          message.text === "" ? (
+            thread.action
+          ) : (
             <CopyMessageAction
               words={message.text}
               // Note that a turn's journal stands under the turn's own id, which Rewind conversation to here names it by.
@@ -408,7 +413,10 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
         continues={!place.opens}
         contextMenu={menu.contextMenu}
         actions={
-          message.text === "" ? null : (
+          // Note that a message of files alone has no words to copy or quote, so it offers its thread alone.
+          message.text === "" ? (
+            thread.action
+          ) : (
             <CopyMessageAction
               words={message.text}
               messageId={ownLine === undefined ? undefined : lineId}
@@ -436,9 +444,12 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
 function SendingLine({
   line,
   readerId,
+  recover,
 }: {
   line: SentLine;
   readerId: string | undefined;
+  /** A refused reply's own way back, where the box's marks hold none of it: a thread's, which its pane sends apart from the box. */
+  recover?: SendingRecovery | undefined;
 }): ReactNode {
   const refused = line.state !== SENT_LINE_STATE.PENDING;
   const { members } = useMemberDirectory();
@@ -456,7 +467,19 @@ function SendingLine({
         name={name}
         at={refused ? sentTime(line.sentAt) : undefined}
         under={
-          refused ? (
+          refused && recover !== undefined ? (
+            <span className="flex items-center gap-ui-8" data-thread-refused="">
+              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.DANGER}>
+                {NOT_SENT_WORDS}
+              </Text>
+              <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={recover.onRetry}>
+                {RETRY_WORDS}
+              </TextButton>
+              <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={recover.onDelete}>
+                {DELETE_WORDS}
+              </TextButton>
+            </span>
+          ) : refused ? (
             <UndeliveredMark messageId={line.id} />
           ) : (
             <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
@@ -614,6 +637,19 @@ const NONE_SENDING: readonly ManagerChatSending[] = [];
 
 /** What stands under one of the reader's messages on its way. */
 const SENDING_WORDS = "Sending…";
+
+/** What a refused thread reply says, and its presses. */
+const NOT_SENT_WORDS = "Not sent.";
+
+const RETRY_WORDS = "Retry";
+
+const DELETE_WORDS = "Delete";
+
+/** A refused thread reply's way back: sent again under its key, or let go. */
+interface SendingRecovery {
+  readonly onRetry: () => void;
+  readonly onDelete: () => void;
+}
 
 /** Whether a message on its way replies in a thread, where it stands on its way rather than at the chat's end. */
 function inThread(message: ManagerChatSending): boolean {
@@ -870,10 +906,10 @@ export function ManagerChatTab({
     () =>
       chatRowsOf(
         before === undefined ? managerGreeting(agent.title) : undefined,
-        view.messages,
+        view.top,
         composer.sent,
       ),
-    [before, agent.title, view.messages, composer.sent],
+    [before, agent.title, view.top, composer.sent],
   );
 
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
@@ -994,9 +1030,7 @@ export function ManagerChatTab({
   const rootLine =
     openThread === undefined
       ? undefined
-      : view.messages.find(
-          (line) => line.message.id === openThread && line.message.threadRoot === null,
-        );
+      : view.top.find((line) => line.message.id === openThread && line.message.threadRoot === null);
 
   // Note that a thread's box sends words alone, so a reply on its way stands as its words, marked where it did not go.
   const threadSending = useMemo(
@@ -1043,7 +1077,23 @@ export function ManagerChatTab({
               <Fragment key={line.message.id}>{drawLine(line, paneDoors)}</Fragment>
             ))}
             {threadSending.map((line) => (
-              <SendingLine key={line.id} line={line} readerId={control.me} />
+              <SendingLine
+                key={line.id}
+                line={line}
+                readerId={control.me}
+                recover={{
+                  // Note that a retry goes under the reply's own key, so a send whose answer was lost lands once.
+                  onRetry: () =>
+                    replyInThread({
+                      agentId: agent.id,
+                      text: line.text,
+                      clientKey: line.clientKey,
+                      threadRoot: rootLine.message.id,
+                      retry: true,
+                    } satisfies AgentChatSendParams),
+                  onDelete: () => unsendChat({ agentId: agent.id, clientKey: line.clientKey }),
+                }}
+              />
             ))}
           </>
         }

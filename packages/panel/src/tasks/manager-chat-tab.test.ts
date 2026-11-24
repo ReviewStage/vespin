@@ -125,12 +125,15 @@ async function drawChat(
   const answered: ApprovalAnswerRequest[] = [];
   // The thread each message to the chat replied in, by its root, null for one at the chat's top.
   const threads: (string | null)[] = [];
+  // Each message's key, and whether it went as a retry under it.
+  const keys: (readonly [string, boolean])[] = [];
 
   fakeActs({
     act: (request) => {
       if (request.kind === ACT_KIND.AGENTS_CHAT_SEND) {
         sent.push(request.payload.text);
         threads.push(request.payload.threadRoot ?? null);
+        keys.push([request.payload.clientKey, request.payload.retry === true]);
         carried.push((request.payload.attachments ?? []).map((file) => file.name));
       }
 
@@ -187,7 +190,7 @@ async function drawChat(
   });
   await settleQueries();
 
-  return { container, sent, carried, answered, threads };
+  return { container, sent, carried, answered, threads, keys };
 }
 
 test("each message is a row under its sender's name where their run opens, a thread's replies stand under its message as a count that opens the thread, and the thread's box replies in it", async () => {
@@ -243,6 +246,52 @@ test("each message is a row under its sender's name where their run opens, a thr
 
   assert.deepEqual(sent, ["And the nightly?"]);
   assert.deepEqual(threads, ["first"]);
+});
+
+test("a thread's reply the service refused says so in the thread's pane, and Retry sends it again there under its own key", async () => {
+  const { container, threads, keys } = await drawChat(
+    [
+      row("first", 1, "On it."),
+      { ...row("asked", 2, "Which repo?", CHARLES), threadRoot: "first" },
+    ],
+    {
+      sending: [
+        {
+          clientKey: "c4d1e7a2-5b3f-4e9a-8c60-1f2e3d4c5b6a",
+          text: "And the nightly?",
+          sentAt: 3_000,
+          sentBy: DEAN.userId,
+          threadRoot: "first",
+          refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+        },
+      ],
+    },
+  );
+
+  const count = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent?.endsWith("1 reply") === true,
+  );
+
+  assert.ok(count, "the Manager's message says its thread holds a reply");
+  act(() => count.click());
+  await settleQueries();
+
+  const pane =
+    container.querySelector('aside[aria-label="Thread"]') ?? assert.fail("the thread's pane opens");
+
+  const refused = pane.querySelector("[data-thread-refused]");
+  assert.match(refused?.textContent ?? "", /Not sent\./u);
+
+  const retry = [...pane.querySelectorAll("button")].find(
+    (button) => button.textContent === "Retry",
+  );
+
+  assert.ok(retry, "the refused reply offers Retry");
+  act(() => retry.click());
+  await settleQueries();
+
+  assert.deepEqual(threads, ["first"]);
+  assert.deepEqual(keys, [["c4d1e7a2-5b3f-4e9a-8c60-1f2e3d4c5b6a", true]]);
 });
 
 test("an ended turn's work stands folded over the Manager's first message of the turn, saying how long the turn worked, and opens onto its calls", async () => {

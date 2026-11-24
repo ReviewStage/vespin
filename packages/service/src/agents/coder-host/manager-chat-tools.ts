@@ -39,8 +39,11 @@ const CHAT_LIMIT = {
   MAX: 100,
 } as const;
 
-/** The most messages a search weighs before it orders them, newest first. */
+/** The most matches a search by score ranks, the newest; past them it says so (`SEARCH_POOL_NOTE`). */
 const SEARCH_POOL = 500;
+
+/** What a search by score says where more matches stand than it ranked. */
+const SEARCH_POOL_NOTE = `Ranked the newest ${SEARCH_POOL} matches only; sort by timestamp to page through every match.`;
 
 /** How much of each message a read answers: everything, or its id, sender, words, and thread alone. */
 const RESPONSE_FORMAT = {
@@ -403,33 +406,52 @@ export function runSearchChat(
           ? ({ manager: true } as const)
           : ({ manager: false, name: named } as const);
 
+    const limit = read.limit ?? CHAT_LIMIT.DEFAULT;
+
+    const filtered = {
+      words: keywords,
+      ...(sender === undefined ? undefined : { from: sender }),
+      ...(filters.is_thread === undefined ? undefined : { top: !filters.is_thread }),
+      ...(window.success.after === undefined ? undefined : { sentAfter: window.success.after }),
+      ...(window.success.before === undefined ? undefined : { sentBefore: window.success.before }),
+    };
+
+    // Note that newest first pages through every match in the store, one past the page saying whether more stand.
+    if (read.sort === SEARCH_SORT.TIMESTAMP || keywords.length === 0) {
+      return Effect.flatMap(
+        queryManagerChat(owner.userId, owner.agentId, {
+          ...filtered,
+          offset: from.success,
+          limit: limit + 1,
+        }),
+        (found) =>
+          answered(
+            owner,
+            found.slice(0, limit),
+            read.response_format,
+            found.length > limit ? String(from.success + limit) : undefined,
+          ),
+      );
+    }
+
+    // Note that a ranking weighs the newest matches up to the pool, and says so where more stand past it.
     return Effect.flatMap(
-      queryManagerChat(owner.userId, owner.agentId, {
-        words: keywords,
-        ...(sender === undefined ? undefined : { from: sender }),
-        ...(filters.is_thread === undefined ? undefined : { top: !filters.is_thread }),
-        ...(window.success.after === undefined ? undefined : { sentAfter: window.success.after }),
-        ...(window.success.before === undefined
-          ? undefined
-          : { sentBefore: window.success.before }),
-        limit: SEARCH_POOL,
-      }),
+      queryManagerChat(owner.userId, owner.agentId, { ...filtered, limit: SEARCH_POOL + 1 }),
       (found) => {
-        // Note that the store answers newest first, which a sort by score keeps among equals.
-        const ordered =
-          read.sort === SEARCH_SORT.TIMESTAMP || keywords.length === 0
-            ? found
-            : found.toSorted((a, b) => scoreOf(b, keywords) - scoreOf(a, keywords));
+        const pool = found.slice(0, SEARCH_POOL);
+        const ranked = pool.toSorted((a, b) => scoreOf(b, keywords) - scoreOf(a, keywords));
+        const page = ranked.slice(from.success, from.success + limit);
+        const more = from.success + limit < ranked.length;
 
-        const limit = read.limit ?? CHAT_LIMIT.DEFAULT;
-        const page = ordered.slice(from.success, from.success + limit);
-        const more = from.success + limit < ordered.length;
-
-        return answered(
-          owner,
-          page,
-          read.response_format,
-          more ? String(from.success + limit) : undefined,
+        return Effect.map(
+          answered(
+            owner,
+            page,
+            read.response_format,
+            more ? String(from.success + limit) : undefined,
+          ),
+          (answer): WireRecord =>
+            found.length > SEARCH_POOL ? { ...answer, note: SEARCH_POOL_NOTE } : answer,
         );
       },
     );

@@ -130,8 +130,12 @@ test("a reply stands in its root's thread, in runs of its own, and one also post
   );
 
   assert.deepEqual(
-    view.messages.map((line) => line.message.id),
+    view.top.map((line) => line.message.id),
     ["ask", "sent-too"],
+  );
+  assert.deepEqual(
+    view.messages.map((line) => line.message.id),
+    ["ask", "again", "answer", "sent-too"],
   );
 
   assert.deepEqual(

@@ -124,6 +124,8 @@ function ThreadBox({ onSend }: { onSend: (text: string) => void }): ReactNode {
     maxLength: THREAD_REPLY_CHARS,
     onSubmit: send,
     focus: true,
+    // Note that a reply goes as words alone, so the box offers no file it would drop.
+    takesFiles: false,
   });
 
   return (
