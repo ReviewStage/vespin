@@ -232,6 +232,7 @@ import { SidebarFoot } from "./sidebar-foot.js";
 import { SidebarInboxRow } from "./sidebar-inbox-row.js";
 import {
   MANAGERS_DROP_ZONE,
+  ManagerRows,
   SidebarManagers,
   usePinnedManagers,
   useUnpinnedManagers,
@@ -3003,6 +3004,16 @@ function SidebarColumn({
   );
 
   const { pinnedDrawn: pinnedDrawnRows, tasksHeaded, walked: drawn } = shownLists;
+  // The Managers the sections keep, which the Tasks head folds with their tasks, the open one standing under the fold as the open task does.
+  const openManagerId = tasks.agentView.agentId;
+
+  const sectionedManagers = useMemo(
+    () => homedSections.flatMap((drawnSection) => drawnSection.managers.map(({ agent }) => agent)),
+    [homedSections],
+  );
+
+  const standingManagers = sectionedManagers.filter((agent) => agent.id === openManagerId);
+  const headedCount = tasksHeaded.length + sectionedManagers.length;
   // The tasks' rows chosen together, in the order drawn, those the runs leave undrawn among them, as one run, so ⇧-click chooses across the lists.
   const chooseOrder = drawn.map((task) => task.id);
   const listed = tasks.signedIn && drawn.length > 0;
@@ -3246,12 +3257,12 @@ function SidebarColumn({
                     >
                       <GroupHeader
                         {...sidebarHead(
-                          tasksHeaded.length === 0
+                          headedCount === 0
                             ? undefined
                             : {
                                 folded: folds.tasksFolded,
                                 onToggle: folds.toggleTasks,
-                                count: tasksHeaded.length,
+                                count: headedCount,
                                 noun: TASK_NOUN,
                               },
                         )}
@@ -3285,8 +3296,24 @@ function SidebarColumn({
                           </>
                         }
                         standing={
-                          tasksHeaded.some(currentTask) ? (
-                            <TaskRows tasks={tasksHeaded.filter(currentTask)} context={context} />
+                          tasksHeaded.some(currentTask) || standingManagers.length > 0 ? (
+                            <>
+                              {standingManagers.length === 0 ? null : (
+                                <ManagerRows
+                                  managers={standingManagers}
+                                  tasks={tasks}
+                                  shown={tasks.shown && overlay.inSight}
+                                  drops={undefined}
+                                  onOpen={chosen(openManager)}
+                                />
+                              )}
+                              {tasksHeaded.some(currentTask) ? (
+                                <TaskRows
+                                  tasks={tasksHeaded.filter(currentTask)}
+                                  context={context}
+                                />
+                              ) : null}
+                            </>
                           ) : undefined
                         }
                       >

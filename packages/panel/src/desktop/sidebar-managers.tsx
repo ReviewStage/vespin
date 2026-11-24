@@ -217,8 +217,8 @@ export function SidebarManagerRow({
   );
 }
 
-/** The Managers section's rows, each a `SidebarManagerRow` in a list of its own, sorted as the reader chose, so a row is dragged only out of them, into a section or Pinned. */
-function ManagerRows({
+/** Managers' rows, each a `SidebarManagerRow` in a list of its own: the Managers section's, sorted as the reader chose, so a row is dragged only out of them, into a section or Pinned, and the open one standing under a folded head. */
+export function ManagerRows({
   managers,
   tasks,
   shown,

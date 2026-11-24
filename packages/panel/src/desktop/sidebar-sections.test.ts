@@ -1978,6 +1978,30 @@ async function mountWithManager(sections: TaskSections, asked: Asked): Promise<H
   return sidebar;
 }
 
+test("a Manager open in a section stands under the folded Tasks head, as an open task does", async () => {
+  handState({ [EXPERIMENT.MANAGERS]: true });
+
+  const sidebar = await mountDraggable([INVITES, RETRIES], MANAGER_IN_LAUNCH, noneAsked(), {
+    listedAgents: [KEPT_MANAGER],
+    agentView: { agentId: KEPT_MANAGER.id, onOpen: () => undefined },
+  });
+
+  writeListedTasks({ taskSections: MANAGER_IN_LAUNCH });
+  await settle();
+
+  const head = sidebar.querySelector(".sidebar-tasks-head") ?? assert.fail("the Tasks head");
+  const fold = head.querySelector<HTMLButtonElement>("button[aria-expanded]");
+  act(() => fold?.click());
+  await settle();
+
+  const names = [...head.querySelectorAll(".ui-list-row-title")].map(
+    (name) => name.firstChild?.textContent,
+  );
+
+  assert.equal(fold?.getAttribute("aria-expanded"), "false");
+  assert.deepEqual(names, ["Launch Manager"]);
+});
+
 /** The ids of a section's rows, its tasks' and its Managers', in the order it keeps them. */
 const rowIdsIn = (state: TaskSections, sectionId: string) =>
   sectionRows(state, sectionId).map((entry) => ("taskId" in entry ? entry.taskId : entry.agentId));
