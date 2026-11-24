@@ -59,6 +59,7 @@ const PLACEHOLDER_AGENT = {
   id: "00000000-0000-4000-8000-000000000001",
   runsOn: { machine: AGENT_MACHINE.VERCEL },
   developer: { userId: "00000000-0000-4000-8000-000000000002", name: "Ada Lovelace" },
+  startedByAgent: false,
 } as const;
 
 /**
@@ -262,7 +263,10 @@ function prompts(): AdminCatalogPrompt[] {
     prompt(
       "Manager",
       "managerInstructions",
-      managerInstructions({ name: PLACEHOLDER_MANAGER, repositories: [PLACEHOLDER_REPOSITORY] }),
+      managerInstructions(
+        { name: PLACEHOLDER_MANAGER, repositories: [PLACEHOLDER_REPOSITORY] },
+        true,
+      ),
     ),
     prompt("Pull request chapters", "CHAPTERS_INSTRUCTIONS", CHAPTERS_INSTRUCTIONS),
     prompt("Chapters repair", "REPAIR_INSTRUCTIONS", REPAIR_INSTRUCTIONS),

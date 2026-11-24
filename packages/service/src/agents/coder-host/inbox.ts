@@ -145,10 +145,31 @@ function threadReachWords(slackOn: boolean): string {
   );
 }
 
-/** `post_thread`'s words, naming `send_slack_message` only where the agent is offered it. */
-const postThreadWords = (slackOn: boolean) =>
+/**
+ * What a Manager posts a thread for, the one rule its prompt, `post_thread`,
+ * and `send_to_user` all state (Dean, Nov 23, 2026): an ask its chat cannot
+ * hold, and nothing else, so its pull requests, its pages, and its reports
+ * stand in its chat.
+ */
+export const MANAGER_THREAD_ASKS = "a decision between options or a to-do only they can do";
+
+/** When an agent posts a thread, by whether it is a Manager, whose chat holds all but `MANAGER_THREAD_ASKS`. */
+function postThreadWhen(manager: boolean): string {
+  return manager
+    ? `Use it only for ${MANAGER_THREAD_ASKS}, and say everything else with ${AGENT_TOOL.SEND_TO_USER}, your pull requests and pages included; when someone writes to you on a thread, reply on that same thread. `
+    : "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. ";
+}
+
+/** What an agent's `post_thread` names beside its own rule: whether it is a Manager, and whether its workspace connected the Slack bot. */
+export interface PostThreadStanding {
+  readonly manager: boolean;
+  readonly slackOn: boolean;
+}
+
+/** `post_thread`'s words, with a Manager's rule for when in place of a coder's, and naming `send_slack_message` only where the agent is offered it. */
+const postThreadWords = ({ manager, slackOn }: PostThreadStanding) =>
   "Post a message to the developer's inbox, which is where they look for anything that needs them. " +
-  "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. " +
+  postThreadWhen(manager) +
   "key is your own short lowercase slug, such as branch-protection: the first post under a key opens its thread and must name its title, " +
   "and a later one adds a message to that thread, a title it names renaming it. " +
   `to is the member the thread waits on, by their [@Name](link) mention as ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers it: the first post under a key must name it, and a later one without it keeps the thread's. ` +
@@ -184,18 +205,18 @@ const postThreadWords = (slackOn: boolean) =>
   threadReachWords(slackOn) +
   "The call answers with the thread and one line for each other thread of yours still open.";
 
-/** `post_thread` as an agent is shown it, its Slack sentence where its workspace connected the Slack bot. */
-export function postThreadToolOf(slackOn: boolean) {
+/** `post_thread` as an agent is shown it: a Manager's rule for when in place of a coder's, and its Slack sentence where its workspace connected the Slack bot. */
+export function postThreadToolOf(standing: PostThreadStanding) {
   return {
     name: INBOX_TOOL.POST,
-    description: postThreadWords(slackOn),
+    description: postThreadWords(standing),
     inputSchema: inboxThreadPostInputSchema,
   };
 }
 
 /** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input, `post_thread`'s in its words where nothing narrows it. */
 export const INBOX_TOOLS = {
-  POST: postThreadToolOf(true),
+  POST: postThreadToolOf({ manager: false, slackOn: true }),
   WITHDRAW: {
     name: INBOX_TOOL.WITHDRAW,
     description:

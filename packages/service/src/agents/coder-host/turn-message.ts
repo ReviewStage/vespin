@@ -34,6 +34,7 @@ import { recallSource } from "../memory-provenance.js";
 import { recordMemoryRecalls } from "../memory-tools.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import type { SessionTurn } from "../sessions/agent-sessions.js";
+import { postsThreads, standingOfAgent, TOOL_GATE } from "../tool-catalog/gates.js";
 import { experimentOnIn, experimentOnSinceIn } from "../workspace-experiment-on.js";
 import {
   handedAfterCompaction,
@@ -41,7 +42,9 @@ import {
   movedWords,
   resizedWords,
   savedByAnotherSince,
+  TURN_ASK,
   TURN_REPLY,
+  type TurnAsk,
   type TurnHanded,
   TurnHandedSchema,
   type TurnReply,
@@ -248,6 +251,30 @@ function turnReplyOf(agent: Agent): TurnReply {
 }
 
 /**
+ * Where the agent's question for the developer goes on a typed turn after a
+ * spoken one, the only turn whose words name it: a thread where it posts
+ * them, its Manager where one started it, and its reply otherwise. Note that
+ * its standing is read only for that turn, since every other turn's words
+ * name none, and that a Manager's own words name `send_to_user` instead.
+ */
+const turnAskOf = (
+  agent: Agent,
+  turn: CoderTurn,
+  handed: TurnHanded,
+  reply: TurnReply,
+): Effect.Effect<TurnAsk, never, DatabaseServices> => {
+  if (turn.spoken === true || handed.spoken !== true || reply === TURN_REPLY.SEND_TO_USER) {
+    return Effect.succeed(TURN_ASK.REPLY);
+  }
+
+  return Effect.map(standingOfAgent(Option.some(agent)), (standing) => {
+    if (postsThreads(standing)) return TURN_ASK.THREAD;
+
+    return standing.open.has(TOOL_GATE.UNMANAGED) ? TURN_ASK.REPLY : TURN_ASK.MANAGER;
+  });
+};
+
+/**
  * The message the agent's turn opens with after the history, and what the
  * session has handed once it is: on a spoken turn, the words for a reply
  * read aloud, and after one, the line saying they no longer hold
@@ -275,7 +302,9 @@ export function coderTurnMessage(
     const clock = { now, timeZone: zoned.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
 
-    const kind = turnKindWords(handed, turn.spoken === true, turnReplyOf(agent));
+    const reply = turnReplyOf(agent);
+    const ask = yield* turnAskOf(agent, turn, handed, reply);
+    const kind = turnKindWords(handed, turn.spoken === true, reply, ask);
     const resized = handed.resized === undefined ? undefined : resizedWords(handed.resized);
     const moved = handed.moved === undefined ? undefined : movedWords(handed.moved);
     const taskHanded = task === undefined ? handed.task : task.key;

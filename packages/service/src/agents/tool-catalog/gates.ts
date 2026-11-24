@@ -57,13 +57,26 @@ export const TOOL_GATE = {
   INBOX: "inbox",
   /** The agent is a Manager, whose page is a chat with the people who can open it. */
   MANAGER: "manager",
-  /** No Manager started the agent: one a Manager started reaches people through that Manager alone, so it posts no threads of its own. */
+  /** No Manager started the agent: one a Manager started reaches people through that Manager alone, so it posts no threads of its own and sends no Slack message. */
   UNMANAGED: "unmanaged",
   /** The agent's workspace has connected the Slack bot, which every Slack tool acts as. */
   SLACK: "slack",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
+
+/**
+ * The gates an agent's own threads stand behind, `post_thread` and
+ * `withdraw_ask`: an Inbox to land in, and no Manager between the agent and
+ * people. Note that they are declared once here, because a turn's words read
+ * them where the catalog's own `offers` would close a cycle.
+ */
+export const OWN_THREAD_GATES = [TOOL_GATE.INBOX, TOOL_GATE.UNMANAGED] as const;
+
+/** Whether the agent posts threads of its own: every one of `OWN_THREAD_GATES` open to it. */
+export function postsThreads(standing: AgentStanding): boolean {
+  return OWN_THREAD_GATES.every((gate) => standing.open.has(gate));
+}
 
 /** What a gate reads beside the agent's row: its experiments, whether a Manager started it, and whether its workspace holds the Slack bot's token, read once with them. */
 interface GateFacts {
@@ -128,7 +141,7 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
   [TOOL_GATE.UNMANAGED]: {
     opens: (_agent, { startedByManager }) => !startedByManager,
     refusal:
-      "Not run: a Manager started you, and you post no threads; send questions and reports to it with message_agent.",
+      "Not run: a Manager started you, and you reach people through it alone; send questions and reports to it with message_agent.",
   },
   // Note that a bot disconnected mid-run shuts this at the next call, and one whose token this deployment cannot open still opens it, its tools' doors refusing in the same words (`reachSlack`).
   [TOOL_GATE.SLACK]: {
