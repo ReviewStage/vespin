@@ -168,7 +168,7 @@ export interface TranscriptPlace {
 }
 
 /** Which work of a Manager's chat a row stands in: a message's, under its bubble, or the turn under way's, under its working line. */
-export const CHAT_WORK_PLACE = {
+const CHAT_WORK_PLACE = {
   MESSAGE: "message",
   LIVE: "live",
 } as const;
@@ -185,7 +185,7 @@ export const CALL_STANDING = {
 export type CallStanding = (typeof CALL_STANDING)[keyof typeof CALL_STANDING];
 
 /** One block of an open call's body, as its card draws it: its title, its words, and whether they are code. */
-export interface CallBodyBlock {
+interface CallBodyBlock {
   readonly title: string;
   readonly text: string;
 }
@@ -370,7 +370,7 @@ export const NO_TOGGLES: TranscriptToggles = {
 };
 
 /** How a transcript is read for its list. */
-export interface TranscriptReading {
+interface TranscriptReading {
   /** Whether the agent may still write, so its newest turn moves. */
   readonly writing: boolean;
   /** The reader, whose own lines name no sender. */

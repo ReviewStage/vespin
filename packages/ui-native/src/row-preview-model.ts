@@ -153,7 +153,7 @@ const AGENTS_WORDS = {
 } as const;
 
 /** What kind of row a preview glances at. */
-export const ROW_PREVIEW = {
+const ROW_PREVIEW = {
   THREAD: "thread",
   TASK: "task",
   AGENT: "agent",
@@ -236,7 +236,7 @@ export function agentPreview(facts: AgentPreviewFacts): RowPreview {
 }
 
 /** What a node of a preview's tree is: a column or a row of nodes, words, a glyph, the working mark, an agent's tile, a person's face, or a hairline. */
-export const PREVIEW_NODE = {
+const PREVIEW_NODE = {
   COLUMN: "column",
   ROW: "row",
   TEXT: "text",

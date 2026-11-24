@@ -44,7 +44,7 @@ builds a control of its own.
   the `MenuChip` capsule menus in a row under its field inside the same
   glass, so the keyboard never covers them, each capsule led by the
   panel's glyph or a model's harness mark),
-  `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
+  `ToggleRow` for a setting or an agent's option, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike), `ScriptRow` (a script read whole in the monospaced
   face),
   `AccountButton`, `PermissionAsk` (a row heading a list, its `RowList`'s

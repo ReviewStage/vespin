@@ -12,7 +12,6 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
-  accessibilityAddTraits,
   accessibilityElement,
   accessibilityHint,
   accessibilityIdentifier,
@@ -202,65 +201,29 @@ function CapsuleWords({
   );
 }
 
-/** How a `Chip` stands: bordered, as an act's capsule, or quiet, its words alone in the ink, as the panel's quiet button stands the lesser of two acts. */
-export const CHIP_LOOK = {
-  BORDERED: "bordered",
-  QUIET: "quiet",
-} as const;
-
-export type ChipLook = (typeof CHIP_LOOK)[keyof typeof CHIP_LOOK];
-
 type ChipProps = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
-  /** How many it holds, drawn after its words, such as a scope's count. */
-  readonly count?: number | undefined;
-  /** Whether the chip stands chosen, which fills it with the ink. */
-  readonly selected?: boolean | undefined;
-  /** What a press does, heard after the chip's words where they leave it unsaid, such as a picture's × taking it off a message. */
-  readonly hint?: string | undefined;
-  /** How it stands, bordered unless the lesser of two acts names it quiet. */
-  readonly look?: ChipLook | undefined;
   readonly onPress: () => void;
 };
 
 /**
- * A small act or choice as the system's own small capsule button, as Mail
- * and the App Store stand an act under a card: bordered in the ink, and
- * filled with the ink once chosen, as a selection reads without the accent.
- * The system draws its press, its dimming, Button Shapes and Increase
- * Contrast. VoiceOver hears the chosen one as selected, since its fill
- * alone says so on screen.
+ * A small act as the system's own small capsule button, as Mail and the App
+ * Store stand an act under a card, bordered in the ink. The system draws its
+ * press, its dimming, Button Shapes and Increase Contrast.
  */
-export function Chip({
-  label,
-  symbol,
-  count,
-  selected = false,
-  hint,
-  look = CHIP_LOOK.BORDERED,
-  onPress,
-}: ChipProps) {
+export function Chip({ label, symbol, onPress }: ChipProps) {
   const colors = useColors();
-
-  const style = selected
-    ? "borderedProminent"
-    : look === CHIP_LOOK.QUIET
-      ? "borderless"
-      : "bordered";
 
   return (
     <SwiftUIButton
-      {...actContent(count === undefined ? label : `${label} ${count}`, symbol, "subheadline")}
+      {...actContent(label, symbol, "subheadline")}
       onPress={onPress}
       modifiers={[
-        buttonStyle(style),
+        buttonStyle("bordered"),
         SwiftModifiers.buttonBorderShape("capsule"),
         controlSize("small"),
         tint(colors.TEXT),
-        ...(selected ? [foregroundStyle(colors.GROUND)] : []),
-        ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
-        ...(hint === undefined ? [] : [accessibilityHint(hint)]),
       ]}
     />
   );

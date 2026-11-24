@@ -44,7 +44,7 @@ builds a control of its own.
   glass, so the keyboard never covers them, each capsule led by the
   panel's glyph, but the model's, which is its words alone, as the desktop's
   model chip stands),
-  `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
+  `ToggleRow` for a setting or an agent's option, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike), `ScriptRow` (a script read whole in the monospaced
   face),
   `AccountButton`, `PermissionAsk` (a row heading a list, its `RowList`'s

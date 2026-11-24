@@ -576,17 +576,31 @@ type ToggleRowProps = {
   /** Whether it cannot be turned now, such as while the setting is unread. */
   readonly disabled?: boolean | undefined;
   readonly onChange: (on: boolean) => void;
+  /** The name a flow finds the switch by. */
+  readonly testId?: string | undefined;
 };
 
 /** A setting turned on or off, as the system's switch, in the brand's copper, with what it does under its name. */
-export function ToggleRow({ label, detail, on, disabled: off = false, onChange }: ToggleRowProps) {
+export function ToggleRow({
+  label,
+  detail,
+  on,
+  disabled: off = false,
+  onChange,
+  testId,
+}: ToggleRowProps) {
   const colors = useColors();
 
   return (
     <Toggle
       isOn={on}
       onIsOnChange={onChange}
-      modifiers={[tint(colors.ACCENT), disabled(off), listRowBackground(colors.RAISED)]}
+      modifiers={[
+        tint(colors.ACCENT),
+        disabled(off),
+        listRowBackground(colors.RAISED),
+        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+      ]}
     >
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
       {detail === undefined ? null : (

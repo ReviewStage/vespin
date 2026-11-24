@@ -73,7 +73,7 @@ export const MENU_CHIP_LOOK = {
   PAGE: "page",
 } as const;
 
-export type MenuChipLook = (typeof MENU_CHIP_LOOK)[keyof typeof MENU_CHIP_LOOK];
+type MenuChipLook = (typeof MENU_CHIP_LOOK)[keyof typeof MENU_CHIP_LOOK];
 
 /** One group of a capsule menu's choices, one of which is on, under its own heading, such as a model's or its effort's. */
 export type ChipMenuGroup = {
@@ -279,7 +279,7 @@ function leadOf(props: ChipLead): ChipLead {
 }
 
 /** The words a start sends, as its holder keeps them. */
-export type StartWords = {
+type StartWords = {
   /** What the field says before anything is typed: "Describe the task". */
   readonly placeholder: string;
   readonly words: string;
@@ -289,7 +289,7 @@ export type StartWords = {
 };
 
 /** What the composer's + adds: a menu of what it offers, or its one act, such as a picture. */
-export type StartAdd = {
+type StartAdd = {
   readonly menu?: ComposerMenu | undefined;
   readonly onAdd?: (() => void) | undefined;
 };

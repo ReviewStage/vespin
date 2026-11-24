@@ -27,7 +27,7 @@ export const COLUMN_BOUNDS: MediaBounds = {
 };
 
 /** The aspect a picture or a recording stands at while its own is unknown: a film's, as a screen recording most often stands. */
-export const UNSIZED_ASPECT = 16 / 9;
+const UNSIZED_ASPECT = 16 / 9;
 
 /** How large a picture or a recording is on its own, in points. */
 export interface MediaSize {
