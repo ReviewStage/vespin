@@ -33,7 +33,6 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
 import { useAnnounced, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL } from "./call.js";
@@ -56,7 +55,7 @@ import { GlassDock } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, PickOption } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
-import { HarnessMark, RepositoryPicture } from "./marks.js";
+import { RepositoryPicture } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -89,19 +88,10 @@ export type ChipMenu = {
   readonly submenus?: readonly BarMenu[] | undefined;
 };
 
-/** What leads a capsule's words: the panel's glyph for what it picks; for a model, the mark of the harness its agent runs in, as the panel's model chip leads with it; or, for a repository, its owner's picture, as the panel's repository chip leads with it. */
+/** What leads a capsule's words: the panel's glyph for what it picks, or, for a repository, its owner's picture, as the panel's repository chip leads with it. A model's capsule is its words alone, as the panel's model chip stands. */
 type ChipLead =
-  | {
-      readonly symbol?: Glyph | undefined;
-      readonly harness?: undefined;
-      readonly repository?: undefined;
-    }
-  | {
-      readonly harness: ModelProvider;
-      readonly symbol?: undefined;
-      readonly repository?: undefined;
-    }
-  | { readonly repository: string; readonly symbol?: undefined; readonly harness?: undefined };
+  | { readonly symbol?: Glyph | undefined; readonly repository?: undefined }
+  | { readonly repository: string; readonly symbol?: undefined };
 
 type MenuChipProps = ChipLead & {
   /** What is picked, as the capsule says it: a repository, a model and its effort, where an agent runs. */
@@ -129,7 +119,7 @@ type MenuChipProps = ChipLead & {
   );
 
 /** The capsule's words, what leads them before them, in the capsule's small type. */
-function ChipLabel({ label, symbol, harness, repository }: ChipLead & { readonly label: string }) {
+function ChipLabel({ label, symbol, repository }: ChipLead & { readonly label: string }) {
   const markSize = useScaledSize(MARK_SIZE.FACE);
   const type = font({ textStyle: TYPE_ROLE.ROW_TITLE });
   const words = <Text modifiers={[type, lineLimit(1)]}>{label}</Text>;
@@ -138,15 +128,6 @@ function ChipLabel({ label, symbol, harness, repository }: ChipLead & { readonly
     return (
       <HStack spacing={SPACE.TIGHT + 2}>
         <RepositoryPicture repository={repository} size={markSize} />
-        {words}
-      </HStack>
-    );
-  }
-
-  if (harness !== undefined) {
-    return (
-      <HStack spacing={SPACE.TIGHT + 2}>
-        <HarnessMark provider={harness} size={markSize} />
         {words}
       </HStack>
     );
@@ -172,8 +153,8 @@ function chipStyle(look: MenuChipLook): readonly ModifierConfig[] {
 /**
  * A choice among many as one of the system's capsules, opening its menu on
  * a press, as Mail's and Notes' compose stand one: it says what is picked,
- * after the panel's glyph for it (or a model's harness mark, or a
- * repository's owner's picture), with the
+ * after the panel's glyph for it (or a repository's owner's picture; a
+ * model's capsule its words alone, as the panel's model chip), with the
  * system's chevron after it, and its menu checks the one on in each group,
  * under the group's heading, then its acts and the menus within it. In a
  * composer's row it stands plain on the composer's glass; on the page, as
@@ -294,7 +275,7 @@ function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
 function leadOf(props: ChipLead): ChipLead {
   if (props.repository !== undefined) return { repository: props.repository };
 
-  return props.harness === undefined ? { symbol: props.symbol } : { harness: props.harness };
+  return { symbol: props.symbol };
 }
 
 /** The words a start sends, as its holder keeps them. */

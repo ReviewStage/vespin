@@ -52,9 +52,10 @@ const NO_SUBMENUS: readonly BarMenu[] = [];
 
 /**
  * The model chip at the end of the composer's row, as the desktop's stands
- * at its box's foot: the model alone, "Opus 5.5", led by its harness's mark,
- * since a phone's row has no room for its effort too, as Claude's and
- * Cursor's chips name the model alone; a press opens the model's choices,
+ * at its box's foot: the model's name in words alone, "Opus 5.5", with no
+ * harness mark, as the desktop's chip stands, and no effort, since a
+ * phone's row has no room for it, as Claude's and Cursor's chips name the
+ * model alone; a press opens the model's choices,
  * where the model, its effort, Fast and the permission mode are chosen; none
  * before the agent's model is known.
  */
@@ -70,16 +71,8 @@ function AgentModelChip({
   const model =
     pick.models.find((option) => option.id === pick.model)?.label ?? modelLabel(pick.model);
 
-  const harness = providerOf(pick.model);
-
   return (
-    <MenuChip
-      look={MENU_CHIP_LOOK.COMPOSER}
-      label={model}
-      {...(harness === undefined ? {} : { harness })}
-      onOpen={onOpen}
-      testId={MODEL_CHIP_ID}
-    />
+    <MenuChip look={MENU_CHIP_LOOK.COMPOSER} label={model} onOpen={onOpen} testId={MODEL_CHIP_ID} />
   );
 }
 
