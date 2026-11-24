@@ -209,7 +209,7 @@ function agentAt(index: number): AgentRow {
     sandboxOpen: false,
     permissionMode: "full_access",
     pendingApprovals: [],
-    sandboxState: archived ? "stopped" : "running",
+    sandboxState: archived ? "off" : "running",
     sandboxStateAt: created + 41 * MINUTE,
   } as AgentRow;
 }
