@@ -1731,6 +1731,12 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.SLACK_REACT, input, output, "emoji"),
   [AGENT_TOOL.SEND_TO_USER]: ({ input, output }) =>
     namedCall(CALL_KIND.SEND_TO_USER, input, output, "text"),
+  [AGENT_TOOL.READ_CHAT_MESSAGES]: ({ input, output }) =>
+    namedCall(CALL_KIND.CHAT_READ, input, output, undefined),
+  [AGENT_TOOL.READ_CHAT_THREAD]: ({ input, output }) =>
+    namedCall(CALL_KIND.CHAT_THREAD_READ, input, output, undefined),
+  [AGENT_TOOL.SEARCH_CHAT]: ({ input, output }) =>
+    namedCall(CALL_KIND.CHAT_SEARCH, input, output, "keywords"),
 } as const satisfies Record<AgentTool, ToolReader>;
 
 /**

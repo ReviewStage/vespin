@@ -111,6 +111,10 @@ export const AGENT_TOOL = {
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A Manager's message to its chat, the one way its words reach people.
   SEND_TO_USER: "send_to_user",
+  // A Manager's own chat read: its newest messages, one thread whole, or the messages a search finds.
+  READ_CHAT_MESSAGES: "read_chat_messages",
+  READ_CHAT_THREAD: "read_chat_thread",
+  SEARCH_CHAT: "search_chat",
   // The retired runtime's own durable pause, which a coding agent took before it checked on its checks or a deploy again.
   SLEEP: "sleep",
 } as const;

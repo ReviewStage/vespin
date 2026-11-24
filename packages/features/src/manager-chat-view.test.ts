@@ -116,3 +116,34 @@ test("a Manager's chat stands oldest first in runs by sender, a pause past ten m
   assert.equal(view.work.has("t2"), false);
   assert.deepEqual(heldWork(view.live), ["start_agent start-1"]);
 });
+
+test("a reply stands in its root's thread, in runs of its own, and one also posted to the chat stands at the chat's top too", () => {
+  const view = managerChatView(
+    [
+      { ...row("sent-too", 4, 4, { turn: "t" }), threadRoot: "ask", broadcast: true },
+      { ...row("answer", 3, 3, { turn: "t" }), threadRoot: "ask" },
+      { ...row("again", 2, 2, { person: "ada" }), threadRoot: "ask" },
+      row("ask", 1, 1, { person: "ada" }),
+    ],
+    [],
+    { running: undefined },
+  );
+
+  assert.deepEqual(
+    view.top.map((line) => line.message.id),
+    ["ask", "sent-too"],
+  );
+  assert.deepEqual(
+    view.messages.map((line) => line.message.id),
+    ["ask", "again", "answer", "sent-too"],
+  );
+
+  assert.deepEqual(
+    view.threads.get("ask")?.map((line) => [line.message.id, line.place.opens]),
+    [
+      ["again", true],
+      ["answer", true],
+      ["sent-too", false],
+    ],
+  );
+});

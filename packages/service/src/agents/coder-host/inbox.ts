@@ -157,7 +157,7 @@ export const MANAGER_THREAD_ASKS = "a decision between options or a to-do only t
 /** When an agent posts a thread, by whether it is a Manager, whose chat holds all but `MANAGER_THREAD_ASKS`. */
 function postThreadWhen(manager: boolean): string {
   return manager
-    ? `Use it only for ${MANAGER_THREAD_ASKS}, and say everything else with ${AGENT_TOOL.SEND_TO_USER}, your pull requests and pages included; when someone writes to you on a thread, reply on that same thread. `
+    ? `Use it only for ${MANAGER_THREAD_ASKS}, and say everything else with ${AGENT_TOOL.SEND_TO_USER}, your pull requests and pages included; when someone writes to you on an Inbox thread, reply on that same Inbox thread. `
     : "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. ";
 }
 

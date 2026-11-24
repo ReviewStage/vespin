@@ -819,6 +819,8 @@ export interface ManagerChatSending {
   readonly attachments?: AgentChatSendParams["attachments"];
   /** Epoch milliseconds it was sent, drawn under it at once. */
   readonly sentAt: number;
+  /** The root of the thread it replies in, where it does, which a page draws it on its way in; none for a message of the chat itself. */
+  readonly threadRoot?: string;
   /** The account that sent it, whose windows alone draw it; none for one sent while nobody was signed in. */
   readonly sentBy?: string;
   /** The id the chat holds it under, once the service answered; its row landing under that id ends the send. */

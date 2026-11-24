@@ -573,6 +573,156 @@ export function readManagerChatPage(
   return findMessages({ userId, agentId, limit: page.limit, before: page.before });
 }
 
+/** Which of a chat's messages a filtered read takes, each where named: at the chat's top or in a thread, the Manager's or a named person's, holding every word, sent inside a window, and before or after a `seq`; newest first unless `oldestFirst`, at most `limit`. */
+export interface ManagerChatQuery {
+  /** The messages at the chat's top, a reply posted to the chat among them (true), or the thread replies alone (false). */
+  readonly top?: boolean;
+  /** The Manager's own messages, or a person's whose name holds these words, whatever their case. */
+  readonly from?: { readonly manager: true } | { readonly manager: false; readonly name: string };
+  readonly words?: readonly string[];
+  readonly sentAfter?: Date;
+  readonly sentBefore?: Date;
+  readonly beforeSeq?: number;
+  readonly afterSeq?: number;
+  readonly oldestFirst?: boolean;
+  /** How many of the messages the read takes to pass over first, for a page past them. */
+  readonly offset?: number;
+  readonly limit: number;
+}
+
+const findQueried = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...ChatKeySchema.fields,
+    top: Schema.optionalKey(Schema.Boolean),
+    manager: Schema.optionalKey(Schema.Boolean),
+    name: Schema.optionalKey(Schema.String),
+    words: Schema.Array(Schema.String),
+    sentAfter: Schema.optionalKey(Schema.Date),
+    sentBefore: Schema.optionalKey(Schema.Date),
+    beforeSeq: Schema.optionalKey(Schema.Number),
+    afterSeq: Schema.optionalKey(Schema.Number),
+    oldestFirst: Schema.Boolean,
+    offset: Schema.optionalKey(Schema.Number),
+    limit: Schema.Number,
+  }),
+  Result: ManagerChatMessageSchema,
+  execute: (query) =>
+    Database.use((db) => {
+      const { userId, agentId } = query;
+
+      const atTop = or(
+        isNull(managerChatMessage.threadRoot),
+        eq(managerChatMessage.broadcast, true),
+      );
+
+      return db
+        .select(MESSAGE_COLUMNS)
+        .from(managerChatMessage)
+        .innerJoin(agentTable, eq(agentTable.id, managerChatMessage.agentId))
+        .where(
+          ofReachedChat(
+            userId,
+            agentId,
+            query.top === undefined
+              ? undefined
+              : query.top
+                ? atTop
+                : sql`${managerChatMessage.threadRoot} is not null`,
+            query.manager === undefined
+              ? undefined
+              : eq(
+                  managerChatMessage.authorKind,
+                  query.manager ? MANAGER_CHAT_AUTHOR.AGENT : MANAGER_CHAT_AUTHOR.PERSON,
+                ),
+            query.name === undefined
+              ? undefined
+              : sql`${managerChatMessage.authorName} ilike ${containing(query.name)}`,
+            ...query.words.map((word) => sql`${managerChatMessage.text} ilike ${containing(word)}`),
+            query.sentAfter === undefined
+              ? undefined
+              : sql`${managerChatMessage.createdAt} >= ${query.sentAfter.toISOString()}::timestamptz`,
+            query.sentBefore === undefined
+              ? undefined
+              : sql`${managerChatMessage.createdAt} <= ${query.sentBefore.toISOString()}::timestamptz`,
+            query.beforeSeq === undefined ? undefined : lt(managerChatMessage.seq, query.beforeSeq),
+            query.afterSeq === undefined
+              ? undefined
+              : sql`${managerChatMessage.seq} > ${query.afterSeq}`,
+          ),
+        )
+        .orderBy(query.oldestFirst ? asc(managerChatMessage.seq) : desc(managerChatMessage.seq))
+        .limit(query.limit)
+        .offset(query.offset ?? 0);
+    }),
+});
+
+/**
+ * The messages of the Manager's chat a filtered read takes (`ManagerChatQuery`),
+ * as the account reaches the chat.
+ */
+export function queryManagerChat(
+  userId: string,
+  agentId: string,
+  query: ManagerChatQuery,
+): AgentStoreEffect<readonly ManagerChatMessage[]> {
+  const { from, words, oldestFirst, ...rest } = query;
+
+  return findQueried({
+    userId,
+    agentId,
+    ...rest,
+    ...(from === undefined
+      ? undefined
+      : from.manager
+        ? { manager: true }
+        : { manager: false, name: from.name }),
+    words: [...(words ?? [])],
+    oldestFirst: oldestFirst === true,
+  });
+}
+
+/** How many replies a thread holds, and when its newest was sent. */
+export interface ManagerChatReplies {
+  readonly count: number;
+  readonly latestAt: Date;
+}
+
+const findReplyCounts = SqlSchema.findAll({
+  Request: Schema.Struct({ ...ChatKeySchema.fields, roots: Schema.Array(Schema.String) }),
+  Result: Schema.Struct({
+    root: Schema.String,
+    count: Schema.Number,
+    latestAt: InstantColumnSchema,
+  }),
+  execute: ({ userId, agentId, roots }) =>
+    Database.use((db) =>
+      db
+        .select({
+          root: sql<string>`${managerChatMessage.threadRoot}`,
+          count: sql<number>`count(*)::int`,
+          latestAt: sql<Date>`max(${managerChatMessage.createdAt})`,
+        })
+        .from(managerChatMessage)
+        .innerJoin(agentTable, eq(agentTable.id, managerChatMessage.agentId))
+        .where(ofReachedChat(userId, agentId, inArray(managerChatMessage.threadRoot, [...roots])))
+        .groupBy(managerChatMessage.threadRoot),
+    ),
+});
+
+/** Each of these roots' threads' reply counts and newest reply, by root, as the account reaches the chat; a root with no replies is absent. */
+export function readManagerChatReplies(
+  userId: string,
+  agentId: string,
+  roots: readonly string[],
+): AgentStoreEffect<ReadonlyMap<string, ManagerChatReplies>> {
+  if (roots.length === 0) return Effect.succeed(new Map());
+
+  return Effect.map(
+    findReplyCounts({ userId, agentId, roots }),
+    (rows) => new Map(rows.map((row) => [row.root, { count: row.count, latestAt: row.latestAt }])),
+  );
+}
+
 /** A thread of the Manager's chat, its root then its replies, oldest first, as the account reaches the chat; none where the id names no root. */
 export function readManagerChatThread(
   userId: string,

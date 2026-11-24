@@ -64,14 +64,15 @@ const UNCLEAR_LINE =
  * unclear request's lines: its page is a chat, whose every message from it
  * is a `send_to_user` call, so its plain text and its other calls are never
  * shown, and it writes there as a coworker on Slack, in several short
- * messages; and, where it posts threads, that a thread is kept for the asks
- * a chat cannot hold, since every post is a notification.
+ * messages, replying in the thread of the message it answers; and, where it
+ * posts Inbox threads, that an Inbox thread is kept for the asks a chat
+ * cannot hold, since every post is a notification.
  */
 function chatLine(posts: boolean): string {
-  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there, as a coworker would on Slack: several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
+  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there, as a coworker would on Slack. Reply in the thread of the message you're answering or following up on, with \`thread_ts\`, and start a new message only for something new. Write several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
 
   return posts
-    ? `${chat} Post a thread with \`${INBOX_TOOLS.POST.name}\` only for ${MANAGER_THREAD_ASKS}, since every post reaches people as a notification: your pull requests and pages are named in your chat once ready, and a go-ahead you want on one is a decision.`
+    ? `${chat} Post an Inbox thread with \`${INBOX_TOOLS.POST.name}\` only for ${MANAGER_THREAD_ASKS}, since every post reaches people as a notification: your pull requests and pages are named in your chat once ready, and a go-ahead you want on one is a decision.`
     : chat;
 }
 

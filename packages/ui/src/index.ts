@@ -244,6 +244,8 @@ export * from "./components/menu/touch-hold.js";
 
 export * from "./components/menu-section/menu-section.js";
 
+export * from "./components/message/channel-message.js";
+
 export * from "./components/message/chat-bubble.js";
 
 export * from "./components/message/message.js";
