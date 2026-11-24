@@ -553,10 +553,12 @@ function catalogEntriesOf(model: CursorModel): readonly OfferedModel[] {
     efforts: model.effort?.values ?? [NO_EFFORT],
   };
 
-  if (!model.fast) return [{ ...own, ...offeredWindows(model.windows.standard) }];
+  const standard = { ...own, ...offeredWindows(model.windows.standard) };
+
+  if (!model.fast) return [standard];
 
   return [
-    { ...own, ...offeredWindows(model.windows.standard) },
+    standard,
     {
       ...own,
       id: modelIdAtSpeed(model.catalogId, MODEL_SPEED.FAST),
