@@ -54,7 +54,7 @@ env:
 - takeScreenshot: pull-request-files-search
 # A file opens its diff on a screen of its own, drawn natively: each row is
 # heard as its line numbers and its words.
-- clearText
+- eraseText
 - tapOn: "Cancel"
 - tapOn: "resend.ts"
 - extendedWaitUntil:
