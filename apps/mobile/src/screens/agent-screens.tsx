@@ -157,7 +157,7 @@ import {
 } from "../agents/use-agent-composer.js";
 import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
-import { useAgentPictures } from "../agents/use-agent-pictures.js";
+import { useAgentPictureFiles, useAgentPictures } from "../agents/use-agent-pictures.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
@@ -954,8 +954,8 @@ const AgentConversation = memo(function AgentConversation({
   const mediaIds = useMemo(() => {
     const pictures = new Set(pictureIds);
 
-    return [...shownMediaIds(near).filter((each) => !pictures.has(each)), ...dockIds];
-  }, [near, pictureIds, dockIds]);
+    return shownMediaIds(near).filter((each) => !pictures.has(each));
+  }, [near, pictureIds]);
 
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
@@ -1011,7 +1011,8 @@ const AgentConversation = memo(function AgentConversation({
   const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId ?? undefined);
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
-  const media = useAgentMedia(id, mediaIds, dockIds);
+  const media = useAgentMedia(id, mediaIds);
+  const dockFiles = useAgentPictureFiles(id, dockIds);
   const pictures = useAgentPictures(id, pictureIds);
   const pictureSet = useMemo(() => new Set(pictureIds), [pictureIds]);
 
@@ -1183,9 +1184,7 @@ const AgentConversation = memo(function AgentConversation({
     <AgentComposerArea
       id={id}
       apps={
-        inUse === undefined
-          ? undefined
-          : { inUse, source: (pictureId) => media.sources.get(pictureId) }
+        inUse === undefined ? undefined : { inUse, source: (pictureId) => dockFiles.get(pictureId) }
       }
       pullRequest={pullRequests[0]}
       onOpenPullRequest={openPullRequest}
