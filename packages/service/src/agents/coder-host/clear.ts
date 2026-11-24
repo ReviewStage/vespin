@@ -76,11 +76,16 @@ export const clearedAgent = /* @__PURE__ */ Effect.fn("web/clearedAgent")(functi
     // failed write leaves the session as it stood rather than a fresh one with no mark where it began.
     const store = yield* writer;
 
+    // Note that the mark goes first, because its write takes the conversation's lock, which every write
+    // takes before the agent's row (`writer.ts`'s `chatMessageOfLine`), and a conversation gone lets nothing go.
     const letGo = Effect.gen(function* () {
+      const marked = yield* store.markSessionCleared(target);
+
+      if (Result.isFailure(marked)) return marked;
       yield* cancelAgentWakeup(agent.id);
       yield* recordAgentNativeSession(agent.userId, agent.id, null);
 
-      return yield* store.markSessionCleared(target);
+      return marked;
     });
 
     const client = yield* SqlClient.SqlClient;

@@ -1,5 +1,5 @@
 /**
- * manager-chat-messages.ts -- a Manager's chat: write a message, grow a call's line in place, read one by its id or its key, a page of the chat, a thread, or what matches words, and delete what a rewind dropped.
+ * manager-chat-messages.ts -- a Manager's chat: write a message, grow a call's line in place, read one by its id, its key, or its line, a page of the chat, a thread, or what matches words, and delete what a rewind dropped.
  *
  * Every read and write is made as an account that reaches the Manager
  * (`agentReachableBy`), a Manager standing on no task, so no account reads
@@ -217,13 +217,14 @@ const findMessages = SqlSchema.findAll({
     ...ChatKeySchema.fields,
     ids: Schema.optionalKey(Schema.Array(Schema.String)),
     clientKey: Schema.optionalKey(Schema.String),
+    lineId: Schema.optionalKey(Schema.String),
     root: Schema.optionalKey(Schema.String),
     before: Schema.optional(Schema.Number),
     words: Schema.optionalKey(Schema.Array(Schema.String)),
     limit: Schema.optionalKey(Schema.Number),
   }),
   Result: ManagerChatMessageSchema,
-  execute: ({ userId, agentId, ids, clientKey, root, before, words, limit }) =>
+  execute: ({ userId, agentId, ids, clientKey, lineId, root, before, words, limit }) =>
     Database.use((db) => {
       const query = db
         .select(MESSAGE_COLUMNS)
@@ -235,6 +236,7 @@ const findMessages = SqlSchema.findAll({
             agentId,
             ids === undefined ? undefined : inArray(managerChatMessage.id, ids),
             clientKey === undefined ? undefined : eq(managerChatMessage.clientKey, clientKey),
+            lineId === undefined ? undefined : eq(managerChatMessage.lineId, lineId),
             root === undefined
               ? undefined
               : or(
@@ -488,6 +490,17 @@ export function readManagerChatMessageByKey(
   clientKey: string,
 ): AgentStoreEffect<Option.Option<ManagerChatMessage>> {
   return Effect.map(findMessages({ userId, agentId, clientKey }), (rows) =>
+    Option.fromNullishOr(rows[0]),
+  );
+}
+
+/** The person's message of the Manager's chat written beside this line of its transcript, as the account reaches the chat; none where it does not, or the line is no chat message. */
+export function readManagerChatMessageOfLine(
+  userId: string,
+  agentId: string,
+  lineId: string,
+): AgentStoreEffect<Option.Option<ManagerChatMessage>> {
+  return Effect.map(findMessages({ userId, agentId, lineId }), (rows) =>
     Option.fromNullishOr(rows[0]),
   );
 }

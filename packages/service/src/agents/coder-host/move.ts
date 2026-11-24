@@ -262,7 +262,15 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
     // never told of, or with no mark where it moved.
     const store = yield* writer;
 
+    // Note that the mark goes first, because its write takes the conversation's lock, which every write
+    // takes before the agent's row (`writer.ts`'s `chatMessageOfLine`).
     const steps = Effect.gen(function* () {
+      const marked = yield* store.markAgentMoved(target, {
+        from: markedPlace(from),
+        to: markedPlace(to),
+      });
+
+      if (Result.isFailure(marked)) return marked;
       yield* cancelAgentWakeup(agent.id);
       yield* moveAgentPlace(agent.userId, standing, { machine: to.machine, deviceId: to.deviceId });
 
@@ -273,7 +281,7 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
       const handed = yield* heldNativeTurnHanded(target);
       yield* keptNativeTurnHanded(target, { ...handed, moved: told });
 
-      return yield* store.markAgentMoved(target, { from: markedPlace(from), to: markedPlace(to) });
+      return marked;
     });
 
     // Note that a conversation gone fails inside the transaction, so nothing written before the mark stands.

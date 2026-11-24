@@ -2540,7 +2540,10 @@ const claimLine = /* @__PURE__ */ Effect.fnUntraced(function* (
  * The person's chat message written beside their line, in the line's
  * transaction: their words and kept pictures, under the line's key, naming
  * the line and the turn it awaits. One that does not land fails the write,
- * so the line goes with it.
+ * so the line goes with it. Note that the chat's write locks the Manager's
+ * row while the conversation's lock is held, the one order every
+ * transaction takes the two in: the conversation first, then the agent's
+ * row, which Clear and a move keep too (`coder-host/clear.ts`, `move.ts`).
  */
 const chatMessageOfLine = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,

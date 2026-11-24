@@ -17,7 +17,10 @@ import {
 } from "@repo/database/models/agent-store";
 import { type LineFileRead, lineRead } from "@repo/database/models/attached-file-parts";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
-import { MANAGER_CHAT_OUTCOME } from "@repo/database/models/manager-chat-messages";
+import {
+  MANAGER_CHAT_OUTCOME,
+  readManagerChatMessageOfLine,
+} from "@repo/database/models/manager-chat-messages";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { readTaskDescription } from "@repo/database/models/task-store";
@@ -36,7 +39,12 @@ import {
 } from "@repo/database/models/writer";
 import { type ConversationRuntime, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { runsGoal } from "@repo/features/agent-goal-model";
-import { AGENT_MACHINE, AGENT_STATUS, type AgentAttachment } from "@repo/features/agent-wire";
+import {
+  AGENT_KIND,
+  AGENT_MACHINE,
+  AGENT_STATUS,
+  type AgentAttachment,
+} from "@repo/features/agent-wire";
 import { MENTION_KIND, withoutMemberLinks } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { leadingCommand, SLASH_COMMAND } from "@repo/features/slash-command";
@@ -174,14 +182,15 @@ export interface SteerLine {
 
 /**
  * A member's line as a message of a Manager's chat: the id the service
- * minted for it, and the message it replies to. The line is written as any
- * other, its words plain, and the chat's message beside it in its
- * transaction; the model reads its header (`chatHeader`), composed as the
- * harness is handed the line and stored nowhere.
+ * minted for it, and the root of the thread it replies in. The line is
+ * written as any other, its words plain, and the chat's message beside it
+ * in its transaction; the model reads its header (`chatHeader`), composed
+ * as the harness is handed the line, and as it is handed again from the
+ * chat's message, and stored nowhere.
  */
 export interface SteerChat {
   readonly id: string;
-  readonly inReplyTo: string | null;
+  readonly threadRoot: string | null;
 }
 
 /** Another coding agent as the row of a line it sends keeps it: by its name, id, and model. */
@@ -277,10 +286,30 @@ const FORMER_MEMBER = "A former member";
 
 /** The line a Manager reads ahead of a person's chat message: who sent it, its id, and the thread it replies in. */
 function chatHeader(name: string, chat: SteerChat): string {
-  const thread = chat.inReplyTo === null ? "" : ` in thread ${chat.inReplyTo}`;
+  const thread = chat.threadRoot === null ? "" : ` in thread ${chat.threadRoot}`;
 
   return `${name}, message ${chat.id}${thread}:`;
 }
+
+/** What a line is handed under: a teammate's label, then a chat message's header, each where it has one. */
+function headingOf(label: string | undefined, header: string | undefined): string | undefined {
+  const pieces = [label, header].filter((piece) => piece !== undefined);
+
+  return pieces.length === 0 ? undefined : pieces.join("\n");
+}
+
+/** The header of the chat message written beside a line handed again, read from the chat as the line's sender reaches it; none for a line of no chat. */
+const chatHeaderOfLine = (agent: Agent, line: LostLine) =>
+  agent.kind !== AGENT_KIND.MANAGER || line.senderUserId === null
+    ? Effect.succeed(undefined)
+    : Effect.map(
+        readManagerChatMessageOfLine(line.senderUserId, agent.id, line.id),
+        Option.match({
+          onNone: () => undefined,
+          onSome: (message) =>
+            chatHeader(message.authorName, { id: message.id, threadRoot: message.threadRoot }),
+        }),
+      );
 
 /** The sender's name as their account holds it, which a chat message keeps and its header reads; none for a line of no chat. */
 const chatAuthorOf = (sender: LineSender, chat: SteerChat | undefined) => {
@@ -695,14 +724,20 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const chat =
     line.chat === undefined || author === undefined
       ? undefined
-      : { ...line.chat, agentId: agent.id, userId: author.userId, authorName: author.name };
+      : {
+          id: line.chat.id,
+          inReplyTo: line.chat.threadRoot,
+          agentId: agent.id,
+          userId: author.userId,
+          authorName: author.name,
+        };
 
-  const heading =
+  const heading = headingOf(
+    label,
     chat === undefined
-      ? label
-      : [label, chatHeader(chat.authorName, chat)]
-          .filter((piece) => piece !== undefined)
-          .join("\n");
+      ? undefined
+      : chatHeader(chat.authorName, { id: chat.id, threadRoot: chat.inReplyTo }),
+  );
 
   // Each image is kept beside the agent's conversation before the harness is handed it, so the harness is told its id and the
   // row names it; a repeat under the key was answered above, and the same bytes again keep nothing twice.
@@ -870,6 +905,9 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
         ? yield* teammateLabel(agent, { kind: MESSAGE_SENDER.MEMBER, userId: line.senderUserId })
         : undefined;
 
+    // A chat message's header is read again from the chat, so the Manager reads the same id however often its line is handed.
+    const heading = headingOf(label, yield* chatHeaderOfLine(agent, line));
+
     const message: SessionMessage<TypedTurn> = {
       conversationId: target.conversationId,
       turn: SESSION_TURN.TYPED,
@@ -879,7 +917,7 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
       line.metadata.channel === MESSAGE_CHANNEL.VOICE
         ? { spoken: true }
         : undefined),
-      message: turnContent(read.text, files.flat(), read.mentioned, label),
+      message: turnContent(read.text, files.flat(), read.mentioned, heading),
       lineId: line.clientId,
     };
 

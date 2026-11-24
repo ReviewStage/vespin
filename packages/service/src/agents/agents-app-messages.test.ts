@@ -2129,6 +2129,66 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
+    "a person's chat message to a Manager whose turn was lost is handed again under the same header, read from the chat, when Try again resends it",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+
+        const { owner, agent, ask, target, writer } = yield* messagedAgent(agentSessions, {
+          running: false,
+        });
+
+        const db = yield* Database;
+        yield* db.update(user).set({ name: "Ada Lovelace" }).where(eq(user.id, owner));
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const sent = readAnswer(
+          agentChatSendAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            request(AGENT_CHAT_MESSAGES, owner, {
+              method: "POST",
+              id: agent.id,
+              body: { text: "Ship the invites.", clientKey: randomUUID() },
+            }),
+          ),
+        );
+
+        // The turn the line queued is lost before its runner reads it, as a launch that failed leaves it.
+        yield* TestClock.adjust(Duration.seconds(1));
+        yield* settleRunnerLostTurns(
+          writer,
+          target.conversationId,
+          yield* Clock.currentTimeMillis,
+          "the sandbox could not be opened",
+        );
+        yield* TestClock.adjust(Duration.seconds(1));
+
+        readAnswer(
+          agentMessageAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            messageAs(owner, agent.id, { text: "Try again", clientKey: randomUUID(), retry: true }),
+          ),
+        );
+
+        const handed = [
+          text(`Ada Lovelace, message ${sent.messageId}:`),
+          text("Ship the invites."),
+        ];
+
+        assert.deepEqual(
+          agentSessions.sent.map((each) => each.message.message),
+          [handed, handed],
+        );
+      }),
+  );
+
+  it.effect(
     "no Manager's chat is written by an account outside its workspace, nor through an agent that is no Manager",
     () =>
       Effect.gen(function* () {

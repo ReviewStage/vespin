@@ -44,7 +44,10 @@ import { type Agent, readAgent, readVisibleAgent } from "@repo/database/models/a
 import { childTitlesOf } from "@repo/database/models/child-titles";
 import { readRewoundRevision } from "@repo/database/models/conversation-rewind";
 import { childConversationId } from "@repo/database/models/ids";
-import { readManagerChatMessageByKey } from "@repo/database/models/manager-chat-messages";
+import {
+  readManagerChatMessage,
+  readManagerChatMessageByKey,
+} from "@repo/database/models/manager-chat-messages";
 import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
 import { listStandingVoiceCalls } from "@repo/database/models/voice-calls";
 import {
@@ -331,6 +334,26 @@ function mintedChatId(): string {
 }
 
 /**
+ * The root of the thread a chat send replies in, as the chat holds it: the
+ * message it names where that is a root, or that message's own root, so
+ * every header the Manager reads names a root; none for a message of the
+ * chat itself, and refused for one naming no message of the chat.
+ */
+const threadRootOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agentId: string,
+  named: string | undefined,
+) {
+  if (named === undefined) return null;
+
+  const parent = yield* hostedStoreOrUnavailable(readManagerChatMessage(userId, agentId, named));
+
+  if (Option.isNone(parent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
+  return parent.value.threadRoot ?? parent.value.id;
+});
+
+/**
  * The id a chat send's message stands under: the one minted for it where
  * this send wrote it or queued it, or, for a send repeated under its key,
  * the one the chat holds under that key. A key a send of no chat message
@@ -484,7 +507,11 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
         // Note that only a Manager keeps a chat, so any other agent names none.
         if (agent.kind !== AGENT_KIND.MANAGER) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
         const { retry, threadRoot, ...words } = input.body;
-        const chat = { id: mintedChatId(), inReplyTo: threadRoot ?? null };
+
+        const chat = {
+          id: mintedChatId(),
+          threadRoot: yield* threadRootOf(context.userId, agent.id, threadRoot),
+        };
 
         const { txid, outcome } = yield* steerMemberWords(
           writer,
