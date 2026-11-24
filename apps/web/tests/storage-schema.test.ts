@@ -48,6 +48,7 @@ const DECLARED_TABLES = [
   "agent_boot",
   "agent_browser_tab",
   "agent_delegation",
+  "agent_follower",
   "agent_pin",
   "agent_pull_request",
   "agent_queue",
