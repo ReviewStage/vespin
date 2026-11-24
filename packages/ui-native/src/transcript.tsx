@@ -997,9 +997,13 @@ function TranscriptRow({
               <MessageMenu
                 words={item.words}
                 at={item.at}
-                // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id; a Manager's message offers no link or rewind, as the panel's offers none, since one after its turn's first stands under its call's id, which names no message.
+                // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id; a Manager's message offers no link or rewind, as the panel's offers none, only what the page offers every chat message, such as Reply, and its Show work.
                 link={item.manager === true ? undefined : drawing.messageLink?.(item.place.row)}
-                more={item.manager === true ? workActs(item, drawing) : drawing.messageMore?.(item)}
+                more={
+                  item.manager === true
+                    ? [...(drawing.messageMore?.(item) ?? []), ...workActs(item, drawing)]
+                    : drawing.messageMore?.(item)
+                }
                 width={rowWidth(drawing.column) - room}
               >
                 <View style={[styles.saidHeld, item.received ? styles.received : null]}>

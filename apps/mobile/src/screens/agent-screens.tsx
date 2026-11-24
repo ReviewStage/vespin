@@ -528,7 +528,8 @@ const NONE_SHOWN: readonly TranscriptItem[] = [];
  * queue and its edits ask first: the one place the words typed live, so a
  * keystroke draws the composer alone, never the transcript over it. Note
  * that Edit on a sent line in the transcript reaches it through `editMessage`,
- * which it keeps pointed at its own.
+ * and Reply on a chat message through `replyTo`, which it keeps pointed at
+ * its own.
  */
 function AgentComposerArea({
   id,
@@ -538,6 +539,7 @@ function AgentComposerArea({
   messageSent,
   suggested,
   editMessage,
+  replyTo,
   undeliveredActs,
   approvals,
   onShowWaiting,
@@ -560,6 +562,7 @@ function AgentComposerArea({
   readonly messageSent: Parameters<typeof useAgentComposer>[4];
   readonly suggested: Parameters<typeof useAgentComposer>[5];
   readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
+  readonly replyTo: RefObject<AgentComposer["reply"] | undefined>;
   readonly undeliveredActs: RefObject<UndeliveredActs | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
@@ -588,8 +591,16 @@ function AgentComposerArea({
   const said = useNewestNote([composer.note, dictated.note, note]);
   useEffect(() => {
     editMessage.current = composer.editMessage;
+    replyTo.current = composer.reply;
     undeliveredActs.current = composer.undelivered;
-  }, [editMessage, composer.editMessage, undeliveredActs, composer.undelivered]);
+  }, [
+    editMessage,
+    composer.editMessage,
+    replyTo,
+    composer.reply,
+    undeliveredActs,
+    composer.undelivered,
+  ]);
 
   return (
     <>
@@ -1000,6 +1011,8 @@ const AgentConversation = memo(function AgentConversation({
 
   // Note that Edit on a sent line reaches the composer through this one handle, so the page holds none of the composer's state, whose every keystroke would draw the transcript again.
   const editMessage = useRef<AgentComposer["editMessage"] | undefined>(undefined);
+  // Note that Reply on a chat message reaches it the same way.
+  const replyTo = useRef<AgentComposer["reply"] | undefined>(undefined);
   // Note that a refused line's Retry, Edit, and Delete reach the composer the same way.
   const undeliveredActs = useRef<UndeliveredActs | undefined>(undefined);
 
@@ -1043,6 +1056,7 @@ const AgentConversation = memo(function AgentConversation({
     () => ({
       editMessage: (line: Parameters<AgentComposer["editMessage"]>[0]) =>
         editMessage.current?.(line),
+      reply: (words: string) => replyTo.current?.(words),
     }),
     [],
   );
@@ -1169,15 +1183,11 @@ const AgentConversation = memo(function AgentConversation({
   const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
 
-  // Each person's chat message by its row, to the line it went as, which its Edit rewinds to.
+  // Each chat message by its row, to the line it went as, which its Edit rewinds to; null for the Manager's own, which went as none.
   const chatLines = useMemo(
     () =>
       chat
-        ? new Map(
-            (chatPage?.messages ?? []).flatMap((message) =>
-              message.lineId === null ? [] : [[message.id, message.lineId] as const],
-            ),
-          )
+        ? new Map((chatPage?.messages ?? []).map((message) => [message.id, message.lineId]))
         : undefined,
     [chat, chatPage?.messages],
   );
@@ -1255,6 +1265,7 @@ const AgentConversation = memo(function AgentConversation({
       messageSent={approvals.messageSent}
       suggested={suggested}
       editMessage={editMessage}
+      replyTo={replyTo}
       undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
