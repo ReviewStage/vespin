@@ -1,13 +1,6 @@
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { bootHolds } from "@repo/features/agent-boot";
-import {
-  CONTINUE_AGAIN_LABEL,
-  CONTINUE_LABEL,
-  continuedByIds,
-  continuedByTitles,
-  endLineOffersContinue,
-  endLineReason,
-} from "@repo/features/agent-continue-model";
+import { endLineReason } from "@repo/features/agent-continue-model";
 import {
   GOAL_REACH,
   goalConditions,
@@ -63,11 +56,7 @@ import {
 import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import { ENTITY_KIND, type KnownNames } from "@repo/features/entity-kind";
-import {
-  CONTINUE_IN_CLOUD_LABEL,
-  FAILURE_REASON,
-  type FailureReason,
-} from "@repo/features/failure-remedy";
+import { FAILURE_REASON, type FailureReason } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
@@ -157,8 +146,6 @@ import { AGENT_ENTER, EXPERIMENT } from "@repo/settings";
 import {
   ANNOUNCE,
   announce,
-  BUTTON_VARIANT,
-  Button,
   CHAT_RUN,
   CHAT_SIDE,
   ChatAside,
@@ -200,7 +187,6 @@ import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import {
-  ACTION_RESULT_STATUS,
   type CarryOnReason,
   type GitHubLineMetadata,
   MESSAGE_ROLE,
@@ -287,7 +273,7 @@ import {
 } from "./agent-boot-line.js";
 import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
-import { AgentEndRow, TryAgainPress, useTurnEndSaid } from "./agent-end-row.js";
+import { AgentEndRow, useTurnEndSaid } from "./agent-end-row.js";
 import { useForwardToast } from "./agent-forward.js";
 import { GoalConditions, GoalDock, GoalNoticeView } from "./agent-goal.js";
 import { useCallRoute } from "./agent-machines.js";
@@ -297,8 +283,6 @@ import {
   agentWorkingSince,
   dockedPullRequests,
   type EndLineParts,
-  endLineOffersOtherModel,
-  endLineOffersTryAgain,
   endLineParts,
   finishedReplyLead,
   lineSender,
@@ -342,12 +326,6 @@ import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./cha
 import { ComputerDock } from "./computer-dock.js";
 import { ComputerPermissionNote } from "./computer-permission-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
-import {
-  ContinueAgent,
-  ContinuedComposerNote,
-  ContinuedTrail,
-  RefusalContinue,
-} from "./continue-agent.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
@@ -426,6 +404,7 @@ import {
   type MessageSender as MessageWriter,
   useAgentComposer,
 } from "./use-agent-composer.js";
+import { useAgentEndDoors } from "./use-agent-end-doors.js";
 import { useAgentPullRequest } from "./use-agent-pull-request.js";
 import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
 import { type AgentTranscriptControl, useAgentTranscript } from "./use-agent-transcript.js";
@@ -4566,67 +4545,17 @@ function AgentTabBody({
       }),
   });
 
-  const openAgent =
-    onOpenTarget === undefined
-      ? undefined
-      : (agentId: string) => onOpenTarget({ kind: TOOL_TARGET.AGENT, agent: agentId });
-
-  // An archived agent's box gives way to its Unarchive: the page's own where it draws the agent
-  // alone, else this tab's, as on a task, a refusal said as the page says it.
-  const unarchive =
-    control.onUnarchive ??
-    (agent.archivedAt === undefined
-      ? undefined
-      : () =>
-          control.onArchive(agent.id, false).then(
-            (result) => {
-              if (result.status === ACTION_RESULT_STATUS.ACCEPTED) return;
-              toast({
-                words: result.reason,
-                tone: STATUS_TONE.DANGER,
-                failure: {
-                  surface: FAILURE_SURFACE.AGENT_ARCHIVE,
-                  cause: result,
-                  about: { agentId: agent.id },
-                },
-              });
-            },
-            () => undefined,
-          ));
-
-  // The agents that continued this one, as its summary or the task's list names them: a fork is none.
-  const continued = continuedByIds(agent, control.agents, control.archived);
-
-  const continuedDoors = {
-    agentIds: continued,
-    titles: continuedByTitles(agent),
-    control,
-    onOpenAgent: openAgent,
-  };
-
-  // The box's words and files, which a press carries into the continue where it takes the box's place.
-  const carry = {
-    words: composer.unsent.words,
-    attachments: composer.unsent.attachments,
-    taskId: agent.taskId,
-  };
-
-  // The failed end line holds the press, Continue again once another agent continued this one.
-  const { status, failure } = tabTurnOf(agent, composer);
-
-  const ending = {
-    status,
-    endReason: endLineReason(failure, starter),
-    failure,
-    continued: continued.length > 0,
-    boxClosed: composer.closed !== undefined,
-  };
-
-  const pressed = endLineOffersContinue(ending);
-  // Where the model refused the turn, the row offers a continue on another model, the box's words going with it.
-  const otherModel = endLineOffersOtherModel(ending);
-  // Where a message carries the agent on, the row offers it as a line of the developer's own, unless the box is an archived task's note.
-  const triesAgain = endLineOffersTryAgain(ending) && control.onUnarchive === undefined;
+  const { unarchive, endPress, endTrail, continuedNote, closedRemedy, continuable } =
+    useAgentEndDoors({
+      agent,
+      control,
+      composer,
+      starter,
+      hostLost: transcript.hostLost,
+      moveToCloud,
+      onOpenTarget,
+      shown,
+    });
 
   // How the messages are named moves only when the agent's place or the messages read do, not with each page.
   const readIds = useKept(
@@ -4686,50 +4615,12 @@ function AgentTabBody({
           shown,
           message: (message) => <SourceMessage message={message} readerId={control.me} />,
         })}
-        endPress={
-          pressed ? (
-            // Note that once continued, the press carries the box's words, which the continued note hides.
-            <ContinueAgent
-              agentId={agent.id}
-              control={control}
-              carry={continued.length > 0 ? carry : undefined}
-              label={continued.length > 0 ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL}
-            />
-          ) : transcript.hostLost !== undefined && moveToCloud !== undefined ? (
-            // Note that a turn its machine dropped is carried on in the cloud, since a message to the machine waits on it coming back.
-            <Button
-              variant={BUTTON_VARIANT.OUTLINE}
-              icon={<GLYPH.CLOUD />}
-              onClick={() => moveToCloud()}
-            >
-              {CONTINUE_IN_CLOUD_LABEL}
-            </Button>
-          ) : otherModel ? (
-            <RefusalContinue agent={agent} control={control} carry={carry} />
-          ) : triesAgain ? (
-            <TryAgainPress onPress={() => control.onRetry(agent.id, RETRY_LINE)} />
-          ) : undefined
-        }
-        continuable={continued.length > 0 || control.continueAgent !== undefined}
+        endPress={endPress}
+        continuable={continuable}
         onMoveToCloud={moveToCloud}
-        endTrail={
-          // Note that the box's note names them while it stands, so the transcript names them only where an archive took the box.
-          continued.length === 0 || unarchive === undefined ? undefined : (
-            <ContinuedTrail {...continuedDoors} />
-          )
-        }
-        continuedNote={
-          continued.length === 0 ? undefined : (
-            <ContinuedComposerNote
-              agent={agent}
-              doors={continuedDoors}
-              stop={offersStop(agent) ? () => control.onStop(agent.id) : undefined}
-              control={control}
-              shown={shown}
-            />
-          )
-        }
-        closedRemedy={<ContinueAgent agentId={agent.id} control={control} carry={carry} />}
+        endTrail={endTrail}
+        continuedNote={continuedNote}
+        closedRemedy={closedRemedy}
       />
     </MessagePlaceProvider>
   );
