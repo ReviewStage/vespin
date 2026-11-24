@@ -382,3 +382,37 @@ test("a page a Manager's words link opens in the panel beside its chat, read on 
   );
   assert.equal(history.location.pathname, at, "the Manager's page still stands");
 });
+
+test("a Manager's Inbox tab counts its open threads, and the dock over its box opens that tab on the oldest waiting rather than the window's Inbox", async () => {
+  handInboxItems({
+    rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: { [MANAGER.id]: [NEWER, OLDER] } },
+  });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const manager: ListedAgent = { ...MANAGER, kind: AGENT_KIND.MANAGER };
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+  const container = await mountAgentPage(history, tasks);
+
+  const inboxTab =
+    [...container.querySelectorAll<HTMLElement>("[role='tab']")].find((tab) =>
+      /^Inbox/u.test(tab.textContent ?? ""),
+    ) ?? assert.fail("a Manager's page offers an Inbox tab");
+
+  assert.match(inboxTab.textContent ?? "", /Inbox\s*2/u, "it counts both open threads");
+
+  const press =
+    container.querySelector<HTMLElement>(
+      ".agent-threads-dock [role='button'], .agent-threads-dock button",
+    ) ?? assert.fail("the Manager's box docks its threads");
+
+  act(() => press.click());
+  await settleQueries();
+  assert.equal(history.location.pathname, `/acme/agent/${MANAGER.id}`, "the page stands");
+  assert.equal(inboxTab.getAttribute("aria-selected"), "true", "the Inbox tab is chosen");
+  assert.ok(
+    [...container.querySelectorAll("h2")].some((heading) => heading.textContent === OLDER.title),
+    "the oldest waiting thread is shown",
+  );
+});
