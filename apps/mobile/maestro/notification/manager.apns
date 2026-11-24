@@ -1,0 +1,21 @@
+{
+  "Simulator Target Bundle": "dev.vespin.ios",
+  "aps": {
+    "alert": {
+      "title": "Cut the release?",
+      "body": "Invites and the digest are merged and CI is green on main. Should I cut 0.25.0 now, or wait for the rounding fix?"
+    },
+    "thread-id": "81e2a425-6d3f-4a07-92df-9eafb0c1d2e8",
+    "category": "inbox-decide",
+    "mutable-content": 1,
+    "sound": "default",
+    "badge": 1
+  },
+  "kind": "ask",
+  "itemId": "81e2a425-6d9f-4ab7-92df-00000000003c",
+  "messageId": "81e2a425-6d9f-4ab7-92df-000000000258",
+  "agentId": "81e2a425-6d3f-4a07-92df-9eafb0c1d2e8",
+  "revision": 1,
+  "ask": "decide",
+  "options": ["Cut it now", "Wait for rounding"]
+}

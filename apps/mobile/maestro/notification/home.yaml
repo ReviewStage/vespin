@@ -1,0 +1,6 @@
+# home.yaml -- the app sent to the background again after `open.yaml`, so `manager.apns` is pushed to it as `ask.apns` was.
+#
+# Run by `scripts/simulator-screenshots.sh` between the two pushes.
+appId: dev.vespin.ios
+---
+- pressKey: Home
