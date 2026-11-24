@@ -194,15 +194,19 @@ function SealedPageAt({
   const [revealed, setRevealed] = useState(false);
   const reveal = useCallback(() => setRevealed(true), []);
   const starting = `vespin-starting-${useId()}`;
+  // Note that the last HTML handed in stands while a later version is read, so a page followed to its newest never gives way to the empty page it started on.
+  const [drawn, setDrawn] = useState(html);
+
+  if (html !== undefined && html !== drawn) setDrawn(html);
 
   const document = useMemo(
-    () => sealedPageDocument(html ?? startingDocument(starting), themeOf(colors, dark)),
-    [html, starting, colors, dark],
+    () => sealedPageDocument(drawn ?? startingDocument(starting), themeOf(colors, dark)),
+    [drawn, starting, colors, dark],
   );
 
   // Note that the empty page WebKit starts on ends its load too, maybe only once the page's HTML has landed, so it is told apart by its title and only the page itself ends the ground.
   const loadEnded = (event: { readonly nativeEvent: { readonly title: string } }) => {
-    if (html === undefined || event.nativeEvent.title === starting) return;
+    if (drawn === undefined || event.nativeEvent.title === starting) return;
     setLoaded(true);
     onLoaded?.();
   };
