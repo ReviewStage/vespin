@@ -32,6 +32,9 @@ const TAB_ROOT = {
 
 const TAB_ROOTS: ReadonlySet<string> = new Set(Object.values(TAB_ROOT));
 
+/** The tab roots that keep the stack's own bar beside an iPad's own sidebar, rather than a column's bar of their own, so it stands their Show Sidebar too. */
+const STACK_ROOTS: ReadonlySet<string> = new Set([TAB_ROOT.AUTOMATIONS]);
+
 /**
  * Every tab's stack: the system's own headers with no ground of their own
  * and no rule under them, and the back button the system's round glass
@@ -59,8 +62,9 @@ const TAB_ROOTS: ReadonlySet<string> = new Set(Object.values(TAB_ROOT));
  * rows already read, where the Inbox's mounts behind the launch's wait.
  *
  * On an iPad whose own sidebar is folded, a page pushed over a root stands
- * Show Sidebar after its back button, as the root's column does, so the
- * sidebar is one press away on every page.
+ * Show Sidebar after its back button, as the root's column does, and so does
+ * a root that keeps the stack's bar, such as Automations', so the sidebar is
+ * one press away on every page.
  */
 export function TabStack() {
   const colors = useColors();
@@ -84,7 +88,7 @@ export function TabStack() {
         }),
         ...(SPLIT_ROOTS.has(route.name) && { headerShown: false }),
         ...(show !== undefined &&
-          !TAB_ROOTS.has(route.name) && {
+          (!TAB_ROOTS.has(route.name) || STACK_ROOTS.has(route.name)) && {
             headerBackVisible: true,
             headerLeft: () => <SidebarStackButton onPress={show.onPress} />,
           }),

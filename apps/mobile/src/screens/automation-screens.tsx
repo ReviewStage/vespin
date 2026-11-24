@@ -47,6 +47,8 @@ import {
   RowList,
   Screen,
   useMinute,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
@@ -77,6 +79,7 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { stackMenuItems } from "../stack-bar-menu.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -185,6 +188,9 @@ export function AutomationsScreen() {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const compose = useComposeAction();
+  // Note that an iPad's own sidebar holds the workspace switcher beside the page, so its bar stands no second one.
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const besidePane = APP_SIDEBAR && regular;
 
   return (
     <>
@@ -198,7 +204,7 @@ export function AutomationsScreen() {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
-      <SettingsBarButton switcher={switcher} />
+      {besidePane ? null : <SettingsBarButton switcher={switcher} />}
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           {stackMenuItems(menu)}

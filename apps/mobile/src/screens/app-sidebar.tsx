@@ -103,6 +103,7 @@ const MERGE_QUEUE_SEGMENT = MERGE_QUEUE_ROUTE.split("/").at(-1);
 const TAB_PLACE = {
   [IOS_TAB.INBOX]: SIDEBAR_PLACE.INBOX,
   [IOS_TAB.TASKS]: SIDEBAR_PLACE.TASKS,
+  [IOS_TAB.AUTOMATIONS]: SIDEBAR_PLACE.AUTOMATIONS,
   [IOS_TAB.SEARCH]: SIDEBAR_PLACE.SEARCH,
 } as const satisfies Record<IosTab, SidebarPlace>;
 
@@ -166,8 +167,8 @@ export function useSidebarShowAction(): BarAction | undefined {
  * An iPad's own sidebar, standing beside the tabs as the panel's sidebar
  * stands beside its pages, so every page, a pushed one included, keeps it
  * beside it: Hide Sidebar heading it; its places (Search, the Inbox with
- * what waits on the reader, Tasks, Automations, which opens Settings' list
- * of them, and Merge queue, while the account has it on); then the tasks, as the Tasks list draws them, read once
+ * what waits on the reader, Tasks, Automations, and Merge queue, while the
+ * account has it on); then the tasks, as the Tasks list draws them, read once
  * above the tabs (`useSidebarTasks`); the place or task in front standing
  * selected (`useSidebarHere`), under the workspace switcher heading the
  * list, as the panel's sidebar heads itself; and at its foot, in the
