@@ -8,10 +8,11 @@
  * own workspace and repository instead, as New task's composer and an
  * automation's prompt do (`tasklessMentions`): a `/` lists its
  * repository's skills and the member's installed ones, a skill a message
- * names opens its `SKILL.md` on GitHub, since no File tab stands beside
- * the page, an `@` offers its repository's files, its skills, the servers,
+ * names opens its `SKILL.md` in a File tab beside the page, as a file it
+ * names does, an `@` offers its repository's files, its skills, the servers,
  * and the workspace's coding agents, and a mention its transcript holds is
- * drawn as its chip. A dictation into its box listens for its repository
+ * drawn as its chip, a file's opening in the panel beside the page
+ * (`onOpenFile`). A dictation into its box listens for its repository
  * and its name rather than the last task opened.
  */
 
@@ -26,6 +27,7 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useTaskNames } from "../task-list-collections.js";
 import { repositorySkillsQueryOptions } from "../tasks/agent-reads.js";
+import type { MentionDoors } from "../tasks/mention-chip.js";
 import { keptSkills } from "../tasks/repository-skills.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import type { SkillSource } from "../tasks/skill-picker.js";
@@ -59,6 +61,7 @@ export function useOwnAgentPlace(
   tasks: TasksControl,
   agent: ListedAgent,
   models: AgentsControl["models"],
+  onOpenFile: MentionDoors["onOpenFile"],
 ): OwnAgentPlace {
   const { workspaceId, repository } = agent;
   const listed = tasks.workspaces.find((each) => each.id === workspaceId);
@@ -94,8 +97,9 @@ export function useOwnAgentPlace(
         { workspace: linkWorkspace, workspaceId, repository },
         onShowMention,
         readAgents,
+        onOpenFile,
       ),
-    [linkWorkspace, workspaceId, repository, onShowMention, readAgents],
+    [linkWorkspace, workspaceId, repository, onShowMention, readAgents, onOpenFile],
   );
 
   const { title } = agent;
@@ -126,9 +130,12 @@ export function OwnAgentPlaceProvider({
 }): React.JSX.Element {
   const { mentions } = place;
 
-  // A skill's chip opens its `SKILL.md` on GitHub, as New task's does, since no File tab stands beside the page.
+  // A skill's chip opens its `SKILL.md` beside the page as a file its words name does, else on GitHub, as New task's does.
   const openSkill = (skill: SkillWithFile) => {
     if (mentions.repository === null) return;
+    const { onOpenFile } = mentions.doors;
+
+    if (onOpenFile !== undefined) return onOpenFile(skill.path, undefined);
     appPlatform().openGitHub(
       encodeMention({ kind: MENTION_KIND.FILE, path: skill.path }, mentions.doors.place),
     );

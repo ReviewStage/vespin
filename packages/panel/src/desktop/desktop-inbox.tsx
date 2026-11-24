@@ -354,6 +354,7 @@ export const DesktopInbox = memo(function DesktopInbox({
       kind: HERE.INBOX_ITEM,
       chosen: chosen !== undefined,
       taskId,
+      workspaceId: chosenTask?.workspaceId,
       repository: chosenTask?.repository ?? null,
       agentIds: named.agentIds,
       heldIds,
@@ -984,6 +985,7 @@ function InboxSidePanel({
         unread={NO_UNREAD}
         holder={SIDE_PANEL_HOLDER.INBOX}
         taskId={taskId ?? ""}
+        workspaceId={listedTask?.workspaceId}
         repository={repository}
         pages={pages}
         agents={agents}

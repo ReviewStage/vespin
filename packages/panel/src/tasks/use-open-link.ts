@@ -87,11 +87,9 @@ import { numberedTaskIdNow } from "./use-link-standing.js";
  * on the route tree.
  */
 
-/** A task's page a press comes from, and what it holds. */
+/** A task's page a press comes from, or an agent on no task's, and what it holds: the task it shows in `taskId`, none for an agent on no task. */
 export type PagesHere = {
   readonly kind: typeof HERE.TASK;
-  /** The task the page shows. */
-  readonly taskId: string;
 } & Holding;
 
 /** The tasks the window lists, as their rows name their pull requests, and the window's door to a pull request's tab on one of them. */
@@ -224,7 +222,8 @@ type PagePlaceBeside = (place: LinkDestination, here: PagesHere) => Route;
 /**
  * Each place of the app a task's page opens beside it, by the name of the
  * declaration its route matched (`LINK_ROUTED_PLACE`): a page of another
- * task than the one it shows, read on its own place; its own is the
+ * task than the one it shows, read on its own place, every task's beside an
+ * agent on no task's page, which shows none; a task's page's own is the
  * window's, which opens it as the panel's, and so is an older link's page
  * an agent showed on itself, which the window finds the task of. Every
  * other place is the window's.
@@ -265,10 +264,11 @@ function besidePages(address: Address, here: PagesHere): Route {
 }
 
 /**
- * A task's page's opener for what it opens beside it
- * (`besidePages`): a pull request, by its repository and number, in its
- * Pull request tab through `open`; and a page of another place through
- * `openPage`, read on that place; any other address is the window's.
+ * A task's page's opener for what it opens beside it, and an agent on no
+ * task's page's (`besidePages`): a pull request, by its repository and
+ * number, in its Pull request tab through `open`; and a page of another
+ * place through `openPage`, read on that place; any other address is the
+ * window's.
  */
 export function openPullRequestsHere(
   here: PagesHere,

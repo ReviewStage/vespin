@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; ⌘F finds in its conversation; and its box offers Talk. Synthetic throughout.
+ * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; ⌘F finds in its conversation; its box offers Talk; and a page its words link opens in the panel beside it. Synthetic throughout.
  */
 
 import assert from "node:assert/strict";
@@ -21,6 +21,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
+import { MESSAGE_ROLE } from "@repo/wire";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -35,6 +36,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
 import { RoutedExitsProvider } from "../places/routed-exits.js";
+import { useSidePanel } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -42,7 +44,7 @@ import {
   fakeActs,
   fakeActsAnswer,
 } from "../testing/app-bridge.js";
-import { handInboxItems, handState } from "../testing/app-state.js";
+import { handHostReads, handInboxItems, handState, holdPages } from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, typeInComposer } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { ACME } from "../testing/desktop-inbox.js";
@@ -99,14 +101,16 @@ const NEWER = ask("7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d02", "Ship the notes?", 20)
 const roots: Root[] = [];
 
 /**
- * A router holding the agent's own address and the Inbox's item beneath the
- * window's pathless places, as the panel's names them, over `history`, the
- * agent's page drawn where its address stands under `tasks`. Note that the
+ * A router holding the agent's own address, the Inbox's item, and a task's
+ * page beneath the window's pathless places, as the panel's names them, over
+ * `history`, the agent's page drawn where its address stands under `tasks`
+ * as `Page` draws it. Note that the
  * panel's own routes draw the whole window, which this page needs none of.
  */
 function agentRouter(
   history: ReturnType<typeof createMemoryHistory>,
   tasks: ReturnType<typeof tasksControl>,
+  Page: () => React.ReactNode,
 ) {
   const root = createRootRoute();
   const places = createRoute({ getParentRoute: () => root, id: "places" });
@@ -115,13 +119,16 @@ function agentRouter(
   const agent = createRoute({
     getParentRoute: () => workspace,
     path: "agent/$agentId",
-    component: () => overListedTasks(tasks, createElement(AgentRoutePage, { tasks })),
+    component: () => overListedTasks(tasks, createElement(Page)),
   });
 
   const inbox = createRoute({ getParentRoute: () => workspace, path: "inbox/$itemId" });
+  const page = createRoute({ getParentRoute: () => workspace, path: "task/$taskId/page/$pageId" });
 
   return createRouter({
-    routeTree: root.addChildren([places.addChildren([workspace.addChildren([agent, inbox])])]),
+    routeTree: root.addChildren([
+      places.addChildren([workspace.addChildren([agent, inbox, page])]),
+    ]),
     history,
   });
 }
@@ -130,6 +137,7 @@ function agentRouter(
 async function mountAgentPage(
   history: ReturnType<typeof createMemoryHistory>,
   tasks: ReturnType<typeof tasksControl>,
+  Page: () => React.ReactNode = () => createElement(AgentRoutePage, { tasks }),
 ): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -140,7 +148,7 @@ async function mountAgentPage(
         createElement(
           RoutedExitsProvider,
           null,
-          createElement(RouterProvider, { router: agentRouter(history, tasks) }),
+          createElement(RouterProvider, { router: agentRouter(history, tasks, Page) }),
         ),
       ),
     ),
@@ -273,4 +281,66 @@ test("an agent on no task's box offers Talk, as an agent's tab on a task does", 
     container.querySelector('.agent-composer [aria-label="Talk"]'),
     "the box offers a call into the agent",
   );
+});
+
+test("a page a Manager's words link opens in the panel beside its chat, read on its task, as a task's page opens one, the Manager's page still standing", async () => {
+  const taskId = "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d";
+  const pageId = "3c4d5e6f-0000-4000-8000-000000000001";
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    {
+      messages: [
+        {
+          id: "answer",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            {
+              type: "text",
+              text: `The numbers are on [@Invite funnel](https://vespin.dev/acme/task/${taskId}/page/${pageId}).`,
+            },
+          ],
+        },
+      ],
+      cursor: "1:0",
+      status: AGENT_STATUS.COMPLETED,
+      title: null,
+    },
+  ]);
+  // The page's task holds it, as the host lays a task's pages once the panel holds them.
+  holdPages(handHostReads({}).deliverPages, (place) => ({
+    rows:
+      place.taskId === taskId ? [{ id: pageId, title: "Invite funnel", version: 1, at: 1 }] : [],
+  }));
+  const at = `/acme/agent/${MANAGER.id}`;
+  const history = createMemoryHistory({ initialEntries: [at] });
+  const listed = tasksControl({ shown: true, workspace: ACME, listedAgents: [MANAGER] });
+
+  // The window's own panel, held at the Manager's stop and standing for no task, as the window holds it on its page (`use-tasks-tab.ts`).
+  function Paneled() {
+    const sidePanel = useSidePanel(undefined, {
+      id: undefined,
+      holds: {},
+      bare: true,
+      stop: MANAGER.id,
+    });
+
+    return createElement(AgentRoutePage, { tasks: { ...listed, sidePanel } });
+  }
+
+  const container = await mountAgentPage(history, listed, Paneled);
+
+  const chip =
+    container.querySelector<HTMLElement>(".agent-page [data-mention-ref]") ??
+    assert.fail("the Manager's words name the page");
+
+  act(() => chip.click());
+  await settleQueries();
+
+  const tabs = [...container.querySelectorAll('aside[aria-label="Panel"] [role="tab"]')];
+  assert.deepEqual(
+    tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]),
+    [["Invite funnel", "true"]],
+    "the page stands in the panel beside the chat",
+  );
+  assert.equal(history.location.pathname, at, "the Manager's page still stands");
 });

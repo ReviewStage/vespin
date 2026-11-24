@@ -32,6 +32,7 @@ const ROUTER = createPanelRouter(
 
 /** A task's: its repository, and one agent. */
 const HOLDING = {
+  workspaceId: "8a1c3e5f-7b9d-4f2a-8c4e-6a8b0c2d4e6f",
   repository: "acme/relay",
   agentIds: [AGENT],
   heldIds: undefined,

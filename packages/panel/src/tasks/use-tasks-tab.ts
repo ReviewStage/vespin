@@ -1182,10 +1182,15 @@ export function useTasksTab(input: {
   // The cloud Browser tabs, which the panel draws by its holder: a task's own panel its agents', never the Inbox's.
   const activeTaskId = viewed.activeTaskId;
 
+  // An agent on no task's page holds the panel at a stop of its own, standing for no task, as a thread on no task in the Inbox does.
+  const ownAgentId = inboxView === undefined ? agentView?.agentId : undefined;
+
   const cloudPlace = useMemo(
     () =>
-      inboxView !== undefined || activeTaskId === undefined ? undefined : { taskId: activeTaskId },
-    [inboxView, activeTaskId],
+      inboxView !== undefined || ownAgentId !== undefined || activeTaskId === undefined
+        ? undefined
+        : { taskId: activeTaskId },
+    [inboxView, ownAgentId, activeTaskId],
   );
 
   const cloudListed = useCloudBrowserTabs(cloudPlace, cloudPlace !== undefined);
@@ -1205,7 +1210,8 @@ export function useTasksTab(input: {
 
   // Where the panel's file and page tabs opened here read, saved with each tab: the task the panel
   // stands for and its repository.
-  const panelTaskId = inboxView !== undefined ? inboxTask : activeTaskId;
+  const panelTaskId =
+    inboxView !== undefined ? inboxTask : ownAgentId !== undefined ? undefined : activeTaskId;
 
   const panelRepository =
     (panelTaskId === undefined ? undefined : listedRows.task(panelTaskId))?.repository ?? null;
@@ -1244,36 +1250,47 @@ export function useTasksTab(input: {
   // A fixture run's staged Terminal tab is held under the account signed in, as a real open holds it, so it stands.
   useHeldTerminalTabs(stagedPanel?.terminals);
 
+  // Note that the panel beside an agent on no task's page reads what its words open where each names it (`desktop-agent-page.tsx`).
   const sidePanel = useSidePanel(
     stagedPanel,
-    inboxView !== undefined
-      ? {
-          id: inboxTask,
-          holds: NO_HOLDS,
-          bare: true,
-          files: panelFileReads,
-          pages: panelPages,
-          // Each item is a stop of its own, two of one task among them.
-          stop: inboxChosen?.itemId,
-          // An item of a task stands beside the strip of the agent that posted it, as that agent's column draws it.
-          agent: inboxChosen === undefined ? undefined : choiceItemAgentOf(inboxChosen),
-        }
-      : {
-          id: viewed.activeTaskId,
-          holds: NO_HOLDS,
-          files: panelFileReads,
-          pages: panelPages,
-          agent: columnAgent,
-        },
-    inboxView !== undefined ? NO_IDS : mainTabs.openAgents,
+    ownAgentId !== undefined
+      ? { id: undefined, holds: NO_HOLDS, bare: true, stop: ownAgentId }
+      : inboxView !== undefined
+        ? {
+            id: inboxTask,
+            holds: NO_HOLDS,
+            bare: true,
+            files: panelFileReads,
+            pages: panelPages,
+            // Each item is a stop of its own, two of one task among them.
+            stop: inboxChosen?.itemId,
+            // An item of a task stands beside the strip of the agent that posted it, as that agent's column draws it.
+            agent: inboxChosen === undefined ? undefined : choiceItemAgentOf(inboxChosen),
+          }
+        : {
+            id: viewed.activeTaskId,
+            holds: NO_HOLDS,
+            files: panelFileReads,
+            pages: panelPages,
+            agent: columnAgent,
+          },
+    inboxView !== undefined || ownAgentId !== undefined ? NO_IDS : mainTabs.openAgents,
     NO_IDS,
-    inboxView !== undefined ? inboxPageIds : pages,
+    ownAgentId !== undefined ? NO_IDS : inboxView !== undefined ? inboxPageIds : pages,
     // Note that the task's agents in the Inbox are its own read's (`desktop-inbox.tsx`), which the panel draws a Pull request tab by (`use-inbox-task-agents.ts`).
-    inboxView !== undefined ? inboxTaskAgents.agentIds : agents.agentIds,
+    ownAgentId !== undefined
+      ? NO_IDS
+      : inboxView !== undefined
+        ? inboxTaskAgents.agentIds
+        : agents.agentIds,
     input.room,
     cloudBrowsers,
     // Every agent of the task, an archived one among them, whose Pull request tab stands as a live agent's does.
-    inboxView !== undefined ? inboxTaskAgents.heldIds : agents.heldIds,
+    ownAgentId !== undefined
+      ? NO_IDS
+      : inboxView !== undefined
+        ? inboxTaskAgents.heldIds
+        : agents.heldIds,
     cloudBrowserAgents,
   );
 

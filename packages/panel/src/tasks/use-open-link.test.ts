@@ -397,6 +397,7 @@ const ROUTER = createPanelRouter(
 
 /** A task's: its repository, and one agent. */
 const HOLDING = {
+  workspaceId: "8a1c3e5f-7b9d-4f2a-8c4e-6a8b0c2d4e6f",
   repository: "acme/relay",
   agentIds: [AGENT],
   heldIds: undefined,
@@ -493,6 +494,22 @@ test("a task's page: a pull request another listed task's lines name, as its row
     { places, opened, onTask },
     { places: [], opened: [], onTask: [[TASK, RELAY_42]] },
   );
+});
+
+test("an agent on no task's page: a pull request a listed task's lines name, as its row presses it, beside it, in its Pull request tab read through the agent's workspace", () => {
+  const opened: NumberedAddress[] = [];
+
+  const page = openPullRequestsHere(
+    { ...TASK_PAGE, taskId: undefined, agentIds: [OTHER] },
+    (pullRequest) => opened.push(pullRequest),
+    () => undefined,
+  );
+
+  const { places, onTask } = press(URL, (row) =>
+    createElement(OpenAddressesHere, { value: page }, row),
+  );
+
+  assert.deepEqual({ places, opened, onTask }, { places: [], opened: [RELAY_42], onTask: [] });
 });
 
 test.each<[string, string, boolean, Route]>([
