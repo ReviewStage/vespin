@@ -1,6 +1,6 @@
 import { WHOLE_PART } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
-import { managerChatLines } from "@repo/features/manager-chat";
+import { managerChatLines, managerChatWork } from "@repo/features/manager-chat";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
@@ -415,6 +415,58 @@ describe("transcriptItems", () => {
       ["Thanks!", false, false, false],
       [TRANSCRIPT_ITEM.WORKING, true],
     ]);
+  });
+
+  it("opens the work a Manager's message came of under its bubble on Show work, and folds it away again", () => {
+    const transcript = [
+      {
+        id: "turn",
+        role: MESSAGE_ROLE.ASSISTANT,
+        parts: [
+          {
+            type: "tool-list_tasks",
+            toolCallId: "look",
+            state: "output-available",
+            input: {},
+            output: { tasks: [] },
+          },
+          {
+            type: "tool-send_to_user",
+            toolCallId: "send",
+            state: "output-available",
+            input: { text: "Nothing open." },
+            output: { status: "accepted" },
+          },
+        ],
+        startedAt: 0,
+        finishedAt: 1,
+      },
+    ];
+
+    const read = (toggles: typeof NO_TOGGLES) =>
+      transcriptItems(managerChatLines(transcript), {
+        writing: false,
+        readerId: "u1",
+        toggles,
+        now: 2,
+        pullRequests: [],
+        chat: true,
+        chatWork: managerChatWork(transcript, false),
+      });
+
+    const closed = read(NO_TOGGLES);
+    const bubble = closed[0];
+
+    expect(closed).toHaveLength(1);
+    expect(bubble).toMatchObject({ kind: TRANSCRIPT_ITEM.SAID, workShown: false });
+
+    const opened = read(bubble === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, bubble));
+
+    expect(opened.map((item) => [item.kind, item.depth])).toEqual([
+      [TRANSCRIPT_ITEM.SAID, 0],
+      [TRANSCRIPT_ITEM.CALL, 1],
+    ]);
+    expect(opened[0]).toMatchObject({ workShown: true });
   });
 
   it("names an app's line while the reader is not yet known", () => {

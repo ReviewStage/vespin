@@ -4,6 +4,7 @@ import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
+import { chatWorkWords } from "@repo/features/manager-chat";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
@@ -43,6 +44,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import {
   CopyWordsMenu,
   type HeldAct,
+  HeldMenu,
   MessageMenu,
   MessageWords,
   PictureOriginProvider,
@@ -846,6 +848,25 @@ function ShownMediaView({
   }
 }
 
+/** Show work, or Hide work while it stands open, where a Manager's message or its working line came of work (`workShown`); none where it came of none. */
+function workActs(
+  item: Extract<
+    TranscriptItem,
+    { kind: typeof TRANSCRIPT_ITEM.SAID | typeof TRANSCRIPT_ITEM.WORKING }
+  >,
+  drawing: RowDrawing,
+): readonly HeldAct[] {
+  if (item.workShown === undefined) return [];
+
+  return [
+    {
+      label: chatWorkWords(item.workShown),
+      symbol: GLYPH.SHOW_WORK,
+      onPress: () => drawing.onToggle(item),
+    },
+  ];
+}
+
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -924,7 +945,7 @@ function TranscriptRow({
               at={item.at}
               // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id; a Manager's message offers no link or rewind, as the panel's offers none, since one after its turn's first stands under its call's id, which names no message.
               link={item.manager === true ? undefined : drawing.messageLink?.(item.place.row)}
-              more={item.manager === true ? undefined : drawing.messageMore?.(item)}
+              more={item.manager === true ? workActs(item, drawing) : drawing.messageMore?.(item)}
               width={rowWidth(drawing.column)}
             >
               <View style={[styles.saidHeld, item.received ? styles.received : null]}>
@@ -974,16 +995,21 @@ function TranscriptRow({
       if (item.chat === true) {
         return (
           <View style={[styles.row, styles.received, { paddingVertical: CHAT_RUN_GAP * 2 }]}>
-            <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
-              <Text
-                style={{
-                  fontSize: PROSE_SIZE,
-                  color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
-                }}
-              >
-                {item.words}
-              </Text>
-            </ChatBubble>
+            {/* Note that a long press offers the turn under way's work, as the press beside the panel's working line does. */}
+            <HeldMenu acts={workActs(item, drawing)}>
+              <View>
+                <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+                  <Text
+                    style={{
+                      fontSize: PROSE_SIZE,
+                      color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
+                    }}
+                  >
+                    {item.words}
+                  </Text>
+                </ChatBubble>
+              </View>
+            </HeldMenu>
           </View>
         );
       }

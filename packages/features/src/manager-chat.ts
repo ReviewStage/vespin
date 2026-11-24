@@ -229,6 +229,17 @@ export function managerChatLines(
   });
 }
 
+/** What Show work says beside a message or in its menu, by whether its work stands open under it. */
+const CHAT_WORK_WORDS = {
+  SHOW: "Show work",
+  HIDE: "Hide work",
+} as const;
+
+/** What the press that opens a message's work under it, or folds it away, says, by whether it stands open. */
+export function chatWorkWords(shown: boolean): string {
+  return shown ? CHAT_WORK_WORDS.HIDE : CHAT_WORK_WORDS.SHOW;
+}
+
 /** The work a Manager's chat holds a press away: each message's, by its chat id, and the turn under way's since its last message. */
 export interface ManagerChatWork {
   readonly work: ReadonlyMap<string, readonly AgentPart[]>;

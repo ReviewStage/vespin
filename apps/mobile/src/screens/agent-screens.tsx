@@ -36,7 +36,7 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { managerChatLines } from "@repo/features/manager-chat";
+import { managerChatLines, managerChatWork } from "@repo/features/manager-chat";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
@@ -870,6 +870,15 @@ const AgentConversation = memo(function AgentConversation({
     [pending],
   );
 
+  // Note that a Manager's work stays a press away from its chat, read from its whole transcript, the turn under way's under its working line.
+  const chatWork = useMemo(
+    () =>
+      chat && messages !== undefined
+        ? managerChatWork(messages, status !== undefined && agentStillWriting(status))
+        : undefined,
+    [chat, messages, status],
+  );
+
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const items = useMemo(
     () =>
@@ -884,6 +893,7 @@ const AgentConversation = memo(function AgentConversation({
         suggestionAddress,
         waitingCalls,
         chat,
+        chatWork,
         // Note that the greeting stands over the chat's first line, so it waits until no older page is left to read, as the panel draws it above its first message.
         greeting:
           chat && shown !== undefined && transcript?.before === undefined
@@ -893,6 +903,7 @@ const AgentConversation = memo(function AgentConversation({
     [
       shown,
       transcript?.before,
+      chatWork,
       waitingCalls,
       messages,
       sending,
