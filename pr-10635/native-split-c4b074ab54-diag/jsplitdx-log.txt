@@ -1,0 +1,11 @@
+pinned to c4b074ab54
+== bundle PJjsplitdx base c4b074ab54
+  built c4b074ab54 base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+ipad27-control-vmain12: alive at 45 s Y; ReactNativeJS lines 0; first bundle/JS line: none
+ipad27-control-vmain12: pid 16407, hierarchy 651668 B, error lines 8; first: 2026-11-23 23:48:52.379 Df Vespin[16407:b8eedfb] [com.apple.CFNetwork:Default] Task <E0B808BC-5112-4BBB-B217-9162FE502F14>.<1> finished with error [-999] Error Domain=NSURLErrorDomain Code=-999 "cancelled" UserInfo={NSEr ), _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <E0B808BC-5112-4BBB-B217-9162FE502F14>.<1>, NSLocalizedDescription=cancelled} 2026-11-23 23:48:52.662 E  Vespin[16407:b8eed3c] [com.apple.BoardServices:XPCErrors] non-launching port is incompatible with service identifier "com.apple.PointerUI.pointeruid.default-service" 
+ipad27-probe-c4b074ab54: alive at 45 s Y; ReactNativeJS lines 0; first bundle/JS line: 2026-11-23 23:50:02.028 I  Vespin[16776:b8efd38] [com.facebook.react.log:javascript] Running "main"
+ipad27-probe-c4b074ab54: pid 16776, hierarchy 31742 B, error lines 30; first: 2026-11-23 23:50:02.390 Df Vespin[16776:b8efd33] [com.apple.CFNetwork:Default] Task <C20362F6-2D90-407C-888B-57C6540FCF26>.<1> finished with error [-999] Error Domain=NSURLErrorDomain Code=-999 "cancelled" UserInfo={NSEr ), _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <C20362F6-2D90-407C-888B-57C6540FCF26>.<1>, NSLocalizedDescription=cancelled} 2026-11-23 23:50:02.390 Df Vespin[16776:b8efd33] [com.apple.CFNetwork:Default] Task <2B78112D-6625-40FC-A4F5-A005C0F4F4F3>.<2> finished with error [-999] Error Domain=NSURLErrorDomain Code=-999 "cancelled" UserInfo={NSEr 
