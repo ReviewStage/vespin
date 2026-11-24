@@ -260,11 +260,14 @@ function ManagerViewOptions({
 /** The Managers section; see the module's head. Nothing while the workspace listed has the Managers experiment off. */
 export function SidebarManagers({
   tasks,
+  taskAgentPins,
   folds,
   inSight,
   onOpen,
 }: {
   tasks: SidebarTasksControl;
+  /** The reader's pins of agents, whose Managers stand under Pinned alone. */
+  taskAgentPins: readonly TaskAgentPin[];
   folds: FoldedGroups;
   /** Whether the sidebar is in sight, which its rows' menus ask on. */
   inSight: boolean;
@@ -275,8 +278,6 @@ export function SidebarManagers({
   const newManager = useNewManagerDialog({ tasks, onOpen });
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const sorting = useManagerSort(tasks.workspace?.id, staged);
-
-  const { taskAgentPins } = tasks;
 
   // Note that a pinned Manager stands under Pinned alone, as a pinned task does, and returns here on Unpin.
   const sorted = useMemo(() => {
