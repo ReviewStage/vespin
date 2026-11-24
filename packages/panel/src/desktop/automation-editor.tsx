@@ -35,11 +35,13 @@ import {
   GITHUB_SWITCH_WORDS,
   HOURLY_MINUTES,
   hourlyLabel,
+  NEW_SECRET_REFUSAL_WORDS,
   PULL_REQUEST_EVENTS,
   PULL_REQUEST_MOMENTS,
   SCHEDULE_KINDS,
   SENTRY_EVENTS,
   SENTRY_LEVELS,
+  WEBHOOK_WORDS,
   WEEKDAYS,
   zoneLabel,
 } from "@repo/features/automation-editor-words";
@@ -48,7 +50,6 @@ import { type AutomationPresetName, automationPreset } from "@repo/features/auto
 import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
   AUTOMATION_CALL_FAILURE,
-  type AutomationCallFailure,
   type AutomationChangeParams,
   type AutomationCreateParams,
   type AutomationView,
@@ -1514,12 +1515,6 @@ function SentryRows({
   );
 }
 
-/** Why a new secret could not be made, as its dialog says it. */
-const NEW_SECRET_REFUSAL_WORDS = {
-  ...AUTOMATION_SAVE_REFUSAL_WORDS,
-  [AUTOMATION_CALL_FAILURE.UNANSWERED]: "The secret could not be made. Try again.",
-} as const satisfies Record<AutomationCallFailure, string>;
-
 /**
  * A webhook's secret, shown the one time the write that minted it answers:
  * read-only, with Copy and Done, and said never to be shown again. Note that
@@ -1533,10 +1528,7 @@ function ShownSecretRow({
   onDone: () => void;
 }): React.JSX.Element {
   return (
-    <SettingsRow
-      label="Secret"
-      description="You won't be able to see this again. Copy it into your sender now."
-    >
+    <SettingsRow label={WEBHOOK_WORDS.SECRET} description={WEBHOOK_WORDS.SECRET_ONCE}>
       {() => (
         <>
           <CopyField label="Secret" value={secret} what="secret" copy={copyThroughShell} />
@@ -1600,7 +1592,7 @@ function WebhookRows({
     return (
       <SettingsRow
         label={<ReplayUnmask>Address</ReplayUnmask>}
-        description={<ReplayUnmask>Save to get its address and secret.</ReplayUnmask>}
+        description={<ReplayUnmask>{WEBHOOK_WORDS.SAVE_FIRST}</ReplayUnmask>}
       >
         {() => null}
       </SettingsRow>
@@ -1629,7 +1621,7 @@ function WebhookRows({
           {() => (
             <ReplayUnmask>
               <Button variant={BUTTON_VARIANT.OUTLINE} onClick={rotation.ask}>
-                New secret
+                {WEBHOOK_WORDS.NEW_SECRET}
               </Button>
             </ReplayUnmask>
           )}
@@ -1641,10 +1633,10 @@ function WebhookRows({
         open
         confirm={rotation}
         question={{
-          title: "Make a new secret?",
-          body: `The secret your sender uses now stops working until you give it the new one, which ${PRODUCT_NAME} shows you once. ${IRREVERSIBLE_WORDS}`,
-          verb: "Make secret",
-          running: "Making",
+          title: WEBHOOK_WORDS.NEW_SECRET_TITLE,
+          body: WEBHOOK_WORDS.NEW_SECRET_BODY,
+          verb: WEBHOOK_WORDS.NEW_SECRET_VERB,
+          running: WEBHOOK_WORDS.NEW_SECRET_RUNNING,
           replayUnmasked: true,
           loss: CONFIRM_LOSS.IRREVERSIBLE,
         }}

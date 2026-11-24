@@ -9,11 +9,14 @@ import {
   type DraftDefaults,
   draftNextRuns,
   draftProblems,
+  draftRepositories,
   draftTrigger,
+  type GitHubTriggerSettings,
   repositoryHeld,
   SCHEDULE_KIND,
   type ScheduleDraft,
   sameDraft,
+  withGithubEvent,
   withRepository,
   withScheduleKind,
 } from "@repo/features/automation-draft-model";
@@ -22,10 +25,17 @@ import {
   AUTOMATION_EDITOR_WORDS,
   AUTOMATION_TARGETS,
   AUTOMATION_TRIGGERS,
+  GITHUB_EVENTS,
+  GITHUB_SENDERS,
+  GITHUB_SWITCH_WORDS,
   HOURLY_MINUTES,
   hourlyLabel,
+  NEW_SECRET_REFUSAL_WORDS,
   nextRunWords,
+  PULL_REQUEST_EVENTS,
+  PULL_REQUEST_MOMENTS,
   SCHEDULE_KINDS,
+  WEBHOOK_WORDS,
   WEEKDAYS,
   workspaceOwnerDetail,
   zoneLabel,
@@ -36,6 +46,8 @@ import {
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
   type AutomationSummary,
+  GITHUB_TRIGGER_EVENT,
+  type GitHubTriggerEvent,
 } from "@repo/features/automation-wire";
 import {
   AUTOMATION_PHONE_WORDS,
@@ -54,7 +66,10 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAgentDefault, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  ActionRow,
   BAR_TITLE,
+  BUZZ,
+  buzz,
   ConfirmAsk,
   DATE_PICK_PART,
   DatePickRow,
@@ -81,6 +96,7 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { timeZoneRoute } from "../automations/automation-editor-route.js";
@@ -380,6 +396,229 @@ function ModelRows({
  * is said under the row it is about once Save was pressed. A draft written
  * in asks before Cancel or a swipe lets it go.
  */
+/** A list with a value in it or out of it, as a switch leaves it. */
+function toggled<Value>(list: readonly Value[], value: Value, on: boolean): readonly Value[] {
+  return on
+    ? [...list.filter((each) => each !== value), value]
+    : list.filter((each) => each !== value);
+}
+
+/** Copies what a webhook's row holds to the pasteboard for its sender, with the system's tap of success, or says on the console why it could not. */
+function copyForSender(words: string): void {
+  setStringAsync(words)
+    .then(() => buzz(BUZZ.SUCCESS))
+    .catch((cause: unknown) => {
+      console.error("The webhook's words could not be copied.", cause);
+      buzz(BUZZ.ERROR);
+    });
+}
+
+/**
+ * A GitHub trigger's rows, as the desktop's: the event it fires on, then a
+ * switch each for whose events fire it, the moments an update fires on,
+ * whether drafts are skipped and forks heard, and whether prereleases are
+ * heard, each standing only for the events it speaks to. A check names no
+ * sender, so it stands none, and a merged pull request is never a draft.
+ */
+function GitHubRows({
+  event,
+  settings,
+  onEvent,
+  onSettings,
+}: {
+  readonly event: GitHubTriggerEvent;
+  readonly settings: GitHubTriggerSettings;
+  readonly onEvent: (event: GitHubTriggerEvent) => void;
+  readonly onSettings: (settings: GitHubTriggerSettings) => void;
+}) {
+  const checks = event === GITHUB_TRIGGER_EVENT.CHECK_FAILED;
+  const pullRequest = PULL_REQUEST_EVENTS.has(event);
+
+  return (
+    <>
+      <MenuPickRow
+        label={AUTOMATION_EDITOR_WORDS.EVENT}
+        options={GITHUB_EVENTS.map((each) => ({ id: each.value, label: each.label }))}
+        picked={event}
+        onPick={(id) => {
+          const picked = GITHUB_EVENTS.find((each) => each.value === id)?.value;
+
+          if (picked !== undefined) onEvent(picked);
+        }}
+      />
+      {checks
+        ? null
+        : GITHUB_SENDERS.map((choice) => (
+            <ToggleRow
+              key={choice.value}
+              label={choice.label}
+              detail={choice.detail}
+              on={settings.senders.includes(choice.value)}
+              onChange={(on) =>
+                onSettings({ ...settings, senders: toggled(settings.senders, choice.value, on) })
+              }
+            />
+          ))}
+      {event === GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED
+        ? PULL_REQUEST_MOMENTS.map((choice) => (
+            <ToggleRow
+              key={choice.value}
+              label={choice.label}
+              detail={choice.detail}
+              on={settings.moments.includes(choice.value)}
+              onChange={(on) =>
+                onSettings({ ...settings, moments: toggled(settings.moments, choice.value, on) })
+              }
+            />
+          ))
+        : null}
+      {pullRequest && event !== GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED ? (
+        <ToggleRow
+          label={GITHUB_SWITCH_WORDS.SKIP_DRAFTS}
+          on={!settings.drafts}
+          onChange={(skip) => onSettings({ ...settings, drafts: !skip })}
+        />
+      ) : null}
+      {pullRequest ? (
+        <ToggleRow
+          label={GITHUB_SWITCH_WORDS.INCLUDE_FORKS}
+          detail={GITHUB_SWITCH_WORDS.FORKS_DETAIL}
+          on={settings.forks}
+          onChange={(forks) => onSettings({ ...settings, forks })}
+        />
+      ) : null}
+      {event === GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED ? (
+        <ToggleRow
+          label={GITHUB_SWITCH_WORDS.INCLUDE_PRERELEASES}
+          on={settings.prereleases}
+          onChange={(prereleases) => onSettings({ ...settings, prereleases })}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** A webhook's secret as the write that minted it answered it, which this sheet alone holds, and the address its sender posts it to. */
+interface MintedSecret {
+  readonly secret: string;
+  readonly address: string | undefined;
+}
+
+/**
+ * A webhook's rows once it is saved as one: its address to copy, and New
+ * secret, which asks first, since the new one stops the one a sender holds,
+ * and then shows the new one once (`SecretRows`). Before it is saved as a
+ * webhook, its footer says a save gives it both.
+ */
+function WebhookRows({
+  automation,
+  onMinted,
+}: {
+  readonly automation: AutomationSummary | undefined;
+  readonly onMinted: (minted: MintedSecret) => void;
+}) {
+  const acts = useHostActs();
+  const minting = useAsyncAction(() => ACT_UNREACHED_WORDS);
+  const [asking, setAsking] = useState(false);
+
+  const address =
+    automation?.trigger.kind === AUTOMATION_TRIGGER.WEBHOOK ? automation.webhookUrl : undefined;
+
+  if (automation === undefined || address === undefined) return null;
+
+  const mint = () =>
+    void minting.run(() =>
+      acts[ACT_KIND.AUTOMATIONS_NEW_WEBHOOK_SECRET]({ automationId: automation.id }).then(
+        (answer) => {
+          if ("failure" in answer) return NEW_SECRET_REFUSAL_WORDS[answer.failure];
+
+          if (answer.webhookSecret !== undefined) {
+            onMinted({ secret: answer.webhookSecret, address });
+          }
+
+          return undefined;
+        },
+      ),
+    );
+
+  return (
+    <>
+      <ActionRow
+        label={WEBHOOK_WORDS.COPY_ADDRESS}
+        symbol={GLYPH.COPY}
+        detail={address}
+        onPress={() => copyForSender(address)}
+      />
+      <ActionRow
+        label={WEBHOOK_WORDS.NEW_SECRET}
+        disabled={minting.running}
+        detail={minting.refusal}
+        onPress={() => setAsking(true)}
+      />
+      <ConfirmAsk
+        title={WEBHOOK_WORDS.NEW_SECRET_TITLE}
+        message={WEBHOOK_WORDS.NEW_SECRET_BODY}
+        act={WEBHOOK_WORDS.NEW_SECRET_VERB}
+        destructive
+        presented={asking}
+        onDismiss={() => setAsking(false)}
+        onAct={() => {
+          setAsking(false);
+          mint();
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * A webhook's secret, shown the one time the write that minted it answers,
+ * in the sheet that asked and nowhere else, as root AGENTS.md allows it: its
+ * address and its secret, each to copy, and said never to be shown again.
+ * Done closes the sheet, and the secret goes with it.
+ */
+function SecretScreen({
+  minted,
+  onDone,
+}: {
+  readonly minted: MintedSecret;
+  readonly onDone: () => void;
+}) {
+  return (
+    <>
+      <EditorBar
+        title={WEBHOOK_WORDS.SECRET}
+        act={WEBHOOK_WORDS.DONE}
+        busy={false}
+        onAct={onDone}
+        onCancel={onDone}
+      />
+      <Screen ground={SCREEN_GROUND.GROUPED}>
+        <SettingsForm>
+          {minted.address === undefined ? null : (
+            <ListSection title={WEBHOOK_WORDS.ADDRESS} footer={WEBHOOK_WORDS.ADDRESS_DETAIL}>
+              <ActionRow
+                label={WEBHOOK_WORDS.COPY_ADDRESS}
+                symbol={GLYPH.COPY}
+                detail={minted.address}
+                onPress={() => copyForSender(minted.address ?? "")}
+              />
+            </ListSection>
+          )}
+          <ListSection title={WEBHOOK_WORDS.SECRET} footer={WEBHOOK_WORDS.SECRET_ONCE}>
+            <ActionRow
+              label={WEBHOOK_WORDS.COPY_SECRET}
+              symbol={GLYPH.COPY}
+              detail={minted.secret}
+              onPress={() => copyForSender(minted.secret)}
+            />
+          </ListSection>
+        </SettingsForm>
+      </Screen>
+    </>
+  );
+}
+
 function EditorForm({
   automation,
   workspace,
@@ -403,6 +642,8 @@ function EditorForm({
   const [draft, setDraft] = useState(start);
   const [shownProblems, setShownProblems] = useState(false);
   const [seeded, setSeeded] = useState(automation !== undefined);
+  // Note that a minted secret stands in this sheet's state alone, never the app's document, so it goes with the sheet.
+  const [minted, setMinted] = useState<MintedSecret | undefined>(undefined);
 
   // Note that a new automation starts in the repository the account's tasks were about lately, as New task does, once the repositories are read.
   useEffect(() => {
@@ -455,6 +696,18 @@ function EditorForm({
         : acts[ACT_KIND.AUTOMATIONS_CHANGE]({ automationId: automation.id, change: change ?? {} })
       ).then((answer) => {
         if ("failure" in answer) return AUTOMATION_SAVE_REFUSAL_WORDS[answer.failure];
+
+        // A save that made the webhook a secret stays open to show it once, as the desktop's editor does; any other closes.
+        if (
+          answer.automation.trigger.kind === AUTOMATION_TRIGGER.WEBHOOK &&
+          answer.webhookSecret !== undefined
+        ) {
+          kept.release();
+          setMinted({ secret: answer.webhookSecret, address: answer.automation.webhookUrl });
+
+          return undefined;
+        }
+
         leave();
 
         return undefined;
@@ -462,11 +715,14 @@ function EditorForm({
     );
   };
 
-  // Note that only a schedule is edited here, so a trigger of another kind is offered beside it only where it was saved so.
+  // Note that Sentry is edited on the desktop and the web for now, so it is offered only where it was saved so.
   const triggers = AUTOMATION_TRIGGERS.filter(
     (trigger) =>
-      trigger.value === AUTOMATION_TRIGGER.SCHEDULE || trigger.value === saved?.triggerKind,
+      trigger.value !== AUTOMATION_TRIGGER.INTEGRATION || trigger.value === saved?.triggerKind,
   );
+
+  const webhook = draft.triggerKind === AUTOMATION_TRIGGER.WEBHOOK;
+  const github = draft.triggerKind === AUTOMATION_TRIGGER.GITHUB;
 
   const scheduled = draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE;
   const scheduleProblem = shown[DRAFT_FIELD.SCHEDULE];
@@ -485,6 +741,8 @@ function EditorForm({
   ];
 
   const ownerName = (owner: typeof draft.owner) => automationOwnerName(owner, workspace.name, mine);
+
+  if (minted !== undefined) return <SecretScreen minted={minted} onDone={leave} />;
 
   return (
     <>
@@ -562,9 +820,16 @@ function EditorForm({
           <ListSection
             title={AUTOMATION_EDITOR_SECTION.TRIGGER}
             footer={
-              scheduled
-                ? (scheduleProblem ?? nextRunsText(draft))
-                : (scheduleProblem ?? WORDS.TRIGGER_ELSEWHERE)
+              scheduleProblem ??
+              (scheduled
+                ? nextRunsText(draft)
+                : github
+                  ? automationTriggerText(draftTrigger(draft), draftRepositories(draft))
+                  : webhook
+                    ? automation?.trigger.kind === AUTOMATION_TRIGGER.WEBHOOK
+                      ? WEBHOOK_WORDS.ADDRESS_DETAIL
+                      : WEBHOOK_WORDS.SAVE_FIRST
+                    : WORDS.TRIGGER_ELSEWHERE)
             }
             footerTone={footerToneOf(scheduleProblem)}
           >
@@ -582,6 +847,15 @@ function EditorForm({
             ) : null}
             {scheduled ? (
               <ScheduleRows draft={draft} onSchedule={(schedule) => edit({ schedule })} />
+            ) : github ? (
+              <GitHubRows
+                event={draft.githubEvent}
+                settings={draft.githubSettings}
+                onEvent={(event) => edit(withGithubEvent(draft, event))}
+                onSettings={(githubSettings) => edit({ githubSettings })}
+              />
+            ) : webhook ? (
+              <WebhookRows automation={automation} onMinted={setMinted} />
             ) : (
               <NoteRow
                 symbol={GLYPH.AUTOMATION}
