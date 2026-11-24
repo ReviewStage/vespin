@@ -5,7 +5,10 @@ import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { writeAccountTimeZone } from "@repo/database/models/account-time-zone";
 import { type Agent, createAgent, recordNativeHanded } from "@repo/database/models/agent-store";
 import type { DescriptionWriter } from "@repo/database/models/description-revisions";
-import { readManagerChatMessage } from "@repo/database/models/manager-chat-messages";
+import {
+  readManagerChatMessage,
+  writeManagerChatMessage,
+} from "@repo/database/models/manager-chat-messages";
 import { tallyMemoryRecalls } from "@repo/database/models/memory-recall-store";
 import { type MemoryOutcome, rememberMemory } from "@repo/database/models/memory-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -17,22 +20,31 @@ import {
   startTask,
 } from "@repo/database/testing";
 import { AGENT_KIND, AGENT_PAYER } from "@repo/features/agent-wire";
+import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import { RUN_STATUS, RUN_TURN_ORIGIN, TURN_TRIGGER } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { EXPERIMENT } from "@repo/settings";
 import { Clock, Effect, Option, Predicate } from "effect";
 import { TestClock } from "effect/testing";
-import { ACTION_RESULT_STATUS, RUN_EVENT, TURN_ORIGIN, unparsedWire } from "../../core.js";
+import {
+  ACTION_RESULT_STATUS,
+  isRecord,
+  RUN_EVENT,
+  TURN_ORIGIN,
+  unparsedWire,
+  type WireRecord,
+} from "../../core.js";
 import { saveNotes } from "../../tasks/description-notes.js";
 import { fakeAgentSessions } from "../../testing/agents-app-support.js";
 import { openGithubUser } from "../../testing/github-app-fake.js";
 import { added } from "../../testing/task-contents.js";
-import { AGENT_CALLER } from "../agent-tools.js";
+import { AGENT_CALLER, type AgentCall } from "../agent-tools.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import { SESSION_TURN } from "../sessions/agent-sessions.js";
 import { runAgentEditDescription } from "./agent-doors.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
+import { runReadChatMessages, runReadChatThread, runSearchChat } from "./manager-chat-tools.js";
 import { runSendToUser } from "./send-to-user-tool.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import {
@@ -254,6 +266,116 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
 
         const row = yield* readManagerChatMessage(opened.userId, agent.id, sent.message_id);
         assert.equal(Option.getOrThrow(row).text, "The invite email is sent.");
+      }),
+  );
+
+  it.effect(
+    "a Manager replies in a thread by its parent's or a reply's id, reads its own chat and threads and searches them, and reaches nothing of another Manager's chat",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* openManager;
+        const other = yield* openManager;
+        const { agent } = opened;
+        const now = new Date(yield* Clock.currentTimeMillis);
+
+        // A person's message at the chat's top, as their send writes it.
+        yield* writeManagerChatMessage(opened.userId, {
+          agentId: agent.id,
+          id: "p1",
+          clientKey: randomUUID(),
+          authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+          authorUserId: opened.userId,
+          authorName: "Ada",
+          text: "How are the E2E tests?",
+          attachments: [],
+          inReplyTo: null,
+          broadcast: false,
+          turnId: null,
+          lineId: null,
+          now,
+        });
+
+        const callOf = (caller: Agent): AgentCall => {
+          const agentSessions = fakeAgentSessions().agentSessions("deployment");
+
+          return {
+            caller: { kind: AGENT_CALLER.AGENT, agent: caller, descriptionsOn: true },
+            agentSessions,
+            agentSessionsAs: () => agentSessions,
+            writer: storeWriter({ tools: CODER_TOOL_SET }),
+            clientKey: randomUUID(),
+          };
+        };
+
+        const sent = (caller: Agent, input: Record<string, string | boolean>) =>
+          runSendToUser(
+            callOf(caller),
+            unparsedWire({ text: "All green, nightly too.", ...input }),
+          );
+
+        const reply = yield* sent(agent, { thread_ts: "p1", reply_broadcast: true });
+        assert.equal(reply.thread_ts, "p1");
+        assert.ok(Predicate.isString(reply.message_id), JSON.stringify(reply));
+
+        // A reply's id posts in its parent's thread, as Slack takes it.
+        const again = yield* sent(agent, { thread_ts: reply.message_id });
+        assert.equal(again.thread_ts, "p1");
+
+        const unknown = yield* sent(agent, { thread_ts: "nope" });
+        assert.equal(unknown.status, ACTION_RESULT_STATUS.REJECTED);
+        assert.match(String(unknown.reason), /No message in your chat has the id nope/u);
+
+        const idsOf = (answer: WireRecord) =>
+          Array.isArray(answer.messages)
+            ? answer.messages.map((message) =>
+                isRecord(message) ? [message.message_id, message.thread_ts ?? null] : [],
+              )
+            : [];
+
+        // The chat's top holds the person's message and the reply posted to it too, newest first.
+        const top = yield* runReadChatMessages(callOf(agent), unparsedWire({}));
+        assert.deepEqual(idsOf(top), [
+          [reply.message_id, "p1"],
+          ["p1", null],
+        ]);
+
+        const counted = Array.isArray(top.messages) ? top.messages[1] : undefined;
+        assert.equal(isRecord(counted) ? counted.reply_count : undefined, 2);
+
+        const thread = yield* runReadChatThread(
+          callOf(agent),
+          unparsedWire({ message_id: again.message_id }),
+        );
+
+        assert.deepEqual(idsOf(thread), [
+          ["p1", null],
+          [reply.message_id, "p1"],
+          [again.message_id, "p1"],
+        ]);
+
+        const found = yield* runSearchChat(
+          callOf(agent),
+          unparsedWire({ keywords: "NIGHTLY", filters: { from: "me", is_thread: true } }),
+        );
+
+        assert.deepEqual(
+          idsOf(found).map(([id]) => id),
+          [again.message_id, reply.message_id],
+        );
+
+        // Another Manager's chat holds none of it, and its sends reach none of it.
+        const strangers = yield* runReadChatMessages(callOf(other.agent), unparsedWire({}));
+        assert.deepEqual(strangers.messages, []);
+
+        const intruding = yield* sent(other.agent, { thread_ts: "p1" });
+        assert.equal(intruding.status, ACTION_RESULT_STATUS.REJECTED);
+
+        const searched = yield* runSearchChat(
+          callOf(other.agent),
+          unparsedWire({ keywords: "nightly" }),
+        );
+
+        assert.deepEqual(searched.messages, []);
       }),
   );
 

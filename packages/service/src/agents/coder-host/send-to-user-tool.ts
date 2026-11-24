@@ -20,16 +20,19 @@ import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import type { WireRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
-import { Clock, Effect, Option, Predicate, Result, Schema } from "effect";
+import { Clock, Effect, Predicate, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { type AgentCall, agentToolRejected, callerAgent } from "../agent-tools.js";
 import { MANAGER_THREAD_ASKS } from "./inbox.js";
-import { writeManagerSaid } from "./manager-chat-row.js";
+import { MANAGER_SAID, writeManagerSaid } from "./manager-chat-row.js";
 import { readNativeTurnHanded } from "./turn-message.js";
 
 /** The most characters one message may spell. */
 const SEND_TO_USER_CHARS = 8_000;
+
+/** The most characters the id of the thread a reply names may spell: a message's id, with room to spare. */
+const SEND_TO_USER_ID_CHARS = 200;
 
 /** Why `send_to_user` was refused, in words the model can act on. */
 const SEND_TO_USER_REFUSAL = {
@@ -39,6 +42,8 @@ const SEND_TO_USER_REFUSAL = {
   NOT_MANAGER: "Not sent: only a Manager sends to its chat.",
   SPOKEN: "You're on a call: answer in plain text; the voice will say it.",
   UNKEPT: "Not sent: the message could not be kept just now. The call may be made again.",
+  NO_THREAD: (id: string) =>
+    `Not sent: No message in your chat has the id ${id}. Use read_chat_messages or search_chat to find message ids.`,
 } as const;
 
 const SEND_TO_USER_INPUT = Schema.Struct({
@@ -46,9 +51,23 @@ const SEND_TO_USER_INPUT = Schema.Struct({
     Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(SEND_TO_USER_CHARS)),
     "One message, in Markdown, as people will read it in your chat: a line or two making one point, with mention links for what they can open.",
   ),
+  thread_ts: Schema.optionalKey(
+    describeWire(
+      Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(SEND_TO_USER_ID_CHARS)),
+      "The parent message's id, to make this message a reply in its thread.",
+    ),
+  ),
+  reply_broadcast: Schema.optionalKey(
+    describeWire(Schema.Boolean, "Also post the reply to the chat."),
+  ),
 });
 
 const readInput = Schema.decodeUnknownResult(SEND_TO_USER_INPUT);
+
+/** How `send_to_user` threads its replies, in Charles's words. */
+const CHAT_THREAD_WORDS =
+  "Reply in threads. When you answer or follow up on a message, set thread_ts to its thread's " +
+  "parent message id. Leave thread_ts out only to bring up something new.";
 
 /** What `send_to_user` says of the chat, whether or not the Manager posts threads. */
 const SEND_TO_USER_WORDS =
@@ -60,12 +79,13 @@ const SEND_TO_USER_WORDS =
   "to say what you are waiting on; a turn that sends nothing shows nothing. Write as a coworker " +
   "would on Slack: several short messages rather than one long one, one point to each, concise " +
   "and straight to the point, with no greeting, filler, or recap, and no headers or long lists " +
-  "unless what you say needs them.";
+  "unless what you say needs them. " +
+  CHAT_THREAD_WORDS;
 
 /** `send_to_user` as a Manager is offered it: its name, its words, and its input. */
 export const SEND_TO_USER_TOOL = {
   name: AGENT_TOOL.SEND_TO_USER,
-  description: `${SEND_TO_USER_WORDS} For ${MANAGER_THREAD_ASKS}, post a thread instead.`,
+  description: `${SEND_TO_USER_WORDS} For ${MANAGER_THREAD_ASKS}, post an Inbox thread instead.`,
   inputSchema: SEND_TO_USER_INPUT,
 } as const;
 
@@ -82,10 +102,10 @@ export function sendToUserToolOf(on: { readonly inboxOn: boolean }) {
 }
 
 /** The call's input read, its refusal naming the one thing wrong. */
-function readSend(input: UnparsedWireValue): Result.Result<string, string> {
+function readSend(input: UnparsedWireValue): Result.Result<typeof SEND_TO_USER_INPUT.Type, string> {
   const read = readInput(input);
 
-  if (Result.isSuccess(read)) return Result.succeed(read.success.text);
+  if (Result.isSuccess(read)) return Result.succeed(read.success);
   const text = isRecord(input) ? input.text : undefined;
 
   if (Predicate.isString(text) && text.trim().length > SEND_TO_USER_CHARS) {
@@ -120,7 +140,16 @@ export function runSendToUser(
   }
 
   const target = { userId: manager.userId, conversationId: manager.conversationId };
-  const said = { clientKey: call.clientKey, text: read.success, attachments: [] };
+  const { text, thread_ts: threadTs, reply_broadcast: broadcast } = read.success;
+
+  const said = {
+    clientKey: call.clientKey,
+    text,
+    attachments: [],
+    ...(threadTs === undefined
+      ? undefined
+      : { inReplyTo: threadTs, broadcast: broadcast === true }),
+  };
 
   return Effect.gen(function* () {
     const handed = yield* readNativeTurnHanded(target);
@@ -131,11 +160,17 @@ export function runSendToUser(
     // Note that the row is written before the call answers, so the id answered names a message that stands.
     const written = yield* writeManagerSaid(manager, said);
 
-    if (Option.isNone(written)) return agentToolRejected(SEND_TO_USER_REFUSAL.UNKEPT);
+    // Note that a reply's id names the thread it stands in, as Slack takes it, so only an id the chat does not hold is refused.
+    if (written.kind === MANAGER_SAID.NO_THREAD) {
+      return agentToolRejected(SEND_TO_USER_REFUSAL.NO_THREAD(threadTs ?? ""));
+    }
+
+    if (written.kind !== MANAGER_SAID.KEPT) return agentToolRejected(SEND_TO_USER_REFUSAL.UNKEPT);
 
     const answer: WireRecord = {
       status: ACTION_RESULT_STATUS.ACCEPTED,
-      message_id: written.value,
+      message_id: written.id,
+      thread_ts: written.threadRoot,
     };
 
     return yield* stampedSaid(manager.id, answer);

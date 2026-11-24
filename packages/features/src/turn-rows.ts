@@ -142,6 +142,10 @@ export const CALL_KIND = {
   END_TURN: "end-turn",
   /** A Manager's message to its chat (`send_to_user`), its row saying the words. */
   SEND_TO_USER: "send-to-user",
+  /** A Manager's own chat it read (`read_chat_messages`), a thread of it (`read_chat_thread`), or searched (`search_chat`), its row naming the words searched for. */
+  CHAT_READ: "chat-read",
+  CHAT_THREAD_READ: "chat-thread-read",
+  CHAT_SEARCH: "chat-search",
   /** The workspace's tasks listed (`list_tasks`). */
   LIST_TASKS: "list-tasks",
   /** A fact kept in the workspace's shared memory (`save_memory`, or `remember` in an older transcript), its row saying it. */
@@ -241,6 +245,9 @@ export const CALL_WORDS = {
   [CALL_KIND.CANCEL_WAKEUP]: { verb: "Canceled the wakeup", code: false },
   [CALL_KIND.END_TURN]: { verb: "Ended the turn", code: false },
   [CALL_KIND.SEND_TO_USER]: { verb: "Said in the chat:", code: false },
+  [CALL_KIND.CHAT_READ]: { verb: "Read the chat", code: false },
+  [CALL_KIND.CHAT_THREAD_READ]: { verb: "Read a thread of the chat", code: false },
+  [CALL_KIND.CHAT_SEARCH]: { verb: "Searched the chat:", code: false },
   [CALL_KIND.LIST_TASKS]: { verb: "Listed the tasks", code: false },
   [CALL_KIND.REMEMBER]: { verb: "Saved to memory:", code: false },
   [CALL_KIND.RECALL]: { verb: "Recalled", code: false },

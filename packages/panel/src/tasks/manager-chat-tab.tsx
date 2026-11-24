@@ -42,6 +42,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { keptPictureSchema } from "@repo/features/conversation-picture-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { chatWorkWords } from "@repo/features/manager-chat";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { type ManagerChatLine, managerChatView } from "@repo/features/manager-chat-view";
@@ -52,41 +53,37 @@ import { WORKED_WORDS, workingTime } from "@repo/features/time-format";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import {
-  CHAT_RUN,
-  CHAT_SIDE,
-  ChatAside,
-  ChatBubble,
-  chatRunOf,
+  ChannelMessage,
+  ChannelSplit,
   Disclosure,
   DisclosureBody,
   DisclosureSummary,
-  MESSAGE_LINE_ALIGN,
-  MESSAGE_LINE_INSET,
-  MessageHead,
-  MessageLine,
-  type MessageLineInset,
-  TEXT_ELEMENT,
+  GlyphSlot,
+  TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  TIME_LOOK,
+  Time,
 } from "@repo/ui";
+import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
+import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
   ConversationRows,
   ConversationScrollButton,
 } from "../ai-elements/conversation.js";
-import { Message, RECEIVED_MESSAGE_CLASS } from "../ai-elements/message.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
-import { usePerson } from "../member-directory.js";
+import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { keepPictureRead } from "../picture-query.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
@@ -125,6 +122,7 @@ import { type ChatWorkToggle, WorkingWorkAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { EditComposer } from "./edit-composer.js";
 import { useManagerChatLooks } from "./manager-chat-looks.js";
+import { ManagerThreadPane, ThreadReplyAction, ThreadSummary } from "./manager-chat-threads.js";
 import { useMoveToCloud } from "./move-agent.js";
 import { ReplyDoorProvider, ReplyToSelection, useBoxReplyDoor } from "./reply-to-selection.js";
 import { RewindProvider, useMessageEdit } from "./rewind-action.js";
@@ -157,31 +155,57 @@ interface ChatDoors {
   readonly delegation: DelegationDoors;
   /** The transcript's lines by their ids, which a person's message opens for writing again by its line (`lineId`). */
   readonly lines: ReadonlyMap<string, AgentTranscriptMessage>;
+  /** The chat's threads, which its rows open; none in a thread's own pane, whose rows open no thread. */
+  readonly thread?: ChatThreadDoors | undefined;
 }
 
-/** The face beside a Manager's bubbles; none where it wears none. */
-function chatAvatar(face: ManagerFaceValue | undefined): ReactNode {
-  return face === undefined ? undefined : (
+/** The chat's threads as its rows read them: each root's replies by the root's id, the thread open in the pane, and the press that opens one. */
+interface ChatThreadDoors {
+  readonly replies: ReadonlyMap<string, readonly ManagerChatLine[]>;
+  readonly open: string | undefined;
+  readonly onOpen: (root: string) => void;
+}
+
+/** What a row offers of its thread: Reply in thread beside its Copy, and the summary of its replies under it; nothing in a thread's pane. A reply posted to the chat too opens the thread it stands in. */
+/** What a row draws of its thread: its press beside its Copy, and its summary under its words. */
+interface RowThread {
+  readonly action: ReactNode;
+  readonly summary: ReactNode;
+}
+
+function threadOf(message: ManagerChatLiveMessage, doors: ChatDoors): RowThread {
+  const { thread } = doors;
+
+  if (thread === undefined) return { action: null, summary: null };
+  const root = message.threadRoot ?? message.id;
+  const onOpen = () => thread.onOpen(root);
+
+  return {
+    action: <ThreadReplyAction onOpen={onOpen} />,
+    summary: (
+      <ThreadSummary
+        replies={thread.replies.get(root)}
+        face={doors.manager.face}
+        open={thread.open === root}
+        onOpen={onOpen}
+      />
+    ),
+  };
+}
+
+/** When a message was sent, as its row's head names it. */
+function sentTime(at: number): ReactNode {
+  return <Time at={at} look={TIME_LOOK.DAY} />;
+}
+
+/** The Manager's picture at a row's seat: its face, or the agent's glyph where a service older than faces names none. */
+function ChatFace({ face }: { face: ManagerFaceValue | undefined }): ReactNode {
+  return face === undefined ? (
+    <GlyphSlot size={ICON_SIZE.LARGE}>
+      <EntityGlyph kind={ENTITY_KIND.AGENT} />
+    </GlyphSlot>
+  ) : (
     <ManagerFace face={face} size={MANAGER_FACE_SIZE.MESSAGE} />
-  );
-}
-
-/** Where a run's head and the line under it start: past the face beside its bubbles, or at the bubble's inset where none stands. */
-function chatInset(face: ManagerFaceValue | undefined): MessageLineInset {
-  return face === undefined ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR;
-}
-
-/** A Manager's name over a run of its messages, as a group chat names a speaker over theirs. */
-function ManagerHead({ manager }: { manager: ChatManagerLook }): ReactNode {
-  return (
-    <MessageHead
-      inset={chatInset(manager.face)}
-      sender={
-        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate>
-          {manager.name}
-        </Text>
-      }
-    />
   );
 }
 
@@ -242,12 +266,11 @@ function ManagerGreeting({
   words: string;
 }): ReactNode {
   return (
-    <Message from="assistant" className={RECEIVED_MESSAGE_CLASS} data-manager-greeting="">
-      <ManagerHead manager={manager} />
-      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE} avatar={chatAvatar(manager.face)}>
+    <div data-manager-greeting="">
+      <ChannelMessage avatar={<ChatFace face={manager.face} />} name={manager.name}>
         <TranscriptWords text={words} />
-      </ChatBubble>
-    </Message>
+      </ChannelMessage>
+    </div>
   );
 }
 
@@ -286,61 +309,62 @@ function ManagerMessage({
   work: TurnWork | null;
 }): ReactNode {
   const { message, place } = line;
-  const { face } = doors.manager;
   const menu = useChatMessageMenu(message.text);
   // Note that the Manager's pictures kept with their size stand as the set it showed, as the transcript draws a shown set.
   const shown = shownOf(message);
   const files = fileChipsOf(message, shown);
+  const thread = threadOf(message, doors);
 
   return (
-    <Message from="assistant" className={RECEIVED_MESSAGE_CLASS} data-message-id={message.id}>
-      {place.opens ? <ManagerHead manager={doors.manager} /> : null}
-      {work === null ? null : (
-        // Note that the turn's work stands folded over its first message, in the order it was done, at the bubbles' inset past the face.
-        <ChatAside inset={chatInset(face)}>
+    <>
+      <ChannelMessage
+        messageId={message.id}
+        avatar={<ChatFace face={doors.manager.face} />}
+        name={doors.manager.name}
+        at={sentTime(message.createdAt)}
+        continues={!place.opens}
+        contextMenu={menu.contextMenu}
+        actions={
+          message.text === "" ? null : (
+            <CopyMessageAction
+              words={message.text}
+              // Note that a turn's journal stands under the turn's own id, which Rewind conversation to here names it by.
+              messageId={place.closes && message.turnId !== null ? message.turnId : undefined}
+              rewind={place.closes && message.turnId !== null ? REWIND_ACTION.REVERT : undefined}
+              lead={
+                <>
+                  {thread.action}
+                  <ReplyMessageAction words={message.text} />
+                </>
+              }
+            />
+          )
+        }
+        under={
+          <>
+            {shown.length === 0 && files.length === 0 ? null : (
+              <div data-shown-set="">
+                <KeptShownSet shown={shown} />
+                {files.length === 0 ? null : <KeptFileChips files={files} />}
+              </div>
+            )}
+            {thread.summary}
+          </>
+        }
+      >
+        {work === null ? null : (
+          // Note that the turn's work stands folded over its first message, in the order it was done.
           <Disclosure data-turn-work="">
             <DisclosureSummary>
               <span>{work.summary}</span>
             </DisclosureSummary>
             <DisclosureBody>{work.rows}</DisclosureBody>
           </Disclosure>
-        </ChatAside>
-      )}
-      {shown.length === 0 && files.length === 0 ? null : (
-        // Note that what the Manager showed stands at its bubbles' inset, past its face, as the work under a message does.
-        <ChatAside inset={chatInset(face)}>
-          <KeptShownSet shown={shown} />
-          {files.length === 0 ? null : <KeptFileChips files={files} />}
-        </ChatAside>
-      )}
-      {message.text === "" ? null : (
-        <ChatBubble
-          side={CHAT_SIDE.RECEIVED}
-          run={chatRunOf(place.opens, place.closes)}
-          avatar={chatAvatar(face)}
-          contextMenu={menu.contextMenu}
-          beside={
-            <CopyMessageAction
-              words={message.text}
-              // Note that a turn's journal stands under the turn's own id, which Rewind conversation to here names it by.
-              messageId={place.closes && message.turnId !== null ? message.turnId : undefined}
-              rewind={place.closes && message.turnId !== null ? REWIND_ACTION.REVERT : undefined}
-              lead={<ReplyMessageAction words={message.text} />}
-            />
-          }
-        >
-          <TranscriptWords text={message.text} />
-        </ChatBubble>
-      )}
+        )}
+        {message.text === "" ? null : <TranscriptWords text={message.text} />}
+      </ChannelMessage>
       {menu.menu}
-      {place.closes ? (
-        <MessageLine
-          align={MESSAGE_LINE_ALIGN.START}
-          inset={chatInset(face)}
-          at={message.createdAt}
-        />
-      ) : null}
-    </Message>
+    </>
   );
 }
 
@@ -372,98 +396,103 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
     return <EditComposer message={ownLine} words={message.text} edit={editor} />;
   }
 
+  const thread = threadOf(message, doors);
+
   return (
-    <Message
-      from={own ? "user" : "assistant"}
-      className={own ? undefined : RECEIVED_MESSAGE_CLASS}
-      data-message-id={message.id}
-    >
-      {!own && place.opens ? (
-        <MessageHead
-          inset={MESSAGE_LINE_INSET.AVATAR}
-          sender={<ActorRef actor={sender} nameOnly />}
-        />
-      ) : null}
-      {files.length === 0 ? null : <KeptFileChips files={files} />}
-      {message.text === "" ? null : (
-        <ChatBubble
-          side={own ? CHAT_SIDE.SENT : CHAT_SIDE.RECEIVED}
-          run={chatRunOf(place.opens, place.closes)}
-          avatar={own ? undefined : <ActorMark actor={sender} size={ACTOR_SIZE.CARD} />}
-          contextMenu={menu.contextMenu}
-          beside={
+    <>
+      <ChannelMessage
+        messageId={message.id}
+        avatar={<ActorMark actor={sender} size={ACTOR_SIZE.CARD} />}
+        name={message.authorName}
+        at={sentTime(message.createdAt)}
+        continues={!place.opens}
+        contextMenu={menu.contextMenu}
+        actions={
+          message.text === "" ? null : (
             <CopyMessageAction
               words={message.text}
               messageId={ownLine === undefined ? undefined : lineId}
               rewind={ownLine === undefined ? undefined : REWIND_ACTION.EDIT}
-              lead={<ReplyMessageAction words={message.text} />}
+              lead={
+                <>
+                  {thread.action}
+                  <ReplyMessageAction words={message.text} />
+                </>
+              }
             />
-          }
-        >
-          <TranscriptWords text={message.text} />
-        </ChatBubble>
-      )}
+          )
+        }
+        under={thread.summary}
+      >
+        {files.length === 0 ? null : <KeptFileChips files={files} />}
+        {message.text === "" ? null : <TranscriptWords text={message.text} />}
+      </ChannelMessage>
       {menu.menu}
-      {place.closes ? (
-        <MessageLine
-          align={own ? MESSAGE_LINE_ALIGN.END : MESSAGE_LINE_ALIGN.START}
-          inset={own ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR}
-          at={message.createdAt}
-        />
-      ) : null}
-    </Message>
+    </>
   );
 }
 
-/** One of the reader's messages on its way to the chat, or refused, at the chat's end: their bubble at the column's right, its files over it, and its mark where it did not go. */
-function SendingLine({ line }: { line: SentLine }): ReactNode {
+/** One of the reader's messages on its way to the chat, or refused: their row under their name, its files over its words, and Sending… under it, or its mark where it did not go. */
+function SendingLine({
+  line,
+  readerId,
+}: {
+  line: SentLine;
+  readerId: string | undefined;
+}): ReactNode {
   const refused = line.state !== SENT_LINE_STATE.PENDING;
-  const mark = refused ? <UndeliveredMark messageId={line.id} /> : null;
+  const { members } = useMemberDirectory();
+  const name = members?.find((member) => member.userId === readerId)?.name ?? "";
+  const reader = usePerson(readerId === undefined ? undefined : { userId: readerId, name });
 
   const files = line.attachments.map(
     (file): MessageFileChip => ({ name: file.name, mediaType: file.mediaType, url: fileUrl(file) }),
   );
 
   return (
-    <Message from="user" data-message-id={line.id} data-undelivered={refused ? "" : undefined}>
-      {files.length === 0 ? null : <KeptFileChips files={files} sending={!refused} />}
-      <ChatBubble side={CHAT_SIDE.SENT} run={CHAT_RUN.ALONE} beside={mark}>
+    <div data-message-id={line.id} data-undelivered={refused ? "" : undefined}>
+      <ChannelMessage
+        avatar={<ActorMark actor={reader} size={ACTOR_SIZE.CARD} />}
+        name={name}
+        at={refused ? sentTime(line.sentAt) : undefined}
+        under={
+          refused ? (
+            <UndeliveredMark messageId={line.id} />
+          ) : (
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              {SENDING_WORDS}
+            </Text>
+          )
+        }
+      >
+        {files.length === 0 ? null : <KeptFileChips files={files} sending={!refused} />}
         <TranscriptWords text={line.text} />
-      </ChatBubble>
-      <MessageLine
-        align={MESSAGE_LINE_ALIGN.END}
-        inset={MESSAGE_LINE_INSET.BUBBLE}
-        status={refused ? undefined : "Sending…"}
-        at={refused ? line.sentAt : undefined}
-      />
-    </Message>
+      </ChannelMessage>
+    </div>
   );
 }
 
 /** What the chat says while a turn runs: its working line in a bubble of the Manager's, as a chat app shows the other side typing, the turn's work so far a press away. */
 function ChatWorking({
   words,
-  face,
+  manager,
   work,
 }: {
   words: string;
-  face: ManagerFaceValue | undefined;
+  manager: ChatManagerLook;
   work: ReactNode | null;
 }): ReactNode {
   const toggle = useWorkToggle();
 
   return (
-    <Message from="assistant" className={RECEIVED_MESSAGE_CLASS}>
-      <ChatBubble
-        side={CHAT_SIDE.RECEIVED}
-        run={CHAT_RUN.ALONE}
-        avatar={chatAvatar(face)}
-        beside={work === null ? null : <WorkingWorkAction toggle={toggle} />}
-      >
-        <WorkingLine startedAt={undefined} words={words} />
-      </ChatBubble>
-      {toggle.shown && work !== null ? <ChatAside inset={chatInset(face)}>{work}</ChatAside> : null}
-    </Message>
+    <ChannelMessage
+      avatar={<ChatFace face={manager.face} />}
+      name={manager.name}
+      actions={work === null ? null : <WorkingWorkAction toggle={toggle} />}
+      under={toggle.shown && work !== null ? work : null}
+    >
+      <WorkingLine startedAt={undefined} words={words} />
+    </ChannelMessage>
   );
 }
 
@@ -583,6 +612,14 @@ const NONE_SHOWN: readonly ShownPicture[] = [];
 /** No message on its way. */
 const NONE_SENDING: readonly ManagerChatSending[] = [];
 
+/** What stands under one of the reader's messages on its way. */
+const SENDING_WORDS = "Sending…";
+
+/** Whether a message on its way replies in a thread, where it stands on its way rather than at the chat's end. */
+function inThread(message: ManagerChatSending): boolean {
+  return message.threadRoot !== undefined;
+}
+
 /** What a Manager's chat tab is handed beside the agent, as an agent's tab is. */
 interface ManagerChatTabDoors {
   readonly agent: AgentSummary;
@@ -691,8 +728,9 @@ export function ManagerChatTab({
     messages: transcript.messages,
     sending: useMemo(
       () =>
-        sendingLinesOf(chat?.sending ?? NONE_SENDING, (message) =>
-          filesOf(queryClient, agent.id, sentFiles.current, message),
+        sendingLinesOf(
+          (chat?.sending ?? NONE_SENDING).filter((message) => !inThread(message)),
+          (message) => filesOf(queryClient, agent.id, sentFiles.current, message),
         ),
       [chat?.sending, queryClient, agent.id],
     ),
@@ -794,9 +832,20 @@ export function ManagerChatTab({
     [transcript.messages],
   );
 
-  const doors = useMemo(
+  const [openThread, setOpenThread] = useState<string | undefined>(undefined);
+
+  // Note that the pane's own rows read the chat's doors with no thread, so a reply offers no thread of its own.
+  const paneDoors = useMemo(
     () => ({ manager, readerId: control.me, delegation, lines }),
     [manager, control.me, delegation, lines],
+  );
+
+  const doors = useMemo(
+    () => ({
+      ...paneDoors,
+      thread: { replies: view.threads, open: openThread, onOpen: setOpenThread },
+    }),
+    [paneDoors, view.threads, openThread],
   );
 
   const boxOpen = boxTakesWords({
@@ -871,7 +920,7 @@ export function ManagerChatTab({
         {standing.working ? (
           <ChatWorking
             words={workingWords}
-            face={agent.face}
+            manager={manager}
             work={
               view.live.length === 0 ? null : (
                 <TurnWorkRows parts={view.live} moving delegation={delegation} />
@@ -901,22 +950,16 @@ export function ManagerChatTab({
       </>
     );
 
-  /** One row of the log, as its kind draws it. */
-  const drawRow = (row: ChatRow): ReactNode => {
-    if (row.kind === CHAT_ROW.GREETING)
-      return <ManagerGreeting manager={manager} words={row.words} />;
-
-    if (row.kind === CHAT_ROW.SENDING) return <SendingLine line={row.line} />;
-    const { line } = row;
-
+  /** One message of the chat, as its sender draws it, reading `drawn`'s doors: the chat's, or a thread pane's. */
+  const drawLine = (line: ManagerChatLine, drawn: ChatDoors): ReactNode => {
     if (line.message.authorKind !== MANAGER_CHAT_AUTHOR.AGENT) {
-      return <PersonMessage line={line} doors={doors} />;
+      return <PersonMessage line={line} doors={drawn} />;
     }
 
     return (
       <ManagerMessage
         line={line}
-        doors={doors}
+        doors={drawn}
         work={
           line.work === undefined
             ? null
@@ -934,6 +977,78 @@ export function ManagerChatTab({
       />
     );
   };
+
+  /** One row of the log, as its kind draws it. */
+  const drawRow = (row: ChatRow): ReactNode => {
+    if (row.kind === CHAT_ROW.GREETING)
+      return <ManagerGreeting manager={manager} words={row.words} />;
+
+    if (row.kind === CHAT_ROW.SENDING) return <SendingLine line={row.line} readerId={control.me} />;
+
+    return drawLine(row.line, doors);
+  };
+
+  // The open thread, where its root stands among the messages read: its root, its replies, and the reader's replies on their way.
+  const rootLine =
+    openThread === undefined
+      ? undefined
+      : view.messages.find(
+          (line) => line.message.id === openThread && line.message.threadRoot === null,
+        );
+
+  // Note that a thread's box sends words alone, so a reply on its way stands as its words, marked where it did not go.
+  const threadSending = useMemo(
+    () =>
+      (chat?.sending ?? NONE_SENDING)
+        .filter((message) => message.threadRoot === openThread)
+        .map(
+          (message): SentLine => ({
+            id: message.clientKey,
+            clientKey: message.clientKey,
+            text: message.text,
+            attachments: [],
+            steers: false,
+            sentAt: message.sentAt,
+            state:
+              message.refused === undefined ? SENT_LINE_STATE.PENDING : SENT_LINE_STATE.UNDELIVERED,
+          }),
+        ),
+    [chat?.sending, openThread],
+  );
+
+  /** Sends the reader's words to the chat as a reply in the open thread. */
+  const sendInThread = (root: string) => (text: string) => {
+    void sendChat({
+      agentId: agent.id,
+      text,
+      clientKey: crypto.randomUUID(),
+      threadRoot: root,
+    } satisfies AgentChatSendParams);
+  };
+
+  const threadReplies = rootLine === undefined ? [] : (view.threads.get(rootLine.message.id) ?? []);
+
+  const threadPane =
+    rootLine === undefined ? null : (
+      <ManagerThreadPane
+        rootKey={rootLine.message.id}
+        // Note that the root stands alone in the pane, under its sender's name.
+        root={drawLine({ ...rootLine, place: { opens: true, closes: true } }, paneDoors)}
+        count={threadReplies.length}
+        replies={
+          <>
+            {threadReplies.map((line) => (
+              <Fragment key={line.message.id}>{drawLine(line, paneDoors)}</Fragment>
+            ))}
+            {threadSending.map((line) => (
+              <SendingLine key={line.id} line={line} readerId={control.me} />
+            ))}
+          </>
+        }
+        onSend={boxOpen ? sendInThread(rootLine.message.id) : undefined}
+        onClose={() => setOpenThread(undefined)}
+      />
+    );
 
   const log = (() => {
     if (read.isError) {
@@ -986,32 +1101,34 @@ export function ManagerChatTab({
         <UndeliveredLines value={marks}>
           <RewindProvider value={rewind}>
             <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
-              {log}
+              <ChannelSplit pane={threadPane}>
+                {log}
+                <AgentTabFoot>
+                  <ThreadsDock threads={threads} />
+                  <AgentComposerDock
+                    agent={agent}
+                    box={box}
+                    composer={composer}
+                    transcript={transcript}
+                    approvalsWaiting={approvals.waiting}
+                    onStop={() => control.onStop(agent.id)}
+                    onUnarchive={unarchive}
+                    continuedNote={continuedNote}
+                    cards={cards}
+                    keywords={control.keywords}
+                    skills={control.readSkills}
+                    replyDoor={replyDoor}
+                    closedRemedy={closedRemedy}
+                    onMoveToCloud={moveToCloud}
+                    queue={{ controls: true, working: standing.working, editing: queueEditing }}
+                    place={{ owner: undefined, route: callRoute, pictures, computerApps }}
+                  />
+                </AgentTabFoot>
+              </ChannelSplit>
             </ReplyDoorProvider>
           </RewindProvider>
         </UndeliveredLines>
       </AgentPicturesProvider>
-      <AgentTabFoot>
-        <ThreadsDock threads={threads} />
-        <AgentComposerDock
-          agent={agent}
-          box={box}
-          composer={composer}
-          transcript={transcript}
-          approvalsWaiting={approvals.waiting}
-          onStop={() => control.onStop(agent.id)}
-          onUnarchive={unarchive}
-          continuedNote={continuedNote}
-          cards={cards}
-          keywords={control.keywords}
-          skills={control.readSkills}
-          replyDoor={replyDoor}
-          closedRemedy={closedRemedy}
-          onMoveToCloud={moveToCloud}
-          queue={{ controls: true, working: standing.working, editing: queueEditing }}
-          place={{ owner: undefined, route: callRoute, pictures, computerApps }}
-        />
-      </AgentTabFoot>
       {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
     </AgentTabFrame>
   );

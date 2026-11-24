@@ -1003,7 +1003,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
-    "tools/list words a Manager's post_thread for a decision or a to-do alone, and a Manager with no Inbox is told of no thread by send_to_user",
+    "tools/list words a Manager's post_thread for a decision or a to-do alone, and a Manager with no Inbox is told of no Inbox thread by send_to_user",
     () =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -1030,7 +1030,8 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         yield* writeAccountPreferences(agent.userId, { inbox: false });
         const sending = yield* described("send_to_user");
-        assert.ok(sending.length > 0 && !sending.includes("thread"), sending);
+        // Note that a chat's own threads are told of all the same, never an Inbox thread.
+        assert.ok(sending.length > 0 && !sending.includes("Inbox thread"), sending);
       }),
   );
 

@@ -2,12 +2,13 @@
  * manager-chat-view.ts -- a Manager's chat as a page draws it from its rows: its messages oldest first, each placed in its sender's run, and the work of each of the Manager's turns a press away.
  *
  * A Manager's chat is its own rows (`manager-chat-live.ts`), which a page
- * reads newest first and draws oldest first, as a chat app does. Every row
- * stands in its `seq`'s place, a reply among them, until a thread view
- * stands. Consecutive messages of one sender, the Manager or one person,
- * none further from the one before than `CHAT_RUN_GAP_MS`, are one run,
- * which a page draws close together with one time under its last
- * (`ChatRunPlace`).
+ * reads newest first and draws oldest first, as a team channel does. The
+ * chat's top holds each message that is no reply, and each reply posted to
+ * the chat too (`broadcast`); every reply stands in its root's thread,
+ * which a page opens beside the chat (`threads`). Consecutive messages of
+ * one sender, the Manager or one person, none further from the one before
+ * than `CHAT_RUN_GAP_MS`, are one run, within the chat's top or within one
+ * thread, which a page draws under one head (`ChatRunPlace`).
  *
  * The chat is the conversation; what the Manager did to say it is its
  * transcript, the work under it, and the two meet only by turn: each of the
@@ -45,9 +46,10 @@ export interface ManagerChatLine {
   readonly work?: string;
 }
 
-/** A Manager's chat as a page draws it: its messages oldest first, each turn's work by the turn's id, and the turn under way's work. */
+/** A Manager's chat as a page draws it: the messages at its top oldest first, each thread's replies oldest first by its root's id, each turn's work by the turn's id, and the turn under way's work. */
 export interface ManagerChatView {
   readonly messages: readonly ManagerChatLine[];
+  readonly threads: ReadonlyMap<string, readonly ManagerChatLine[]>;
   readonly work: ReadonlyMap<string, readonly AgentPart[]>;
   /** The turn under way's work so far, which its working line opens; none where no turn is under way or it has done none. */
   readonly live: readonly AgentPart[];
@@ -118,20 +120,32 @@ export function managerChatView(
     if (!firstOfTurn.has(message.turnId)) firstOfTurn.set(message.turnId, message);
   }
 
-  const messages = ordered.map((message, index): ManagerChatLine => {
-    const before = ordered[index - 1];
-    const after = ordered[index + 1];
+  /** A run of messages as lines, each placed in its sender's run within it, and the first of each turn that did work opening it. */
+  const linesOf = (run: readonly ManagerChatLiveMessage[]) =>
+    run.map((message, index): ManagerChatLine => {
+      const before = run[index - 1];
+      const after = run[index + 1];
 
-    const place = {
-      opens: before === undefined || !continuesRun(before, message),
-      closes: after === undefined || !continuesRun(message, after),
-    };
+      const place = {
+        opens: before === undefined || !continuesRun(before, message),
+        closes: after === undefined || !continuesRun(message, after),
+      };
 
-    const turn = message.turnId;
-    const opener = turn !== null && firstOfTurn.get(turn) === message && work.has(turn);
+      const turn = message.turnId;
+      const opener = turn !== null && firstOfTurn.get(turn) === message && work.has(turn);
 
-    return opener ? { message, place, work: turn } : { message, place };
-  });
+      return opener ? { message, place, work: turn } : { message, place };
+    });
 
-  return { messages, work, live };
+  const top = ordered.filter((message) => message.threadRoot === null || message.broadcast);
+  const replies = new Map<string, ManagerChatLiveMessage[]>();
+
+  for (const message of ordered) {
+    if (message.threadRoot === null) continue;
+    replies.set(message.threadRoot, [...(replies.get(message.threadRoot) ?? []), message]);
+  }
+
+  const threads = new Map([...replies].map(([root, thread]) => [root, linesOf(thread)]));
+
+  return { messages: linesOf(top), threads, work, live };
 }

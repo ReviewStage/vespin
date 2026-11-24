@@ -1,0 +1,60 @@
+{
+  "type": "object",
+  "properties": {
+    "keywords": {
+      "type": "string",
+      "description": "Words every result holds, in any case."
+    },
+    "filters": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "Only messages from this person, by name, or `me` for yours."
+        },
+        "before": {
+          "type": "string",
+          "description": "Only messages sent before this time, in ISO 8601."
+        },
+        "after": {
+          "type": "string",
+          "description": "Only messages sent after this time, in ISO 8601."
+        },
+        "is_thread": {
+          "type": "boolean",
+          "description": "true for thread replies alone, false for none."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "description": "How many messages to return, 1 to 100; 20 where left out."
+    },
+    "cursor": {
+      "type": "string",
+      "description": "The next_cursor a previous read returned, for its next page."
+    },
+    "sort": {
+      "type": "string",
+      "enum": [
+        "score",
+        "timestamp"
+      ],
+      "description": "`score` (the default) for the best matches first, or `timestamp` for the newest first."
+    },
+    "response_format": {
+      "type": "string",
+      "enum": [
+        "detailed",
+        "concise"
+      ],
+      "description": "`detailed` (the default) for times and thread info, or `concise` for ids, senders, and words alone."
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

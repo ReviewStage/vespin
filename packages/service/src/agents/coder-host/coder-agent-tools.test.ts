@@ -227,6 +227,11 @@ import {
 } from "./agent-message.js";
 import { CODER_REFUSAL } from "./bounds.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
+import {
+  READ_CHAT_MESSAGES_TOOL,
+  READ_CHAT_THREAD_TOOL,
+  SEARCH_CHAT_TOOL,
+} from "./manager-chat-tools.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { NativeAgentSessions } from "./runtime-sessions.js";
@@ -1930,6 +1935,20 @@ test("message_agent shows the model the recorded input", async () => {
 
 test("send_to_user shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "send-to-user-input", SEND_TO_USER_TOOL.inputSchema);
+});
+
+test("a Manager's chat reads show the model the recorded inputs", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "read-chat-messages-input",
+    READ_CHAT_MESSAGES_TOOL.inputSchema,
+  );
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "read-chat-thread-input",
+    READ_CHAT_THREAD_TOOL.inputSchema,
+  );
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "search-chat-input", SEARCH_CHAT_TOOL.inputSchema);
 });
 
 test("send_slack_message shows the model the recorded input", async () => {

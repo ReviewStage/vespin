@@ -123,11 +123,14 @@ async function drawChat(
   // Each message's files as the box sent them to the chat, by their names.
   const carried: (readonly string[])[] = [];
   const answered: ApprovalAnswerRequest[] = [];
+  // The thread each message to the chat replied in, by its root, null for one at the chat's top.
+  const threads: (string | null)[] = [];
 
   fakeActs({
     act: (request) => {
       if (request.kind === ACT_KIND.AGENTS_CHAT_SEND) {
         sent.push(request.payload.text);
+        threads.push(request.payload.threadRoot ?? null);
         carried.push((request.payload.attachments ?? []).map((file) => file.name));
       }
 
@@ -184,31 +187,58 @@ async function drawChat(
   });
   await settleQueries();
 
-  return { container, sent, carried, answered };
+  return { container, sent, carried, answered, threads };
 }
 
-test("the reader's message stands at the right, and a teammate's and the Manager's at the left, each named over their run, each message on a bubble of its own", async () => {
-  const { container } = await drawChat([
+test("each message is a row under its sender's name where their run opens, a thread's replies stand under its message as a count that opens the thread, and the thread's box replies in it", async () => {
+  const { container, sent, threads } = await drawChat([
     row("dean", 1, "Ship the invite flow.", DEAN),
     row("charles", 2, "Seven days.", CHARLES),
     row("charles-more", 3, "Not five.", CHARLES),
     row("first", 4, "On it."),
-    row("second", 5, "Seven days it is."),
+    { ...row("asked", 5, "Which repo?", CHARLES), threadRoot: "first" },
+    { ...row("answered", 6, "The web app's."), threadRoot: "first" },
   ]);
 
-  const drawn = [...container.querySelectorAll("[data-message-id]")].map((message) => [
-    message.classList.contains("is-user") ? "right" : "left",
-    message.querySelector(".ui-chat-bubble")?.textContent ?? "",
-    message.querySelector(".ui-message-head-sender")?.textContent?.trim() ?? null,
+  /** Each row a scope draws: its sender's name where its run opens, and its words. */
+  const rowsIn = (scope: Element) =>
+    [...scope.querySelectorAll(".ui-channel-message")]
+      .filter((drawn) => drawn.closest("[data-manager-greeting]") === null)
+      .map((drawn) => [
+        drawn.querySelector(".ui-channel-message-head > span")?.textContent?.trim() ?? null,
+        drawn.querySelector(".ui-channel-message-words")?.textContent ?? "",
+      ]);
+
+  assert.deepEqual(rowsIn(container), [
+    [DEAN.name, "Ship the invite flow."],
+    [CHARLES.name, "Seven days."],
+    [null, "Not five."],
+    ["Iris", "On it."],
   ]);
 
-  assert.deepEqual(drawn, [
-    ["right", "Ship the invite flow.", null],
-    ["left", "Seven days.", CHARLES.name],
-    ["left", "Not five.", null],
-    ["left", "On it.", "Iris"],
-    ["left", "Seven days it is.", null],
+  const count = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent?.endsWith("2 replies") === true,
+  );
+
+  assert.ok(count, "the Manager's message says how many replies its thread holds");
+  act(() => count.click());
+  await settleQueries();
+
+  const pane =
+    container.querySelector('aside[aria-label="Thread"]') ?? assert.fail("the thread's pane opens");
+
+  assert.deepEqual(rowsIn(pane), [
+    ["Iris", "On it."],
+    [CHARLES.name, "Which repo?"],
+    ["Iris", "The web app's."],
   ]);
+
+  typeInComposer(pane, "And the nightly?");
+  pressInComposer(pane, "Enter");
+  await settleQueries();
+
+  assert.deepEqual(sent, ["And the nightly?"]);
+  assert.deepEqual(threads, ["first"]);
 });
 
 test("an ended turn's work stands folded over the Manager's first message of the turn, saying how long the turn worked, and opens onto its calls", async () => {
