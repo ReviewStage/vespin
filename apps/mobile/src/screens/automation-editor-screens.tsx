@@ -132,11 +132,15 @@ import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  type EditorParams,
+  type EditorPicked,
+  FIRST_RUN_AGENT,
   PROMPT_ROUTE,
-  RUNS_AGENT_ROUTE,
+  pickedRoute,
+  runsAgentRoute,
   timeZoneRoute,
 } from "../automations/automation-editor-route.js";
-import { EDITOR_PICK, useEditorPick, useEditorPicked } from "../automations/editor-pick.js";
+import { usePromptPick, usePromptPicked } from "../automations/prompt-pick.js";
 import {
   useWorkspaceAutomations,
   useWorkspaceIntegrations,
@@ -174,9 +178,6 @@ const NO_REPOSITORY_ID = "none";
 
 /** How many of a schedule's next runs its footer names. */
 const NEXT_RUNS_SHOWN = 3;
-
-/** The agent picker's choice of the one its first run starts. Note that no agent's id is this word, so it never names one. */
-const FIRST_RUN_ID = "first-run";
 
 /** What the MCP servers' section says where the editor has no word of the desktop's to share. */
 const SERVER_WORDS = {
@@ -314,9 +315,11 @@ function EditorBar({
  */
 function ScheduleRows({
   draft,
+  editorParams,
   onSchedule,
 }: {
   readonly draft: AutomationDraft;
+  readonly editorParams: EditorParams;
   readonly onSchedule: (schedule: ScheduleDraft) => void;
 }) {
   const router = useRouter();
@@ -392,7 +395,7 @@ function ScheduleRows({
         label={AUTOMATION_EDITOR_WORDS.TIME_ZONE}
         detail={zoneLabel(draft.timezone)}
         goes={PUSH_ROW_GOES.PAGE}
-        onPress={() => router.push(timeZoneRoute(draft.timezone))}
+        onPress={() => router.push(timeZoneRoute(draft.timezone, editorParams))}
       />
     </>
   );
@@ -684,9 +687,11 @@ function runsAgentLabel(
 function RunsAgentRow({
   agentId,
   workspaceId,
+  editorParams,
 }: {
   readonly agentId: string | null;
   readonly workspaceId: string;
+  readonly editorParams: EditorParams;
 }) {
   const router = useRouter();
   const listed = useWorkspaceAgents(workspaceId);
@@ -696,7 +701,7 @@ function RunsAgentRow({
       label={RUNS_AGENT_WORDS.AGENT}
       detail={runsAgentLabel(agentId, listed)}
       goes={PUSH_ROW_GOES.PAGE}
-      onPress={() => router.push(RUNS_AGENT_ROUTE)}
+      onPress={() => router.push(runsAgentRoute(agentId, workspaceId, editorParams))}
     />
   );
 }
@@ -886,7 +891,13 @@ function EditorForm({
   preset,
   workspace,
   offersOwner,
+  editorParams,
+  picked,
 }: {
+  /** The editor's own route params, which a page pushed over it carries back. */
+  readonly editorParams: EditorParams;
+  /** What a page pushed over it handed back on its params. */
+  readonly picked: EditorPicked;
   readonly automation: AutomationSummary | undefined;
   /** The suggestion a new automation starts filled in from, which it keeps so the list suggests it no more; none for a blank one or an Edit. */
   readonly preset: AutomationPresetName | undefined;
@@ -930,28 +941,25 @@ function EditorForm({
     setDraft((was) => (was.repository === null ? { ...was, repository } : was));
   }, [seeded, repositories.picked]);
 
-  // What the pages pushed over the editor edit: its zone, its prompt, and the agent its runs go to, each handed back as it is picked or typed.
+  // The prompt's page is lent the prompt and hands it back as it is typed (`prompt-pick.tsx`).
   const lent = useMemo(
-    () => ({ prompt: draft.prompt, agentId: draft.agentId, workspaceId: workspace.id }),
-    [draft.prompt, draft.agentId, workspace.id],
+    () => ({ prompt: draft.prompt, workspaceId: workspace.id }),
+    [draft.prompt, workspace.id],
   );
 
-  useEditorPicked((pick) => {
-    switch (pick.kind) {
-      case EDITOR_PICK.ZONE:
-        edit({ timezone: pick.zone });
+  usePromptPicked((prompt) => edit({ prompt }), lent);
 
-        return;
-      case EDITOR_PICK.PROMPT:
-        edit({ prompt: pick.prompt });
+  // A time zone or an agent picked on a page pushed over the editor comes back on the editor's own params, as expo-router hands a route back its params (`pickedRoute`), and is laid on the draft as it lands.
+  useEffect(() => {
+    if (picked.zone !== undefined)
+      setDraft((was) => ({ ...was, timezone: picked.zone ?? was.timezone }));
+  }, [picked.zone]);
 
-        return;
-      case EDITOR_PICK.AGENT:
-        edit({ agentId: pick.agentId });
-
-        return;
-    }
-  }, lent);
+  useEffect(() => {
+    if (picked.agent === undefined) return;
+    const agentId = picked.agent === FIRST_RUN_AGENT ? null : picked.agent;
+    setDraft((was) => ({ ...was, agentId }));
+  }, [picked.agent]);
 
   const saved = automation === undefined ? undefined : automationDraft(automation, defaults);
   const written = !sameDraft(draft, saved ?? start);
@@ -1151,7 +1159,11 @@ function EditorForm({
               />
             ) : null}
             {scheduled ? (
-              <ScheduleRows draft={draft} onSchedule={(schedule) => edit({ schedule })} />
+              <ScheduleRows
+                draft={draft}
+                editorParams={editorParams}
+                onSchedule={(schedule) => edit({ schedule })}
+              />
             ) : github ? (
               <GitHubRows
                 event={draft.githubEvent}
@@ -1245,7 +1257,11 @@ function EditorForm({
               }
             />
             {draft.target === AUTOMATION_TARGET.SAME_AGENT ? (
-              <RunsAgentRow agentId={draft.agentId} workspaceId={workspace.id} />
+              <RunsAgentRow
+                agentId={draft.agentId}
+                workspaceId={workspace.id}
+                editorParams={editorParams}
+              />
             ) : (
               <>
                 <ModelRows choice={draft.choice} onChoice={(choice) => edit({ choice })} />
@@ -1285,9 +1301,16 @@ function EditorForm({
  * they are read, where they could not be, and where the automation is gone.
  */
 export function AutomationEditorScreen() {
-  const { automation: automationId, preset: presetParam } = useLocalSearchParams<{
+  const {
+    automation: automationId,
+    preset: presetParam,
+    zone: pickedZone,
+    agent: pickedAgent,
+  } = useLocalSearchParams<{
     automation?: string;
     preset?: string;
+    zone?: string;
+    agent?: string;
   }>();
 
   // Note that a route's params may come from any link, so only a preset this build knows is taken.
@@ -1334,6 +1357,8 @@ export function AutomationEditorScreen() {
       preset={automationId === undefined ? preset : undefined}
       workspace={workspace}
       offersOwner={offersOwner}
+      editorParams={{ automation: automationId, preset: presetParam }}
+      picked={{ zone: pickedZone, agent: pickedAgent }}
     />
   );
 }
@@ -1344,10 +1369,17 @@ export function AutomationEditorScreen() {
  * bar's field. A pick hands the zone to the editor under it and goes back.
  */
 export function TimeZoneScreen() {
-  const { zone = "" } = useLocalSearchParams<{ zone?: string }>();
+  const {
+    zone = "",
+    automation,
+    preset,
+  } = useLocalSearchParams<{
+    zone?: string;
+    automation?: string;
+    preset?: string;
+  }>();
+
   const router = useRouter();
-  const { pick: pickFor } = useEditorPick();
-  const pick = (zone: string) => pickFor({ kind: EDITOR_PICK.ZONE, zone });
   const [query, setQuery] = useState("");
 
   const [zones] = useState(() => {
@@ -1381,10 +1413,9 @@ export function TimeZoneScreen() {
               <PickRows
                 options={found.map((each) => ({ id: each, label: zoneLabel(each) }))}
                 picked={zone}
-                onPick={(picked) => {
-                  pick(picked);
-                  router.back();
-                }}
+                onPick={(picked) =>
+                  router.dismissTo(pickedRoute({ automation, preset }, { zone: picked }))
+                }
               />
             </ListSection>
           </SettingsForm>
@@ -1405,7 +1436,7 @@ const PROMPT_TITLE = "Prompt";
  * under it as it is typed, so Back keeps it.
  */
 export function PromptScreen() {
-  const { pick, lent } = useEditorPick();
+  const { write, lent } = usePromptPick();
   const [prompt, setPrompt] = useState(lent?.prompt ?? "");
   const field = useRef<DocumentFieldHandle>(null);
   const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
@@ -1427,7 +1458,7 @@ export function PromptScreen() {
         value={prompt}
         onChange={(words) => {
           setPrompt(words);
-          pick({ kind: EDITOR_PICK.PROMPT, prompt: words });
+          write(words);
         }}
         placeholder={AUTOMATION_EDITOR_WORDS.PROMPT_PLACEHOLDER}
         onAtWord={setAtWord}
@@ -1456,14 +1487,26 @@ export function PromptScreen() {
  */
 export function RunsAgentScreen() {
   const router = useRouter();
-  const { pick, lent } = useEditorPick();
-  const listed = useWorkspaceAgents(lent?.workspaceId ?? "");
+
+  const {
+    agent = FIRST_RUN_AGENT,
+    workspace = "",
+    automation,
+    preset,
+  } = useLocalSearchParams<{
+    agent?: string;
+    workspace?: string;
+    automation?: string;
+    preset?: string;
+  }>();
+
+  const listed = useWorkspaceAgents(workspace);
   const [query, setQuery] = useState("");
-  const picked = lent?.agentId ?? null;
+  const picked = agent === FIRST_RUN_AGENT ? null : agent;
   const tokens = searchTokens(query);
 
   const options = [
-    { id: FIRST_RUN_ID, label: RUNS_AGENT_WORDS.FIRST_RUN },
+    { id: FIRST_RUN_AGENT, label: RUNS_AGENT_WORDS.FIRST_RUN },
     ...(picked === null || listed.some((option) => option.id === picked)
       ? []
       : [{ id: picked, label: RUNS_AGENT_WORDS.NO_LONGER_LISTED }]),
@@ -1487,11 +1530,10 @@ export function RunsAgentScreen() {
             <ListSection>
               <PickRows
                 options={options}
-                picked={picked ?? FIRST_RUN_ID}
-                onPick={(id) => {
-                  pick({ kind: EDITOR_PICK.AGENT, agentId: id === FIRST_RUN_ID ? null : id });
-                  router.back();
-                }}
+                picked={picked ?? FIRST_RUN_AGENT}
+                onPick={(id) =>
+                  router.dismissTo(pickedRoute({ automation, preset }, { agent: id }))
+                }
               />
             </ListSection>
           </SettingsForm>
