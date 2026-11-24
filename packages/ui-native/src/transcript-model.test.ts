@@ -138,7 +138,7 @@ describe("transcriptItems", () => {
     expect(shownMediaIds(items)).toContain("mail-icon");
   });
 
-  it("draws the pictures a line carried over its words, one kept apart read by its id, and its other files as chips under them", () => {
+  it("draws the pictures a line carried over its words, one its words name where they name it, one kept apart read by its id, and its other files as chips under them", () => {
     const shot = "data:image/png;base64,iVBORw0KGgo=";
 
     const items = transcriptItems(
@@ -147,7 +147,7 @@ describe("transcriptItems", () => {
           id: "sent",
           role: MESSAGE_ROLE.USER,
           parts: [
-            { type: "text", text: "The button is cut off." },
+            { type: "text", text: "The button is cut off in [Picture 1]." },
             { type: "file", mediaType: "image/png", filename: "bug.png", url: shot },
             {
               type: "file",
@@ -165,7 +165,7 @@ describe("transcriptItems", () => {
             {
               type: "file",
               mediaType: "image/png",
-              filename: "kept.png",
+              filename: "Picture 1",
               url: "data:image/png;base64,",
               providerMetadata: { app: { attachmentId: "picture-9" } },
             },
@@ -177,17 +177,18 @@ describe("transcriptItems", () => {
 
     expect(items[0]).toMatchObject({
       kind: TRANSCRIPT_ITEM.SAID,
-      words: "The button is cut off.",
-      pictures: [
-        { name: "bug.png", url: shot, pictureId: undefined },
-        { name: "kept.png", url: undefined, pictureId: "picture-9" },
-      ],
+      words: "The button is cut off in [Picture 1].",
+      pictures: [{ name: "bug.png", url: shot, pictureId: undefined }],
+      wordPictures: new Map([
+        ["Picture 1", { key: "4", name: "Picture 1", url: undefined, pictureId: "picture-9" }],
+      ]),
       files: [
         { name: "notes.md", base64: "YQpiCg==", size: "2 lines" },
         { name: "plan.pdf", base64: undefined, size: undefined },
         { name: "broken.txt", base64: "%%%" },
       ],
     });
+    expect(shownMediaIds(items)).toEqual(["picture-9"]);
   });
 
   it("keeps each line's files apart where two lines reach one turn while it runs", () => {
