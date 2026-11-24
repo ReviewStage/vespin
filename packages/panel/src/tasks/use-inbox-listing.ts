@@ -114,7 +114,7 @@ export function choiceOf({ holder, item }: InboxListed): InboxChoice {
  * on no task by its id alone, opened, as a link to it stands it
  * (`inbox-route.ts`'s `choiceAt`), so the address names it the same way.
  */
-function anyChoiceOf(listed: InboxListed<InboxAnyHolder>): InboxChoice {
+export function anyChoiceOf(listed: InboxListed<InboxAnyHolder>): InboxChoice {
   const held = onTask(listed);
 
   return held === undefined ? { itemId: listed.item.id, opened: true } : choiceOf(held);
