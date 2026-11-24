@@ -314,6 +314,8 @@ const LIVE_ACTIVITY: AppExtension = {
     { FROM: "modules/live-activity/ios", NAME: "CallActivityAttributes.swift" },
     { FROM: "live-activity", NAME: "InboxWidget.swift" },
     INBOX_WIDGET_SNAPSHOT,
+    { FROM: "live-activity", NAME: "NewTaskControl.swift" },
+    START_TASK_INTENT,
   ],
   EXTENSION_POINT: "com.apple.widgetkit-extension",
   COLORS: {
@@ -337,6 +339,7 @@ const LIVE_ACTIVITY: AppExtension = {
     "Volume2",
     "VolumeOff",
     "PhoneOff",
+    "SquarePen",
   ],
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
