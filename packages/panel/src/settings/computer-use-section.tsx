@@ -4,6 +4,7 @@ import type { ComputerUseStatus } from "@repo/host/contract";
 import { AccessibilityIcon, ScreenRecordingIcon } from "@repo/ui";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { actFailureWords, askAct } from "../act.js";
+import { pressMutation } from "../act-mutations.js";
 import { refusalShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { PERMISSION_STANDING, PermissionRow } from "./permission-row.js";
@@ -16,8 +17,10 @@ import type { SettingRefusal } from "./row-write.js";
  * app's window and Accessibility to click and type in it, each say whether
  * they stand; one that does not offers Allow, which opens its System
  * Settings pane beside a panel holding the app to drag into the list, as only
- * macOS may grant them. They are read every second while shown, since the
- * developer grants and takes them back in System Settings. The switch that
+ * macOS may grant them, and one that does holds Open System Settings under
+ * its ⋯, opening that pane alone, where it is taken back. They are read
+ * every second while shown, since the developer grants and takes them back
+ * in System Settings. The switch that
  * lets agents use apps, and the apps they use without asking, stand under
  * this Mac on Settings › Machines.
  */
@@ -59,9 +62,9 @@ const COMPUTER_USE_GRANTS = [
 /**
  * The two grants as This Mac's Permissions lists them, each as every
  * permission reads (`PermissionRow`): Allow… opens the pane, and the panel
- * to drag the app from, for the first one still missing, read again as it
- * answers and every second while shown, and an ask that never reached macOS
- * says why under that row.
+ * to drag the app from, for the first one still missing, an allowed one's ⋯
+ * opens its own pane, each read again as it answers and every second while
+ * shown, and an ask that never reached macOS says why under that row.
  */
 export function ComputerUsePermissionRows(): React.JSX.Element | null {
   const queries = useQueryClient();
@@ -71,6 +74,19 @@ export function ComputerUsePermissionRows(): React.JSX.Element | null {
     mutationFn: () => askAct(ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS, {}),
     onSettled: () => queries.invalidateQueries({ queryKey: computerUseStatusQuery.queryKey }),
   });
+
+  const { mutate: openScreenRecordingSettings } = useMutation(
+    pressMutation(ACT_KIND.SCREEN_RECORDING_OPEN_SETTINGS),
+  );
+
+  const { mutate: openAccessibilitySettings } = useMutation(
+    pressMutation(ACT_KIND.ACCESSIBILITY_OPEN_SETTINGS),
+  );
+
+  const openSettings = {
+    screenRecording: () => openScreenRecordingSettings(),
+    accessibility: () => openAccessibilitySettings(),
+  } as const satisfies Record<(typeof COMPUTER_USE_GRANTS)[number]["key"], () => void>;
 
   // Note that only a request that did not reach macOS is said here: a grant macOS was asked for stands as the developer leaves it in System Settings, which the status read says.
   const askRefused: SettingRefusal | undefined =
@@ -98,6 +114,7 @@ export function ComputerUsePermissionRows(): React.JSX.Element | null {
               ? refusalShown(askRefused, FAILURE_SURFACE.COMPUTER_USE_PERMISSIONS)
               : undefined
           }
+          onOpenSettings={openSettings[grant.key]}
           onAllow={() =>
             asking.mutateAsync().then(
               () => undefined,

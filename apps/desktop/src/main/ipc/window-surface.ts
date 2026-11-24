@@ -152,6 +152,22 @@ export function windowSurfaceProcedures(
         "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
       ),
     ),
+    // Privacy & Security's Screen Recording pane, where the grant that lets agents see an app's window is changed.
+    [WINDOW_SURFACE_ACT_KIND.SCREEN_RECORDING_OPEN_SETTINGS]: surfacePort[
+      WINDOW_SURFACE_ACT_KIND.SCREEN_RECORDING_OPEN_SETTINGS
+    ].handler(() =>
+      dependencies.openExternal(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+      ),
+    ),
+    // Privacy & Security's Accessibility pane, where the grant that lets agents click and type in an app is changed.
+    [WINDOW_SURFACE_ACT_KIND.ACCESSIBILITY_OPEN_SETTINGS]: surfacePort[
+      WINDOW_SURFACE_ACT_KIND.ACCESSIBILITY_OPEN_SETTINGS
+    ].handler(() =>
+      dependencies.openExternal(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+      ),
+    ),
     // Login Items, where the member allows the host's agent that macOS holds for them, opened the one way Apple names.
     [WINDOW_SURFACE_ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS

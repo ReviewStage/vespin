@@ -226,6 +226,8 @@ it("words are copied, a mail and the settings opened, and feedback carried", asy
   });
   await port.call(panel, KIND.CONTACT_EMAIL);
   await port.call(panel, KIND.NOTIFICATIONS_OPEN_SETTINGS);
+  await port.call(panel, KIND.SCREEN_RECORDING_OPEN_SETTINGS);
+  await port.call(panel, KIND.ACCESSIBILITY_OPEN_SETTINGS);
   assert.deepEqual(await port.call(panel, KIND.FEEDBACK_SEND, { submission: SUBMISSION }), {
     answer: { delivered: true },
   });
@@ -233,6 +235,8 @@ it("words are copied, a mail and the settings opened, and feedback carried", asy
     "copy:",
     "open:mailto:founders@vespin.dev",
     "open:x-apple.systempreferences:com.apple.Notifications-Settings.extension",
+    "open:x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+    "open:x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
     "feedback:The panel is lovely.",
   ]);
 });
