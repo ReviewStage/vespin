@@ -1209,7 +1209,7 @@ function ListHead({
 
   return (
     <>
-      <Toolbar />
+      {head.bare === true ? null : <Toolbar />}
       <ReplayUnmask>
         <VisuallyHidden as={VISUALLY_HIDDEN_ELEMENT.H1}>{title}</VisuallyHidden>
       </ReplayUnmask>
@@ -1408,6 +1408,13 @@ export interface InboxListHead {
    * its search under where the head stood.
    */
   readonly tab?: boolean | undefined;
+  /**
+   * Whether the list stands under a tab row that already names it, as a
+   * Manager's Inbox tab does (`agent-threads.tsx`): its name is heard
+   * rather than drawn, no bar stands over it, and its head row holds only
+   * the selection's controls while rows are chosen.
+   */
+  readonly bare?: boolean | undefined;
   /** Copy link, the open item's, which a task's own Inbox tab hands its ⋯ first (`useTabActions`); none while no item is open, since a link names no task's Inbox whole. */
   readonly link?: MenuAction | undefined;
   /** The task the window's Inbox is narrowed to, which a chip over the list names and clears; none where it lists every task's items. */

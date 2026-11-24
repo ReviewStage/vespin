@@ -24,7 +24,7 @@ import {
 } from "../tasks/inbox-columns.js";
 import { InboxList, InboxListNote, InboxPaneEmpty } from "../tasks/inbox-list.js";
 import { useInboxPager } from "../tasks/inbox-pager.js";
-import { InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
+import { INBOX_PANE_ACTIONS, InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
 import { type AgentsSource, useTaskAgents } from "../tasks/use-agents.js";
 import { useHeldInboxList } from "../tasks/use-held-inbox-list.js";
 import { useInboxReadMarks, useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
@@ -57,7 +57,10 @@ import { paneDoors, startedThreads } from "./desktop-inbox.js";
  * (`inbox-columns.ts`). A Manager's page, its agent on no task, draws the
  * same as its Inbox tab (`desktop-agent-page.tsx`), held by the Manager
  * rather than a task, with no way back, since its transcript is a sibling
- * tab rather than the step behind.
+ * tab rather than the step behind: the tab row names the list, so the list
+ * stands with no bar of its own, and the thread's ⋯ stands at its title
+ * (`INBOX_PANE_ACTIONS.SUBJECT`), as the window's Inbox's title starts at
+ * the pane's top.
  *
  * Each agent keeps whether its card shows its threads, and which
  * (`tasks/agent-thread-views.ts`), so going to another agent's tab and back
@@ -195,18 +198,24 @@ export function AgentThreads({
   // Note that the task's page holds its read with its cards' drafts, so the pane takes it whole.
   useNodOnOpen({ shown: opened, readerId: me, control: inbox });
 
-  // Note that a tab's list still heads itself in the card's bar, its title alone, as `null` asks.
-  const back =
-    tabbed === true ? null : (
-      <ReplayUnmask>
-        <BackButton
-          label={TRANSCRIPT.LABEL}
-          place={TRANSCRIPT.PLACE}
-          command={APP_COMMAND.EXIT_AGENT_THREADS}
-          onBack={onBack}
-        />
-      </ReplayUnmask>
-    );
+  // Note that under a tab row, which names the list, the list draws no bar of its own, and the thread's ⋯ stands at its title.
+  const head =
+    tabbed === true
+      ? { shown: active, view: undefined, bare: true }
+      : {
+          shown: active,
+          view: undefined,
+          lead: (
+            <ReplayUnmask>
+              <BackButton
+                label={TRANSCRIPT.LABEL}
+                place={TRANSCRIPT.PLACE}
+                command={APP_COMMAND.EXIT_AGENT_THREADS}
+                onBack={onBack}
+              />
+            </ReplayUnmask>
+          ),
+        };
 
   return (
     <Fill as={FILL_ELEMENT.SECTION} className="agent-threads" data-popover-room="">
@@ -216,7 +225,7 @@ export function AgentThreads({
           chosen={chosen}
           columns={columns.shown}
           rows={columns.rows}
-          head={{ shown: active, view: undefined, lead: back }}
+          head={head}
           models={agents.models}
           readerId={me}
           reading={inbox.reading}
@@ -256,6 +265,7 @@ export function AgentThreads({
             onBack={columns.onBack}
             pager={columns.shown === INBOX_COLUMNS.ITEM ? pager : undefined}
             within
+            actionsAt={tabbed === true ? INBOX_PANE_ACTIONS.SUBJECT : INBOX_PANE_ACTIONS.BAR}
             newThread={
               tasks.signedIn
                 ? startedThreads(agents.startInboxThread, (_item, itemId) => onChoose(itemId))
