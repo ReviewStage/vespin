@@ -15,7 +15,6 @@ import {
   Toolbar,
   ToolbarItem,
   useNativeState,
-  VStack,
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
@@ -715,7 +714,8 @@ export function SidebarColumn({
   const colors = useColors();
 
   return (
-    <Host style={{ flex: 1 }} modifiers={[tint(colors.TEXT)]}>
+    // Note that the sidebar's list takes the brand's accent as its tint, which the system's own selection fills with, rather than the ink the screens take, which drew the selection a black capsule over its words.
+    <Host style={{ flex: 1 }} modifiers={[tint(colors.ACCENT)]}>
       <ZStack alignment="bottom">
         {view}
         {foot === undefined ? null : (

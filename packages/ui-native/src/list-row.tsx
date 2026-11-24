@@ -147,6 +147,9 @@ const ROW_TEST_ID = {
 
 type RowTestId = (typeof ROW_TEST_ID)[keyof typeof ROW_TEST_ID];
 
+/** The system's primary hierarchical style, which a row's title in the system's sidebar list stands in. */
+const PRIMARY_STYLE = { type: "hierarchical", style: "primary" } as const;
+
 /** What parts the pieces of what a row is heard as, as VoiceOver pauses between a label's phrases. */
 const HEARD_PART = ", ";
 
@@ -788,6 +791,7 @@ export function RowHead({
   /** Where given, what the title's whole width and its room on the line are told to, so the row can let marks of its end go before the title is cut. */
   readonly fit?: TitleFit | undefined;
 }) {
+  const system = useContext(RowSystemLookContext);
   const lines = useRowLines();
   const stacked = useAccessibilitySize();
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
@@ -797,7 +801,8 @@ export function RowHead({
       title={title}
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
-        foregroundStyle(ink),
+        // Note that a title in the system's sidebar list stands in the system's primary style, so the sidebar's own selection turns it as it turns its own rows' words.
+        foregroundStyle(system ? PRIMARY_STYLE : ink),
         lineLimit(lines.title),
       ]}
     />
