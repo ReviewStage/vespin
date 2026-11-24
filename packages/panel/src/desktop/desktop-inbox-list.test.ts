@@ -629,7 +629,7 @@ test("each row names its task on its first line with its time at that line's end
   assert.deepEqual(lines(), expected);
 });
 
-test("a thread on no task names its agent on its first line where a task's thread names the task, and its press opens the thread beside the list, led by its agent", async () => {
+test("a thread on no task names its agent on its first line where a task's thread names the task, counts on the sidebar's Inbox as a task's does, and its press opens the thread beside the list, led by its agent", async () => {
   const manager = {
     ...AGENT,
     id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
@@ -646,7 +646,7 @@ test("a thread on no task names its agent on its first line where a task's threa
       title: "Cut the release?",
     },
   ]);
-  const { page, asked } = mount();
+  const { page, asked } = mount({ withSidebar: true });
   await settle();
 
   const lead = (title: string) =>
@@ -655,6 +655,11 @@ test("a thread on no task names its agent on its first line where a task's threa
   assert.deepEqual(
     [lead("Cut the release?"), lead("Alert at 80%?")],
     ["Release manager", "Billing usage alerts"],
+  );
+  assert.equal(
+    sidebarInboxCount(page),
+    4,
+    "the sidebar counts its thread as a task's, beside the three on tasks",
   );
 
   act(() => rowNamed(page, "Cut the release?").click());

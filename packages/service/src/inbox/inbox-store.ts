@@ -1288,11 +1288,13 @@ const findSettledStamps = SqlSchema.findAll({
  * The open items on the tasks of the account's workspaces, whichever
  * member's agent posted each, but those that are their agent's turn
  * (`AGENTS_TURN`), and those the build reading reads none of
- * (`itemServed`): the rows the account's read of what waits names.
+ * (`itemServed`): the rows the account's read of what waits names. Those
+ * on no task, a Manager's, are among them only where `taskless`, for a
+ * build that reads a null task (`tasklessLiveParam`).
  */
-function accountWaiting({ userId, workspaceMachines }: InboxReader) {
+function accountWaiting({ userId, workspaceMachines }: InboxReader, taskless = false) {
   return and(
-    isNotNull(inboxItem.taskId),
+    taskless ? undefined : isNotNull(inboxItem.taskId),
     itemVisibleTo(userId),
     eq(inboxItem.status, INBOX_STATUS.OPEN),
     not(AGENTS_TURN),
@@ -1484,14 +1486,20 @@ const findTasksWithItems = SqlSchema.findAll({
  * column under the key `ACCOUNT_INBOX_READ` declares it by and each instant
  * in epoch milliseconds, so a row decodes as the held read's entry does. The order is the reader's to keep, since Realtime keeps none.
  * The account's failed runs are its binding's own (`../live/reads/account-inbox.ts`).
- * The items of agents with no task, and the automations and agents holding
- * them (`taskless`, `automations`, `agents`), answer no rows, since every
- * agent stands on a task, and stand because a released desktop follows
- * them: each still joins its items' agents and their automations, so its
- * columns read as they did, and takes no row.
+ * An item on no task, a Manager's thread, waits in `items` with a null
+ * task only where `taskless`, the build reading reads one, so the Dock
+ * counts it as a task's; an older build fails its whole answer on a null.
+ * The parts named for agents with no task, and the automations and agents
+ * holding them (`taskless`, `automations`, `agents`), answer no rows, and
+ * stand because a released desktop follows them: each still joins its
+ * items' agents and their automations, so its columns read as they did,
+ * and takes no row.
  */
-export function accountInboxLiveStatements(userId: string, workspaceMachines = true) {
-  const reader = { userId, workspaceMachines };
+export function accountInboxLiveStatements(
+  userId: string,
+  served: { readonly taskless: boolean; readonly workspaceMachines: boolean },
+) {
+  const reader = { userId, workspaceMachines: served.workspaceMachines };
   const { parts } = ACCOUNT_INBOX_READ;
 
   const items = liveRowsStatement(
@@ -1500,7 +1508,7 @@ export function accountInboxLiveStatements(userId: string, workspaceMachines = t
       ordered: false,
       columns: {
         id: inboxItem.id,
-        // Note that the wire reads an item on no task as null (`accountInboxEntrySchema`), though none stands on none yet.
+        // Note that the wire reads an item on no task as null (`accountInboxEntrySchema`).
         taskId: sql<string | null>`${inboxItem.taskId}`,
         agentId: inboxItem.agentId,
         agentTitle: agentTable.title,
@@ -1523,7 +1531,7 @@ export function accountInboxLiveStatements(userId: string, workspaceMachines = t
         .select(selection)
         .from(inboxItem)
         .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        .where(accountWaiting(reader)),
+        .where(accountWaiting(reader, served.taskless)),
   );
 
   const taskless = liveRowsStatement(

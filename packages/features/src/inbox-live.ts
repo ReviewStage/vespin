@@ -73,7 +73,11 @@ function latestOrder<Key extends string>(key: Key) {
  * on a machine its workspace owns are carried only to a build that reads
  * one (`HOSTED_API_VERSION` 7 on), which the service binds as
  * `workspaceMachines` from the headers the build names itself in, as a
- * plan's inbox and the account's items carry them. The service answers `unavailable` where its
+ * plan's inbox and the account's items carry them. An item on no task, a
+ * Manager's thread, waits in `items` with a null `taskId`, carried only to a
+ * build that reads one (`HOSTED_API_VERSION` 6 on), which the service binds
+ * as `taskless` the same way, so the Dock counts it as a task's.
+ * The service answers `unavailable` where its
  * deployment's Realtime is misconfigured, which the desktop answers by
  * asking again.
  */
@@ -83,6 +87,7 @@ export const ACCOUNT_INBOX_READ = liveRead({
   params: {
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
     [ACCOUNT_INBOX_REPOSITORYLESS.QUERY]: LIVE_PARAM.OPTIONAL_TEXT,
+    taskless: LIVE_PARAM.SERVED,
     workspaceMachines: LIVE_PARAM.SERVED,
   },
   query: {
