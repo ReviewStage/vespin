@@ -18,12 +18,11 @@ import {
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useIsFocused } from "expo-router";
 import { type ReactElement, type ReactNode, useMemo } from "react";
 import { useColorScheme } from "react-native";
 import { MachineAsks } from "../agents/machine-asks.js";
 import { useCrashReportAccount } from "../crash-reports.js";
-import { useFocusShown } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
@@ -109,9 +108,9 @@ const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set([
 /** The pages that start work over the whole window as a new conversation does, rather than as a sheet: New agent. */
 const START_PAGE: ReadonlySet<string> = new Set([SHEET_ROUTE.START_AGENT]);
 
-/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. Note that a screen's layout draws inside its screen's navigation, so `useFocusShown` hears the sheet's own focus. */
+/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. Note that a screen's layout draws inside its screen's navigation, so `useIsFocused` reads the sheet's own focus. */
 function SheetNoticeLayer({ children }: { readonly children: ReactNode }) {
-  return <FailureNoticeLayer inFront={useFocusShown()}>{children}</FailureNoticeLayer>;
+  return <FailureNoticeLayer inFront={useIsFocused()}>{children}</FailureNoticeLayer>;
 }
 
 /**
