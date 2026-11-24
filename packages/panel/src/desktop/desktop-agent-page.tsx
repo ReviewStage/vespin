@@ -20,8 +20,7 @@
  * as in a task's column, and a phone's ⋯ offers Find in its place. A
  * Manager's page stands a row of tabs under its head, as a Slack channel's
  * does: Overview, what the Manager is doing (`manager-overview.tsx`);
- * Messages, its chat; and Agent, its transcript as any agent's tab draws
- * it. While Messages shows, the page marks itself a chat (`data-chat`), so
+ * and Messages, its chat. While Messages shows, the page marks itself a chat (`data-chat`), so
  * both sides' bubbles stand at one width, and take the column in a phone's
  * room, as desktop.css says. The agent is read from the task list where
  * it carries it, and else once by its id.
@@ -133,7 +132,6 @@ const AGENT_THING = "Agent";
 const MANAGER_VIEW = {
   OVERVIEW: "overview",
   MESSAGES: "messages",
-  AGENT: "agent",
 } as const;
 
 type ManagerView = (typeof MANAGER_VIEW)[keyof typeof MANAGER_VIEW];
@@ -142,7 +140,6 @@ type ManagerView = (typeof MANAGER_VIEW)[keyof typeof MANAGER_VIEW];
 const MANAGER_VIEWS: readonly ChoiceItem<ManagerView>[] = [
   { value: MANAGER_VIEW.OVERVIEW, label: "Overview" },
   { value: MANAGER_VIEW.MESSAGES, label: "Messages" },
-  { value: MANAGER_VIEW.AGENT, label: "Agent" },
 ];
 
 /** What a Manager's page's tab row is called to a reader. */
@@ -469,8 +466,7 @@ function OwnAgentPage({
   const [view, setView] = useState<ManagerView>(MANAGER_VIEW.MESSAGES);
   const ids = useId();
   const panels = (value: ManagerView) => ({ tab: `${ids}tab-${value}`, panel: `${ids}panel` });
-  const shownView = manager ? view : MANAGER_VIEW.AGENT;
-  const chat = shownView === MANAGER_VIEW.MESSAGES;
+  const chat = manager && view === MANAGER_VIEW.MESSAGES;
 
   const openTarget = (target: ToolTarget) => {
     if (target.kind !== TOOL_TARGET.TASK) return;
@@ -510,7 +506,7 @@ function OwnAgentPage({
                 }
               />
             ) : null}
-            {shownView === MANAGER_VIEW.OVERVIEW ? (
+            {manager && view === MANAGER_VIEW.OVERVIEW ? (
               <Fill id={panels(view).panel} role="tabpanel" aria-labelledby={panels(view).tab}>
                 <ManagerOverview tasks={tasks} manager={agent} threads={threads} staged={staged} />
               </Fill>
@@ -525,8 +521,6 @@ function OwnAgentPage({
                 aria-labelledby={manager ? panels(view).tab : undefined}
               >
                 <AgentPane
-                  // Note that the chat and the transcript are two tabs of one agent, so each stands afresh.
-                  key={shownView}
                   label={label}
                   tabbed={false}
                   tab={agentTab(agent.id)}
