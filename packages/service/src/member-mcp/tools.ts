@@ -2788,7 +2788,8 @@ const DELETE_AGENT_TOOL = memberMcpTool({
     "Delete agent would: its transcript is deleted and its session ended, and nothing brings " +
     "it back. It stops nothing: an agent starting or running is refused, and " +
     `${MEMBER_MCP_TOOL.STOP_AGENT} stops it first. Its branch and pull request on ` +
-    "GitHub stay. Any member who can see an agent may delete it, as in the app. Delete only an " +
+    "GitHub stay. Any member who can see an agent may delete it, as in the app, but a Manager " +
+    "only by the member who started it or the workspace's owner or an admin. Delete only an " +
     "agent the member asked you to; to put one away and keep it, archive it with " +
     `${MEMBER_MCP_TOOL.ARCHIVE_AGENT} instead. Answers \`accepted\` once it is deleted, or ` +
     "`rejected` and why.",

@@ -632,7 +632,7 @@ export function agentsProcedures(
 
       return yield* committedAgent(userId, changed);
     }),
-    /** The agent deleted for good (`agent-lifecycle.ts`), stopped for good first, by any member who reaches it. */
+    /** The agent deleted for good (`agent-lifecycle.ts`), stopped for good first, by any member who reaches it, but a Manager by its owner or the workspace's owner or an admin alone. */
     delete: signedIn.delete.effect(function* ({ input, context }) {
       return yield* deletedAgent(writer, context.userId, input.id);
     }),

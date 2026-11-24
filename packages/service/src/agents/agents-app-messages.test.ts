@@ -39,6 +39,7 @@ import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-voc
 import {
   getTestDB,
   joinWorkspace,
+  leaveWorkspace,
   openedPullRequest,
   openWorkspace,
   startTask,
@@ -88,6 +89,7 @@ import {
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { RUN_ON_MAC_OFF, workspaceToolsAnswerSchema } from "@repo/features/workspace-tools-wire";
+import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -658,6 +660,42 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           [[], []],
           "nothing of the agent's stays",
         );
+      }),
+  );
+
+  it.effect(
+    "a member's delete of a teammate's Manager is refused, asking the harness nothing, and an admin's deletes it",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+
+        const { owner, other, task, agent, sessionId, ask } = yield* messagedAgent(agentSessions, {
+          running: false,
+        });
+
+        yield* joinWorkspace(task.workspaceId, other);
+
+        yield* (yield* Database)
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER, taskId: null })
+          .where(eq(agentTable.id, agent.id));
+
+        const refused = yield* ask(request(AGENT, other, { method: "DELETE", id: agent.id }));
+
+        assert.deepEqual(
+          refused,
+          refusal(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
+        );
+        assert.deepEqual([agentSessions.canceled, agentSessions.reset], [[], []]);
+        assert.ok(Option.isSome(yield* readAgent(owner, agent.id)));
+
+        yield* leaveWorkspace(task.workspaceId, other);
+        yield* joinWorkspace(task.workspaceId, other, WORKSPACE_ROLE.ADMIN);
+        const deleted = yield* ask(request(AGENT, other, { method: "DELETE", id: agent.id }));
+
+        assert.equal(deleted.status, HOSTED_HTTP_STATUS.OK, JSON.stringify(deleted.body));
+        assert.deepEqual(agentSessions.reset, [sessionId]);
+        assert.ok(Option.isNone(yield* readAgent(owner, agent.id)));
       }),
   );
 

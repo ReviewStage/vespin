@@ -10,7 +10,9 @@
  *
  * The agent is reached as every agent procedure reaches it
  * (`agent-reach.ts`): one of a workspace the account is a member of, every
- * other read as none. A delete is any reaching member's, as a task's is.
+ * other read as none. A delete is any reaching member's, as a task's is,
+ * but a Manager's, which every member of its workspace shares, is its
+ * owner's, who started it, or the workspace's owner's or an admin's alone.
  * The app's delete stops the agent for good first, so a turn under way is
  * no refusal of its own: only a Stop that does not take is. The member MCP
  * server's `delete_agent` and `rewind_agent` stop nothing, since only
@@ -26,6 +28,7 @@ import type { StoreWriter } from "@repo/database/models/writer";
 import { AGENT_SANDBOX_BEAT_KIND } from "@repo/database/schemas/agent-sandbox";
 import {
   AGENT_CHAT,
+  AGENT_KIND,
   AGENT_STATUS,
   type AgentChatHold,
   type AgentRunsOnRequest,
@@ -35,6 +38,7 @@ import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
 import type { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
+import { managedWorkspace } from "../accounts/workspace-access.js";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
@@ -68,6 +72,20 @@ function agentStandsStopped(agent: Agent) {
 }
 
 /**
+ * The agent's delete refused as not permitted where it is a Manager the
+ * account neither started nor manages the workspace of; any other agent is
+ * any reaching member's to delete.
+ */
+const deletePermitted = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agent: Pick<Agent, "kind" | "userId" | "organizationId">,
+): Effect.fn.Return<void, HostedRefusal, DatabaseServices> {
+  if (agent.kind !== AGENT_KIND.MANAGER || agent.userId === userId) return;
+
+  yield* managedWorkspace(userId, agent.organizationId);
+});
+
+/**
  * The agent deleted for good, by the steps a task's delete takes for each
  * of its agents (`tasks-procedures.ts`): stopped for good first, then,
  * under its conversation's lock, its session retired
@@ -87,6 +105,7 @@ export const deletedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices | HttpClient.HttpClient | Sandbox
 > {
   const { userId, agent } = yield* reachedAgentById(account, id);
+  yield* deletePermitted(userId, agent);
   const retiring = yield* retiringReach(userId);
   yield* stoppedForGood(writer, userId, agent);
 
@@ -107,6 +126,7 @@ export const deletedStoppedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices | HttpClient.HttpClient
 > {
   const { userId, agent } = yield* reachedAgentById(account, id);
+  yield* deletePermitted(userId, agent);
   const retiring = yield* retiringReach(userId);
 
   return yield* deletedStopped(userId, agent, retiring);
