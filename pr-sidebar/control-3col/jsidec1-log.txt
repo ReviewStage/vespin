@@ -1,0 +1,8 @@
+pinned to aa5fe68313
+== bundle PJjsidec1 base aa5fe68313
+  built aa5fe68313 base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+ipad27-land-light-1chk: fails 0 shots 1 
