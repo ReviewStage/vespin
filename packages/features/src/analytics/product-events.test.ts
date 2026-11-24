@@ -6,6 +6,7 @@ import {
   PRODUCT_EXPERIMENT,
   PRODUCT_EXPERIMENT_SCOPE,
   PRODUCT_OPEN_ORDER,
+  PRODUCT_PAGE_VERSION,
   PRODUCT_REPLY_KIND,
   PRODUCT_SETTING_VALUE,
   PRODUCT_SURFACE,
@@ -293,6 +294,30 @@ test("a page's open travels its waits on rungs with its kind and order, never wh
       },
     }),
     undefined,
+  );
+  // A page an agent showed travels its read and its draw on the same rungs, with where its version came from, never which page.
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.PAGE_SHOWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.READ_MS]: 300,
+        [PRODUCT_EVENT_PROPERTY.SHOWN_MS]: 1750,
+        [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: PRODUCT_PAGE_VERSION.NEWEST,
+        [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: PRODUCT_OPEN_ORDER.FIRST,
+        pageId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.PAGE_SHOWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.READ_MS]: 300,
+        [PRODUCT_EVENT_PROPERTY.SHOWN_MS]: 1750,
+        [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: PRODUCT_PAGE_VERSION.NEWEST,
+        [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: PRODUCT_OPEN_ORDER.FIRST,
+      },
+    },
   );
 });
 
