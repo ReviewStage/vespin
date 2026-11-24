@@ -42,7 +42,10 @@
  * project key its build carries (none, and nothing records), where its
  * recording posts, the address its window says it has in place of the one it
  * has, and where its recorder's bundle is. Whether a run may record at all is
- * the host's word (`SessionReplayBootstrap`): there is no switch. Where it may, recording
+ * the host's word (`SessionReplayBootstrap`), which the device's "Share usage
+ * data" switch is part of: turned off, the word stops the recording and opts
+ * the client out, and turned back on, it opts in and records again, with no
+ * relaunch between. Where it may, recording
  * waits for an account: nothing loads and nothing records while signed out,
  * so a visit that never signs in sends nothing, and every recording is filed
  * under a person, named by the account's name and email, from its first

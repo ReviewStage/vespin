@@ -18,7 +18,9 @@ import {
 } from "@repo/features/sentry-breadcrumbs";
 import { sentryTracesSampler } from "@repo/features/sentry-tracing";
 import { SENTRY_TUNNEL } from "@repo/features/sentry-tunnel";
+import { usageDataTransportOptions } from "@repo/features/sentry-usage-data";
 import { sendShownFailure } from "@repo/features/shown-failure";
+import { sharesUsageData } from "@repo/host/app-state";
 import { sentrySendTracer } from "@repo/panel/send-traces";
 import { appStateQuery } from "@repo/panel/use-app-state";
 import {
@@ -31,6 +33,8 @@ import {
   getTraceData,
   init,
   logger,
+  makeBrowserOfflineTransport,
+  makeFetchTransport,
   startBrowserTracingPageLoadSpan,
   startNewTrace,
   startSpan,
@@ -104,6 +108,13 @@ function accountId(queryClient: QueryClient): string | undefined {
   return signedInAccountId(queryClient.getQueryData(appStateQuery.queryKey)?.account);
 }
 
+/** Whether the tab's device shares usage data, as its document says now; undefined until its settings are read. */
+function usageData(queryClient: QueryClient): boolean | undefined {
+  const document = queryClient.getQueryData(appStateQuery.queryKey);
+
+  return document === undefined ? undefined : sharesUsageData(document);
+}
+
 /**
  * Starts the SDK with its default data collection, under the build's DSN,
  * environment, and release, and the desktop renderer's filters: a
@@ -121,11 +132,25 @@ function accountId(queryClient: QueryClient): string | undefined {
  * it. Every envelope is posted
  * to a path on the tab's own origin, which passes it on to Sentry, because
  * tracker blockers refuse Sentry's own host (`@repo/features/sentry-tunnel`).
+ *
+ * Nothing leaves while the device does not share usage data: the SDK's
+ * offline transport asks Settings › Account › "Share usage data" before each
+ * envelope (`@repo/features/sentry-usage-data`), so turning it off stops the
+ * tab's reports from the next one and turning it on resumes them, and one
+ * made before the tab has read its settings waits in the browser's storage
+ * until it has.
  */
 export function initWebSentry(build: WebSentryBuild, queryClient: QueryClient): WebSentry {
   init({
     dsn: build.dsn,
     tunnel: SENTRY_TUNNEL.PATH,
+    // The hooks ride the offline transport's own options, which the browser
+    // SDK's `transportOptions` does not type.
+    transport: (options) =>
+      makeBrowserOfflineTransport(makeFetchTransport)({
+        ...options,
+        ...usageDataTransportOptions(() => usageData(queryClient)),
+      }),
     environment: build.environment,
     ...(build.release ? { release: build.release } : undefined),
     integrations: [

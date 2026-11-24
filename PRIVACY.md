@@ -296,6 +296,10 @@ account. While a maintainer is signed in as your account with your support
 access (section 4), their use of the web app is counted and recorded the same
 way, under your account. The iOS app records nothing.
 
+Turning off Settings › Account › "Share usage data" stops the counts, the
+recordings, and the Sentry reports described below from that Mac or browser,
+at once and without restarting the app; turning it back on resumes them.
+
 ### Error and performance data
 
 The Mac app, the web app, and the Service send Sentry error reports, crash
@@ -310,7 +314,9 @@ error's own words can quote what an agent was working on. The Mac app also sends
 Sentry diagnostic data about its resource use, such as processor usage. The
 Service and the Mac app's windows send processor profiles of the traces Sentry
 keeps: which of their own functions ran and for how long, never the values
-they handled.
+they handled. The Mac app and the web app send none of this while "Share
+usage data" is off. A report made as the app starts, before it has read that
+setting, waits on your device until it has, and is then sent or deleted.
 
 An agent running in Vespin's cloud also sends Sentry, from its sandbox, the
 timings of its own start: performance traces of its startup steps, in the same
@@ -710,10 +716,13 @@ Depending on your jurisdiction, you may have the right to:
 To exercise any of these rights, contact us at founders@vespin.dev. You
 can also act directly in the app:
 
-- **Usage data:** turn off Settings › Account › "Share usage data". It is set
-  per Mac and per browser, is on by default in the Vespin you download, and
-  does not stop the counts the Service makes of work done through it. The
-  iOS app has no such switch yet, and counts while you are signed in.
+- **Usage data:** turn off Settings › Account › "Share usage data". It stops
+  the Mac app's or the web app's feature counts, screen recordings, and
+  Sentry error, crash, and performance reports, at once. It is set per Mac
+  and per browser, is on by default in the Vespin you download, and does not
+  stop the counts the Service makes of work done through it, or the Sentry
+  reports the Service and a host machine send of their own work. The iOS app
+  has no such switch yet, and counts while you are signed in.
 - **Commands on your Mac:** set Settings › This Mac › "Let agents run commands
   on this Mac" to Never.
 - **Integrations:** switch one off for a single agent in its message box's MCP

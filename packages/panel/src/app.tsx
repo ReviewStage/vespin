@@ -130,6 +130,7 @@ import {
   selectRun,
   selectSessionReplay,
   selectSettingsHeld,
+  selectSharesUsageData,
   selectTasks,
 } from "./use-app-state.js";
 import { useSignIn } from "./use-sign-in.js";
@@ -580,10 +581,11 @@ function AppWindow(): React.JSX.Element {
     if (owner === undefined || owner === accountKey) return;
     leavePast(onGoHome);
   }, [accountKey, leavePast, onGoHome]);
-  // Session replay starts once the renderer is idle, filed under the workspace the sidebar lists.
+  // Session replay starts once the renderer is idle, where the device shares usage data, filed under the workspace the sidebar lists.
   useSessionReplay(
     run,
     useQuery({ ...appStateQuery, select: selectSessionReplay }).data,
+    useQuery({ ...appStateQuery, select: selectSharesUsageData }).data,
     tasks.workspace?.id,
   );
 
