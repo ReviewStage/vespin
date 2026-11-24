@@ -12,6 +12,7 @@ import {
   type AgentAccountInboxAnswerView,
   type AgentAgentAnswer,
   type AgentArchiveParams,
+  type AgentChatSendParams,
   type AgentChooseParams,
   type AgentDeleteAnswerView,
   type AgentFaceParams,
@@ -245,6 +246,7 @@ export type AgentClient = Pick<
   | "messagesNewest"
   | "messagesBefore"
   | "message"
+  | "chatSend"
   | "choose"
   | "rename"
   | "switchServers"
@@ -929,6 +931,11 @@ function composed(
   /** A rewind, sent after every write of the agent's asked before it. */
   const rewound = queues.rewind(outboxSends);
 
+  /** A person's message to a Manager's chat, after every write of the agent's asked before it, so the Manager takes the lines in the order they were sent. */
+  const chatSent = queues.inTurn(({ agentId, ...request }: AgentChatSendParams) =>
+    asked(client.chatSend(agentId, request)),
+  );
+
   /** A suggestion in an agent's reply sent from its draft, after every write of the agent's asked before it, so the agent takes the lines in the order they were sent. */
   const pressed = queues.inTurn((params: ReplyButtonPressParams) =>
     asked(client.pressReplyButton(params)),
@@ -1271,6 +1278,7 @@ function composed(
           sentBy: dependencies.accountId(),
         })),
     }),
+    AGENTS_CHAT_SEND: declaredWrite(dependencies.pool, chatSent),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),

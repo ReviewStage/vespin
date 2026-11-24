@@ -17,6 +17,7 @@ import {
 } from "@repo/database/models/agent-store";
 import { type LineFileRead, lineRead } from "@repo/database/models/attached-file-parts";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
+import { MANAGER_CHAT_OUTCOME } from "@repo/database/models/manager-chat-messages";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { readTaskDescription } from "@repo/database/models/task-store";
@@ -167,6 +168,20 @@ export interface SteerLine {
   readonly mentionWords?: string | undefined;
   /** The caller's lines of a call the line is, by the keys they were recorded under, oldest first: a delegation's, which starts its turn on those rows, under the newest's key, rather than writing its words again. */
   readonly adopts?: readonly string[] | undefined;
+  /** The message of a Manager's chat a member's line is, written with it (`SteerChat`); none for a line of no chat. */
+  readonly chat?: SteerChat | undefined;
+}
+
+/**
+ * A member's line as a message of a Manager's chat: the id the service
+ * minted for it, and the message it replies to. The line is written as any
+ * other, its words plain, and the chat's message beside it in its
+ * transaction; the model reads its header (`chatHeader`), composed as the
+ * harness is handed the line and stored nowhere.
+ */
+export interface SteerChat {
+  readonly id: string;
+  readonly inReplyTo: string | null;
 }
 
 /** Another coding agent as the row of a line it sends keeps it: by its name, id, and model. */
@@ -220,6 +235,18 @@ const REFUSAL_OF_UNWRITTEN_LINE = {
 } as const;
 
 /**
+ * Why a chat message did not land with its line, in the route's words: no
+ * Manager's chat the sender reaches names nothing, a reply to no message of
+ * it is the request's own fault, and an id another message holds is an
+ * outage the same key may retry, which mints another.
+ */
+const REFUSAL_OF_UNWRITTEN_CHAT = {
+  [MANAGER_CHAT_OUTCOME.NO_CHAT]: HOSTED_REFUSAL.NOT_FOUND,
+  [MANAGER_CHAT_OUTCOME.NO_THREAD]: HOSTED_REFUSAL.INVALID_REQUEST,
+  [MANAGER_CHAT_OUTCOME.ID_TAKEN]: HOSTED_REFUSAL.UNAVAILABLE,
+} as const;
+
+/**
  * Whether a message to an agent whose session has not claimed its record
  * opens one: where its Start opened none, as an agent started blank, with
  * neither the description nor a prompt, has none until its first words; or past the
@@ -247,6 +274,24 @@ const unreached = (failure: SessionUnreachable) =>
 
 /** What a teammate's mention link names them by where their account is gone. */
 const FORMER_MEMBER = "A former member";
+
+/** The line a Manager reads ahead of a person's chat message: who sent it, its id, and the thread it replies in. */
+function chatHeader(name: string, chat: SteerChat): string {
+  const thread = chat.inReplyTo === null ? "" : ` in thread ${chat.inReplyTo}`;
+
+  return `${name}, message ${chat.id}${thread}:`;
+}
+
+/** The sender's name as their account holds it, which a chat message keeps and its header reads; none for a line of no chat. */
+const chatAuthorOf = (sender: LineSender, chat: SteerChat | undefined) => {
+  if (chat === undefined || sender.kind !== MESSAGE_SENDER.MEMBER) return Effect.succeed(undefined);
+  const { userId } = sender;
+
+  return Effect.map(readAccountNames([userId]), (names) => ({
+    userId,
+    name: names.get(userId) ?? FORMER_MEMBER,
+  }));
+};
 
 /**
  * The label naming the teammate who sent the line, by their mention link
@@ -461,6 +506,7 @@ const heldWhileBooting = Effect.fnUntraced(function* (
         ...(line.serverWords === undefined ? undefined : { serverWords: line.serverWords }),
         ...(line.mentionWords === undefined ? undefined : { mentionWords: line.mentionWords }),
         ...(line.adopts === undefined ? undefined : { adopts: line.adopts }),
+        ...(line.chat === undefined ? undefined : { chat: line.chat }),
       },
     }),
   );
@@ -535,6 +581,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
       // Read before the harness is asked, so an ended session settles the turn it was running and never one begun since.
       running: Effect.result(runningTurnOf(agent)),
       label: Effect.result(hostedStoreOrUnavailable(teammateLabel(agent, line.sender))),
+      author: Effect.result(hostedStoreOrUnavailable(chatAuthorOf(line.sender, line.chat))),
     },
     { concurrency: "unbounded" },
   );
@@ -642,6 +689,20 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
 
   const running = yield* Effect.fromResult(read.running);
   const label = yield* Effect.fromResult(read.label);
+  const author = yield* Effect.fromResult(read.author);
+
+  // A chat message is written beside its line, and named to the model by a header ahead of its words, under the teammate's label where there is one.
+  const chat =
+    line.chat === undefined || author === undefined
+      ? undefined
+      : { ...line.chat, agentId: agent.id, userId: author.userId, authorName: author.name };
+
+  const heading =
+    chat === undefined
+      ? label
+      : [label, chatHeader(chat.authorName, chat)]
+          .filter((piece) => piece !== undefined)
+          .join("\n");
 
   // Each image is kept beside the agent's conversation before the harness is handed it, so the harness is told its id and the
   // row names it; a repeat under the key was answered above, and the same bytes again keep nothing twice.
@@ -657,7 +718,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     conversationId: agent.conversationId,
     turn: SESSION_TURN.TYPED,
     ...(line.metadata?.channel === MESSAGE_CHANNEL.VOICE ? { spoken: true } : undefined),
-    message: turnContent(line.text, attachments, mentioned, label),
+    message: turnContent(line.text, attachments, mentioned, heading),
     // The line's own id, which a native harness's runner names back as it takes the message.
     lineId: sentLineId(line.clientKey),
   };
@@ -707,12 +768,19 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
 
   const written = yield* hostedStoreOrUnavailable(
     Effect.flatMap(writer, (write) =>
-      write.writeAwaitingLine(target, { ...line, attachments, mentioned }, dispatch),
+      write.writeAwaitingLine(target, { ...line, attachments, mentioned, chat }, dispatch),
     ),
   );
 
-  if (Result.isFailure(written))
-    return yield* Effect.fail(REFUSAL_OF_UNWRITTEN_LINE[written.failure.refusal]);
+  if (Result.isFailure(written)) {
+    const { failure } = written;
+
+    return yield* Effect.fail(
+      failure.refusal === STORE_WRITE_REFUSAL.CHAT_REFUSED
+        ? REFUSAL_OF_UNWRITTEN_CHAT[failure.chat]
+        : REFUSAL_OF_UNWRITTEN_LINE[failure.refusal],
+    );
+  }
 
   // The turn the ended session was running is settled whether or not the fresh session took the words.
   if (outcome.ended && running !== undefined) yield* settledEnded(writer, agent, running);

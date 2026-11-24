@@ -25,6 +25,8 @@ import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
   AGENT_BOUNDS,
+  agentChatSendAnswerSchema,
+  agentChatSendRequestSchema,
   agentMessageAnswerSchema,
   agentMessageRequestSchema,
   agentNewestAnswerSchema,
@@ -144,6 +146,19 @@ export const messagesContract = {
     )
     .input(exactBodyInput(EffectSchema.Struct(byId), agentMessageRequestSchema))
     .output(EffectSchema.flip(agentMessageAnswerSchema)),
+  /** One person's message to a Manager's chat, written to the chat and handed to the Manager as the message above, answering it as it does and the message's id. */
+  chatSend: messageProcedure
+    .meta(bodyCap(MESSAGE_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: "/api/agents/{id}/chat-messages",
+        successStatus: ACCEPTED,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(EffectSchema.Struct(byId), agentChatSendRequestSchema))
+    .output(EffectSchema.flip(agentChatSendAnswerSchema)),
   /** One change of an agent's queue of messages waiting behind its turn, answering the queue as it then stands. */
   queue: messageProcedure
     .meta(bodyCap(MESSAGE_BODY_BYTES))

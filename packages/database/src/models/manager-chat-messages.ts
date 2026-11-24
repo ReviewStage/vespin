@@ -1,5 +1,5 @@
 /**
- * manager-chat-messages.ts -- a Manager's chat: write a message, grow a call's line in place, read one by its id, a page of the chat, a thread, or what matches words, and delete what a rewind dropped.
+ * manager-chat-messages.ts -- a Manager's chat: write a message, grow a call's line in place, read one by its id or its key, a page of the chat, a thread, or what matches words, and delete what a rewind dropped.
  *
  * Every read and write is made as an account that reaches the Manager
  * (`agentReachableBy`), a Manager standing on no task, so no account reads
@@ -477,6 +477,17 @@ export function readManagerChatMessage(
   id: string,
 ): AgentStoreEffect<Option.Option<ManagerChatMessage>> {
   return Effect.map(findMessages({ userId, agentId, ids: [id] }), (rows) =>
+    Option.fromNullishOr(rows[0]),
+  );
+}
+
+/** The message of the Manager's chat written under this client key, as the account reaches the chat; none where it does not, or no write under the key landed. */
+export function readManagerChatMessageByKey(
+  userId: string,
+  agentId: string,
+  clientKey: string,
+): AgentStoreEffect<Option.Option<ManagerChatMessage>> {
+  return Effect.map(findMessages({ userId, agentId, clientKey }), (rows) =>
     Option.fromNullishOr(rows[0]),
   );
 }

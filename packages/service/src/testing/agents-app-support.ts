@@ -125,6 +125,9 @@ import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-confi
 export const ORIGIN = "https://app.test";
 export const TASK_AGENTS = "/api/tasks/agents";
 export const AGENT_MESSAGES = "/api/agents/messages";
+
+/** A person's message to a Manager's chat, by the flattened key the router's public path is named by here. */
+export const AGENT_CHAT_MESSAGES = "/api/agents/chat-messages";
 export const SUBAGENT_MESSAGES = "/api/agents/subagent-messages";
 export const AGENT_NEWEST = "/api/agents/messages-newest";
 export const SUBAGENT_NEWEST = "/api/agents/subagent-messages-newest";
@@ -460,6 +463,7 @@ const ORPC_PUBLIC_PATH: ReadonlyMap<string, (id: string) => string> = new Map([
   ["/api/agents/rewind", (id: string) => `/api/agents/${id}/rewind`],
   ["/api/agents/queue", (id: string) => `/api/agents/${id}/queue`],
   ["/api/agents/voice-lines", (id: string) => `/api/agents/${id}/voice-lines`],
+  ["/api/agents/chat-messages", (id: string) => `/api/agents/${id}/chat-messages`],
   ["/api/agents/agents", (id: string) => `/api/agents/${id}/agents`],
   ["/api/agents/messages-newest", (id: string) => `/api/agents/${id}/messages/newest`],
   ["/api/agents/changes", (id: string) => `/api/agents/${id}/changes`],

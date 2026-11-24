@@ -329,8 +329,9 @@ export const MEMBER_MCP_EXCLUSIONS = {
     pressButton: SCREEN_ONLY,
   },
   dictation: { transcribe: SCREEN_ONLY },
-  // A call's lines are recorded by the window holding the call, as GPT-Live hears them; a member's agent messages an agent with its own tools.
-  messages: { recordVoiceLine: SCREEN_ONLY },
+  // A call's lines are recorded by the window holding the call, as GPT-Live hears them, and a person's own words to a Manager's chat
+  // are typed in its composer; a member's agent messages an agent with its own tools.
+  messages: { recordVoiceLine: SCREEN_ONLY, chatSend: SCREEN_ONLY },
   events: { record: INTERNAL },
   github: {
     connect: NEEDS_BROWSER,

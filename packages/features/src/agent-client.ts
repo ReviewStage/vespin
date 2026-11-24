@@ -34,6 +34,7 @@ import {
   type AgentAgentAnswer,
   type AgentApprovalAnswerView,
   type AgentCallFailure,
+  type AgentChatSendAnswerView,
   type AgentDefaultAnswer,
   type AgentDefaultMachineAnswerView,
   type AgentDeleteAnswerView,
@@ -120,6 +121,7 @@ import {
   AGENT_WORKSPACE_QUERY,
   type AgentArchiveRequest,
   type AgentChatHold,
+  type AgentChatSendRequest,
   type AgentFaceRequest,
   type AgentMessageRequest,
   type AgentNewestAnswer,
@@ -130,6 +132,7 @@ import {
   type AgentRunsOnRequest,
   type AgentServersRequest,
   type AgentStartRequest,
+  agentChatSendRequestSchema,
   agentFaceRequestSchema,
   agentMessageRequestSchema,
   agentQueueChangeSchema,
@@ -1178,6 +1181,27 @@ export class HostedAgentClient {
 
     return hostedCall(
       this.#hosted.messages.send,
+      { params: { id: agentId }, body: admitted },
+      { deadline: HOSTED_DEADLINE.STEER },
+    );
+  }
+
+  /**
+   * Sends a Manager's chat a person's message under the key the window made
+   * for the send, which a retry carries again, and answers as a message is
+   * answered, with the id the chat holds it under; a message the service
+   * would refuse by shape is refused here without traveling.
+   */
+  chatSend(
+    agentId: string,
+    request: AgentChatSendRequest,
+  ): Effect.Effect<AgentChatSendAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(agentChatSendRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(
+      this.#hosted.messages.chatSend,
       { params: { id: agentId }, body: admitted },
       { deadline: HOSTED_DEADLINE.STEER },
     );

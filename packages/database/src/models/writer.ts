@@ -77,6 +77,7 @@ import { alias } from "drizzle-orm/pg-core";
 import {
   Cause,
   Context,
+  Data,
   DateTime,
   Duration,
   Effect,
@@ -90,6 +91,7 @@ import {
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { CURRENT_TXID } from "../core/txid.js";
+import { MANAGER_CHAT_AUTHOR } from "../schemas/manager-chat-message.js";
 import {
   conversations,
   messages,
@@ -109,7 +111,13 @@ import {
   takeDispatchClaim,
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
-import { growManagerChatLine } from "./manager-chat-messages.js";
+import {
+  deleteDroppedManagerChat,
+  growManagerChatLine,
+  MANAGER_CHAT_OUTCOME,
+  type ManagerChatOutcome,
+  writeManagerChatMessage,
+} from "./manager-chat-messages.js";
 import { COALESCED_LINE_SEPARATOR, noReceiptOfLine } from "./message-reads.js";
 import {
   type AwaitedTurn,
@@ -319,6 +327,8 @@ export const STORE_WRITE_REFUSAL = {
   FENCED: "fenced",
   /** The client id a line of a call names stands for another row: another speaker's, another call's, or no line of a call. */
   TAKEN: "taken",
+  /** A person's line to a Manager's chat whose chat message did not land, nothing written (`AwaitingChatMessage`). */
+  CHAT_REFUSED: "chat_refused",
 } as const;
 
 type StoreWriteRefusal = (typeof STORE_WRITE_REFUSAL)[keyof typeof STORE_WRITE_REFUSAL];
@@ -331,6 +341,16 @@ type MessageRefused = Refused<typeof STORE_WRITE_REFUSAL.MESSAGE_REFUSED> & {
   readonly reason: SchemaRefusal;
   readonly path: SchemaPath;
 };
+
+/** Why a person's chat message did not land with its line: no Manager's chat the sender reaches, no message of it to reply to, or its id another message's. */
+type ChatRefused = Refused<typeof STORE_WRITE_REFUSAL.CHAT_REFUSED> & {
+  readonly chat: Exclude<ManagerChatOutcome["status"], typeof MANAGER_CHAT_OUTCOME.DONE>;
+};
+
+/** A chat message refused inside the line's write, which fails it so the line's row goes with it. */
+class ChatMessageRefused extends Data.TaggedError("ChatMessageRefused")<{
+  readonly chat: ChatRefused["chat"];
+}> {}
 
 const NO_CONVERSATION: Refused<typeof STORE_WRITE_REFUSAL.NO_CONVERSATION> = {
   refusal: STORE_WRITE_REFUSAL.NO_CONVERSATION,
@@ -451,6 +471,23 @@ interface AwaitingLineWrite {
    * writing the words again, and whose every line takes the delegation.
    */
   readonly adopts?: readonly string[] | undefined;
+  /** The message of a Manager's chat the line is, written with it in its transaction; none for a line of no chat. */
+  readonly chat?: AwaitingChatMessage | undefined;
+}
+
+/**
+ * A person's message to a Manager's chat as its line's write lands it beside
+ * the line (`manager-chat-messages.ts`): the Manager, the member who sent it,
+ * as whom the chat is reached, their name as it stands, the id the service
+ * minted for it, and the message it replies to. Its words, files, key, line,
+ * and turn are the line's own.
+ */
+export interface AwaitingChatMessage {
+  readonly agentId: string;
+  readonly userId: string;
+  readonly authorName: string;
+  readonly id: string;
+  readonly inReplyTo: string | null;
 }
 
 /**
@@ -523,7 +560,7 @@ type AwaitingLineWritten = Result.Result<
     /** The transaction that wrote the row, where this write wrote it. */
     readonly txid?: string;
   }>,
-  typeof NO_CONVERSATION | typeof CONVERSATION_BUSY | MessageRefused
+  typeof NO_CONVERSATION | typeof CONVERSATION_BUSY | MessageRefused | ChatRefused
 >;
 
 /** One of the developer's lines the agent's failed turn never took, as a resend of it hands it to its dispatch: the row, the id its runner names it back by, its parts, and who sent it. */
@@ -2415,9 +2452,11 @@ type LineClaimed = Result.Result<
       readonly queuedTurnId: string | undefined;
       /** The caller's lines of a call a delegation adopted in place of writing a row, which an untaken hand-over gives back rather than withdrawing. */
       readonly adopted?: readonly string[];
+      /** The chat message written with the line, which an untaken hand-over deletes with it. */
+      readonly chat?: AwaitingChatMessage;
     }
   | { readonly id: string; readonly effect: typeof STORE_WRITE_EFFECT.REPEATED },
-  typeof NO_CONVERSATION | typeof CONVERSATION_BUSY | MessageRefused
+  typeof NO_CONVERSATION | typeof CONVERSATION_BUSY | MessageRefused | ChatRefused
 >;
 
 /**
@@ -2436,7 +2475,11 @@ const claimLine = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,
   line: AwaitingLineWrite,
   place: number,
-): Effect.fn.Return<LineClaimed, StoreFailure | DispatchClaimHeld, DatabaseServices> {
+): Effect.fn.Return<
+  LineClaimed,
+  StoreFailure | DispatchClaimHeld | ChatMessageRefused,
+  DatabaseServices
+> {
   if (yield* dispatchClaimStands(context.target.conversationId, place)) {
     return yield* new DispatchClaimHeld();
   }
@@ -2481,6 +2524,7 @@ const claimLine = /* @__PURE__ */ Effect.fnUntraced(function* (
     awaitsTurnId: awaited?.turnId,
   });
 
+  if (line.chat !== undefined) yield* chatMessageOfLine(context, line, line.chat, id, awaited);
   const claim = yield* takeDispatchClaim(context.target.conversationId, place, id);
 
   return Result.succeed({
@@ -2488,7 +2532,48 @@ const claimLine = /* @__PURE__ */ Effect.fnUntraced(function* (
     txid,
     claim,
     queuedTurnId: awaited?.queued === true ? awaited.turnId : undefined,
+    ...(line.chat === undefined ? undefined : { chat: line.chat }),
   });
+});
+
+/**
+ * The person's chat message written beside their line, in the line's
+ * transaction: their words and kept pictures, under the line's key, naming
+ * the line and the turn it awaits. One that does not land fails the write,
+ * so the line goes with it.
+ */
+const chatMessageOfLine = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  line: AwaitingLineWrite,
+  chat: AwaitingChatMessage,
+  lineId: string,
+  awaited: AwaitedTurn | undefined,
+): Effect.fn.Return<void, StoreFailure | ChatMessageRefused, DatabaseServices> {
+  const attachments = (line.attachments ?? []).flatMap((file) =>
+    file.kept !== undefined && "id" in file.kept
+      ? [{ id: file.kept.id, mediaType: file.mediaType }]
+      : [],
+  );
+
+  const written = yield* writeManagerChatMessage(chat.userId, {
+    agentId: chat.agentId,
+    id: chat.id,
+    clientKey: line.clientKey,
+    authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+    authorUserId: chat.userId,
+    authorName: chat.authorName,
+    text: line.text,
+    attachments,
+    inReplyTo: chat.inReplyTo,
+    broadcast: false,
+    turnId: awaited?.turnId ?? null,
+    lineId,
+    now: context.now,
+  });
+
+  if (written.status !== MANAGER_CHAT_OUTCOME.DONE) {
+    return yield* new ChatMessageRefused({ chat: written.status });
+  }
 });
 
 /** Who wrote a line of a call, as its row's metadata says: the developer's own words, or the voice model's. */
@@ -2829,6 +2914,7 @@ function recordedLine(
     readonly claim: string;
     readonly queuedTurnId: string | undefined;
     readonly adopted?: readonly string[];
+    readonly chat?: AwaitingChatMessage;
   },
   taken: boolean,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
@@ -2855,6 +2941,14 @@ function recordedLine(
 
             if (removed.length > 0)
               yield* markLineWithdrawn({ conversationId: target.conversationId });
+          }
+
+          // Note that the chat message goes with its withdrawn line, because the sender was told it was not sent, and a send again under its key writes both afresh.
+          if (claimed.chat !== undefined) {
+            yield* deleteDroppedManagerChat(claimed.chat.userId, claimed.chat.agentId, {
+              turnIds: [],
+              lineIds: [claimed.id],
+            });
           }
 
           // The send failed and its sender was told, so the turn queued for its line goes with it, unless another line joined it meanwhile.
@@ -3441,7 +3535,7 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
   ): Write<AwaitingLineWritten> {
     return Effect.gen(function* () {
       const claimed = yield* waitingOutDispatchClaim(target.conversationId, (place) =>
-        locked<LineClaimed, DispatchClaimHeld>(
+        locked<LineClaimed, DispatchClaimHeld | ChatMessageRefused>(
           target,
           (context) => claimLine(context, line, place),
           () => Result.fail(NO_CONVERSATION),
@@ -3449,6 +3543,11 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
       ).pipe(
         Effect.catchTag("DispatchClaimHeld", () =>
           Effect.succeed<LineClaimed>(Result.fail(CONVERSATION_BUSY)),
+        ),
+        Effect.catchTag("ChatMessageRefused", ({ chat }) =>
+          Effect.succeed<LineClaimed>(
+            Result.fail({ refusal: STORE_WRITE_REFUSAL.CHAT_REFUSED, chat }),
+          ),
         ),
       );
 
