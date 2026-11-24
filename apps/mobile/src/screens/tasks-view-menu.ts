@@ -6,8 +6,7 @@
  * Group by and Order by; then Show sub-tasks and Show completed; then Reset
  * view while the view is not the one the list starts as. Status keeps
  * several at once, each toggled where it stands; every other choice is one
- * of its kind. Its glyph fills while the view is changed, so a narrowed list
- * never passes for the whole of it. Each choice is kept for the workspace
+ * of its kind. Each choice is kept for the workspace
  * on this device (`tree-view.ts`) and redraws the list at once.
  */
 
@@ -173,7 +172,7 @@ export function tasksViewMenu(input: TasksViewMenuInput): BarMenu {
 
   return {
     label: VIEW_OPTIONS,
-    symbol: changed ? GLYPH.FILTERED : GLYPH.FILTER,
+    symbol: GLYPH.FILTER,
     choices: [],
     actions: [],
     submenus: shared ? [status, assignedTo] : [status],
