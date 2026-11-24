@@ -15,6 +15,9 @@
  * - The agent's current thread (`currentSlackThread`) is where it was
  *   addressed, so a post or a reaction in its channel, and a read of the
  *   thread itself, need no lookup.
+ * - Who the agent acts for in Slack (`slackAsker`) is its starter, or for a
+ *   Manager the member who asked for its turn under way (`turnAsker`): their
+ *   own lines are not outside, and a thread it posts is kept for them.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
@@ -23,7 +26,9 @@ import {
   currentSlackThread,
   type SlackThread,
 } from "@repo/database/models/slack-installation-store";
+import { turnAsker } from "@repo/database/models/turn-asker";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { Effect, Option, Result } from "effect";
 import { SlackBot, type SlackChannel, type SlackWorkspaceBot } from "./slack-bot.js";
 
@@ -93,6 +98,17 @@ export const reachSlack = Effect.fn("web/reachSlack")(function* (
 
   return Result.succeed({ bot, agent, botUserId: team.value.botUserId, thread });
 });
+
+/** The member the agent acts for in Slack, as the module says: a Manager's asker, any other agent's starter. */
+export function slackAsker(
+  reach: SlackReach,
+): Effect.Effect<string, StoreFailure, DatabaseServices> {
+  const { agent } = reach;
+
+  return agent.kind === AGENT_KIND.MANAGER
+    ? turnAsker({ userId: agent.userId, conversationId: agent.conversationId })
+    : Effect.succeed(agent.userId);
+}
 
 /**
  * The channel an agent named, where it may act there for the use given:
