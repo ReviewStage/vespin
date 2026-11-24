@@ -9,13 +9,12 @@ import {
   onGeometryChange,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
   type KeyboardEvent,
   LayoutAnimation,
   type LayoutChangeEvent,
-  PanResponder,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -66,9 +65,6 @@ export const BAR_HEAD_INSET = {
   trailing: SPACE.TIGHT + 2,
   top: SPACE.TIGHT + 2,
 } as const;
-
-/** How far a finger drags down over a bar that lowers the keyboard before it does, in points: half a press's height, so a tap that slips never lowers it. */
-const LOWER_DRAG = PRESS_SIZE / 2;
 
 /** The most of the window's height above the keyboard what heads a bar takes before it scrolls inside the bar, so the content under the bar stays in reach at the largest text sizes and with the keyboard up. */
 const HEAD_SHARE = 0.35;
@@ -246,23 +242,6 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
 }
 
 /**
- * The touch handlers that run `onLower` on a drag down over a bar, claimed
- * before the bar's own controls see the drag, since a drag down is no press
- * of theirs; none where it is not given.
- */
-function useLowerDrag(onLower: (() => void) | undefined) {
-  return useMemo(() => {
-    if (onLower === undefined) return {};
-
-    return PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_, { dx, dy }) =>
-        dy > LOWER_DRAG && Math.abs(dy) > Math.abs(dx),
-      onPanResponderGrant: onLower,
-    }).panHandlers;
-  }, [onLower]);
-}
-
-/**
  * A bar of glass holding a composer's field and its buttons, floating over
  * the content it scrolls above, as the system's own bars do. Its children
  * are SwiftUI pieces, laid in a row on a host of its own, under its head
@@ -283,7 +262,7 @@ export function GlassBar({
   modifiers = [],
   field = false,
   heads = false,
-  onLower,
+  lowers = false,
 }: {
   readonly children: ReactNode;
   /** What stands under the row inside the same glass, such as the capsules saying where a start runs; nothing where none is given. */
@@ -298,12 +277,11 @@ export function GlassBar({
   readonly modifiers?: readonly ModifierConfig[];
   /** Whether a head may come and go over a row that must never be drawn anew, such as a field of pills holding the keyboard: the bar then keeps the column a head stands in even while none does. */
   readonly heads?: boolean;
-  /** Lowers the keyboard, which a drag down over the bar runs, as Messages lowers its keyboard, where no list stands over the bar to drag instead; none where the bar takes no such drag. */
-  readonly onLower?: (() => void) | undefined;
+  /** Whether a drag down over the bar lowers the keyboard, as a list's drag does, where no list stands over the bar to drag instead. */
+  readonly lowers?: boolean;
 }) {
   const ground = useFieldGround(PRESS_SIZE / 2);
   const pill = field ? ground : [];
-  const lowering = useLowerDrag(onLower);
 
   // Note that the glass spans the bar's width whatever its row holds, as the bar always has.
   const glass = [
@@ -328,17 +306,31 @@ export function GlassBar({
       </VStack>
     );
 
+  const content = alone ? (
+    row
+  ) : (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
+      {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
+      {row}
+      {foot}
+    </VStack>
+  );
+
+  // Note that the bar stands in the system's own scroll view at its content's height, so where it `lowers`, a drag down over it lowers the keyboard as a list's drag does, the system's interactive dismiss rather than a gesture of ours. Elsewhere the scroll stands still, and its content turns scrolling back on for what scrolls inside it, the capsules and a long head, since a scroll's stillness reaches every scroll under it.
   const bar = (
     <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
-      {alone ? (
-        row
-      ) : (
-        <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
-          {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
-          {row}
-          {foot}
-        </VStack>
-      )}
+      <ScrollView
+        axes="vertical"
+        showsIndicators={false}
+        modifiers={[
+          SwiftModifiers.fixedSize({ horizontal: false, vertical: true }),
+          SwiftModifiers.scrollClipDisabled(),
+          SwiftModifiers.scrollDisabled(!lowers),
+          SwiftModifiers.scrollDismissesKeyboard(lowers ? "interactively" : "never"),
+        ]}
+      >
+        <VStack modifiers={[SwiftModifiers.scrollDisabled(false)]}>{content}</VStack>
+      </ScrollView>
     </Host>
   );
 
@@ -349,10 +341,7 @@ export function GlassBar({
           {above}
         </Host>
       )}
-      {/* Note that the bar stands in this view whether or not it takes the drag, and the view is never flattened away, since a view flattened while it took no drag became a view of its own once it took one, which moved the bar into it and drew the field anew, letting go of the keyboard that turned the drag on. */}
-      <View collapsable={false} {...lowering}>
-        {bar}
-      </View>
+      {bar}
     </DockedFoot>
   );
 }

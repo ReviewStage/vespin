@@ -45,7 +45,6 @@ import {
   type ReactElement,
   type ReactNode,
   type RefObject,
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -624,8 +623,6 @@ interface ComposerParts {
   readonly field: ReactElement;
   readonly call: ReactElement | null;
   readonly send: ReactElement;
-  /** Lets go of the keyboard the field holds. */
-  readonly lower: () => void;
 }
 
 /** Whether the composer stands its controls in a row under its field, as the desktop composer does: one that starts work or speaks to an agent, holding capsules (`tools`, `trailing`). */
@@ -748,15 +745,8 @@ function useComposerParts(props: ComposerProps, oneLine = false): ComposerParts 
       </VStack>
     );
 
-  // Note that the act keeps one identity across renders, so the bar's drag that runs it is made once rather than on each key.
-  const lower = useCallback(() => {
-    if (pillDoor !== undefined) return pillDoor.current?.blur();
-    void field.current?.blur().catch(() => undefined);
-  }, [pillDoor]);
-
   return {
     add: rowed ? null : <AddPress menu={addMenu} onAdd={onAdd} />,
-    lower,
     field: pillsField ?? (
       <TextField
         ref={field}
@@ -912,6 +902,8 @@ function capsulesOwnLine(widths: RowWidths): boolean {
 
   return widths.row > 0 && widths.capsules > room;
 }
+
+// Note that the row measures its own widths to choose one line or two, a stand-in for SwiftUI's `ViewThatFits`, which `@expo/ui` does not expose; STAG-3998 (https://vespin.dev/stage/task/2155cd60-9c12-5616-a0dc-371ec53026be) wraps the system's own and retires `capsulesOwnLine`, `endFits` and `pickedWhole`.
 
 /** Whether what is picked and the presses fit the row whole on one line, each at its whole width; a row not yet measured keeps one line. */
 function endFits(widths: RowWidths): boolean {
@@ -1166,7 +1158,7 @@ export function Composer(props: ComposerProps) {
       foot={rowed ? foot : undefined}
       above={oneLine ? undefined : props.above}
       // Note that on one line no transcript stands over the bar to drag the keyboard down by, so the bar takes the drag itself.
-      onLower={oneLine ? parts.lower : undefined}
+      lowers={oneLine}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >
       {rowed ? (
