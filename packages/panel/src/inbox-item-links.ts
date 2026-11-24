@@ -4,7 +4,10 @@
  * The panel beside an item stands for the task that holds it, so a place in
  * the app opens there where that panel draws it, and
  * is otherwise the window's (`places/pressed-address.ts` states the choices
- * every surface answers by).
+ * every surface answers by). A thread on no task, as a Manager's, has the
+ * panel beside it too, standing for no task, so a page of a task opens
+ * there as a page of another task opens beside a task's item; everything
+ * else it names is the window's.
  */
 
 import { LINK_DESTINATION, type LinkDestination, taskNumberOf } from "@repo/features/link-grammar";
@@ -26,7 +29,9 @@ import { type Holding, ofRepository, pullRequestBeside } from "./places/pull-req
 /** An Inbox item a press comes from, and the task that holds it, which the panel beside it stands for. */
 export type InboxItemHere = {
   readonly kind: typeof HERE.INBOX_ITEM;
-  /** The task that holds the item; none before an item is chosen. */
+  /** Whether an item is chosen, which the panel beside the Inbox stands for; nothing opens there before one is. */
+  readonly chosen: boolean;
+  /** The task that holds the item; none for a thread on no task, as a Manager's, or before an item is chosen. */
   readonly taskId: string | undefined;
 } & Holding;
 
@@ -110,6 +115,9 @@ const ITEM_BESIDE: Readonly<Partial<Record<LinkDestinationName, ItemPlaceBeside>
   },
 };
 
+/** The places a thread on no task opens beside it, by the declaration its route matched: a page of a task, read on that task. */
+const TASKLESS_BESIDE: ReadonlySet<LinkDestinationName> = new Set(["PAGE"]);
+
 /** A file pressed on an Inbox item, beside it: one of the item's repository, which the panel reads through what holds the item, and one of another repository, read through the item's workspace; an older link's, naming none, only where the item holds a repository. */
 function fileBeside(
   address: Extract<Address, { readonly kind: typeof ADDRESS.FILE }>,
@@ -140,7 +148,16 @@ function itemPlace(address: PlaceAddress, here: InboxItemHere): Route {
 
 /** What an address pressed on an Inbox item opens: nothing before an item is chosen, since its panel stands for what holds the item. */
 export function besideItem(address: Address, here: InboxItemHere): Route {
-  if (here.taskId === undefined) return NOTHING;
+  if (!here.chosen) return NOTHING;
+
+  // A thread on no task opens a page of a task beside it alone, since its panel stands for no task to read the rest through.
+  if (here.taskId === undefined) {
+    return address.kind === ADDRESS.PLACE &&
+      address.routed !== undefined &&
+      TASKLESS_BESIDE.has(address.routed.name)
+      ? itemPlace(address, here)
+      : NOTHING;
+  }
 
   switch (address.kind) {
     case ADDRESS.PLACE:

@@ -44,6 +44,7 @@ import { beforeAll, beforeEach, onTestFinished, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
+import { SHELL_ROOM } from "../shell-room.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
@@ -513,6 +514,42 @@ test("a page's bare link alone on its line, naming its task by the task's number
     page.querySelector(`[data-inbox-message-text] iframe[title="${FUNNEL.title}"]`) === frame,
     "the page's frame is the one first drawn",
   );
+});
+
+test("a page a Manager's thread names opens in the panel beside the Inbox, read on its task, as a task's item opens one, the Inbox still standing", async () => {
+  const manager = { ...AGENT, id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b", taskId: null };
+  const words = `See [@${FUNNEL.title}](https://vespin.dev/acme/task/${BILLING.id}/page/${FUNNEL.id}).`;
+  world.listedAgents = [AGENT, manager];
+  world.tasklessInboxes.set(manager.id, [
+    {
+      ...saying(EXPIRY, words),
+      id: "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e",
+      agentId: manager.id,
+      title: "Which funnel?",
+    },
+  ]);
+  const { page, asked, windowPath } = mount({ room: SHELL_ROOM.WIDE });
+  await settle();
+  act(() => rowNamed(page, "Which funnel?").click());
+  await settle();
+
+  const chip = await vi.waitFor(
+    () =>
+      page.querySelector<HTMLElement>("[data-inbox-message-text] [data-mention-ref]") ??
+      assert.fail("the thread's words name the page"),
+  );
+
+  const at = windowPath();
+  act(() => chip.click());
+  await settle();
+
+  const tabs = [...page.querySelectorAll('aside[aria-label="Panel"] [role="tab"]')];
+  assert.deepEqual(
+    tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]),
+    [[FUNNEL.title, "true"]],
+    "the page stands in the panel beside the thread",
+  );
+  assert.deepEqual([windowPath(), asked.openedAgents], [at, []], "the Inbox still stands");
 });
 
 test("a picture of an item opens a viewer the arrow keys walk across every picture of the item, its Markdown's pair and a picture it carried alike, in the order they are drawn", async () => {
