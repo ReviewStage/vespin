@@ -464,7 +464,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   to a floating bar over the page, a root's column or a pushed page's
   header then standing Show Sidebar (`sidebarAction`,
   `SidebarStackButton`), and a `SplitView`'s list beside it always stands,
-  with no system sidebar button (`listFixed`), while a root with no list
+  the system's sidebar button over it folding the app's sidebar instead
+  (`listFixed`), while a root with no list
   stands a `PageColumn` (the developer, Nov 23, 2026). A compact window hides it while a
   conversation stands in front (a thread, an agent's page, or a pull
   request it opened), as Messages does, so the composer stands alone at

@@ -45,7 +45,6 @@ import { useScaledSize } from "./accessibility.js";
 import { BarContent } from "./bar-content.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
-import { sidebarToggleOff } from "./interactions.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { MANAGER_FACE_SEAT, ManagerFace, TaskStatusMark } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
@@ -200,11 +199,11 @@ type SplitViewProps = {
   readonly onSidebarShownChange?: ((shown: boolean) => void) | undefined;
   /**
    * Whether the list always stands, as an iPad's Inbox list does beside the
-   * app's own sidebar: it never folds, and its column stands no sidebar
-   * button of the system's, since the app's sidebar has its own.
+   * app's own sidebar: it never folds, and the system's sidebar button over
+   * it shows or hides the app's sidebar instead (`onFixedToggle`).
    */
   readonly listFixed?: boolean | undefined;
-  /** Called where a fixed list's system button still stands, in a build without the module that takes it off, so a press on it shows or hides the app's own sidebar rather than nothing. */
+  /** Called as the system's sidebar button over a fixed list is pressed, so it shows or hides the app's own sidebar rather than folding the list or doing nothing. */
   readonly onFixedToggle?: (() => void) | undefined;
 };
 
@@ -467,15 +466,12 @@ function Column({
   bar = {},
   place,
   first = false,
-  fixed = false,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
   readonly place: ColumnPlace;
   /** Whether it is the split view's first column, whose search the system stands in the sidebar's own place. */
   readonly first?: boolean | undefined;
-  /** Whether it stands no sidebar button of the system's, as a list that never folds doesn't. */
-  readonly fixed?: boolean | undefined;
 }) {
   const colors = useColors();
   const text = useSearchWords(bar.search);
@@ -491,7 +487,6 @@ function Column({
         background(colors.GROUND),
         // Note that the list column is drawn at its own width, which a person drags its divider within, rather than the system's fixed one.
         ...(listed ? [navigationSplitViewColumnWidth(LIST_COLUMN_WIDTH)] : []),
-        ...(fixed ? [sidebarToggleOff()] : []),
         // Note that the list stands its title large under its bar, collapsing into it as the list scrolls, as Mail's list column does, rather than leading the bar (`inlineLarge`), because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [navigationTitle(bar.title), toolbarTitleDisplayMode(listed ? "large" : "inlineLarge")]
@@ -616,7 +611,7 @@ export function SplitView({
 
         const shown = visibility !== "detailOnly";
 
-        // Note that a fixed list refuses to fold, its split view held at both columns, and a press on a system button left standing shows or hides the app's own sidebar instead.
+        // Note that a fixed list refuses to fold, its split view held at both columns, and a press on the system's button shows or hides the app's own sidebar instead.
         if (listFixed) {
           if (!shown) onFixedToggle?.();
 
@@ -628,7 +623,7 @@ export function SplitView({
       modifiers={[navigationSplitViewStyle("balanced")]}
     >
       <NavigationSplitView.Sidebar>
-        <Column view={sidebar} bar={sidebarBar} place={COLUMN_PLACE.LIST} first fixed={listFixed} />
+        <Column view={sidebar} bar={sidebarBar} place={COLUMN_PLACE.LIST} first />
       </NavigationSplitView.Sidebar>
       <NavigationSplitView.Detail>
         <Column view={detail} bar={detailBar} place={COLUMN_PLACE.DETAIL} />
