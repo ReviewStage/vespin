@@ -62,8 +62,9 @@ private let commands: [Command] = [
     id: "newTask", place: .file, title: "New Task", symbol: "SquarePen", input: "n",
     nonRepeatable: true),
   Command(
-    id: "newAgent", place: .file, title: "New Agent", symbol: "Plus", input: "n",
-    modifiers: [.command, .shift], nonRepeatable: true),
+    // Note that New Agent takes ⌘T, as the desktop's tab strip's + does, rather than ⇧⌘N, which an iPad's apps keep for a new window.
+    id: "newAgent", place: .file, title: "New Agent", symbol: "Plus", input: "t",
+    nonRepeatable: true),
   Command(id: "inbox", place: .view, title: "Inbox", symbol: "Inbox", input: "1"),
   Command(id: "tasks", place: .view, title: "Tasks", symbol: "ListTodo", input: "2"),
   Command(id: "search", place: .view, title: "Search", symbol: "Search", input: "3"),
