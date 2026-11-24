@@ -247,10 +247,17 @@ doesn't, the agent doesn't start, and its transcript says to sign in with
 ### Usage data and screen recordings
 
 The Mac app and the web app send counts of which features you use, from a
-fixed list of event names and values, under your account's name and email.
-They never include anything you type or say, titles, branches, file paths,
-prompts, or error text. The Service counts work done through it (such as
-tasks created and agents started) the same way. Counts are grouped by
+fixed list of event names and values. They never include anything you type or
+say, titles, branches, file paths, prompts, or error text. These counts are
+anonymous: each copy of the app (on a Mac, in a browser, or on an iPhone or
+iPad) makes a random ID for itself the first time it counts, keeps it in its
+settings on that device, and sends its counts under that ID alone, never under
+your account, name, email, or workspace. The Service accepts them only while
+you are signed in, but does not pass your account on with them. The ID stays
+the same when you sign out or sign in as someone else on that device.
+
+The Service counts work done through it (such as tasks created and agents
+started) under your account's name and email. Those counts are grouped by
 workspace, with each workspace's name and creation date.
 
 The Vespin iOS app sends the same kind of counts while you are signed in:
@@ -291,10 +298,16 @@ app's do, and the app holds no PostHog key of its own.
 While you are signed in, the Mac app and the web app record how you use
 Vespin's window, such as the screens you visit and where you click, never your
 screen or other apps. Text you type and other content that may be sensitive is
-masked before a recording leaves your device. Recordings are linked to your
-account. While a maintainer is signed in as your account with your support
-access (section 4), their use of the web app is counted and recorded the same
-way, under your account. The iOS app records nothing.
+masked before a recording leaves your device. Recordings are filed under your
+account's id, name, and email, so we can find them when you ask for help and
+erase them with your account. They are kept apart from the anonymous counts:
+the two share no ID and no workspace. Someone with access to our PostHog
+project could still match when a device's counts were made against when a
+recording was, or against the Service's counts, which are under your account;
+we do not do this. While a maintainer is signed in as your account with your
+support access (section 4), their use of the web app is recorded the same way,
+under your account, and counted under that browser's own ID. The iOS app
+records nothing.
 
 Turning off Settings › Account › "Share usage data" stops the counts, the
 recordings, and the Sentry reports described below from that Mac or browser,
@@ -308,7 +321,8 @@ sample of launches and page loads. They use Sentry's default data collection,
 so reports may include error messages, stack traces, request addresses and
 headers, device details, and your IP address. Sentry replaces values whose
 names look like credentials, and Vespin removes query parameter values and
-token-shaped parts of addresses. Reports name your account by its id only. The
+token-shaped parts of addresses. The Mac app's and the web app's reports do not
+name your account; the Service's name it by its id only. The
 Service does not send Sentry what was sent to or returned by a model, though an
 error's own words can quote what an agent was working on. The Mac app also sends
 Sentry diagnostic data about its resource use, such as processor usage. The
@@ -346,9 +360,8 @@ or GitHub) and how it ended, with the app's own lines about its sign-in before
 it. It uses Sentry's default data collection, so reports may include error
 messages, stack traces, the addresses of the app's own requests, device and
 iOS details, the app's version and build, and your IP address. A report
-naming a sign-in token in an address is dropped, and reports name your
-account by its id only, or not at all for a crash before you are signed in
-again at launch. Each time you open the app, it sends Sentry a performance
+naming a sign-in token in an address is dropped, and reports do not name your
+account. Each time you open the app, it sends Sentry a performance
 trace of its start: how long each of its startup steps took, from iOS
 starting it to your Inbox's first rows, and a processor profile of which of
 the app's own functions ran and for how long, never the values they handled.
@@ -685,13 +698,20 @@ made before default-branch drives expires thirty days after its last use. When y
   services until you uninstall them there.
 - **Workspaces with other members**, and the tasks, memories, comments, and
   description text you left in them, stay with the workspace without your name.
-- **Usage data and screen recordings:** we ask PostHog to erase them; if it
-  cannot be reached, your account is deleted anyway and PostHog keeps them.
+- **Screen recordings and the Service's counts:** we ask PostHog to erase
+  everything filed under your account, which also covers the apps' counts from
+  before they became anonymous; if it cannot be reached, your account is
+  deleted anyway and PostHog keeps them.
+- **The apps' anonymous counts** are not tied to your account, so deleting it
+  cannot find or erase them; they stay in PostHog under each device's random
+  ID.
 - **Onboarding emails:** we ask Resend to delete the contact it keeps under
   your email address, which stops them; if it cannot be reached, your account
   is deleted anyway and Resend keeps it.
 - **Error reports** already sent to Sentry are kept until Sentry's retention
-  ends, since Sentry offers no way to erase one account's reports.
+  ends, since Sentry offers no way to erase one account's reports. The Mac
+  app's, the web app's, and the iOS app's reports no longer name your account,
+  so the ones sent since cannot be found as yours.
 - **Integrations:** we ask Vercel Connect to revoke your grants; anything your
   agents already did at those services stays there.
 - **Google and GitHub sign-in:** we ask GitHub to revoke your authorization

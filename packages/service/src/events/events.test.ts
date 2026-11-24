@@ -7,15 +7,9 @@
  */
 
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { Database } from "@repo/database/core/query";
-import { user } from "@repo/database/schemas/auth";
-import { personalWorkspace } from "@repo/database/schemas/personal-workspace";
-import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
-import { noDatabase } from "@repo/database/testing/no-database";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { DateTime, Effect } from "effect";
+import { Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { PRODUCT_EVENT, type WireValue } from "../core.js";
 import { HOSTED_REFUSAL, upstreamRefused } from "../http/http-effect.js";
@@ -24,6 +18,8 @@ import { type EventsOptions, recordEvents } from "./events.js";
 
 const NOW = Date.parse("2026-08-19T12:00:00.000Z");
 const PROJECT_KEY = "phc_project";
+const INSTALL_ID = "0b7c1f2e-4a5d-4e6f-8a9b-1c2d3e4f5a6b";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 const LAUNCH = {
   name: PRODUCT_EVENT.APP_LAUNCH,
@@ -54,21 +50,8 @@ function options(overrides: Partial<EventsOptions> = {}): EventsOptions {
   return { projectApiKey: PROJECT_KEY, ...overrides };
 }
 
-/**
- * One batch recorded for the account named, at the test's instant, over a
- * database that refuses every statement and the upstream handed in.
- */
+/** One batch recorded for the account named, at the test's instant, over the upstream handed in. */
 function post(
-  userId: string,
-  batch: WireValue,
-  posthog: ReturnType<typeof upstream>,
-  overrides: Partial<EventsOptions> = {},
-) {
-  return Effect.provide(postOverDatabase(userId, batch, posthog, overrides), noDatabase);
-}
-
-/** One batch recorded for the account named, at the test's instant, over the database the test provides. */
-function postOverDatabase(
   userId: string,
   batch: WireValue,
   posthog: ReturnType<typeof upstream>,
@@ -81,36 +64,21 @@ function postOverDatabase(
   });
 }
 
-/** A new account, with the personal workspace the app makes for every account; answers both. */
-const openAccount = Effect.gen(function* () {
-  const userId = `user-${randomUUID()}`;
-  yield* Database.use((db) =>
-    db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
-  );
-  const personal = yield* openWorkspace(userId);
-  const now = yield* DateTime.nowAsDate;
-  yield* Database.use((db) =>
-    db.insert(personalWorkspace).values({ userId, organizationId: personal, createdAt: now }),
-  );
-
-  return { userId, personal };
-});
-
-/** The workspace group each event of the account's next batch was filed under, or none. */
-const groupsOfBatchFrom = (userId: string) =>
-  Effect.gen(function* () {
-    const posthog = upstream();
-    yield* postOverDatabase(userId, { events: [LAUNCH, LAUNCH] }, posthog);
-
-    return (posthog.forwarded[0]?.body.batch ?? []).map((item) => item.properties.$groups);
-  });
-
 it.effect(
-  "an accepted batch posts every event under the account at its top level, as the capture docs ask, with geolocation off",
+  "an accepted batch posts every event under the install's id at its top level, as a personless event with geolocation off, and names neither the account nor a workspace",
   () =>
     Effect.gen(function* () {
       const posthog = upstream();
-      const answer = yield* post("user-document", { events: [LAUNCH, LAUNCH] }, posthog);
+
+      const answer = yield* post(
+        "user-document",
+        {
+          events: [LAUNCH, LAUNCH],
+          installId: INSTALL_ID,
+          build: { workspace: "workspace-named" },
+        },
+        posthog,
+      );
 
       assert.deepEqual(answer, { accepted: 2 });
       assert.equal(posthog.forwarded.length, 1);
@@ -119,14 +87,39 @@ it.effect(
       assert.equal(sent?.body.api_key, PROJECT_KEY);
       assert.equal(sent?.body.historical_migration, false);
       assert.equal(sent?.body.batch.length, 2);
+      assert.ok(!JSON.stringify(sent?.body).includes("user-document"));
 
       for (const item of sent?.body.batch ?? []) {
         assert.equal(item.event, PRODUCT_EVENT.APP_LAUNCH);
-        assert.equal(item.distinct_id, "user-document");
+        assert.equal(item.distinct_id, INSTALL_ID);
         assert.equal(item.properties.distinct_id, undefined);
+        assert.equal(item.properties.$process_person_profile, false);
+        assert.equal(item.properties.$set, undefined);
+        assert.equal(item.properties.$groups, undefined);
         assert.equal(item.properties.$geoip_disable, true);
         assert.equal(item.properties.app_version, "0.2.0");
       }
+    }),
+);
+
+it.effect(
+  "a batch from a build that names no install, or names one that is not a UUID, goes under an id of its own, never the account's",
+  () =>
+    Effect.gen(function* () {
+      const older = upstream();
+      yield* post("user-older-install", { events: [LAUNCH, LAUNCH] }, older);
+      yield* post(
+        "user-older-install",
+        { events: [LAUNCH], installId: "user-older-install" },
+        older,
+      );
+
+      const ids = older.forwarded.map((sent) => sent.body.batch.map((item) => item.distinct_id));
+      const [first, second] = ids;
+      assert.equal(first?.[0], first?.[1]);
+      assert.match(first?.[0] ?? "", UUID);
+      assert.match(second?.[0] ?? "", UUID);
+      assert.notEqual(first?.[0], second?.[0]);
     }),
 );
 
@@ -146,61 +139,36 @@ it.effect("a web batch is stamped web, and one that names no platform is stamped
   }),
 );
 
-it.effect(
-  "the person is set on the first item alone, and each timestamp is clamped into the window",
-  () =>
-    Effect.gen(function* () {
-      const posthog = upstream();
-      const person = { name: "Ada Lovelace", email: "ada@example.test" };
+it.effect("each timestamp is clamped into the window", () =>
+  Effect.gen(function* () {
+    const posthog = upstream();
 
-      const answer = yield* post(
-        "user-person",
-        {
-          events: [
-            { ...LAUNCH, at: NOW - 30 * 24 * 60 * 60 * 1000 },
-            { ...LAUNCH, at: NOW + 60 * 60 * 1000 },
-            LAUNCH,
-          ],
-        },
-        posthog,
-        { readPerson: () => Effect.succeed(person) },
-      );
-
-      assert.deepEqual(answer, { accepted: 3 });
-      const batch = posthog.forwarded[0]?.body.batch ?? [];
-      assert.deepEqual(
-        batch.map((item) => item.properties.$set),
-        [person, undefined, undefined],
-      );
-      assert.deepEqual(
-        batch.map((item) => item.timestamp),
-        [
-          // A month back is pulled up to the oldest instant the window keeps.
-          "2026-08-12T12:00:00.000Z",
-          // An hour ahead of the service's clock is pulled back to it.
-          "2026-08-19T12:00:00.000Z",
-          // Inside the window, the desktop's own instant stands.
-          "2026-08-19T11:59:30.000Z",
+    const answer = yield* post(
+      "user-person",
+      {
+        events: [
+          { ...LAUNCH, at: NOW - 30 * 24 * 60 * 60 * 1000 },
+          { ...LAUNCH, at: NOW + 60 * 60 * 1000 },
+          LAUNCH,
         ],
-      );
-    }),
-);
+      },
+      posthog,
+    );
 
-it.effect(
-  "a batch whose account was deleted after its caller was resolved is refused and nothing is forwarded",
-  () =>
-    Effect.gen(function* () {
-      const posthog = upstream();
-
-      const refusal = yield* Effect.flip(
-        post("user-deleted", { events: [LAUNCH] }, posthog, {
-          readPerson: () => Effect.succeed(undefined),
-        }),
-      );
-
-      assert.equal(refusal, HOSTED_REFUSAL.INVALID_TOKEN);
-      assert.deepEqual(posthog.forwarded, []);
-    }),
+    assert.deepEqual(answer, { accepted: 3 });
+    const batch = posthog.forwarded[0]?.body.batch ?? [];
+    assert.deepEqual(
+      batch.map((item) => item.timestamp),
+      [
+        // A month back is pulled up to the oldest instant the window keeps.
+        "2026-08-12T12:00:00.000Z",
+        // An hour ahead of the service's clock is pulled back to it.
+        "2026-08-19T12:00:00.000Z",
+        // Inside the window, the desktop's own instant stands.
+        "2026-08-19T11:59:30.000Z",
+      ],
+    );
+  }),
 );
 
 it.effect("a user past the brake is refused as over quota and nothing more is forwarded", () =>
@@ -287,41 +255,3 @@ it.effect(
       assert.equal(olderEvent?.properties.packaged, undefined);
     }),
 );
-
-// The group is the service's own reading of the caller's membership, never a
-// claim the batch makes: a workspace named in the build attaches nothing.
-it.layer(getTestDB())("the workspace a batch is filed under", (it) => {
-  it.effect(
-    "a member of one shared workspace is filed under it, a solo account under its personal one, and a member of two under none, whatever the batch names",
-    () =>
-      Effect.gen(function* () {
-        const solo = yield* openAccount;
-        assert.deepEqual(yield* groupsOfBatchFrom(solo.userId), [
-          { workspace: solo.personal },
-          { workspace: solo.personal },
-        ]);
-
-        const owner = yield* openAccount;
-        const team = yield* openWorkspace(owner.userId);
-        const member = yield* openAccount;
-        yield* joinWorkspace(team, member.userId);
-        assert.deepEqual(yield* groupsOfBatchFrom(member.userId), [
-          { workspace: team },
-          { workspace: team },
-        ]);
-
-        const otherTeam = yield* openWorkspace(owner.userId);
-        yield* joinWorkspace(otherTeam, member.userId);
-        const posthog = upstream();
-        yield* postOverDatabase(
-          member.userId,
-          { events: [LAUNCH], build: { workspace: solo.personal } },
-          posthog,
-        );
-        assert.deepEqual(
-          (posthog.forwarded[0]?.body.batch ?? []).map((item) => item.properties.$groups),
-          [undefined],
-        );
-      }),
-  );
-});

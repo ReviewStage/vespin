@@ -3,8 +3,8 @@
  *
  * The service reads an account's name and email from the row the sign-in
  * keeps for it rather than from any request, so the desktop sends nothing
- * that names anybody: the events endpoint's PostHog person fields read it
- * here, and so does choosing which integrations the account is offered
+ * that names anybody: the service's own counts' PostHog person fields read
+ * it here (`server-events.ts`), and so does choosing which integrations the account is offered
  * (`integration-connect.ts`). An invitation email reads its inviter's
  * sign-in picture here too.
  */

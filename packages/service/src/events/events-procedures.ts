@@ -1,8 +1,8 @@
 /**
- * events-procedures.ts -- the desktop's product analytics batch, recorded for the signed-in account.
+ * events-procedures.ts -- an app's product analytics batch, taken from a signed-in account.
  *
- * `POST /api/events` takes an allowlisted batch and forwards it under the
- * caller's account (`events.ts`). The checks run in the order the old
+ * `POST /api/events` takes an allowlisted batch from a signed-in caller and
+ * forwards it under the install's own id, never the account (`events.ts`). The checks run in the order the old
  * route ran them, as far as a procedure can: an unconfigured deployment is
  * unavailable before any caller is resolved, so it does no work at all;
  * then the caller; then the body's stated size; then the batch itself.
@@ -10,7 +10,6 @@
 
 import { middlewareGen } from "@orpc/experimental-effect";
 import { Effect, Redacted } from "effect";
-import { readAccountPerson } from "../accounts/account-person.js";
 import { text as trimmedText, type UnparsedWireValue } from "../core.js";
 import { HostedEnvironment } from "../environment.js";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
@@ -45,9 +44,6 @@ const recordingConfigured = middlewareGen<HostedContext, { recording: EventsOpti
     projectApiKey,
     // Vercel's own variable, read where Sentry reads it for the same name.
     deployment: process.env[DEPLOYMENT_VARIABLE],
-    // Read from the service's own user row rather than from the request, so
-    // the desktop still sends nothing that names anybody.
-    readPerson: readAccountPerson,
   };
 
   if (environment.posthogIngestHost) recording.host = environment.posthogIngestHost;

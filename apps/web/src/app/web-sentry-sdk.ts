@@ -6,10 +6,8 @@
  * hold on to.
  */
 
-import { signedInAccountId } from "@repo/credentials/snapshot";
 import { readLink } from "@repo/features/link-grammar";
 import { LINK_ORIGIN, PANEL_PATH } from "@repo/features/link-home";
-import { eventNamingAccount, logNamingAccount } from "@repo/features/sentry-account";
 import {
   eventWithoutAccessTokens,
   SPANS_NAMING_ACCESS_TOKENS,
@@ -103,11 +101,6 @@ function nameByRoute(client: Client): void {
   });
 }
 
-/** The account the tab's host has signed in, as its document says now. */
-function accountId(queryClient: QueryClient): string | undefined {
-  return signedInAccountId(queryClient.getQueryData(appStateQuery.queryKey)?.account);
-}
-
 /** Whether the tab's device shares usage data, as its document says now; undefined until its settings are read. */
 function usageData(queryClient: QueryClient): boolean | undefined {
   const document = queryClient.getQueryData(appStateQuery.queryKey);
@@ -123,9 +116,8 @@ function usageData(queryClient: QueryClient): boolean | undefined {
  * addresses scrubbed (`@repo/features/sentry-breadcrumbs`). Each page load
  * and navigation is named by the kind of place it opens, never its path. A
  * failure the panel showed is sent as a log line, and as an issue besides
- * where nothing named it (`@repo/features/shown-failure`). Each event and log
- * line names the account signed in as it leaves, by its id alone, as
- * Sentry's user (`@repo/features/sentry-account`). A send the developer
+ * where nothing named it (`@repo/features/shown-failure`). No event or log
+ * line names the account: the tab sets no user (`PRIVACY.md`). A send the developer
  * presses is a span of its own, whose trace its act carries to the tab's
  * host and on to the service (`@repo/panel/send-traces`), because the
  * host's requests leave through a `fetch` it held before this SDK patched
@@ -161,9 +153,7 @@ export function initWebSentry(build: WebSentryBuild, queryClient: QueryClient): 
     ],
     tracesSampler: sentryTracesSampler,
     beforeBreadcrumb: withoutAccessTokens,
-    beforeSend: (event) =>
-      eventWithoutAccessTokens(eventNamingAccount(event, accountId(queryClient))),
-    beforeSendLog: (log) => logNamingAccount(log, accountId(queryClient)),
+    beforeSend: eventWithoutAccessTokens,
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,
     beforeSendSpan: withStreamedSpan(spanWithoutAccessTokens),
   });

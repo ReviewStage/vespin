@@ -61,10 +61,10 @@ import { DEPLOYMENT_VARIABLE, deploymentNamed, WORKSPACE_GROUP_TYPE } from "./ev
  * than counted under the member who started the agent, so a count of posts is
  * a count of people talking, and an agent's work is the agent events'.
  *
- * The events are joined to the same person the desktop's are, by the account's
- * own user id, so PostHog's funnels run from the site's sign-in through the
- * desktop's counts to the work itself; and erased with them on account
- * deletion, which deletes by that id. Since a capture runs after its request
+ * The events are filed under the account's own user id, the person its
+ * session replay and the site's sign-in are filed under, never the apps'
+ * counted events, which go under each install's own random id (`events.ts`);
+ * and erased with that person on account deletion, which deletes by that id. Since a capture runs after its request
  * has answered, or with no request at all (a settled turn, the sweep, an
  * automation's run), it reads the account's row first and posts nothing for
  * one no longer there, so a late event does not bring back the person a

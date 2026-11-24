@@ -51,7 +51,6 @@ import { createNativeNode, type NativeNode } from "./native-node";
 import { colorCodeInUtilityProcess } from "./task-code-coloring";
 import {
   createTelemetryService,
-  followAccountInReports,
   followUsageDataInReports,
   mainErrorReporting,
   type TelemetryService,
@@ -247,9 +246,7 @@ export function composeDesktop(
         services,
       );
 
-      // Every report main sends names the account signed in, from its first document on.
-      yield* followAccountInReports(state);
-      // And sends only while the device shares usage data, as the document says it does now.
+      // Every report main sends goes only while the device shares usage data, as the document says it does now.
       yield* followUsageDataInReports(state);
       const native = createNativeNode({ config, state });
 

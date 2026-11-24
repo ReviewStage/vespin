@@ -169,6 +169,10 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       appVersion: identity.appVersion,
       packaged: identity.packaged,
       platform: identity.platform,
+      // Note that an id the file could not keep still counts this run, under an id of its own.
+      installId: store
+        .usageInstallId(kernel.createId)
+        .pipe(Effect.orElseSucceed(() => kernel.createId())),
       sends: runMode.sendsNetwork,
       // The kernel's clock, so a count is stamped on the same clock as every other timer here.
       now: kernel.now,
