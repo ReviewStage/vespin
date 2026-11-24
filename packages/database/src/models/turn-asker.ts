@@ -6,6 +6,7 @@ import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { member } from "../schemas/auth.js";
+import { automation } from "../schemas/automation.js";
 import { conversations, messages, turns } from "../schemas/storage.js";
 import { MESSAGE_SENDER } from "../storage-vocabulary.js";
 import type { ConversationTarget } from "./writer.js";
@@ -15,13 +16,17 @@ import type { ConversationTarget } from "./writer.js";
  *
  * The asker is read from the rows alone, never from what a model says: the
  * first of the developer's lines the agent's newest started turn took, read
- * through a worker's conversation to the agent it was delegated from, where
- * a member sent it (`messages.sender_user_id`) and is still a member of the
- * agent's workspace. A turn an automation, an agent, GitHub, or the app
- * opened, a line from before lines named their sender, and a member who
- * since left the workspace have no asker, so the agent's starter, its
- * owner, stands in. Every place that acts for whoever asked reads this one
- * read, so "who asked" means one thing everywhere.
+ * through a worker's conversation to the agent it was delegated from. A
+ * member's line answers that member (`messages.sender_user_id`), an
+ * automation's run answers the automation's creator
+ * (`messages.sender_automation_id`), and another agent's line, such as the
+ * report of one the agent started, answers that agent's starter
+ * (`messages.sender_agent_id`), each while they are still a member of the
+ * agent's workspace. A turn GitHub, a wakeup, or the app opened, a line from
+ * before lines named their sender, a deleted automation or agent, and an
+ * account that since left the workspace have no asker, so the agent's
+ * starter, its owner, stands in. Every place that acts for whoever asked
+ * reads this one read, so "who asked" means one thing everywhere.
  */
 
 /** The conversation a worker was delegated from, through which its own agent is read. */
@@ -29,6 +34,9 @@ const parent = alias(conversations, "parent");
 
 /** The line that opened the agent's turn under way. */
 const opener = alias(messages, "opener");
+
+/** The agent that sent the opening line, where another agent did. */
+const sendingAgent = alias(agentTable, "sending_agent");
 
 const findAsker = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
@@ -65,12 +73,29 @@ const findAsker = SqlSchema.findOneOption({
             eq(agentTable.conversationId, sql`coalesce(${parent.id}, ${conversations.id})`),
           )
           .leftJoin(opener, eq(opener.id, sql`(${openingLine})`))
+          .leftJoin(
+            automation,
+            and(
+              eq(opener.sender, MESSAGE_SENDER.AUTOMATION),
+              eq(automation.id, opener.senderAutomationId),
+            ),
+          )
+          .leftJoin(
+            sendingAgent,
+            and(eq(opener.sender, MESSAGE_SENDER.AGENT), eq(sendingAgent.id, opener.senderAgentId)),
+          )
           // Note that a former member asks nothing, so their line hands the turn to the starter rather than to an account outside the workspace.
           .leftJoin(
             member,
             and(
-              eq(opener.sender, MESSAGE_SENDER.MEMBER),
-              eq(member.userId, opener.senderUserId),
+              eq(
+                member.userId,
+                sql`case ${opener.sender}
+                  when ${MESSAGE_SENDER.MEMBER} then ${opener.senderUserId}
+                  when ${MESSAGE_SENDER.AUTOMATION} then ${automation.userId}
+                  when ${MESSAGE_SENDER.AGENT} then ${sendingAgent.userId}
+                end`,
+              ),
               eq(member.organizationId, agentTable.organizationId),
             ),
           )
@@ -82,7 +107,8 @@ const findAsker = SqlSchema.findOneOption({
 
 /**
  * Who asked for the turn under way in the conversation given, as the module
- * says: the member whose line opened it, else the agent's starter; the
+ * says: the member whose line opened it, or the creator of the automation
+ * or the starter of the agent that sent it, else the agent's starter; the
  * conversation's own account where it is no agent's.
  */
 export function turnAsker(

@@ -13,11 +13,29 @@ import { MESSAGE_SENDER } from "../storage-vocabulary.js";
  * developer's lines it took, in the order given, each from the sender given.
  */
 
-/** What sent one of the developer's lines: a member by their account, or an automation's run by its name. */
-export type TestLineSender = { readonly member: string } | { readonly automation: string };
+/** What sent one of the developer's lines: a member by their account, an automation's run by its name and, where it names one, its id, or another agent by its id. */
+export type TestLineSender =
+  | { readonly member: string }
+  | { readonly automation: string; readonly automationId?: string }
+  | { readonly agent: string };
 
 /** How many turns and lines were written so far, so each starts and sits after the last. */
 let written = 0;
+
+/** The columns a line from the sender is written with. */
+function senderColumns(sender: TestLineSender) {
+  if ("member" in sender) return { sender: MESSAGE_SENDER.MEMBER, senderUserId: sender.member };
+
+  if ("agent" in sender) {
+    return { sender: MESSAGE_SENDER.AGENT, senderName: "Reporter", senderAgentId: sender.agent };
+  }
+
+  return {
+    sender: MESSAGE_SENDER.AUTOMATION,
+    senderName: sender.automation,
+    senderAutomationId: sender.automationId ?? null,
+  };
+}
 
 /** A running turn of the conversation, started after every earlier one, that took one line from each sender given, in order; its id. */
 export const openRunningTurn = (
@@ -55,9 +73,7 @@ export const openRunningTurn = (
         metadata: { channel: MESSAGE_CHANNEL.TYPED },
         placedAt: startedAt,
         finishedAt: startedAt,
-        ...("member" in sender
-          ? { sender: MESSAGE_SENDER.MEMBER, senderUserId: sender.member }
-          : { sender: MESSAGE_SENDER.AUTOMATION, senderName: sender.automation }),
+        ...senderColumns(sender),
       });
     }
 
