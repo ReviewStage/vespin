@@ -195,6 +195,7 @@ import {
   type ReactElement,
   type ReactNode,
   useDeferredValue,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -3413,9 +3414,16 @@ function TasksStackList({
   const probeFocused = useIsFocused();
   probeRenders += 1;
 
-  if (probeRenders <= 30) probe("tasks:render", { n: probeRenders, focused: probeFocused });
+  if (probeRenders <= 600) probe("tasks:render", { n: probeRenders, focused: probeFocused });
 
   if (probeFocused) probeOnce("tasks:focus");
+  // PROBE ONLY: when each render's commit lands, and the frame after it, so a tap's render, commit and next frame are each timed.
+  const probeRender = probeRenders;
+  useLayoutEffect(() => {
+    if (probeRender > 600) return;
+    probe("tasks:commit", { n: probeRender });
+    requestAnimationFrame(() => probe("tasks:frame", { n: probeRender }));
+  });
 
   return (
     <>
