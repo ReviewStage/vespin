@@ -11,7 +11,7 @@
 
 import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import { Predicate } from "effect";
-import { Platform, Settings } from "react-native";
+import { Settings } from "react-native";
 
 /** The launch arguments the app reads: the fixture's profile, as `-fixture <profile>`, and the account service a flow signs in against, as `-authServer stub`. */
 const LAUNCH_ARGUMENT = {
@@ -41,39 +41,34 @@ export type LaunchSentryTest = (typeof LAUNCH_SENTRY_TEST)[keyof typeof LAUNCH_S
 /** The one account service a launch argument may name in place of the real one. */
 const STUB_AUTH_SERVER = "stub";
 
-/** The profile this launch's arguments name, read from the defaults iOS registered them in; none on any other platform, and none for a word that is no profile. */
+/** The profile this launch's arguments name, read from the defaults iOS registered them in; none for a word that is no profile. */
 export function launchFixtureProfile(): RunProfile | undefined {
-  if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.FIXTURE);
 
   return Object.values(RUN_PROFILE).find((profile) => profile === named);
 }
 
-/** Whether this launch signs in against the stubbed account service (`stub-auth-server.ts`) rather than the real one; never on any other platform. */
+/** Whether this launch signs in against the stubbed account service (`stub-auth-server.ts`) rather than the real one. */
 export function launchStubsAuthServer(): boolean {
-  if (Platform.OS !== "ios") return false;
-
   return Settings.get(LAUNCH_ARGUMENT.AUTH_SERVER) === STUB_AUTH_SERVER;
 }
 
-/** The agent this launch opens on, as `-agent <id>` names it, as a flow reaches an agent's page; none on any other platform, and where none is named. */
+/** The agent this launch opens on, as `-agent <id>` names it, as a flow reaches an agent's page; none where none is named. */
 export function launchAgent(): string | undefined {
-  if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.AGENT);
 
   return Predicate.isString(named) && named !== "" ? named : undefined;
 }
 
-/** The pull request of the launch's agent this launch opens on, as `-pullRequest <number>` names it; none on any other platform, and where none is named. */
+/** The pull request of the launch's agent this launch opens on, as `-pullRequest <number>` names it; none where none is named. */
 export function launchPullRequest(): number | undefined {
-  if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.PULL_REQUEST);
   const number = Predicate.isNumber(named) ? named : Number(named);
 
   return Number.isInteger(number) && number > 0 ? number : undefined;
 }
 
-/** The pairing code a fixture run's launch hands the app, as `-connect <code>` names it, as a machine's link would (`maestro/settings-machine-connect.yaml`); none in a live run, on any other platform, and where none is named. */
+/** The pairing code a fixture run's launch hands the app, as `-connect <code>` names it, as a machine's link would (`maestro/settings-machine-connect.yaml`); none in a live run, and where none is named. */
 export function launchHostConnect(): string | undefined {
   // Note that only a fixture run takes a code from its launch, since a live one takes a pairing only from its link.
   if (launchFixtureProfile() === undefined) return undefined;
@@ -84,50 +79,48 @@ export function launchHostConnect(): string | undefined {
 
 /** Whether the launch argument `key` says true, as iOS registers `-key true`: a string, a boolean, or a number by how it was passed. */
 function launchSaysTrue(key: string): boolean {
-  if (Platform.OS !== "ios") return false;
   const named: unknown = Settings.get(key);
 
   return named === true || named === "true" || named === 1;
 }
 
-/** Whether this launch starts a fixture run's own Live Activity, as `-liveActivity true` asks (`maestro/live-activity.yaml`); never on any other platform. */
+/** Whether this launch starts a fixture run's own Live Activity, as `-liveActivity true` asks (`maestro/live-activity.yaml`). */
 export function launchLiveActivity(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.LIVE_ACTIVITY);
 }
 
-/** Whether this launch's fixture run holds an ask of Ada's MacBook for an agent's command, as `-machineAsk true` asks (`maestro/machine-ask.yaml`); never on any other platform. */
+/** Whether this launch's fixture run holds an ask of Ada's MacBook for an agent's command, as `-machineAsk true` asks (`maestro/machine-ask.yaml`). */
 export function launchMachineAsk(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.MACHINE_ASK);
 }
 
-/** Whether this launch's fixture run stands its account as one that started setup and hasn't finished it, as `-setupOwed true` asks (`maestro/setup.yaml`); never on any other platform. */
+/** Whether this launch's fixture run stands its account as one that started setup and hasn't finished it, as `-setupOwed true` asks (`maestro/setup.yaml`). */
 export function launchSetupOwed(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.SETUP_OWED);
 }
 
-/** Whether this launch's fixture run stands its account with its Inbox turned off, as `-inboxOff true` asks (`maestro/inbox-off.yaml`); never on any other platform. */
+/** Whether this launch's fixture run stands its account with its Inbox turned off, as `-inboxOff true` asks (`maestro/inbox-off.yaml`). */
 export function launchInboxOff(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.INBOX_OFF);
 }
 
-/** Whether this launch stands a fixture run as the service's refusal of an old build leaves it, as `-updateNeeded true` asks (`maestro/update-needed.yaml`); never on any other platform. */
+/** Whether this launch stands a fixture run as the service's refusal of an old build leaves it, as `-updateNeeded true` asks (`maestro/update-needed.yaml`). */
 export function launchUpdateNeeded(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.UPDATE_NEEDED);
 }
 
-/** Whether this launch opens on the pill field's scratch page, as `-pillField true` asks (`maestro/pill-field.yaml`); never on any other platform. */
+/** Whether this launch opens on the pill field's scratch page, as `-pillField true` asks (`maestro/pill-field.yaml`). */
 export function launchPillField(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.PILL_FIELD);
 }
 
-/** Whether this launch's fixture run refuses the writes a flow presses, as `-refuseWrites true` asks, so a flow shoots the failure notice (`maestro/failure-notice.yaml`); never on any other platform. */
+/** Whether this launch's fixture run refuses the writes a flow presses, as `-refuseWrites true` asks, so a flow shoots the failure notice (`maestro/failure-notice.yaml`). */
 export function launchRefusesWrites(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.REFUSE_WRITES);
 }
 
-/** The test report this launch asks Sentry for, as `-sentryTest <js|native>` names it (`crash-reports.ts`); none on any other platform, and none for a word that is no test. */
+/** The test report this launch asks Sentry for, as `-sentryTest <js|native>` names it (`crash-reports.ts`); none for a word that is no test. */
 export function launchSentryTest(): LaunchSentryTest | undefined {
-  if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.SENTRY_TEST);
 
   return Object.values(LAUNCH_SENTRY_TEST).find((test) => test === named);
