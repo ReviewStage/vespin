@@ -75,6 +75,7 @@ import {
   machineAskAnswerParamsSchema,
   machineChangeParamsSchema,
   managerChatOlderParamsSchema,
+  managerChatUnsendParamsSchema,
   replyButtonAnswerViewSchema,
   replyButtonParamsSchema,
   replyButtonPressAnswerViewSchema,
@@ -422,6 +423,14 @@ export const AGENT_ACTS = declaredActs({
   }),
   AGENTS_UNSEND: hostAct({
     input: agentUnsendParamsSchema,
+    output: EffectSchema.Void,
+    refusal: "Could not let the message go on this system.",
+    panelOnly: true,
+    door: ACT.LOCAL_WRITE,
+    unanswered: undefined,
+  }),
+  AGENTS_CHAT_UNSEND: hostAct({
+    input: managerChatUnsendParamsSchema,
     output: EffectSchema.Void,
     refusal: "Could not let the message go on this system.",
     panelOnly: true,

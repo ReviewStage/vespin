@@ -11,6 +11,7 @@ import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import {
   AGENT_CALL_FAILURE,
   type AgentAgentAnswer,
+  type AgentChatSendAnswerView,
   type AgentMessageAnswerView,
   type AgentQueueAnswerView,
   type DevicePresenceAnswerView,
@@ -317,6 +318,8 @@ function fakeService() {
   // What a message sent answers once its gate lets it; none answers the agent as it stands.
   let messageAnswer: AgentMessageAnswerView | undefined;
   let messageSendGate: Effect.Effect<void> = Effect.void;
+  // What a message sent to a Manager's chat answers; none answers it taken, under one id.
+  let chatAnswer: AgentChatSendAnswerView | undefined;
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -604,7 +607,7 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`chatSend:${agentId}:${request.clientKey}:${request.text}`);
 
-        return { agent: AGENT, messageId: "a1b2c3d4" };
+        return chatAnswer ?? { agent: AGENT, messageId: "a1b2c3d4" };
       }),
     message: (agentId, request) =>
       Effect.andThen(
@@ -1063,6 +1066,10 @@ function fakeService() {
       messageAnswer = answer;
       messageSendGate = gate;
     },
+    /** What a message sent to a Manager's chat answers from now on. */
+    answerChat: (answer: AgentChatSendAnswerView) => {
+      chatAnswer = answer;
+    },
     /** What a change of an agent's queue answers from now on, once `gate` lets it. */
     answerQueue: (answer: AgentQueueAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       queueAnswer = answer;
@@ -1473,6 +1480,7 @@ export function subject(
       holdMessages: service.holdMessages,
       answerQueue: service.answerQueue,
       answerMessage: service.answerMessage,
+      answerChat: service.answerChat,
       sealScope: service.sealScope,
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,

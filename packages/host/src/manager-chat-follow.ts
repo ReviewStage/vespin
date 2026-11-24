@@ -1,4 +1,11 @@
-import { AGENT_CALL_FAILURE, type AgentTranscriptOlderAnswer } from "@repo/features/agent-view";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentChatSendAnswerView,
+  type AgentChatSendParams,
+  type AgentTranscriptOlderAnswer,
+  type ManagerChatSending,
+  type ManagerChatUnsendParams,
+} from "@repo/features/agent-view";
 import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import {
   MANAGER_CHAT_READ,
@@ -25,6 +32,15 @@ import { pushLive } from "./live-push.js";
  * messages held only while they still end where it was asked
  * (`withOlderPage`), so one that answers after the held chat moved leaves
  * no gap.
+ *
+ * A message the reader sends stands drawn on the chat from the moment it is
+ * sent (`sending`), whether or not the chat is held, until a row under the id
+ * the service answered stands in the chat's messages. One the service
+ * refused stands marked with why until it is sent again under its key,
+ * which draws it on its way again, or let go (`unsend`). Note that the
+ * messages on their way are kept for the account that sent them, in this
+ * process alone, and a sign-out lets them all go, since the next account
+ * signed in may reach the same chat but never another's words that did not go.
  */
 
 /** A read the service did not answer, as the client and the gate tell it. */
@@ -59,14 +75,23 @@ export interface ManagerChatFollowDependencies {
   readonly accountId: () => string | undefined;
   /** Whether the account gate stands open, so a follow may read. */
   readonly gate: () => boolean;
+  /** Epoch milliseconds now, which a message sent is stamped with. */
+  readonly now: () => number;
   readonly tell: (held: AppManagerChats) => void;
 }
 
-/** The held chats, and the read of an older page of one laid on them. */
+/** A person's message sent to a Manager's chat, as the service is asked it. */
+type ChatSend = (params: AgentChatSendParams) => Effect.Effect<AgentChatSendAnswerView>;
+
+/** The held chats, the read of an older page of one laid on them, and the reader's messages on their way to one drawn over it. */
 export type HeldManagerChats = HeldSlice<string> &
   HeldRows<string, AppManagerChat> & {
     /** Reads the page of `agentId`'s chat before `before` and lays it past the messages held where they still end there: whether it landed, or why it was not read. */
     readonly older: (agentId: string, before: number) => Effect.Effect<AgentTranscriptOlderAnswer>;
+    /** `send` drawn on the chat as the message it sends: on its way from the moment it is asked, under the id the service answers, or refused, marked with why. */
+    readonly sending: (send: ChatSend) => ChatSend;
+    /** A refused message let go, by the key it went under. */
+    readonly unsend: (params: ManagerChatUnsendParams) => Effect.Effect<void>;
   };
 
 const decodePage = Schema.decodeUnknownOption(MANAGER_CHAT_READ.rows);
@@ -137,11 +162,12 @@ function withOlderPage(
   return page.before === undefined ? { messages } : { messages, before: page.before };
 }
 
-/** Follows `agentId`'s newest page live until let go, each page laid over the older ones held and told through `answers`, and unanswered where a page could not be read. */
+/** Follows `agentId`'s newest page live until let go, each page laid over the older ones held, drawn with the messages on their way (`drawn`), and told through `answers`, and unanswered where a page could not be read. */
 function followChat(
   dependencies: ManagerChatFollowDependencies,
   agentId: string,
   answers: HeldAnswers<AppManagerChat>,
+  drawn: (agentId: string, chat: ManagerChatPageView) => AppManagerChat,
 ): Effect.Effect<void> {
   // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
   const userId = dependencies.accountId();
@@ -155,65 +181,151 @@ function followChat(
     publish: (page) =>
       Effect.sync(() => {
         if (page === undefined) return answers.unanswered();
-        answers.answered(withNewestPage(answers.rows(), page));
+        answers.answered(drawn(agentId, withNewestPage(answers.rows(), page)));
       }),
   });
+}
+
+/** `sending` with `message` in its key's place, or after the rest where none stands under its key. */
+function withSending(
+  sending: readonly ManagerChatSending[],
+  message: ManagerChatSending,
+): readonly ManagerChatSending[] {
+  const at = sending.findIndex((each) => each.clientKey === message.clientKey);
+
+  return at === -1 ? [...sending, message] : sending.with(at, message);
 }
 
 /**
  * The held lifetime over every Manager's chat the windows show
  * (`heldSlice`), told whole on its slice: each chat's newest page as its
- * follow last told it with the older pages read past it, kept where a later
- * read does not answer, and failed where it never answered. A chat let go
- * stops following, its messages standing for a window that steps back to it.
- * One the service refused for good, an agent the account does not reach or
- * one that is no Manager, is told failed and followed no longer until every
- * window lets it go and one holds it anew.
+ * follow last told it with the older pages read past it and the messages on
+ * their way, kept where a later read does not answer, and failed where it
+ * never answered. A chat let go stops following, its messages standing for
+ * a window that steps back to it. One the service refused for good, an
+ * agent the account does not reach or one that is no Manager, is told failed
+ * and followed no longer until every window lets it go and one holds it anew.
  */
 export function heldManagerChats(
   dependencies: ManagerChatFollowDependencies,
 ): Effect.Effect<HeldManagerChats, never, Scope.Scope> {
-  return Effect.map(
-    heldSlice<typeof LIVE_READ.MANAGER_CHAT, string>({
+  return Effect.gen(function* () {
+    /** The reader's messages on their way to each chat, by the agent's id, oldest sent first. */
+    const sendings = new Map<string, readonly ManagerChatSending[]>();
+
+    /** `chat` with the messages on their way to it, each whose row it holds let go. */
+    const drawn = (agentId: string, chat: ManagerChatPageView): AppManagerChat => {
+      const landed = new Set(chat.messages.map((message) => message.id));
+
+      const sending = (sendings.get(agentId) ?? []).filter(
+        (message) => message.messageId === undefined || !landed.has(message.messageId),
+      );
+
+      if (sending.length === 0) sendings.delete(agentId);
+      else sendings.set(agentId, sending);
+      const { messages, before } = chat;
+      const page = before === undefined ? { messages } : { messages, before };
+
+      return sending.length === 0 ? page : { ...page, sending };
+    };
+
+    const slice = yield* heldSlice<typeof LIVE_READ.MANAGER_CHAT, string>({
       empty: NO_KEYS_HELD,
       path: (agentId) => [agentId],
       gate: dependencies.gate,
-      follow: (agentId, answers) => followChat(dependencies, agentId, answers),
+      follow: (agentId, answers) => followChat(dependencies, agentId, answers, drawn),
       tell: dependencies.tell,
       pause: true,
-    }),
-    (slice) => ({
-      ...slice,
-      // Note that the page is polled with no `after`, so its rows come inline at once rather than held for a move.
-      older: (agentId, before) =>
+    });
+
+    // Note that a chat not read yet draws its messages on their way with its first page, so nothing is laid over a chat that holds none.
+    const redraw = (agentId: string) => {
+      const chat = slice.rowsOf(agentId);
+
+      if (chat !== undefined) slice.lay(agentId, drawn(agentId, chat));
+    };
+
+    const draw = (agentId: string, message: ManagerChatSending) => {
+      sendings.set(agentId, withSending(sendings.get(agentId) ?? [], message));
+      redraw(agentId);
+    };
+
+    // Note that the page is polled with no `after`, so its rows come inline at once rather than held for a move.
+    const older = (agentId: string, before: number) =>
+      Effect.gen(function* () {
+        const userId = dependencies.accountId();
+
+        if (!dependencies.gate() || userId === undefined) {
+          return { failure: AGENT_CALL_FAILURE.UNANSWERED };
+        }
+
+        const sealed = yield* dependencies.seal({ agentId, userId, before }, true);
+
+        if ("failure" in sealed) {
+          return {
+            failure:
+              sealed.failure === AGENT_CALL_FAILURE.NOT_FOUND
+                ? AGENT_CALL_FAILURE.NOT_FOUND
+                : AGENT_CALL_FAILURE.UNANSWERED,
+          };
+        }
+
+        const rows = sealed.queries.messages.rows;
+        const page = rows === undefined ? Option.none() : pageOfRows({ messages: rows });
+
+        if (Option.isNone(page)) return { failure: AGENT_CALL_FAILURE.UNANSWERED };
+        const laid = withOlderPage(slice.rowsOf(agentId), before, page.value);
+
+        if (laid !== undefined) slice.lay(agentId, drawn(agentId, laid));
+
+        return { landed: laid !== undefined };
+      });
+
+    // Note that a message sent again under its key takes its refused one's place, drawn on its way again in the same draw.
+    const sending =
+      (send: ChatSend): ChatSend =>
+      (params) =>
         Effect.gen(function* () {
-          const userId = dependencies.accountId();
+          const { agentId, clientKey, text, attachments } = params;
+          const sentBy = dependencies.accountId();
 
-          if (!dependencies.gate() || userId === undefined) {
-            return { failure: AGENT_CALL_FAILURE.UNANSWERED };
-          }
+          const message: ManagerChatSending = {
+            clientKey,
+            text,
+            ...(attachments === undefined ? undefined : { attachments }),
+            sentAt: dependencies.now(),
+            ...(sentBy === undefined ? undefined : { sentBy }),
+          };
 
-          const sealed = yield* dependencies.seal({ agentId, userId, before }, true);
+          draw(agentId, message);
+          const answer = yield* send(params);
 
-          if ("failure" in sealed) {
-            return {
-              failure:
-                sealed.failure === AGENT_CALL_FAILURE.NOT_FOUND
-                  ? AGENT_CALL_FAILURE.NOT_FOUND
-                  : AGENT_CALL_FAILURE.UNANSWERED,
-            };
-          }
+          draw(
+            agentId,
+            "failure" in answer
+              ? { ...message, refused: answer }
+              : { ...message, messageId: answer.messageId },
+          );
 
-          const rows = sealed.queries.messages.rows;
-          const page = rows === undefined ? Option.none() : pageOfRows({ messages: rows });
+          return answer;
+        });
 
-          if (Option.isNone(page)) return { failure: AGENT_CALL_FAILURE.UNANSWERED };
-          const laid = withOlderPage(slice.rowsOf(agentId), before, page.value);
+    const unsend = ({ agentId, clientKey }: ManagerChatUnsendParams) =>
+      Effect.sync(() => {
+        const kept = (sendings.get(agentId) ?? []).filter(
+          (message) => message.clientKey !== clientKey || message.refused === undefined,
+        );
 
-          if (laid !== undefined) slice.lay(agentId, laid);
+        sendings.set(agentId, kept);
+        redraw(agentId);
+      });
 
-          return { landed: laid !== undefined };
-        }),
-    }),
-  );
+    // Note that a sign-out lets every message on its way go with the chats, since they are the signed-out account's words.
+    const end = Effect.andThen(
+      Effect.sync(() => sendings.clear()),
+      slice.end,
+    );
+
+    return { ...slice, end, older, sending, unsend };
+  });
 }

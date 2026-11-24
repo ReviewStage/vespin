@@ -801,6 +801,40 @@ export const agentChatSendParamsSchema = EffectSchema.Struct({
 
 export type AgentChatSendParams = typeof agentChatSendParamsSchema.Type;
 
+/** Why the service did not take a person's message to a Manager's chat, as the window hears it. */
+export type ManagerChatRefusal = Extract<AgentChatSendAnswerView, { readonly failure: unknown }>;
+
+/**
+ * A person's message to a Manager's chat, as the host draws it on the chat
+ * (`@repo/host`'s `manager-chat-follow.ts`) from the moment it is sent until
+ * the chat's row for it lands, or, refused, until the person sends it again
+ * under its key or lets it go: the one record every window draws the
+ * message on its way from.
+ */
+export interface ManagerChatSending {
+  /** The key it went under, which Retry sends it under again, so it reaches the chat once. */
+  readonly clientKey: string;
+  readonly text: string;
+  /** Its files, as the send carried them. */
+  readonly attachments?: AgentChatSendParams["attachments"];
+  /** Epoch milliseconds it was sent, drawn under it at once. */
+  readonly sentAt: number;
+  /** The account that sent it, whose windows alone draw it; none for one sent while nobody was signed in. */
+  readonly sentBy?: string;
+  /** The id the chat holds it under, once the service answered; its row landing under that id ends the send. */
+  readonly messageId?: string;
+  /** Why the service did not take it, where it did not; none while it is on its way. */
+  readonly refused?: ManagerChatRefusal;
+}
+
+/** A person's message to a Manager's chat the service refused, let go from its Delete or its Edit, as the window asks it: the Manager, and the key it went under. */
+export const managerChatUnsendParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  clientKey: EffectSchema.NonEmptyString,
+});
+
+export type ManagerChatUnsendParams = typeof managerChatUnsendParamsSchema.Type;
+
 /**
  * One change of an agent's queue, as the window asks it: the agent, the
  * change, and for a message queued or edited with files, the ids the window

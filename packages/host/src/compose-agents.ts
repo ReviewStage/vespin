@@ -596,6 +596,7 @@ export function composeAgents(
         ),
       accountId: dependencies.accountId,
       gate,
+      now: dependencies.kernel.now,
       tell: liveTold(dependencies.kernel.emit, AGENT_FOLLOWS.AGENTS_MANAGER_CHAT_FOLLOW),
     });
 
@@ -1305,7 +1306,9 @@ function composed(
           sentBy: dependencies.accountId(),
         })),
     }),
-    AGENTS_CHAT_SEND: declaredWrite(dependencies.pool, chatSent),
+    // Note that a message to a Manager's chat stands drawn on the chat on its way, until its row lands there.
+    AGENTS_CHAT_SEND: managerChats.sending(declaredWrite(dependencies.pool, chatSent)),
+    AGENTS_CHAT_UNSEND: managerChats.unsend,
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),

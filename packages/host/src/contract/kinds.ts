@@ -313,6 +313,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_WARM: "agents.warm",
   /** A message of the member's the service refused let go, from its Delete or its Edit, which took its words back into the box (`agent-queue-writes.ts`). */
   AGENTS_UNSEND: "agents.unsend",
+  /** A person's message to a Manager's chat the service refused let go, from its Delete or its Edit, by the key it went under (`manager-chat-follow.ts`). */
+  AGENTS_CHAT_UNSEND: "agents.chatUnsend",
   /** A button in an agent's reply as the transcript draws it, asked of the service as it is drawn (`reply-button-wire.ts`). */
   AGENTS_REPLY_BUTTON: "agents.replyButton",
   /** A suggestion in an agent's reply sent by the member from its draft, which the service runs once. */
@@ -1203,6 +1205,7 @@ export const PORT_ACT_USE = {
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
   AGENTS_UNSEND: ACT_USE.WRITE,
+  AGENTS_CHAT_UNSEND: ACT_USE.WRITE,
   AGENTS_REPLY_BUTTON: ACT_USE.FETCH,
   AGENTS_REPLY_BUTTON_PRESS: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
