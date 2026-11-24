@@ -1422,6 +1422,14 @@ export const agentPictureParamsSchema = EffectSchema.Struct({
   playable: EffectSchema.optionalKey(playableVideoTypeSchema),
 });
 
+/** One picture a tool answered an agent, as `agentPictureParamsSchema` names it, and the file of the device its bytes are written to. */
+export const agentPictureFileParamsSchema = EffectSchema.Struct({
+  ...agentPictureParamsSchema.fields,
+  path: EffectSchema.NonEmptyString,
+});
+
+export type AgentPictureFileParams = typeof agentPictureFileParamsSchema.Type;
+
 /** One part of a message of an agent's transcript, or one of its workers' where `callId` names the delegation call that started it, by the message's id and the part's index among its parts: what the page carried cut (`cutParts`). */
 export const agentPartParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
@@ -1437,6 +1445,14 @@ export const agentPartViewSchema = answerView(messagesContract.agentPart);
 
 export type AgentPartView = typeof agentPartViewSchema.Type;
 
+/** The type a served file stands under: a transcript's picture may be a WebM an agent recorded, its MP4 copy to a window that plays MP4, or a sound clip, as well as a picture or a file. */
+const servedFileTypeSchema = EffectSchema.Literals([
+  ...Object.values(AGENT_ATTACHMENT_TYPE),
+  CONVERSATION_MEDIA_TYPE.WEBM,
+  MP4_TYPE,
+  ...Object.values(AUDIO_TYPE),
+]);
+
 /**
  * The image, or the file an inbox answer carried, as the window hears it:
  * its bytes in base64 under the media type the service sniffed and kept, or
@@ -1445,20 +1461,24 @@ export type AgentPartView = typeof agentPartViewSchema.Type;
  * the account, so the window holds no bearer and no address.
  */
 export const agentInboxAttachmentViewSchema = EffectSchema.Union([
-  EffectSchema.Struct({
-    // A transcript's picture may be a WebM an agent recorded, read through this same view, its MP4 copy to a window that plays MP4, or a sound clip.
-    contentType: EffectSchema.Literals([
-      ...Object.values(AGENT_ATTACHMENT_TYPE),
-      CONVERSATION_MEDIA_TYPE.WEBM,
-      MP4_TYPE,
-      ...Object.values(AUDIO_TYPE),
-    ]),
-    base64: EffectSchema.String,
-  }),
+  EffectSchema.Struct({ contentType: servedFileTypeSchema, base64: EffectSchema.String }),
   failed,
 ]);
 
 export type AgentInboxAttachmentView = typeof agentInboxAttachmentViewSchema.Type;
+
+/**
+ * One picture a tool answered an agent, read straight into a file of the
+ * device rather than as base64, as the iOS app reads one: written to
+ * `path`, whose bytes never reach the JavaScript that asked, and answered
+ * with the type it was served as, or why there is none.
+ */
+export const agentPictureFileViewSchema = EffectSchema.Union([
+  EffectSchema.Struct({ contentType: servedFileTypeSchema }),
+  failed,
+]);
+
+export type AgentPictureFileView = typeof agentPictureFileViewSchema.Type;
 
 /** One image an agent's pull request's overview names, as the window asks for it: the agent, and the address GitHub's rendering spelled. */
 export const agentGitHubImageParamsSchema = EffectSchema.Struct({

@@ -42,6 +42,8 @@ import {
   agentInboxStartParamsSchema,
   agentInboxTakeBackParamsSchema,
   agentInboxTakenBackViewSchema,
+  agentPictureFileParamsSchema,
+  agentPictureFileViewSchema,
   agentPictureParamsSchema,
 } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -139,6 +141,14 @@ export const AGENT_INBOX_ACTS = declaredActs({
     input: agentPictureParamsSchema,
     output: EffectSchema.toType(agentInboxAttachmentViewSchema),
     refusal: "Could not read the agent's picture on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: UNANSWERED,
+  }),
+  AGENTS_PICTURE_FILE: hostAct({
+    input: agentPictureFileParamsSchema,
+    output: EffectSchema.toType(agentPictureFileViewSchema),
+    refusal: "Could not read the agent's picture into a file on this system.",
     panelOnly: true,
     door: ACT.READ,
     unanswered: UNANSWERED,
