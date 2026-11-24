@@ -12,12 +12,12 @@ import { useTaskCountUpTo } from "../task-list-collections.js";
 import { useRepositoryMend } from "../tasks/no-repositories-banner.js";
 import { useNewTaskRunsOn } from "../tasks/runs-on.js";
 import {
+  draftWithStarter,
   type OfferedStarter,
   STARTER,
   STARTER_BOUNDS,
   STARTER_NEED,
   type Starter,
-  draftWithStarter,
   startersFor,
 } from "../tasks/starter-tasks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";

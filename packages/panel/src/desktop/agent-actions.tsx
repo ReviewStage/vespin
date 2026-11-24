@@ -8,7 +8,7 @@ import {
   type AgentSummary,
   agentMachineOf,
 } from "@repo/features/agent-wire";
-import type { ManagerFace } from "@repo/features/manager-face";
+import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DraftSuggestion } from "@repo/features/suggestion-model";
@@ -53,7 +53,6 @@ import type { MenuAction, MenuEntry, MenuSubmenu } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { useAgentDelete } from "./agent-delete.js";
 import {
-  FACE_FAILED,
   type ManagerSettingsSubject,
   useManagerSettingsDialog,
 } from "./manager-settings-dialog.js";
@@ -476,7 +475,7 @@ export function useAgentActions(
 
       toast({
         replayUnmasked: true,
-        words: FACE_FAILED,
+        words: MANAGER_FACE_FAILED,
         tone: STATUS_TONE.DANGER,
         failure: {
           surface: FAILURE_SURFACE.MANAGER_FACE,

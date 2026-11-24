@@ -19,7 +19,7 @@
 
 import { chooseFailureNote } from "@repo/features/agent-refusal-words";
 import { AGENT_MACHINE, type AgentSummary, agentMachineOf } from "@repo/features/agent-wire";
-import type { ManagerFace } from "@repo/features/manager-face";
+import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
 import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useConfirmDialog } from "@repo/ui";
@@ -41,8 +41,6 @@ import { useFormDialog } from "./use-form-dialog.js";
 const NAME_ASKED = "Name the Manager.";
 
 /** What the card, and a toast from a Manager's menu, say where the face was not saved. */
-export const FACE_FAILED = "Couldn't change the Manager's face.";
-
 /** No device, while the member's devices are not read. */
 const NO_DEVICES: readonly MacOffer[] = [];
 
@@ -155,7 +153,7 @@ export function useManagerSettingsDialog(
         const faced = await agents.onFace(agent.id, face);
 
         if ("failure" in faced)
-          return { status: ACTION_RESULT_STATUS.REJECTED, reason: FACE_FAILED };
+          return { status: ACTION_RESULT_STATUS.REJECTED, reason: MANAGER_FACE_FAILED };
       }
 
       if (sameChoice(choice, standing)) return ANSWER_ACCEPTED;

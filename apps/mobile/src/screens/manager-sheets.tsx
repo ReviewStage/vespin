@@ -1,6 +1,7 @@
-// manager-sheets.tsx -- New Manager and a Manager's Settings, each a sheet of the desktop's one Manager card: its name, its repositories, where it runs, and its model, the face left to the service on iOS.
+// manager-sheets.tsx -- New Manager and a Manager's Settings, each a sheet of the desktop's one Manager card: its name, its face, its repositories, where it runs, and its model.
 
 import { iosAgentRoute } from "@repo/features/ios-app-links";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import { IN_THE_CLOUD, placeIdOf, placeOfId } from "@repo/features/runs-on-places";
 import { agentRunsOnWords } from "@repo/features/task-agents-model";
@@ -12,6 +13,7 @@ import {
   glyphSymbol,
   ListSection,
   LoadingRow,
+  ManagerFacePicker,
   MenuPickRow,
   PickRows,
   Screen,
@@ -44,6 +46,8 @@ const WORDS = {
   SETTINGS: "Manager settings",
   NAME: "Name",
   NAME_PLACEHOLDER: "Release captain",
+  FACE: "Face",
+  FACE_PICKED_FOR_YOU: "One no other Manager here wears is picked for you, unless you choose one.",
   REPOSITORIES: "Repositories",
   REPOSITORIES_HINT: "The first picked is its checkout.",
   MACHINE: "Machine",
@@ -114,10 +118,10 @@ function SheetBar({
  * New Manager, as a sheet over the tabs, as the desktop's card makes one:
  * its name, kept as typed; the repositories it works in, one or more, the
  * first picked its checkout, starting on New task's own repository until a
- * pick; where it runs, the cloud until a device is picked; and its model
- * and effort, on the account's default until a pick. It picks no face,
- * since the app draws none, so the service picks one no other Manager of
- * the workspace wears. Create, lit once a name and a repository stand,
+ * pick; where it runs, the cloud until a device is picked; its model and
+ * effort, on the account's default until a pick; and its face, none until a
+ * pick, so the service picks one no other Manager of the workspace wears,
+ * as the desktop's card leaves it. Create, lit once a name and a repository stand,
  * makes it in the workspace the phone works in (`useCreateManager`) and,
  * once made, closes the sheet and opens the Manager's chat; a refusal says
  * why under the name and keeps the sheet, with what was picked kept for
@@ -138,6 +142,7 @@ export function NewManagerScreen() {
   const [name, setName] = useState("");
   const [picks, setPicks] = useState<readonly string[] | undefined>(undefined);
   const [runsOn, setRunsOn] = useState(IN_THE_CLOUD);
+  const [face, setFace] = useState<ManagerFace | undefined>(undefined);
 
   const chosen = picks ?? (repositories.picked === undefined ? [] : [repositories.picked]);
 
@@ -162,14 +167,16 @@ export function NewManagerScreen() {
     if (first === undefined || choice === undefined || trimmed === "") return;
 
     void making.run(() =>
-      create({ name: trimmed, repositories: [first, ...rest], runsOn, choice }).then((made) => {
-        if ("refused" in made) return made.refused;
+      create({ name: trimmed, repositories: [first, ...rest], runsOn, choice, face }).then(
+        (made) => {
+          if ("refused" in made) return made.refused;
 
-        // Note that the Manager's chat opens once the sheet has gone, on its own tab, as a task New task made opens.
-        leaveThen(() => router.push(onTab(iosAgentRoute(made.agentId))));
+          // Note that the Manager's chat opens once the sheet has gone, on its own tab, as a task New task made opens.
+          leaveThen(() => router.push(onTab(iosAgentRoute(made.agentId))));
 
-        return undefined;
-      }),
+          return undefined;
+        },
+      ),
     );
   };
 
@@ -196,6 +203,18 @@ export function NewManagerScreen() {
               }}
               autoFocus
               testId={NAME_FIELD_ID}
+            />
+          </ListSection>
+          <ListSection
+            title={WORDS.FACE}
+            footer={face === undefined ? WORDS.FACE_PICKED_FOR_YOU : undefined}
+          >
+            <ManagerFacePicker
+              face={face}
+              onPick={(picked) => {
+                setFace(picked);
+                changed();
+              }}
             />
           </ListSection>
           <ListSection
@@ -267,7 +286,9 @@ export function NewManagerScreen() {
  * and effort, each changed at once as picked, as the agent's model sheet
  * changes them, a refusal saying why under them; and its checkout and where
  * it runs, standing as it was made and saying so, since neither changes
- * after. Its face stands as the service picked it, since the app draws none.
+ * after. Its face, picked from the same faces the desktop's card offers,
+ * changes at once as picked (`AGENTS_FACE`), as its model does, the ring
+ * moving once the change lands and a refusal saying why under it.
  */
 export function ManagerSettingsScreen() {
   const { agent: agentId = "" } = useLocalSearchParams<{ agent: string }>();
@@ -308,6 +329,13 @@ export function ManagerSettingsScreen() {
                   onWords={setName}
                   testId={NAME_FIELD_ID}
                 />
+              </ListSection>
+              <ListSection
+                title={WORDS.FACE}
+                footer={actions.note}
+                footerTone={FOOTER_TONE.FAILURE}
+              >
+                <ManagerFacePicker face={agent.face} onPick={actions.changeFace} />
               </ListSection>
               <ListSection title={WORDS.MODEL} footer={model.note} footerTone={FOOTER_TONE.FAILURE}>
                 <MenuPickRow

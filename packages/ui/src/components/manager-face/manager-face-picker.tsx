@@ -1,9 +1,9 @@
 import {
   MANAGER_FACE_CHARACTER,
+  MANAGER_FACE_CHARACTER_NAME,
   MANAGER_FACE_COLOR,
-  type ManagerFaceCharacter,
-  type ManagerFaceColor,
   type ManagerFace as ManagerFaceValue,
+  managerFaceName,
 } from "@repo/features/manager-face";
 import { type RefObject, useRef, useState } from "react";
 import { SmilePlusIcon } from "../../icons/icons.js";
@@ -35,26 +35,6 @@ import { MANAGER_FACE_SIZE, ManagerFace } from "./manager-face.js";
  * draw a Manager.
  */
 
-/** What each character is called, as its face is named. */
-const CHARACTER_NAME = {
-  [MANAGER_FACE_CHARACTER.GHOST]: "Ghost",
-  [MANAGER_FACE_CHARACTER.PLANET]: "Planet",
-  [MANAGER_FACE_CHARACTER.CAT]: "Cat",
-  [MANAGER_FACE_CHARACTER.BACKPACK]: "Backpack",
-  [MANAGER_FACE_CHARACTER.MUG]: "Mug",
-  [MANAGER_FACE_CHARACTER.SPEECH_BUBBLE]: "Speech bubble",
-} as const satisfies Record<ManagerFaceCharacter, string>;
-
-/** What each color is called, as its face is named. */
-const COLOR_NAME = {
-  [MANAGER_FACE_COLOR.YELLOW]: "Yellow",
-  [MANAGER_FACE_COLOR.GREEN]: "Green",
-  [MANAGER_FACE_COLOR.BLUE]: "Blue",
-  [MANAGER_FACE_COLOR.PINK]: "Pink",
-  [MANAGER_FACE_COLOR.PURPLE]: "Purple",
-  [MANAGER_FACE_COLOR.PEACH]: "Peach",
-} as const satisfies Record<ManagerFaceColor, string>;
-
 const CHARACTERS = Object.values(MANAGER_FACE_CHARACTER);
 const COLORS = Object.values(MANAGER_FACE_COLOR);
 
@@ -74,11 +54,6 @@ const MANAGER_FACE = "Manager face";
 const MENU_PANEL =
   "ui-manager-face-menu-panel rounded-menu border border-border-strong bg-popover text-popover-foreground shadow-menu animate-menu-in";
 
-/** What a face is called: its color, then its character, "Purple cat". */
-function faceName(face: ManagerFaceValue): string {
-  return `${COLOR_NAME[face.color]} ${CHARACTER_NAME[face.character].toLowerCase()}`;
-}
-
 /** Whether two faces are one. */
 function sameFace(one: ManagerFaceValue | undefined, other: ManagerFaceValue): boolean {
   return one?.character === other.character && one.color === other.color;
@@ -97,7 +72,7 @@ function foundFaces(query: string): readonly ManagerFaceValue[] {
     .filter((word) => word !== "");
 
   return FACES.filter((face) => {
-    const name = faceName(face).toLowerCase();
+    const name = managerFaceName(face).toLowerCase();
 
     return words.every((word) => name.includes(word));
   });
@@ -123,7 +98,7 @@ export function ManagerFacePicker({
   const choice = (one: ManagerFaceValue) => (
     <IconPickerChoice
       key={`${one.character}:${one.color}`}
-      label={faceName(one)}
+      label={managerFaceName(one)}
       pressed={sameFace(face, one)}
       stop={stop !== undefined && sameFace(stop, one)}
       face={<ManagerFace face={one} size={MANAGER_FACE_SIZE.ROW} />}
@@ -148,7 +123,7 @@ export function ManagerFacePicker({
           )
         ) : (
           CHARACTERS.map((character) => (
-            <IconPickerGroup key={character} name={CHARACTER_NAME[character]}>
+            <IconPickerGroup key={character} name={MANAGER_FACE_CHARACTER_NAME[character]}>
               {COLORS.map((color) => choice({ character, color }))}
             </IconPickerGroup>
           ))
@@ -188,7 +163,7 @@ export function ManagerFaceWell({
           <ManagerFace face={face} size={MANAGER_FACE_SIZE.ROW} />
         )
       }
-      label={face === undefined ? "Pick face" : `Change face, ${faceName(face)}`}
+      label={face === undefined ? "Pick face" : `Change face, ${managerFaceName(face)}`}
       title={MANAGER_FACE}
       open={open}
       onOpenChange={(next) => onOpenChange(next)}
