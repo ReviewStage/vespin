@@ -554,10 +554,11 @@ interface HeldState extends Omit<SidePanelState, "tabs" | "tab" | "tasks" | "pin
   readonly locals: readonly LocalStripTab[];
   /** The agents' cloud Browser tabs opened in this window, by the id the service keeps each under, in the order opened: the only ones the strip draws. */
   readonly openedCloudBrowsers: readonly string[];
-  /** The agent whose Terminal tab was shown last on each task, by task. */
+  /** The agent whose Terminal tab was shown last on each place (`placeOf`), by place. */
   readonly lastTerminals: Readonly<Record<string, string>>;
   /** What each Pull request tab shows, by its repository and then its number (`by-pull-request.ts`), of those whose view was chosen; the overview otherwise. */
   readonly pullRequestViews: ByPullRequest<PullRequestView>;
+  /** The developer's choices on each place the panel stood for (`placeOf`): a task's, by its id, or a stop's on no task, by the stop. */
   readonly tasks: Readonly<Record<string, TaskTabs>>;
   readonly pins: readonly PinnedTab[];
 }
@@ -741,7 +742,7 @@ export interface OpenTask {
   files?: FileReads | undefined;
   /** Where a page opened here stands, as its tab saves it. */
   pages?: PagePlace | undefined;
-  /** The stop the panel stands at, where it is not the task itself, as an Inbox item of the task is one; a new stop starts with the panel shut. */
+  /** The stop the panel stands at, where it is not the task itself, as an Inbox item of the task is one, or an agent on no task's page; a new stop of a task starts with the panel shut, and a stop on no task is the place the panel's choices are kept on (`placeOf`). */
   stop?: string | undefined;
   /** The agent the task's column shows, whose tabs alone the strip draws (`ownerOf`); none while it shows none, as its Overview or a draft does, where every tab stands. */
   agent?: string | undefined;
@@ -768,7 +769,16 @@ export interface DrawnTabs {
   cloudBrowserAgents?: ReadonlyMap<string, string> | undefined;
 }
 
-/** The developer's own choices of fixed tab on the task. */
+/**
+ * The place a panel stands for, which its choices are kept on: its task,
+ * else the stop it stands at, as an agent on no task's page or a thread on
+ * no task in the Inbox is one; none where it stands at neither.
+ */
+function placeOf(task: Pick<OpenTask, "id" | "stop">): string | undefined {
+  return task.id ?? task.stop;
+}
+
+/** The developer's own choices on the place (`placeOf`). */
 function taskTabs(held: HeldState, taskId: string | undefined): TaskTabs {
   return taskId === undefined ? NO_CHOICES : (held.tasks[taskId] ?? NO_CHOICES);
 }
@@ -785,6 +795,9 @@ const NO_PAGES: readonly string[] = [];
 
 /** A task with no Changes tab open, the same array every render. */
 const NO_CHANGES: readonly ChangesKindTab[] = [];
+
+/** A place with no file opened on it, the same array every render. */
+const NO_FILES: readonly string[] = [];
 
 /** The bare panel's fixed tabs: none, the same array every render. */
 const NO_FIXED: readonly FixedSidePanelTab[] = [];
@@ -807,7 +820,7 @@ function orderOn(held: HeldState, taskId: string | undefined): readonly SidePane
  */
 function drawnFixed(held: HeldState, task: OpenTask): readonly FixedSidePanelTab[] {
   if (task.bare === true) return NO_FIXED;
-  const chosen = taskTabs(held, task.id);
+  const chosen = taskTabs(held, placeOf(task));
 
   const open = held.tabs.filter(
     (tab) =>
@@ -815,14 +828,14 @@ function drawnFixed(held: HeldState, task: OpenTask): readonly FixedSidePanelTab
       (chosen.opened.includes(tab) || (!chosen.closed.includes(tab) && task.holds[tab] === true)),
   );
 
-  return inTaskOrder(open, orderOn(held, task.id), (tab) => tab);
+  return inTaskOrder(open, orderOn(held, placeOf(task)), (tab) => tab);
 }
 
 /**
- * The state with the task's choices changed, that task's kept latest and the
- * oldest task's let go past the bound. With no task open there is nothing to
- * keep a choice on, and a change that answers the choices it was handed
- * changes nothing.
+ * The state with the place's choices changed (`placeOf`), that place's kept
+ * latest and the oldest place's let go past the bound. With no place there
+ * is nothing to keep a choice on, and a change that answers the choices it
+ * was handed changes nothing.
  */
 function withTaskTabs(
   held: HeldState,
@@ -1469,7 +1482,7 @@ function drawnFiles(held: HeldState, drawn: DrawnTabs): readonly string[] {
 
 /** The Changes tabs open on the task that it draws (`drawsChanges`), in the order opened. */
 function drawnChanges(held: HeldState, drawn: DrawnTabs): readonly ChangesKindTab[] {
-  return (taskTabs(held, drawn.task.id).changes ?? NO_CHANGES).filter((each) =>
+  return (taskTabs(held, placeOf(drawn.task)).changes ?? NO_CHANGES).filter((each) =>
     drawsChanges(each, drawn),
   );
 }
@@ -1541,7 +1554,7 @@ function agentOwnerOf(tab: SidePanelTab, drawn: DrawnTabs): string | undefined {
  * stands in every agent's strip.
  */
 function ownerOf(held: HeldState, drawn: DrawnTabs, tab: SidePanelTab): string | undefined {
-  const opened = (taskTabs(held, drawn.task.id).owners ?? []).find((each) =>
+  const opened = (taskTabs(held, placeOf(drawn.task)).owners ?? []).find((each) =>
     sameTab(each.tab, tab),
   );
 
@@ -1572,7 +1585,7 @@ function withOwner(
   if (agent === undefined || ownerOf(held, drawn, tab) === agent) return held;
   const own = agentOwnerOf(tab, drawn) === agent;
 
-  return withTaskTabs(held, drawn.task.id, (was) => {
+  return withTaskTabs(held, placeOf(drawn.task), (was) => {
     const others = (was.owners ?? []).filter((each) => !sameTab(each.tab, tab));
 
     if (own && others.length === (was.owners ?? []).length) return was;
@@ -1650,7 +1663,7 @@ function stripOf(held: HeldState, drawn: DrawnTabs): readonly SidePanelTab[] {
     ...Object.values(DRAWN_OF_KIND).flatMap((drawnOf) => drawnOf(held, drawn)),
   ].filter((tab) => ownedHere(held, drawn, tab));
 
-  return inTaskOrder(kinds, orderOn(held, drawn.task.id), (tab) => tab);
+  return inTaskOrder(kinds, orderOn(held, placeOf(drawn.task)), (tab) => tab);
 }
 
 /**
@@ -1664,13 +1677,13 @@ function stripOf(held: HeldState, drawn: DrawnTabs): readonly SidePanelTab[] {
 function fallbackTabs(held: HeldState, drawn: DrawnTabs): readonly SidePanelTab[] {
   const fixed = drawnFixed(held, drawn.task);
   const strip = stripOf(held, drawn);
-  const recent = taskTabs(held, drawn.task.id).recent ?? [];
+  const recent = taskTabs(held, placeOf(drawn.task)).recent ?? [];
   const head = recent.findLast((viewed) => strip.some((tab) => sameTab(tab, viewed))) ?? strip[0];
 
   const ahead =
     head === undefined || isFixedTab(head)
       ? undefined
-      : orderOn(held, drawn.task.id).find((tab) => sameTab(tab, head));
+      : orderOn(held, placeOf(drawn.task)).find((tab) => sameTab(tab, head));
 
   return ahead === undefined ? fixed : [ahead, ...fixed];
 }
@@ -1693,7 +1706,7 @@ function withChosenViewed(held: HeldState, tab: SidePanelTab, drawn: DrawnTabs):
   const shown = shownIn(held, drawn);
   const viewed = shown === undefined || sameTab(shown, tab) ? [tab] : [shown, tab];
 
-  return withViewed(held, drawn.task.id, viewed);
+  return withViewed(held, placeOf(drawn.task), viewed);
 }
 
 /** The state without what holds the tab open, as its kind holds it; none where a fixed tab the task does not draw, or a subagent's not open, holds nothing to let go. */
@@ -1701,7 +1714,7 @@ function withTabLetGo(held: HeldState, tab: SidePanelTab, drawn: DrawnTabs): Hel
   if (isFixedTab(tab)) {
     if (!drawnFixed(held, drawn.task).includes(tab)) return undefined;
 
-    return drawn.task.bare === true ? held : withChoice(held, drawn.task.id, tab, false);
+    return drawn.task.bare === true ? held : withChoice(held, placeOf(drawn.task), tab, false);
   }
 
   switch (tab.kind) {
@@ -1713,7 +1726,7 @@ function withTabLetGo(held: HeldState, tab: SidePanelTab, drawn: DrawnTabs): Hel
         : undefined;
     case STRIP_TAB_KIND.CHANGES:
     case STRIP_TAB_KIND.TURN_CHANGES:
-      return withTaskTabs(held, drawn.task.id, (was) => ({
+      return withTaskTabs(held, placeOf(drawn.task), (was) => ({
         ...was,
         changes: (was.changes ?? NO_CHANGES).filter((each) => !sameTab(each, tab)),
       }));
@@ -1745,7 +1758,11 @@ function withoutTab(held: HeldState, tab: SidePanelTab, drawn: DrawnTabs): HeldS
   const closed = withTabLetGo(held, tab, drawn);
 
   if (closed === undefined) return held;
-  const forgotten = withoutOwner(withoutViewed(closed, drawn.task.id, tab), drawn.task.id, tab);
+  const forgotten = withoutOwner(
+    withoutViewed(closed, placeOf(drawn.task), tab),
+    placeOf(drawn.task),
+    tab,
+  );
   const left = stripOf(forgotten, drawn);
 
   // Note that only a close that empties the strip shuts the panel, because a
@@ -1758,7 +1775,7 @@ function withoutTab(held: HeldState, tab: SidePanelTab, drawn: DrawnTabs): HeldS
   const shown = shownIn(held, drawn);
 
   if (shown === undefined || !sameTab(shown, tab)) return kept;
-  const recent = taskTabs(kept, drawn.task.id).recent ?? [];
+  const recent = taskTabs(kept, placeOf(drawn.task)).recent ?? [];
   const replacement = replacementOf(left, recent, stripOf(held, drawn), tab);
 
   return { ...kept, tab: replacement };
@@ -1797,12 +1814,12 @@ function withFileAsked(
  * every kind, kept as the task's order (`movedOrder`).
  */
 function withTabAt(held: HeldState, tab: SidePanelTab, to: number, drawn: DrawnTabs): HeldState {
-  const taskId = drawn.task.id;
-  const order = movedOrder(orderOn(held, taskId), stripOf(held, drawn), tab, to);
+  const place = placeOf(drawn.task);
+  const order = movedOrder(orderOn(held, place), stripOf(held, drawn), tab, to);
 
   return order === undefined
     ? held
-    : withTaskTabs(held, taskId, (choices) => ({ ...choices, order }));
+    : withTaskTabs(held, place, (choices) => ({ ...choices, order }));
 }
 
 /**
@@ -1812,12 +1829,12 @@ function withTabAt(held: HeldState, tab: SidePanelTab, to: number, drawn: DrawnT
  * changes nothing, since opening it only chooses it.
  */
 function withTabLast(held: HeldState, tab: SidePanelTab, drawn: DrawnTabs): HeldState {
-  const taskId = drawn.task.id;
-  const order = openedOrder(orderOn(held, taskId), stripOf(held, drawn), tab);
+  const place = placeOf(drawn.task);
+  const order = openedOrder(orderOn(held, place), stripOf(held, drawn), tab);
 
   return order === undefined
     ? held
-    : withTaskTabs(held, taskId, (choices) => ({ ...choices, order }));
+    : withTaskTabs(held, place, (choices) => ({ ...choices, order }));
 }
 
 /** Whether the task's strip is sure not to draw the tab: a fixed tab closed there, a Changes tab not open there, or a file with no tab open; any other kind may stand there already. */
@@ -2182,27 +2199,28 @@ export function useSidePanel(
   const [opened, setOpened] = useState(0);
   const stage = useMemo(() => (staged === undefined ? undefined : stagedHeld(staged)), [staged]);
   const taskId = task.id;
+  // The place the panel stands for, which its choices are kept on, and its files and pages opened here drawn on.
+  const place = placeOf(task);
   const { files: fileReads, pages: pagePlace } = task;
   const state = stage === undefined ? kept : (moved ?? stage);
 
-  // The files the task draws tabs of: those opened on it.
+  // The files the place draws tabs of: those opened on it.
   const taskFiles = useMemo(
-    () => state.files.flatMap((each) => (each.browsedOn === taskId ? [each.path] : [])),
-    [state.files, taskId],
+    () =>
+      place === undefined
+        ? NO_FILES
+        : state.files.flatMap((each) => (each.browsedOn === place ? [each.path] : [])),
+    [state.files, place],
   );
-
-  // The panel a page of another place opened here is drawn on: the task it stands for, else the stop it stands at,
-  // as a thread on no task in the Inbox is one, so a page opened beside the thread stands beside it alone.
-  const shownOn = taskId ?? task.stop;
 
   // The pages the panel draws tabs of: its place's own, and those of other places opened beside it.
   const pagesHere = useMemo(() => {
     const beside = state.pages.flatMap((each) =>
-      each.shownOn === shownOn && !pages.includes(each.page) ? [each.page] : [],
+      each.shownOn === place && !pages.includes(each.page) ? [each.page] : [],
     );
 
     return beside.length === 0 ? pages : [...pages, ...beside];
-  }, [state.pages, pages, shownOn]);
+  }, [state.pages, pages, place]);
 
   const update = useCallback(
     (change: (held: HeldState) => HeldState) => {
@@ -2219,7 +2237,7 @@ export function useSidePanel(
 
   const shownFor = (holds: TaskHolds) =>
     shownIn(state, {
-      task: { id: taskId, holds, agent: task.agent },
+      task: { id: taskId, stop: task.stop, holds, agent: task.agent },
       agents,
       subagents,
       files: taskFiles,
@@ -2236,8 +2254,14 @@ export function useSidePanel(
   // otherwise become the first, and a chosen tab the task lacked would come
   // back over the one standing in for it: the tab shown is kept as chosen.
   // A tab a pin or a notification asked for is the exception, since it was
-  // chosen on this very task and stands in for nothing.
-  if (seen.id !== taskId || seen.bare !== task.bare || !sameHolds(seen.holds, task.holds)) {
+  // chosen on this very task and stands in for nothing. A stop on no task
+  // is a place of its own, so the strip is drawn from it as it arrives.
+  if (
+    seen.id !== taskId ||
+    placeOf(seen) !== place ||
+    seen.bare !== task.bare ||
+    !sameHolds(seen.holds, task.holds)
+  ) {
     setSeen(task);
 
     const before =
@@ -2346,15 +2370,16 @@ export function useSidePanel(
   const narrow = room === SHELL_ROOM.NARROW;
   const shown = state.open && strip.length > 0;
   // Note that the panel belongs to the stop it was opened at: a task or an
-  // Inbox item, two items of one task being two stops. A task opens with the
-  // panel shown or shut, and as wide, as it was last left there, so it
-  // opens as the developer left it; an Inbox item, a task it was never shown
-  // on, and every stop in a narrow room, where it would stand over the
-  // document, start with it shut. A tab asked for on the stop arrived at, as
+  // Inbox item, two items of one task being two stops. A task, or a stop on
+  // no task (an agent on no task's page, a thread on no task in the Inbox),
+  // opens with the panel shown or shut, and as wide, as it was last left
+  // there, so it opens as the developer left it; an Inbox item of a task, a
+  // place it was never shown on, and every stop in a narrow room, where it
+  // would stand over the document, start with it shut. A tab asked for on the stop arrived at, as
   // a link, a pin, or a step of the history opens one there, was asked for,
   // so it stands.
   const stop = task.stop ?? taskId;
-  const keptOn = task.stop === undefined && !narrow ? taskId : undefined;
+  const keptOn = (task.stop === undefined || taskId === undefined) && !narrow ? place : undefined;
 
   // How the panel stands on the task is kept on it as it changes, so it is there to come back to;
   // not while a tab asked for on another stop is carried there, which is that stop's to keep.
@@ -2369,7 +2394,7 @@ export function useSidePanel(
     if (carrying) {
       setCarrying(false);
 
-      if (taskId !== undefined) update((held) => withShownCarried(held, taskId));
+      if (place !== undefined) update((held) => withShownCarried(held, place));
     } else if (asked?.carry === true && asked.task === taskId) setAsked({ ...asked, carry: false });
     else update((held) => withPanelOf(held, keptOn));
     setStanding(stop);
@@ -2384,7 +2409,7 @@ export function useSidePanel(
     setNewTabAsked(false);
   }
 
-  if (toggleAskedOn !== undefined && (shown || toggleAskedOn !== taskId)) {
+  if (toggleAskedOn !== undefined && (shown || toggleAskedOn !== place)) {
     setToggleAskedOn(undefined);
   }
 
@@ -2403,13 +2428,13 @@ export function useSidePanel(
     }
 
     if (strip.length === 0) {
-      setToggleAskedOn((was) => (was === taskId ? undefined : taskId));
+      setToggleAskedOn((was) => (was === place ? undefined : place));
 
       return;
     }
 
     update((held) => (held.open ? held : { ...held, open: true }));
-  }, [update, shown, strip.length, taskId]);
+  }, [update, shown, strip.length, place]);
 
   const onSetOpen = useCallback(
     (open: boolean) => {
@@ -2431,14 +2456,14 @@ export function useSidePanel(
 
   const onNewTab = useCallback(() => {
     if (strip.length === 0) {
-      setToggleAskedOn(taskId);
+      setToggleAskedOn(place);
 
       return;
     }
 
     update((held) => (held.open ? held : { ...held, open: true }));
     setNewTabAsked(true);
-  }, [update, strip.length, taskId]);
+  }, [update, strip.length, place]);
 
   const onNewTabAnswered = useCallback(() => setNewTabAsked(false), []);
   const onToggleAskedAnswered = useCallback(() => setToggleAskedOn(undefined), []);
@@ -2456,7 +2481,7 @@ export function useSidePanel(
               drawn,
             ),
             tab,
-            taskId,
+            place,
             drawn.task.bare === true,
           ),
           tab,
@@ -2465,7 +2490,7 @@ export function useSidePanel(
         open: true,
       }));
     },
-    [update, drawn, taskId, pagePlace, columnAgent],
+    [update, drawn, place, pagePlace, columnAgent],
   );
 
   // Note that the retired kinds, which a step of the history or a pin an
@@ -2515,27 +2540,27 @@ export function useSidePanel(
           ref,
           commit,
           drawn,
-          taskId,
+          place,
           reads ?? fileReads,
         ),
         open: true,
       }));
     },
-    [update, drawn, taskId, fileReads, opener],
+    [update, drawn, place, fileReads, opener],
   );
 
   const onOpen = useCallback(
-    (tab: SidePanelTab, place?: PagePlace) => {
+    (tab: SidePanelTab, at?: PagePlace) => {
       setAsked(undefined);
       setOpened((was) => was + 1);
 
       // Note that a page of the panel's own place, however it was named, is its own.
       const beside =
+        at === undefined ||
         place === undefined ||
-        shownOn === undefined ||
-        (pagePlace !== undefined && place.taskId === pagePlace.taskId)
+        (pagePlace !== undefined && at.taskId === pagePlace.taskId)
           ? undefined
-          : { place, on: shownOn };
+          : { place: at, on: place };
 
       // A page of another place is drawn here as it is opened, before the state naming it lands.
       const here =
@@ -2551,7 +2576,7 @@ export function useSidePanel(
           withTab(
             withTabLast(withChosenViewed(withOwner(held, here, tab, opener), tab, here), tab, here),
             tab,
-            taskId,
+            place,
           ),
           tab,
           pagePlace,
@@ -2560,7 +2585,7 @@ export function useSidePanel(
         open: true,
       }));
     },
-    [update, drawn, taskId, shownOn, pagePlace, opener],
+    [update, drawn, place, pagePlace, opener],
   );
 
   // Note that the state is read as it stands at the call, so the reader stays one function while the panel's tabs move,
@@ -2584,19 +2609,19 @@ export function useSidePanel(
         const standing = newTab ? undefined : tree;
 
         if (standing === undefined || held.files.some((each) => each.path === path)) {
-          return withFileShown(held, path, drawn, taskId, tree?.reads ?? fileReads);
+          return withFileShown(held, path, drawn, place, tree?.reads ?? fileReads);
         }
 
         const viewed = withChosenViewed(held, fileTab(path), drawn);
 
         return withOwnerMoved(
-          withFileBrowsed(viewed, taskId, standing, path, standing.reads),
-          taskId,
+          withFileBrowsed(viewed, place, standing, path, standing.reads),
+          place,
           standing.path,
           path,
         );
       }),
-    [update, drawn, taskId, fileReads],
+    [update, drawn, place, fileReads],
   );
 
   // Note that a step to a file with a tab of its own by then chooses that
@@ -2614,19 +2639,18 @@ export function useSidePanel(
         if (to === undefined) return held;
         const open = held.files.find((each) => each.path === to);
 
-        if (open !== undefined)
-          return withOpenFileChosen(held, open, drawn, taskId, standing.reads);
+        if (open !== undefined) return withOpenFileChosen(held, open, drawn, place, standing.reads);
 
         const stepped = withFileStepped(
           withChosenViewed(held, fileTab(to), drawn),
-          taskId,
+          place,
           standing,
           step,
         );
 
-        return withOwnerMoved(stepped, taskId, from, to);
+        return withOwnerMoved(stepped, place, from, to);
       }),
-    [update, drawn, taskId],
+    [update, drawn, place],
   );
 
   const onPullRequestView = useCallback(
@@ -2660,17 +2684,17 @@ export function useSidePanel(
         const restored = file === undefined ? held : { ...held, files: [...others, file] };
 
         const browsed =
-          file !== undefined && file.browsedOn === taskId && !drawn.files.includes(file.path);
+          file !== undefined && file.browsedOn === place && !drawn.files.includes(file.path);
 
         const here = browsed ? { ...drawn, files: [...drawn.files, file.path] } : drawn;
         // Note that a tab reopened stands under the agent shown, whose strip it is reopened in.
         const owned = withOwner(restored, here, tab, columnAgent);
-        const opened = withTab(withChosenViewed(owned, tab, here), tab, taskId);
+        const opened = withTab(withChosenViewed(owned, tab, here), tab, place);
 
         return { ...withTabAt(opened, tab, at, here), open: true };
       });
     },
-    [update, drawn, taskId, columnAgent],
+    [update, drawn, place, columnAgent],
   );
 
   const onPin = useCallback(
@@ -2713,16 +2737,16 @@ export function useSidePanel(
     stop,
     tabs,
     strip,
-    order: orderOn(state, taskId),
-    closedTabs: taskTabs(state, taskId).closed,
+    order: orderOn(state, place),
+    closedTabs: taskTabs(state, place).closed,
     used,
     pins: state.pins,
     subagents: state.subagents,
-    changes: taskTabs(state, taskId).changes ?? NO_CHANGES,
+    changes: taskTabs(state, place).changes ?? NO_CHANGES,
     pages: state.pages,
     terminals: heldTerminals,
     locals: heldLocals,
-    lastTerminal: taskId === undefined ? undefined : state.lastTerminals[taskId],
+    lastTerminal: place === undefined ? undefined : state.lastTerminals[place],
     pullRequestViews: state.pullRequestViews,
     onPullRequestView,
     files: state.files,
@@ -2733,7 +2757,7 @@ export function useSidePanel(
     fullScreenOnly: shown && narrow,
     newTabAsked: shown && newTabAsked,
     onToggle,
-    toggleAsked: toggleAskedOn !== undefined && toggleAskedOn === taskId && !shown,
+    toggleAsked: toggleAskedOn !== undefined && toggleAskedOn === place && !shown,
     onToggleAskedAnswered,
     onSetOpen,
     onToggleFullScreen,
@@ -2757,7 +2781,7 @@ export function useSidePanel(
     onBrowseFile,
     onFileHistory,
     onResize,
-    viewedAt: taskTabs(state, taskId).viewedAt ?? NO_STAMPS,
+    viewedAt: taskTabs(state, place).viewedAt ?? NO_STAMPS,
     onViewedAt,
   };
 }
