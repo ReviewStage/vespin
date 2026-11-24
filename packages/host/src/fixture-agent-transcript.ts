@@ -60,6 +60,14 @@ const EXPIRED_INVITES = {
   url: "data:text/plain;base64,ZW1haWwsZXhwaXJlZAprYXRoZXJpbmVAZXhhbXBsZS5jb20sMjAyNi0xMS0wMgptYXJjb0BleGFtcGxlLmNvbSwyMDI2LTExLTA1Cg==",
 } as const;
 
+/** The picture the account sent with its ask for the funnel, named by its marker in the words, so a sent line's picture chip has a picture to draw. */
+const INVITE_PAGE = {
+  type: "file",
+  mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+  filename: "Picture 1",
+  url: `data:image/png;base64,${FIXTURE_PICTURE_PNG}`,
+} as const;
+
 /** The fixture's picture as the service keeps one: a screenshot-sized PNG. */
 function keptPicture(id: string): WireRecord {
   return { id, mediaType: AGENT_ATTACHMENT_TYPE.PNG, width: 320, height: 180, byteCount: 7549 };
@@ -302,8 +310,9 @@ function transcriptMessages(
     asked(
       "fixture-invites-funnel-ask",
       startedAt + 40 * MINUTE,
-      "How many invites are accepted? Show me the funnel, and record accepting one.",
+      "How many invites are accepted? Show me the funnel from [Picture 1], and record accepting one.",
       reader,
+      [INVITE_PAGE],
     ),
     {
       id: "fixture-invites-funnel",

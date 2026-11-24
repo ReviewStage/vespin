@@ -50,13 +50,17 @@ import {
 } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { type ReactNode, useMemo, useState } from "react";
+import { useAgentBox } from "../agents/agent-box.js";
+import { useFollowedAgent } from "../agents/use-agent.js";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
+import { useNewestNote } from "../newest-note.js";
 import {
   attachedFiles,
   PICKER_FAILED,
   pickPictures,
   takePictures,
 } from "../use-attached-pictures.js";
+import { useDictation } from "../use-dictation.js";
 import { useMentionOffer } from "../use-mention-offer.js";
 import { usePillField } from "../use-pill-field.js";
 import { REMIND_ME } from "./inbox-remind.js";
@@ -294,9 +298,18 @@ export function OpenAskCard({
 const GOT_IT_SEND = { label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK } as const;
 
 /**
- * The box under a thread: the composer, its line asking for a note while an
- * ask's controls stand over it and a reply otherwise, Send lit once an answer
- * is picked; docked in a compact window, or at a split view column's foot.
+ * The box under a thread: the agent's own composer, as the panel's thread
+ * box is its agent box (`inbox-answer-box.tsx`), writing to the thread's
+ * agent and reading off it what the agent's page reads (`useAgentBox`): the
+ * Machine chip after the +, the model chip at the row's end, whose choices
+ * hold the model, its effort, Fast, and the permission mode, the + menu's
+ * MCP servers, and Dictate before Send. Left out, as the panel leaves them
+ * out of its thread box: Stop, since an empty Send here settles a notice,
+ * and the agent's dock and queue, since a thread is no transcript. Its line
+ * asks for a note while an ask's controls stand over it and a reply
+ * otherwise, Send lit once an answer is picked; docked in a compact window,
+ * or at a split view column's foot, where the model's choices pop over the
+ * chip since no sheet can stand in a SwiftUI column.
  * A notice waiting on the reader's nod, where opening did not settle it,
  * reads Got it on the empty box's Send, as the panel's Send does, which
  * settles it without messaging its agent, with Undo; a word or a picture
@@ -329,6 +342,8 @@ export function ThreadComposer({
   const { draft, onDraft, note: sendNote, answerReady, send, asNew, setAsNew, start } = answer;
   const { nods, acknowledge } = answer;
   const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
+  // What the composer reads off the thread's agent, read as the agent's page reads it, so the two stand alike.
+  const box = useAgentBox(item.agentId, useFollowedAgent(item.agentId), inColumn === true);
 
   // Note that the pictures picked are named and bounded against the draft as it stands when the picker answers, since a refused send may have put words and pictures back while it stood open.
   const attach = () => {
@@ -363,18 +378,15 @@ export function ThreadComposer({
   const pictures = useMemo(() => attachedFiles(draft.attachments), [draft.attachments]);
   const onNote = (note: string) => onDraft((now) => ({ ...now, note }));
   const pillField = usePillField(draft.note, onNote, { attached: pictures, detach });
+  const dictated = useDictation(draft.note, onNote);
+  // Note that one pick holds the newest refusal, the picker's, a send's, a dictation's, or a chip's, so an older one never hides why the last act did not go, as on the agent's page.
+  const said = useNewestNote([pictureNote, sendNote, dictated.note, ...box.notes]);
 
   // Note that the thread's own agent, whom the reply goes to, is left out of what an `@` offers, as on its own page.
   const mentions = useMentionOffer({ ...place, agentId: item.agentId }, pillField.mentions);
 
-  // Note that the box's head holds what the picker refused, then why the last send didn't go; what an `@` offers floats over the box.
-  const head =
-    pictureNote === undefined && sendNote === undefined ? undefined : (
-      <>
-        {pictureNote === undefined ? null : <AskNote words={pictureNote} />}
-        {sendNote === undefined ? null : <AskNote words={sendNote} />}
-      </>
-    );
+  // Note that the box's head holds the newest refusal; what an `@` offers floats over the box.
+  const head = said === undefined ? undefined : <AskNote words={said} />;
 
   const float =
     mentions === undefined ? undefined : (
@@ -404,8 +416,12 @@ export function ThreadComposer({
     // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
     head,
     float,
+    tools: box.tools,
+    trailing: box.trailing,
+    dictation: dictated.dictation,
     addMenu: {
       actions: [{ ...ATTACH_PHOTOS, onPress: attach }],
+      submenus: box.submenus,
       switches: [
         {
           label: `${INBOX_BOX_WORDS.SEND_AS_NEW} ${agentName}`,
@@ -416,7 +432,14 @@ export function ThreadComposer({
     },
   };
 
-  return !inColumn ? <Composer {...props} /> : <ComposerFoot {...props} />;
+  if (inColumn) return <ComposerFoot {...props} />;
+
+  return (
+    <>
+      <Composer {...props} />
+      {box.sheet}
+    </>
+  );
 }
 
 /** What the thread's ⋯ menu acts through: its read mark, Remind me's times, and its link copied. */

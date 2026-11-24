@@ -120,7 +120,10 @@ builds a control of its own.
   picked pill in that word's place (`pick`).
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
-  screen and zooms, and its `Video` in the system's player through
+  screen and zooms, a picture its words name by its marker ("[Picture 1]")
+  standing where they name it as its chip, its thumbnail and name, as the
+  panel's `AttachmentRef` does, opening the same viewer, so only the pictures
+  its words name none of stand over its bubble, and its `Video` in the system's player through
   `expo-video`, which says so in its place where the player cannot read the
   file. A long press on a picture, a recording, a file's chip, or a message
   opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside

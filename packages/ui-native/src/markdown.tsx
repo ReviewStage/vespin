@@ -48,6 +48,7 @@ import {
   PictureSetProvider,
   useKeeping,
   useKeptActs,
+  usePicturesView,
   usePictureView,
 } from "./held-menu.js";
 import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -113,6 +114,18 @@ type ScrollEdge = (typeof SCROLL_EDGE)[keyof typeof SCROLL_EDGE];
 
 /** The share of a line's size an inline chip sits below the baseline by, so it centers on the words rather than standing on them. */
 const CHIP_DROP = 0.22;
+
+/** How much taller a picture chip's thumbnail stands than its words' glyph, in points, as the panel's thumbnail stands a hair taller than the words (`AttachmentRef`). */
+const THUMBNAIL_LIFT = 2;
+
+/** How round a picture chip's thumbnail is cut. */
+const THUMBNAIL_CORNER = 4;
+
+/** What a press on a picture chip is heard to do: open it, or read it again where it could not be read. */
+const PICTURE_CHIP_HINT = {
+  OPENS: "Opens full screen",
+  READS_AGAIN: "Reads the picture again",
+} as const;
 
 /** How wide a list's marker column stands, in body sizes. */
 const MARKER_WIDTH = 1.4;
@@ -184,6 +197,7 @@ const styles = StyleSheet.create({
   },
   picture: { width: "100%", borderRadius: RADIUS.BLOCK },
   pending: { alignItems: "center", justifyContent: "center" },
+  pictureChip: { paddingLeft: 2, borderWidth: StyleSheet.hairlineWidth },
   measured: { alignSelf: "stretch" },
 });
 
@@ -210,6 +224,10 @@ interface Drawing {
   readonly markOf: ChipMarkOf;
   /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
   readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
+  /** The picture the words name by its marker, by its name, which its chip draws; none for a marker of no picture the message carries. */
+  readonly wordPicture: (name: string) => MarkdownWordPicture | undefined;
+  /** Opens pictures full screen where no thumbnail stands for them, as VoiceOver's action on a chip opens its picture; none where no app answers it. */
+  readonly viewPictures: ReturnType<typeof usePicturesView>;
   /** How many lists stand around the words, which a bullet's mark follows as a browser's does: a disc, then a ring, then a square; none outside a list. */
   readonly listDepth?: number | undefined;
 }
@@ -388,6 +406,85 @@ function MentionChip({
   );
 }
 
+/**
+ * A picture the words name by its marker, "[Picture 1]", as its chip
+ * standing in the line where the marker was written, as the panel's
+ * message draws it (`AttachmentRef`): the picture's thumbnail, a square cut
+ * from it a hair taller than the words, then its name, in a mention chip's
+ * shape inside a hairline, so it reads on a bubble's fill as on the page. A
+ * press opens the picture full screen in the app's viewer, grown out of the
+ * thumbnail, as a message's own picture opens; a picture still on its way
+ * wears the picture glyph in the thumbnail's box, so the chip keeps its
+ * width as the bytes land, and one that could not be read wears the failed
+ * glyph and reads it again on a press. Note that the thumbnail is React
+ * Native's image at the chip's size, which decodes the picture down to the
+ * pixels it stands at and keeps that small bitmap in its cache, so a long
+ * transcript's chips scroll without decoding each full-size picture again.
+ */
+function PictureChip({ name, drawing }: { readonly name: string; readonly drawing: Drawing }) {
+  const { colors, fontScale } = drawing;
+  const picture = drawing.wordPicture(name);
+  const source = picture?.source;
+  const drawn = useRef<ComponentRef<typeof Image>>(null);
+  const show = usePictureView(source, name, drawn);
+  const unread = source === null;
+  const onPress = unread ? picture?.onRetry : show;
+  const markSize = ROLE_SIZE.ROW_LINE * fontScale;
+  const side = Math.ceil(markSize) + THUMBNAIL_LIFT;
+  const thumbnail = { width: side, height: side, borderRadius: THUMBNAIL_CORNER };
+
+  return (
+    <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
+      <Press
+        onPress={onPress}
+        disabled={onPress === undefined}
+        accessibilityRole="imagebutton"
+        accessibilityLabel={unread ? unreadWords(name) : name}
+        accessibilityHint={
+          onPress === undefined
+            ? undefined
+            : unread
+              ? PICTURE_CHIP_HINT.READS_AGAIN
+              : PICTURE_CHIP_HINT.OPENS
+        }
+        testID="markdown-picture-chip"
+        style={[
+          styles.chip,
+          styles.pictureChip,
+          {
+            maxWidth: drawing.lineWidth,
+            backgroundColor: colors.FILL_STRONG,
+            borderColor: colors.CHIP_EDGE,
+          },
+        ]}
+      >
+        {source != null ? (
+          <Image ref={drawn} source={{ uri: source }} resizeMode="cover" style={thumbnail} />
+        ) : (
+          <View style={[thumbnail, styles.pending]}>
+            <ChipSymbol
+              glyph={unread ? GLYPH.FAILED : GLYPH.IMAGE}
+              size={markSize}
+              color={colors.TEXT_MUTED}
+            />
+          </View>
+        )}
+        <Text
+          numberOfLines={1}
+          style={{
+            flexShrink: 1,
+            fontSize: ROLE_SIZE.ROW_LINE,
+            color: colors.TEXT,
+            fontWeight: "500",
+          }}
+        >
+          {name}
+        </Text>
+      </Press>
+    </View>
+  );
+}
+
 /** The steer arrow a suggestion leads with, as the panel's pill and its Started or Sent do. */
 const SUGGESTION_SYMBOL = GLYPH.SUGGEST;
 
@@ -523,6 +620,8 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
 
     case MARKDOWN_RUN.CHIP:
       return <MentionChip chip={run.chip} drawing={drawing} />;
+    case MARKDOWN_RUN.PICTURE:
+      return <PictureChip name={run.name} drawing={drawing} />;
     case MARKDOWN_RUN.SUGGESTION: {
       const look = drawing.suggestion(run.suggestion.link, run.suggestion.words);
 
@@ -590,6 +689,17 @@ function collectOpenings(
           onOpen,
         });
       }
+    } else if (run.kind === MARKDOWN_RUN.PICTURE) {
+      const source = drawing.wordPicture(run.name)?.source;
+      const view = drawing.viewPictures;
+
+      if (source != null && view !== undefined) {
+        openings.push({
+          name: `open-${openings.length}`,
+          label: `${OPEN_WORD} ${run.name}`,
+          onOpen: () => view([{ source, title: run.name, subtitle: undefined }], 0),
+        });
+      }
     } else if (run.kind === MARKDOWN_RUN.SUGGESTION) {
       const look = drawing.suggestion(run.suggestion.link, run.suggestion.words);
       const onOpen = look === undefined ? open(run.suggestion.target, drawing) : look.onPress;
@@ -624,6 +734,8 @@ function runText(run: MarkdownRun, drawing: Drawing): string {
       return chipHeard(run.chip, drawing);
     case MARKDOWN_RUN.SUGGESTION:
       return suggestionRunHeard(run.suggestion, drawing);
+    case MARKDOWN_RUN.PICTURE:
+      return run.name;
     case MARKDOWN_RUN.BREAK:
       return " ";
     default: {
@@ -1415,7 +1527,17 @@ type MarkdownProps = {
   readonly width?: number | undefined;
   /** Whether a Mermaid fence is drawn as its diagram, as a description's are (`DiagramBlock`); it stands as its code where none is given, as a transcript still being written keeps it. */
   readonly diagrams?: boolean | undefined;
+  /** The names of the pictures the message carries that its words name by their markers ("Picture 1"), each marker drawn as its chip (`PictureChip`); every marker stays its words where none is given. Note that the words are read again only when this changes, so a caller hands the same one while the names stand. */
+  readonly wordPictures?: Pick<ReadonlySet<string>, "has"> | undefined;
+  /** The picture a marker names, by its name, which its chip is drawn from. */
+  readonly wordPicture?: ((name: string) => MarkdownWordPicture | undefined) | undefined;
 };
+
+/** A picture the words name by its marker, as its chip draws it: the address it is drawn from, none while its bytes are on their way and `null` where they could not be read, and what reads it again. */
+export interface MarkdownWordPicture {
+  readonly source: string | null | undefined;
+  readonly onRetry?: (() => void) | undefined;
+}
 
 /** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, whether it is a sound clip, where a video opens where the player cannot read it, and what reads it again. */
 export interface MarkdownVideo {
@@ -1459,6 +1581,11 @@ function noFile(): undefined {
   return undefined;
 }
 
+/** No picture named by a marker. */
+function noWordPicture(): undefined {
+  return undefined;
+}
+
 /**
  * Words drawn as the Markdown they were written in, as the panel draws a
  * message: the panel's parse (`@repo/features/markdown-tree`), read into
@@ -1485,10 +1612,13 @@ export function Markdown({
   suggestion = noSuggestion,
   width: known,
   diagrams = false,
+  wordPictures,
+  wordPicture = noWordPicture,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
   const markOf = useChipMarkOf();
+  const viewPictures = usePicturesView();
   const [measured, setMeasured] = useState<number | undefined>(undefined);
   const [measuredAt, setMeasuredAt] = useState(width);
 
@@ -1507,8 +1637,9 @@ export function Markdown({
         typed,
         hidesHtml,
         diagrams,
+        pictures: wordPictures,
       }),
-    [words, repository, typed, hidesHtml, diagrams],
+    [words, repository, typed, hidesHtml, diagrams, wordPictures],
   );
 
   const drawing: Drawing = {
@@ -1524,6 +1655,8 @@ export function Markdown({
     linkStanding,
     markOf,
     suggestion,
+    wordPicture,
+    viewPictures,
   };
 
   // Note that the words' pictures are one set a viewer swipes through, as a description's are, or join the set of the thread or message around them.

@@ -33,6 +33,7 @@ export function usePillField(
 ): PillFieldHeld {
   const field = useRef<PillFieldHandle>(null);
   const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
+  const [focused, setFocused] = useState(false);
 
   // The names the field draws as pills: each file held, a picture or a pasted text.
   const held = useMemo(
@@ -71,9 +72,10 @@ export function usePillField(
   }, [words, onWords, held, attached, detach]);
 
   return {
-    pills: { field, onAtWord: setAtWord, files: held },
+    pills: { field, onAtWord: setAtWord, files: held, onFocusChange: setFocused },
     mentions: {
       word: atWord,
+      focused,
       pick: (mention) => field.current?.pick(mentionPill(mention.name, mention.target)),
       rewrite: (words) => field.current?.rewrite(words),
     },
