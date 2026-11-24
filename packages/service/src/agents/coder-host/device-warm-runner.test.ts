@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import type { ClaudeCodeConfig } from "@repo/agent-runner/protocol";
+import type { ClaudeCodeConfig, CursorConfig } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
 import { latestTurnsOf, recordAgentNativeSession } from "@repo/database/models/agent-store";
 import {
@@ -16,6 +16,7 @@ import {
 } from "@repo/database/models/device-agent-store";
 import { beatDevice } from "@repo/database/models/device-store";
 import { turns } from "@repo/database/schemas/storage";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB } from "@repo/database/testing";
 import {
   DEVICE_AGENT_LINE_KIND,
@@ -37,6 +38,7 @@ import {
   typedMessage,
   type WarmLocalAgent,
   warmLocalAgent,
+  warmLocalAgentOn,
 } from "../../testing/local-agent.js";
 import { claimedDeviceAgentLine, settledDeviceAgentLine } from "../device-agent.js";
 import { MAC_MACHINE } from "../machine/device-machine.js";
@@ -48,6 +50,9 @@ const UNREACHED = Layer.merge(noNetwork, memorySandbox().layer);
 
 /** A Claude Code session the agent's Mac began before its host kept transcripts at the service. */
 const BEGUN_BEFORE = "5b7c9d1e-3f40-4a5b-8c6d-7e8f9a0b1c2d";
+
+/** A Cursor agent's session its Mac began whose first mirror to the service failed, so the store holds none of it. */
+const CURSOR_BEGUN_BEFORE = "agent-6c8d0e2f-4051-4b6c-9d7e-8f9a0b1c2d3e";
 
 /** The line a retire writes to a warm runner, as its Mac takes it. */
 const RETIRE_LINE = '{"type":"retire"}\n';
@@ -62,6 +67,41 @@ const idled = (warm: WarmLocalAgent) =>
     });
 
     return yield* driven(yield* forkClockDriven(idle), MAC_MACHINE.POLL);
+  });
+
+/**
+ * The config line of the launch the next message makes once the agent's
+ * runner ended, its record naming the session given, which the store holds
+ * none of: the first line of the launch its Mac claims, opened from its
+ * sealed secrets.
+ */
+const relaunchedOver = (warm: WarmLocalAgent, session: string) =>
+  Effect.gen(function* () {
+    const { userId, deviceId, agent } = warm;
+    assert.equal(yield* recordAgentNativeSession(userId, agent.id, session), true);
+    const launch = yield* latestDeviceAgentLaunch(userId, agent.id);
+    assert.ok(Option.isSome(launch));
+    yield* TestClock.adjust("1 minute");
+    yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.value.id, 0);
+
+    const sent = yield* warm.sessions.send(warm.sessionId, typedMessage(agent, "And the tests."));
+
+    assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+
+    const relaunch = (yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).find(
+      (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
+    );
+
+    assert.ok(relaunch !== undefined);
+
+    const claimed = Option.getOrThrow(
+      yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), relaunch.id),
+    );
+
+    assert.ok("secrets" in claimed);
+    const { stdin } = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(claimed.secrets);
+
+    return stdin.split("\n")[0] ?? "";
   });
 
 /**
@@ -184,40 +224,27 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
       "a relaunch on a Mac resumes a session begun before, which the store holds none of, from its disk with the store left out",
       () =>
         Effect.gen(function* () {
-          const warm = yield* warmLocalAgent;
-          const { userId, deviceId, agent } = warm;
-          // The session stood on the Mac's disk alone, begun before its runner kept transcripts.
-          assert.equal(yield* recordAgentNativeSession(userId, agent.id, BEGUN_BEFORE), true);
-          const launch = yield* latestDeviceAgentLaunch(userId, agent.id);
-          assert.ok(Option.isSome(launch));
-          yield* TestClock.adjust("1 minute");
-          yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.value.id, 0);
-
-          const sent = yield* warm.sessions.send(
-            warm.sessionId,
-            typedMessage(agent, "And the tests."),
+          const config: ClaudeCodeConfig = JSON.parse(
+            yield* relaunchedOver(yield* warmLocalAgent, BEGUN_BEFORE),
           );
 
-          assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-
-          const relaunch = (yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).find(
-            (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
-          );
-
-          assert.ok(relaunch !== undefined);
-
-          const claimed = Option.getOrThrow(
-            yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), relaunch.id),
-          );
-
-          assert.ok("secrets" in claimed);
-
-          const { stdin } = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(
-            claimed.secrets,
-          );
-
-          const config: ClaudeCodeConfig = JSON.parse(stdin.split("\n")[0] ?? "");
           assert.deepEqual([config.resume, config.transcriptsUrl], [BEGUN_BEFORE, undefined]);
+        }),
+    );
+
+    it.effect(
+      "a relaunch on a Mac of a Cursor agent whose session the store holds none of opens a fresh session kept at the store, since Cursor keeps nothing on the Mac's disk",
+      () =>
+        Effect.gen(function* () {
+          const config: CursorConfig = JSON.parse(
+            yield* relaunchedOver(
+              yield* warmLocalAgentOn(CONVERSATION_RUNTIME.CURSOR),
+              CURSOR_BEGUN_BEFORE,
+            ),
+          );
+
+          assert.notEqual(config.session, CURSOR_BEGUN_BEFORE);
+          assert.ok(config.transcriptsUrl !== undefined);
         }),
     );
 

@@ -1,7 +1,23 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { it } from "@effect/vitest";
+import { Database } from "@repo/database/core/query";
+import { user } from "@repo/database/schemas/auth";
+import { getTestDB } from "@repo/database/testing";
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
-import { it } from "vitest";
-import { cursorModelSelectionOf, cursorModelsOf, withCursorModels } from "./cursor-models.js";
+import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
+import { fakeHttpClientLayer } from "@repo/wire/testing";
+import { Effect, Layer } from "effect";
+import { TestClock } from "effect/testing";
+import { connectAgentApiKeys } from "../testing/agent-credentials.js";
+import { LOCAL_AGENT_ENVIRONMENT } from "../testing/local-agent.js";
+import {
+  CursorModelCatalog,
+  cursorModelCatalogLayer,
+  cursorModelSelectionOf,
+  cursorModelsOf,
+  withCursorModels,
+} from "./cursor-models.js";
 
 /**
  * Cursor's model list as `GET api.cursor.com/v1/models` answers it, written
@@ -164,6 +180,13 @@ it.each([
       maxMode: true,
     },
   ],
+  [
+    "a fast model the list does not name, as while Cursor's list cannot be read, on Cursor's id and its speed alone",
+    "cursor/gpt-6-fast",
+    "high",
+    undefined,
+    { id: "gpt-6", params: [{ id: "fast", value: "true" }] },
+  ],
 ] as const)("runs %s as Cursor's SDK takes it", (_case, catalogId, effort, window, selection) => {
   assert.deepEqual(
     cursorModelSelectionOf(cursorModelsOf(LIST), catalogId, effort, window),
@@ -176,4 +199,41 @@ it("offers no Cursor model to an account without Cursor agents on, or a client t
 
   assert.deepEqual(withCursorModels([], { experimentOn: false, apiVersion: 4 }, models), []);
   assert.deepEqual(withCursorModels([], { experimentOn: true, apiVersion: 3 }, models), []);
+});
+
+it.layer(getTestDB())("Cursor's list as the service reads it", (it) => {
+  it.effect(
+    "keeps offering the account's last list it read while Cursor's list cannot be read",
+    () =>
+      Effect.gen(function* () {
+        const userId = `user-${randomUUID()}`;
+        yield* Effect.flatMap(Database, (db) =>
+          db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
+        );
+        yield* connectAgentApiKeys(userId, { providers: [PROVIDER_KEY_PROVIDER.CURSOR] });
+        let reads = 0;
+
+        // Cursor answers its list once, then times out on every read after.
+        const cursor = fakeHttpClientLayer(() => {
+          reads += 1;
+
+          if (reads > 1) throw new Error("timed out");
+
+          return Response.json({ items: LIST });
+        });
+
+        const catalog = yield* Effect.provide(
+          CursorModelCatalog,
+          cursorModelCatalogLayer.pipe(Layer.provide(Layer.merge(cursor, LOCAL_AGENT_ENVIRONMENT))),
+        );
+
+        const first = yield* catalog.forAccount(userId);
+        yield* TestClock.adjust("1 hour");
+        const later = yield* catalog.forAccount(userId);
+
+        assert.equal(reads, 2);
+        assert.deepEqual(later, first);
+        assert.ok(later.some((model) => model.catalogId === "cursor/claude-opus-5.5"));
+      }),
+  );
 });
