@@ -31,6 +31,7 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { FieldChip, type FieldMenu, LabelChip } from "./button.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { useRowInset } from "./layout-margin.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
@@ -214,6 +215,7 @@ export function PullRequestHead({
   labels = [],
 }: PullRequestHeadProps) {
   const colors = useColors();
+  const inset = useRowInset();
   const large = useAccessibilitySize();
   const look = PULL_REQUEST_LOOK[pullRequestMarkState({ state, queued })];
 
@@ -230,7 +232,12 @@ export function PullRequestHead({
       modifiers={[
         listRowBackground("clear"),
         listRowSeparator("hidden"),
-        listRowInsets({ leading: SPACE.EDGE, trailing: SPACE.EDGE, top: SPACE.TIGHT, bottom: 0 }),
+        listRowInsets({
+          leading: inset.lead,
+          trailing: inset.margin,
+          top: SPACE.TIGHT,
+          bottom: 0,
+        }),
       ]}
     >
       <Text
@@ -435,6 +442,7 @@ export function WriteNoteRow({
   readonly said?: string | undefined;
 }) {
   const colors = useColors();
+  const inset = useRowInset();
 
   return (
     <HStack
@@ -443,8 +451,8 @@ export function WriteNoteRow({
       modifiers={[
         listRowBackground("clear"),
         listRowInsets({
-          leading: SPACE.EDGE,
-          trailing: SPACE.EDGE,
+          leading: inset.lead,
+          trailing: inset.margin,
           top: SPACE.TIGHT,
           bottom: SPACE.TIGHT,
         }),
@@ -516,6 +524,7 @@ export function MergeActRow({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  const inset = useRowInset();
 
   const words = (
     <Text
@@ -536,8 +545,8 @@ export function MergeActRow({
     listRowBackground("clear"),
     listRowSeparator("hidden"),
     listRowInsets({
-      leading: SPACE.EDGE,
-      trailing: SPACE.EDGE,
+      leading: inset.lead,
+      trailing: inset.margin,
       top: SPACE.TIGHT,
       bottom: SPACE.TIGHT,
     }),

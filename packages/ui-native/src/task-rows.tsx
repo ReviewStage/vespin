@@ -859,6 +859,8 @@ type WordsRowProps = {
   readonly change?: VersionUnit["change"] | undefined;
   /** Takes a press on the words, by how far in from their start it landed, as a description edited in place puts the caret there; none where the words are read alone. A link or a chip pressed still opens. */
   readonly onPressAt?: ((x: number, y: number) => void) | undefined;
+  /** Where its words start: the screen's edge, or the rows' leading marks'; the screen's edge where none is given. */
+  readonly edge?: WordsEdge | undefined;
   /** Groups its long press menu holds after its acts, such as a pull request description's Add reaction; none where it offers nothing more. */
   readonly menuGroups?: readonly LongPressGroup[] | undefined;
   /** The reactions the words wear as one line, such as "👍 2  ❤️ 1", under them; none where they wear none. */
@@ -894,6 +896,19 @@ export function FieldRow({ children }: { readonly children: ReactNode }) {
     </VStack>
   );
 }
+
+/**
+ * Where a description's words start: at the screen's edge, as a task's page
+ * stands them under its grouped headers, or where a list's rows start their
+ * leading marks (`inset.lead`), as a pull request's page stands its heading,
+ * its rows, and its words on one edge.
+ */
+export const WORDS_EDGE = {
+  PAGE: "page",
+  ROWS: "rows",
+} as const;
+
+export type WordsEdge = (typeof WORDS_EDGE)[keyof typeof WORDS_EDGE];
 
 /** How tall folded words stand at the body's size, about twelve of its lines. */
 const FOLDED_HEIGHT = 264;
@@ -1036,8 +1051,10 @@ export function WordsRow({
   folded = false,
   menuGroups = [],
   reactions,
+  edge = WORDS_EDGE.PAGE,
 }: WordsRowProps) {
   const colors = useColors();
+  const inset = useRowInset();
   const foldedHeight = useScaledSize(FOLDED_HEIGHT);
 
   // Note that the press is the words' own, not VoiceOver's: the words stay read as words, and the section's Edit edits them.
@@ -1076,8 +1093,8 @@ export function WordsRow({
         listRowBackground("clear"),
         listRowSeparator("hidden"),
         listRowInsets({
-          leading: SPACE.EDGE,
-          trailing: SPACE.EDGE,
+          leading: edge === WORDS_EDGE.ROWS ? inset.lead : SPACE.EDGE,
+          trailing: edge === WORDS_EDGE.ROWS ? inset.margin : SPACE.EDGE,
           top: SPACE.TIGHT,
           bottom: last ? SPACE.PAGE : SPACE.TIGHT,
         }),

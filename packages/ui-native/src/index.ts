@@ -444,6 +444,8 @@ export {
   VERSION_WRITER,
   VersionRow,
   type VersionWriter,
+  WORDS_EDGE,
+  type WordsEdge,
   WordsRow,
 } from "./task-rows.js";
 
