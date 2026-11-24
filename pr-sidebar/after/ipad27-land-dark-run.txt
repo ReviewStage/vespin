@@ -7,26 +7,34 @@ Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74
 Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
 Set orientation LANDSCAPE_LEFT... COMPLETED
 Assert that "Recorded the invite flow" is visible... COMPLETED
+Start recording 1-open-thread... COMPLETED
 Tap on "Recorded the invite flow"... COMPLETED
-Wait for animation to end... COMPLETED
+Assert that (Optional) "invite-test-plan\.pdf.*" is visible... COMPLETED
+Run flow when "invite-test-plan\.pdf.*" is not visible...
+Run flow when "invite-test-plan\.pdf.*" is not visible... SKIPPED
+Run flow when "invite-test-plan\.pdf.*" is not visible...
+Run flow when "invite-test-plan\.pdf.*" is not visible... SKIPPED
+Stop recording... COMPLETED
 Take screenshot 1-inbox-thread... COMPLETED
 Tap on "Hide Sidebar", Index: 0... COMPLETED
 Wait for animation to end... COMPLETED
 Take screenshot 2-pane-hidden... COMPLETED
 Tap on "Show Sidebar", Index: 0... COMPLETED
 Wait for animation to end... COMPLETED
-Tap on "Weekly digest email"... COMPLETED
+Swipe from (15%, 80%) to (15%, 35%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Teammate invitations", Index: 0... COMPLETED
 Wait for animation to end... COMPLETED
 Take screenshot 3-task-page... COMPLETED
-Tap on "Send the weekly digest"... COMPLETED
+Tap on "Build teammate invitations"... COMPLETED
 Wait for animation to end... COMPLETED
 Take screenshot 4-agent-page... COMPLETED
-Tap on "#43 .*", Index: 0... FAILED
+Tap on "#128 .*", Index: 0... FAILED
 Set orientation PORTRAIT... COMPLETED
 
-Element not found: Text matching regex: #43 .*, Index: 0
+Element not found: Text matching regex: #128 .*, Index: 0
 
-Element with Text matching regex: #43 .*, Index: 0 not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+Element with Text matching regex: #128 .*, Index: 0 not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
 
 Possible causes:
 - Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
@@ -35,4 +43,4 @@ Possible causes:
 
 ==== Debug output (logs & screenshots) ====
 
-/Users/deanstratakos/vespin-ipad-agent/out/sjsidea/ipad27-land-dark/2026-11-23_210300
+/Users/deanstratakos/vespin-ipad-agent/out/sjsidea/ipad27-land-dark/2026-11-23_213906
