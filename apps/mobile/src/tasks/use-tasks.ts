@@ -115,6 +115,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
+  useArchivedAgentsWritten,
   useHostActs,
   useListedTasks,
   useTaskListCollections,
@@ -965,6 +966,8 @@ function usePageRows(
   reading: boolean,
 ): PageRows {
   const collections = useTaskListCollections();
+  // Note that the page lists its tasks' archived agents too, so those the task list still keeps back are written as it first reads.
+  useArchivedAgentsWritten(reading && taskId !== undefined);
 
   const tasks =
     useLiveQuery((q) =>

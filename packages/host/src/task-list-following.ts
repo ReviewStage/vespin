@@ -254,6 +254,118 @@ function partCollectionOptions<Row extends object>(
   };
 }
 
+/** The archived agents a follow keeps back from the agents' collection while a client draws its first screens, and the doors that write them. */
+interface AgentsDeferral {
+  /** Lays `rows` as the agents' whole list, keeping back the archived ones still deferred. */
+  readonly lay: (rows: readonly ListedAgent[]) => void;
+  /** Lays the agents that moved, keeping back the archived ones still deferred, and lets go every agent `ids` leaves out. */
+  readonly move: (rows: readonly ListedAgent[], ids: readonly string[] | undefined) => void;
+  readonly keep: (ids: Iterable<string>) => void;
+  readonly write: (count: number) => number;
+  readonly flush: () => void;
+}
+
+/**
+ * The archived agents on a task kept back from `feed` until the client
+ * writes them (`write`, a few at a time, or `flush`, the rest at once), and
+ * the agents `keep` names written at once. An agent on no task, a Manager,
+ * is never kept back, and once the backlog is written, every agent passes
+ * straight through. Note that an agent kept back is kept as it last moved:
+ * archived after the list was laid, it leaves the collection for the
+ * backlog; brought back, it leaves the backlog for the collection; gone, it
+ * leaves both.
+ */
+function agentsDeferral(feed: PartFeed<ListedAgent>): AgentsDeferral {
+  let deferring = true;
+  const deferred = new Map<string, ListedAgent>();
+  const kept = new Set<string>();
+
+  const passes = (agent: ListedAgent): boolean =>
+    !deferring || agent.archivedAt === undefined || agent.taskId === null || kept.has(agent.id);
+
+  // Writes `rows` into the collection as moved rows, ending the deferral once the backlog is empty.
+  const writeOut = (rows: readonly ListedAgent[]): void => {
+    for (const agent of rows) deferred.delete(agent.id);
+
+    if (deferred.size === 0) deferring = false;
+
+    if (rows.length > 0) feed.move(rows, undefined);
+  };
+
+  return {
+    lay: (rows) => {
+      if (!deferring) {
+        feed.lay(rows);
+
+        return;
+      }
+
+      deferred.clear();
+      const passed = rows.filter((agent) => passes(agent) || !deferred.set(agent.id, agent));
+      feed.lay(passed);
+    },
+    move: (rows, ids) => {
+      if (!deferring) {
+        feed.move(rows, ids);
+
+        return;
+      }
+
+      const newlyDeferred = new Set<string>();
+      const passed: ListedAgent[] = [];
+
+      for (const agent of rows) {
+        if (passes(agent)) {
+          deferred.delete(agent.id);
+          passed.push(agent);
+        } else {
+          deferred.set(agent.id, agent);
+          newlyDeferred.add(agent.id);
+        }
+      }
+
+      const named = ids === undefined ? undefined : new Set(ids);
+
+      if (named !== undefined)
+        for (const key of deferred.keys()) if (!named.has(key)) deferred.delete(key);
+
+      // Note that an agent the move archived leaves the collection as it joins the backlog, so the ids the feed is told leave it out.
+      const held = feed.held();
+
+      const told =
+        ids !== undefined
+          ? ids.filter((id) => !deferred.has(id))
+          : newlyDeferred.size > 0 && held !== undefined
+            ? [...held.keys(), ...passed.map((agent) => agent.id)].filter(
+                (id) => !newlyDeferred.has(id),
+              )
+            : undefined;
+
+      feed.move(passed, told);
+    },
+    keep: (ids) => {
+      const named: ListedAgent[] = [];
+
+      for (const id of ids) {
+        kept.add(id);
+        const agent = deferred.get(id);
+
+        if (agent !== undefined) named.push(agent);
+      }
+
+      if (named.length > 0) writeOut(named);
+    },
+    write: (count) => {
+      if (deferring) writeOut([...deferred.values()].slice(0, count));
+
+      return deferred.size;
+    },
+    flush: () => {
+      if (deferring) writeOut([...deferred.values()]);
+    },
+  };
+}
+
 /** The task list's collections, one per part, each keyed by its rows' id. */
 export interface TaskListCollections {
   /** The account's tasks, by task id. */
@@ -275,12 +387,34 @@ export interface TaskListFollowing {
   readonly deliver: (delivery: TaskListDelivery) => void;
   /** Says a document could not be written; the rows held stay, and the next write clears it. */
   readonly trouble: (cause: unknown) => void;
+  /**
+   * Writes up to `count` of the archived agents kept back
+   * (`deferArchivedAgents`) into the agents' collection in one commit, and
+   * answers how many still wait; none where nothing is kept back.
+   */
+  readonly writeDeferredAgents: (count: number) => number;
+  /** Writes every archived agent still kept back at once, and keeps none back from then on. */
+  readonly flushDeferredAgents: () => void;
+  /** Writes at once the kept-back agents `ids` names, and keeps none of them back from then on, as the Inbox names those its threads stand on. */
+  readonly keepAgents: (ids: Iterable<string>) => void;
   /** Stops every collection's sync. */
   readonly stop: () => void;
 }
 
+/** How a client follows its task list. */
+export interface TaskListFollowingOptions {
+  /**
+   * Whether the archived agents on a task are kept back from the agents'
+   * collection until the client writes them (`writeDeferredAgents`,
+   * `flushDeferredAgents`), so a launch's first screens, none of which list
+   * an archived agent, are drawn without writing an account's thousands of
+   * them. Off where none is given.
+   */
+  readonly deferArchivedAgents?: boolean;
+}
+
 /** The collections of one client's task list, syncing from the moment they are made, and the feed its follow writes them through. */
-export function taskListFollowing(): TaskListFollowing {
+export function taskListFollowing(options: TaskListFollowingOptions = {}): TaskListFollowing {
   let version = -1;
   let laid = false;
   /** The moved rows heard before any whole list was laid, in order. */
@@ -292,6 +426,10 @@ export function taskListFollowing(): TaskListFollowing {
     taskPullRequests: partFeed(TASK_PULL_REQUESTS_PART),
     agentPullRequests: partFeed(AGENT_PULL_REQUESTS_PART),
   };
+
+  const deferral =
+    options.deferArchivedAgents === true ? agentsDeferral(feeds.taskAgents) : undefined;
+  const agentsFeed = deferral ?? feeds.taskAgents;
 
   const collections: TaskListCollections = {
     tasks: createCollection(partCollectionOptions(TASKS_PART, feeds.tasks)),
@@ -317,7 +455,7 @@ export function taskListFollowing(): TaskListFollowing {
   const lay = (view: TaskListParts): void => {
     laid = true;
     feeds.tasks.lay(view.tasks);
-    feeds.taskAgents.lay(view.taskAgents ?? []);
+    agentsFeed.lay(view.taskAgents ?? []);
     feeds.taskPullRequests.lay(view.taskPullRequests ?? []);
     feeds.agentPullRequests.lay(view.agentPullRequests ?? []);
   };
@@ -328,7 +466,9 @@ export function taskListFollowing(): TaskListFollowing {
 
     if (field === undefined || !Object.hasOwn(feeds, field)) return;
     // SAFETY: `field` is an own key of `feeds`, checked above, and a part's rows cross as the rows of its own field (`HOST_READ_SLICE`'s `tasks`), so the feed takes them as its own.
-    const feed = feeds[field as keyof typeof feeds] as PartFeed<object>;
+    const feed = (
+      field === AGENTS_PART.field ? agentsFeed : feeds[field as keyof typeof feeds]
+    ) as Pick<PartFeed<object>, "lay" | "move">;
 
     if ("value" in move) {
       // SAFETY: a part's key crossing whole carries its list of rows, or null where the part is gone (`HOST_READ_SLICE`'s `tasks`).
@@ -371,6 +511,9 @@ export function taskListFollowing(): TaskListFollowing {
     trouble: (cause) => {
       for (const feed of Object.values(feeds)) feed.trouble(cause);
     },
+    writeDeferredAgents: (count) => deferral?.write(count) ?? 0,
+    flushDeferredAgents: () => deferral?.flush(),
+    keepAgents: (ids) => deferral?.keep(ids),
     stop: () => {
       // Note that the live queries reading the collections are cleaned up with them, since the follow stops only as the window, the app, or its account goes, and `cleanup()` alone rejects while one reads a collection (`@tanstack/db` 1.0's `Collection.cleanup` documents `dependents` for this).
       for (const collection of Object.values(collections))

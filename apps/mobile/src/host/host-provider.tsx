@@ -17,6 +17,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -30,8 +31,8 @@ import {
   noteLaunchPhase,
 } from "../launch-phases.js";
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
-import { releaseSplashAfterFrame } from "../splash.js";
-import { followAppStateInto } from "./app-state-query.js";
+import { releaseSplashAfterFrame, useSplashReleased } from "../splash.js";
+import { type DeferredAgents, followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot, onNetworkChanged } from "./device-seams.js";
 import {
   launchFixtureProfile,
@@ -65,6 +66,7 @@ type Standing =
   | {
       readonly client: QueryClient;
       readonly taskList: TaskListCollections;
+      readonly deferredAgents: DeferredAgents;
       readonly acts: ActPortClient;
       readonly follow: HostFollow;
       readonly count: HostCount;
@@ -82,6 +84,18 @@ const HostCounts = createContext<HostCount | undefined>(undefined);
 
 /** The task list's collections, fed from the document the client holds, once the host stands. */
 const TaskListCollectionsContext = createContext<TaskListCollections | undefined>(undefined);
+
+/** The archived agents the task list keeps back while the launch draws, once the host stands. */
+const DeferredAgentsContext = createContext<DeferredAgents | undefined>(undefined);
+
+/**
+ * How many of the archived agents kept back are written in one commit once
+ * the first frame stands, a task of its own between each. Note that it is a
+ * couple of hundred because a written agent cost the agents' collection
+ * about 20 µs on the iPhone simulator, more with live queries over it, so a
+ * commit stays near the 8 ms a frame can spare on a phone.
+ */
+const DEFERRED_AGENTS_CHUNK = 200;
 
 /** The host's act port, for a screen drawn under `HostProvider`. */
 export function useHostActs(): ActPortClient {
@@ -146,9 +160,69 @@ export function useTaskListRow<Row extends object>(
     [collection, key],
   );
 
-  return useSyncExternalStore(subscribe, () =>
+  const row = useSyncExternalStore(subscribe, () =>
     key === undefined ? undefined : collection.get(key),
   );
+
+  useAgentMissWritten(collection, key !== undefined && row === undefined);
+
+  return row;
+}
+
+/**
+ * Writes every archived agent the task list still keeps back the moment a
+ * read of the agents' collection by id finds no row, before the frame is
+ * drawn, so a reader nobody listed as one that needs archived agents (a
+ * mention, a notification's agent) never reads one as gone.
+ */
+function useAgentMissWritten<Row extends object>(
+  collection: Collection<Row, string>,
+  missed: boolean,
+): void {
+  const collections = useContext(TaskListCollectionsContext);
+  const deferred = useContext(DeferredAgentsContext);
+  // Note that the collections are told apart by identity alone, whatever rows each holds.
+  const ofAgents = collections !== undefined && Object.is(collection, collections.agents);
+
+  useLayoutEffect(() => {
+    if (missed && ofAgents) deferred?.flush();
+  }, [missed, ofAgents, deferred]);
+}
+
+/**
+ * Writes every archived agent the task list still keeps back as a place
+ * that lists them first draws while `asked`, before the frame is drawn, as
+ * a task's page does.
+ */
+export function useArchivedAgentsWritten(asked = true): void {
+  const deferred = useContext(DeferredAgentsContext);
+
+  useLayoutEffect(() => {
+    if (asked) deferred?.flush();
+  }, [asked, deferred]);
+}
+
+/**
+ * Writes the archived agents the task list keeps back once the first frame
+ * stands, `DEFERRED_AGENTS_CHUNK` to a commit and a task of their own
+ * between each, so no commit holds a frame; at once wherever a place asks
+ * for them sooner (`useArchivedAgentsWritten`).
+ */
+function useDeferredAgentsWritten(deferred: DeferredAgents | undefined): void {
+  const released = useSplashReleased();
+
+  useEffect(() => {
+    if (deferred === undefined || !released) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const step = () => {
+      timer = deferred.write(DEFERRED_AGENTS_CHUNK) > 0 ? setTimeout(step, 0) : undefined;
+    };
+
+    timer = setTimeout(step, 0);
+
+    return () => clearTimeout(timer);
+  }, [deferred, released]);
 }
 
 /**
@@ -269,6 +343,12 @@ export function useListedTasks(reading = true): readonly TaskSummary[] {
  */
 export function useListedAgents(reading = true): readonly ListedAgent[] {
   const { agents } = useTaskListCollections();
+  const deferred = useContext(DeferredAgentsContext);
+
+  // Note that the list names the archived agents, so those the task list still keeps back are written as it first reads.
+  useLayoutEffect(() => {
+    if (reading) deferred?.flush();
+  }, [reading, deferred]);
 
   return (
     useLiveQuery((q) =>
@@ -363,6 +443,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
           setStanding({
             client,
             taskList: following.taskList,
+            deferredAgents: following.deferredAgents,
             acts: host.acts,
             follow: host.follow,
             count: host.bridge.recordSurfaceEvent,
@@ -385,6 +466,9 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
   }, [attempt]);
   // Note that the splash stands over the launch until the screens, or the failure in their place, first draw, so no blank screen shows while the host starts.
   useEffect(() => (standing === undefined ? undefined : releaseSplashAfterFrame()), [standing]);
+  useDeferredAgentsWritten(
+    standing === undefined || "failed" in standing ? undefined : standing.deferredAgents,
+  );
 
   if (standing === undefined) return <HostStartingScreen />;
 
@@ -398,7 +482,9 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         <HostFollows.Provider value={standing.follow}>
           <HostCounts.Provider value={standing.count}>
             <TaskListCollectionsContext.Provider value={standing.taskList}>
-              {children}
+              <DeferredAgentsContext.Provider value={standing.deferredAgents}>
+                {children}
+              </DeferredAgentsContext.Provider>
             </TaskListCollectionsContext.Provider>
           </HostCounts.Provider>
         </HostFollows.Provider>

@@ -18,6 +18,7 @@
  * that moved, and is never behind the document.
  */
 
+import { LIVE_READ } from "@repo/features/live-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
   type AppStateBridgeReads,
@@ -46,9 +47,31 @@ export const appStateQuery = queryOptions({
   retry: false,
 });
 
+/** The archived agents the task list keeps back while the launch draws its first screens (`deferArchivedAgents`), and the doors that write them. */
+export interface DeferredAgents {
+  /** Writes up to `count` of them in one commit, and answers how many still wait. */
+  readonly write: (count: number) => number;
+  /** Writes every one still waiting at once. */
+  readonly flush: () => void;
+}
+
 /** The document followed into the client, and the task list's collections fed from the same readings. */
 export interface FollowedAppStateInto extends FollowedAppState {
   readonly taskList: TaskListCollections;
+  readonly deferredAgents: DeferredAgents;
+}
+
+/** No agent: what the Inbox names before its first read. */
+const NO_AGENT_IDS: readonly string[] = [];
+
+/** Every agent the Inbox's threads stand on, or are held by, in the document as it stands. */
+function inboxAgentIdsOf(state: AppStateSnapshot): readonly string[] {
+  const rows = state[LIVE_READ.INBOX_ITEMS].rows;
+
+  if (rows === undefined) return NO_AGENT_IDS;
+  const held = [...Object.values(rows.task), ...Object.values(rows.agents ?? {})];
+
+  return [...Object.keys(rows.agents ?? {}), ...held.flat().map((item) => item.agentId)];
 }
 
 /**
@@ -63,12 +86,20 @@ export function followAppStateInto(
   bridge: AppStateBridgeReads,
   client: QueryClient,
 ): FollowedAppStateInto {
-  const taskList = taskListFollowing();
+  // Note that the archived agents on a task are kept back while the launch draws, since none of its first screens lists one, and the host provider writes them once the first frame stands; those the Inbox names are written at once, since its rows name their agents.
+  const taskList = taskListFollowing({ deferArchivedAgents: true });
+  let inboxRead: unknown;
 
   const followed = followAppStateOver(
     bridge,
     (state) => {
       client.setQueryData(appStateQuery.queryKey, state);
+
+      if (state[LIVE_READ.INBOX_ITEMS] !== inboxRead) {
+        inboxRead = state[LIVE_READ.INBOX_ITEMS];
+        taskList.keepAgents(inboxAgentIdsOf(state));
+      }
+
       noteDelivered();
 
       return undefined;
@@ -87,6 +118,7 @@ export function followAppStateInto(
   return {
     ...followed,
     taskList: taskList.collections,
+    deferredAgents: { write: taskList.writeDeferredAgents, flush: taskList.flushDeferredAgents },
     stop: () => {
       followed.stop();
       taskList.stop();
