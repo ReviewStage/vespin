@@ -1,5 +1,9 @@
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { AGENT_BOUNDS, AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
+import {
+  automationAgentBrief,
+  CREATE_WITH_AGENT_WORDS,
+} from "@repo/features/automation-agent-brief";
 import { FAILURE_REASON, type Failure, rejectedFailure } from "@repo/features/failure-remedy";
 import { wordsWithoutMarkers } from "@repo/features/file-marker";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
@@ -38,7 +42,6 @@ import {
   useDraft,
   useDraftWriter,
 } from "../composer-drafts.js";
-import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
 import { sectionGlyph } from "../desktop/section-icon-picker.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
@@ -213,7 +216,7 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * agent that makes an automation (`NEW_TASK_PURPOSE.AUTOMATION`), so making
  * one looks and works as starting any agent does. Its title and placeholder
  * say so, its words are kept as a draft of their own, and the agent is handed
- * the fixed brief with the words fenced after it (`automation-agent-brief.ts`),
+ * the fixed brief with the words fenced after it (`@repo/features/automation-agent-brief`),
  * refused here where that would pass an agent's first message's bound. It
  * starts on words alone, and
  * ⌘Return on an empty box starts no bare task, so its hint never names one.
@@ -226,7 +229,7 @@ const BARE_CHORD: ShortcutChord = { key: SHORTCUT_KEY.ENTER };
 /** Each purpose's head row title, before the repository's chip: drawn for an automation's, and named to a reader alone for a task's. */
 const PURPOSE_HEADING = {
   [NEW_TASK_PURPOSE.TASK]: "New task",
-  [NEW_TASK_PURPOSE.AUTOMATION]: "Create with an agent",
+  [NEW_TASK_PURPOSE.AUTOMATION]: CREATE_WITH_AGENT_WORDS.TITLE,
 } as const satisfies Record<NewTaskPurpose, string>;
 
 /** What each purpose's card asks for, calls its field, and calls its round button. */
@@ -237,8 +240,8 @@ const PURPOSE_WORDS = {
     send: "Start agent",
   },
   [NEW_TASK_PURPOSE.AUTOMATION]: {
-    placeholder: "Describe what to automate",
-    label: "What to automate",
+    placeholder: CREATE_WITH_AGENT_WORDS.PLACEHOLDER,
+    label: CREATE_WITH_AGENT_WORDS.LABEL,
     send: "Start agent",
   },
 } as const satisfies Record<NewTaskPurpose, ComposerWords>;
@@ -251,7 +254,7 @@ const BARE_WORDS: ComposerWords = {
 };
 
 /** Why an automation's agent did not start where the brief and the words pass an agent's first message's bound. */
-const TOO_LONG = "That request is too long.";
+const TOO_LONG = CREATE_WITH_AGENT_WORDS.TOO_LONG;
 
 /** Why the chip is held on a tree's card, whose tasks share the other's repository. */
 const REPOSITORY_HELD = "A sub-task and its parent share one repository";

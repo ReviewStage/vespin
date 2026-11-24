@@ -1,5 +1,5 @@
 /**
- * automation-agent-brief.ts -- what the Automations page's Create with an agent hands the agent it starts: a fixed brief, then the member's own words fenced as their request.
+ * automation-agent-brief.ts -- what Create with an agent hands the agent it starts, on the desktop's Automations page and the phone's tab alike: a fixed brief, then the member's own words fenced as their request.
  *
  * The brief is the same for every request, written here rather than by a
  * model, so what the agent is told to do, and which automations tools it is
@@ -8,8 +8,8 @@
  * nothing they wrote closes the fence and reads as the brief.
  */
 
-import { LINK_ORIGIN } from "@repo/features/link-home";
-import { fencedBlock } from "@repo/features/markdown-fence";
+import { LINK_ORIGIN } from "./link-home.js";
+import { fencedBlock } from "./markdown-fence.js";
 
 /** The brief every Create with an agent opens with, ahead of the request. */
 const BRIEF = `# Create an automation
@@ -24,6 +24,14 @@ A member asked on the Automations page for an automation that does what their re
 
 /** What leads the member's words in. */
 const REQUEST_LEAD = "Their request, in their own words:";
+
+/** What Create with an agent's card says, the desktop's and the phone's alike: its title, what its field asks for and is called, and why a request too long for an agent's first message is refused. */
+export const CREATE_WITH_AGENT_WORDS = {
+  TITLE: "Create with an agent",
+  PLACEHOLDER: "Describe what to automate",
+  LABEL: "What to automate",
+  TOO_LONG: "That request is too long.",
+} as const;
 
 /** The agent's first message for a request: the brief, then the request fenced, trimmed of the space around it. */
 export function automationAgentBrief(request: string): string {

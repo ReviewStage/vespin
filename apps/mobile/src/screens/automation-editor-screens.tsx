@@ -17,6 +17,7 @@ import {
   filterAdmitted,
   filterValuesOf,
   type GitHubTriggerSettings,
+  presetDraft,
   repositoryHeld,
   SCHEDULE_KIND,
   type ScheduleDraft,
@@ -53,6 +54,11 @@ import {
 } from "@repo/features/automation-editor-words";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import {
+  AUTOMATION_PRESET,
+  type AutomationPresetName,
+  automationPreset,
+} from "@repo/features/automation-presets";
+import {
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -70,7 +76,6 @@ import {
 import { readerZone } from "@repo/features/date-mention";
 import { INTEGRATION_NAME, integrationConnectionOf } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
-import { LIVE_READ } from "@repo/features/live-wire";
 import { effortFor, effortsOf } from "@repo/features/model-effort";
 import { agentName } from "@repo/features/model-label";
 import { type CatalogModel, type ModelChoice, standardModelIdOf } from "@repo/features/models-wire";
@@ -79,7 +84,6 @@ import { dayAndTimeText, timeZoneNames } from "@repo/features/time-format";
 import { ACT_UNREACHED_WORDS, andList, MCP_SERVER_LABEL, readingWords } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
   selectAccount,
   selectAgentDefault,
@@ -121,7 +125,10 @@ import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { timeZoneRoute } from "../automations/automation-editor-route.js";
-import { useWorkspaceAutomations } from "../automations/use-automations.js";
+import {
+  useWorkspaceAutomations,
+  useWorkspaceIntegrations,
+} from "../automations/use-automations.js";
 import { useZonePick, useZonePicked } from "../automations/zone-pick.js";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -222,29 +229,6 @@ function choiceAt(
   const effort = effortFor(effortsOf(catalog, model), shown?.effort);
 
   return effort === undefined ? undefined : { model, effort };
-}
-
-/** What the workspace's integrations say to the editor: whether its Slack bot is connected, so a run's result may be sent on Slack, and its Sentry, through whose installation a Sentry trigger's events arrive; neither while the read is out or failed. */
-interface EditorIntegrations {
-  readonly slackBot: boolean;
-  readonly sentry: WorkspaceSentry | undefined;
-}
-
-/** The workspace's integrations as the editor reads them, followed while the sheet stands. */
-function useEditorIntegrations(workspaceId: string): EditorIntegrations {
-  const acts = useHostActs();
-  useLiveFollow(workspaceId, (id) =>
-    acts[ACT_KIND.WORKSPACE_INTEGRATIONS_FOLLOW]({ workspaceId: id }),
-  );
-
-  const select = useMemo(
-    () => (state: AppStateSnapshot) => state[LIVE_READ.WORKSPACE_INTEGRATIONS][workspaceId]?.rows,
-    [workspaceId],
-  );
-
-  const rows = useQuery({ ...appStateQuery, select }).data;
-
-  return { slackBot: rows?.slack.team !== undefined, sentry: rows?.sentry };
 }
 
 /** The sheet's bar: its title, the system's ✕ (Cancel to VoiceOver), and its act, lit while none is out. */
@@ -874,16 +858,19 @@ function SecretScreen({
 
 function EditorForm({
   automation,
+  preset,
   workspace,
   offersOwner,
 }: {
   readonly automation: AutomationSummary | undefined;
+  /** The suggestion a new automation starts filled in from, which it keeps so the list suggests it no more; none for a blank one or an Edit. */
+  readonly preset: AutomationPresetName | undefined;
   readonly workspace: Workspace;
   readonly offersOwner: boolean;
 }) {
   const acts = useHostActs();
   const repositories = useRepositoryPick(workspace);
-  const { slackBot, sentry } = useEditorIntegrations(workspace.id);
+  const { slackBot, sentry } = useWorkspaceIntegrations(workspace.id);
   const saving = useAsyncAction(() => ACT_UNREACHED_WORDS);
 
   const [defaults] = useState<DraftDefaults>(() => ({
@@ -891,10 +878,20 @@ function EditorForm({
     owner: AUTOMATION_SCOPE.PERSONAL,
   }));
 
-  const [start, setStart] = useState(() => automationDraft(automation, defaults));
+  const [start, setStart] = useState(() => {
+    const blank = automationDraft(automation, defaults);
+
+    return preset === undefined ? blank : presetDraft(blank, automationPreset(preset), offersOwner);
+  });
+
   const [draft, setDraft] = useState(start);
   const [shownProblems, setShownProblems] = useState(false);
-  const [seeded, setSeeded] = useState(automation !== undefined);
+
+  // Note that a suggestion whose runs work in no repository is left with none, rather than the one New task would start in.
+  const [seeded, setSeeded] = useState(
+    automation !== undefined || (preset !== undefined && !automationPreset(preset).inRepository),
+  );
+
   // Note that a minted secret stands in this sheet's state alone, never the app's document, so it goes with the sheet.
   const [minted, setMinted] = useState<MintedSecret | undefined>(undefined);
 
@@ -945,7 +942,10 @@ function EditorForm({
 
     void saving.run(() =>
       (automation === undefined
-        ? acts[ACT_KIND.AUTOMATIONS_CREATE](createRequestOf(draft, workspace.id))
+        ? acts[ACT_KIND.AUTOMATIONS_CREATE]({
+            ...createRequestOf(draft, workspace.id),
+            ...(preset === undefined ? undefined : { preset }),
+          })
         : acts[ACT_KIND.AUTOMATIONS_CHANGE]({ automationId: automation.id, change: change ?? {} })
       ).then((answer) => {
         if ("failure" in answer) return AUTOMATION_SAVE_REFUSAL_WORDS[answer.failure];
@@ -1239,7 +1239,13 @@ function EditorForm({
  * they are read, where they could not be, and where the automation is gone.
  */
 export function AutomationEditorScreen() {
-  const { automation: automationId } = useLocalSearchParams<{ automation?: string }>();
+  const { automation: automationId, preset: presetParam } = useLocalSearchParams<{
+    automation?: string;
+    preset?: string;
+  }>();
+
+  // Note that a route's params may come from any link, so only a preset this build knows is taken.
+  const preset = Object.values(AUTOMATION_PRESET).find((each) => each === presetParam);
   const workspace = useTasksWorkspace();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const read = useWorkspaceAutomations(automationId === undefined ? undefined : workspace?.id);
@@ -1279,6 +1285,7 @@ export function AutomationEditorScreen() {
     <EditorForm
       key={workspace.id}
       automation={automation}
+      preset={automationId === undefined ? preset : undefined}
       workspace={workspace}
       offersOwner={offersOwner}
     />

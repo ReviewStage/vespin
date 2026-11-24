@@ -68,6 +68,13 @@ export function automationDeleteTitle(name: string | undefined): string {
   return `Delete ${name ?? "this automation"}?`;
 }
 
+/** The automations the list suggests under its own, and what a Sentry one says while the workspace has no Sentry: the press that connects it, for an owner or an admin, or whom a member asks. */
+export const AUTOMATION_SUGGESTION_WORDS = {
+  SUGGESTED: "Suggested",
+  CONNECT_SENTRY: "Connect Sentry",
+  ASK_SENTRY: "Ask an owner or admin to connect Sentry",
+} as const;
+
 /** Take over, which an owner or an admin offers on an automation whose creator left the workspace: the act, and what a refusal says. */
 export const AUTOMATION_TAKE_OVER_WORDS = {
   ACT: "Take over",

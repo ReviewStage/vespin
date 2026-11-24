@@ -1,7 +1,11 @@
 // start-screens.tsx -- the two pages that start work, each a new conversation's page over the agent page's composer: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus under the composer's field; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules.
 
 import { type AgentFork, FORK_WORDS, forkChoice } from "@repo/features/agent-fork-model";
-import { type AgentRunsOnRequest, hasWordsOrFiles } from "@repo/features/agent-wire";
+import { AGENT_BOUNDS, type AgentRunsOnRequest, hasWordsOrFiles } from "@repo/features/agent-wire";
+import {
+  automationAgentBrief,
+  CREATE_WITH_AGENT_WORDS,
+} from "@repo/features/automation-agent-brief";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { wordsWithoutMarkers } from "@repo/features/file-marker";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
@@ -1235,8 +1239,11 @@ export function NewTaskScreen({
   parent,
   section,
   draft,
+  forAutomation = false,
 }: {
   readonly parent?: string | undefined;
+  /** Whether the agent it starts makes an automation, as the Automations tab's Create with an agent opens it: its title and its field say so, its words are kept as no draft, and the agent is handed the fixed brief with the words fenced after it (`@repo/features/automation-agent-brief`). */
+  readonly forAutomation?: boolean | undefined;
   /** The member's section the task is filed in once it starts, as the panel's section header's + files it. */
   readonly section?: string | undefined;
   readonly draft?: NewTaskDraft | undefined;
@@ -1265,7 +1272,14 @@ export function NewTaskScreen({
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
   const kept = useKeptWords(drafted);
   const { starting, go } = useClosingStart(kept, setNote, LANDING.TASK);
-  const saving = useSavedDraft(draft === undefined ? workspaceId : undefined, prompt, setPrompt);
+
+  // Note that Create with an agent keeps no draft, as the desktop keeps its words apart from New task's, so neither one's words open in the other.
+  const saving = useSavedDraft(
+    draft === undefined && !forAutomation ? workspaceId : undefined,
+    prompt,
+    setPrompt,
+  );
+
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
   // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
@@ -1309,11 +1323,20 @@ export function NewTaskScreen({
 
   const start = () => {
     if (!drafted) return;
+    const asked = forAutomation ? automationAgentBrief(sendablePrompt()) : sendablePrompt();
+
+    // Note that a request whose brief would pass an agent's first message's bound is refused here, as the desktop's card refuses it, rather than by the service.
+    if (asked.length > AGENT_BOUNDS.MAX_MESSAGE_CHARS) {
+      setNote(CREATE_WITH_AGENT_WORDS.TOO_LONG);
+
+      return;
+    }
+
     saving.discard();
     go(
       () =>
         startTask({
-          prompt: sendablePrompt(),
+          prompt: asked,
           attachments: pictures.files,
           picked: pick.picked,
           runsOn,
@@ -1351,7 +1374,12 @@ export function NewTaskScreen({
 
   return (
     <>
-      <SheetBar title={WORDS.NEW_TASK} kept={kept} talk={talk} saving={saving} />
+      <SheetBar
+        title={forAutomation ? CREATE_WITH_AGENT_WORDS.TITLE : WORDS.NEW_TASK}
+        kept={kept}
+        talk={forAutomation ? undefined : talk}
+        saving={forAutomation ? undefined : saving}
+      />
       <StartModelSheet
         pick={pick}
         presented={modelsShown}
@@ -1360,7 +1388,7 @@ export function NewTaskScreen({
       <StartPage
         head={head}
         words={{
-          placeholder: WORDS.TASK_PLACEHOLDER,
+          placeholder: forAutomation ? CREATE_WITH_AGENT_WORDS.PLACEHOLDER : WORDS.TASK_PLACEHOLDER,
           words: prompt,
           onWords: setPrompt,
           onLongPaste: pictures.pasteText,
@@ -1381,7 +1409,12 @@ export function NewTaskScreen({
         ready={drafted && placed && !starting}
         onStart={start}
         onTalk={
-          talk === undefined || pictures.opening || !talk.ready || !placed || starting
+          forAutomation ||
+          talk === undefined ||
+          pictures.opening ||
+          !talk.ready ||
+          !placed ||
+          starting
             ? undefined
             : talk.onTalk
         }
