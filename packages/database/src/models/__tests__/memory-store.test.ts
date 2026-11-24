@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
 import { eq } from "drizzle-orm";
-import { Duration, Effect } from "effect";
+import { Duration, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
 import { memory } from "../../schemas/memory.js";
 import { task } from "../../schemas/task.js";
+import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import {
   getTestDB,
   joinWorkspace,
@@ -18,6 +20,7 @@ import {
   openAgentOnOwnTask,
   openWorkspace,
 } from "../../testing/index.js";
+import { createAgent } from "../agent-store.js";
 import {
   forgetMemory,
   listMemories,
@@ -44,7 +47,8 @@ import {
  * words came from moves with them: an agent's keep names it and its turn's
  * line, a correction names the corrector's or none for a member's, and the
  * same words kept again stay where they first came from; and only a member
- * who may open the agent's task reads where they came from.
+ * who may open the agent's task reads where they came from, or, for a
+ * Manager, which works on no task, the Manager by its name.
  *
  * Synthetic accounts, workspaces, and words throughout.
  */
@@ -223,6 +227,41 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
         assert.deepEqual([...teammates], []);
         assert.deepEqual([...fromElsewhere], []);
       }),
+  );
+
+  it.effect("a memory a Manager kept reads back with the Manager it came from", () =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const { owner, teammate, workspaceId } = yield* openTeam;
+
+      const started = yield* createAgent(owner, {
+        taskId: null,
+        workspaceId,
+        idempotencyKey: randomUUID(),
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+        repository: null,
+        descriptionSnapshot: null,
+        prompt: null,
+        runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        kind: AGENT_KIND.MANAGER,
+      });
+
+      const agentId = Option.getOrThrow(started).agent.id;
+      yield* db.update(agentTable).set({ title: "Release desk" }).where(eq(agentTable.id, agentId));
+      const line = randomUUID();
+
+      const kept = keptId(
+        yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined, { agentId, messageId: line }),
+      );
+
+      const read = yield* readMemorySources(teammate, workspaceId, [kept]);
+
+      assert.deepEqual(
+        [...read],
+        [[kept, { agentId, messageId: line, taskId: null, managerName: "Release desk" }]],
+      );
+    }),
   );
 
   it.effect("a correction into words another memory already holds leaves that one memory", () =>

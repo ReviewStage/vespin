@@ -264,6 +264,22 @@ function summariesFor(
   );
 }
 
+/**
+ * Where a memory's words came from, as the wire says it: the agent's task
+ * (`source`), or the Manager standing on none (`managerSource`) beside a
+ * null `source`, which a client from before Managers' sources reads as none.
+ */
+function sourcesOf(
+  read: MemorySourceRead | undefined,
+): Pick<MemorySummary, "source" | "managerSource"> {
+  if (read === undefined) return { source: null };
+  const { agentId, messageId } = read;
+
+  return read.taskId === null
+    ? { source: null, managerSource: { agentId, messageId, name: read.managerName } }
+    : { source: { agentId, messageId, taskId: read.taskId, taskName: read.taskName } };
+}
+
 /** One memory as the reader sees it, what is read beside it filled in. */
 function summaryOf(
   userId: string,
@@ -280,7 +296,7 @@ function summaryOf(
     forgettable: manages || kept.userId === userId,
     createdAt: kept.createdAt,
     updatedAt: kept.updatedAt,
-    source: readings.sources.get(kept.id) ?? null,
+    ...sourcesOf(readings.sources.get(kept.id)),
     recalls30d: tally?.recalls30d ?? 0,
     lastRecalledAt: tally?.lastRecalledAt ?? null,
   };

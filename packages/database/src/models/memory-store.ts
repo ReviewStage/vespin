@@ -1,6 +1,7 @@
 import { isWireUuid } from "@repo/features";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -98,11 +99,12 @@ export type MemoryOutcome =
   | { readonly kind: MemoryWritten; readonly memory: StoredMemory }
   | { readonly kind: typeof MEMORY_OUTCOME.NOT_FOUND | typeof MEMORY_OUTCOME.FULL };
 
-/** Where a memory's words came from as one reader may see it: the agent, the line that opened its turn, and the task the agent works on. */
-export interface MemorySourceRead extends MemorySource {
-  readonly taskId: string;
-  readonly taskName: string;
-}
+/** Where a memory's words came from as one reader may see it: the agent, the line that opened its turn, and the task the agent works on, or the Manager, which works on none, by its name. */
+export type MemorySourceRead = MemorySource &
+  (
+    | { readonly taskId: string; readonly taskName: string }
+    | { readonly taskId: null; readonly managerName: string }
+  );
 
 /** Who asks to forget: the member, and whether they own or administer the workspace. */
 export interface MemoryForgetter {
@@ -242,20 +244,24 @@ const deleteMemory = SqlSchema.findAll({
     ),
 });
 
-/** Where each of the memories named came from, as the reader may see it: only an agent the reader may open, with its task. */
+/** A memory's source as its statement reads it: the agent, its line, its task where it stands on one, and its name. */
+const MemorySourceRowSchema = Schema.Struct({
+  id: Schema.String,
+  agentId: Schema.String,
+  messageId: Schema.NullOr(Schema.String),
+  taskId: Schema.NullOr(Schema.String),
+  taskName: Schema.NullOr(Schema.String),
+  agentName: Schema.String,
+});
+
+/** Where each of the memories named came from, as the reader may see it: only an agent the reader may open, with its task, or a Manager, which works on none, with its name. */
 const findMemorySources = SqlSchema.findAll({
   Request: Schema.Struct({
     readerId: Schema.String,
     organizationId: Schema.String,
     ids: Schema.Array(Schema.String),
   }),
-  Result: Schema.Struct({
-    id: Schema.String,
-    agentId: Schema.String,
-    messageId: Schema.NullOr(Schema.String),
-    taskId: Schema.String,
-    taskName: Schema.String,
-  }),
+  Result: MemorySourceRowSchema,
   execute: (key) =>
     Database.use((db) =>
       db
@@ -265,19 +271,31 @@ const findMemorySources = SqlSchema.findAll({
           messageId: memory.messageId,
           taskId: task.id,
           taskName: task.name,
+          // Note that a Manager is named at its start, so its model stands in only for a row that somehow holds no title.
+          agentName: sql<string>`coalesce(${agentTable.title}, ${agentTable.model})`,
         })
         .from(memory)
         .innerJoin(agentTable, eq(agentTable.id, memory.agentId))
-        .innerJoin(task, eq(task.id, agentTable.taskId))
+        .leftJoin(task, eq(task.id, agentTable.taskId))
         .where(
           and(
             eq(memory.organizationId, key.organizationId),
             inArray(memory.id, [...key.ids]),
             agentVisibleTo(key.readerId),
+            or(isNotNull(task.id), eq(agentTable.kind, AGENT_KIND.MANAGER)),
           ),
         ),
     ),
 });
+
+/** A source row as the reader is told it: the agent's task, or the Manager standing on none. */
+function sourceReadOf(row: typeof MemorySourceRowSchema.Type): MemorySourceRead {
+  const { agentId, messageId } = row;
+
+  return row.taskId === null || row.taskName === null
+    ? { agentId, messageId, taskId: null, managerName: row.agentName }
+    : { agentId, messageId, taskId: row.taskId, taskName: row.taskName };
+}
 
 /** A row as the store answers it. */
 function storedOf(row: typeof MemoryRowSchema.Type): StoredMemory {
@@ -395,7 +413,8 @@ export function rememberMemory(
 /**
  * Where each of the workspace's memories named came from, by its id, as the
  * reader may see it: the agent that kept or last corrected it, the line
- * that opened its turn, and the agent's task. A memory a member kept, one
+ * that opened its turn, and the agent's task, or, for a Manager, which works
+ * on none, its name. A memory a member kept, one
  * whose agent is gone, and one whose agent or task the reader may not open
  * (`agentVisibleTo`) has none, so no reader learns of a task it cannot see.
  */
@@ -408,7 +427,7 @@ export function readMemorySources(
 
   return Effect.map(
     findMemorySources({ readerId, organizationId, ids }),
-    (rows) => new Map(rows.map(({ id, ...source }) => [id, source])),
+    (rows) => new Map(rows.map((row) => [row.id, sourceReadOf(row)])),
   );
 }
 
