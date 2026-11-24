@@ -30,9 +30,8 @@ import type { ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { MenuPickRow } from "./form-rows.js";
 import { HarnessMark } from "./marks.js";
-import { SwitchRow } from "./option-rows.js";
 import { FOOTER_TONE, SectionFooter } from "./row-list.js";
-import { type PickOption, PickRows } from "./settings-form.js";
+import { type PickOption, PickRows, ToggleRow } from "./settings-form.js";
 import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
@@ -245,10 +244,10 @@ function ModelChoiceList(props: ModelChoices & { readonly onDone?: (() => void) 
                 />
               ) : null}
               {props.fast === undefined ? null : (
-                <SwitchRow
+                <ToggleRow
                   label={FAST_WORD}
                   on={props.fast.on}
-                  onSwitch={props.fast.onSwitch}
+                  onChange={props.fast.onSwitch}
                   testId="options-fast"
                 />
               )}

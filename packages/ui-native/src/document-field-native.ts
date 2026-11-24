@@ -50,7 +50,7 @@ export interface NativeToldLine extends NativeLineFacts {
 }
 
 /** The lines handed to the view, and how many of its changes JavaScript had heard as it handed them. */
-export interface NativeDocumentValue {
+interface NativeDocumentValue {
   readonly lines: readonly NativeDocumentLine[];
   readonly seen: number;
 }

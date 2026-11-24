@@ -180,7 +180,7 @@ const ASKS_FIRST: ReadonlySet<RowActionTone> = new Set([
 ]);
 
 /** Whether a swipe's piece is a menu of choices rather than one act. */
-export function isSubmenu(swipe: RowSwipe): swipe is RowSubmenu {
+function isSubmenu(swipe: RowSwipe): swipe is RowSubmenu {
   return "choices" in swipe;
 }
 
