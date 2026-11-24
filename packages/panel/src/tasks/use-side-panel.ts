@@ -2191,14 +2191,18 @@ export function useSidePanel(
     [state.files, taskId],
   );
 
+  // The panel a page of another place opened here is drawn on: the task it stands for, else the stop it stands at,
+  // as a thread on no task in the Inbox is one, so a page opened beside the thread stands beside it alone.
+  const shownOn = taskId ?? task.stop;
+
   // The pages the panel draws tabs of: its place's own, and those of other places opened beside it.
   const pagesHere = useMemo(() => {
     const beside = state.pages.flatMap((each) =>
-      each.shownOn === taskId && !pages.includes(each.page) ? [each.page] : [],
+      each.shownOn === shownOn && !pages.includes(each.page) ? [each.page] : [],
     );
 
     return beside.length === 0 ? pages : [...pages, ...beside];
-  }, [state.pages, pages, taskId]);
+  }, [state.pages, pages, shownOn]);
 
   const update = useCallback(
     (change: (held: HeldState) => HeldState) => {
@@ -2528,10 +2532,10 @@ export function useSidePanel(
       // Note that a page of the panel's own place, however it was named, is its own.
       const beside =
         place === undefined ||
-        taskId === undefined ||
+        shownOn === undefined ||
         (pagePlace !== undefined && place.taskId === pagePlace.taskId)
           ? undefined
-          : { place, on: taskId };
+          : { place, on: shownOn };
 
       // A page of another place is drawn here as it is opened, before the state naming it lands.
       const here =
@@ -2556,7 +2560,7 @@ export function useSidePanel(
         open: true,
       }));
     },
-    [update, drawn, taskId, pagePlace, opener],
+    [update, drawn, taskId, shownOn, pagePlace, opener],
   );
 
   // Note that the state is read as it stands at the call, so the reader stays one function while the panel's tabs move,

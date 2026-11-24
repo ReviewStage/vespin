@@ -352,6 +352,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   const openHere: OpenAddressHere = (address) => {
     const routed = besideItem(address, {
       kind: HERE.INBOX_ITEM,
+      chosen: chosen !== undefined,
       taskId,
       repository: chosenTask?.repository ?? null,
       agentIds: named.agentIds,

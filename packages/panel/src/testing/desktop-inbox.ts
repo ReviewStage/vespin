@@ -883,9 +883,12 @@ export function mount({
   }
 
   function Paneled({ at }: { at: ShellRoom }) {
+    // The panel stands at the item chosen, each a stop of its own, as the window's stands it (`use-tasks-tab.ts`).
+    const stop = useInboxRoute().chosen?.itemId;
+
     const sidePanel = useSidePanel(
       undefined,
-      { id: undefined, holds: {}, bare: true },
+      { id: undefined, holds: {}, bare: true, stop },
       [],
       [],
       [],

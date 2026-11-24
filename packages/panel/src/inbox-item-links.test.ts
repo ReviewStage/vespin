@@ -40,7 +40,7 @@ const HOLDING = {
 /** The same, its agent archived: no longer drawn, though still held. */
 const ARCHIVED = { ...HOLDING, agentIds: [], heldIds: [AGENT] };
 
-const ITEM: InboxItemHere = { kind: HERE.INBOX_ITEM, taskId: TASK, ...HOLDING };
+const ITEM: InboxItemHere = { kind: HERE.INBOX_ITEM, chosen: true, taskId: TASK, ...HOLDING };
 
 const NOTHING: Route = { kind: ROUTE.NOTHING };
 
@@ -91,7 +91,7 @@ it.each<[string, string, InboxItemHere, Route]>([
   [
     "an Inbox item not yet chosen: nothing beside it",
     FILE,
-    { ...ITEM, taskId: undefined },
+    { ...ITEM, chosen: false, taskId: undefined },
     NOTHING,
   ],
   [
