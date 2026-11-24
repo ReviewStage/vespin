@@ -53,7 +53,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedFile, cachedPicture, cachedPlayed } from "../cached-media.js";
+import { cachedFile, cachedPicture, cachedPlayed, keptMedia } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -342,6 +342,10 @@ async function agentMediaSource(
   agentId: string,
   pictureId: string,
 ): Promise<string> {
+  // Note that one shown before draws from the file its first read wrote, asking the host nothing.
+  const kept = keptMedia(AGENT_MEDIA_PREFIX, pictureId);
+
+  if (kept !== undefined) return kept;
   // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.
   const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
 
@@ -365,8 +369,11 @@ export interface AgentMedia {
 
 /**
  * What each picture, recording, and sound clip the agent showed is drawn
- * from, by its id, read once through the host as the panel reads one
- * (`ACT_KIND.AGENTS_PICTURE`): a picture as a `data:` address, and a
+ * from, by its id: the file an earlier read wrote under the app's caches,
+ * this launch's or one before it (`keptMedia`), or else read once through
+ * the host as the panel reads one (`ACT_KIND.AGENTS_PICTURE`): a picture
+ * written to a file of the caches, or a `data:` address where its type names
+ * none, and a
  * recording or a clip, its MP4 copy where the service kept one, as a file of
  * the app's caches, written whole before it is drawn, since the system's
  * player reads a file; one on its way is absent, and one whose every try

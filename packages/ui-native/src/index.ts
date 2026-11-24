@@ -193,6 +193,7 @@ export {
   type KeepAct,
   type Kept,
   type KeptKind,
+  PICTURE_FILE_EXTENSIONS,
   pictureExtension,
 } from "./keep-model.js";
 
@@ -471,6 +472,7 @@ export {
   drawnCallIds,
   NO_TOGGLES,
   openCuts,
+  rowsNear,
   type SaidFile,
   type ShownFile,
   shownFiles,

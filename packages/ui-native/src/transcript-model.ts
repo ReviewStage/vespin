@@ -1437,6 +1437,29 @@ export function shownFiles(items: readonly TranscriptItem[]): readonly ShownFile
   );
 }
 
+/**
+ * The rows on screen and the `reach` rows on each side of them, in the
+ * transcript's order, whose pictures a page reads before they scroll in;
+ * the rows on screen alone where none of them stands among `items`. Note
+ * that a row is found by its identity, as the list hands back the rows it
+ * was given.
+ */
+export function rowsNear(
+  items: readonly TranscriptItem[],
+  shown: readonly TranscriptItem[],
+  reach: number,
+): readonly TranscriptItem[] {
+  const places = shown.flatMap((item) => {
+    const at = items.indexOf(item);
+
+    return at < 0 ? [] : [at];
+  });
+
+  if (places.length === 0) return shown;
+
+  return items.slice(Math.max(0, Math.min(...places) - reach), Math.max(...places) + reach + 1);
+}
+
 /** The ids of every picture and recording the items show, an open call's body's among them, which the list reads the bytes of. */
 export function shownMediaIds(items: readonly TranscriptItem[]): readonly string[] {
   return items.flatMap((item) => {

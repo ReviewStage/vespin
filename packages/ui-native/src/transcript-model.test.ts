@@ -8,6 +8,7 @@ import {
   drawnCallIds,
   NO_TOGGLES,
   openCuts,
+  rowsNear,
   SHOWN_MEDIA,
   shownFiles,
   shownMediaIds,
@@ -910,4 +911,40 @@ describe("a call whose answer its page carried cut", () => {
       expect(openCuts(items)).toEqual(asks ? [CUT] : []);
     },
   );
+});
+
+describe("rowsNear", () => {
+  it("reads the pictures of the rows on screen and of the few on each side of them", () => {
+    const shown = (index: number) => ({
+      id: `work-${index}`,
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        {
+          type: "tool-show_image",
+          toolCallId: `shots-${index}`,
+          state: "output-available",
+          input: { images: [{ path: `/shots/${index}.png`, caption: `Shot ${index}` }] },
+          output: { status: "accepted", pictures: [{ ...PICTURE, id: `picture-${index}` }] },
+        },
+      ],
+      finishedAt: 1,
+    });
+
+    const items = transcriptItems([0, 1, 2, 3, 4, 5, 6].map(shown), {
+      writing: false,
+      readerId: undefined,
+      toggles: NO_TOGGLES,
+      now: 2,
+      pullRequests: [],
+    });
+
+    const onScreen = items.filter((item) => item.kind === TRANSCRIPT_ITEM.MEDIA).slice(3, 4);
+
+    expect(shownMediaIds(rowsNear(items, onScreen, 1))).toEqual([
+      "picture-2",
+      "picture-3",
+      "picture-4",
+    ]);
+    expect(shownMediaIds(rowsNear(items, [], 1))).toEqual([]);
+  });
 });
