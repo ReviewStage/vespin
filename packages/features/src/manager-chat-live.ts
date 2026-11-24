@@ -43,8 +43,10 @@ export const MANAGER_CHAT_PAGE = 50;
  * A file a message carries, by the reference its line keeps it under, and
  * named as it was sent: a picture by the id it was kept under, a person's
  * under its file's name or one of a set the Manager showed under its
- * caption; and any other file a person sent (a text file, a PDF, a picture
- * not kept) by its bytes as a `data:` URL, as their line carries it.
+ * caption, with its size where it was kept with one, as a set the Manager
+ * showed is, so a reader draws it at its shape before its bytes land; and
+ * any other file a person sent (a text file, a PDF, a picture not kept) by
+ * its bytes as a `data:` URL, as their line carries it.
  */
 export const managerChatAttachmentSchema = EffectSchema.Union([
   EffectSchema.Struct({
@@ -52,6 +54,9 @@ export const managerChatAttachmentSchema = EffectSchema.Union([
     mediaType: EffectSchema.String,
     name: EffectSchema.optionalKey(EffectSchema.String),
     caption: EffectSchema.optionalKey(EffectSchema.String),
+    width: EffectSchema.optionalKey(EffectSchema.Number),
+    height: EffectSchema.optionalKey(EffectSchema.Number),
+    byteCount: EffectSchema.optionalKey(EffectSchema.Number),
   }),
   EffectSchema.Struct({
     name: EffectSchema.String,
