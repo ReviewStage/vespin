@@ -14,8 +14,8 @@
  * `macTools`, for a coding agent alone, is where `run_on_mac` and
  * `computer` may go from its conversation: the machines `routeOf` would
  * consider, its task's assignee's (or, where it has none, its starter's)
- * and those of the followers who let the task's agents use theirs
- * (`defaultMachinesOf`), each with whether it listened lately, its command
+ * and those of the followers who let the task's agents use theirs, or a
+ * Manager's own followers (`defaultMachinesOf`), each with whether it listened lately, its command
  * mode, and whether it lets agents use its apps. A member is listed none,
  * since the member MCP server has no Mac tools.
  */
@@ -61,7 +61,8 @@ export const LIST_MACHINES_TOOL = {
     "who started you, by id and name, with the runsOn value to pass as it stands and whether it " +
     `is online; and macTools, each machine ${AGENT_TOOL.RUN_ON_MAC} and ${AGENT_TOOL.COMPUTER} ` +
     "may reach from this conversation (your task's assignee's, or your starter's where it has " +
-    "none, and those of followers who let the task's agents use theirs), by id, name, and owner, " +
+    "none, and those of followers of your task, or of you where you are a Manager, who let its " +
+    "agents use theirs), by id, name, and owner, " +
     "with whether it is online, its command mode (never, ask, or always), and whether it lets " +
     "agents use its apps (on, off, or decided-on-the-mac). Those tools take no machine: they go " +
     "to this agent's machine, which a member picks in its composer, or else to the default of " +

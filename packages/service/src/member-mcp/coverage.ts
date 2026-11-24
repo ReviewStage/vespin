@@ -58,7 +58,7 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   RETIRED: "retired",
   /** A member could use a tool for it, and none exists yet. */
   NOT_YET_BUILT: "not-yet-built",
-  /** Who follows a task, and whose machines its agents may use, is a member's own choice in the app: an agent reads followers and never adds, removes, or switches one. */
+  /** Who follows a task or a Manager, and whose machines its agents may use, is a member's own choice in the app: an agent reads followers and never adds, removes, or switches one. */
   MEMBER_ONLY: "member-only",
 } as const;
 
@@ -371,6 +371,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     taskHistory: SCREEN_ONLY,
     taskComments: SCREEN_ONLY,
     managerChat: SCREEN_ONLY,
+    agentFollowers: SCREEN_ONLY,
     taskBrowserTabs: SCREEN_ONLY,
     agentBrowserTabs: SCREEN_ONLY,
     tasks: SCREEN_ONLY,
@@ -444,6 +445,15 @@ export const MEMBER_MCP_EXCLUSIONS = {
     // A page opened from a link with no version: an agent reads a page's newest with its own tools.
     newestPage: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
+  },
+  // Note that a Manager's followers are listed for its Settings › People, and who follows it is a member's own choice there, as a task's is.
+  agentFollowers: {
+    list: SCREEN_ONLY,
+    follow: MEMBER_ONLY,
+    unfollow: MEMBER_ONLY,
+    setMachines: MEMBER_ONLY,
+    add: MEMBER_ONLY,
+    remove: MEMBER_ONLY,
   },
   taskFollowers: {
     follow: MEMBER_ONLY,

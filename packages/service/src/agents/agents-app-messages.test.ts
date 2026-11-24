@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
+import { listAgentFollowers } from "@repo/database/models/agent-follower-store";
 import {
   latestTurnsOfReached,
   pinAgent,
@@ -2138,6 +2139,37 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           },
         );
       }),
+  );
+
+  it.effect("a member who messages a teammate's Manager follows it with their machines on", () =>
+    Effect.gen(function* () {
+      const agentSessions = fakeAgentSessions();
+
+      const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
+        running: false,
+      });
+
+      yield* joinWorkspace(task.workspaceId, other);
+
+      yield* (yield* Database)
+        .update(agentTable)
+        .set({ kind: AGENT_KIND.MANAGER, taskId: null })
+        .where(eq(agentTable.id, agent.id));
+
+      const body = { text: "Check my Mac's checkout.", clientKey: randomUUID() };
+
+      const sent = yield* ask(
+        request(AGENT_CHAT_MESSAGES, other, { method: "POST", id: agent.id, body }),
+      );
+
+      assert.equal(sent.status, HOSTED_HTTP_STATUS.ACCEPTED, JSON.stringify(sent.body));
+      const followers = Option.getOrThrow(yield* listAgentFollowers(owner, agent.id));
+
+      assert.deepEqual(
+        Object.fromEntries(followers.map((follower) => [follower.userId, follower.machines])),
+        { [owner]: true, [other]: true },
+      );
+    }),
   );
 
   it.effect(
