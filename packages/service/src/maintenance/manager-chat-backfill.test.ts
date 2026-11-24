@@ -195,7 +195,15 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
                 input: { images: [{ path: "shots/table.png", caption: "The table" }] },
                 output: {
                   status: ACTION_RESULT_STATUS.ACCEPTED,
-                  pictures: [{ id: "picture-1", mediaType: "image/png" }],
+                  pictures: [
+                    {
+                      id: "picture-1",
+                      mediaType: "image/png",
+                      width: 1280,
+                      height: 800,
+                      byteCount: 52_000,
+                    },
+                  ],
                 },
               },
               sent("call-3", "Shipped.", "11ve0001"),
@@ -276,7 +284,16 @@ it.layer(getTestDB())("the Manager chat backfill", (it) => {
               authorKind: MANAGER_CHAT_AUTHOR.AGENT,
               authorUserId: null,
               text: "",
-              attachments: [{ id: "picture-1", mediaType: "image/png", caption: "The table" }],
+              attachments: [
+                {
+                  id: "picture-1",
+                  mediaType: "image/png",
+                  caption: "The table",
+                  width: 1280,
+                  height: 800,
+                  byteCount: 52_000,
+                },
+              ],
               turnId: turn.id,
               lineId: null,
             },

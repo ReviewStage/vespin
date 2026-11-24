@@ -43,7 +43,14 @@ import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/
 import { messageFileChips } from "@repo/features/message-files";
 import { agentName } from "@repo/features/model-label";
 import { isVoiceLine, spokenLineOf } from "@repo/features/voice-call-lines";
-import { isRecord, isWireString, MESSAGE_ROLE, type WireValue } from "@repo/wire";
+import {
+  isRecord,
+  isWireNumber,
+  isWireString,
+  MESSAGE_ROLE,
+  type WireRecord,
+  type WireValue,
+} from "@repo/wire";
 import { Effect, Option, type Redacted } from "effect";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { type TranscriptMessage, transcriptMessagesOf } from "../agents/coder-host/transcript.js";
@@ -171,7 +178,18 @@ function lineAttachments(line: AgentTranscriptMessage): readonly ManagerChatAtta
   });
 }
 
-/** The set a `show_media` call showed, each picture by its kept id with the caption it was shown under, as the live write keeps it. */
+/** A kept picture's size as its call's answer gives it: each of its width, height, and bytes it names, as the live write keeps them. */
+function sizeOf(picture: WireRecord) {
+  const { width, height, byteCount } = picture;
+
+  return {
+    ...(isWireNumber(width) ? { width } : undefined),
+    ...(isWireNumber(height) ? { height } : undefined),
+    ...(isWireNumber(byteCount) ? { byteCount } : undefined),
+  };
+}
+
+/** The set a `show_media` call showed, each picture by its kept id with the caption it was shown under and its size, as the live write keeps it. */
 function shownAttachments(part: ToolPart): readonly ManagerChatAttachment[] {
   const pictures = isRecord(part.output) ? part.output.pictures : undefined;
   const images = isRecord(part.input) ? part.input.images : undefined;
@@ -187,9 +205,12 @@ function shownAttachments(part: ToolPart): readonly ManagerChatAttachment[] {
     const caption = isRecord(image) && isWireString(image.caption) ? image.caption : undefined;
 
     return [
-      caption === undefined
-        ? { id: picture.id, mediaType: picture.mediaType }
-        : { id: picture.id, mediaType: picture.mediaType, caption },
+      {
+        id: picture.id,
+        mediaType: picture.mediaType,
+        ...(caption === undefined ? undefined : { caption }),
+        ...sizeOf(picture),
+      },
     ];
   });
 }
