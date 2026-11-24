@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- a regular window's tab roots: an iPad's own sidebar of places and tasks beside the tabs, with the workspace and account at its foot, each tab's list column beside its detail, and New task, the compose button leading the detail's bar where the tab bar has no round +.
+// app-sidebar.tsx -- a regular window's tab roots: an iPad's sidebar of places and tasks, headed by the workspace, the first column of the system's split view; each tab's list column beside its detail; and New task, the compose button leading the detail's bar where the tab bar has no round +.
 
 import { IOS_TAB, type IosTab, iosTabOfGroup } from "@repo/features/ios-app-links";
 import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
@@ -29,6 +29,7 @@ import { useSidebarTasks } from "../sidebar-tasks.js";
 import { showPickedPage } from "../split-columns.js";
 import { SPLIT_TAB, useSplitPicked } from "../split-route.js";
 import { tabGroupOf, useOnTab } from "../tab-route.js";
+import { useStandingCallCard } from "../voice-call.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
 /** New task as the detail's bar offers it, under the compose glyph, as the tab bar's round + names it. */
@@ -36,6 +37,8 @@ const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
 
 /** The places an iPad's own sidebar goes to, by the ids its list picks them by, as the panel's sidebar heads its tasks with them. */
 const SIDEBAR_PLACE = {
+  /** The call standing, while one does: the way back to its agent. */
+  CALL: "place-call",
   SEARCH: "place-search",
   INBOX: "place-inbox",
   TASKS: "place-tasks",
@@ -47,6 +50,7 @@ type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
 
 /** Each place's name, as the panel's sidebar names it. */
 const PLACE_WORDS = {
+  [SIDEBAR_PLACE.CALL]: "Call",
   [SIDEBAR_PLACE.SEARCH]: "Search",
   [SIDEBAR_PLACE.INBOX]: "Inbox",
   [SIDEBAR_PLACE.TASKS]: "Tasks",
@@ -126,20 +130,18 @@ function useSidebarHere(): string | undefined {
 }
 
 /**
- * An iPad's own sidebar, standing beside the tabs as the panel's sidebar
- * stands beside its pages, so every page, a pushed one included, keeps it
- * beside it: Hide Sidebar heading it; its places (Search, the Inbox with
- * what waits on the reader, Tasks, Automations, and Merge queue, while the
- * account has it on); then the tasks, as the Tasks list draws them, read once
- * above the tabs (`useSidebarTasks`); the place or task in front standing
- * selected (`useSidebarHere`), under the workspace switcher heading the
- * list, as the panel's sidebar heads itself; and at its foot, in the
- * system's glass, the account's photo and name opening its menu (Settings,
- * Send feedback) with Settings' gear at its end, as the panel's foot holds
- * them. Its list is the system's sidebar list, so it keeps the system's
- * keyboard focus, arrow keys and pointer hover. A place opens its tab; Tasks opens
- * on its whole list, and a task beside the sidebar on Tasks, as a link to
- * it does. It is drawn once, by the tabs' layout, and only on an iPad.
+ * An iPad's sidebar, the first column of the system's split view at the
+ * root, as the panel's sidebar stands beside its pages: the workspace
+ * switcher heading it, with New task's glyph at its end, its menu holding
+ * the workspaces, Manage, and the account's Settings; then the call
+ * standing, while one does; its places (Search, the Inbox with what waits
+ * on the reader, Tasks, Automations, and Merge queue, while the account has
+ * it on); then the tasks, as the Tasks list draws them, read once above the
+ * split view (`useSidebarTasks`); the place or task in front standing
+ * selected (`useSidebarHere`). Its list is the system's sidebar list, so it
+ * keeps the system's selection, keyboard focus, arrow keys and pointer
+ * hover. A place opens its list beside it; a task opens beside the sidebar
+ * on Tasks, as a link to it does.
  */
 export function AppSidebarPane() {
   const router = useRouter();
@@ -151,9 +153,12 @@ export function AppSidebarPane() {
   const mergeQueueOn = useMergeQueueOn();
   const onTab = useOnTab();
   const compose = useComposeAction();
+  const call = useStandingCallCard();
 
   const go = (id: string) => {
     switch (id) {
+      case SIDEBAR_PLACE.CALL:
+        return call?.open();
       case SIDEBAR_PLACE.SEARCH:
         return router.navigate("/search");
       case SIDEBAR_PLACE.INBOX:
@@ -185,6 +190,14 @@ export function AppSidebarPane() {
             />
           )}
           <ListSection>
+            {/* Note that the call standing heads the places while it stands, the way back to its agent, whose page holds its mute and end, as the tab bar's accessory stands it on an iPhone. */}
+            {call === undefined ? null : (
+              <PlaceRow
+                id={SIDEBAR_PLACE.CALL}
+                symbol={GLYPH.MICROPHONE}
+                label={`${PLACE_WORDS[SIDEBAR_PLACE.CALL]} · ${call.card.agentName}`}
+              />
+            )}
             <PlaceRow
               id={SIDEBAR_PLACE.SEARCH}
               symbol={GLYPH.SEARCH}

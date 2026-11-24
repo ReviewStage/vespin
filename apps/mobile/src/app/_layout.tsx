@@ -20,10 +20,11 @@ import { HostProvider } from "../host/host-provider.js";
 import { useKeeping } from "../keeping.js";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 import { AppSidebarPane } from "../screens/app-sidebar.js";
+import { PlaceListColumn, PlacesHeldProvider } from "../screens/place-columns.js";
 import { SidebarTasksProvider } from "../screens/task-screens.js";
 import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { holdSplash } from "../splash.js";
-import { keepSplitHost, ListColumnSlot, SplitColumnsProvider } from "../split-columns.js";
+import { keepSplitHost } from "../split-columns.js";
 import { useChipMarks } from "../tasks/chip-marks.js";
 import { VoiceCallProvider } from "../voice-call.js";
 
@@ -64,7 +65,8 @@ function navigationTheme(colors: BrandColors, dark: boolean) {
  * expo-router's `SplitView`), as Mail stands its mailboxes, a mailbox's
  * messages and the message: the app's sidebar first, read once for every
  * place with the Tasks tab's list (`SidebarTasksProvider`); then the list of
- * the place standing, which its root hands up (`TabColumns`); then the
+ * the place standing (`PlaceListColumn`), reading what each place holds
+ * above the split view (`PlacesHeldProvider`), as its page does; then the
  * picked row's page, every page pushed over it included. The system draws
  * the glass, the selection, the sidebar's toggle, its swipe, its menu
  * command and the columns' edges, which a person drags; the sidebar stands
@@ -82,7 +84,7 @@ function AppFrame() {
 
   return (
     <SidebarTasksProvider>
-      <SplitColumnsProvider>
+      <PlacesHeldProvider>
         <SplitView
           ref={keepSplitHost}
           primaryBackgroundStyle="sidebar"
@@ -93,11 +95,9 @@ function AppFrame() {
           {...(signedIn ? {} : { preferredDisplayMode: "secondaryOnly" as const })}
         >
           <SplitView.Column>{signedIn ? <AppSidebarPane /> : null}</SplitView.Column>
-          <SplitView.Column>
-            <ListColumnSlot />
-          </SplitView.Column>
+          <SplitView.Column>{signedIn ? <PlaceListColumn /> : null}</SplitView.Column>
         </SplitView>
-      </SplitColumnsProvider>
+      </PlacesHeldProvider>
     </SidebarTasksProvider>
   );
 }

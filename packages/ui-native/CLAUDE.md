@@ -472,7 +472,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   by the workspace switcher with New task's glyph at its end,
   `WorkspaceSwitcherRow`, whose menu holds the account and Settings, then a
   `PlaceRow` for each place and the tasks), then the list of the place
-  picked (`ListColumn`, which the place's root hands up), then the picked
+  picked (`ListColumn`, reading what the place holds above the split view,
+  as its page does), then the picked
   row's page (`PageColumn`) with every page pushed over it; the system draws
   the sidebar's glass, selection, toggle and swipe, and the columns' edges a
   person drags, the list's never folding away. A compact window hides it while a

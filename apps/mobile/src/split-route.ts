@@ -2,8 +2,15 @@
 
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useNavigation,
+  useNavigationContainerRef,
+  useRouter,
+} from "expo-router";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { type NavigatorState, tabStackBacks, tabsInFront } from "./menu-commands/window-back.js";
 import { showPickedPage } from "./split-columns.js";
 import { useOwnTab } from "./tab-route.js";
 
@@ -46,6 +53,33 @@ function keepPick(tab: SplitTab, id: string | undefined): void {
   else picked.set(tab, id);
 
   told();
+}
+
+/**
+ * How an iPad's list column picks a row of its place: the place's root
+ * selects it, beside the list, as a tap on the root's own list would, going
+ * back to the root first where a page stands pushed over it, and the page is
+ * brought forward where the window stands upright. Note that the stack is
+ * read at the press, so the column never draws again as pages come and go.
+ */
+export function usePickInPlace(tab: SplitTab): (id: string) => void {
+  const router = useRouter();
+  const navigation = useNavigationContainerRef();
+
+  return useCallback(
+    (id) => {
+      keepPick(tab, id);
+      const root: NavigatorState | undefined = navigation.getRootState();
+      const tabs = tabsInFront(root);
+
+      if (tabs !== undefined && tabStackBacks(tabs))
+        router.dismissTo({ pathname: tab, params: { selected: id } });
+      else router.setParams({ selected: id });
+
+      showPickedPage();
+    },
+    [navigation, router, tab],
+  );
 }
 
 /** The item a tab's root last picked beside its list, as an iPad's sidebar stands it selected; none while its whole list stands. */
