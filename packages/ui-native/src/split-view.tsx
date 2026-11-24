@@ -28,6 +28,7 @@ import {
   type ModifierConfig,
   menuIndicator,
   menuStyle,
+  navigationSplitViewColumnWidth,
   navigationSplitViewStyle,
   navigationTitle,
   overlay,
@@ -53,6 +54,14 @@ import { TYPE_ROLE } from "./tokens/type.js";
  * glass, where Mail's ⋯ stands in the bar's glass alone.
  */
 export const BAR_ITEM_MENU = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")];
+
+/**
+ * How wide a split view's list column stands, as Mail's message list does:
+ * the system's own 320 pt at first, and dragged by its divider between the
+ * narrowest its rows still read in and the widest that leaves the detail
+ * room, as iPadOS 26 lets a person resize a split view's columns.
+ */
+const LIST_COLUMN_WIDTH = { min: 280, ideal: 320, max: 480 } as const;
 
 /** What parts a thread's path, as the panel's crumbs part a task from its agent. */
 export const PATH_PART = " › ";
@@ -430,6 +439,8 @@ function Column({
         // Note that the column paints its ground itself, filling it under its bar too, because the shots showed `containerBackground` leaving a dark column at the system's black beside the list's ground, where Mail paints its columns one ground.
         frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
         background(colors.GROUND),
+        // Note that the list column is drawn at its own width, which a person drags its divider within, rather than the system's fixed one.
+        ...(sidebar ? [navigationSplitViewColumnWidth(LIST_COLUMN_WIDTH)] : []),
         // Note that the list stands its title large under its bar, collapsing into it as the list scrolls, as Mail's list column does, rather than leading the bar (`inlineLarge`), because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [navigationTitle(bar.title), toolbarTitleDisplayMode(sidebar ? "large" : "inlineLarge")]
