@@ -793,6 +793,28 @@ const INBOXES: ReadonlyMap<string, readonly InboxItem[]> = new Map([
   [TASK.ROUNDING, ROUNDING_ITEMS],
 ]);
 
+/**
+ * Each agent on no task's inbox, by the agent's id: the release Manager's one
+ * question, which the Inbox lists under the Manager rather than a task, as
+ * the account's feed carries it (`AppInboxItems`' `agents`).
+ */
+const AGENT_INBOXES: Readonly<Record<string, readonly InboxItem[]>> = {
+  [AGENT.MANAGER]: [
+    item(60, AGENT.MANAGER, "cut-the-release", "Cut the release?", [
+      agentSaid(
+        600,
+        30 * MINUTE,
+        "Invites and the digest are merged and CI is green on main. Should I cut 0.25.0 now, or wait for the rounding fix?",
+        {
+          type: INBOX_ASK.DECIDE,
+          options: [{ label: "Cut it now" }, { label: "Wait for rounding" }],
+          ...OPEN,
+        },
+      ),
+    ]),
+  ],
+};
+
 /** How many threads the large Inbox adds beside the staged ones, about as many as a busy real account holds (639 on the one that was timed). */
 const LARGE_THREADS = 600;
 
@@ -2541,7 +2563,7 @@ export function inboxAppState(
     ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.TASK]: fed },
+      rows: { [INBOX_SCOPE_KIND.TASK]: fed, agents: AGENT_INBOXES },
     },
     [LIVE_READ.HELD_TASK]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),

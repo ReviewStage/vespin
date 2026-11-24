@@ -32,6 +32,9 @@ import { STUB_ACCOUNT, stubAuthFetch, stubAuthSession } from "./stub-auth-server
 /** A thread the Inbox profile stages, by its title (`@repo/host/fixture-inbox`). */
 const STAGED_THREAD = "Who can withdraw an invite?";
 
+/** The question the Inbox profile's Manager stages, which stands on no task. */
+const MANAGER_THREAD = "Cut the release?";
+
 /** A notice the Inbox profile stages, which asks nothing, so a reply to it answers no ask. */
 const NOTICE = "acceptInvite can add a member twice";
 
@@ -139,6 +142,7 @@ it.effect(
         );
 
         expect(titles).toContain(STAGED_THREAD);
+        expect(titles).toContain(MANAGER_THREAD);
         // Note that a `/` in any of the app's composers offers skills only while the account has Skills on (`use-skill-offer.ts`).
         expect(selectExperiment(EXPERIMENT.SKILLS)(state)).toBe(true);
         // Note that Search says nothing matched only once the task list stands read (`use-search.ts`), so a staged list that stood unread kept a miss reading for good.
