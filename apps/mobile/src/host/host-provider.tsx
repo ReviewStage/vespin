@@ -3,13 +3,15 @@
 import NetInfo from "@react-native-community/netinfo";
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
+import { selectTaskListDrawn } from "@repo/host/app-state-reads";
 import type { AppBridge } from "@repo/host/bridge";
 import type { ActPortClient } from "@repo/host/contract";
 import type { TaskListCollections } from "@repo/host/task-list-following";
 import { type Collection, useLiveQuery } from "@tanstack/react-db";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
 import Constants from "expo-constants";
+import { useIsFocused } from "expo-router";
 import {
   createContext,
   type ReactNode,
@@ -30,7 +32,7 @@ import {
 } from "../launch-phases.js";
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
-import { followAppStateInto } from "./app-state-query.js";
+import { appStateQuery, followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import {
   launchFixtureProfile,
@@ -216,15 +218,40 @@ export function useTaskListRowsOf<Row extends object>(
   });
 }
 
-/** Every row of one of the task list's pull-request collections, in no order, as one live query, drawn again only when one of them moves. */
-export function useTaskListRows<Row extends object>(
-  collection: Collection<Row, string>,
-): readonly Row[] {
-  return useLiveQuery((q) => q.from({ row: collection })).data;
+/** No row: what a list read while it is not asked for answers. */
+const NOT_READ: readonly never[] = [];
+
+/**
+ * Whether a place reads the task list whole: once the tab it stands on is
+ * in front, or once the host says the rows the list stood with are drawn
+ * (`selectTaskListDrawn`), and from then on. Note that every tab mounts at
+ * launch, so a tab standing behind that read the list whole as it landed
+ * took each of an account's thousands of rows through its sorted reads as
+ * it moved, several times the work of reading them once drawn, on the JS
+ * thread the Inbox draws on. A read begun holds every row in its first
+ * render, so a tab brought forward draws its rows at once.
+ */
+export function useWholeListRead(): boolean {
+  const inFront = useIsFocused();
+  const { data: drawn = false } = useQuery({ ...appStateQuery, select: selectTaskListDrawn });
+  const [begun, begin] = useState(false);
+  const reading = begun || inFront || drawn;
+
+  // Note that a read once begun stays, so a page pushed over the tab, or the tab left, never drops what it read only to read it again.
+  useEffect(() => {
+    if (reading) begin(true);
+  }, [reading]);
+
+  return reading;
 }
 
-/** No task or agent: what a list read while it is not asked for answers. */
-const NOT_READ: readonly never[] = [];
+/** Every row of one of the task list's pull-request collections, in no order, as one live query, drawn again only when one of them moves; none while `reading` is false, when nothing is read and no change is heard. */
+export function useTaskListRows<Row extends object>(
+  collection: Collection<Row, string>,
+  reading = true,
+): readonly Row[] {
+  return useLiveQuery((q) => (reading ? q.from({ row: collection }) : undefined)).data ?? NOT_READ;
+}
 
 /**
  * The task list's tasks newest started first, as the document lists them, as one live query, drawn again only when one of them moves; none while `reading` is false, when nothing is read and no change is heard.

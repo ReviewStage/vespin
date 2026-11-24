@@ -196,6 +196,15 @@ export const tasksViewSchema = EffectSchema.Struct({
    */
   listed: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
+   * Whether every row the list stood with is drawn: the tasks the local
+   * database kept and the agents that fill in behind them, true at once
+   * where it kept none, or once the list's follow answered. What a place
+   * that stands behind waits on before it reads the list whole, since an
+   * account's thousands of rows each moving through its reads as they land
+   * cost several times reading them once drawn. Absent until then.
+   */
+  listDrawn: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /**
    * The workspaces in which the account reaches any task, as the list's
    * last answer said, whatever the list holds of them: whether it has ever
    * had a task there. Absent before an answer says, as one drawn from disk
