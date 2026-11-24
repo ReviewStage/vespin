@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
@@ -12,8 +13,11 @@ import { eq } from "drizzle-orm";
 import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
+import { agentTable } from "../../schemas/agent.js";
 import { organization, user } from "../../schemas/auth.js";
+import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
+import { createAgent } from "../agent-store.js";
 import { setRepositoryPin } from "../repository-pin-store.js";
 import { deleteTaskSectionIn, listTaskSections, writeTaskSections } from "../task-section-store.js";
 import { createTask, deleteTask, updateTask } from "../task-store.js";
@@ -24,7 +28,8 @@ import { createTask, deleteTask, updateTask } from "../task-store.js";
  * in them, through the store's public reads and writes, over a real
  * dialect. A task stands in one section at a time, deleting a section
  * deletes none of its tasks, and nobody puts a task in a section that is
- * not theirs or a task of another workspace in one.
+ * not theirs or a task of another workspace in one. A Manager is kept in a
+ * section on the same terms as a task.
  *
  * Synthetic accounts, workspaces, sections, and tasks throughout.
  */
@@ -75,6 +80,36 @@ const create = (workspaceId: string, title: string, id = randomUUID()): TaskSect
 const place = (taskId: string, sectionId: string | null, position?: string): TaskSectionWrite => ({
   kind: TASK_SECTION_WRITE.PLACE,
   taskId,
+  sectionId,
+  ...(position === undefined ? undefined : { position }),
+});
+
+/** A Manager the member started in the workspace, on no task; its id. */
+const openManager = (userId: string, workspaceId: string) =>
+  Effect.gen(function* () {
+    const started = yield* createAgent(userId, {
+      taskId: null,
+      workspaceId,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: null,
+      descriptionSnapshot: null,
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      kind: AGENT_KIND.MANAGER,
+    });
+
+    return Option.getOrThrow(started).agent.id;
+  });
+
+const placeAgent = (
+  agentId: string,
+  sectionId: string | null,
+  position?: string,
+): TaskSectionWrite => ({
+  kind: TASK_SECTION_WRITE.PLACE_AGENT,
+  agentId,
   sectionId,
   ...(position === undefined ? undefined : { position }),
 });
@@ -347,6 +382,69 @@ it.layer(getTestDB())("an account's task sections", (it) => {
           Option.getOrThrow(pinnedAgain).pins.map((pin) => pin.repository),
           ["acme/relay"],
         );
+      }),
+  );
+
+  it.effect(
+    "a Manager kept in a section is its keeper's alone, and nobody puts one in a section not theirs",
+    () =>
+      Effect.gen(function* () {
+        const { dean, charles, workspace } = yield* openSharedWorkspace;
+        const outsider = yield* openAccount;
+        const manager = yield* openManager(dean, workspace);
+        const deans = randomUUID();
+        const charless = randomUUID();
+        yield* written(dean, create(workspace, "Launch", deans));
+        yield* written(charles, create(workspace, "Mine", charless));
+        const addedAt = yield* Clock.currentTimeMillis;
+
+        const answer = yield* written(dean, placeAgent(manager, deans));
+
+        assert.deepEqual(answer.agentEntries, [{ agentId: manager, sectionId: deans, addedAt }]);
+        assert.deepEqual((yield* listTaskSections(charles)).agentEntries, []);
+        assert.equal(yield* refused(charles, placeAgent(manager, deans)), true);
+        assert.equal(yield* refused(outsider, placeAgent(manager, deans)), true);
+        // Charles keeps the same Manager in a section of his own, which leaves Dean's entry as it stands.
+        yield* written(charles, placeAgent(manager, charless));
+        assert.deepEqual((yield* listTaskSections(dean)).agentEntries, answer.agentEntries);
+      }),
+  );
+
+  it.effect(
+    "a Manager stands in one section, moves within it keeping when it was put there, and goes back when its section goes",
+    () =>
+      Effect.gen(function* () {
+        const { dean, workspace } = yield* openSharedWorkspace;
+        const elsewhere = yield* openWorkspace(dean);
+        const manager = yield* openManager(dean, workspace);
+        const stranger = yield* openManager(dean, elsewhere);
+        const launch = randomUUID();
+        const later = randomUUID();
+        yield* written(dean, create(workspace, "Launch", launch));
+        yield* written(dean, create(workspace, "Later", later));
+        const addedAt = yield* Clock.currentTimeMillis;
+        yield* written(dean, placeAgent(manager, launch));
+        yield* TestClock.adjust("1 minute");
+
+        assert.equal(yield* refused(dean, placeAgent(stranger, launch)), true);
+        const reordered = yield* written(dean, placeAgent(manager, launch, "a1"));
+        assert.deepEqual(reordered.agentEntries, [
+          { agentId: manager, sectionId: launch, position: "a1", addedAt },
+        ]);
+
+        const movedAt = yield* Clock.currentTimeMillis;
+        const moved = yield* written(dean, placeAgent(manager, later));
+        assert.deepEqual(moved.agentEntries, [
+          { agentId: manager, sectionId: later, addedAt: movedAt },
+        ]);
+        assert.deepEqual((yield* written(dean, placeAgent(manager, null))).agentEntries, []);
+
+        yield* written(dean, placeAgent(manager, later));
+        const deleted = yield* written(dean, { kind: TASK_SECTION_WRITE.DELETE, id: later });
+        assert.deepEqual(deleted.agentEntries, []);
+        yield* written(dean, placeAgent(manager, launch));
+        yield* Database.use((db) => db.delete(agentTable).where(eq(agentTable.id, manager)));
+        assert.deepEqual((yield* listTaskSections(dean)).agentEntries, []);
       }),
   );
 });

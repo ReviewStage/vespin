@@ -1,6 +1,7 @@
 import type { TaskSectionIcon } from "@repo/features/task-section-wire";
 import { index, jsonb, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
+import { agentTable } from "./agent.js";
 import { organization, user } from "./auth.js";
 import { task } from "./task.js";
 
@@ -68,5 +69,37 @@ export const taskSectionEntry = pgTable(
     index("task_section_entry_task").on(table.taskId),
     // A section's delete cascades to its entries, found by the section alone.
     index("task_section_entry_section").on(table.sectionId),
+  ],
+);
+
+/**
+ * One agent an account keeps in one of its sections, a Manager as the
+ * sidebar draws it beside the tasks, as a task's entry is kept: at most one
+ * section per agent for each account, its place in the one key space the
+ * section's tasks stand in, and leaving with its account, its agent, or its
+ * section, so deleting a section puts its agents back and deletes none.
+ */
+export const agentSectionEntry = pgTable(
+  "agent_section_entry",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agentTable.id, { onDelete: "cascade" }),
+    sectionId: uuid("section_id")
+      .notNull()
+      .references(() => taskSection.id, { onDelete: "cascade" }),
+    // Where it stands among the section's rows once dragged, a key among its tasks' own; null stands it by `addedAt`.
+    position: text("position"),
+    addedAt: timestamptz("added_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.agentId] }),
+    // An agent's delete cascades to its entries, found by the agent alone.
+    index("agent_section_entry_agent").on(table.agentId),
+    // A section's delete cascades to its entries, found by the section alone.
+    index("agent_section_entry_section").on(table.sectionId),
   ],
 );
