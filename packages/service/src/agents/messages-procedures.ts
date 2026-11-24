@@ -9,7 +9,8 @@
  * deadline of its own, and the hold ends when the store's does, answering
  * the page as it stands. Beside them, the write the same path takes: a
  * message to an agent (`POST /api/agents/{id}/messages`), handed to its
- * session through the one steer path (`coder-host/steer.ts`), and a line of
+ * session through the one steer path (`coder-host/steer.ts`), its typed
+ * words to a Manager written to its chat as the chat's own send writes them, and a line of
  * a call into it recorded as it stands (`POST /api/agents/{id}/voice-lines`),
  * a person's message to a Manager's chat (`POST /api/agents/{id}/chat-messages`),
  * written to the chat beside the line the same steer hands the Manager,
@@ -354,6 +355,19 @@ const threadRootOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
+ * The chat message a person's line to a Manager is, as both sends write it
+ * beside the line (`writer.ts`'s `AwaitingChatMessage`): a fresh id, in the
+ * thread the send names.
+ */
+const chatOfLine = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agentId: string,
+  threadRoot: string | undefined,
+) {
+  return { id: mintedChatId(), threadRoot: yield* threadRootOf(userId, agentId, threadRoot) };
+});
+
+/**
  * The id a chat send's message stands under: the one minted for it where
  * this send wrote it or queued it, or, for a send repeated under its key,
  * the one the chat holds under that key. A key a send of no chat message
@@ -479,11 +493,18 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
         // A delegation starts its turn on the caller's lines already recorded, rather than writing its words again.
         const line = lines === undefined ? spoken : { ...spoken, adopts: lines };
 
+        // Note that a typed line to a Manager is a message of its chat, as `chatSend` writes it, because released apps send
+        // a Manager's chat here; a line of a call, or a delegation of its lines, is the call's and no message of the chat.
+        const chat =
+          agent.kind === AGENT_KIND.MANAGER && metadata === undefined && lines === undefined
+            ? yield* chatOfLine(context.userId, agent.id, undefined)
+            : undefined;
+
         const { txid, outcome } = yield* steerMemberWords(
           writer,
           context.userId,
           agent,
-          line,
+          chat === undefined ? line : { ...line, chat },
           retry === true,
         );
 
@@ -508,10 +529,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
         if (agent.kind !== AGENT_KIND.MANAGER) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
         const { retry, threadRoot, ...words } = input.body;
 
-        const chat = {
-          id: mintedChatId(),
-          threadRoot: yield* threadRootOf(context.userId, agent.id, threadRoot),
-        };
+        const chat = yield* chatOfLine(context.userId, agent.id, threadRoot);
 
         const { txid, outcome } = yield* steerMemberWords(
           writer,
