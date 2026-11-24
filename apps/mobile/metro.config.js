@@ -114,10 +114,21 @@ function workspaceConfig(projectRoot, options) {
 // which is what Sentry matches a Hermes stack trace to its uploaded map by.
 // The SDK's web replay and feedback widget are left out of the bundle, and
 // no options file is read, since the app passes its options to `init`.
-module.exports = getSentryExpoConfig(__dirname, {
+const sentryConfig = getSentryExpoConfig(__dirname, {
   getDefaultConfig: workspaceConfig,
   includeWebReplay: false,
   includeWebFeedback: false,
   injectReleaseForWeb: false,
   optionsFile: false,
 });
+
+// PROBE ONLY, never merged: every import evaluated at its first use (`inlineRequires`), Expo's other transform options kept.
+const baseTransformOptions = sentryConfig.transformer.getTransformOptions;
+
+sentryConfig.transformer.getTransformOptions = async (...args) => {
+  const options = await baseTransformOptions(...args);
+
+  return { ...options, transform: { ...options.transform, inlineRequires: true } };
+};
+
+module.exports = sentryConfig;
