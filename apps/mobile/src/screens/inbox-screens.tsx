@@ -140,6 +140,7 @@ import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
+  SIDEBAR_PLACE,
   useComposeAction,
   useDetailColumnBar,
   useListColumn,
@@ -1496,7 +1497,7 @@ function InboxSplitScreen({
   // Note that with no thread picked the detail's bar keeps the thread's acts, dimmed, as Mail's bar stands over No Message Selected; a picked thread's page stands its own.
   const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
 
-  const first = useListColumn(list);
+  const first = useListColumn(list, SIDEBAR_PLACE.INBOX);
   const firstDetailBar = useDetailColumnBar(detailBar);
   const build = useSplitBuild();
 

@@ -3,7 +3,7 @@
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useOwnTab } from "./tab-route.js";
 
 /** A tab whose root stands a split view in a regular window, by its root route. */
@@ -22,12 +22,42 @@ function itemRoute(tab: SplitTab, id: string): string {
 /** Each tab's item as its root last selected it, beside its list. */
 const picked = new Map<SplitTab, string>();
 
+/** The tabs asked to stand their whole list rather than their last pick, as an iPad sidebar's Tasks asks from another tab, each taken once by its root. */
+const listAsked = new Set<SplitTab>();
+
+const listListeners = new Set<() => void>();
+
+function subscribeListAsked(listener: () => void): () => void {
+  listListeners.add(listener);
+
+  return () => {
+    listListeners.delete(listener);
+  };
+}
+
+/**
+ * Asks a tab's root to stand its whole list, with nothing picked, the next
+ * time it draws, as an iPad sidebar's Tasks does from another tab, so the
+ * tab opens on its list rather than the task it last showed.
+ */
+export function showSplitList(tab: SplitTab): void {
+  picked.delete(tab);
+  listAsked.add(tab);
+
+  for (const listener of listListeners) listener();
+}
+
+/** A pick let go, and the selection the route held when it was, which stands as none until the route names another. */
+type Dropped = { readonly over: string | undefined };
+
 /** An item just picked from the list, and the selection the route held when it was. */
 type HeldPick = { readonly id: string; readonly over: string | undefined };
 
 type UseSplitSelectionResult = {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
+  /** Lets the pick go, so the whole list stands, as an iPad sidebar's Tasks does. */
+  readonly deselect: () => void;
 };
 
 /**
@@ -51,7 +81,20 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   const { selected } = useLocalSearchParams<{ selected?: string }>();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const [held, hold] = useState<HeldPick | undefined>(undefined);
-  const routed = selected ?? (regular ? picked.get(tab) : undefined);
+  const [dropped, drop] = useState<Dropped | undefined>(undefined);
+  const asked = useSyncExternalStore(subscribeListAsked, () => listAsked.has(tab));
+  // Note that a pick let go stands as none only while the route still names what it named then, so a link or a notification naming another item after it still lands.
+  const letGo = dropped !== undefined && dropped.over === selected;
+  const routed = letGo ? undefined : (selected ?? (regular ? picked.get(tab) : undefined));
+
+  // Note that the route's param is left as it stood rather than cleared, because only the screen in front may set its params, and the ask may come from another tab's sidebar.
+  useEffect(() => {
+    if (!asked) return;
+
+    listAsked.delete(tab);
+    hold(undefined);
+    drop({ over: selected });
+  }, [asked, selected, tab]);
 
   // Note that a moved route drops the hold outright, so a later return to the selection it was made over can't raise it again.
   useEffect(() => hold(undefined), [routed]);
@@ -65,8 +108,8 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
     useCallback(() => {
       if (regular) return;
 
-      // Note that the item shown beside the list may be the tab's last pick rather than the param, so a fold pushes that one.
-      const shown = selected ?? picked.get(tab);
+      // Note that the item shown beside the list may be the tab's last pick rather than the param, so a fold pushes that one, and none where the pick was let go.
+      const shown = letGo ? undefined : (selected ?? picked.get(tab));
 
       if (shown === undefined) return;
       // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
@@ -74,15 +117,21 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
 
       if (selected !== undefined) router.setParams({ selected: undefined });
       router.push(itemRoute(tab, shown));
-    }, [regular, selected, router, tab]),
+    }, [regular, selected, router, tab, letGo]),
   );
 
   return {
     selected: held !== undefined && held.over === routed ? held.id : routed,
     select: (id) => {
+      drop(undefined);
       hold({ id, over: routed });
       picked.set(tab, id);
       router.setParams({ selected: id });
+    },
+    deselect: () => {
+      picked.delete(tab);
+      hold(undefined);
+      drop({ over: selected });
     },
   };
 }

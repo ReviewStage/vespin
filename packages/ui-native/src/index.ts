@@ -384,7 +384,9 @@ export {
 } from "./settings-form.js";
 
 export {
+  type AppColumn,
   type BarAction,
+  type BarBottom,
   type BarFootItem,
   type BarMenu,
   type BarMenuAction,
@@ -439,6 +441,7 @@ export {
   LINK_ROW_TONE,
   LinkRow,
   type LinkRowTone,
+  PlaceRow,
   RelationRow,
   TaskHead,
   VERSION_WRITER,

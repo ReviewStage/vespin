@@ -46,6 +46,7 @@ import {
   RowList,
   type RowSubmenu,
   Screen,
+  SplitView,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
@@ -67,10 +68,17 @@ import {
 } from "../search/use-search.js";
 import { SEARCH_FOCUS_PARAM, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton, useOpenSettings } from "../settings-button.js";
+import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
+import {
+  PLUS_TAB,
+  SIDEBAR_PLACE,
+  useAppColumn,
+  useComposeAction,
+  useSplitBuild,
+} from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRow, InboxItemRows } from "./inbox-screens.js";
 import {
@@ -408,7 +416,7 @@ function FoundList({
  * as ⌘K goes somewhere by name. A pick opens as a result's does, and the
  * questions and sheets a row's acts raise stand beside it.
  */
-function SearchRecentList({ leave }: { readonly leave: (() => void) | undefined }) {
+function useRecentScreen(leave: (() => void) | undefined) {
   const recent = useSearchRecent();
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
@@ -427,69 +435,78 @@ function SearchRecentList({ leave }: { readonly leave: (() => void) | undefined 
     leave,
   );
 
-  return (
-    <>
-      <Screen>
-        <RowList
-          look={LIST_LOOK.PLAIN}
-          onSelect={open}
-          onRefresh={async () => {
-            await Promise.all([refresh(), refreshTasks()]);
+  const results = (
+    <RowList
+      look={LIST_LOOK.PLAIN}
+      onSelect={open}
+      onRefresh={async () => {
+        await Promise.all([refresh(), refreshTasks()]);
+      }}
+    >
+      {recent.rows.length === 0 ? null : (
+        <ListSection
+          title={RECENT_WORDS.TITLE}
+          act={{
+            label: RECENT_WORDS.CLEAR,
+            heard: RECENT_WORDS.CLEAR_HEARD,
+            onPress: forgetRecentOpened,
           }}
         >
-          {recent.rows.length === 0 ? null : (
-            <ListSection
-              title={RECENT_WORDS.TITLE}
-              act={{
-                label: RECENT_WORDS.CLEAR,
-                heard: RECENT_WORDS.CLEAR_HEARD,
-                onPress: forgetRecentOpened,
-              }}
-            >
-              <RowForEach data={recent.rows} keyOf={(row) => row.id}>
-                {(row) => {
-                  switch (row.kind) {
-                    case SEARCH_FOUND_KIND.TASKS:
-                      return <TaskListRow task={row.row} listing={listing} keyed={false} />;
-                    case SEARCH_FOUND_KIND.INBOX:
-                      return (
-                        <InboxItemRow
-                          listed={row.row}
-                          readerId={recent.readerId}
-                          pictureOf={pictureOf}
-                          onMark={mark}
-                          remindMenu={remind.itemMenu}
-                          onResolve={resolve}
-                        />
-                      );
-                    case SEARCH_FOUND_KIND.AGENTS:
-                      return (
-                        <TaskAgentRow
-                          line={row.row}
-                          task={
-                            row.row.agent.taskId === null
-                              ? undefined
-                              : recent.tasksById.get(row.row.agent.taskId)
-                          }
-                          named
-                          asking={asking}
-                        />
-                      );
-                  }
-                }}
-              </RowForEach>
-            </ListSection>
-          )}
-          {managers.length === 0 ? null : (
-            <ListSection title={GO_TO_WORDS.MANAGERS}>
-              {managers.map((agent) => (
-                <ManagerTaskRow key={agent.id} agent={agent} asking={asking} />
-              ))}
-            </ListSection>
-          )}
-          <GoToSection places={goTo.reached} onGo={goTo.go} />
-        </RowList>
-      </Screen>
+          <RowForEach data={recent.rows} keyOf={(row) => row.id}>
+            {(row) => {
+              switch (row.kind) {
+                case SEARCH_FOUND_KIND.TASKS:
+                  return <TaskListRow task={row.row} listing={listing} keyed={false} />;
+                case SEARCH_FOUND_KIND.INBOX:
+                  return (
+                    <InboxItemRow
+                      listed={row.row}
+                      readerId={recent.readerId}
+                      pictureOf={pictureOf}
+                      onMark={mark}
+                      remindMenu={remind.itemMenu}
+                      onResolve={resolve}
+                    />
+                  );
+                case SEARCH_FOUND_KIND.AGENTS:
+                  return (
+                    <TaskAgentRow
+                      line={row.row}
+                      task={
+                        row.row.agent.taskId === null
+                          ? undefined
+                          : recent.tasksById.get(row.row.agent.taskId)
+                      }
+                      named
+                      asking={asking}
+                    />
+                  );
+              }
+            }}
+          </RowForEach>
+        </ListSection>
+      )}
+      {managers.length === 0 ? null : (
+        <ListSection title={GO_TO_WORDS.MANAGERS}>
+          {managers.map((agent) => (
+            <ManagerTaskRow key={agent.id} agent={agent} asking={asking} />
+          ))}
+        </ListSection>
+      )}
+      <GoToSection places={goTo.reached} onGo={goTo.go} />
+    </RowList>
+  );
+
+  return { results, status, deletion, remind };
+}
+
+/** What Search draws before anything is typed under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
+function SearchRecentList({ leave }: { readonly leave: (() => void) | undefined }) {
+  const { results, status, deletion, remind } = useRecentScreen(leave);
+
+  return (
+    <>
+      <Screen>{results}</Screen>
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
       {remind.sheet}
@@ -675,6 +692,70 @@ function SearchStackScreen(words: SearchWords) {
   );
 }
 
+/**
+ * Search's columns on an iPad while its tab is shown, beside its own
+ * sidebar: the system's field over the detail's column, and under it what
+ * the query finds or, with nothing typed, the recents, each drawn as the
+ * Stack's Search draws it. Note that both are read here, under one split
+ * view, so the first key typed swaps the column's rows rather than building
+ * the split view and its field anew, which dropped the keyboard.
+ */
+function SearchSidebarShown(words: SearchWords) {
+  const { query, setQuery, scope } = words;
+  const app = useAppColumn(SIDEBAR_PLACE.SEARCH);
+  const compose = useComposeAction();
+  const build = useSplitBuild();
+  const found = useSearchScreen(words, undefined);
+  const recent = useRecentScreen(undefined);
+  const shown = query.trim() !== "" ? found : recent;
+
+  return (
+    <>
+      <Screen key={build}>
+        <SplitView
+          app={app}
+          detail={shown.results}
+          detailBar={{
+            title: SEARCH_TITLE,
+            lead: [compose],
+            search: { placeholder: searchPlaceholder(scope), text: query, onChange: setQuery },
+          }}
+        />
+      </Screen>
+      <StatusQuestionAsk question={shown.status} />
+      <StatusQuestionAsk question={shown.deletion} />
+      {found.remind.sheet}
+      {recent.remind.sheet}
+    </>
+  );
+}
+
+/**
+ * Search on an iPad, beside its own sidebar, as the sidebar's Search opens
+ * it. Note that what it finds and its recents are read only while the tab
+ * is shown, as the Stack's Search reads them, since the tab stays mounted
+ * behind the others; behind them its columns stand empty.
+ */
+function SearchSidebarScreen(words: SearchWords) {
+  const shown = useSearchTabShown();
+  const app = useAppColumn(SIDEBAR_PLACE.SEARCH);
+  const build = useSplitBuild();
+
+  return (
+    <>
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it. */}
+      <Stack.Screen options={{ headerShown: false, title: SEARCH_TITLE }} />
+      {shown ? (
+        <SearchSidebarShown {...words} />
+      ) : (
+        <Screen key={build}>
+          <SplitView app={app} detail={null} />
+        </Screen>
+      )}
+    </>
+  );
+}
+
 /** The Search tab's root screen, under the Stack's bar, the query and its scope held here. */
 export function SearchScreen() {
   const [query, setQuery] = useState("");
@@ -683,5 +764,12 @@ export function SearchScreen() {
   // Note that the Inbox's scope, chosen before the member turned the Inbox off, stands as All for the field and the results alike, since no scope offers it then.
   const scope = inboxShown || chosen !== SEARCH_SCOPE.INBOX ? chosen : SEARCH_SCOPE.ALL;
 
-  return <SearchStackScreen query={query} setQuery={setQuery} scope={scope} setScope={setScope} />;
+  const words = { query, setQuery, scope, setScope };
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+
+  return APP_SIDEBAR && regular ? (
+    <SearchSidebarScreen {...words} />
+  ) : (
+    <SearchStackScreen {...words} />
+  );
 }

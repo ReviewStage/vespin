@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: labeled glass tabs for Inbox with its count, Tasks, Automations, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, which an iPad folds away rather than moving to the top, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: labeled glass tabs for Inbox with its count, Tasks, Automations, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window but an iPad's, whose split views lead with the app's own sidebar and stand no bar, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import {
   IOS_TAB,
@@ -22,7 +22,7 @@ import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { PLUS_TAB } from "../../screens/app-sidebar.js";
 import { useNewTaskAfterSetup } from "../../setup/setup-place.js";
-import { useSidebarChoiceLapse } from "../../sidebar-shown.js";
+import { APP_SIDEBAR, useSidebarChoiceLapse } from "../../sidebar-shown.js";
 import { useTabSurfaceOpen } from "../../surface-open.js";
 import { useKeepStandingTab } from "../../tab-route.js";
 import { useStandingCallCard } from "../../voice-call.js";
@@ -67,8 +67,7 @@ function useInboxListStands(segments: readonly string[]): boolean {
 }
 
 // Note that nothing here draws the bar: the system draws it in Liquid Glass
-// and minimizes it as a list scrolls down, and, on iOS 26 alone, floats it at the top of a
-// portrait iPad. Every tab keeps its label in any window, as Apple's own
+// and minimizes it as a list scrolls down. Every tab keeps its label in any window, as Apple's own
 // apps do, since a bar of icons alone read as empty; the round + alone is an
 // icon in a compact window, its label heard still as its accessibility
 // label, since it is an act rather than a place. The selected tab is tinted in the brand's copper,
@@ -90,14 +89,18 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // the tabs that stand: a + hidden by the window would mount every tab again,
 // its pages and drafts dropped, on each fold, rotation, or resize.
 //
-// The bar is `sidebarAdaptable` everywhere, as Apple's tab sidebar guidance
-// has it: folded, iOS 27 stands the Duo's tabs as a glass rail on the outer
-// display, unfolded the bar becomes a sidebar rail, and on an iPad the
-// system draws its own tab sidebar. Note that an iPad prefers the sidebar
-// (`preferredPlacement`, iOS 27), so hiding it folds it away rather than
-// moving the tabs into a floating bar over the page, which the developer ruled out
-// (Nov 23, 2026); its placement is read by the device's idiom, as the + is,
-// so nothing mounts again as the window turns or resizes. Each tab's root stands its own
+// The bar is `sidebarAdaptable` on an iPhone, as Apple's tab sidebar
+// guidance has it: folded, iOS 27 stands the Duo's tabs as a glass rail on
+// the outer display, and unfolded the bar becomes a sidebar rail. An iPad
+// stands no system tab sidebar and, in a regular window, no bar at all:
+// each tab's split view leads with the app's own sidebar instead
+// (`useAppColumn`), as the panel's does, its places, tasks, workspace and
+// account, which the system's sidebar button folds away rather than moving
+// the tabs into a floating bar over the page, which the developer ruled out
+// (Nov 23, 2026). A compact iPad window, such as a narrow Split View, keeps
+// the bar, which only shows or hides, so nothing mounts again; whether a
+// sidebar can stand at all is read by the device's idiom, as the + is.
+// Each tab's root stands its own
 // list beside its detail in a regular window (`SplitView`), and Tasks keeps
 // Pinned, Following, and the member's sections as groups atop its list.
 // Tabs stay mounted across a fold, a rotation, or a resize, so each keeps
@@ -142,10 +145,9 @@ export default function TabsLayout() {
 
   return (
     <NativeTabs
-      hidden={iconOnly && (conversation || choosing)}
+      hidden={iconOnly ? conversation || choosing : APP_SIDEBAR}
       minimizeBehavior="onScrollDown"
-      sidebarAdaptable
-      {...(PLUS_TAB ? {} : { preferredPlacement: "sidebar" })}
+      sidebarAdaptable={!APP_SIDEBAR}
       tintColor={colors.ACCENT}
       badgeBackgroundColor={colors.ATTENTION_FILL}
       badgeTextColor={colors.ON_ACCENT}

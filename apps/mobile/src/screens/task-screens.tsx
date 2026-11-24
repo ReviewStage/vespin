@@ -214,11 +214,11 @@ import { usePushStarted, usePushStood } from "../push-stood.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-
 import { useOnOwnTab } from "../tab-route.js";
 import {
   threadComments,
@@ -267,6 +267,8 @@ import {
 } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
+  SIDEBAR_PLACE,
+  useAppColumn,
   useComposeAction,
   useDetailColumnBar,
   useListColumn,
@@ -3588,7 +3590,7 @@ function TasksSplitScreen({
     },
   };
 
-  const first = useListColumn(list);
+  const first = useListColumn(list, SIDEBAR_PLACE.TASKS);
   const firstDetailBar = useDetailColumnBar(detailBar);
   const build = useSplitBuild();
 
@@ -3603,6 +3605,68 @@ function TasksSplitScreen({
   );
 }
 
+// An iPad's regular window: its own sidebar, the places and, as the panel's
+// sidebar holds them, the tasks, beside the picked task's page, or beside
+// the whole tree with its View options and search while none is picked, as
+// the sidebar's Tasks stands it. The Stack's header steps aside, since the
+// split view draws each column's navigation bar itself.
+function TasksSidebarScreen({
+  selected,
+  select,
+  deselect,
+  screen,
+  hold,
+}: {
+  readonly selected: string | undefined;
+  readonly select: (id: string) => void;
+  readonly deselect: () => void;
+  readonly screen: TasksScreenState;
+  readonly hold: TreeHold;
+}) {
+  const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
+  const chrome = useInlineChrome();
+  const task = useTaskDetail(selected, listing, chrome);
+  const app = useAppColumn(SIDEBAR_PLACE.TASKS, deselect);
+  const compose = useComposeAction();
+  const taskBar = useDetailColumnBar(task.detailBar);
+  const build = useSplitBuild();
+  const listed = selected === undefined;
+
+  const detail = listed ? (
+    <TasksTree
+      listing={listing}
+      hold={hold}
+      look={LIST_LOOK.PLAIN}
+      search={search}
+      selected={selected}
+      onSelect={select}
+      onRefresh={refreshTasks}
+    />
+  ) : (
+    task.detail
+  );
+
+  // Note that the whole tree's bar holds New task, its View options and its search, as its list column's did, and a task's page its own acts.
+  const detailBar = listed
+    ? {
+        title: TASKS_TITLE,
+        lead: [compose],
+        menu: viewMenu,
+        search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
+      }
+    : taskBar;
+
+  return (
+    <>
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it. */}
+      <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />
+      <Screen key={build}>
+        <InlineSplitView app={app} detail={detail} detailBar={detailBar} chrome={chrome} />
+      </Screen>
+    </>
+  );
+}
+
 /**
  * The Tasks tab's root screen: its tree, laid out by the window's size
  * class. Note that what the reader set is held here, above the two layouts,
@@ -3612,17 +3676,25 @@ function TasksSplitScreen({
  */
 export function TasksListScreen() {
   const sizeClass = useWindowSizeClass();
-  const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
+  const { selected, select, deselect } = useSplitSelection(SPLIT_TAB.TASKS);
   const [search, setSearch] = useState("");
   const screen = useTasksScreen({ search, setSearch });
   const hold = useTreeHoldState();
 
   return (
     <>
-      {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-        <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
-      ) : (
+      {sizeClass !== WINDOW_SIZE_CLASS.REGULAR ? (
         <TasksStackList screen={screen} hold={hold} />
+      ) : APP_SIDEBAR ? (
+        <TasksSidebarScreen
+          selected={selected}
+          select={select}
+          deselect={deselect}
+          screen={screen}
+          hold={hold}
+        />
+      ) : (
+        <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
       )}
       <StatusQuestionAsk question={screen.status} />
       <StatusQuestionAsk question={screen.deletion} />

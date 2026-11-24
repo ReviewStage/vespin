@@ -453,9 +453,15 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   compact window's icons alone read as empty (the developer, Nov 23, 2026),
   the round + alone an icon there through its `Label`'s own `hidden`, the
   Inbox count in copper, and the round + for New task; a regular window's
-  bar is
-  `sidebarAdaptable`, so iPadOS stands it as its own tab sidebar, as Apple's
-  tab guidance has it. A compact window hides it while a
+  bar, on an iPhone, is `sidebarAdaptable`, so the unfolded Duo stands it as
+  a sidebar rail. An
+  iPad stands no system tab sidebar and, in a regular window, no bar: each
+  tab's `SplitView` leads with the app's own sidebar (`AppColumn`, a
+  `PlaceRow` for each place, the workspace switcher and the account's photo
+  at its foot in the system's glass, `ColumnBar`'s `bottom`), which the
+  system's sidebar button folds away rather than moving the tabs to a
+  floating bar over the page, a list beside it always standing (the
+  developer, Nov 23, 2026). A compact window hides it while a
   conversation stands in front (a thread, an agent's page, or a pull
   request it opened), as Messages does, so the composer stands alone at
   the foot (the developer, Nov 12, 2026).
