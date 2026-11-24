@@ -1,3 +1,4 @@
+import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import type { WorkspaceMember } from "@repo/features/workspace-wire";
 import { agentOfTab } from "@repo/ui/tab-strip-model";
 import type { HistoryRows } from "./places/history-rows.js";
@@ -48,7 +49,7 @@ export const VERSION_HISTORY_WORDS = "Version history";
 export const INBOX_WORDS = "Inbox";
 
 /** What the Merge queue page is called, its step's name and its row's. */
-export const MERGE_QUEUE_WORDS = "Merge queue";
+export const MERGE_QUEUE_WORDS = MERGE_QUEUE_PAGE_WORDS.TITLE;
 
 /** What Settings is called, its step's name over the page it stands on. */
 export const SETTINGS_WORDS = "Settings";
