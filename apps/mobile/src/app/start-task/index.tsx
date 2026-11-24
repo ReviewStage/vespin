@@ -1,8 +1,9 @@
-// index.tsx -- New task, Home's composer as a sheet, which the tab bar's round + opens, a task's New sub-task opens as a sub-task of the task the route's `parent` names, a section's + opens to file the task in the section `section` names, and a draft the share sheet kept opens prefilled, its pictures attached (`share-sheet.ts`).
+// index.tsx -- New task, Home's composer as a sheet, or Create with an agent where the route's `purpose` names an automation, which the tab bar's round + opens, a task's New sub-task opens as a sub-task of the task the route's `parent` names, a section's + opens to file the task in the section `section` names, and a draft the share sheet kept opens prefilled, its pictures attached (`share-sheet.ts`).
 
 import { SHARE_DRAFT_PICTURE_FILES } from "@repo/features/ios-share-wire";
 import { useLocalSearchParams } from "expo-router";
 import { appGroupFileUri } from "../../app-group.js";
+import { START_PURPOSE } from "../../automations/automation-routes.js";
 import { NewTaskScreen } from "../../screens/start-screens.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -31,19 +32,22 @@ function draftPictures(param: string | undefined): readonly string[] | undefined
 }
 
 export default function StartTaskRoute() {
-  const { parent, section, prompt, workspace, repository, pictures } = useLocalSearchParams<{
-    parent?: string;
-    section?: string;
-    prompt?: string;
-    workspace?: string;
-    repository?: string;
-    pictures?: string;
-  }>();
+  const { parent, section, prompt, workspace, repository, pictures, purpose } =
+    useLocalSearchParams<{
+      purpose?: string;
+      parent?: string;
+      section?: string;
+      prompt?: string;
+      workspace?: string;
+      repository?: string;
+      pictures?: string;
+    }>();
 
   return (
     <NewTaskScreen
       parent={parent === "" ? undefined : parent}
       section={section === "" ? undefined : section}
+      forAutomation={purpose === START_PURPOSE.AUTOMATION}
       draft={
         prompt === undefined
           ? undefined

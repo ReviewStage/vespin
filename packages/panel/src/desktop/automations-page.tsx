@@ -1,3 +1,4 @@
+import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import {
   AUTOMATION_NEXT,
   AUTOMATIONS_ORDER,
@@ -187,7 +188,7 @@ const AUTOMATIONS = "Automations";
 
 /** What the list's acts are called, on their buttons and a phone's ⋯ alike. */
 const NEW_AUTOMATION = "New automation";
-const CREATE_WITH_AGENT = "Create with an agent";
+const CREATE_WITH_AGENT = CREATE_WITH_AGENT_WORDS.TITLE;
 
 /** What the list says where it could not be read. */
 const UNREAD_LINE = "The automations could not be read.";

@@ -1,5 +1,6 @@
 // automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each in the order View options chose, a finished one-time automation folded under Finished, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
 
+import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import {
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
@@ -51,7 +52,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { newAutomationRoute } from "../automations/automation-editor-route.js";
-import { AUTOMATION_RUNS_ROUTE, automationRoute } from "../automations/automation-routes.js";
+import {
+  AUTOMATION_RUNS_ROUTE,
+  automationRoute,
+  CREATE_WITH_AGENT_ROUTE,
+} from "../automations/automation-routes.js";
 import {
   AUTOMATION_SUGGESTIONS,
   type AutomationSuggestion,
@@ -247,7 +252,6 @@ function AutomationsList({
   const tokens = searchTokens(search);
   const automations = read.rows?.filter((automation) => found(automation, tokens));
   const groups = automations === undefined ? [] : automationGroups(automations, order);
-  const offered = useOfferedSuggestions(read.rows ?? NO_AUTOMATIONS, workspace.id);
   const finished = automations === undefined ? [] : finishedAutomations(automations, order);
 
   // Note that a Delete asked about one deleted elsewhere since withdraws its question.
@@ -292,8 +296,8 @@ function AutomationsList({
       )
     ) : undefined;
 
-  // Note that with nothing listed but suggestions to offer, the suggestions stand in the empty state's place, as the desktop's list offers them under its line saying there are none.
-  const offering = suggested && offered.length > 0;
+  // Note that with nothing listed, the suggestions stand in the empty state's place, Create with an agent first, as the desktop's list offers them under its line saying there are none.
+  const offering = suggested;
 
   return (
     <>
@@ -366,16 +370,15 @@ function useOfferedSuggestions(
   return allowed.filter((each) => !taken.has(each.preset));
 }
 
-/** No automations, as before the list is read. */
-const NO_AUTOMATIONS: readonly AutomationSummary[] = [];
-
 /** No suggestions, as before the document is read. */
 const NO_SUGGESTIONS: readonly AutomationSuggestion[] = [];
 
 /**
  * The automations the list suggests under its own, as the desktop's list
- * does: each a row whose press opens New automation filled in from its
- * preset, to look over and Create. One fired by Sentry while the workspace
+ * does: Create with an agent first, which opens New task's sheet for an
+ * agent that makes one from the member's words, then each preset a row
+ * whose press opens New automation filled in from it, to look over and
+ * Create. One fired by Sentry while the workspace
  * has none says so under its words: an owner or an admin is told to connect
  * it, which the editor's Sentry section does; a member is told whom to ask,
  * and the row takes no press. One fired by Sentry on a deployment that holds
@@ -421,9 +424,20 @@ function SuggestedAutomations({
     ];
   });
 
-  if (rows.length === 0) return null;
-
-  return <ListSection title={AUTOMATION_SUGGESTION_WORDS.SUGGESTED}>{rows}</ListSection>;
+  // Note that Create with an agent heads the suggestions, as the desktop stands it beside New automation, so an automation no preset fits is a sentence away.
+  return (
+    <ListSection title={AUTOMATION_SUGGESTION_WORDS.SUGGESTED}>
+      <AutomationRow
+        look={AUTOMATION_ROW_LOOK.LIST}
+        title={CREATE_WITH_AGENT_WORDS.TITLE}
+        line={CREATE_WITH_AGENT_WORDS.PLACEHOLDER}
+        standing={AUTOMATION_RUN_STANDING.REST}
+        symbol={GLYPH.AGENT}
+        onPress={() => router.push(CREATE_WITH_AGENT_ROUTE)}
+      />
+      {rows}
+    </ListSection>
+  );
 }
 
 /** An automation's row id in the list. */

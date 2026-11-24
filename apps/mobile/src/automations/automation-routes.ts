@@ -6,6 +6,17 @@ export const AUTOMATIONS_ROUTE = "/automations";
 /** The workspace's runs, every automation's, newest first. */
 export const AUTOMATION_RUNS_ROUTE = `${AUTOMATIONS_ROUTE}/runs`;
 
+/** What New task's sheet starts an agent for, where its route names it: one that makes an automation. */
+export const START_PURPOSE = {
+  AUTOMATION: "automation",
+} as const;
+
+/** Create with an agent: New task's sheet, its agent handed the brief that makes an automation. */
+export const CREATE_WITH_AGENT_ROUTE = {
+  pathname: "/start-task",
+  params: { purpose: START_PURPOSE.AUTOMATION },
+} as const;
+
 /** An automation's page. */
 export function automationRoute(automationId: string): string {
   return `${AUTOMATIONS_ROUTE}/${encodeURIComponent(automationId)}`;
