@@ -6,6 +6,8 @@ import type { AutomationPresetName } from "@repo/features/automation-presets";
 const AUTOMATION_EDITOR_ROUTE = {
   EDITOR: "/automation-editor",
   TIME_ZONE: "/automation-editor/time-zone",
+  PROMPT: "/automation-editor/prompt",
+  AGENT: "/automation-editor/agent",
 } as const;
 
 /** New automation, in the workspace the app works in, filled in from the suggestion's `preset` where one is named. */
@@ -28,3 +30,9 @@ export function editAutomationRoute(automationId: string) {
 export function timeZoneRoute(zone: string) {
   return { pathname: AUTOMATION_EDITOR_ROUTE.TIME_ZONE, params: { zone } } as const;
 }
+
+/** The prompt, edited whole on a page pushed in the sheet over the editor, its mentions as pills. */
+export const PROMPT_ROUTE = AUTOMATION_EDITOR_ROUTE.PROMPT;
+
+/** The agent a same-agent automation's runs go to, picked from the workspace's agents on a page pushed in the sheet. */
+export const RUNS_AGENT_ROUTE = AUTOMATION_EDITOR_ROUTE.AGENT;
