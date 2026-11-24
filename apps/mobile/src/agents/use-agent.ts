@@ -623,31 +623,50 @@ export type PageRead =
   | { readonly html: string; readonly title: string }
   | { readonly failed: true };
 
+/** The version a page is read at where its opener named none, as a link opens it: the newest the service holds. */
+export const PAGE_NEWEST = "newest";
+
 /** A page's read as it stands, and the ask to read it again after it failed. */
 export interface PageHtml {
   readonly read: PageRead;
   readonly again: () => void;
 }
 
-/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known, and read again on `again` after a read that failed. */
+/**
+ * One version of a page the agent showed on its task, or its newest
+ * (`PAGE_NEWEST`), read whole once through the host
+ * (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading
+ * until the task is known, and read again on `again` after a read that
+ * failed. A version named after the newest was read is read only where it
+ * is not the one the newest read answered, so a link's page, read at once,
+ * is not read again when the task's pages name the same version.
+ */
 export function usePageHtml(
   taskId: string | undefined,
   pageId: string,
-  version: number | undefined,
+  version: number | typeof PAGE_NEWEST | undefined,
 ): PageHtml {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
+  // The version the page last read answered, which a version named after it is told apart from.
+  const standing = useRef<number | undefined>(undefined);
   // Note that each ask to read again counts up, which the read below depends on, so Try again reads the page anew rather than leaving the failure standing.
   const [asked, setAsked] = useState(0);
   const again = useCallback(() => setAsked((was) => was + 1), []);
   useEffect(() => {
     let current = true;
+
+    if (version !== PAGE_NEWEST && version !== undefined && version === standing.current) return;
     setRead({ reading: true });
+    standing.current = undefined;
 
     if (taskId === undefined || version === undefined) return;
-    acts[ACT_KIND.TASKS_PAGE_HTML]({ taskId, pageId, version }).then(
+    const named = version === PAGE_NEWEST ? {} : { version };
+    acts[ACT_KIND.TASKS_PAGE_HTML]({ taskId, pageId, ...named }).then(
       (answer) => {
         if (!current) return;
+
+        if ("page" in answer) standing.current = answer.page.version;
         setRead(
           "page" in answer
             ? { html: answer.page.html, title: answer.page.title }
