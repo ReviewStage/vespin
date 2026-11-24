@@ -7,7 +7,12 @@
  * tightened, so the run reads as one block that opens and closes round.
  * What stands beside a bubble (`beside`), such as its actions, stands on the
  * side toward the column's middle and adds nothing to the run's height, so
- * the run stays tight. A sender's picture (`avatar`), such as a Manager's
+ * the run stays tight, nor to its width: it hangs past the bubble's edge, as
+ * a chat app hangs its hover actions, so a bubble wraps where its words and
+ * its caller's width say, whatever stands beside it. The row spans what
+ * holds it, so a share of the column the caller caps the bubble at
+ * (`ui-chat-bubble-hold`) is a share of the column, never of the row's own
+ * words. A sender's picture (`avatar`), such as a Manager's
  * face, stands at the bubble's outer side, level with its foot, beside the
  * run's last bubble and a bubble alone, as a chat app stands it, and keeps
  * its room beside the run's others, so the run's bubbles line up, and the
@@ -68,6 +73,18 @@ const RUN_CORNERS: Record<ChatSide, Record<ChatRun, string>> = {
     [CHAT_RUN.MIDDLE]: "rounded-l-ui-6",
     [CHAT_RUN.LAST]: "rounded-tl-ui-6",
   },
+};
+
+/** Which way a side's row runs: from the column's left for what the other side sent, from its right for what people sent. */
+const SIDE_FLOW: Record<ChatSide, string> = {
+  [CHAT_SIDE.SENT]: "flex-row-reverse",
+  [CHAT_SIDE.RECEIVED]: "",
+};
+
+/** Where what stands beside a bubble hangs: past its edge toward the column's middle, a gap off it. */
+const BESIDE_PLACE: Record<ChatSide, string> = {
+  [CHAT_SIDE.SENT]: "end-full me-ui-4",
+  [CHAT_SIDE.RECEIVED]: "start-full ms-ui-4",
 };
 
 /** Whether a bubble shows its sender's picture: the run's last and a bubble alone do, and the others keep its room. */
@@ -139,7 +156,7 @@ export function ChatBubble({
 }): React.JSX.Element {
   return (
     <div
-      className={`ui-chat-bubble-row flex min-w-0 max-w-full items-center gap-ui-4 ${side === CHAT_SIDE.SENT ? "flex-row-reverse" : ""}`}
+      className={`ui-chat-bubble-row flex w-full min-w-0 items-center gap-ui-4 ${SIDE_FLOW[side]}`}
       data-side={side}
       data-run={run}
     >
@@ -150,15 +167,23 @@ export function ChatBubble({
           {avatar}
         </span>
       )}
-      {/* Note that it clips past the keyboard's ring rather than at its edge, so a fold, a chip, or a link it holds keeps its ring. */}
-      <div
-        className={`ui-chat-bubble min-w-0 max-w-full overflow-clip rounded-ui-14 px-list-inset py-row-inset text-body leading-reading text-foreground [overflow-clip-margin:var(--ui-focus-ring-room)] bg-fill-strong ${RUN_CORNERS[side][run]}`}
-        {...withContextMenu<HTMLDivElement>(contextMenu, {})}
-      >
-        {quote === undefined ? null : <BubbleQuote quote={quote} />}
-        {children}
+      <div className="ui-chat-bubble-hold relative flex min-w-0 max-w-full">
+        {/* Note that it clips past the keyboard's ring rather than at its edge, so a fold, a chip, or a link it holds keeps its ring. */}
+        <div
+          className={`ui-chat-bubble min-w-0 max-w-full overflow-clip rounded-ui-14 px-list-inset py-row-inset text-body leading-reading text-foreground [overflow-clip-margin:var(--ui-focus-ring-room)] bg-fill-strong ${RUN_CORNERS[side][run]}`}
+          {...withContextMenu<HTMLDivElement>(contextMenu, {})}
+        >
+          {quote === undefined ? null : <BubbleQuote quote={quote} />}
+          {children}
+        </div>
+        {beside === undefined || beside === null ? null : (
+          <div
+            className={`ui-chat-bubble-beside absolute top-1/2 flex w-max -translate-y-1/2 items-center gap-ui-4 ${SIDE_FLOW[side]} ${BESIDE_PLACE[side]}`}
+          >
+            {beside}
+          </div>
+        )}
       </div>
-      {beside}
     </div>
   );
 }

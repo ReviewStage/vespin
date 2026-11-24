@@ -927,20 +927,21 @@ body,
 
 /* A Manager's chat (`desktop-agent-page.tsx`'s `data-chat`) stands both
    sides' bubbles at one width, as a chat app does: each turn of a bubble
-   spans the column, and its bubble keeps to one share of it, whatever
-   stands beside it (the Manager's face, and the actions, which differ by
-   side). A phone's room keeps a narrower share, as its face and actions
-   take more of the column there. */
+   spans the column, and so does its row (`ChatBubble`), so its bubble keeps
+   to one share of the column, whatever its words and whatever stands
+   beside it (the Manager's face, and the actions, which differ by side and
+   take no width). A phone's room keeps a narrower share, as its face and
+   actions take more of the column there. */
 .agent-page[data-chat] .transcript-message:has(> .ui-chat-bubble-row) {
   max-width: 100%;
 }
 
-.agent-page[data-chat] .ui-chat-bubble {
+.agent-page[data-chat] .ui-chat-bubble-hold {
   max-width: var(--spacing-chat-bubble);
 }
 
 @container find-scope (width < 480px) {
-  .agent-page[data-chat] .ui-chat-bubble {
+  .agent-page[data-chat] .ui-chat-bubble-hold {
     max-width: var(--spacing-chat-bubble-narrow);
   }
 }
