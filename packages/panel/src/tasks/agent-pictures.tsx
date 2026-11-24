@@ -387,6 +387,19 @@ export function ShownPictures({
   return <ShownSet door={door} shown={all} />;
 }
 
+/**
+ * Pictures kept with their size drawn as a shown set, as a `show_media`
+ * call draws what it showed (`ShownPictures`), from the pictures themselves
+ * rather than a call: a Manager's set as its chat's row names it.
+ */
+export function KeptShownSet({ shown }: { shown: readonly ShownPicture[] }): ReactNode {
+  const door = useContext(AgentPicturesContext);
+
+  if (door === undefined || shown.length === 0) return null;
+
+  return <ShownSet door={door} shown={shown} />;
+}
+
 /** Whether a shown file was kept as a video or a sound clip, played where it stands rather than drawn in a set. */
 function isShownPlayed(
   shown: ShownPicture,

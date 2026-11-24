@@ -178,7 +178,7 @@ function cutFrom(
 }
 
 /** A file the box held, as the window draws it from its own bytes. */
-function fileUrl(file: AgentAttachment): string {
+export function fileUrl(file: AgentAttachment): string {
   return `data:${file.mediaType};base64,${file.data}`;
 }
 

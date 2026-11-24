@@ -798,7 +798,7 @@ function calledAgentActor(
 }
 
 /** One tool call: its row, and its input and answer under it once opened, a stop naming the worker it stopped by its job where `jobs` knows it, a call about an agent naming it by its chip where `cards` or its answer know it, and a command killed out of memory offering a larger sandbox (`OutOfMemoryOffer`); an answer its page carried cut drawn as `cut` says. */
-function ToolCallView({
+export function ToolCallView({
   part,
   jobs,
   cards,
@@ -2270,7 +2270,7 @@ export function AgentMessage({
           moving={moving}
           work={
             work === undefined || work.length === 0 ? null : (
-              <ChatWorkRows parts={work} moving={false} delegation={doors} />
+              <TurnWorkRows parts={work} moving={false} delegation={doors} />
             )
           }
         >
@@ -2531,8 +2531,8 @@ function useWorkToggle(): ChatWorkToggle {
   return { shown, onToggle: () => setShown((was) => !was) };
 }
 
-/** A stretch of a Manager's work (`managerChatWork`) as the rows a turn's transcript draws, each part drawn as the turn's own is. */
-function ChatWorkRows({
+/** A stretch of a turn's work as the rows its transcript draws, each part drawn as the turn's own is: what a Manager's chat opens under a message on Show work. */
+export function TurnWorkRows({
   parts,
   moving,
   delegation,
@@ -2701,7 +2701,7 @@ function findRowOf(row: PlacedRow): FindRow {
 }
 
 /** The class every row of the log wears (tasks.css). */
-const LOG_ROW_CLASS = "agent-log-row";
+export const LOG_ROW_CLASS = "agent-log-row";
 
 /** One row of the log: a placed message, or one piece of a turn too long to draw at once (`turn-pieces.ts`). */
 interface LogEntry {
@@ -3397,7 +3397,7 @@ function AgentTranscriptView({
               face={manager?.face}
               work={
                 chatWork === undefined || chatWork.live.length === 0 ? null : (
-                  <ChatWorkRows parts={chatWork.live} moving delegation={delegation} />
+                  <TurnWorkRows parts={chatWork.live} moving delegation={delegation} />
                 )
               }
             />
