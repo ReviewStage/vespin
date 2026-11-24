@@ -188,13 +188,13 @@ export const INBOX_BOUNDS = {
  */
 export const INBOX_TOOL = {
   /** Adds the agent's message to the thread under its key, opening one under a new key, its ask replacing the open one. */
-  POST: "post_thread",
+  POST: "inbox_post",
   /** Withdraws the thread's open ask, with why. */
-  WITHDRAW: "withdraw_ask",
+  WITHDRAW: "inbox_withdraw_ask",
   /** Lists threads one line each: the agent's own, or another agent's or a task's of its workspace. */
-  LIST: "list_threads",
+  LIST: "inbox_list_threads",
   /** Reads one thread whole, a page of its messages at a time. */
-  READ: "read_thread",
+  READ: "inbox_read_thread",
 } as const;
 
 /** The blocks an item's context is made of. */

@@ -1933,7 +1933,7 @@ test("message_agent shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "message-agent-input", MESSAGE_AGENT_TOOL.inputSchema);
 });
 
-test("send_to_user shows the model the recorded input", async () => {
+test("chat_send shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "send-to-user-input", SEND_TO_USER_TOOL.inputSchema);
 });
 

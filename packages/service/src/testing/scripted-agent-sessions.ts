@@ -13,7 +13,7 @@
  * script past the answer, written through the store writer as the runner's
  * events route writes a native turn (`runner-events-app.ts`): the turn its
  * line awaits started, the line taken into it, its steps, and its end. An
- * ask is posted as the `post_thread` tool posts one (`postInboxThread`),
+ * ask is posted as the `inbox_post` tool posts one (`postInboxThread`),
  * addressed to the agent's starter, so it stands open in the Inbox and on
  * the agent's page until answered, and the answer, handed to the agent as
  * its next message, plays the turn after.
@@ -35,7 +35,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, readAgentOfConversation } from "@repo/database/models/agent-store";
 import { queuedTurnOf, turnAwaitedByLine } from "@repo/database/models/turn-state";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, storedToolName } from "@repo/features/agent-tools";
 import { INBOX_ASK, type InboxAsk } from "@repo/features/inbox-wire";
 import type { WireBoundaryInput } from "@repo/wire";
 import { Clock, Duration, Effect, Layer, Option, Predicate, Result, Schedule } from "effect";
@@ -184,7 +184,7 @@ function turnIdOf(message: SessionMessage) {
   });
 }
 
-/** One thread posted with its ask, as the agent's `post_thread` posts one, addressed to its starter; the tool's input and answer as its call shows them. */
+/** One thread posted with its ask, as the agent's `inbox_post` posts one, addressed to its starter; the tool's input and answer as its call shows them. */
 function postedAsk(agent: Agent, posted: Extract<ScriptedStep, { readonly ask: unknown }>["ask"]) {
   return Effect.gen(function* () {
     const poster = { userId: agent.userId, taskId: agent.taskId, agentId: agent.id };
@@ -285,7 +285,10 @@ function playedTurn(account: string, message: SessionMessage, steps: readonly Sc
       const { name, input, output } =
         "call" in step
           ? step.call
-          : { name: AGENT_TOOL.POST_THREAD, ...(yield* postedAsk(agent, step.ask)) };
+          : {
+              name: storedToolName(AGENT_TOOL.POST_THREAD),
+              ...(yield* postedAsk(agent, step.ask)),
+            };
 
       yield* tell({ kind: RUN_EVENT.TOOL_CALL_STARTED, callId, name, input: unparsedWire(input) });
       yield* tell({

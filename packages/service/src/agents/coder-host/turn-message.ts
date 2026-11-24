@@ -254,7 +254,7 @@ const memoriesOf = (agent: Agent, words: string) =>
     Effect.catch(() => Effect.succeed(undefined)),
   );
 
-/** How the agent's reply reaches the developer, which its turn's kind words follow: a Manager's by `send_to_user`, and every other agent's by its last message. */
+/** How the agent's reply reaches the developer, which its turn's kind words follow: a Manager's by `chat_send`, and every other agent's by its last message. */
 function turnReplyOf(agent: Agent): TurnReply {
   return agent.kind === AGENT_KIND.MANAGER ? TURN_REPLY.SEND_TO_USER : TURN_REPLY.LAST_MESSAGE;
 }
@@ -264,7 +264,7 @@ function turnReplyOf(agent: Agent): TurnReply {
  * spoken one, the only turn whose words name it: a thread where it posts
  * them, its Manager where one started it, and its reply otherwise. Note that
  * its standing is read only for that turn, since every other turn's words
- * name none, and that a Manager's own words name `send_to_user` instead.
+ * name none, and that a Manager's own words name `chat_send` instead.
  */
 const turnAskOf = (
   agent: Agent,

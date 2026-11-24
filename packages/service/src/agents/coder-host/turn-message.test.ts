@@ -70,7 +70,7 @@ import { coderTurnMessage } from "./turn-message.js";
  * request names no zone reads the developer's day in the zone their account
  * keeps, and in UTC, said to be so, only where it keeps none; and a
  * Manager's spoken turn is told to answer in plain text, and its
- * `send_to_user` refused, until the typed turn after it, whose message is
+ * `chat_send` refused, until the typed turn after it, whose message is
  * written to the chat under the id it answers. Synthetic accounts, tasks,
  * and words throughout.
  */
@@ -216,7 +216,7 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
   );
 
   it.effect(
-    "a Manager's spoken turn answers in its plain text, its send_to_user refused, and the typed turn after it goes back to send_to_user, whose message stands in the chat under the id it answers",
+    "a Manager's spoken turn answers in its plain text, its chat_send refused, and the typed turn after it goes back to chat_send, whose message stands in the chat under the id it answers",
     () =>
       Effect.gen(function* () {
         const opened = yield* openManager;
@@ -251,7 +251,7 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
 
         const spoken = yield* turnOn(true, {});
         const spokenText = spoken.text ?? "";
-        assert.ok(spokenText.includes("do not call `send_to_user` this turn"), spokenText);
+        assert.ok(spokenText.includes("do not call `chat_send` this turn"), spokenText);
         assert.deepEqual(yield* sentOn(spoken.handed), {
           status: ACTION_RESULT_STATUS.REJECTED,
           reason: "You're on a call: answer in plain text; the voice will say it.",
@@ -259,7 +259,7 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
 
         const typed = yield* turnOn(false, spoken.handed);
         const typedText = typed.text ?? "";
-        assert.ok(typedText.includes("only `send_to_user` reaches people again"), typedText);
+        assert.ok(typedText.includes("only `chat_send` reaches people again"), typedText);
         const sent = yield* sentOn(typed.handed);
         assert.equal(sent.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.ok(Predicate.isString(sent.message_id), JSON.stringify(sent));

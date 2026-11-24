@@ -62,7 +62,7 @@ const UNCLEAR_LINE =
 /**
  * What a Manager is told in place of its reply's, its threads', and an
  * unclear request's lines: its page is a chat, whose every message from it
- * is a `send_to_user` call, so its plain text and its other calls are never
+ * is a `chat_send` call, so its plain text and its other calls are never
  * shown, and it writes there as a coworker on Slack, in several short
  * messages, replying in the thread of the message it answers; and, where it
  * posts Inbox threads, that an Inbox thread is kept for the asks a chat
@@ -132,7 +132,7 @@ function machineLines(machine: CoderMachine, repository: boolean): string[] {
  * its id, its task's id where it stands on one, where it runs as `start_agent`'s `runsOn` names
  * it, its repository, and the branch it was cloned at; then the developer it
  * works for, by their id and mention link, as `list_agents`' `startedBy`,
- * `post_thread`'s `to`, and a task's `assignee` take them, so it names them
+ * `inbox_post`'s `to`, and a task's `assignee` take them, so it names them
  * without reading the workspace's members for a guess. Note that they sit in
  * the instructions, since none changes over a session, so the prompt cache
  * holds them; the branch it pushes to is its own to read with git.
@@ -341,9 +341,9 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
  * `edit_description`, a Manager's reply by
- * `send_to_user`, which stands for its threads' and unclear request's lines
+ * `chat_send`, which stands for its threads' and unclear request's lines
  * too, and its threads by
- * `post_thread`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
+ * `inbox_post`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
  * not named, since each harness loads its own.
  */
 export function coderInstructions(
@@ -440,7 +440,7 @@ function managerRepositoryOf(repositories: readonly string[]): string {
  * What a Manager is told beyond the coder's lines: its role, the greeting its
  * conversation opens on,
  * how it starts and briefs work, and when it reaches a person, its threads
- * named only where it posts them (`post_thread`, behind its Inbox). Note that
+ * named only where it posts them (`inbox_post`, behind its Inbox). Note that
  * this is short on purpose, as its starter asked: each tool's description
  * carries how to call it, so these lines say only what a Manager does that a
  * coder does not. The agents it starts get no prompt of their own; the

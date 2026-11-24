@@ -1,5 +1,5 @@
 /**
- * manager-chat-tools.ts -- a Manager's own chat as its tools read it: `read_chat_messages`, `read_chat_thread`, and `search_chat`, as Slack's tools read a channel.
+ * manager-chat-tools.ts -- a Manager's own chat as its tools read it: `chat_read_messages`, `chat_read_thread`, and `chat_search`, as Slack's tools read a channel.
  *
  * A Manager's chat is its rows (`@repo/database/models/manager-chat-messages`):
  * people's messages and the Manager's own, each going by a short id the
@@ -8,7 +8,7 @@
  * the newest messages at the chat's top, one thread whole, or the messages
  * a search finds, each with its id and, for a reply, its thread's root's id
  * (`thread_ts`), so the Manager answers in the right thread with
- * `send_to_user`.
+ * `chat_send`.
  *
  * Every read is the calling Manager's own chat, as its starter reaches it,
  * and nothing of another agent's or another workspace's.
@@ -70,7 +70,7 @@ const CHAT_REFUSAL = {
   BAD_CURSOR: "Not read: cursor is not one a previous read returned as next_cursor.",
   BAD_TIME: (field: string) => `Not read: ${field} is not a time in ISO 8601.`,
   UNKNOWN: (id: string) =>
-    `No message in your chat has the id ${id}. Use read_chat_messages or search_chat to find message ids.`,
+    `No message in your chat has the id ${id}. Use chat_read_messages or chat_search to find message ids.`,
 } as const;
 
 const LIMIT = Schema.optionalKey(
@@ -150,32 +150,32 @@ const SEARCH_CHAT_INPUT = Schema.Struct({
   response_format: FORMAT,
 });
 
-/** `read_chat_messages` as a Manager is offered it. */
+/** `chat_read_messages` as a Manager is offered it. */
 export const READ_CHAT_MESSAGES_TOOL = {
   name: AGENT_TOOL.READ_CHAT_MESSAGES,
   description:
     "Read your chat's messages, newest first. Detailed format includes thread info (reply count, " +
-    "latest reply). Use read_chat_thread with message_id to read thread replies. Use search_chat " +
+    "latest reply). Use chat_read_thread with message_id to read thread replies. Use chat_search " +
     "to search.",
   inputSchema: READ_CHAT_INPUT,
 } as const;
 
-/** `read_chat_thread` as a Manager is offered it. */
+/** `chat_read_thread` as a Manager is offered it. */
 export const READ_CHAT_THREAD_TOOL = {
   name: AGENT_TOOL.READ_CHAT_THREAD,
   description:
     "Read a thread of your chat: its parent message and all replies, oldest first. Use " +
-    "read_chat_messages or search_chat to find message ids. Use send_to_user with thread_ts to " +
+    "chat_read_messages or chat_search to find message ids. Use chat_send with thread_ts to " +
     "reply to a thread.",
   inputSchema: READ_THREAD_INPUT,
 } as const;
 
-/** `search_chat` as a Manager is offered it. */
+/** `chat_search` as a Manager is offered it. */
 export const SEARCH_CHAT_TOOL = {
   name: AGENT_TOOL.SEARCH_CHAT,
   description:
     "Search your chat's messages, thread replies included, by keywords and filters. Use " +
-    "read_chat_thread with message_id to read a result's thread.",
+    "chat_read_thread with message_id to read a result's thread.",
   inputSchema: SEARCH_CHAT_INPUT,
 } as const;
 
@@ -294,7 +294,7 @@ const answered = (
     }),
   );
 
-/** One call of `read_chat_messages`: the messages at the chat's top, newest first, a page at a time. */
+/** One call of `chat_read_messages`: the messages at the chat's top, newest first, a page at a time. */
 export function runReadChatMessages(
   call: AgentCall,
   input: UnparsedWireValue,
@@ -329,7 +329,7 @@ export function runReadChatMessages(
   });
 }
 
-/** One call of `read_chat_thread`: the thread's root, then its replies oldest first, a page at a time; the thread a reply stands in where its id names a reply. */
+/** One call of `chat_read_thread`: the thread's root, then its replies oldest first, a page at a time; the thread a reply stands in where its id names a reply. */
 export function runReadChatThread(
   call: AgentCall,
   input: UnparsedWireValue,
@@ -378,7 +378,7 @@ function scoreOf(message: ManagerChatMessage, keywords: readonly string[]): numb
   return keywords.reduce((sum, keyword) => sum + words.split(keyword).length - 1, 0);
 }
 
-/** One call of `search_chat`: the chat's messages, replies included, that hold every keyword and pass the filters, the best matches or the newest first, a page at a time. */
+/** One call of `chat_search`: the chat's messages, replies included, that hold every keyword and pass the filters, the best matches or the newest first, a page at a time. */
 export function runSearchChat(
   call: AgentCall,
   input: UnparsedWireValue,

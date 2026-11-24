@@ -2,7 +2,7 @@
  * manager-chat-row.ts -- a Manager's own message written to its chat as a row, under the call's key, before its tool answers.
  *
  * A Manager's chat is its rows (`@repo/database/models/manager-chat-messages`):
- * what `send_to_user` says, and each set `show_media` shows, lands there
+ * what `chat_send` says, and each set `show_media` shows, lands there
  * before the call answers, authored by the Manager and standing with the
  * turn it was sent in. The row's id is short, since the model repeats it,
  * and comes of the call's key, so a call its harness runs again answers the

@@ -836,7 +836,11 @@ function inboxToolView(
 ): ToolCallView {
   const refused = inboxRefusal(output);
 
-  if (tool === AGENT_TOOL.POST_THREAD || tool === RETIRED_TOOL.POST_TO_INBOX) {
+  if (
+    tool === AGENT_TOOL.POST_THREAD ||
+    tool === RETIRED_TOOL.POST_THREAD ||
+    tool === RETIRED_TOOL.POST_TO_INBOX
+  ) {
     const message = threadPostView(input);
 
     if (message !== undefined) {
@@ -863,7 +867,7 @@ function inboxToolView(
     };
   }
 
-  if (tool === AGENT_TOOL.WITHDRAW_ASK) {
+  if (tool === AGENT_TOOL.WITHDRAW_ASK || tool === RETIRED_TOOL.WITHDRAW_ASK) {
     return {
       kind: CALL_KIND.INBOX_WITHDRAW,
       subject: stringAt(input, "key") ?? "",
@@ -890,7 +894,7 @@ function inboxToolView(
     };
   }
 
-  if (tool === AGENT_TOOL.READ_THREAD) {
+  if (tool === AGENT_TOOL.READ_THREAD || tool === RETIRED_TOOL.READ_THREAD) {
     const thread = isRecord(output) ? output.thread : undefined;
 
     return {
@@ -1810,6 +1814,14 @@ const RETIRED_TOOL_VIEWS = {
     namedCall(CALL_KIND.REOPEN_THREAD, input, output, undefined),
   [RETIRED_TOOL.END_TURN]: ({ input, output }) =>
     namedCall(CALL_KIND.END_TURN, input, output, undefined),
+  [RETIRED_TOOL.POST_THREAD]: READ_INBOX_CALL,
+  [RETIRED_TOOL.WITHDRAW_ASK]: READ_INBOX_CALL,
+  [RETIRED_TOOL.LIST_THREADS]: READ_INBOX_CALL,
+  [RETIRED_TOOL.READ_THREAD]: READ_INBOX_CALL,
+  [RETIRED_TOOL.SEND_TO_USER]: AGENT_TOOL_VIEWS[AGENT_TOOL.SEND_TO_USER],
+  [RETIRED_TOOL.READ_CHAT_MESSAGES]: AGENT_TOOL_VIEWS[AGENT_TOOL.READ_CHAT_MESSAGES],
+  [RETIRED_TOOL.READ_CHAT_THREAD]: AGENT_TOOL_VIEWS[AGENT_TOOL.READ_CHAT_THREAD],
+  [RETIRED_TOOL.SEARCH_CHAT]: AGENT_TOOL_VIEWS[AGENT_TOOL.SEARCH_CHAT],
 } as const satisfies Record<RetiredTool, ToolReader>;
 
 /** The tools the retired runtime gave a session and a native harness's subagent, a message to one and a stop of what runs in Claude Code's background, which a transcript carries beside the agent's own, and the retired runtime's connection tools: a connection's search and its run, each naming the server its input does. */
@@ -2121,11 +2133,15 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [RETIRED_TOOL.REOPEN_THREAD, namedDescription],
   [AGENT_TOOL.OPEN_PULL_REQUEST, openedPullRequest],
   [AGENT_TOOL.POST_THREAD, namedThread],
+  [RETIRED_TOOL.POST_THREAD, namedThread],
   [RETIRED_TOOL.POST_TO_INBOX, namedThread],
   [AGENT_TOOL.WITHDRAW_ASK, namedThread],
+  [RETIRED_TOOL.WITHDRAW_ASK, namedThread],
   [RETIRED_TOOL.CLOSE_INBOX_ITEM, () => INBOX_TARGET],
   [AGENT_TOOL.LIST_THREADS, () => INBOX_TARGET],
+  [RETIRED_TOOL.LIST_THREADS, () => INBOX_TARGET],
   [AGENT_TOOL.READ_THREAD, readThread],
+  [RETIRED_TOOL.READ_THREAD, readThread],
   [RETIRED_TOOL.READ_THREADS, () => INBOX_TARGET],
   [RETIRED_TOOL.READ_INBOX, () => INBOX_TARGET],
   [RETIRED_TOOL.REPLY_INBOX, () => INBOX_TARGET],

@@ -47,7 +47,7 @@ import {
   isShownSet,
   messageWords,
 } from "./agent-parts.js";
-import { AGENT_TOOL } from "./agent-tools.js";
+import { isChatSendTool } from "./agent-tools.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 import { TOOL_STATE } from "./tool-call-block.js";
 import { isPersonLine } from "./transcript-lines.js";
@@ -63,7 +63,7 @@ type ChatSender =
 
 /** The words of a `send_to_user` call whose input is whole, but one its answer refused; none for any other part. */
 function sentWords(part: AgentPart): string | undefined {
-  if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.SEND_TO_USER) return undefined;
+  if (part.kind !== AGENT_PART.TOOL || !isChatSendTool(part.tool)) return undefined;
 
   // Note that a call still streaming its input holds only the start of its words, so it stands once they are whole.
   if (part.state === TOOL_STATE.INPUT_STREAMING || part.state === TOOL_STATE.OUTPUT_ERROR) {

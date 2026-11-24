@@ -568,7 +568,7 @@ export function fixtureDigestTranscript(
 /**
  * The release Manager's transcript, its instants counted from `startedAt`:
  * the account's ask, then a turn that thought, read a task, wrote words of
- * its own, and sent the account two messages (`send_to_user`), which its
+ * its own, and sent the account two messages (`chat_send`), which its
  * page draws as its chat, the rest a press away under each message
  * (`@repo/features/manager-chat`).
  */
