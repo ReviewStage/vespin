@@ -1,0 +1,31 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow related
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that ".*walked the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot related-thread... COMPLETED
+Run flow when id: BackButton is visible...
+  Tap on "More", Index: -1... COMPLETED
+  Tap on "Open task"... COMPLETED
+  Assert that "Agents" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot related-task... COMPLETED
+  Tap on id: BackButton... COMPLETED
+  Assert that ".*walked the invite flow.*" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot related-task-back... COMPLETED
+  Tap on "More"... COMPLETED
+  Tap on "Open agent"... COMPLETED
+  Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+  Take screenshot related-agent... COMPLETED
+  Tap on id: BackButton... COMPLETED
+  Assert that ".*walked the invite flow.*" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot related-agent-back... COMPLETED
+Run flow when id: BackButton is visible... COMPLETED

@@ -1,0 +1,29 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow .kbd-skeleton
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Take screenshot inbox... COMPLETED
+Tap on "New task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Assert that "ada/relay" is visible... COMPLETED
+Take screenshot new-task... COMPLETED
+Tap on "Cancel"... COMPLETED
+Assert that "Describe the task" is not visible... COMPLETED
+Tap on "Who can withdraw an invite?"... COMPLETED
+Assert that ".*withdrawing one deletes it.*" is visible... FAILED
+
+Assertion is false: ".*withdrawing one deletes it.*" is visible
+
+Assertion '".*withdrawing one deletes it.*" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjnatc2/p10743-ipad27-light-skeleton/2026-11-24_054123

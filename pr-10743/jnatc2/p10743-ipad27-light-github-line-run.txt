@@ -1,0 +1,42 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow github-line
+  > On Flow Complete
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Set orientation LANDSCAPE_LEFT... COMPLETED
+Run flow when true is true... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+      Swipe from (85%, 40%) to (85%, 65%) in 1200 ms... COMPLETED
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)... COMPLETED
+    Assert that "${ELEMENT}" is visible... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+Run subflows/scroll-in.yaml... COMPLETED
+Assert that "Close, but an invite to an address.*" is not visible... COMPLETED
+Assert that "Act on it as you judge best." is not visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot github-line-closed... COMPLETED
+Tap on "gracehopper requested changes on #128, 2 comments"... COMPLETED
+Assert that "Close, but an invite to an address.*" is visible... COMPLETED
+Assert that "src/members/invite.ts.*" is visible... COMPLETED
+Assert that "src/pages/invite.tsx.*" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot github-line-open... COMPLETED
+Tap on "gracehopper requested changes on #128, 2 comments"... COMPLETED
+Assert that "Close, but an invite to an address.*" is not visible... COMPLETED
+Set orientation PORTRAIT... COMPLETED
