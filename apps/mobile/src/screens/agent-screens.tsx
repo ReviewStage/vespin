@@ -1230,6 +1230,7 @@ const AgentConversation = memo(function AgentConversation({
       onOpenAddress={openInSafari}
       messageLink={messageLink}
       messageMore={messageActs.more}
+      managerFace={chat ? shown?.face : undefined}
       onOpenThread={openThread}
       undelivered={undelivered}
       onOpenPullRequest={(item) => openPullRequest(item.url)}
