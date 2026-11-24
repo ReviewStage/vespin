@@ -2,14 +2,17 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { createAgent } from "@repo/database/models/agent-store";
 import { tallyMemoryRecalls } from "@repo/database/models/memory-recall-store";
 import { listMemories, MEMORY_OUTCOME } from "@repo/database/models/memory-store";
 import { user } from "@repo/database/schemas/auth";
 import { memory } from "@repo/database/schemas/memory";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, openAgentOnOwnTask, openWorkspace } from "@repo/database/testing";
 import { noDatabase } from "@repo/database/testing/no-database";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
-import { Duration, Effect } from "effect";
+import { Duration, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { ACTION_RESULT_STATUS, isRecord, isWireString, type WireRecord } from "../core.js";
 import { type MemoryCall, runRecall, runRemember } from "./memory-tools.js";
@@ -21,8 +24,9 @@ import { type MemoryCall, runRecall, runRemember } from "./memory-tools.js";
  * recall, words that look like a credential are never kept, an input that
  * does not read keeps and recalls nothing, a coding agent's search logs
  * each memory it answers as recalled where a member's logs none, a recall
- * that cannot be logged still answers, and a store that cannot be
- * reached answers the model rather than failing the turn.
+ * that cannot be logged still answers, a Manager keeps and recalls
+ * memories of its own that no other caller reads, and a store that cannot
+ * be reached answers the model rather than failing the turn.
  *
  * Synthetic accounts, workspaces, and words throughout.
  */
@@ -46,6 +50,25 @@ const openCall = Effect.gen(function* () {
 
   return call;
 });
+
+/** A Manager of the call's member in its workspace, on no task; its id. */
+const openManager = (call: MemoryCall) =>
+  Effect.gen(function* () {
+    const started = yield* createAgent(call.userId, {
+      taskId: null,
+      workspaceId: call.workspaceId,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: null,
+      descriptionSnapshot: null,
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      kind: AGENT_KIND.MANAGER,
+    });
+
+    return Option.getOrThrow(started).agent.id;
+  });
 
 const TESTS_RUN = "The web server's store tests run on PGlite through test:store.";
 const DEPLOYS = "Deployments go out from the main branch through Vercel.";
@@ -200,6 +223,28 @@ it.layer(getTestDB())("the coding agent's memory tools", (it) => {
       assert.deepEqual(recalledWords(answer), [TESTS_RUN]);
       assert.deepEqual(yield* recallsOf(call, [tests]), [0]);
     }),
+  );
+
+  it.effect(
+    "a Manager recalls the memories it keeps for itself beside the workspace's, a correction of one stays its own, and no other caller recalls them",
+    () =>
+      Effect.gen(function* () {
+        const call = yield* openCall;
+        const manager: MemoryCall = { ...call, managerId: yield* openManager(call) };
+
+        yield* runRemember(manager, { text: TESTS_RUN });
+        const own = keptId(yield* runRemember(manager, { text: DEPLOYS, scope: "manager" }));
+        // Note that the correction names no scope, so it would land in the workspace's if it followed the default.
+        yield* runRemember(manager, { text: DEPLOYS_CORRECTED, replaces: own });
+
+        assert.deepEqual(
+          new Set(recalledWords(yield* runRecall(manager, { query: "tests deployments" }))),
+          new Set([DEPLOYS_CORRECTED, TESTS_RUN]),
+        );
+        assert.deepEqual(recalledWords(yield* runRecall(call, { query: "tests deployments" })), [
+          TESTS_RUN,
+        ]);
+      }),
   );
 
   it.effect("a call that does not read keeps and recalls nothing", () =>

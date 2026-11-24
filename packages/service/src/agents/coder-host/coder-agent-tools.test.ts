@@ -196,7 +196,7 @@ import { AgentBrowser } from "../browser/agent-browser.js";
 import { COMPUTER_TOOL } from "../computer-tool.js";
 import { RUN_ON_MAC_TOOL } from "../machine-command.js";
 import { LIST_MACHINES_TOOL } from "../machines-tool.js";
-import { FORGET_MEMORY_TOOL, LIST_MEMORIES_TOOL } from "../memory-tools.js";
+import { FORGET_MEMORY_TOOL, LIST_MEMORIES_TOOL, saveMemoryToolOf } from "../memory-tools.js";
 import { ADD_SUGGESTION_REFUSAL, ADD_SUGGESTION_TOOL } from "../reply-buttons/add-suggestion.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
@@ -1960,6 +1960,14 @@ test("list_machines shows the model the recorded input", async () => {
 test("list_memories and forget_memory show the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "list-memories-input", LIST_MEMORIES_TOOL.inputSchema);
   await settleJsonSchemaGolden(GOLDEN_ROOT, "forget-memory-input", FORGET_MEMORY_TOOL.inputSchema);
+});
+
+test("a Manager's save_memory shows the model the recorded input, its scope among it", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "manager-save-memory-input",
+    saveMemoryToolOf(true).inputSchema,
+  );
 });
 
 test("schedule_wakeup shows the model the recorded input", async () => {
