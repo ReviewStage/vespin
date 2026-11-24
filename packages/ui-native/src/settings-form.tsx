@@ -48,6 +48,7 @@ import {
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { addressWords } from "./address-words-model.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
@@ -293,8 +294,10 @@ type HeadRowProps = {
   /** What leads the row: a person's face or a workspace's tile, at the head's size. */
   readonly face: ReactNode;
   readonly name: string;
-  /** The line under the name, such as an account's address or a workspace's role. */
+  /** The line under the name, such as an account's address or a workspace's role, as it is heard. */
   readonly line: string;
+  /** That line as it is drawn, where it differs from how it is heard, such as an address that must never hyphenate (`addressWords`). */
+  readonly shownLine?: string | undefined;
   /** A quiet line under that, such as how the account signed in. */
   readonly detail?: string | undefined;
   /** Where a press goes; a row with none takes no press. */
@@ -304,7 +307,7 @@ type HeadRowProps = {
 };
 
 /** A page's head: its face, its name, its lines, and the chevron where a press goes on, as the account heads iOS's own Settings. */
-function HeadRow({ face, name, line, detail, onPress, testId }: HeadRowProps) {
+function HeadRow({ face, name, line, shownLine, detail, onPress, testId }: HeadRowProps) {
   const colors = useColors();
 
   const drawn = (
@@ -330,7 +333,7 @@ function HeadRow({ face, name, line, detail, onPress, testId }: HeadRowProps) {
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
         >
-          {line}
+          {shownLine ?? line}
         </Text>
         {detail === undefined ? null : (
           <Text
@@ -382,6 +385,7 @@ export function AccountRow({ name, email, picture, detail, onPress }: AccountRow
       face={<Avatar name={name} picture={picture} size={faceSize} />}
       name={name}
       line={email}
+      shownLine={addressWords(email)}
       detail={detail}
       onPress={onPress}
     />
@@ -421,7 +425,7 @@ export function AccountHead({ name, email, picture, detail }: Omit<AccountRowPro
       <Text
         modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
       >
-        {email}
+        {addressWords(email)}
       </Text>
       {detail === undefined ? null : (
         <Text modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}>
@@ -1045,7 +1049,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
                     foregroundStyle(colors.TEXT_MUTED),
                   ]}
                 >
-                  {line}
+                  {addressWords(line)}
                 </Text>
               )}
             </VStack>
@@ -1115,7 +1119,7 @@ export function MemberRow({ name, line, picture, role, onOpen }: MemberRowProps)
                   foregroundStyle(colors.TEXT_MUTED),
                 ]}
               >
-                {line}
+                {addressWords(line)}
               </Text>
             </VStack>
           }
