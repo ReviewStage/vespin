@@ -456,8 +456,9 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   which pushed the page's path out of a compact bar.
 - **The tab bar** is `NativeTabs`: each tab labeled in every window, since a
   compact window's icons alone read as empty (the developer, Nov 23, 2026),
-  the round + alone an icon there through its `Label`'s own `hidden`, the
-  Inbox count in copper, and the round + for New task; a regular window's
+  the Inbox count in copper, and Search on the system's own round glass,
+  with no round + for New task, which each tab root's bar offers as its
+  compose instead; a regular window's
   bar is
   `sidebarAdaptable`, so iPadOS stands it as its own tab sidebar, as Apple's
   tab guidance has it. A compact window hides it while a

@@ -423,8 +423,8 @@ A flow is written one way throughout:
   it is an iPad's, the unfolded iPhone Duo's, or a Split View pane, stands
   list and detail side by side in `NavigationSplitView`, and New task is
   the compose button leading the detail's bar, as Mail stands compose over
-  the message, rather than the tab bar's round +, which only a compact
-  window keeps (Search's own two columns hold it in Search's bar).
+  the message; a compact window ends each tab root's own bar with it, and
+  the tab bar holds no round + (the developer, Nov 24, 2026).
   The tab bar is `sidebarAdaptable`, so a regular window stands iPadOS's
   own tab sidebar beside each tab's list and detail, as Apple's tab
   guidance has it, and the Tasks list draws Pinned, Following, and the

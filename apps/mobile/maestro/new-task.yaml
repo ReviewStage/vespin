@@ -1,4 +1,4 @@
-# new-task.yaml -- New task from the tab bar's round +: Home's composer as a page of its own, the task described, its repository picked from its capsule under the composer's field, and the task started with its agent, the agent's page opened; then a task related to another picked from the composer's +; then a draft whose swipe down and ✕ ask Discard draft or Save draft, saved for the next New task and then discarded; then the composer's + Photos opening the system's photo picker, closed unpicked.
+# new-task.yaml -- New task from the Inbox bar's compose: Home's composer as a page of its own, the task described, its repository picked from its capsule under the composer's field, and the task started with its agent, the agent's page opened; then a task related to another picked from the composer's +; then a draft whose swipe down and ✕ ask Discard draft or Save draft, saved for the next New task and then discarded; then the composer's + Photos opening the system's photo picker, closed unpicked.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -68,8 +68,8 @@ env:
 # down is held and asks Discard draft or Save draft from the system's sheet,
 # whose Cancel keeps the page; the ✕ (Cancel) opens the same two as its
 # menu; and a draft saved stands in the next New task's field, until it is
-# discarded. Note that the app is launched again for it, so the round +
-# stands in the tab bar.
+# discarded. Note that the app is launched again for it, so the Inbox and
+# its bar's compose stand.
 - launchApp:
     arguments:
       fixture: inbox
