@@ -43,9 +43,12 @@ import {
 } from "@repo/features/agent-wire";
 import { keptPictureSchema } from "@repo/features/conversation-picture-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { chatWorkWords } from "@repo/features/manager-chat";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
-import { type ManagerChatLine, managerChatView } from "@repo/features/manager-chat-view";
+import {
+  chatWorkWords,
+  type ManagerChatLine,
+  managerChatView,
+} from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MessageFileChip } from "@repo/features/message-files";

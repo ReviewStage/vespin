@@ -66,12 +66,12 @@ import { fileName } from "@repo/features/code-ref-words";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { fileMarkers } from "@repo/features/file-marker";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import { chatWorkWords } from "@repo/features/manager-chat";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
-import type {
-  ChatRunPlace,
-  ManagerChatLine,
-  ManagerChatView,
+import {
+  type ChatRunPlace,
+  chatWorkWords,
+  type ManagerChatLine,
+  type ManagerChatView,
 } from "@repo/features/manager-chat-view";
 import { type MessageFileChip, messageFileChips } from "@repo/features/message-files";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";

@@ -139,7 +139,6 @@
     "./agent-transcript-live": "./src/agent-transcript-live.js",
     "./agent-warm": "./src/agent-warm.js",
     "./agent-wire": "./src/agent-wire.js",
-    "./manager-chat": "./src/manager-chat.js",
     "./manager-face": "./src/manager-face.js",
     "./manager-greeting": "./src/manager-greeting.js",
     "./manager-wire": "./src/manager-wire.js",
