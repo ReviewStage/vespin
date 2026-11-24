@@ -1,6 +1,7 @@
 // row-menu-model.ts -- a row's acts as the plain tree the app's native module builds SwiftUI's own long press menu and swipes from, as they're asked for, and the press a place in that tree names.
 
 import type { IntegrationProvider } from "@repo/features/integration-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import {
   TASK_PRIORITY_WORDS,
@@ -10,6 +11,7 @@ import {
 import { TASK_STATUS, type TaskPriority, type TaskStatus } from "@repo/features/task-wire";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
+import { managerFaceAsset } from "./manager-face-look.js";
 import { HARNESS_MARK_ASSET, REPOSITORY_CORNER } from "./mark-look.js";
 import {
   PRIORITY_MARK_SYMBOL,
@@ -106,8 +108,8 @@ export type ChoiceMark =
   | { readonly kind: typeof CHOICE_MARK.INTEGRATION; readonly provider: IntegrationProvider }
   | {
       readonly kind: typeof CHOICE_MARK.MANAGER;
-      /** Its face's picture in the asset catalog (`managerFaceAsset`), drawn in its own colors. */
-      readonly asset: string;
+      /** Its face, drawn at rest from the asset catalog in its own colors (`managerFaceAsset`), as its rows wear it. */
+      readonly face: ManagerFace;
     }
   | { readonly kind: typeof CHOICE_MARK.HARNESS; readonly provider: ModelProvider }
   | {
@@ -128,8 +130,13 @@ export function taskLead(status: TaskStatus | undefined): MenuLead {
   return { mark: { kind: CHOICE_MARK.STATUS, status: status ?? TASK_STATUS.TODO } };
 }
 
-/** What leads an item that opens an agent, such as Open agent: its harness's mark, as its tile wears it, or the agent glyph before its harness is known. */
-export function agentLead(harness: ModelProvider | undefined): MenuLead {
+/** What leads an item that opens an agent, such as Open agent: a Manager's face, as its rows wear it in its harness's place, as the panel's do; else its harness's mark, as its tile wears it; or the agent glyph before its harness is known. */
+export function agentLead(
+  harness: ModelProvider | undefined,
+  face?: ManagerFace | undefined,
+): MenuLead {
+  if (face !== undefined) return { mark: { kind: CHOICE_MARK.MANAGER, face } };
+
   return harness === undefined
     ? { symbol: GLYPH.AGENT }
     : { mark: { kind: CHOICE_MARK.HARNESS, provider: harness } };
@@ -228,7 +235,7 @@ export function markLook(mark: ChoiceMark): ChoiceLook {
             fallback: GLYPH.REPOSITORY,
           };
     case CHOICE_MARK.MANAGER:
-      return { kind: MENU_ICON.MARK, asset: mark.asset, sized: false };
+      return { kind: MENU_ICON.MARK, asset: managerFaceAsset(mark.face, false), sized: false };
   }
 }
 
