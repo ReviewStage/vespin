@@ -1,6 +1,7 @@
 // mention-offer.test.ts -- an `@` offers its groups in the panel's order, browses its kinds, narrows to one by its word before a colon, and writes a description's sections, a date, an automation, a machine and a repository's paths as the panel's picks do, walking into a folder as its → does.
 
 import { describe, expect, it } from "vitest";
+import { MENTION_FROM } from "./mention-kind.js";
 import {
   automationCandidate,
   dateCandidates,
@@ -52,6 +53,21 @@ describe("mentionOffer", () => {
       "agents:",
       "tasks:",
       "people:",
+      "dates:",
+    ]);
+  });
+
+  it("browses a kind still being read in its place, so its row never pops in once its rows land", () => {
+    const [browse] = mentionOffer(
+      { ...sources, pending: new Set([MENTION_FROM.AUTOMATIONS]) },
+      "",
+    ).groups;
+
+    expect(browse?.rows.map((each) => ("query" in each ? each.query : undefined))).toEqual([
+      "agents:",
+      "tasks:",
+      "people:",
+      "automations:",
       "dates:",
     ]);
   });

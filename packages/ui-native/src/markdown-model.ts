@@ -9,6 +9,7 @@ import {
   entityOfMention,
   entityWordHeard,
 } from "@repo/features/entity-kind";
+import { isPictureName, writtenMarkers } from "@repo/features/file-marker";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import {
   LINK_DESTINATION,
@@ -80,6 +81,8 @@ export const MARKDOWN_RUN = {
   CHIP: "chip",
   /** A suggestion an agent wrote into its reply as a link (`@repo/features/reply-button-wire`), which the screen reads and draws. */
   SUGGESTION: "suggestion",
+  /** A picture the words name by its marker, "[Picture 1]", standing where it was written as its chip (`PictureChip`), as the panel's message draws it. */
+  PICTURE: "picture",
   BREAK: "break",
 } as const;
 
@@ -154,6 +157,7 @@ export type MarkdownRun =
     }
   | { readonly kind: typeof MARKDOWN_RUN.CHIP; readonly chip: MarkdownChip }
   | { readonly kind: typeof MARKDOWN_RUN.SUGGESTION; readonly suggestion: MarkdownSuggestion }
+  | { readonly kind: typeof MARKDOWN_RUN.PICTURE; readonly name: string }
   | { readonly kind: typeof MARKDOWN_RUN.BREAK };
 
 interface MarkdownListItem {
@@ -215,6 +219,8 @@ export interface MarkdownReading {
    * since a fence redrawn at each word would draw a picture each time.
    */
   readonly diagrams?: boolean | undefined;
+  /** The pictures the message carries, by the names its markers name them by ("Picture 1"), each marker of one drawn as its chip; every marker stays its words where none is given, as in words that carry no pictures. */
+  readonly pictures?: Pick<ReadonlySet<string>, "has"> | undefined;
 }
 
 /** A line break inside a paragraph's words, which Markdown reads as a space. */
@@ -456,6 +462,29 @@ function wordsRun(text: string, marks: WordMarks): MarkdownRun[] {
   return text === "" ? [] : [{ kind: MARKDOWN_RUN.WORDS, text, ...marks }];
 }
 
+/**
+ * A run of words with each marker of a picture the message carries as its
+ * chip, the words around it kept, and every other marker its words, as the
+ * panel draws a sent message's. Note that words in code never come here, so
+ * a marker in code stays the code's words, as `fileMarkers` reads it.
+ */
+function wordsWithPictures(text: string, marks: WordMarks, reader: Reader): MarkdownRun[] {
+  const { pictures } = reader.reading;
+
+  if (pictures === undefined) return wordsRun(text, marks);
+  const runs: MarkdownRun[] = [];
+  let at = 0;
+
+  for (const marker of writtenMarkers(text)) {
+    if (!isPictureName(marker.name) || !pictures.has(marker.name)) continue;
+    runs.push(...wordsRun(text.slice(at, marker.start), marks));
+    runs.push({ kind: MARKDOWN_RUN.PICTURE, name: marker.name });
+    at = marker.end;
+  }
+
+  return [...runs, ...wordsRun(text.slice(at), marks)];
+}
+
 /** The runs an inline node draws, under the marks of the nodes around it. */
 function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): MarkdownRun[] {
   const inside = (children: readonly PhrasingContent[], more: Partial<WordMarks>) =>
@@ -463,13 +492,13 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
 
   switch (node.type) {
     case "text":
-    case "html":
+    case "html": {
       if (node.type === "html" && reader.reading.hidesHtml === true) return [];
+      const text = reader.reading.typed === true ? node.value : node.value.replace(SOFT_BREAK, " ");
 
-      return wordsRun(
-        reader.reading.typed === true ? node.value : node.value.replace(SOFT_BREAK, " "),
-        marks,
-      );
+      return node.type === "html" ? wordsRun(text, marks) : wordsWithPictures(text, marks, reader);
+    }
+
     case "inlineCode":
       return [{ kind: MARKDOWN_RUN.CODE, text: node.value }];
     case "break":
@@ -675,6 +704,8 @@ function heardRun(run: MarkdownRun, hearing: LineHearing): string {
       return hearing.chip(run.chip);
     case MARKDOWN_RUN.SUGGESTION:
       return hearing.suggestion(run.suggestion);
+    case MARKDOWN_RUN.PICTURE:
+      return run.name;
     case MARKDOWN_RUN.BREAK:
       return "\n";
   }
@@ -684,7 +715,11 @@ function heardRun(run: MarkdownRun, hearing: LineHearing): string {
 function holdsChip(run: MarkdownRun): boolean {
   if (run.kind === MARKDOWN_RUN.LINK) return run.runs.some(holdsChip);
 
-  return run.kind === MARKDOWN_RUN.CHIP || run.kind === MARKDOWN_RUN.SUGGESTION;
+  return (
+    run.kind === MARKDOWN_RUN.CHIP ||
+    run.kind === MARKDOWN_RUN.SUGGESTION ||
+    run.kind === MARKDOWN_RUN.PICTURE
+  );
 }
 
 /**

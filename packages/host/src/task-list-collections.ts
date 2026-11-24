@@ -159,6 +159,8 @@ export interface TaskListCollections {
   readonly stored: () => StoredTaskList | undefined;
   /** Ends once the tasks the local database kept are drawn, their agents still filling behind, which they are just after the list stands; at once where it kept none. */
   readonly keptDrawn: Effect.Effect<void>;
+  /** Ends once every row the local database kept is drawn, the tasks and the agents behind them; at once where it kept none. */
+  readonly drawnWhole: Effect.Effect<void>;
   /** Whether the list draws the task or the agent `id` names, from its follow or as a cold one. */
   readonly holds: (id: string) => boolean;
   /** Marks a read outside the list as it is asked: where the follow's answers stand, and its own place among such reads. */
@@ -601,10 +603,12 @@ export function taskListCollections(
     // Note that the rows the local database held are the list's own as it stands, so its follow's next answer settles them as any it held.
     const shownAtStand = plans.rows().length + agents.rows().length > 0;
     const keptDrawn = yield* Deferred.make<void>();
+    const drawnWhole = yield* Deferred.make<void>();
 
-    if (!(plans.loaded || agents.loaded || shownAtStand))
+    if (!(plans.loaded || agents.loaded || shownAtStand)) {
       yield* Deferred.succeed(keptDrawn, undefined);
-    else {
+      yield* Deferred.succeed(drawnWhole, undefined);
+    } else {
       planKeys = new Set(plans.synced().map((row) => row.id));
       agentKeys = new Set(agents.synced().map((row) => row.id));
 
@@ -623,6 +627,7 @@ export function taskListCollections(
             agentsDrawn,
           );
           yield* ticks.drawn;
+          yield* Deferred.succeed(drawnWhole, undefined);
         }),
       );
     }
@@ -827,6 +832,7 @@ export function taskListCollections(
           });
         }),
       keptDrawn: Deferred.await(keptDrawn),
+      drawnWhole: Deferred.await(drawnWhole),
       stored: () => {
         if (!plans.loaded && !agents.loaded) return undefined;
         const plansAt = Option.getOrUndefined(decodeKept(plans.stored));

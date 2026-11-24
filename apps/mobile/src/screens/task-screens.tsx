@@ -196,6 +196,7 @@ import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
 import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useWholeListRead } from "../host/host-provider.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useKeeping } from "../keeping.js";
@@ -1377,7 +1378,9 @@ type TasksTreeProps = {
  */
 function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
   const { tree } = listing;
-  const read = useTasksReadStatus();
+  const status = useTasksReadStatus();
+  // Note that a list its tab has not yet read says it is reading, never that it holds no task, should the tab come forward before its rows are drawn.
+  const read = useWholeListRead() ? status : TASKS_READ.READING;
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const managers = useWorkspaceManagers(listing.workspace?.id);

@@ -44,7 +44,7 @@ import {
 } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { ROW_ACTION_TONE } from "./list-row.js";
-import { Markdown, Picture } from "./markdown.js";
+import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
 import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
@@ -60,6 +60,7 @@ import {
   type CallStanding,
   type OriginPart,
   type SaidFile,
+  type SaidPicture,
   SHOWN_MEDIA,
   type ShownMedia,
   TRANSCRIPT_ITEM,
@@ -799,6 +800,19 @@ function sentFileRetry(
   return retry === undefined ? undefined : () => retry(message, file.key);
 }
 
+/** A picture a sent line's words name by its marker, as its chip draws it: read as the line's other pictures are, by its bytes or its id. */
+function wordPictureOf(
+  drawing: RowDrawing,
+  picture: SaidPicture | undefined,
+): MarkdownWordPicture | undefined {
+  if (picture === undefined) return undefined;
+
+  return {
+    source: picture.url ?? saidSource(drawing, picture.pictureId),
+    onRetry: picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+  };
+}
+
 /** What reads a picture or a recording again, by its id, where the transcript offers it. */
 function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
   const retry = drawing.onRetryMedia;
@@ -877,7 +891,7 @@ function TranscriptRow({
               {item.sender}
             </Text>
           )}
-          {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
+          {/* Note that the pictures a line carried that its words name none of stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side; a picture its words name stands where they name it, as its chip. */}
           {/* Note that a line's pictures name who sent it and when in their viewer's bar, the reader's own as theirs. */}
           <PictureOriginProvider origin={{ by: item.sender ?? SENT_BY_YOU, at: item.at }}>
             <PictureSet
@@ -925,6 +939,8 @@ function TranscriptRow({
                       repository={drawing.repository}
                       onOpenLink={drawing.onOpenLink}
                       width={bubbleWordsWidth(drawing.column)}
+                      wordPictures={item.wordPictures}
+                      wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
                     />
                   </MessageWords>
                 </View>

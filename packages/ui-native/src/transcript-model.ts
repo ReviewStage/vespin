@@ -63,6 +63,7 @@ import {
 } from "@repo/features/attachment-model";
 import { fileName } from "@repo/features/code-ref-words";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
+import { fileMarkers } from "@repo/features/file-marker";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import { messageFileChips } from "@repo/features/message-files";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
@@ -225,8 +226,10 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.SAID;
       readonly words: string;
-      /** The pictures the line carried, drawn over its words as the panel draws them; none where it carried none. */
+      /** The pictures the line carried that its words name none of, drawn over its words as the panel draws them; none where it carried none. */
       readonly pictures?: readonly SaidPicture[] | undefined;
+      /** The pictures its words name by their markers ("[Picture 1]"), by name, each drawn where its marker stands as its chip; none where they name none. */
+      readonly wordPictures?: ReadonlyMap<string, SaidPicture> | undefined;
       /** The files the line carried that are no picture, such as a PDF, drawn under its words as their chips; none where it carried none. */
       readonly files?: readonly SaidFile[] | undefined;
       /** Who sent it, where the reader did not. */
@@ -522,6 +525,33 @@ function saidPictures(line: AgentTranscriptMessage): readonly SaidPicture[] {
   );
 }
 
+/** A sent line's pictures as its words place them: those its words name, by name, drawn where each marker stands, and the rest, drawn over the words. */
+interface PlacedPictures {
+  readonly pictures: readonly SaidPicture[];
+  readonly wordPictures: ReadonlyMap<string, SaidPicture> | undefined;
+}
+
+/**
+ * A sent line's pictures placed by its words, as the panel places a
+ * message's files (`useWordFiles`): each picture a marker outside code
+ * names drawn where the marker stands, the first picture of its name alone,
+ * so a later one of that name stays over the words with every picture the
+ * words name none of, such as a line's sent before markers.
+ */
+function placedPictures(words: string, all: readonly SaidPicture[]): PlacedPictures {
+  const named = new Set(fileMarkers(words).map((marker) => marker.name));
+  const wordPictures = new Map<string, SaidPicture>();
+
+  const pictures = all.filter((picture) => {
+    if (!named.has(picture.name) || wordPictures.has(picture.name)) return true;
+    wordPictures.set(picture.name, picture);
+
+    return false;
+  });
+
+  return { pictures, wordPictures: wordPictures.size === 0 ? undefined : wordPictures };
+}
+
 /** A file a sent line carried that is no picture, such as a PDF or a text file: its place on the line, its name and type, its bytes where the line kept them, and its size in words. */
 export interface SaidFile {
   readonly key: string;
@@ -602,11 +632,13 @@ function saidItem(
   // Note that a started agent's first line names who started it in its head, so its sender stands nowhere else.
   const started = from !== undefined && suggestionStartOf(line) !== undefined;
 
+  const shown = from === undefined ? words : suggestionWords(words);
+
   return {
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
-    words: from === undefined ? words : suggestionWords(words),
-    pictures: saidPictures(line),
+    words: shown,
+    ...placedPictures(shown, saidPictures(line)),
     files: saidFiles(line),
     sender: started ? undefined : sender,
     received: !own,
@@ -625,11 +657,13 @@ function originItem(
   base: ItemBase,
   origin: TranscriptOrigin,
 ): TranscriptItem {
+  const words = origin.prompt ?? messageWords(line);
+
   return {
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
-    words: origin.prompt ?? messageWords(line),
-    pictures: saidPictures(line),
+    words,
+    ...placedPictures(words, saidPictures(line)),
     files: saidFiles(line),
     sender: undefined,
     // Note that an automation's prompt is the automation's, so it stands at the leading edge under the run's card, as the panel stands its received lines.
@@ -1257,8 +1291,8 @@ export function shownMediaIds(items: readonly TranscriptItem[]): readonly string
 
     // Note that a picture a sent line kept by its id is read as the agent's shown ones are, through the same door.
     if (item.kind === TRANSCRIPT_ITEM.SAID) {
-      return (item.pictures ?? []).flatMap(({ pictureId }) =>
-        pictureId === undefined ? [] : [pictureId],
+      return [...(item.pictures ?? []), ...(item.wordPictures?.values() ?? [])].flatMap(
+        ({ pictureId }) => (pictureId === undefined ? [] : [pictureId]),
       );
     }
 
