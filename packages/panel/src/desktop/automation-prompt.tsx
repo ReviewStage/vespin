@@ -1,4 +1,5 @@
 import { SERVER_HANDED } from "@repo/features/agent-servers-model";
+import { AUTOMATION_EDITOR_WORDS } from "@repo/features/automation-editor-words";
 import { AUTOMATION_BOUNDS } from "@repo/features/automation-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -40,9 +41,6 @@ import { appStateQuery, selectExperiment } from "../use-app-state.js";
  * reaches the window marked taken, as every field's on the page does.
  */
 
-/** The prompt's placeholder, an example of a prompt. */
-const PROMPT_PLACEHOLDER = "Find the flakiest test in CI this week and fix it.";
-
 /** The tasks of a window that lists none yet. */
 const NO_TASKS: readonly { readonly id: string; readonly name: string }[] = [];
 
@@ -74,7 +72,7 @@ function PromptField({
   const box = useMessageBox({
     draft: value,
     setDraft: onChange,
-    placeholder: PROMPT_PLACEHOLDER,
+    placeholder: AUTOMATION_EDITOR_WORDS.PROMPT_PLACEHOLDER,
     label,
     maxLength: AUTOMATION_BOUNDS.MAX_PROMPT_CHARS,
     onSubmit: onSave,

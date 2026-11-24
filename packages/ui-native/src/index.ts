@@ -143,7 +143,14 @@ export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-m
 
 export { releaseFields } from "./field-focus.js";
 
-export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
+export {
+  AttachRow,
+  DATE_PICK_PART,
+  DatePickRow,
+  MenuPickRow,
+  WORDS_LOOK,
+  WordsField,
+} from "./form-rows.js";
 
 export { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 

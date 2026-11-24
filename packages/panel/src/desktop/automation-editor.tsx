@@ -27,6 +27,8 @@ import {
 } from "@repo/features/automation-draft-model";
 import {
   AUTOMATION_EDITOR_SECTION,
+  AUTOMATION_EDITOR_WORDS,
+  AUTOMATION_TARGETS,
   AUTOMATION_TRIGGERS,
   GITHUB_EVENTS,
   GITHUB_SENDERS,
@@ -57,7 +59,6 @@ import {
   AUTOMATION_TRIGGER,
   type AutomationScope,
   type AutomationSummary,
-  type AutomationTargetKind,
   GITHUB_TRIGGER_EVENT,
   type GitHubTriggerEvent,
   type IntegrationTriggerFilters,
@@ -504,7 +505,7 @@ function OwnerRow({
               run it. <ReplayMask>{changers}</ReplayMask>, owners, and admins can change it.
             </>
           ) : (
-            "Only you can change it. Owners and admins can see it."
+            AUTOMATION_EDITOR_WORDS.PERSONAL_OWNER_DETAIL
           )}
         </ReplayUnmask>
       }
@@ -829,13 +830,13 @@ function ScheduleRows({
       </RevealChoice>
       <PickerRow
         width={CHIP_WIDTH.MIN_FIELD}
-        label="Time zone"
+        label={AUTOMATION_EDITOR_WORDS.TIME_ZONE}
         labelReplayUnmasked
         value={timezone}
         valueLabel={zoneLabel(timezone)}
         rows={zones.map((zone) => ({ id: zone, label: zoneLabel(zone) }))}
-        placeholder="Search time zones"
-        noMatch="No time zones match"
+        placeholder={AUTOMATION_EDITOR_WORDS.SEARCH_ZONES}
+        noMatch={AUTOMATION_EDITOR_WORDS.NO_ZONES}
         error={zoneRefused ? inputProblem(problem) : undefined}
         onPick={onTimezone}
       />
@@ -1652,12 +1653,6 @@ function WebhookRows({
   );
 }
 
-/** Where a run may land, as the row's picker names them. */
-const TARGETS: readonly { value: AutomationTargetKind; label: string }[] = [
-  { value: AUTOMATION_TARGET.NEW_AGENT, label: "New agent each run" },
-  { value: AUTOMATION_TARGET.SAME_AGENT, label: "Same agent" },
-];
-
 /**
  * Choose a model, where the default could not be read: a chip naming no
  * model, whose menu is the agent box's model menu with nothing checked, so
@@ -1962,7 +1957,7 @@ function AgentRow({
 }
 
 /** The parse the Runs land in picker reads its target back with. */
-const targetOf = optionValue(TARGETS);
+const targetOf = optionValue(AUTOMATION_TARGETS);
 
 /** Where a run lands, under the repository it works in: a new agent each time, on a model, archived once it succeeds where asked, or the one agent chosen. */
 function RunsGroup({
@@ -2043,10 +2038,10 @@ function RunsGroup({
       </SettingsRow>
       <SelectRow
         width={CHIP_WIDTH.MIN_FIELD}
-        label="Runs land in"
+        label={AUTOMATION_EDITOR_WORDS.RUNS_LAND_IN}
         labelReplayUnmasked
         value={draft.target}
-        options={TARGETS}
+        options={AUTOMATION_TARGETS}
         parse={targetOf}
         onChange={(target) => onDraft({ target })}
       />
@@ -2069,7 +2064,7 @@ function RunsGroup({
                 onSwitch={(disabledServers) => onDraft({ disabledServers })}
               />
               <SwitchRow
-                label="Mark finished runs Done"
+                label={AUTOMATION_EDITOR_WORDS.MARK_DONE}
                 labelReplayUnmasked
                 checked={draft.archiveSuccessful}
                 onChange={(archiveSuccessful) => onDraft({ archiveSuccessful })}
@@ -2080,7 +2075,7 @@ function RunsGroup({
       </RevealChoice>
       {slackOffered ? (
         <SwitchRow
-          label="Send the result to me on Slack"
+          label={AUTOMATION_EDITOR_WORDS.SLACK_RESULT}
           labelReplayUnmasked
           checked={draft.slackDelivery}
           onChange={(slackDelivery) => onDraft({ slackDelivery })}

@@ -1,7 +1,8 @@
-// form-rows.tsx -- the rows a sheet's Form holds: the words to send, the pictures attached to them, and a choice among many in the system's menu picker; and the words on a page written whole, such as a description's.
+// form-rows.tsx -- the rows a sheet's Form holds: the words to send, the pictures attached to them, a choice among many in the system's menu picker, and a day or a time of day in the system's compact date picker; and the words on a page written whole, such as a description's.
 
 import {
   Button,
+  DatePicker,
   HStack,
   Image,
   Picker,
@@ -16,6 +17,7 @@ import {
   accessibilityLabel,
   autocorrectionDisabled,
   buttonStyle,
+  datePickerStyle,
   font,
   frame,
   lineLimit,
@@ -270,5 +272,57 @@ export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
         />
       ))}
     </Picker>
+  );
+}
+
+/** What a date picker's row picks: a day, or a time of day. */
+export const DATE_PICK_PART = {
+  DAY: "day",
+  TIME: "time",
+} as const;
+
+type DatePickPart = (typeof DATE_PICK_PART)[keyof typeof DATE_PICK_PART];
+
+/** The system picker's component for each part. */
+const DATE_PICK_COMPONENT = {
+  [DATE_PICK_PART.DAY]: "date",
+  [DATE_PICK_PART.TIME]: "hourAndMinute",
+} as const satisfies Record<DatePickPart, "date" | "hourAndMinute">;
+
+type DatePickRowProps = {
+  /** The row's name, beside the value picked. */
+  readonly label: string;
+  /** The day or the time picked, read on this device's own clock: its day, or its hour and minute. */
+  readonly value: Date;
+  readonly part: DatePickPart;
+  /** The first day it offers; every day where none is given. */
+  readonly earliest?: Date | undefined;
+  readonly onPick: (picked: Date) => void;
+};
+
+/**
+ * A day or a time of day as a Form's row, as Calendar's and Clock's forms
+ * ask for one: its name, and the system's compact picker at its end, the
+ * value in a capsule that opens the calendar or the wheel on a press. Note
+ * that the picker reads its value on this device's clock, so a holder that
+ * keeps a day and a time in another zone hands it their wall clock as a
+ * local date and reads the wall clock back.
+ */
+export function DatePickRow({ label, value, part, earliest, onPick }: DatePickRowProps) {
+  const colors = useColors();
+
+  return (
+    <DatePicker
+      title={label}
+      selection={value}
+      displayedComponents={[DATE_PICK_COMPONENT[part]]}
+      {...(earliest === undefined ? {} : { range: { start: earliest } })}
+      onDateChange={onPick}
+      modifiers={[
+        datePickerStyle("compact"),
+        tint(colors.ACCENT),
+        listRowBackground(colors.RAISED),
+      ]}
+    />
   );
 }
