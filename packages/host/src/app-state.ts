@@ -11,6 +11,7 @@ import {
   type AgentTranscriptPage,
   INBOX_SCOPE_KIND,
   type InboxScopeKind,
+  type ManagerChatSending,
   PULL_REQUEST_PART,
   type PullRequestPart,
   type SendingMessage,
@@ -709,7 +710,10 @@ export type AppHistories = AppHeldById<DescriptionRevisionsAnswer>;
  * older pages read past it, newest first, and the `seq` the next older page
  * is read before, absent once the chat's start is held.
  */
-export type AppManagerChat = ManagerChatPageView;
+export interface AppManagerChat extends ManagerChatPageView {
+  /** The signed-in account's messages on their way to the chat, oldest sent first, from the moment each was sent until its row stands in `messages`, those the service refused among them, marked; none while none is. */
+  readonly sending?: readonly ManagerChatSending[];
+}
 
 /** Each Manager's chat the host holds for the windows: those a window shows, and the few let go lately, by the agent's id, each as its own read stands. */
 export type AppManagerChats = AppHeldById<AppManagerChat>;

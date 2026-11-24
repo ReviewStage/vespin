@@ -49,7 +49,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import { TestClock } from "effect/testing";
-import type { AppTranscript } from "./app-state.js";
+import type { AppManagerChats, AppTranscript } from "./app-state.js";
 import { localCopy } from "./local-copy.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
@@ -2069,6 +2069,41 @@ it.effect(
           `manager-chat-older:${AGENT_ID}:151`,
         ],
       );
+    }),
+);
+
+it.effect(
+  "a message sent to a Manager's chat stands drawn on it from its send, under the id answered, until its row lands, and one refused stands marked until it is let go",
+  () =>
+    Effect.gen(function* () {
+      const { acts, live, managerChats, answerChat } = yield* subject();
+      const sendingOf = (told: AppManagerChats | undefined) => told?.[AGENT_ID]?.rows?.sending;
+      const sent = { clientKey: "send-1", text: "Ship it.", sentAt: NOW, sentBy: "user-dana" };
+
+      live.managerChat.set({ messages: chatRows(3, 1) });
+      yield* acts.AGENTS_MANAGER_CHAT_FOLLOW.hold({ agentId: AGENT_ID });
+      yield* settled;
+      const told = managerChats().length;
+
+      yield* acts.AGENTS_CHAT_SEND({ agentId: AGENT_ID, text: "Ship it.", clientKey: "send-1" });
+      assert.deepEqual(managerChats().slice(told).map(sendingOf), [
+        [sent],
+        [{ ...sent, messageId: "a1b2c3d4" }],
+      ]);
+
+      live.managerChat.set({ messages: [{ ...chatRow(4), id: "a1b2c3d4" }, ...chatRows(3, 1)] });
+      yield* nextPoll;
+      assert.equal(sendingOf(managerChats().at(-1)), undefined);
+
+      const refused = { failure: AGENT_CALL_FAILURE.UNANSWERED };
+      answerChat(refused);
+      yield* acts.AGENTS_CHAT_SEND({ agentId: AGENT_ID, text: "Again.", clientKey: "send-2" });
+      assert.deepEqual(sendingOf(managerChats().at(-1)), [
+        { clientKey: "send-2", text: "Again.", sentAt: NOW, sentBy: "user-dana", refused },
+      ]);
+
+      yield* acts.AGENTS_CHAT_UNSEND({ agentId: AGENT_ID, clientKey: "send-2" });
+      assert.equal(sendingOf(managerChats().at(-1)), undefined);
     }),
 );
 
