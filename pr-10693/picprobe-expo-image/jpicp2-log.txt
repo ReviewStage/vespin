@@ -1,0 +1,9 @@
+pinned to 82732e7196
+== bundle PJjpicp2 base 82732e7196f
+  built 82732e7196f base app Vnatc1.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+picp: load 94.72 45.00 39.20; host Mac15,7 Apple M3 Pro
+picp: picture-probe.json 7133 bytes; server requests 110
