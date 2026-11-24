@@ -620,7 +620,8 @@ const CATALOG = [
   ),
   served(
     SHOW_MEDIA_TOOL,
-    (admitted, input, { sandbox }) => runAgentShowMedia(admitted, input, sandbox),
+    (admitted, input, { sandbox, standing, callKey }) =>
+      runAgentShowMedia(admitted, input, sandbox, { agent: standing.agent, callKey }),
     LOADED,
   ),
   served(
