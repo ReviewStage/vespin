@@ -169,6 +169,7 @@ import {
 import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useAgentThreadsLine } from "../inbox/use-agent-threads.js";
 import { useNewestNote } from "../newest-note.js";
 import { useOpenDrawnCount } from "../open-drawn.js";
@@ -734,7 +735,8 @@ export function AgentScreen() {
     brief?: string;
   }>();
 
-  useOpenDrawnCount(PRODUCT_SURFACE.AGENT);
+  const listed = useTaskListRow(useTaskListCollections().agents, id || undefined);
+  useOpenDrawnCount(PRODUCT_SURFACE.AGENT, listed !== undefined);
 
   return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} brief={brief} />;
 }

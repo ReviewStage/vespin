@@ -272,8 +272,10 @@ or an agent opens as a page of its own, how long it took to start sliding in
 and to stand, each rounded down to a step (under 0.1 seconds, then every 0.1
 seconds to 1, every 0.25 seconds to 3, then 4, or 5 seconds or more), which of
 the three it was, whether it was the
-first of its kind since the app started, and the app's build number, never
-which thread, task, or agent it was, and, each time a page an agent showed
+first of its kind since the app started, how long the app was busy before it
+started sliding in, on the same steps, whether what it showed was already on
+the phone, and the app's build number, never which thread, task, or agent it
+was, and, each time a page an agent showed
 opens, how long it took to read and to show, on those same steps, whether
 it opened at a version its opener named or at the newest, whether it was the
 first page since the app started, and the app's build number, never which

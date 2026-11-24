@@ -54,7 +54,7 @@ export const PRODUCT_EVENT = {
   APP_READY: "app:ready",
   /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
   REPLY_DRAWN: "reply:drawn",
-  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand, each on a rung of `productOpenMilliseconds`, its kind, and whether it was the first of its kind since launch. */
+  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was busy before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew. */
   OPEN_DRAWN: "open:drawn",
   /** A page an agent showed, opened on the iOS app, counted once an open by how long it took to read its HTML and to draw it, each on a rung of `productOpenMilliseconds`, whether its opener named its version or it waited on the task's pages for the newest, and whether it was the first page since launch. */
   PAGE_SHOWN: "page:shown",
@@ -139,6 +139,8 @@ export const PRODUCT_EVENT_PROPERTY = {
   START_MS: "start_ms",
   STAND_MS: "stand_ms",
   OPEN_ORDER: "open_order",
+  BUSY_MS: "busy_ms",
+  PAGE_DATA: "page_data",
   READ_MS: "read_ms",
   SHOWN_MS: "shown_ms",
   PAGE_VERSION: "page_version",
@@ -623,6 +625,14 @@ export const PRODUCT_OPEN_ORDER = {
 
 export type ProductOpenOrder = (typeof PRODUCT_OPEN_ORDER)[keyof typeof PRODUCT_OPEN_ORDER];
 
+/** Whether a page pushed open drew its first frame from what the app held, its thread, task, or agent already in memory, or had it still to read. */
+export const PRODUCT_PAGE_DATA = {
+  HELD: "held",
+  READ: "read",
+} as const;
+
+export type ProductPageData = (typeof PRODUCT_PAGE_DATA)[keyof typeof PRODUCT_PAGE_DATA];
+
 /** Where a page opened learned its version: named by its opener, as a transcript's card or a task's list names it, or read as the newest the task's pages hold, as a link opens it. */
 export const PRODUCT_PAGE_VERSION = {
   NAMED: "named",
@@ -716,6 +726,8 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.START_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.STAND_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: ProductOpenOrder;
+  [PRODUCT_EVENT_PROPERTY.BUSY_MS]: ProductOpenMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.PAGE_DATA]: ProductPageData;
   [PRODUCT_EVENT_PROPERTY.READ_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.SHOWN_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: ProductPageVersion;
@@ -741,6 +753,7 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.DRAWN_MS
   | typeof PRODUCT_EVENT_PROPERTY.START_MS
   | typeof PRODUCT_EVENT_PROPERTY.STAND_MS
+  | typeof PRODUCT_EVENT_PROPERTY.BUSY_MS
   | typeof PRODUCT_EVENT_PROPERTY.READ_MS
   | typeof PRODUCT_EVENT_PROPERTY.SHOWN_MS
   | typeof PRODUCT_EVENT_PROPERTY.STANDING_SECONDS
@@ -775,6 +788,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
   [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: Object.values(PRODUCT_OPEN_ORDER),
+  [PRODUCT_EVENT_PROPERTY.PAGE_DATA]: Object.values(PRODUCT_PAGE_DATA),
   [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: Object.values(PRODUCT_PAGE_VERSION),
   [PRODUCT_EVENT_PROPERTY.PICTURE_FROM]: Object.values(PRODUCT_PICTURE_FROM),
   [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: Object.values(PRODUCT_PICTURE_KIND),
@@ -866,7 +880,11 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
     PRODUCT_EVENT_PROPERTY.READY_AFTER,
   ],
-  [PRODUCT_EVENT.OPEN_DRAWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
+  [PRODUCT_EVENT.OPEN_DRAWN]: [
+    PRODUCT_EVENT_PROPERTY.APP_BUILD,
+    PRODUCT_EVENT_PROPERTY.BUSY_MS,
+    PRODUCT_EVENT_PROPERTY.PAGE_DATA,
+  ],
   [PRODUCT_EVENT.PAGE_SHOWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PICTURE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.PICTURE_BYTES,
@@ -1068,6 +1086,7 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: drawnReader,
   [PRODUCT_EVENT_PROPERTY.START_MS]: openReader,
   [PRODUCT_EVENT_PROPERTY.STAND_MS]: openReader,
+  [PRODUCT_EVENT_PROPERTY.BUSY_MS]: openReader,
   [PRODUCT_EVENT_PROPERTY.READ_MS]: openReader,
   [PRODUCT_EVENT_PROPERTY.SHOWN_MS]: openReader,
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: launchReader,
