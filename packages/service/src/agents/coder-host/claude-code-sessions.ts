@@ -341,6 +341,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
     name: "Claude Code",
     runtime: SERVER_AGENT_HARNESS.CLAUDE_CODE,
     sessionPrefix: NATIVE_SESSION_PREFIX[CONVERSATION_RUNTIME.CLAUDE_CODE],
+    sessionsOnDisk: true,
     // Note that a launch carries one credential alone, the key or the plan's token, because the CLI prefers the key where both are set.
     launch: (agent) =>
       Effect.gen(function* () {

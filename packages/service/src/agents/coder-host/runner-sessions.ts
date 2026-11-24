@@ -370,6 +370,13 @@ export interface RunnerHarness<E extends { readonly _tag: string }> {
   readonly runtime: (typeof SERVER_AGENT_HARNESS)[keyof typeof SERVER_AGENT_HARNESS];
   /** What a session id it mints begins with, before a fresh UUID. */
   readonly sessionPrefix: string;
+  /**
+   * Whether it keeps its sessions in files on its machine's disk, as Claude
+   * Code's and Codex's CLIs do, so a Mac's launch may resume one the store
+   * does not hold whole from there (`MachineLayout`'s `diskSessions`);
+   * Cursor's SDK keeps its store in memory and at the service alone.
+   */
+  readonly sessionsOnDisk: boolean;
   /** The credential a launch on a machine of the layout given starts with, read afresh for every launch. */
   readonly launch: (
     agent: Agent,
@@ -1806,7 +1813,8 @@ export const runnerSessions = <
      * (`holdsSession`). One it holds a tail of, or none of, as a session
      * begun before it kept transcripts, is let go in a sandbox, and the fresh
      * session that opens in its place is handed the agent's steps so far
-     * (`replay`); on a Mac, whose disk keeps it (`diskSessions`), it resumes
+     * (`replay`); on a Mac, whose disk keeps it (`diskSessions`) for a
+     * harness that keeps it there (`sessionsOnDisk`), it resumes
      * from the disk with the store left out of the launch (`fromDisk`), so
      * the store never comes to hold a tail it would load alone. A continued or forked agent with
      * no session of its own yet forks its source's in a new place, where the
@@ -1839,7 +1847,7 @@ export const runnerSessions = <
             return { resume: own } satisfies ResumedSession;
           }
 
-          const fromDisk = layout.diskSessions && !(yield* created);
+          const fromDisk = harness.sessionsOnDisk && layout.diskSessions && !(yield* created);
 
           return (fromDisk ? { resume: own, fromDisk } : { replay: true }) satisfies ResumedSession;
         }
