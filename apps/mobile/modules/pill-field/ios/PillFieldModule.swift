@@ -34,7 +34,7 @@
 // drawn faded.
 
 import ExpoModulesCore
-import ImageIO
+import SDWebImage
 import UIKit
 
 public final class PillFieldModule: Module {
@@ -423,41 +423,6 @@ final class PillViewProvider: NSTextAttachmentViewProvider {
 /// How round a picture pill's thumbnail is cut, as the sent message's chip cuts its own (`markdown.tsx`'s `THUMBNAIL_CORNER`).
 private let thumbnailCorner: CGFloat = 4
 
-/// Pictures' thumbnails, decoded at a pill's size from the files JavaScript wrote, by each file's address, so a pill drawn again, as each edit redraws the words, never decodes its picture twice.
-private enum PillThumbnails {
-  static let decoded = NSCache<NSString, UIImage>()
-
-  /// The thumbnail already decoded for the file, if any.
-  static func held(_ address: String) -> UIImage? {
-    decoded.object(forKey: address as NSString)
-  }
-
-  /// Decodes the file's picture off the main thread, no larger than `pixels` on its long edge, through ImageIO's thumbnail, which reads the file without drawing it whole, and answers on the main thread.
-  static func decode(_ address: String, pixels: CGFloat, done: @escaping (UIImage?) -> Void) {
-    DispatchQueue.global(qos: .userInitiated).async {
-      var image: UIImage?
-
-      if let url = URL(string: address), let source = CGImageSourceCreateWithURL(url as CFURL, nil) {
-        let options: [CFString: Any] = [
-          kCGImageSourceCreateThumbnailFromImageAlways: true,
-          kCGImageSourceCreateThumbnailWithTransform: true,
-          kCGImageSourceShouldCacheImmediately: true,
-          kCGImageSourceThumbnailMaxPixelSize: max(pixels, 1),
-        ]
-
-        if let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) {
-          image = UIImage(cgImage: thumbnail)
-        }
-      }
-
-      DispatchQueue.main.async {
-        if let image { PillThumbnails.decoded.setObject(image, forKey: address as NSString) }
-        done(image)
-      }
-    }
-  }
-}
-
 /// The panel's chip: its kind's glyph and its words on a rounded fill, cut short where the line is narrower; a picture's wears its thumbnail in the glyph's place.
 final class PillView: UIView {
   private let glyph = UIImageView()
@@ -497,29 +462,25 @@ final class PillView: UIView {
     fatalError("A pill is never decoded.")
   }
 
-  /// Stands the picture's thumbnail in the glyph's place, at once where it was decoded before, else once it is, the glyph standing until then so the pill never stands empty.
+  /// Stands the picture's thumbnail in the glyph's place through SDWebImage, the image engine expo-image draws every other picture with: it decodes the file no larger than the pill's square and keeps the result in the one memory and disk cache expo-image shares, so a pill drawn again, as each edit redraws the words, never decodes its picture twice. The glyph stands until the thumbnail is drawn, so the pill never stands empty.
   private func showThumbnail() {
-    guard let address = pill.thumbnail else { return }
+    guard let address = pill.thumbnail, let url = URL(string: address) else { return }
     glyph.layer.cornerRadius = thumbnailCorner
     glyph.layer.cornerCurve = .continuous
     glyph.clipsToBounds = true
+    let side = (ceil(pillFont().pointSize) + PillSpace.rise * 2) * UITraitCollection.current.displayScale
 
-    if let held = PillThumbnails.held(address) {
-      wear(held)
-      return
+    glyph.sd_setImage(
+      with: url,
+      placeholderImage: glyph.image,
+      options: [],
+      context: [.imageThumbnailPixelSize: CGSize(width: side, height: side)],
+      progress: nil
+    ) { [weak self] image, _, _, _ in
+      guard let self, image != nil else { return }
+      self.glyph.contentMode = .scaleAspectFill
+      self.setNeedsLayout()
     }
-
-    let pixels = (ceil(pillFont().pointSize) + PillSpace.rise * 2) * UITraitCollection.current.displayScale
-    PillThumbnails.decode(address, pixels: pixels) { [weak self] image in
-      guard let self, let image, self.pill.thumbnail == address else { return }
-      self.wear(image)
-    }
-  }
-
-  private func wear(_ image: UIImage) {
-    glyph.image = image
-    glyph.contentMode = .scaleAspectFill
-    setNeedsLayout()
   }
 
   @objc private func pressed() {

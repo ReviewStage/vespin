@@ -114,8 +114,9 @@ builds a control of its own.
   scrolls, tells the `@` word the caret stands in (`onAtWord`), and puts a
   picked pill in that word's place (`pick`). A held picture's pill wears its
   thumbnail in its glyph's place (`thumbnails`, the file the app writes each
-  picture's bytes to, which the Swift decodes at the pill's size through
-  ImageIO and keeps in a cache), as the panel's box draws a picture's chip,
+  picture's bytes to, which the Swift draws through SDWebImage, expo-image's
+  own engine, decoded at the pill's size into expo-image's cache), as the
+  panel's box draws a picture's chip,
   and a press on it opens the picture full screen (`onPicturePress`) where
   any other pill's press places the caret.
 - **React Native views only where SwiftUI has no piece**, such as the
