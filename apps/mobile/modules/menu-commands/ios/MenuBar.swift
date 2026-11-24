@@ -37,6 +37,8 @@ private struct Command {
   var modifiers: UIKeyModifierFlags = .command
   /// A command whose act cannot be taken back with another press, which holding its keys never repeats.
   var nonRepeatable = false
+  /// A second key for a command the menu already shows under its own, kept out of the menu so the command stands once: Search's ⌘K beside its ⌘3.
+  var hidden = false
 }
 
 /// A glyph by its name: the asset catalog's symbol of that name, as the app's Lucide glyphs are, else an SF Symbol's.
@@ -65,6 +67,9 @@ private let commands: [Command] = [
   Command(id: "inbox", place: .view, title: "Inbox", symbol: "Inbox", input: "1"),
   Command(id: "tasks", place: .view, title: "Tasks", symbol: "ListTodo", input: "2"),
   Command(id: "search", place: .view, title: "Search", symbol: "Search", input: "3"),
+  // The panel's own ⌘K for its finder, opening Search as ⌘3 and ⌘F do.
+  Command(
+    id: "search", place: .view, title: "Search", symbol: "Search", input: "k", hidden: true),
   Command(id: "back", place: .navigate, title: "Back", symbol: nil, input: "["),
   // The panel's own pager keys, K and J, unmodified as the panel's are, so an open thread steps through the list it was opened from as it does on the desktop.
   Command(
@@ -163,7 +168,9 @@ enum MenuBar {
     let shown = look(of: known)
     command.title = shown.title
     command.image = shown.image
-    command.attributes = shown.enabled ? [] : .disabled
+    // Note that a hidden key stays hidden as it is validated, since it shares its command's id with the item the menu shows.
+    let hidden: UIMenuElement.Attributes = command.attributes.contains(.hidden) ? .hidden : []
+    command.attributes = shown.enabled ? hidden : hidden.union(.disabled)
   }
 
   /// Whether a command may act now: one JavaScript said may.
@@ -266,6 +273,7 @@ enum MenuBar {
         title: shown.title, image: shown.image, action: action, propertyList: command.id)
     }
     if !shown.enabled { made.attributes = .disabled }
+    if command.hidden { made.attributes.insert(.hidden) }
     if command.nonRepeatable, #available(iOS 26.0, *) { made.repeatBehavior = .nonRepeatable }
     return made
   }
