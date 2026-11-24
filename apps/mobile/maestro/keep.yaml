@@ -3,8 +3,6 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
-env:
-  THREAD: "Recorded the invite flow"
 ---
 # Launched on the host's Inbox fixture, as `inbox.yaml` is, so the thread and
 # its picture's bytes are the fixture's (`@repo/host/fixture-inbox`) and no
@@ -15,9 +13,9 @@ env:
     arguments:
       fixture: inbox
 - extendedWaitUntil:
-    visible: "${THREAD}"
+    visible: "Recorded the invite flow"
     timeout: 30000
-- tapOn: "${THREAD}"
+- tapOn: "Recorded the invite flow"
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd
 # The picture's menu, which the system opens over it lifted.
@@ -29,7 +27,7 @@ env:
 # Note that a menu is put away by a tap on the thread's own title in the bar,
 # never a bare point, since a point can land on a link chip in the message
 # once the menu is gone, which opens the link's sheet instead.
-- tapOn: "${THREAD}"
+- tapOn: "Recorded the invite flow"
 - waitForAnimationToEnd
 - assertNotVisible: "Save to Photos"
 # The message's own menu, opened on its words. Note that they are scrolled to
@@ -44,7 +42,7 @@ env:
 - assertVisible: "Copy message"
 - waitForAnimationToEnd
 - takeScreenshot: keep-message-menu
-- tapOn: "${THREAD}"
+- tapOn: "Recorded the invite flow"
 - waitForAnimationToEnd
 - assertNotVisible: "Copy message"
 # The picture opens full screen in the app's viewer, whose share sheet copies
