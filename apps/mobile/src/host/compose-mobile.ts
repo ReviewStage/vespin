@@ -96,7 +96,7 @@ import {
 import { LocalDatabaseDriver, type LocalDatabaseDriverSeam } from "@repo/host/local-database";
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
-import { Cause, ConfigProvider, Context, Effect, Layer, Path, Stream } from "effect";
+import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import type * as FixtureHost from "./fixture-host.js";
@@ -145,6 +145,8 @@ export interface DeviceSeams {
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
   readonly onAppActiveChanged: (listener: (active: boolean) => void) => () => void;
+  /** Whether the device has a network: its reading now, then each change, for as long as the subscription stands. */
+  readonly onNetworkChanged: (listener: (online: boolean) => void) => () => void;
   /** Where the Keychain keeps the account's tokens (`keychain-tokens.ts`). */
   readonly tokenVault: TokenVault;
   /** When the account may renew: only while the app is in the foreground, held running through the renewal; a device without one renews whenever a call asks. */
@@ -253,6 +255,24 @@ function seamLayers(options: MobileHostOptions) {
       : Layer.succeed(PlatformFileDownload, device.fileDownload),
   );
 }
+
+/**
+ * Whether the device has a network, as its seam reads it now and at each
+ * change, for the host's network watch, as the web hands it the tab's
+ * `online` and the desktop `net.isOnline`; the listener is let go as the
+ * stream ends.
+ */
+const deviceOnline = (device: DeviceSeams): Stream.Stream<boolean> =>
+  Stream.callback<boolean>((queue) =>
+    Effect.acquireRelease(
+      Effect.sync(() =>
+        device.onNetworkChanged((online) => {
+          Queue.offerUnsafe(queue, online);
+        }),
+      ),
+      (stop) => Effect.sync(stop),
+    ),
+  );
 
 /**
  * The act port's procedures' dependencies, answered for the app: no keys,
@@ -432,10 +452,10 @@ const composedMobile = (options: MobileHostOptions) =>
         state,
       });
 
-      // Note that the device is taken as online: what it can reach is what the service's reach says (`serviceReachLayer`), which the watch follows.
+      // Note that the device's network and the service's reach (`serviceReachLayer`) are both followed, so an offline phone is marked at once and its live reads catch up as its network returns.
       yield* linkNetworkWatch({
         state,
-        online: Stream.make(true),
+        online: deviceOnline(device),
         regained: operator.host.tasksRegained(),
         report,
       });

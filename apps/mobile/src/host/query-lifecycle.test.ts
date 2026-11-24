@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { followQueryLifecycle } from "./query-lifecycle.js";
 
 const appListeners = new Set<(status: AppStateStatus) => void>();
-const networkListeners = new Set<(state: { isConnected: boolean | null }) => void>();
+const networkListeners = new Set<(online: boolean) => void>();
 let stop: () => void;
 let client: QueryClient;
 let unsubscribe: (() => void) | undefined;
@@ -29,7 +29,6 @@ beforeEach(() => {
         };
       },
     },
-    { OS: "ios" },
     (listener) => {
       networkListeners.add(listener);
 
@@ -73,7 +72,7 @@ it("refetches an active stale query after background then active", async () => {
 });
 
 it("pauses a query offline and resumes it when the network reconnects", async () => {
-  for (const listener of networkListeners) listener({ isConnected: false });
+  for (const listener of networkListeners) listener(false);
 
   const observer = new QueryObserver(client, {
     queryKey: ["connectivity"],
@@ -83,7 +82,7 @@ it("pauses a query offline and resumes it when the network reconnects", async ()
   unsubscribe = observer.subscribe(() => {});
   expect(observer.getCurrentResult().fetchStatus).toBe("paused");
 
-  for (const listener of networkListeners) listener({ isConnected: true });
+  for (const listener of networkListeners) listener(true);
   await vi.advanceTimersByTimeAsync(1);
 
   expect(observer.getCurrentResult().data).toBe("reconnected");

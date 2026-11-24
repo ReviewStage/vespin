@@ -1,6 +1,5 @@
 // host-provider.tsx -- the host started as the app mounts, its document followed into the Query client every screen reads.
 
-import NetInfo from "@react-native-community/netinfo";
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { selectTaskListDrawn } from "@repo/host/app-state-reads";
@@ -22,7 +21,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { AppState, Platform } from "react-native";
+import { AppState } from "react-native";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
 import {
   LAUNCH_PHASE,
@@ -33,7 +32,7 @@ import {
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
 import { appStateQuery, followAppStateInto } from "./app-state-query.js";
-import { deviceSeams, hostStateRoot } from "./device-seams.js";
+import { deviceSeams, hostStateRoot, onNetworkChanged } from "./device-seams.js";
 import {
   launchFixtureProfile,
   launchInboxOff,
@@ -338,7 +337,7 @@ function launchOptions(): MobileHostStartOptions {
  * unmounts, which on a device is the app ending.
  */
 export function HostProvider({ children }: { readonly children: ReactNode }) {
-  useEffect(() => followQueryLifecycle(AppState, Platform, NetInfo.addEventListener), []);
+  useEffect(() => followQueryLifecycle(AppState, onNetworkChanged), []);
   const [standing, setStanding] = useState<Standing | undefined>(undefined);
   // Each press of Try again starts the host anew.
   const [attempt, setAttempt] = useState(0);
