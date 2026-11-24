@@ -291,13 +291,18 @@ const runLive = <Row, Encoded>(statement: LiveStatement, schema: Schema.Codec<Ro
     return yield* Schema.decodeUnknownEffect(Schema.Array(schema))(rows);
   });
 
-/** What waits across the account as the desktop builds it from the live rows, at the instant the held read was read. */
-const liveAnswerOf = (userId: string, readAt: number) =>
+/** What waits across the account as the desktop builds it from the live rows, at the instant the held read was read, for a build that reads items on no task or, by default, one that does not. */
+const liveAnswerOf = (
+  userId: string,
+  readAt: number,
+  taskless: (typeof TASKLESS_LIVE)[keyof typeof TASKLESS_LIVE] = TASKLESS_LIVE.LEFT_OUT,
+) =>
   Effect.gen(function* () {
     const parts = Option.getOrThrow(
       accountInboxRead.statements({
         userId,
         repositoryless: ACCOUNT_INBOX_REPOSITORYLESS.INCLUDE,
+        taskless,
         workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
       }),
     );
@@ -460,6 +465,17 @@ it.layer(getTestDB())("the inbox store", (it) => {
           stamps: [posted.id],
           items: [posted.id],
         });
+
+        // Note that what waits across the account, which the Dock and the tab's title count, waits on its starter as a task's thread does.
+        const waitingOf = (taskless: (typeof TASKLESS_LIVE)[keyof typeof TASKLESS_LIVE]) =>
+          Effect.map(liveAnswerOf(userId, 0, taskless), ({ items }) =>
+            items.map(({ id, taskId, waitsOn }) => ({ id, taskId, waitsOn })),
+          );
+
+        assert.deepEqual(yield* waitingOf(TASKLESS_LIVE.LEFT_OUT), []);
+        assert.deepEqual(yield* waitingOf(TASKLESS_LIVE.CARRIED), [
+          { id: posted.id, taskId: null, waitsOn: userId },
+        ]);
       }),
   );
 

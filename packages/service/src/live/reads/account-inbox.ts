@@ -26,6 +26,7 @@ import { AUTOMATION_RUN_STATUS } from "@repo/features/automation-wire";
 import { ACCOUNT_INBOX_READ } from "@repo/features/inbox-live";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { Effect } from "effect";
+import { TASKLESS_LIVE, tasklessLiveParam } from "../../agents/taskless-reads.js";
 import {
   WORKSPACE_MACHINE_LIVE,
   workspaceMachineLiveParam,
@@ -86,7 +87,8 @@ function failedRunsStatement(userId: string) {
  * few seconds and every member would read again for nothing: the rare
  * change the inbox shows of either, a task's assignee or an agent's title,
  * shows at the hold's end. The items of an agent on a workspace's machine
- * it carries only to a build that reads one (`workspaceMachineLiveParam`).
+ * it carries only to a build that reads one (`workspaceMachineLiveParam`),
+ * and those on no task, a Manager's, likewise (`tasklessLiveParam`).
  * The query's `ACCOUNT_INBOX_REPOSITORYLESS`
  * changes nothing, since it asked only for items of agents with no task.
  */
@@ -104,9 +106,15 @@ export const accountInboxRead = bindLiveRead(ACCOUNT_INBOX_READ, {
   ],
   topics: ({ userId }) => [[TOPIC.ACCOUNT, userId]],
   serve: (_params, _query, request) =>
-    Effect.succeed({ workspaceMachines: workspaceMachineLiveParam(request) }),
-  statements: ({ userId, workspaceMachines }) => ({
-    ...accountInboxLiveStatements(userId, workspaceMachines === WORKSPACE_MACHINE_LIVE.CARRIED),
+    Effect.succeed({
+      taskless: tasklessLiveParam(request),
+      workspaceMachines: workspaceMachineLiveParam(request),
+    }),
+  statements: ({ userId, taskless, workspaceMachines }) => ({
+    ...accountInboxLiveStatements(userId, {
+      taskless: taskless === TASKLESS_LIVE.CARRIED,
+      workspaceMachines: workspaceMachines === WORKSPACE_MACHINE_LIVE.CARRIED,
+    }),
     failedRuns: failedRunsStatement(userId),
   }),
 });
