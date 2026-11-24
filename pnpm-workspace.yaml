@@ -295,6 +295,23 @@ patchedDependencies:
 # binding, and a toolbar spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
+# `expo-modules-core` 58.0.30 names every SwiftUI view it makes with
+# `String(describing: viewType)` (`SwiftUIVirtualView.init`), which on a
+# metatype runs protocol conformance probes and a `Mirror` for each view, every
+# time. On the iOS app's first Tasks tap after a cold launch (STAG-3917,
+# jcold11d, a Time Profiler trace on the simulator), that call was 115 of
+# `SwiftUIVirtualView.init`'s 117 samples while the list's rows mounted, and
+# conformance lookups were 41-49% of the main thread's whole window. The patch
+# names the view with `_typeName(viewType, qualified: false)`, never inlined, as
+# `@expo/ui`'s own `UIBaseView` already names its views (`unqualifiedTypeName`).
+# Upstream asks, not filed (the developer, Nov 24, 2026: local patches for now):
+# (1) this change; (2) `ViewProps.setUpEvents` and `updateRawProps`, and
+# `Record.init(from:)` through `fieldsOf`, walk a `Mirror` of the props on every
+# view made and every update, and could cache each props type's fields once.
+# Only (1) is patched. Delete it when an `expo-modules-core` release names its
+# views without `String(describing:)`.
+  expo-modules-core@58.0.30: patches/expo-modules-core@58.0.30.patch
+#
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
 # lines by the marker's width less its `.` or `)`, so each line of a code
 # block in a numbered item opens with a stray space, one more on every save,
