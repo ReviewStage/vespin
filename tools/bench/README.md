@@ -5,6 +5,8 @@ window. A step is one agent's row moving, or one task's row moving as its
 agents' turns start and end. It times builds side by side, so a change is
 measured against the commit it is based on. It is a tool, not a test:
 nothing is asserted, no CI job runs it, and nothing it writes is committed.
+It times the window only; `host-bench.ts` times the host's own task-list live
+queries (the last section).
 
 It drives the large stage of the `tasks-open` fixture
 (`packages/panel/src/tasks/open-tasks-fixture.ts`), which an address asks
@@ -103,3 +105,55 @@ A cell is the range of the rounds' medians, one median step per round:
 
 The window is 1280×840, the size Vespin opens at. A sandbox's numbers
 compare only with each other, so quote both sides from the same run.
+
+## The host's live queries
+
+`bench.ts` cannot see the host's task-list live queries
+(`taskListCollections`, `taskListFollowing`): its fixture lays its lists
+over the window's document, so they never run under it. A change to shared
+host code, such as the tallies, the pull-request lines, or the summaries,
+or a cost it adds while agents work, is invisible to it. `host-bench.ts`
+runs the real `taskListCollections` in Node (V8 with its JIT, as the
+desktop's main process runs it) over a busy account's rows, and draws every
+list a window would read.
+
+- **The seed** (`host-seed.ts`): 3,240 plans and 5,400 agents, every word
+  invented. 220 plans are open and the rest Done, and the agents of a Done
+  plan are archived, so about 93% of the agents are archived and 440 are
+  live. Two in three agents hold a pull request, every 40th is on no task,
+  and the first 12 are at work. The clock is pinned, so one process's rows
+  equal another's.
+- **A build** is a worktree of the repository, with its own
+  `node_modules` (`./scripts/bootstrap.sh`). Each measurement is a fresh
+  process of `host-worker.ts` that loads that worktree's own host, sync, and
+  Effect, so the numbers are that build's code:
+
+```sh
+git worktree add /tmp/vespin-before origin/main       # the base, then ./scripts/bootstrap.sh there
+node tools/bench/host-bench.ts --build before=/tmp/vespin-before --build after=. \
+  --rounds 6 --steps 400
+```
+
+  With no `--build`, it times this checkout as `here`. `--only kept` or
+  `--only answer` runs one kind of process; `--agents` (5,400) and
+  `--kept-agents` (4,831, a phone's) set the account's size; `--steps` (400)
+  how many moves each process takes.
+- **Interleaving:** each round runs every build's processes in turn, so a
+  sandbox that slows down halfway weighs on every build alike. A cell is the
+  range of the rounds' figures, one per fresh process. A 4-core sandbox
+  varies about ±0.5 ms a step and ±25 ms a draw, with the occasional round
+  far out, so compare builds from one run and use 6 or more rounds.
+
+What it reports:
+
+- **kept draw:** the list stands over a local copy holding every plan and
+  agent, as a phone's launch and a desktop's start do. Timed from standing
+  to the tasks drawn (`keptDrawn`), then to the draw holding every agent,
+  and the two together.
+- **first whole answer:** one answer of the follow's whole rows with no kept
+  list, as a desktop's or the web's first draw.
+- **per moved live agent:** an answer past a sync id that moves one live
+  agent's row, a turn starting and then ending in turn through the 440, and
+  the draw tick passing. The median and p95 of the steps after the first 20.
+- **per moved task:** the same for one live plan's own row, its status
+  alternating and its update time advancing.

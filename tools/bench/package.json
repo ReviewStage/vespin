@@ -3,5 +3,5 @@
   "version": "0.24.0",
   "private": true,
   "type": "module",
-  "description": "The step bench: what one step of a moving row costs the web client's window, timed in builds side by side, run by hand or by an agent"
+  "description": "The step bench: what one step of a moving row costs the web client's window, and the host's task-list live queries over the same account, timed in builds side by side, run by hand or by an agent"
 }
