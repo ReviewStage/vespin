@@ -429,6 +429,7 @@ export function taskListFollowing(options: TaskListFollowingOptions = {}): TaskL
 
   const deferral =
     options.deferArchivedAgents === true ? agentsDeferral(feeds.taskAgents) : undefined;
+
   const agentsFeed = deferral ?? feeds.taskAgents;
 
   const collections: TaskListCollections = {
@@ -465,6 +466,7 @@ export function taskListFollowing(options: TaskListFollowingOptions = {}): TaskL
     const field = move.key[0];
 
     if (field === undefined || !Object.hasOwn(feeds, field)) return;
+
     // SAFETY: `field` is an own key of `feeds`, checked above, and a part's rows cross as the rows of its own field (`HOST_READ_SLICE`'s `tasks`), so the feed takes them as its own.
     const feed = (
       field === AGENTS_PART.field ? agentsFeed : feeds[field as keyof typeof feeds]
