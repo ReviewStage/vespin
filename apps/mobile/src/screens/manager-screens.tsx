@@ -1,4 +1,4 @@
-// manager-screens.tsx -- a Manager's overview, pushed from its chat: what it is doing at a glance, the agents it started, and the pull requests they opened.
+// manager-screens.tsx -- a Manager's overview, pushed from its chat: what it is doing at a glance, the agents it started, and the pull requests they opened, as the desktop's page stands them beside the chat.
 
 import { iosAgentRoute, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
@@ -92,7 +92,8 @@ function PullRequestRow({
  * lists, opening its page, and the pull requests they opened, the open ones
  * first, each opening its own screen. Everything is read from what the phone
  * already holds of the task list (`@repo/features/manager-overview-model`),
- * so it reads nothing of its own. A pull reads the list again.
+ * as the desktop's overview reads what its window follows, so it reads
+ * nothing of its own. A pull reads the list again.
  */
 export function ManagerOverviewScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
