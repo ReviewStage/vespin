@@ -5,6 +5,7 @@ import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { writeAccountTimeZone } from "@repo/database/models/account-time-zone";
 import { type Agent, createAgent, recordNativeHanded } from "@repo/database/models/agent-store";
 import type { DescriptionWriter } from "@repo/database/models/description-revisions";
+import { readManagerChatMessage } from "@repo/database/models/manager-chat-messages";
 import { tallyMemoryRecalls } from "@repo/database/models/memory-recall-store";
 import { type MemoryOutcome, rememberMemory } from "@repo/database/models/memory-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -20,7 +21,7 @@ import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import { RUN_STATUS, RUN_TURN_ORIGIN, TURN_TRIGGER } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { EXPERIMENT } from "@repo/settings";
-import { Clock, Effect, Option } from "effect";
+import { Clock, Effect, Option, Predicate } from "effect";
 import { TestClock } from "effect/testing";
 import { ACTION_RESULT_STATUS, RUN_EVENT, TURN_ORIGIN, unparsedWire } from "../../core.js";
 import { saveNotes } from "../../tasks/description-notes.js";
@@ -57,8 +58,9 @@ import { coderTurnMessage } from "./turn-message.js";
  * request names no zone reads the developer's day in the zone their account
  * keeps, and in UTC, said to be so, only where it keeps none; and a
  * Manager's spoken turn is told to answer in plain text, and its
- * `send_to_user` refused, until the typed turn after it. Synthetic
- * accounts, tasks, and words throughout.
+ * `send_to_user` refused, until the typed turn after it, whose message is
+ * written to the chat under the id it answers. Synthetic accounts, tasks,
+ * and words throughout.
  */
 
 const DESCRIPTION_TEXT = "# Teammate invitations\n\n## Goal\n\nInvite a teammate by email.\n";
@@ -91,6 +93,35 @@ const openAgent = Effect.gen(function* () {
     repository: "acme/relay",
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+  });
+
+  const agent: Agent = Option.getOrThrow(started).agent;
+
+  const admitted: AdmittedConversation = {
+    caller: userId,
+    target: { userId, conversationId: agent.conversationId },
+    runtimeSessionId: undefined,
+    timeZone: undefined,
+  };
+
+  return { userId, agent, admitted };
+});
+
+/** An account with a Manager, standing on no task, admitted as the MCP door admits it. */
+const openManager = Effect.gen(function* () {
+  const userId = yield* openGithubUser();
+
+  const started = yield* createAgent(userId, {
+    taskId: null,
+    workspaceId: yield* openWorkspace(userId),
+    idempotencyKey: randomUUID(),
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    descriptionSnapshot: null,
+    prompt: null,
+    repository: null,
+    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+    kind: AGENT_KIND.MANAGER,
   });
 
   const agent: Agent = Option.getOrThrow(started).agent;
@@ -173,11 +204,11 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
   );
 
   it.effect(
-    "a Manager's spoken turn answers in its plain text, its send_to_user refused, and the typed turn after it goes back to send_to_user",
+    "a Manager's spoken turn answers in its plain text, its send_to_user refused, and the typed turn after it goes back to send_to_user, whose message stands in the chat under the id it answers",
     () =>
       Effect.gen(function* () {
-        const opened = yield* openAgent;
-        const agent: Agent = { ...opened.agent, kind: AGENT_KIND.MANAGER };
+        const opened = yield* openManager;
+        const { agent } = opened;
 
         const turnOn = (spoken: boolean, handed: TurnHanded) =>
           coderTurnMessage(
@@ -217,7 +248,12 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         const typed = yield* turnOn(false, spoken.handed);
         const typedText = typed.text ?? "";
         assert.ok(typedText.includes("only `send_to_user` reaches people again"), typedText);
-        assert.deepEqual(yield* sentOn(typed.handed), { status: ACTION_RESULT_STATUS.ACCEPTED });
+        const sent = yield* sentOn(typed.handed);
+        assert.equal(sent.status, ACTION_RESULT_STATUS.ACCEPTED);
+        assert.ok(Predicate.isString(sent.message_id), JSON.stringify(sent));
+
+        const row = yield* readManagerChatMessage(opened.userId, agent.id, sent.message_id);
+        assert.equal(Option.getOrThrow(row).text, "The invite email is sent.");
       }),
   );
 

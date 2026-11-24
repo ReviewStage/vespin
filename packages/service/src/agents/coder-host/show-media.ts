@@ -1,4 +1,5 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import type { Agent } from "@repo/database/models/agent-store";
 import { keepConversationPictures } from "@repo/database/models/conversation-pictures";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
@@ -17,6 +18,7 @@ import { SqlClient } from "effect/sql";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, type WireRecord } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { type InboxSandboxDoor, phoneCopyOfSandbox, readSandboxImage } from "./inbox-image.js";
+import { writeManagerSaid } from "./manager-chat-row.js";
 
 /**
  * show-media.ts -- a coding agent or its worker shows the developer pictures, recordings, and sound clips from its sandbox, kept beside its transcript as one set.
@@ -41,7 +43,9 @@ import { type InboxSandboxDoor, phoneCopyOfSandbox, readSandboxImage } from "./i
  * sound. A call is shown whole or not at all: the first file refused
  * refuses the call in one sentence the model can act on, naming the path,
  * before anything is kept, and a set the transcript has room for only part
- * of keeps none of it.
+ * of keeps none of it. A set a Manager shows in its own transcript is also
+ * written to its chat as a row of no words before the call answers
+ * (`manager-chat-row.ts`), and the answer names that row's id.
  */
 
 /** Why a call showed nothing, in the words the model reads; a sentence ending in a colon is followed by the path. */
@@ -97,10 +101,17 @@ function showMediaRejected(reason: string): WireRecord {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason };
 }
 
-/** Where one call's files are read from and kept: the transcript it is written to, and the sandbox it names files in. */
+/** The Manager whose chat a set it shows stands in, and the key its call runs under, which keys the set's row. */
+export interface ShowMediaChat {
+  readonly manager: Agent;
+  readonly clientKey: Effect.Effect<string, StoreFailure, DatabaseServices>;
+}
+
+/** Where one call's files are read from and kept: the transcript it is written to, the sandbox it names files in, and the chat the set stands in, where a Manager shows it. */
 export interface ShowMediaBinding {
   readonly target: ConversationTarget;
   readonly sandbox: InboxSandboxDoor;
+  readonly chat?: ShowMediaChat | undefined;
 }
 
 /** One file read and measured, ready to keep, with a recording's MP4 or an Ogg clip's M4A where its sandbox made one. */
@@ -203,10 +214,29 @@ export function runShowMedia(
 
     if (Option.isNone(kept)) return showMediaRejected(SHOW_MEDIA_REFUSAL.FULL);
 
-    return {
+    const answer = {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       pictures: kept.value.map((each) => ({ ...each })),
     };
+
+    if (binding.chat === undefined) return answer;
+
+    // Note that a Manager's set stands in its chat as a row of no words, written before the call answers.
+    const written = yield* writeManagerSaid(binding.chat.manager, {
+      clientKey: yield* binding.chat.clientKey,
+      text: "",
+      attachments: kept.value.map((each, index) => {
+        const caption = read.success.images[index]?.caption;
+
+        return caption === undefined
+          ? { id: each.id, mediaType: each.mediaType }
+          : { id: each.id, mediaType: each.mediaType, caption };
+      }),
+    });
+
+    if (Option.isNone(written)) return showMediaRejected(SHOW_MEDIA_REFUSAL.UNAVAILABLE);
+
+    return { ...answer, message_id: written.value };
   }).pipe(
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(showMediaRejected(SHOW_MEDIA_REFUSAL.UNAVAILABLE))),

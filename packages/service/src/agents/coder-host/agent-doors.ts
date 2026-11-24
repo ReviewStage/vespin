@@ -20,6 +20,7 @@ import {
 } from "@repo/database/models/agent-store";
 import { readTaskHeader } from "@repo/database/models/task-store";
 import type { StoreWriter } from "@repo/database/models/writer";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
 import type { InboxAttachmentRef } from "@repo/features/inbox-attachment-link";
 import { PAGE_SHOWER } from "@repo/features/page-wire";
@@ -66,7 +67,7 @@ import {
   pullRequestRejected,
 } from "./pull-request.js";
 import type { SummaryModelOf } from "./replay-summary.js";
-import { runShowMedia } from "./show-media.js";
+import { runShowMedia, type ShowMediaChat } from "./show-media.js";
 
 /** What the doors that reach an agent's session or the store's writer read of the deployment, as the web function serving the MCP server builds them (`../workspace-mcp/door-seams.ts`). */
 export interface AgentDoorSeams {
@@ -360,11 +361,30 @@ export function runAgentShowPage(
   );
 }
 
-/** Runs one `show_media` call: the pictures read from the agent's sandbox through the door given and kept beside its transcript. */
+/**
+ * Runs one `show_media` call: the pictures read from the agent's sandbox
+ * through the door given and kept beside its transcript, and, where a
+ * Manager shows them in its own transcript, not a worker's, written to its
+ * chat under the call's key.
+ */
 export function runAgentShowMedia(
   admitted: AdmittedConversation,
   input: UnparsedWireValue,
   sandbox: InboxSandboxDoor,
+  shower?: { readonly agent: Option.Option<Agent>; readonly callKey: ShowMediaChat["clientKey"] },
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
-  return runShowMedia({ target: admitted.target, sandbox }, input);
+  if (shower === undefined) return runShowMedia({ target: admitted.target, sandbox }, input);
+
+  const manager = Option.filter(
+    shower.agent,
+    (agent) =>
+      agent.kind === AGENT_KIND.MANAGER && agent.conversationId === admitted.target.conversationId,
+  );
+
+  const chat = Option.match(manager, {
+    onNone: () => undefined,
+    onSome: (agent) => ({ manager: agent, clientKey: shower.callKey }),
+  });
+
+  return runShowMedia({ target: admitted.target, sandbox, chat }, input);
 }
