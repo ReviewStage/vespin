@@ -1,4 +1,4 @@
-import type { ChatReply } from "@repo/features/manager-chat";
+import { type ChatReply, chatWorkWords } from "@repo/features/manager-chat";
 import { plainWords } from "@repo/features/plain-words";
 import type { ChatBubbleQuote, ContextMenuProps } from "@repo/ui";
 import { CopyIcon, ONE_LINE_END, OneLine, useMenu } from "@repo/ui";
@@ -7,7 +7,7 @@ import { createContext, type ReactNode, useContext } from "react";
 import { MessageAction } from "../ai-elements/message.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
-import { type ChatWorkToggle, chatWorkWords } from "./chat-work.js";
+import type { ChatWorkToggle } from "./chat-work.js";
 import { DraftStarterCard } from "./fork-action.js";
 import type { ChatReplyTarget } from "./use-agent-composer.js";
 
