@@ -1,147 +1,136 @@
-// manager-face-picker.tsx -- where a Manager's face is picked on iOS: its color, then its character, each a row of faces in a form's section, as Reminders picks a list's color and then its glyph.
+// manager-face-picker.tsx -- where a Manager's face is picked on iOS: the app's one icon picker (`IconPickerSheet`) over every face, one group to each character in each of the colors, as the panel picks it.
 
-import { Button, HStack, Image, Spacer, VStack, ZStack } from "@expo/ui/swift-ui";
-import {
-  accessibilityAddTraits,
-  accessibilityLabel,
-  buttonStyle,
-  frame,
-  resizable,
-  strokeBorder,
-} from "@expo/ui/swift-ui/modifiers";
 import {
   MANAGER_FACE_CHARACTER,
+  MANAGER_FACE_CHARACTER_NAME,
   MANAGER_FACE_COLOR,
+  MANAGER_FACES,
   type ManagerFace,
   managerFaceName,
+  managerFacesFound,
 } from "@repo/features/manager-face";
-import { Fragment } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useState } from "react";
+import { IconPickerSheet } from "./icon-picker.js";
 import { managerFaceAsset } from "./manager-face-look.js";
-import { useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { PictureRow } from "./settings-form.js";
 
-/** A face's side in the picker, in points, at the default text size: a little larger than a row's lead, so a finger finds each. */
-const CHOICE_SIDE = 32;
-
-/** The room between a face and the ring the picked one wears, and the ring's width, in points. */
-const RING_GAP = 3;
-const RING_WIDTH = 2;
-
-/** Every color and every character, in the order the desktop's picker lists them. */
-const COLORS = Object.values(MANAGER_FACE_COLOR);
-const CHARACTERS = Object.values(MANAGER_FACE_CHARACTER);
+/** The picker's words, the panel's own (`@repo/ui`'s `ManagerFacePicker`). */
+const WORDS = {
+  TITLE: "Manager face",
+  SEARCH: "Search faces",
+  FOUND: "Faces",
+  NONE: "No faces match.",
+} as const;
 
 /** Whether two faces are one. */
 function sameFace(one: ManagerFace | undefined, other: ManagerFace): boolean {
   return one?.character === other.character && one.color === other.color;
 }
 
-/** One face to press: itself, ringed in copper while it stands picked, heard as its name ("Purple cat"). */
-function FaceChoice({
-  face,
-  picked,
-  onPick,
-}: {
-  readonly face: ManagerFace;
-  readonly picked: boolean;
-  readonly onPick: (face: ManagerFace) => void;
-}) {
-  const colors = useColors();
-  const side = useScaledSize(CHOICE_SIDE);
-  const ringed = side + 2 * (RING_GAP + RING_WIDTH);
-
-  return (
-    <Button
-      onPress={() => onPick(face)}
-      modifiers={[
-        buttonStyle("plain"),
-        accessibilityLabel(managerFaceName(face)),
-        ...(picked ? [accessibilityAddTraits(["isSelected"])] : []),
-      ]}
-    >
-      <ZStack
-        modifiers={[
-          frame({ width: ringed, height: ringed }),
-          // Note that every face wears its ring's room, clear where it is not picked, so a pick never shifts the row.
-          strokeBorder({
-            content: picked ? colors.ACCENT : "#00000000",
-            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-            shape: "circle",
-            style: { lineWidth: RING_WIDTH },
-          }),
-        ]}
-      >
-        <Image
-          assetName={managerFaceAsset(face, false)}
-          modifiers={[resizable(), frame({ width: side, height: side })]}
-        />
-      </ZStack>
-    </Button>
-  );
+/** What tells a face apart among the picker's choices: its character and its color, in a word. */
+function faceKey(face: ManagerFace): string {
+  return managerFaceName(face);
 }
 
-/** A row of faces spread across the section's width, evenly apart, each kept by what sets it apart from the others in its row (`keyOf`). */
-function FaceRow({
-  faces,
-  keyOf,
-  picked,
+/** A face as the picker draws it: its picture, its name, and whether it stands. */
+function faceChoice(face: ManagerFace, standing: ManagerFace | undefined) {
+  return {
+    key: faceKey(face),
+    label: managerFaceName(face),
+    picture: managerFaceAsset(face, false),
+    picked: sameFace(standing, face),
+  };
+}
+
+/**
+ * A Manager's face as the panel picks it, in the app's one icon picker: all
+ * thirty-six faces under each character's name, each in every color, named
+ * by its color and character ("Purple cat"), a search finding the faces
+ * whose name holds every word typed (`@repo/features/manager-face`'s
+ * `managerFacesFound`), the face standing ringed. A pick hands the face on
+ * and puts the sheet away, as the panel's pick puts its picker away.
+ */
+export function ManagerFaceSheet({
+  face,
+  presented,
+  onDismiss,
   onPick,
 }: {
-  readonly faces: readonly ManagerFace[];
-  readonly keyOf: (face: ManagerFace) => string;
-  readonly picked: ManagerFace | undefined;
+  /** The face standing; none before a pick at New Manager, where the service picks one. */
+  readonly face: ManagerFace | undefined;
+  readonly presented: boolean;
+  readonly onDismiss: () => void;
   readonly onPick: (face: ManagerFace) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const searching = query.trim() !== "";
+  const found = searching ? managerFacesFound(query) : MANAGER_FACES;
+
+  const groups = searching
+    ? found.length === 0
+      ? []
+      : [
+          {
+            key: WORDS.FOUND,
+            name: WORDS.FOUND,
+            choices: found.map((each) => faceChoice(each, face)),
+          },
+        ]
+    : Object.values(MANAGER_FACE_CHARACTER).map((character) => ({
+        key: character,
+        name: MANAGER_FACE_CHARACTER_NAME[character],
+        choices: Object.values(MANAGER_FACE_COLOR).map((color) =>
+          faceChoice({ character, color }, face),
+        ),
+      }));
+
   return (
-    <HStack spacing={0}>
-      {faces.map((face, at) => (
-        <Fragment key={keyOf(face)}>
-          {at === 0 ? null : <Spacer />}
-          <FaceChoice face={face} picked={sameFace(picked, face)} onPick={onPick} />
-        </Fragment>
-      ))}
-    </HStack>
+    <IconPickerSheet
+      title={WORDS.TITLE}
+      searchPrompt={WORDS.SEARCH}
+      empty={WORDS.NONE}
+      presented={presented}
+      onDismiss={onDismiss}
+      onQuery={setQuery}
+      groups={groups}
+      onPick={(key) => {
+        const picked = MANAGER_FACES.find((each) => faceKey(each) === key);
+
+        if (picked === undefined) return;
+        onPick(picked);
+        onDismiss();
+      }}
+    />
   );
 }
 
 /**
- * A Manager's face as a form picks it, the desktop's same thirty-six faces
- * (`@repo/features/manager-face`) in the iOS way Reminders picks a list's
- * look: a row of the six colors, each the face's character in that color,
- * then a row of the six characters, each in the face's color, the face
- * standing ringed in copper, as a picked option is. A press picks the face
- * it shows and hands it on; with none standing yet, as at New Manager
- * before a pick, where the service picks one, the rows draw the first
- * character and the first color and no face is ringed. Each face is heard
- * by its name ("Purple cat") and as selected where it stands. It holds no
- * section of its own, so its caller names it and says what a pick does.
+ * A form's Face row, the panel's face well: its label, then the face
+ * standing at its end, heard by its name, or `unpicked`'s words while none
+ * stands, as at New Manager before a pick, and the chevron; a press opens
+ * the picker (`ManagerFaceSheet`).
  */
-export function ManagerFacePicker({
+export function ManagerFaceRow({
+  label,
   face,
-  onPick,
+  unpicked,
+  onPress,
+  testId,
 }: {
-  /** The face standing; none until a pick at New Manager. */
+  readonly label: string;
   readonly face: ManagerFace | undefined;
-  readonly onPick: (face: ManagerFace) => void;
+  readonly unpicked: string;
+  readonly onPress: () => void;
+  readonly testId?: string | undefined;
 }) {
-  const character = face?.character ?? MANAGER_FACE_CHARACTER.GHOST;
-  const color = face?.color ?? MANAGER_FACE_COLOR.YELLOW;
-
   return (
-    <VStack spacing={SPACE.ROW}>
-      <FaceRow
-        faces={COLORS.map((each) => ({ character, color: each }))}
-        keyOf={(each) => each.color}
-        picked={face}
-        onPick={onPick}
-      />
-      <FaceRow
-        faces={CHARACTERS.map((each) => ({ character: each, color }))}
-        keyOf={(each) => each.character}
-        picked={face}
-        onPick={onPick}
-      />
-    </VStack>
+    <PictureRow
+      label={label}
+      picture={face === undefined ? undefined : managerFaceAsset(face, false)}
+      heard={face === undefined ? undefined : managerFaceName(face)}
+      detail={unpicked}
+      onPress={onPress}
+      testId={testId}
+    />
   );
 }

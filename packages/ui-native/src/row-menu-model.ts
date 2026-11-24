@@ -57,6 +57,8 @@ export type MenuChoice = {
   readonly mark?: IntegrationProvider | undefined;
   /** An emoji drawn as its image in the glyph's place, as a section the member gave an emoji leads with it in the panel's Move to, so its words line up with its glyphs' choices. */
   readonly emoji?: string | undefined;
+  /** A picture of the asset catalog drawn in its own colors in the glyph's place, such as a Manager's face (`managerFaceAsset`). */
+  readonly picture?: string | undefined;
   /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
   readonly detail?: string | undefined;
   readonly on: boolean;
@@ -69,6 +71,8 @@ export type MenuChoice = {
 export type RowSubmenu = {
   readonly label: string;
   readonly symbol: Glyph;
+  /** A picture of the asset catalog drawn in its own colors in its glyph's place, such as a Manager's character in Change face; its glyph where none is given. */
+  readonly picture?: string | undefined;
   readonly choices: readonly MenuChoice[];
   /** Menus one level further down, after its choices, such as a task's repository inside More. */
   readonly submenus?: readonly RowSubmenu[] | undefined;
@@ -108,8 +112,8 @@ export const MENU_ICON = {
  * A node's icon as the native module draws it in a system menu: a glyph by
  * the asset catalog's name or an SF Symbol's, in `color` where the menu
  * keeps one, such as a status's tone, with a faint glyph under it where it
- * has one; a photo, drawn round; or an integration's mark from the catalog,
- * in its own colors.
+ * has one; a photo, drawn round; or a picture of the catalog in its own
+ * colors, an integration's mark or a Manager's face.
  */
 export type MenuIcon =
   | {
@@ -199,6 +203,8 @@ function glyphIcon(glyph: Glyph, color?: string, under?: MarkLayer): MenuIcon {
 
 /** A choice's icon: its integration's mark, its photo, or its glyph in its tone's ink; none for a choice of words alone. */
 function choiceIcon(choice: MenuChoice, inks: MenuInks): MenuIcon | undefined {
+  if (choice.picture !== undefined) return { kind: MENU_ICON.MARK, asset: choice.picture };
+
   if (choice.mark !== undefined)
     return { kind: MENU_ICON.MARK, asset: INTEGRATION_MARK_ASSET[choice.mark] };
 
@@ -256,7 +262,10 @@ function submenuNode(
   return {
     kind: MENU_NODE.MENU,
     label: submenu.label,
-    icon: glyphIcon(submenu.symbol),
+    icon:
+      submenu.picture === undefined
+        ? glyphIcon(submenu.symbol)
+        : { kind: MENU_ICON.MARK, asset: submenu.picture },
     tint: ink,
     nodes: [
       ...submenu.choices.map(
@@ -265,7 +274,9 @@ function submenuNode(
           label: choice.label,
           // Note that a choice led by an integration's mark or an emoji says nothing under its words, as `markContent` and `emojiContent` drew it.
           detail:
-            choice.mark === undefined && choice.emoji === undefined ? choice.detail : undefined,
+            choice.mark === undefined && choice.emoji === undefined && choice.picture === undefined
+              ? choice.detail
+              : undefined,
           icon: choiceIcon(choice, inks),
           on: choice.on,
           heard: heard(choice, within),
