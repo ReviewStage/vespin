@@ -1,0 +1,11 @@
+# close-sheet.yaml -- closes the sheet in front, such as Settings, by a swipe down from near its top, as a reader puts a sheet away.
+#
+# Note that the swipe starts on the sheet's own list, scrolled to its top,
+# which iOS hands to the sheet's dismissal rather than to the list.
+appId: dev.vespin.ios
+---
+- swipe:
+    start: "50%, 25%"
+    end: "50%, 95%"
+    duration: 500
+- waitForAnimationToEnd
