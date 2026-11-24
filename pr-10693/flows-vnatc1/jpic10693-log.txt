@@ -1,0 +1,11 @@
+pinned to decba745f2
+== bundle PJjpic10693 base decba745f27
+  built decba745f27 base app Vnatc1.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-agent: fails 1 shots 26 Assert that "Edit" is visible... FAILED
+iphone-light-computer-use: fails 1 shots 3 Assert that "Input" is visible... FAILED
+iphone-light-keep: fails 1 shots 3 Tap on "The invite page"... FAILED
+iphone-light-inbox: fails 0 shots 16 
