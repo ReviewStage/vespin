@@ -255,7 +255,7 @@ async function viewed(pictures: readonly ViewedPicture[], index: number): Promis
 /**
  * The file a picture drawn from a web address is read from: the one the
  * image loader keeps for it, as every picture of the service's is drawn
- * (`use-agent-pictures.ts`), copied once under a name of what it shows and
+ * (`use-agent-pictures.tsx`), copied once under a name of what it shows and
  * its kind's extension, since the loader's own file is named by a digest
  * with none, which Photos and the share sheet read no kind from; the address
  * as it is where the loader keeps none, as for any other address.

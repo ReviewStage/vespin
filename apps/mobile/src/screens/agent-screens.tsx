@@ -92,7 +92,6 @@ import {
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
-  PictureEventsProvider,
   rowsNear,
   Screen,
   SettingsForm,
@@ -157,7 +156,11 @@ import {
 } from "../agents/use-agent-composer.js";
 import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
-import { useAgentPictureFiles, useAgentPictures } from "../agents/use-agent-pictures.js";
+import {
+  AgentPicturesProvider,
+  useAgentPictureFiles,
+  useAgentPictures,
+} from "../agents/use-agent-pictures.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
@@ -1014,7 +1017,8 @@ const AgentConversation = memo(function AgentConversation({
   const media = useAgentMedia(id, mediaIds);
   const dockFiles = useAgentPictureFiles(id, dockIds);
   const pictures = useAgentPictures(id, pictureIds);
-  const pictureSet = useMemo(() => new Set(pictureIds), [pictureIds]);
+  // Note that every picture of the transcript is handed to its row by its id, which it reads where it is drawn, so one landing draws that picture alone and never this page, whose rows may hold an open long-press menu.
+  const pictureSet = useMemo(() => new Set(shownPictureIds(items)), [items]);
 
   // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
   const title =
@@ -1217,7 +1221,7 @@ const AgentConversation = memo(function AgentConversation({
   );
 
   const transcriptView = (
-    <PictureEventsProvider events={pictures.events}>
+    <AgentPicturesProvider agentId={id}>
       <AgentTranscript
         items={rows}
         onRowsShown={showRows}
@@ -1239,7 +1243,7 @@ const AgentConversation = memo(function AgentConversation({
         onToggle={(item) => setToggles((held) => toggledAt(held, item))}
         onOpenPage={openPage}
         mediaSource={(mediaId) =>
-          pictureSet.has(mediaId) ? pictures.sources.get(mediaId) : media.sources.get(mediaId)
+          pictureSet.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
         }
         fileSource={sentFiles.source}
         onRetryFile={sentFiles.retry}
@@ -1262,7 +1266,7 @@ const AgentConversation = memo(function AgentConversation({
             : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
         }}
       />
-    </PictureEventsProvider>
+    </AgentPicturesProvider>
   );
 
   const asks = (

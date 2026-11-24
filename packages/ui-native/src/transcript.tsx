@@ -59,7 +59,7 @@ import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
 import { IntegrationMark, ManagerFace, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
-import { LoaderImage, PICTURE_FIT, type PictureSource } from "./picture-source.js";
+import { LoaderImage, PICTURE_FIT, type PictureRef, usePictureRef } from "./picture-source.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -406,17 +406,19 @@ function CallGlyph({
   readonly callKind: CallKind;
   readonly provider: IntegrationProvider | undefined;
   /** What its app's icon is drawn from, once read; none while it is on its way, where it could not be read, or where its app kept none, when its kind's glyph stands in. */
-  readonly icon: PictureSource | undefined;
+  readonly icon: PictureRef | undefined;
 }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
+  // Note that an icon kept by its id is read here, so its landing draws the glyph again and never its row.
+  const drawn = usePictureRef(icon) ?? undefined;
 
   // Note that an app's icon is its own picture, drawn at the glyph's size in its place, as the panel's row wears it; its row's words name the app, so it is hidden from VoiceOver.
-  if (icon !== undefined) {
+  if (drawn !== undefined) {
     return (
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <LoaderImage
-          source={icon}
+          source={drawn}
           fit={PICTURE_FIT.CONTAIN}
           style={{ width: size, height: size }}
         />
@@ -781,7 +783,7 @@ interface RowDrawing {
     item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>,
   ) => void;
   /** What a picture or a recording is drawn from, by its id: a picture the service's address and its read's headers, or a file; none while it is on its way, and `null` where it could not be read. */
-  readonly mediaSource: (id: string) => PictureSource | null | undefined;
+  readonly mediaSource: (id: string) => PictureRef | null | undefined;
   /** Reads a picture or a recording whose bytes could not be read again, by its id. */
   readonly onRetryMedia?: ((id: string) => void) | undefined;
   /** Where a file a sent line carried was written for its chip to open, by the line's message and the file's place on it; none while it is written, and `null` where it could not be. A file the line kept no bytes of is drawn by its name and kind alone. */
@@ -829,7 +831,7 @@ type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PU
 function saidSource(
   drawing: RowDrawing,
   pictureId: string | undefined,
-): PictureSource | null | undefined {
+): PictureRef | null | undefined {
   return pictureId === undefined ? null : drawing.mediaSource(pictureId);
 }
 
@@ -881,7 +883,7 @@ function ShownMediaView({
   onRetry,
 }: {
   readonly shown: ShownMedia;
-  readonly source: PictureSource | null | undefined;
+  readonly source: PictureRef | null | undefined;
   readonly onOpenElsewhere: (() => void) | undefined;
   readonly onRetry: (() => void) | undefined;
 }) {

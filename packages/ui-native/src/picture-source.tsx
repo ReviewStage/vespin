@@ -60,7 +60,7 @@ export function PictureEventsProvider({
 }
 
 /** The page's ears for the picture drawn here; none where nothing listens. */
-export function usePictureEvents(): PictureEvents | undefined {
+function usePictureEvents(): PictureEvents | undefined {
   return useContext(PictureEventsDoor);
 }
 
@@ -118,4 +118,56 @@ export function LoaderImage({
       />
     </View>
   );
+}
+
+/**
+ * A picture the page keeps by its id rather than its source, which the
+ * picture reads where it is drawn (`usePictureRef`), so its source landing
+ * draws the picture alone again, never its row or the rows around it, such
+ * as one holding an open long-press menu. `peek` reads what has landed so far
+ * without listening, for an act that runs later, such as VoiceOver's Open.
+ */
+export type PictureById = {
+  readonly pictureId: string;
+  readonly peek: () => PictureSource | null | undefined;
+};
+
+/** What a picture is drawn from: its source, or its id for the page to read where it is drawn. */
+export type PictureRef = PictureSource | PictureById;
+
+/** How the page reads one picture by its id, as a hook: none for no id, and the same function for the page's life. */
+export type UsePictureById = (pictureId: string | undefined) => PictureSource | null | undefined;
+
+/** The page's read of a picture by its id; none where the page keeps none by id. */
+const PictureByIdDoor = createContext<UsePictureById>(() => undefined);
+
+/** Whether a picture is kept by its id. */
+function isById(ref: PictureRef | null | undefined): ref is PictureById {
+  return ref != null && !Predicate.isString(ref) && "pictureId" in ref;
+}
+
+/** Hands the pictures drawn under it the page's read of a picture by its id. */
+export function PictureByIdProvider({
+  use,
+  children,
+}: {
+  readonly use: UsePictureById;
+  readonly children: ReactNode;
+}) {
+  return <PictureByIdDoor.Provider value={use}>{children}</PictureByIdDoor.Provider>;
+}
+
+/** What a picture is drawn from: its own source, or the one the page reads for its id, listened to here alone. */
+export function usePictureRef(
+  ref: PictureRef | null | undefined,
+): PictureSource | null | undefined {
+  const useById = useContext(PictureByIdDoor);
+  const read = useById(isById(ref) ? ref.pictureId : undefined);
+
+  return isById(ref) ? read : ref;
+}
+
+/** What a picture is drawn from now, without listening, for an act that runs later. */
+export function peekPicture(ref: PictureRef | null | undefined): PictureSource | null | undefined {
+  return isById(ref) ? ref.peek() : ref;
 }

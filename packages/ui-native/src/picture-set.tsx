@@ -3,7 +3,7 @@
 import { StyleSheet, View } from "react-native";
 import { Picture } from "./markdown.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
-import type { PictureSource } from "./picture-source.js";
+import type { PictureRef } from "./picture-source.js";
 import { SPACE } from "./tokens/space.js";
 
 /** How far apart a set's tiles stand. */
@@ -22,7 +22,7 @@ const styles = StyleSheet.create({
 /** One picture of a set: its key, what it is drawn from (none on its way, `null` where it could not be read), its words, and what reads it again. */
 export type SetPicture = {
   readonly key: string;
-  readonly source: PictureSource | null | undefined;
+  readonly source: PictureRef | null | undefined;
   readonly alt: string;
   readonly onRetry?: (() => void) | undefined;
 };

@@ -281,13 +281,18 @@ export {
   LoaderImage,
   PICTURE_CACHE,
   PICTURE_FIT,
+  type PictureById,
+  PictureByIdProvider,
   type PictureCache,
   type PictureEvents,
   PictureEventsProvider,
   type PictureFit,
+  type PictureRef,
   type PictureSource,
+  peekPicture,
   pictureUri,
   type RemotePicture,
+  type UsePictureById,
 } from "./picture-source.js";
 
 export { PillField, type PillFieldHandle } from "./pill-field.js";
