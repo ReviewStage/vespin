@@ -21,6 +21,7 @@ import { useInboxShown, useKeepInboxShown } from "../../inbox/inbox-shown.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { PLUS_TAB } from "../../screens/app-sidebar.js";
+import { SidebarTasksProvider } from "../../screens/task-screens.js";
 import { useNewTaskAfterSetup } from "../../setup/setup-place.js";
 import { APP_SIDEBAR, useSidebarChoiceLapse } from "../../sidebar-shown.js";
 import { useTabSurfaceOpen } from "../../surface-open.js";
@@ -143,7 +144,7 @@ export default function TabsLayout() {
   // Note that the Inbox's Select mode hides the bar only while the Inbox's own list stands, so a link that opens another place never leaves the bar hidden over it.
   const choosing = useInboxChoosingOn() && inboxListStands;
 
-  return (
+  const tabs = (
     <NativeTabs
       hidden={iconOnly ? conversation || choosing : APP_SIDEBAR}
       minimizeBehavior="onScrollDown"
@@ -206,4 +207,7 @@ export default function TabsLayout() {
       </NativeTabs.Trigger>
     </NativeTabs>
   );
+
+  // Note that an iPad reads its task list once, above the tabs, for every tab's sidebar and Tasks alike; whether it does is the device's idiom, so the tabs never mount again under it.
+  return APP_SIDEBAR ? <SidebarTasksProvider>{tabs}</SidebarTasksProvider> : tabs;
 }

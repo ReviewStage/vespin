@@ -21,6 +21,7 @@ import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useSettingsAccount } from "../settings-button.js";
 import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
+import { useSidebarTasks } from "../sidebar-tasks.js";
 import { SPLIT_TAB, showSplitList } from "../split-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
@@ -44,6 +45,14 @@ const PLACE_WORDS = {
   [SIDEBAR_PLACE.TASKS]: "Tasks",
   [SIDEBAR_PLACE.AUTOMATIONS]: "Automations",
 } as const satisfies Record<SidebarPlace, string>;
+
+/** What a tab's root does with a press in its sidebar that it answers itself, rather than going to another tab. */
+type SidebarDoors = {
+  /** Stands Tasks' whole list, where Tasks is the tab in front. */
+  readonly onTasks?: (() => void) | undefined;
+  /** Picks a task beside the sidebar, where Tasks is the tab in front. */
+  readonly onTask?: ((id: string) => void) | undefined;
+};
 
 /** The list a tab's split view stands beside its detail, and its bar: its title, its menu, and its search. */
 type ListColumn = {
@@ -81,23 +90,27 @@ export const PLUS_TAB = !APP_SIDEBAR;
  * An iPad's own sidebar, the first column of each tab's split view, as the
  * panel's sidebar stands: its places (Search, the Inbox with what waits on
  * the reader, Tasks, and Automations),
- * the place in front standing selected, and at its foot, in the system's
- * glass, the workspace switcher with the account's photo opening Settings
- * beside it, as the panel's foot holds the account. A press on Tasks while
- * Tasks stands calls `onTasks`, which stands its whole list again; from
- * another tab it opens Tasks on its list. Note that a tab behind another
+ * then the tasks, as the Tasks list draws them, read once for every tab
+ * (`useSidebarTasks`), the place or task in front (`here`) standing
+ * selected, and at its foot, in the system's glass, the workspace switcher
+ * with the account's photo opening Settings beside it, as the panel's foot
+ * holds the account. A press on Tasks while Tasks stands calls `onTasks`,
+ * which stands its whole list again, and on a task `onTask`, which picks
+ * it; from another tab each opens Tasks so. Note that a tab behind another
  * keeps the sidebar as it last stood in front, as its list does
  * (`useListColumn`). None stands but on an iPad (`APP_SIDEBAR`).
  */
 export function useAppColumn(
-  here: SidebarPlace | undefined,
-  onTasks?: () => void,
+  /** The place in front (`SIDEBAR_PLACE`), or the task picked beside the sidebar, by its id. */
+  here: string | undefined,
+  { onTasks, onTask }: SidebarDoors = {},
 ): AppColumn | undefined {
   const router = useRouter();
   const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const inboxShown = useInboxShown();
   const waiting = useInboxBadge();
+  const tasks = useSidebarTasks();
   const { shown, setShown } = useSidebarShown();
   const focused = useIsFocused();
   const [kept, keep] = useState(shown);
@@ -123,6 +136,13 @@ export function useAppColumn(
       case SIDEBAR_PLACE.AUTOMATIONS:
         return router.navigate("/automations");
     }
+
+    if (tasks?.opens(id) === true) return;
+
+    // Note that a task opens beside the sidebar on Tasks, picked where Tasks stands and handed to its root from another tab, as a link to it is.
+    if (onTask !== undefined) return onTask(id);
+
+    router.navigate({ pathname: SPLIT_TAB.TASKS, params: { selected: id } });
   };
 
   // Note that the switcher's menu ends in Settings too, so the account's photo beside it stands only once the workspaces are read, and the photo alone stands until then.
@@ -164,6 +184,7 @@ export function useAppColumn(
             label={PLACE_WORDS[SIDEBAR_PLACE.AUTOMATIONS]}
           />
         </ListSection>
+        {tasks?.sections}
       </RowList>
     ),
     bar: { bottom },
