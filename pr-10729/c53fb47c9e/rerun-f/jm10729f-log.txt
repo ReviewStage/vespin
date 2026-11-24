@@ -1,0 +1,53 @@
+pinned to c53fb47c9e
+== bundle PJjm10729f base c53fb47c9ec
+  built c53fb47c9ec base app Vnatc1.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/features/src/turn-run/tool-set.ts(25,5): error TS2345: Argument of type 'WireValue' is not assignable to parameter of type 'JSONSchema7 | PromiseLike<JSONSchema7> | (() => JSONSchema7 | PromiseLike<JSONSchema7>)'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-F1: fails 0 shots 14 
+iphone-light-F3: fails 1 shots 1 Assert that "Steer" is visible... FAILED
+  device log:   149510 lines; matches: 46
+    2026-11-24 10:45:56.485 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:45:56.710 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:45:56.916 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:45:57.132 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:11.525 Df Vespin[18548:bbada7f] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:11.529 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:11.742 Df Vespin[18548:bbacb15] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:11.746 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    "XC_kAXXCAttributeElementBaseType" = "_UIPopoverDimmingView";
+    "XC_kAXXCAttributeElementType" = "_UIPopoverDimmingView";
+    "XC_kAXXCAttributeElementBaseType" = "_UIPopoverView";
+    "XC_kAXXCAttributeElementType" = "_UIPopoverView";
+    2026-11-24 10:46:12.813 Df Vespin[18548:bbaca9e] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:12.813 Df Vespin[18548:bbaca9e] [com.apple.dt.xctest:Default] Computed elementType Popover.
+    2026-11-24 10:46:12.814 Df Vespin[18548:bbaca9e] [com.apple.dt.xctest:Default] Popover (AX element pid: 18548, elementOrHash.elementID: 4901945984.661) faulted in {
+    "XC_kAXXCAttributeElementBaseType" = "_UIPopoverShapeLayerChromeView";
+    "XC_kAXXCAttributeElementType" = "_UIPopoverShapeLayerChromeView";
+    "XC_kAXXCAttributeElementBaseType" = "_UIPopoverGlassBackground";
+    "XC_kAXXCAttributeElementType" = "_UIPopoverGlassBackground";
+    Popover, 0x123dad040 <AX element pid: 18548, elementOrHash.elementID: 4901945984.661>
+    2026-11-24 10:46:14.179 Df Vespin[18548:bbad94b] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:14.183 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:14.379 Df Vespin[18548:bbacb15] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:14.382 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:14.573 Df Vespin[18548:bbacb15] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:14.576 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:14.761 Df Vespin[18548:bbacb15] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:14.765 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:14.950 Df Vespin[18548:bbacb15] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:14.954 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:15.140 Df Vespin[18548:bbad94b] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:15.144 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:21.611 Df Vespin[18548:bbadac5] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:21.615 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:21.951 Df Vespin[18548:bbadac5] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:21.959 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:23.101 Df Vespin[18548:bbadac5] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:23.106 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+    2026-11-24 10:46:31.166 Df Vespin[18548:bbad94b] [com.apple.dt.xctest:Default] Preferring automation type 18 instead of legacy element type OTHER derived from class/trait: _UIPopoverView:_UIPopoverView 0
+    2026-11-24 10:46:31.171 Db Vespin[18548:bbaca9e] [com.apple.CFBundle:strings] Bundle: CFBundle 0x10b1108c0 </var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.RvB5rj/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 2
+  marks: === iphone-light-F1 start 10:44:17.3N;=== iphone-light-F1 end 10:47:04;=== iphone-light-F3 start 10:47:22.3N;=== iphone-light-F3 end 10:48:23;
