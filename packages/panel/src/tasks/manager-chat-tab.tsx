@@ -23,19 +23,25 @@
 
 import { endLineReason } from "@repo/features/agent-continue-model";
 import { computerAppsOf } from "@repo/features/agent-parts";
+import { REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
 import type {
   AgentChatSendParams,
   ManagerChatSending,
   SendingMessage,
 } from "@repo/features/agent-view";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
-import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import {
+  AGENT_STATUS,
+  type AgentSummary,
+  type AgentTranscriptMessage,
+} from "@repo/features/agent-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { type ManagerChatLine, managerChatView } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MessageFileChip } from "@repo/features/message-files";
 import { ACT_KIND } from "@repo/host/acts";
+import { EXPERIMENT } from "@repo/settings";
 import {
   CHAT_RUN,
   CHAT_SIDE,
@@ -65,6 +71,7 @@ import {
 import { Message, RECEIVED_MESSAGE_CLASS } from "../ai-elements/message.js";
 import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
 import { usePerson } from "../member-directory.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { useAgentApprovals, useApprovingSend } from "./agent-approvals.js";
 import { useAgentBox } from "./agent-box.js";
 import { AgentComposerDock, boxTakesWords } from "./agent-composer-dock.js";
@@ -88,9 +95,11 @@ import { TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ReplyMessageAction, useChatMessageMenu } from "./chat-reply.js";
 import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
+import { EditComposer } from "./edit-composer.js";
 import { useManagerChatLooks } from "./manager-chat-looks.js";
 import { useMoveToCloud } from "./move-agent.js";
 import { ReplyDoorProvider, ReplyToSelection, useBoxReplyDoor } from "./reply-to-selection.js";
+import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
 import { TranscriptWords } from "./transcript-blocks.js";
 import { OlderReadFailed, TranscriptReadFailed } from "./transcript-read-failed.js";
@@ -117,6 +126,8 @@ interface ChatDoors {
   readonly manager: ChatManagerLook;
   readonly readerId: string | undefined;
   readonly delegation: DelegationDoors;
+  /** The transcript's lines by their ids, which a person's message opens for writing again by its line (`lineId`). */
+  readonly lines: ReadonlyMap<string, AgentTranscriptMessage>;
 }
 
 /** The face beside a Manager's bubbles; none where it wears none. */
@@ -216,6 +227,9 @@ function ManagerMessage({
           beside={
             <CopyMessageAction
               words={message.text}
+              // Note that a turn's journal stands under the turn's own id, which Rewind conversation to here names it by.
+              messageId={place.closes && message.turnId !== null ? message.turnId : undefined}
+              rewind={place.closes && message.turnId !== null ? REWIND_ACTION.REVERT : undefined}
               lead={
                 <>
                   <ReplyMessageAction words={message.text} />
@@ -258,6 +272,13 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   );
 
   const files = fileChipsOf(message);
+  const lineId = own ? (message.lineId ?? undefined) : undefined;
+  const ownLine = lineId === undefined ? undefined : doors.lines.get(lineId);
+  const editor = useMessageEdit(lineId ?? "");
+
+  if (ownLine !== undefined && editor !== undefined) {
+    return <EditComposer message={ownLine} words={message.text} edit={editor} />;
+  }
 
   return (
     <Message
@@ -277,7 +298,13 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
           side={own ? CHAT_SIDE.SENT : CHAT_SIDE.RECEIVED}
           run={chatRunOf(place.opens, place.closes)}
           avatar={own ? undefined : <ActorMark actor={sender} size={ACTOR_SIZE.CARD} />}
-          beside={<CopyMessageAction words={message.text} />}
+          beside={
+            <CopyMessageAction
+              words={message.text}
+              messageId={ownLine === undefined ? undefined : lineId}
+              rewind={ownLine === undefined ? undefined : REWIND_ACTION.EDIT}
+            />
+          }
         >
           <TranscriptWords text={message.text} />
         </ChatBubble>
@@ -451,8 +478,16 @@ export function ManagerChatTab({
   };
 
   // Note that a message to the chat answers as a message to the agent does, with the id the chat holds it under beside it, which the host draws it by.
-  const send: MessageSender = useApprovingSend((agentId, message) => {
+  const send: MessageSender = useApprovingSend(async (agentId, message) => {
     keepFiles(message.clientKey, message);
+
+    // Note that an edit takes the Manager back to just before its line first, which drops the line's row from the chat, and then sends its words to the chat as a message of its own.
+    if (message.rewinds !== undefined) {
+      const { messageId, restoreFiles } = message.rewinds;
+      const rewound = await control.onRewind(agentId, messageId, restoreFiles);
+
+      if ("failure" in rewound) return rewound;
+    }
 
     return sendChat({
       agentId,
@@ -486,6 +521,7 @@ export function ManagerChatTab({
     running: agent.status === AGENT_STATUS.RUNNING,
     send,
     unsend,
+    rewind: control.onRewind,
     starter,
     shown,
   });
@@ -514,6 +550,50 @@ export function ManagerChatTab({
     });
 
   const marks = useSentLineMarks(composer, unarchive !== undefined);
+
+  // A rewind writes in the box, so it is offered only while the box takes words, and nothing is rewound under a call into the Manager.
+  const rewinds =
+    boxTakesWords({
+      archived: unarchive !== undefined,
+      continued: continuedNote !== undefined,
+      closed: composer.closed,
+    }) && transcript.calls.length === 0;
+
+  const restores =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.REWIND_FILES) }).data === true;
+
+  const pendingSends = composer.sent.length > 0;
+
+  const points = useMemo(
+    () => rewindPoints(transcript.messages, pendingSends, control.me, composer.going, restores),
+    [transcript.messages, pendingSends, control.me, composer.going, restores],
+  );
+
+  // Note that the line's box reads what the tab's own box reads, as it opens.
+  const editorProps = useRef({
+    agentId: agent.id,
+    keywords: control.keywords,
+    skills: control.readSkills,
+  });
+
+  editorProps.current = {
+    agentId: agent.id,
+    keywords: control.keywords,
+    skills: control.readSkills,
+  };
+
+  const rewind = rewinds
+    ? {
+        editing: composer.editing,
+        onEdit: composer.edit,
+        onCancelEdit: composer.dropEdit,
+        onSendEdit: composer.sendEdit,
+        onRevert: composer.revert,
+        editor: () => editorProps.current,
+        ...points,
+      }
+    : undefined;
+
   const standing = tabTurnOf(agent, composer);
   const running = standing.working ? (standing.turnId ?? agent.turnId ?? undefined) : undefined;
   const name = agentName(agent, control.models);
@@ -529,9 +609,14 @@ export function ManagerChatTab({
     [control.models, onOpenTarget, cards],
   );
 
+  const lines = useMemo(
+    () => new Map(transcript.messages.map((line) => [line.id, line])),
+    [transcript.messages],
+  );
+
   const doors = useMemo(
-    () => ({ manager, readerId: control.me, delegation }),
-    [manager, control.me, delegation],
+    () => ({ manager, readerId: control.me, delegation, lines }),
+    [manager, control.me, delegation, lines],
   );
 
   const boxOpen = boxTakesWords({
@@ -639,7 +724,11 @@ export function ManagerChatTab({
     <AgentTabFrame ref={tab} label={name}>
       <AgentPicturesProvider value={pictures}>
         <UndeliveredLines value={marks}>
-          <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>{log}</ReplyDoorProvider>
+          <RewindProvider value={rewind}>
+            <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
+              {log}
+            </ReplyDoorProvider>
+          </RewindProvider>
         </UndeliveredLines>
       </AgentPicturesProvider>
       <AgentTabFoot>
