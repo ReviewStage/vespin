@@ -1,6 +1,6 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
-import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
+import { Host, HStack, Popover, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   frame,
@@ -404,6 +404,7 @@ export function GlassBar({
   const pill = field ? ground : [];
   const lowering = useLowerDrag(onLower);
   const [aboveTall, setAboveTall] = useState(0);
+  const [barWide, setBarWide] = useState(320);
   // Note that a float stands down over what stands above the bar, which keeps its room under it, so the float coming and going moves nothing; the float meets the bar a gap above it, as the piece did.
   const covers = float !== undefined && above !== undefined;
 
@@ -430,28 +431,59 @@ export function GlassBar({
       </VStack>
     );
 
-  const bar = (
-    <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
-      {alone ? (
+  const inner = alone ? (
+    row
+  ) : (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
+      {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
+      {foot === undefined ? (
         row
       ) : (
-        <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
-          {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
-          {foot === undefined ? (
-            row
-          ) : (
-            <VStack alignment="leading" spacing={BAR_FOOT_GAP}>
-              {row}
-              {foot}
-            </VStack>
-          )}
+        <VStack alignment="leading" spacing={BAR_FOOT_GAP}>
+          {row}
+          {foot}
         </VStack>
+      )}
+    </VStack>
+  );
+
+  // PROTOTYPE: the float as the system's popover anchored to the bar's top, its arrow down at the field, the bar left pressable behind it; it wraps the bar whenever the bar's head may come and go, so presenting it never re-parents the field.
+  const bar = (
+    <Host
+      matchContents={{ vertical: true }}
+      style={[styles.content, styles.bar]}
+      onLayout={(event: LayoutChangeEvent) => setBarWide(event.nativeEvent.layout.width)}
+    >
+      {heads ? (
+        <Popover
+          isPresented={float !== undefined}
+          attachmentAnchor="top"
+          arrowEdge="bottom"
+          onIsPresentedChange={(shown) => console.log(`[mention-popover] presented ${shown}`)}
+        >
+          <Popover.Trigger>{inner}</Popover.Trigger>
+          <Popover.Content>
+            <VStack
+              alignment="leading"
+              spacing={0}
+              modifiers={[
+                frame({ idealWidth: barWide, alignment: "topLeading" }),
+                padding({ vertical: BAR_EDGE * 2 }),
+                SwiftModifiers.presentationBackgroundInteraction("enabled"),
+              ]}
+            >
+              {float ?? null}
+            </VStack>
+          </Popover.Content>
+        </Popover>
+      ) : (
+        inner
       )}
     </Host>
   );
 
   return (
-    <DockedFoot float={float} overlap={covers ? aboveTall : 0}>
+    <DockedFoot float={heads ? undefined : float} overlap={covers && !heads ? aboveTall : 0}>
       {above === undefined ? null : (
         <View
           style={covers && styles.covered}
