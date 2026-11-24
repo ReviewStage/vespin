@@ -28,7 +28,12 @@ import type { ManagerFaceColor } from "@repo/features/manager-face";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
-import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
+import {
+  IOSConfig,
+  withAppDelegate,
+  withDangerousMod,
+  withXcodeProject,
+} from "expo/config-plugins";
 
 /**
  * The bundle identifier the App ID, the associated domain, and TestFlight are
@@ -429,9 +434,9 @@ const SENTRY = {
 const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "production" : "test";
 
 // What the SDK's native half starts on as the app launches, before React
-// Native loads: the plugin writes `RNSentrySDK.start()` into the AppDelegate,
-// which reads these options from the `sentry.options.json` it copies into the
-// bundle. So a crash before the JavaScript bundle runs, or in the first native
+// Native loads: the AppDelegate calls `RNSentrySDK.start()` where the device
+// shares usage data (`withCrashReportsLaunch`), which reads these options
+// from the `sentry.options.json` the plugin copies into the bundle. So a crash before the JavaScript bundle runs, or in the first native
 // draw, is reported on the next launch, where a start from JavaScript alone
 // never saw it. They name the DSN, environment, release and build number
 // `src/crash-reports.ts` starts the SDK under once the bundle runs, which
@@ -439,7 +444,8 @@ const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "producti
 // Note that the JavaScript filters cannot reach this window, so it sends only
 // what a native crash report holds, with no request breadcrumbs. A build
 // without a DSN, a local or simulator one, gets no native start at all
-// (`useNativeInit` off), since the SDK's start faults on an empty DSN.
+// (`withCrashReportsLaunch` writes none), since the SDK's start faults on
+// an empty DSN, and neither does a device that turned usage data off.
 const SENTRY_LAUNCH_OPTIONS = {
   dsn: SENTRY.DSN,
   enabled: SENTRY.DSN !== "",
@@ -482,6 +488,34 @@ const colorSet = (role: keyof typeof BRAND_PALETTE.LIGHT) => {
     info: { author: "xcode", version: 1 },
   };
 };
+
+// Sentry's native start, written into the AppDelegate as Sentry's plugin
+// writes it (`useNativeInit`), at the head of `didFinishLaunching`, but held
+// to whether the device shares usage data, as the JavaScript last kept it
+// (`modules/crash-reports/`). Note that it is the AppDelegate's, not the
+// module's, because Sentry's pod hands its framework search paths to the
+// app's target alone, so no other pod can import it. A build that names no
+// DSN gets no start at all.
+const withCrashReportsLaunch = (config: ExpoConfig): ExpoConfig =>
+  SENTRY.DSN === ""
+    ? config
+    : withAppDelegate(config, (modConfig) => {
+        const { contents } = modConfig.modResults;
+
+        const started = contents.replace(
+          /(func application\([^)]*\) -> Bool \{)\s*\n(\s*)/s,
+          "$1\n$2if CrashReportsLaunch.sharesUsageData() { RNSentrySDK.start() }\n$2",
+        );
+
+        if (started === contents)
+          throw new Error("The AppDelegate has no didFinishLaunching to start Sentry in.");
+        modConfig.modResults.contents = started.replace(
+          /(import \S+\n)/,
+          "$1import RNSentry\nimport VespinCrashReports\n",
+        );
+
+        return modConfig;
+      });
 
 // Note that Expo has no setting for the app's tint, so the accent is written
 // as the asset catalog's AccentColor, light and dark, which Xcode names as the
@@ -1126,7 +1160,8 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
           project: SENTRY.PROJECT,
           url: SENTRY.URL,
           disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
-          useNativeInit: SENTRY.DSN !== "",
+          // Note that the native start is written by `withCrashReportsLaunch` rather than the plugin, so it is held to whether the device shares usage data.
+          useNativeInit: false,
           options: SENTRY_LAUNCH_OPTIONS,
         },
       ],
@@ -1145,7 +1180,9 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
 const config = (context?: ConfigContext): ExpoConfig =>
   [NOTIFICATION_SERVICE, NOTIFICATION_CONTENT, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
     withAppExtension,
-    withLiveActivityIntents(withMarketingIcon(withImageSets(baseConfig(context)))),
+    withCrashReportsLaunch(
+      withLiveActivityIntents(withMarketingIcon(withImageSets(baseConfig(context)))),
+    ),
   );
 
 export default config;

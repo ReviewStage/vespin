@@ -5,7 +5,12 @@
  * (`SENTRY_DSN`), which `app.config.ts` writes into the build's `extra` as
  * the desktop's build writes it into its bundle; a build without one, a
  * local or simulator build among them, sends nothing, and neither does a
- * fixture run, as the desktop's does not (`sentryReportingEnabled`). The SDK
+ * fixture run, as the desktop's does not (`sentryReportingEnabled`), nor a
+ * device that turned Settings › Account › Share usage data off: the SDK
+ * starts only where the device shares usage data, as last kept
+ * (`crash-reports-module.ts`), and closes, its native half with it, the
+ * moment the switch reads off, starting again when it reads on
+ * (`useCrashReports`). The SDK
  * runs with its default data collection and the desktop renderer's filters:
  * a breadcrumb or an event that names an access token is dropped whole
  * (`@repo/features/sentry-breadcrumbs`), and no event names the account,
@@ -23,7 +28,8 @@
  * The native half starts first, as the app launches and before React Native
  * loads, on the same DSN, environment, release and build number, which
  * `app.config.ts` hands it (`SENTRY_LAUNCH_OPTIONS`), so a crash before this
- * bundle runs is reported too; `init` below starts it again on these options.
+ * bundle runs is reported too, where the device shares usage data
+ * (`modules/crash-reports/`); `init` below starts it again on these options.
  * Native crashes are caught by the SDK's native half and sent on the next
  * launch, where the JavaScript filters cannot reach them, so the native half
  * records no breadcrumb of its own for a request (`enableNetworkBreadcrumbs`):
@@ -43,10 +49,12 @@ import { eventWithoutAccessTokens, withoutAccessTokens } from "@repo/features/se
 import { sentryReporterLayer } from "@repo/features/sentry-reporting";
 import type { SignInFailure } from "@repo/features/words";
 import { sentryReportingEnabled } from "@repo/host";
+import { selectAppSettingsView } from "@repo/host/app-state-reads";
 import { SENTRY_ENVIRONMENT, type SentryEnvironment } from "@repo/host/sentry-environment";
 import {
   addBreadcrumb,
   captureException,
+  close,
   extendAppStart,
   finishExtendedAppStart,
   getExtendedAppStartSpan,
@@ -55,10 +63,13 @@ import {
   setTag,
   startInactiveSpan,
 } from "@sentry/react-native";
+import { useQuery } from "@tanstack/react-query";
 import { type Layer, Option, Schema } from "effect";
 import Constants from "expo-constants";
 import { useEffect } from "react";
 import { AppState } from "react-native";
+import { crashReportsModule } from "./crash-reports-module.js";
+import { appStateQuery } from "./host/app-state-query.js";
 import {
   LAUNCH_SENTRY_TEST,
   launchFixtureProfile,
@@ -142,21 +153,22 @@ function sentryBuild(): SentryBuild {
 }
 
 /**
- * Starts the SDK once, as the bundle loads, before the screens or the
- * background push task can throw. A test report is sent at once where the
- * launch asks for one (`-sentryTest`), so a TestFlight build can be checked
- * end to end: `js` sends a handled error, whose stack reads through the
- * uploaded source maps, and `native` crashes the app, whose report is sent
- * on the next launch and reads through the uploaded dSYMs.
+ * Whether this build and launch report at all: a build that names a DSN, on
+ * a launch that is no fixture run. Read once, as the bundle loads.
  */
-function startCrashReports(): void {
+const reportable = sentryReportingEnabled(launchFixtureProfile() === undefined, sentryBuild().dsn);
+
+/** Whether the SDK stands now: reportable, and on this device's choice to share usage data. */
+let standing = reportable && crashReportsModule.sharesUsageData();
+
+/** The options the SDK starts on, enabled or not. */
+function sentryOptions(enabled: boolean): Parameters<typeof init>[0] {
   const build = sentryBuild();
   const version = Constants.expoConfig?.version;
   const buildNumber = Constants.expoConfig?.ios?.buildNumber;
   const bundleId = Constants.expoConfig?.ios?.bundleIdentifier;
-  const enabled = sentryReportingEnabled(launchFixtureProfile() === undefined, build.dsn);
 
-  init({
+  return {
     dsn: build.dsn,
     enabled,
     environment: environmentOf(build),
@@ -172,17 +184,61 @@ function startCrashReports(): void {
     integrations: (defaults) => defaults.filter(({ name }) => !UNTRACED.has(name)),
     tracePropagationTargets: [],
     _experiments: { enableStandaloneAppStartTracing: true },
-  });
+  };
+}
+
+/**
+ * Starts the SDK once, as the bundle loads, before the screens or the
+ * background push task can throw, enabled where it stands. A test report is
+ * sent at once where the launch asks for one (`-sentryTest`), so a
+ * TestFlight build can be checked end to end: `js` sends a handled error,
+ * whose stack reads through the uploaded source maps, and `native` crashes
+ * the app, whose report is sent on the next launch and reads through the
+ * uploaded dSYMs.
+ */
+function startCrashReports(): void {
+  const buildNumber = Constants.expoConfig?.ios?.buildNumber;
+
+  init(sentryOptions(standing));
 
   if (buildNumber !== undefined) setTag(BUILD_NUMBER_TAG, buildNumber);
 
   // Note that a launch in front holds Sentry's app start open until its Inbox shows (`finishLaunchTrace`); one woken in the background isn't held, since nobody waits through it.
-  if (enabled && AppState.currentState !== "background") extendAppStart();
+  if (standing && AppState.currentState !== "background") extendAppStart();
   const test = launchSentryTest();
 
   if (test === LAUNCH_SENTRY_TEST.JS) captureException(new Error(TEST_REPORT_WORDS));
 
   if (test === LAUNCH_SENTRY_TEST.NATIVE) nativeCrash();
+}
+
+/**
+ * Holds the SDK to this device's choice to share usage data, as the host
+ * reads it: kept for the next launch's native start, and the SDK closed, its
+ * native half with it, where it reads off, or started again where it reads
+ * on after a close. Note that a close drops what the SDK holds unsent, such
+ * as this launch's trace, since nothing goes out once the choice is off.
+ */
+function shareCrashReports(shares: boolean): void {
+  crashReportsModule.keepSharesUsageData(shares);
+
+  if (!reportable || shares === standing) return;
+  standing = shares;
+
+  if (shares) init(sentryOptions(true));
+  else void close();
+}
+
+/** Holds the SDK to Settings › Account › Share usage data as the host reads it (`shareCrashReports`). */
+export function useCrashReports(): void {
+  const { data: shares } = useQuery({
+    ...appStateQuery,
+    select: (state) => selectAppSettingsView(state)?.usageData,
+  });
+
+  useEffect(() => {
+    if (shares !== undefined) shareCrashReports(shares);
+  }, [shares]);
 }
 
 /**
