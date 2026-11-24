@@ -1,4 +1,4 @@
-// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, and a row's long press menu, swipes, and VoiceOver Actions and a section header's menu built from data.
+// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, a row's long press menu, swipes, and VoiceOver Actions and a section header's menu built from data, and a working face's bob.
 
 import {
   createModifier,
@@ -21,6 +21,7 @@ const MODIFIER = {
   ROW_SWIPES: "vespinRowSwipes",
   ROW_HEARD: "vespinRowHeard",
   HEADER_MENU: "vespinHeaderMenu",
+  WORKING_BOB: "vespinWorkingBob",
 } as const;
 
 /** Which bar a subtitle stands under: a split view column's, SwiftUI's own, or the native stack's a compact screen is pushed under. */
@@ -69,6 +70,11 @@ export type BarTitleMark = { readonly title: string; readonly asset: string };
  */
 export function stackScrollEdge(): ModifierConfig {
   return createModifier(MODIFIER.STACK_SCROLL_EDGE, {});
+}
+
+/** A view rising by `height` points and falling back, each in `seconds` and eased, read off the system's clock so it keeps time with the working marks beside it, as a working Manager's face bobs; no JavaScript keeps it moving. */
+export function workingBob(height: number, seconds: number): ModifierConfig {
+  return createModifier(MODIFIER.WORKING_BOB, { height, seconds });
 }
 
 /** A scroll view's content set in from its sides by `length` points, SwiftUI's `contentMargins` for its scroll content, while the scroll view keeps its whole width, so the ground beside the content still scrolls it. */
