@@ -19,8 +19,7 @@ let package = Package(
     .package(url: "https://github.com/tree-sitter/tree-sitter-python", exact: "0.23.6"),
     .package(url: "https://github.com/tree-sitter/tree-sitter-rust", exact: "0.24.2"),
     // Note that Python's, CSS's, and YAML's newest manifests look for their scanner relative to the directory the build runs in, which leaves it out where they are a dependency, so each is pinned to the last tag that names its scanner outright.
-    // Note that Swift's and SQL's grammars commit their generated parsers only on a branch of their own, so each is pinned to a commit of it.
-    .package(url: "https://github.com/DerekStride/tree-sitter-sql", revision: "2d088525f3f986108d969dab526a0d7129281e24"),
+    // Note that Swift's grammar commits its generated parser only on a branch of its own, so it is pinned to a commit of it.
     .package(url: "https://github.com/alex-pinkus/tree-sitter-swift", revision: "82bb3a533e0801fd2bbaa11dc49676e10bf41948"),
     .package(url: "https://github.com/tree-sitter/tree-sitter-typescript", exact: "0.23.2"),
     .package(url: "https://github.com/tree-sitter-grammars/tree-sitter-yaml", exact: "0.7.0"),
@@ -39,7 +38,6 @@ let package = Package(
         .product(name: "TreeSitterMarkdown", package: "tree-sitter-markdown"),
         .product(name: "TreeSitterPython", package: "tree-sitter-python"),
         .product(name: "TreeSitterRust", package: "tree-sitter-rust"),
-        .product(name: "TreeSitterSql", package: "tree-sitter-sql"),
         .product(name: "TreeSitterSwift", package: "tree-sitter-swift"),
         .product(name: "TreeSitterTypeScript", package: "tree-sitter-typescript"),
         .product(name: "TreeSitterYAML", package: "tree-sitter-yaml"),

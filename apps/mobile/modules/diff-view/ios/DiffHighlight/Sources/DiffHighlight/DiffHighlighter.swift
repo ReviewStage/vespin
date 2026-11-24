@@ -29,7 +29,6 @@ import TreeSitterJSON
 import TreeSitterMarkdown
 import TreeSitterPython
 import TreeSitterRust
-import TreeSitterSql
 import TreeSitterSwift
 import TreeSitterTSX
 import TreeSitterTypeScript
@@ -39,7 +38,7 @@ import TreeSitterYAML
 
 /// The languages a diff is colored in, the ones Vespin's repositories hold most; every other file is drawn plain.
 public enum DiffLanguage: String, CaseIterable, Sendable {
-  case bash, css, go, html, javascript, json, markdown, python, rust, sql, swift, tsx, typescript, yaml
+  case bash, css, go, html, javascript, json, markdown, python, rust, swift, tsx, typescript, yaml
 
   /// The language a file's path names by its extension, or none for a file drawn plain.
   public init?(path: String) {
@@ -60,7 +59,6 @@ public enum DiffLanguage: String, CaseIterable, Sendable {
     "md": .markdown, "markdown": .markdown,
     "py": .python,
     "rs": .rust,
-    "sql": .sql,
     "swift": .swift,
     "tsx": .tsx,
     "ts": .typescript, "mts": .typescript, "cts": .typescript,
@@ -79,7 +77,6 @@ public enum DiffLanguage: String, CaseIterable, Sendable {
     case .markdown: return Language(language: tree_sitter_markdown())
     case .python: return Language(language: tree_sitter_python())
     case .rust: return Language(language: tree_sitter_rust())
-    case .sql: return Language(language: tree_sitter_sql())
     case .swift: return Language(language: tree_sitter_swift())
     case .tsx: return Language(language: tree_sitter_tsx())
     case .typescript: return Language(language: tree_sitter_typescript())

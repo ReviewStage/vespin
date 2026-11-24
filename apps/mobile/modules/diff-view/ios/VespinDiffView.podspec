@@ -19,7 +19,6 @@ DIFF_HIGHLIGHT_PACKAGES = [
   ['https://github.com/tree-sitter-grammars/tree-sitter-markdown', { kind: 'exactVersion', version: '0.5.4' }, 'TreeSitterMarkdown'],
   ['https://github.com/tree-sitter/tree-sitter-python', { kind: 'exactVersion', version: '0.23.6' }, 'TreeSitterPython'],
   ['https://github.com/tree-sitter/tree-sitter-rust', { kind: 'exactVersion', version: '0.24.2' }, 'TreeSitterRust'],
-  ['https://github.com/DerekStride/tree-sitter-sql', { kind: 'revision', revision: '2d088525f3f986108d969dab526a0d7129281e24' }, 'TreeSitterSql'],
   ['https://github.com/alex-pinkus/tree-sitter-swift', { kind: 'revision', revision: '82bb3a533e0801fd2bbaa11dc49676e10bf41948' }, 'TreeSitterSwift'],
   ['https://github.com/tree-sitter/tree-sitter-typescript', { kind: 'exactVersion', version: '0.23.2' }, 'TreeSitterTypeScript'],
   ['https://github.com/tree-sitter-grammars/tree-sitter-yaml', { kind: 'exactVersion', version: '0.7.0' }, 'TreeSitterYAML'],

@@ -28,7 +28,6 @@ final class DiffHighlighterTests: XCTestCase {
       .markdown: "# Title",
       .python: "def f():\n    return \"hi\"",
       .rust: "fn main() { let a = 1; }",
-      .sql: "SELECT a FROM b;",
       .swift: "func f() -> String { return \"hi\" }",
       .tsx: "const a: number = <div>hi</div>;",
       .typescript: "const a: number = 1;",

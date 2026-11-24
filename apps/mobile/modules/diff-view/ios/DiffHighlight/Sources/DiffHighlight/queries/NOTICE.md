@@ -15,7 +15,6 @@ License each grammar carries:
 | `markdown.scm` | tree-sitter-grammars/tree-sitter-markdown | v0.5.4 | (c) 2021 Matthias Deiml |
 | `python.scm` | tree-sitter/tree-sitter-python | v0.23.6 | (c) 2016 Max Brunsfeld |
 | `rust.scm` | tree-sitter/tree-sitter-rust | v0.24.2 | (c) 2017 Maxim Sokolov |
-| `sql.scm` | DerekStride/tree-sitter-sql | 2d088525 (gh-pages) | (c) 2021 Derek Stride |
 | `swift.scm` | alex-pinkus/tree-sitter-swift | 82bb3a53 (with-generated-files) | (c) 2021 alex-pinkus |
 | `typescript.scm` | tree-sitter/tree-sitter-typescript | v0.23.2 | (c) 2017 Max Brunsfeld |
 | `yaml.scm` | tree-sitter-grammars/tree-sitter-yaml | v0.7.0 | (c) 2019-2021 Ika, (c) 2024 tree-sitter-grammars contributors |

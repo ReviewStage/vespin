@@ -100,14 +100,6 @@
       }
     },
     {
-      "identity" : "tree-sitter-sql",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/DerekStride/tree-sitter-sql",
-      "state" : {
-        "revision" : "2d088525f3f986108d969dab526a0d7129281e24"
-      }
-    },
-    {
       "identity" : "tree-sitter-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/alex-pinkus/tree-sitter-swift",
