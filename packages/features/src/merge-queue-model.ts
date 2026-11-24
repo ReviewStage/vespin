@@ -23,6 +23,8 @@ export const MERGE_QUEUE_PAGE_WORDS = {
   EMPTY: "Nothing is queued.",
   UNREAD: "The merge queues could not be read.",
   READING: "Reading the merge queues…",
+  /** What a queued pull request's state menu offers to open the page on it. */
+  VIEW: "View merge queue",
 } as const;
 
 /** How often the queues are read again while the page stands, since GitHub tells the app nothing as a queue moves. */

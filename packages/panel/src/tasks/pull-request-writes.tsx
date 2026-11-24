@@ -8,6 +8,7 @@ import {
 import { type AgentPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { saidWords } from "@repo/features/integration-health";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   CLOSE_WORDS,
@@ -426,7 +427,7 @@ const CLOSE_UNKNOWN_QUESTION: DialogQuestion = {
 };
 
 /** What the pill's menu offers to open the Merge queue page on a queued pull request. */
-const VIEW_QUEUE_WORDS = "View merge queue";
+const VIEW_QUEUE_WORDS = MERGE_QUEUE_PAGE_WORDS.VIEW;
 
 /**
  * The pill saying where the pull request stands, its mark in its tone; a press

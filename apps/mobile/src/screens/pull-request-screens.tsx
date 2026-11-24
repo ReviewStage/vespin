@@ -17,6 +17,7 @@ import {
 } from "@repo/features/ios-app-links";
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
+import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import {
   CHECK_SUMMARY_WORDS,
   CLOSE_WORDS,
@@ -69,6 +70,7 @@ import {
   ConfirmAsk,
   ConversationEntryRow,
   EmptyState,
+  type FieldAct,
   type FieldMenu,
   GLYPH,
   type Glyph,
@@ -102,6 +104,7 @@ import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent, useShownAgent } from "../agents/use-agent.js";
+import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-on.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { reactionMenu } from "../pull-requests/reaction-menu.js";
 import {
@@ -540,6 +543,7 @@ function PullRequestPage({
   const asks = asked !== undefined && asked.action === offered && sameKey(asked.on, key);
   const open = pullRequest?.state === PULL_REQUEST_STATE.OPEN;
   const inQueue = open && queued !== null;
+  const mergeQueueOn = useMergeQueueOn();
   // Note that a place in the queue left unread, as a read with no merge box leaves it, may be one, so Close asks of it as of one queued: only a read saying it holds it nowhere lets Close act at once, as the panel's does.
   const mayBeQueued = inQueue || (open && pullRequest?.merging === undefined);
   const closeAsks = closing !== undefined && sameKey(closing, key) && mayBeQueued;
@@ -629,19 +633,37 @@ function PullRequestPage({
         };
 
   // Note that the state chip offers the same changes as the bar's ⋯, as the panel's pill opens them where it says where the pull request stands; none once merged, where nothing changes.
+  // A queued pull request's chip offers View merge queue first, while the account has the page on, as the panel's pill does, opening it on this pull request's row.
+  const viewQueue: readonly FieldAct[] =
+    inQueue && mergeQueueOn
+      ? [
+          {
+            label: MERGE_QUEUE_PAGE_WORDS.VIEW,
+            symbol: GLYPH.QUEUED,
+            destructive: false,
+            disabled: false,
+            onPress: () =>
+              router.push({ pathname: onOwnTab(MERGE_QUEUE_ROUTE), params: { pr: url } }),
+          },
+        ]
+      : [];
+
   const stateMenu: FieldMenu | undefined =
-    changes.length === 0
+    changes.length === 0 && viewQueue.length === 0
       ? undefined
       : {
           label: MENU_WORDS.STATE,
           choices: [],
-          actions: changes.map((change) => ({
-            label: PULL_REQUEST_STATE_ACTION_WORDS[change.action],
-            symbol: STATE_ACTION_GLYPHS[change.action],
-            destructive: change.action === PULL_REQUEST_ACTION.CLOSE,
-            disabled: change.disabled,
-            onPress: change.onPress,
-          })),
+          actions: [
+            ...viewQueue,
+            ...changes.map((change) => ({
+              label: PULL_REQUEST_STATE_ACTION_WORDS[change.action],
+              symbol: STATE_ACTION_GLYPHS[change.action],
+              destructive: change.action === PULL_REQUEST_ACTION.CLOSE,
+              disabled: change.disabled,
+              onPress: change.onPress,
+            })),
+          ],
         };
 
   useScreenActivity((workspaces) =>
