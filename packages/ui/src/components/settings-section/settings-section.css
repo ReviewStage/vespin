@@ -77,13 +77,14 @@
     border-top: 1px solid var(--ui-color-border);
   }
 
-  /* A row's end that holds only the room of a ⋯ or a chevron it lacks
-     (`SettingsRowActSlot`, a fold's with nothing to fold) keeps that room
-     only while another row of its section draws a glyph in that column;
-     where none does, it stands nowhere, gap and all, so a row's last
-     control, a Connect, ends at the card's padding rather than short of it.
-     Note that this stays here rather than in the row, because only the
-     section can see whether any of its rows ends in a glyph. */
+  /* A value's row whose end holds only the room of a ⋯ or a chevron it
+     lacks (`SettingsRowActSlot`, a fold's with nothing to fold) keeps that
+     room only while another row of its section draws a glyph in that
+     column; where none does, it stands nowhere, gap and all, so the value
+     ends at the card's padding rather than short of it. Beside any other
+     control the room stands nowhere at all (settings-row.css). Note that
+     this stays here rather than in the row, because only the section can
+     see whether any of its rows ends in a glyph. */
   .ui-settings-section:not(:has(.ui-settings-row-end > :not(.ui-settings-row-act-slot)))
   .ui-settings-row-end:not(:has(> :not(.ui-settings-row-act-slot))) {
     display: none;
