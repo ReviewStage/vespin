@@ -11,6 +11,8 @@ import {
   automationTriggerText,
   DEFAULT_AUTOMATIONS_ORDER,
   finishedAutomations,
+  RUNS_SHOWN,
+  type RunsShown,
 } from "@repo/features/automation-list-model";
 import {
   AUTOMATION_PRESET,
@@ -25,6 +27,7 @@ import {
 } from "@repo/features/automation-wire";
 import {
   AUTOMATION_RUN_REFUSAL_WORDS,
+  AUTOMATION_TAKE_OVER_WORDS,
   automationNarrowLine,
   automationNextText,
   automationOwnerFor,
@@ -136,14 +139,7 @@ import {
 } from "./automation-list-frame.js";
 import { OWNER_MARK_SIZE, OwnerMark } from "./automation-owner.js";
 import { RunsSkeleton, STANDING_GLYPH } from "./automation-runs-panel.js";
-import {
-  RUNS_SHOWN,
-  type RunsShown,
-  runningRuns,
-  runsCount,
-  runsShownChoices,
-  WorkspaceRuns,
-} from "./automation-runs-tab.js";
+import { runningRuns, runsCount, runsShownChoices, WorkspaceRuns } from "./automation-runs-tab.js";
 import { automationDeleteQuestion } from "./automation-words.js";
 import { PhoneHead, PlaceMore, phoneBar, phoneFindGroups, useMenuAsk } from "./phone-head.js";
 import { useWorkspaceRuns, type WorkspaceRunsRead } from "./use-automation-runs.js";
@@ -360,9 +356,6 @@ function useRunNow(automationId: string): UseRunNowResult {
   return { running: runAutomation.isPending, run };
 }
 
-/** What a refused Take over says. */
-const TAKE_OVER_REFUSED = "Couldn't take over this automation.";
-
 /** The roles that take over an automation whose creator left the workspace. */
 const TAKING_ROLES: ReadonlySet<string> = new Set([WORKSPACE_ROLE.OWNER, WORKSPACE_ROLE.ADMIN]);
 
@@ -388,13 +381,13 @@ function useTakeOver(
   if (!left || workspace === undefined || !TAKING_ROLES.has(workspace.role)) return undefined;
 
   return {
-    label: "Take over",
+    label: AUTOMATION_TAKE_OVER_WORDS.ACT,
     icon: <GLYPH.PERSON />,
     onSelect: () => {
       void onTakeOver().then((answer) => {
         if ("failure" in answer) {
           toast({
-            words: TAKE_OVER_REFUSED,
+            words: AUTOMATION_TAKE_OVER_WORDS.REFUSED,
             replayUnmasked: true,
             tone: STATUS_TONE.DANGER,
             failure: {

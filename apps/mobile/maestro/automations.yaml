@@ -1,0 +1,107 @@
+# automations.yaml -- the Automations tab on the Inbox fixture: the workspace's automations, the workspace's first and Ada's own after, each with what fires it and how its newest run went; View options' Order by; a row's long press with Run now, its switch, Copy link and Delete; an automation's page with its switch, Run now, what fires it and its next runs, its prompt, where it runs, who it is for, its runs, and its ⋯; a run opening the agent it started on the tab, Back returning to the page; and the workspace's runs, narrowed to the ones that failed.
+#
+# Launched on the host's Inbox fixture, whose workspace holds three
+# automations and their runs (`@repo/host/fixture-inbox`'s
+# `inboxAutomationsAppState`), so no server is reached: a weekly digest on a
+# schedule, a fix on each failed check whose newest run is at work, and
+# Ada's own deploy check, turned off, whose newest run could not start. The
+# fixture answers a Run now and a switch as the service would.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Automations
+# Note that a row is one element, heard as its name, so an automation is found by it.
+- extendedWaitUntil:
+    visible: "Weekly digest"
+    timeout: 30000
+- assertVisible: "Fix failing checks"
+- assertVisible: "Check each deploy"
+- waitForAnimationToEnd
+- takeScreenshot: automations-list
+# View options orders each owner's automations, its choice checked, and Reset view puts the list back.
+- tapOn: "View options"
+- tapOn: "Order by"
+- assertVisible: "Last run"
+- waitForAnimationToEnd
+- takeScreenshot: automations-order
+- tapOn: "Name"
+- waitForAnimationToEnd
+- takeScreenshot: automations-by-name
+- tapOn: "View options"
+- tapOn: "Reset view"
+- waitForAnimationToEnd
+# A long press offers Run now and the switch, then Copy link, then Delete in red, which asks first.
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Fix failing checks
+      ITEM: Delete
+- assertVisible: "Run now"
+- assertVisible: "Turn off"
+- assertVisible: "Copy link"
+- takeScreenshot: automations-menu
+- tapOn: "Delete"
+- assertVisible: "Delete automation"
+- waitForAnimationToEnd
+- takeScreenshot: automations-delete-ask
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Delete Fix failing checks?"
+- assertVisible: "Fix failing checks"
+# An automation's page: its switch and Run now, what fires it and when next, its prompt, where it runs, who it is for, and its runs.
+- tapOn: "Weekly digest"
+- waitForAnimationToEnd
+- assertVisible: "Run now"
+- assertVisible: "Trigger"
+- assertVisible: "Next runs.*"
+- takeScreenshot: automation-page
+- scrollUntilVisible:
+    element: "Where it runs"
+- assertVisible: "Runs land in.*"
+- waitForAnimationToEnd
+- takeScreenshot: automation-page-where
+# Its ⋯ holds Run now, its switch, Copy link, and Delete.
+- tapOn: "More"
+- assertVisible: "Copy link"
+- assertVisible: "Delete"
+- waitForAnimationToEnd
+- takeScreenshot: automation-page-more
+- runFlow:
+    file: subflows/dismiss.yaml
+- scrollUntilVisible:
+    element: "Send the weekly digest"
+- waitForAnimationToEnd
+- takeScreenshot: automation-page-runs
+# A run opens the agent it started on the tab, and Back returns to the automation's page.
+- tapOn: "Send the weekly digest"
+- waitForAnimationToEnd
+- assertVisible: ".*merged pull requests.*"
+- takeScreenshot: automation-run-agent
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+- assertVisible: "Recent runs"
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+# The workspace's runs, every automation's, narrowed to the ones that failed.
+- tapOn: "Runs"
+- waitForAnimationToEnd
+- assertVisible: "Check each deploy"
+- takeScreenshot: automations-runs
+- tapOn: "Failed.*"
+- waitForAnimationToEnd
+- assertNotVisible: "Fix failing checks"
+- takeScreenshot: automations-runs-failed

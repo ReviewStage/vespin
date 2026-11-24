@@ -1,6 +1,9 @@
 import {
-  AUTOMATION_RUN_STANDING,
-  automationRunStanding,
+  RUNS_SHOWN,
+  RUNS_SHOWN_NONE,
+  RUNS_SHOWN_WORDS,
+  type RunsShown,
+  shownRuns,
 } from "@repo/features/automation-list-model";
 import type { AutomationWorkspaceRun } from "@repo/features/automation-wire";
 import {
@@ -33,42 +36,12 @@ import type { WorkspaceRunsRead } from "./use-automation-runs.js";
  * the top.
  */
 
-/** Which runs the tab shows: all of them, the ones whose agent still works, or the ones that failed. */
-export const RUNS_SHOWN = {
-  ALL: "all",
-  RUNNING: "running",
-  FAILED: "failed",
-} as const;
-
-export type RunsShown = (typeof RUNS_SHOWN)[keyof typeof RUNS_SHOWN];
-
-/** What each choice that narrows the runs is called, in the bar's order. */
-const SHOWN_LABEL = {
-  [RUNS_SHOWN.ALL]: "All",
-  [RUNS_SHOWN.RUNNING]: "Running",
-  [RUNS_SHOWN.FAILED]: "Failed",
-} as const satisfies Record<RunsShown, string>;
-
 /** The tone a choice's count is drawn in; none for All, which counts nothing. */
 const SHOWN_TONE = {
   [RUNS_SHOWN.ALL]: undefined,
   [RUNS_SHOWN.RUNNING]: STATUS_TONE.WORKING,
   [RUNS_SHOWN.FAILED]: STATUS_TONE.DANGER,
 } as const satisfies Record<RunsShown, StatusTone | undefined>;
-
-/** The standing each narrowing keeps; none for All, which keeps every run. */
-const SHOWN_STANDING = {
-  [RUNS_SHOWN.ALL]: undefined,
-  [RUNS_SHOWN.RUNNING]: AUTOMATION_RUN_STANDING.WORKING,
-  [RUNS_SHOWN.FAILED]: AUTOMATION_RUN_STANDING.FAILED,
-} as const satisfies Record<RunsShown, string | undefined>;
-
-/** What the tab says where the narrowing leaves no run. */
-const NONE_SHOWN = {
-  [RUNS_SHOWN.ALL]: "No runs yet.",
-  [RUNS_SHOWN.RUNNING]: "Nothing is running.",
-  [RUNS_SHOWN.FAILED]: "No run failed.",
-} as const satisfies Record<RunsShown, string>;
 
 /** A count of runs as a choice draws it, in `tone`; none at nothing, as the sidebar's counts leave theirs out. */
 export function runsCount(count: number, tone: StatusTone): readonly CountPart[] | undefined {
@@ -88,22 +61,10 @@ export function runsShownChoices(
 
     return {
       value: shown,
-      label: SHOWN_LABEL[shown],
+      label: RUNS_SHOWN_WORDS[shown],
       count: tone === undefined ? undefined : runsCount(shownRuns(runs, shown).length, tone),
     };
   });
-}
-
-/** The runs a narrowing keeps, in the order they came. */
-function shownRuns(
-  runs: readonly AutomationWorkspaceRun[],
-  shown: RunsShown,
-): readonly AutomationWorkspaceRun[] {
-  const standing = SHOWN_STANDING[shown];
-
-  if (standing === undefined) return runs;
-
-  return runs.filter((run) => automationRunStanding(run) === standing);
 }
 
 /** How many of the workspace's runs still have an agent at work, which the sidebar's Automations row and the Runs tab count; none while the runs are unread. */
@@ -132,7 +93,8 @@ export function WorkspaceRuns({
   const body = useRef<HTMLDivElement | null>(null);
   const kept = shownRuns(runs, shown);
 
-  if (kept.length === 0) return <EmptyState icon={<ClockIcon />}>{NONE_SHOWN[shown]}</EmptyState>;
+  if (kept.length === 0)
+    return <EmptyState icon={<ClockIcon />}>{RUNS_SHOWN_NONE[shown]}</EmptyState>;
 
   return (
     <div ref={body}>

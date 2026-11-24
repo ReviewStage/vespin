@@ -52,6 +52,7 @@ import {
 import { Stack, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useWorkspaceManagers } from "../agents/use-managers.js";
+import { AUTOMATIONS_ROUTE } from "../automations/automation-routes.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
@@ -65,7 +66,7 @@ import {
   useSearchRecent,
 } from "../search/use-search.js";
 import { SEARCH_FOCUS_PARAM, useRefilledSearchField } from "../search-field.js";
-import { SETTINGS_ROUTE, SettingsBarButton, useOpenSettings } from "../settings-button.js";
+import { SettingsBarButton, useOpenSettings } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -196,7 +197,8 @@ function useGoTo(leave: (() => void) | undefined) {
 
         return;
       case GO_TO.AUTOMATIONS:
-        openSettings(SETTINGS_ROUTE.AUTOMATIONS);
+        leave?.();
+        router.navigate(AUTOMATIONS_ROUTE);
 
         return;
       case GO_TO.SETTINGS:

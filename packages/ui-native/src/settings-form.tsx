@@ -1578,7 +1578,17 @@ export function ConnectionRow({
   );
 }
 
+/** Where an automation's row stands: a card's row of a form, as Settings and an automation's page list them, or a row of a tab's plain list, on the list's own ground. */
+export const AUTOMATION_ROW_LOOK = {
+  FORM: "form",
+  LIST: "list",
+} as const;
+
+type AutomationRowLook = (typeof AUTOMATION_ROW_LOOK)[keyof typeof AUTOMATION_ROW_LOOK];
+
 type AutomationRowProps = {
+  /** Where it stands: a form's card, or a plain list's ground; a form's where none is given. */
+  readonly look?: AutomationRowLook | undefined;
   /** Its name, or a run's title. */
   readonly title: string;
   /** What fires it and when it runs next, or why a run stands as it does. */
@@ -1597,6 +1607,10 @@ type AutomationRowProps = {
   readonly onPress?: (() => void) | undefined;
   /** Its acts, such as Run now and Turn off, behind a swipe from the leading edge, the first run by a full swipe, and in the menu a long press opens; none for none. */
   readonly acts?: readonly RowAction[] | undefined;
+  /** The menu's other groups after its acts, such as Copy link and Take over, each set apart by a divider, in the long press alone; none for none. */
+  readonly more?: readonly (readonly RowAction[])[] | undefined;
+  /** The act that takes it away, such as Delete, which asks first: red behind a swipe from the trailing edge, never run by a full swipe, and last in the menu; none where the reader may not. */
+  readonly remove?: RowAction | undefined;
   /** The name a flow finds it by, where its words are not its own. */
   readonly testId?: string | undefined;
 };
@@ -1613,6 +1627,7 @@ type AutomationRowProps = {
  * its lines, and offers its acts among its actions.
  */
 export function AutomationRow({
+  look = AUTOMATION_ROW_LOOK.FORM,
   title,
   line,
   standing,
@@ -1622,6 +1637,8 @@ export function AutomationRow({
   faded = false,
   onPress,
   acts = [],
+  more = [],
+  remove,
   testId,
 }: AutomationRowProps) {
   const colors = useColors();
@@ -1683,7 +1700,7 @@ export function AutomationRow({
   );
 
   const placed = [
-    listRowBackground(colors.RAISED),
+    listRowBackground(look === AUTOMATION_ROW_LOOK.LIST ? "clear" : colors.RAISED),
     accessibilityElement("combine"),
     accessibilityLabel(title),
     ...spokenValue(line, standingWords, when),
@@ -1693,15 +1710,31 @@ export function AutomationRow({
   const drawn =
     onPress === undefined ? content : <SwiftUIButton onPress={onPress}>{content}</SwiftUIButton>;
 
-  if (acts.length === 0) return <HStack modifiers={placed}>{drawn}</HStack>;
+  const groups = [acts, ...more, ...(remove === undefined ? [] : [[remove]])];
+
+  if (groups.every((group) => group.length === 0)) {
+    return <HStack modifiers={placed}>{drawn}</HStack>;
+  }
+
   const gray = fills[SYSTEM_COLOR.GRAY];
 
   return (
     <SwipeActions modifiers={placed}>
-      <LongPressMenu groups={[acts]}>{drawn}</LongPressMenu>
+      <LongPressMenu groups={groups}>{drawn}</LongPressMenu>
       <SwipeActions.Actions edge="leading" allowsFullSwipe>
         {acts.map((act) => actionButton(act, colors, gray, false))}
       </SwipeActions.Actions>
+      {/* Note that Delete asks first, so a full swipe never runs it, as Notes' rows carry theirs. */}
+      {remove === undefined ? null : (
+        <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
+          <SwipeRemove
+            label={remove.label}
+            symbol={remove.symbol}
+            onPress={remove.onPress}
+            colors={colors}
+          />
+        </SwipeActions.Actions>
+      )}
     </SwipeActions>
   );
 }

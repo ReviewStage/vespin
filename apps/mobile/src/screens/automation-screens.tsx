@@ -1,41 +1,97 @@
-// automation-screens.tsx -- the automations of the workspace the app works in, as the Automations tab and Settings' Automations page stand them: the workspace's first and then the reader's own, each with what fires it, when it runs next, and how its newest run went, opening its own page on a press, with Run now and its switch behind a swipe and a long press; made and changed on the desktop and the web.
+// automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each in the order View options chose, a finished one-time automation folded under Finished, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
 
 import {
   AUTOMATION_RUN_STANDING,
+  AUTOMATIONS_ORDER,
+  AUTOMATIONS_ORDER_WORDS,
+  type AutomationsOrder,
   automationGroups,
   automationRunStanding,
+  automationTriggerText,
+  DEFAULT_AUTOMATIONS_ORDER,
+  finishedAutomations,
 } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
 import {
+  AUTOMATION_DELETE_WORDS,
   AUTOMATION_PHONE_WORDS,
+  AUTOMATION_TAKE_OVER_WORDS,
+  automationDeleteTitle,
   automationLastRunWords,
   automationOwnerName,
   automationPhoneLine,
   READING_AUTOMATIONS,
 } from "@repo/features/automation-words";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
+import { TASKS_VIEW_WORDS } from "@repo/features/tasks-page-model";
 import { sinceText } from "@repo/features/time-format";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  AUTOMATION_ROW_LOOK,
   AutomationRow,
+  type BarMenu,
+  ConfirmAsk,
   EmptyState,
   GLYPH,
+  glyphSymbol,
+  LIST_LOOK,
   ListSection,
-  SCREEN_GROUND,
+  ROW_ACTION_TONE,
+  RowForEach,
+  RowList,
   Screen,
-  SettingsForm,
   useMinute,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
+import { useState } from "react";
+import { newAutomationRoute } from "../automations/automation-editor-route.js";
+import { AUTOMATION_RUNS_ROUTE, automationRoute } from "../automations/automation-routes.js";
+import { useAutomationsOrder } from "../automations/automations-order.js";
 import {
+  type AutomationActs,
   automationRowActs,
+  copyAutomationLink,
+  takesOver,
   useAutomationActs,
+  useAutomationMaker,
   useWorkspaceAutomations,
 } from "../automations/use-automations.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { SETTINGS_ROUTE } from "../settings-button.js";
+import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
+import { SettingsBarButton } from "../settings-button.js";
+import { stackMenuItems } from "../stack-bar-menu.js";
+import { useOnOwnTab } from "../tab-route.js";
+import { useWorkspaceSwitcher } from "../workspace-switcher.js";
+import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
+
+/** What the list's field says before anything is typed. */
+const SEARCH_AUTOMATIONS = "Search automations";
+
+/** What the folded group of finished one-time automations is called, as the desktop's list calls it. */
+const FINISHED = "Finished";
+
+/** What the list says where a search keeps none. */
+const NO_MATCH = "No automations match.";
+
+/** What the bar's + is called, as the desktop's page names its act. */
+const NEW_AUTOMATION = "New automation";
+
+/** What the workspace's runs are called, on the bar's button that opens them, as the desktop's tab names them. */
+const RUNS = "Runs";
+
+/** What View options is called, on its button and to VoiceOver. */
+const VIEW_OPTIONS = "View options";
+
+/** Each order's glyph on Order by, the Tasks tab's own where it orders alike. */
+const ORDER_GLYPH = {
+  [AUTOMATIONS_ORDER.CREATED]: GLYPH.SCHEDULE_ADD,
+  [AUTOMATIONS_ORDER.NAME]: GLYPH.LIST,
+  [AUTOMATIONS_ORDER.LAST_RUN]: GLYPH.HISTORY,
+  [AUTOMATIONS_ORDER.NEXT_RUN]: GLYPH.SCHEDULES,
+} as const;
 
 /** When an automation's newest run fired, at its row's end; none while it is at work, whose mark says so, or for one that never ran. */
 function lastRunWhen(automation: AutomationSummary, now: number): string | undefined {
@@ -48,37 +104,162 @@ function lastRunWhen(automation: AutomationSummary, now: number): string | undef
   return sinceText(run.firedAt, now);
 }
 
+/** View options: Order by, its choice checked, then Reset view while the order is not the one the list starts in; its glyph fills while it is changed. */
+function viewMenu(order: AutomationsOrder, setOrder: (next: AutomationsOrder) => void): BarMenu {
+  const changed = order !== DEFAULT_AUTOMATIONS_ORDER;
+
+  return {
+    label: VIEW_OPTIONS,
+    symbol: changed ? GLYPH.FILTERED : GLYPH.FILTER,
+    choices: [],
+    actions: [],
+    groups: [
+      {
+        actions: [],
+        submenus: [
+          {
+            label: TASKS_VIEW_WORDS.ORDER_BY,
+            symbol: GLYPH.TIME,
+            choices: Object.values(AUTOMATIONS_ORDER).map((each) => ({
+              label: AUTOMATIONS_ORDER_WORDS[each],
+              symbol: ORDER_GLYPH[each],
+              on: order === each,
+              onPress: () => setOrder(each),
+            })),
+            actions: [],
+          },
+        ],
+      },
+      {
+        actions: [
+          {
+            label: TASKS_VIEW_WORDS.RESET_VIEW,
+            symbol: GLYPH.RESTORE,
+            disabled: !changed,
+            onPress: () => setOrder(DEFAULT_AUTOMATIONS_ORDER),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** Whether an automation stands among what the search's words find: its name, or what fires it. */
+function found(automation: AutomationSummary, tokens: readonly string[]): boolean {
+  return matchesTokens(
+    [automation.name, automationTriggerText(automation.trigger, automation.repositories ?? [])],
+    tokens,
+  );
+}
+
 /**
- * The automations of the workspace the app works in, as the Automations tab
- * and Settings' Automations page both stand them; nothing until a workspace
- * is chosen.
+ * The Automations tab's root: the workspace the app works in, its
+ * automations listed under who owns them, its switcher leading the bar, View
+ * options and search beside it. Note that it is drawn anew for each
+ * workspace, so nothing of one workspace's list stands over another's.
  */
 export function AutomationsScreen() {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
+  const switcher = useWorkspaceSwitcher();
+  const { order, setOrder } = useAutomationsOrder();
+  const [search, setSearch] = useState("");
+  const field = useRefilledSearchField(search);
+  const placement = useHeldSearchPlacement(search);
+  const menu = viewMenu(order, setOrder);
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+  const compose = useComposeAction();
 
-  if (chosen === undefined) return null;
-
-  // Note that the page is drawn anew for each workspace, so nothing of one workspace's list stands over another's.
-  return <AutomationsPage key={chosen.id} workspace={chosen} />;
+  return (
+    <>
+      <Stack.Screen options={{ title: AUTOMATION_PHONE_WORDS.TITLE }}>
+        <Stack.SearchBar
+          ref={field}
+          placeholder={SEARCH_AUTOMATIONS}
+          placement={placement}
+          allowToolbarIntegration={false}
+          onChangeText={(event) => setSearch(event.nativeEvent.text)}
+          onCancelButtonPress={() => setSearch("")}
+        />
+      </Stack.Screen>
+      <SettingsBarButton switcher={switcher} />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
+          {stackMenuItems(menu)}
+        </Stack.Toolbar.Menu>
+        {/* Note that Runs stands beside View options, as the desktop's page stands its Runs tab beside the list, since every run's agent is found there. */}
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.HISTORY)}
+          accessibilityLabel={RUNS}
+          onPress={() => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE))}
+        />
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.ADD)}
+          accessibilityLabel={NEW_AUTOMATION}
+          onPress={() => router.push(newAutomationRoute())}
+        />
+        {/* Note that an iPad's tab bar has no round +, so its list's bar offers New task too, as every tab root's does. */}
+        {PLUS_TAB ? null : (
+          <Stack.Toolbar.Button
+            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+            accessibilityLabel={compose.label}
+            onPress={compose.onPress}
+          />
+        )}
+      </Stack.Toolbar>
+      <Screen>
+        {chosen === undefined ? null : (
+          <AutomationsList key={chosen.id} workspace={chosen} order={order} search={search} />
+        )}
+      </Screen>
+    </>
+  );
 }
 
-function AutomationsPage({ workspace }: { readonly workspace: Workspace }) {
+function AutomationsList({
+  workspace,
+  order,
+  search,
+}: {
+  readonly workspace: Workspace;
+  readonly order: AutomationsOrder;
+  readonly search: string;
+}) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const now = useMinute();
   const read = useWorkspaceAutomations(workspace.id);
   const acts = useAutomationActs();
-  const automations = read.rows;
-  const groups = automations === undefined ? [] : automationGroups(automations);
+  const [asking, setAsking] = useState<AutomationSummary | undefined>(undefined);
+  // Note that Finished opens folded, as the desktop's group does, since a one-time automation that ran is done with.
+  const [finishedFolded, setFinishedFolded] = useState(true);
+  const tokens = searchTokens(search);
+  const automations = read.rows?.filter((automation) => found(automation, tokens));
+  const groups = automations === undefined ? [] : automationGroups(automations, order);
+  const finished = automations === undefined ? [] : finishedAutomations(automations, order);
 
-  // Note that an automation's page is Settings' own for now, anchored so it opens as Settings' sheet from the tab too, its Back going to Settings' list.
+  // Note that a Delete asked about one deleted elsewhere since withdraws its question.
+  const asked =
+    asking !== undefined && read.rows?.some((each) => each.id === asking.id) === true
+      ? asking
+      : undefined;
+
   const open = (automation: AutomationSummary) =>
-    router.push(
-      { pathname: SETTINGS_ROUTE.AUTOMATION, params: { automation: automation.id } },
-      { withAnchor: true },
-    );
+    router.push(onOwnTab(automationRoute(automation.id)));
 
-  const body =
+  const row = (automation: AutomationSummary) => (
+    <AutomationListRow
+      automation={automation}
+      workspace={workspace}
+      acts={acts}
+      now={now}
+      onOpen={() => open(automation)}
+      onAskDelete={() => setAsking(automation)}
+    />
+  );
+
+  const empty =
     automations === undefined ? (
       read.failed ? (
         <EmptyState
@@ -90,37 +271,127 @@ function AutomationsPage({ workspace }: { readonly workspace: Workspace }) {
         <EmptyState title={READING_AUTOMATIONS} symbol={GLYPH.AUTOMATION} loading />
       )
     ) : automations.length === 0 ? (
-      <EmptyState
-        title={AUTOMATION_PHONE_WORDS.EMPTY}
-        description={AUTOMATION_PHONE_WORDS.MADE_ELSEWHERE}
-        symbol={GLYPH.AUTOMATION}
-      />
-    ) : (
-      <SettingsForm>
-        {groups.map((group, index) => (
+      tokens.length > 0 ? (
+        <EmptyState title={NO_MATCH} symbol={GLYPH.SEARCH} />
+      ) : (
+        <EmptyState title={AUTOMATION_PHONE_WORDS.EMPTY} symbol={GLYPH.AUTOMATION} />
+      )
+    ) : undefined;
+
+  return (
+    <>
+      <RowList look={LIST_LOOK.PLAIN} searched={search} empty={empty}>
+        {groups.map((group) => (
           <ListSection
             key={group.owner}
             title={automationOwnerName(group.owner, workspace.name, true)}
-            footer={index === groups.length - 1 ? AUTOMATION_PHONE_WORDS.MADE_ELSEWHERE : undefined}
+            count={group.automations.length}
           >
-            {group.automations.map((automation) => (
-              <AutomationRow
-                key={automation.id}
-                title={automation.name}
-                line={automationPhoneLine(automation, now)}
-                standing={automationRunStanding(automation.lastRun)}
-                standingWords={automationLastRunWords(automation)}
-                symbol={GLYPH.AUTOMATION}
-                when={lastRunWhen(automation, now)}
-                faded={!automation.enabled}
-                onPress={() => open(automation)}
-                acts={automationRowActs(automation, acts)}
-              />
-            ))}
+            <RowForEach data={group.automations} keyOf={automationKey}>
+              {row}
+            </RowForEach>
           </ListSection>
         ))}
-      </SettingsForm>
-    );
+        {finished.length === 0 ? null : (
+          <ListSection
+            title={FINISHED}
+            count={finished.length}
+            foldable
+            folded={finishedFolded}
+            onFold={setFinishedFolded}
+          >
+            <RowForEach data={finished} keyOf={automationKey}>
+              {row}
+            </RowForEach>
+          </ListSection>
+        )}
+      </RowList>
+      <ConfirmAsk
+        title={automationDeleteTitle(asked?.name)}
+        message={AUTOMATION_DELETE_WORDS.BODY}
+        act={AUTOMATION_DELETE_WORDS.VERB}
+        destructive
+        presented={asked !== undefined}
+        onDismiss={() => setAsking(undefined)}
+        onAct={() => {
+          if (asked === undefined) return;
+          setAsking(undefined);
+          acts.remove(asked);
+        }}
+      />
+    </>
+  );
+}
 
-  return <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>;
+/** An automation's row id in the list. */
+function automationKey(automation: AutomationSummary): string {
+  return automation.id;
+}
+
+/**
+ * One automation's row: what fires it and when it runs next, how its newest
+ * run went, and when, faded while it is off. Its swipe and long press hold
+ * Run now and its switch; its long press then Copy link and, for an owner or
+ * an admin where its creator left, Take over; and Delete, red behind a
+ * swipe from the trailing edge and last in the menu, asks first.
+ */
+function AutomationListRow({
+  automation,
+  workspace,
+  acts,
+  now,
+  onOpen,
+  onAskDelete,
+}: {
+  readonly automation: AutomationSummary;
+  readonly workspace: Workspace;
+  readonly acts: AutomationActs;
+  readonly now: number;
+  readonly onOpen: () => void;
+  readonly onAskDelete: () => void;
+}) {
+  const maker = useAutomationMaker(automation, workspace.id);
+
+  const takeOver = takesOver(maker, workspace)
+    ? [
+        {
+          label: AUTOMATION_TAKE_OVER_WORDS.ACT,
+          symbol: GLYPH.PERSON,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => acts.takeOver(automation),
+        },
+      ]
+    : [];
+
+  return (
+    <AutomationRow
+      look={AUTOMATION_ROW_LOOK.LIST}
+      title={automation.name}
+      line={automationPhoneLine(automation, now)}
+      standing={automationRunStanding(automation.lastRun)}
+      standingWords={automationLastRunWords(automation)}
+      symbol={GLYPH.AUTOMATION}
+      when={lastRunWhen(automation, now)}
+      faded={!automation.enabled}
+      onPress={onOpen}
+      acts={automationRowActs(automation, acts)}
+      more={[
+        [
+          {
+            label: AUTOMATION_PHONE_WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => copyAutomationLink(automation, workspace),
+          },
+          ...takeOver,
+        ],
+      ]}
+      remove={{
+        label: AUTOMATION_PHONE_WORDS.DELETE,
+        symbol: GLYPH.DELETE,
+        tone: ROW_ACTION_TONE.DESTRUCTIVE,
+        onPress: onAskDelete,
+      }}
+    />
+  );
 }

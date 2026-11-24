@@ -17,10 +17,6 @@ export const SETTINGS_ROUTE = {
   MAIN: "/settings",
   ACCOUNT: "/settings/account",
   AGENTS: "/settings/agents",
-  /** The automations of the workspace the app works in, as Settings' row opens them. */
-  AUTOMATIONS: "/settings/automations",
-  /** One automation's page, by the `automation` id it is pushed with, as a row of Automations opens it. */
-  AUTOMATION: "/settings/automation",
   /** The cloud environment of the workspace the app works in: its sandbox, variables, and scripts. */
   CLOUD_ENVIRONMENT: "/settings/cloud-environment",
   /** A secret variable's value, typed for the `name` and `workspaceId` it is pushed with, as a sheet over Cloud environment. */
