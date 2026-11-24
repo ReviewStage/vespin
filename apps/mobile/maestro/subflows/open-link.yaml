@@ -1,0 +1,14 @@
+# open-link.yaml -- opens the app's link `LINK`, answering Open where the system asks before a custom scheme opens the app.
+#
+# Note that Open is pressed only while the system's question stands, known by
+# its Cancel, because a page the link opens may hold its own Open, such as a
+# pull request's state chip, whose press opened its menu over the page
+# (vjnatc2's pull-request-files lane).
+appId: dev.vespin.ios
+---
+- openLink: "${LINK}"
+- runFlow:
+    when:
+      visible: "Cancel"
+    commands:
+      - tapOn: "Open"
