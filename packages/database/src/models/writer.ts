@@ -2951,6 +2951,7 @@ function recordedLine(
             yield* deleteDroppedManagerChat(claimed.chat.userId, claimed.chat.agentId, {
               turnIds: [],
               lineIds: [claimed.id],
+              lineKeys: [],
             });
           }
 

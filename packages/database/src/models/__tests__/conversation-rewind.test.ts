@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { APPROVAL_STATUS } from "@repo/features/agent-approval-wire";
+import { AGENT_KIND } from "@repo/features/agent-wire";
+import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import {
   MESSAGE_AUTHOR,
   MESSAGE_CHANNEL,
@@ -17,7 +19,7 @@ import { agentApproval } from "../../schemas/agent-approval.js";
 import { user } from "../../schemas/auth.js";
 import { conversations, messages, turns } from "../../schemas/storage.js";
 import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
-import { getTestDB, startTask } from "../../testing/index.js";
+import { getTestDB, openWorkspace, startTask } from "../../testing/index.js";
 import { recordApprovalAsked } from "../agent-approvals.js";
 import { createAgent, readNativeHanded, recordNativeHanded } from "../agent-store.js";
 import {
@@ -30,6 +32,13 @@ import {
   readTurnCheckoutRange,
   rewindConversation,
 } from "../conversation-rewind.js";
+import {
+  growManagerChatLine,
+  MANAGER_CHAT_OUTCOME,
+  type ManagerChatWrite,
+  readManagerChatPage,
+  writeManagerChatMessage,
+} from "../manager-chat-messages.js";
 
 /**
  * A coding agent's conversation cut back to just before one of the
@@ -62,6 +71,30 @@ const openConversation = Effect.gen(function* () {
 });
 
 type Target = Effect.Success<typeof openConversation>;
+
+/** A Manager's conversation, standing on no task, with the Manager's id. */
+const openManagerConversation = Effect.gen(function* () {
+  const db = yield* Database;
+  const userId = `user-${randomUUID()}`;
+  yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
+  const started = yield* createAgent(userId, {
+    taskId: null,
+    workspaceId: yield* openWorkspace(userId),
+    idempotencyKey: randomUUID(),
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    descriptionSnapshot: null,
+    prompt: null,
+    repository: null,
+    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+    kind: AGENT_KIND.MANAGER,
+  });
+
+  const agent = Option.getOrThrow(started).agent;
+
+  return { target: { userId, conversationId: agent.conversationId }, agentId: agent.id };
+});
 
 /** A turn queued at the instant given, settled. */
 const turnAt = (target: Target, at: number) =>
@@ -523,6 +556,99 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
           ),
           Result.fail(REWIND_REFUSAL.NOT_FOUND),
         );
+      }),
+  );
+
+  it.effect(
+    "editing a Manager's chat message drops it and every later message of the chat, a reply in an earlier thread and a call's line among them, keeping what came before",
+    () =>
+      Effect.gen(function* () {
+        const { target, agentId } = yield* openManagerConversation;
+        const { userId } = target;
+
+        const says = (text: string, rest: Partial<ManagerChatWrite>) =>
+          Effect.flatMap(
+            writeManagerChatMessage(userId, {
+              agentId,
+              id: randomUUID().slice(0, 8),
+              clientKey: randomUUID(),
+              authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+              authorUserId: userId,
+              authorName: "Test User",
+              text,
+              attachments: [],
+              inReplyTo: null,
+              broadcast: false,
+              turnId: null,
+              lineId: null,
+              now: new Date(0),
+              ...rest,
+            }),
+            (outcome) =>
+              outcome.status === MANAGER_CHAT_OUTCOME.DONE
+                ? Effect.succeed(outcome.message.id)
+                : Effect.die(`the chat refused ${text}`),
+          );
+
+        const managerSays = (text: string, turnId: string, inReplyTo: string | null = null) =>
+          says(text, {
+            authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+            authorUserId: null,
+            authorName: "Manager",
+            turnId,
+            inReplyTo,
+          });
+
+        const { first, firstLine, second, secondLine } = yield* threeLines(target);
+        const awaiting = yield* rowOf(target, 5);
+        yield* says("Ship the invites?", { turnId: first, lineId: firstLine });
+        const earlier = yield* managerSays("Shipping them.", first);
+        const editedKey = randomUUID();
+        yield* says("And the emails?", {
+          turnId: second,
+          lineId: secondLine,
+          clientKey: editedKey,
+        });
+        yield* managerSays("Done too.", second);
+        yield* managerSays("The invites went out.", second, earlier);
+        yield* says("Thanks!", { lineId: awaiting });
+        // A line said on a call after the edited one, which the chat holds under the key its row was recorded with.
+        const callLine = yield* rowAt(target, 6, MESSAGE_ROLE.USER, null, 4_000);
+        yield* (yield* Database)
+          .update(messages)
+          .set({
+            metadata: {
+              author: MESSAGE_AUTHOR.DEVELOPER,
+              channel: MESSAGE_CHANNEL.VOICE,
+              voice_session_id: "call-1",
+              line_key: "call-1-line-1",
+            },
+          })
+          .where(eq(messages.id, callLine));
+        yield* growManagerChatLine(userId, {
+          conversationId: target.conversationId,
+          clientKey: "call-1-line-1",
+          callerId: userId,
+          text: "Also the reminders.",
+          now: new Date(0),
+        });
+
+        yield* rewindConversation(target, secondLine);
+
+        // The edited words sent again in the line's place, under the key the first send was under.
+        const edited = yield* says("And the reminder emails?", {
+          lineId: randomUUID(),
+          clientKey: editedKey,
+        });
+
+        const chat = yield* readManagerChatPage(userId, agentId, { limit: 10 });
+
+        assert.deepEqual(chat.map((message) => message.text).toReversed(), [
+          "Ship the invites?",
+          "Shipping them.",
+          "And the reminder emails?",
+        ]);
+        assert.equal(chat[0]?.id, edited);
       }),
   );
 

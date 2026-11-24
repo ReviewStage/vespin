@@ -115,10 +115,11 @@ export interface ManagerChatPage {
   readonly limit: number;
 }
 
-/** What a rewind dropped of a Manager's conversation: the turns, and the person's lines. */
+/** What a rewind dropped of a Manager's conversation: the turns, the person's lines, and the keys of a call's lines, which their messages were written under. */
 export interface ManagerChatDropped {
   readonly turnIds: readonly string[];
   readonly lineIds: readonly string[];
+  readonly lineKeys: readonly string[];
 }
 
 const MESSAGE_COLUMNS = {
@@ -200,6 +201,26 @@ const lockChatOfConversation = SqlSchema.findOneOption({
         )
         .limit(1)
         .for("no key update", { of: agentTable }),
+    ),
+});
+
+/** The Manager standing on the conversation, as the account reaches it; none where no Manager the account reaches stands on it. */
+const findChatOfConversation = SqlSchema.findOneOption({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(
+          and(
+            eq(agentTable.conversationId, conversationId),
+            eq(agentTable.kind, AGENT_KIND.MANAGER),
+            agentReachableBy(userId),
+          ),
+        )
+        .limit(1),
     ),
 });
 
@@ -301,8 +322,9 @@ const deleteDropped = SqlSchema.void({
     ...ChatKeySchema.fields,
     turnIds: Schema.Array(Schema.String),
     lineIds: Schema.Array(Schema.String),
+    lineKeys: Schema.Array(Schema.String),
   }),
-  execute: ({ userId, agentId, turnIds, lineIds }) =>
+  execute: ({ userId, agentId, turnIds, lineIds, lineKeys }) =>
     Database.use((db) =>
       db.delete(managerChatMessage).where(
         and(
@@ -310,6 +332,14 @@ const deleteDropped = SqlSchema.void({
           or(
             turnIds.length === 0 ? undefined : inArray(managerChatMessage.turnId, turnIds),
             lineIds.length === 0 ? undefined : inArray(managerChatMessage.lineId, lineIds),
+            // Note that a call's line names no line or turn, so it goes by the key it was grown under.
+            lineKeys.length === 0
+              ? undefined
+              : and(
+                  isNull(managerChatMessage.lineId),
+                  isNull(managerChatMessage.turnId),
+                  inArray(managerChatMessage.clientKey, lineKeys),
+                ),
           ),
           exists(
             queryBuilder
@@ -537,15 +567,36 @@ export function searchManagerChat(
   return findMessages({ userId, agentId, words, limit });
 }
 
-/** The messages of the Manager's chat a rewind dropped deleted, as the account reaches the chat: those sent in a dropped turn, and a person's on a dropped line, with the threads they root. */
+/** The messages of the Manager's chat a rewind dropped deleted, as the account reaches the chat: those sent in a dropped turn, a person's on a dropped line, and a call's dropped lines, with the threads they root. */
 export function deleteDroppedManagerChat(
   userId: string,
   agentId: string,
   dropped: ManagerChatDropped,
 ): AgentStoreEffect<void> {
-  if (dropped.turnIds.length === 0 && dropped.lineIds.length === 0) return Effect.void;
+  const { turnIds, lineIds, lineKeys } = dropped;
+
+  if (turnIds.length === 0 && lineIds.length === 0 && lineKeys.length === 0) return Effect.void;
 
   return deleteDropped({ userId, agentId, ...dropped });
+}
+
+/**
+ * What a rewind of the conversation dropped deleted from the chat of the
+ * Manager standing on it, as the account reaches the chat, as
+ * `deleteDroppedManagerChat` deletes it; nothing for a conversation no
+ * Manager the account reaches stands on.
+ */
+export function deleteRewoundManagerChat(
+  userId: string,
+  conversationId: string,
+  dropped: ManagerChatDropped,
+): AgentStoreEffect<void> {
+  return Effect.flatMap(findChatOfConversation({ userId, conversationId }), (chat) =>
+    Option.match(chat, {
+      onNone: () => Effect.void,
+      onSome: ({ id }) => deleteDroppedManagerChat(userId, id, dropped),
+    }),
+  );
 }
 
 /**

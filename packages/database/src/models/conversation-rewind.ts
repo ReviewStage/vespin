@@ -27,6 +27,7 @@ import {
   dispatchClaimStands,
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
+import { deleteRewoundManagerChat } from "./manager-chat-messages.js";
 import { settleKeptTurn } from "./turn-state.js";
 import type { ConversationTarget } from "./writer.js";
 
@@ -35,9 +36,10 @@ import type { ConversationTarget } from "./writer.js";
  *
  * A rewind drops the line named and everything after it: the turn it
  * opened and every later turn, with every row they wrote, and every row no
- * turn owns from the line on. A cut at the first line keeps the first
- * turn's row, its rows gone and settled, since an agent with no turn at all
- * reads as one that never started. It counts the journal revision up and marks
+ * turn owns from the line on, and, for a Manager, every message of its chat
+ * those turns and lines carried (`manager-chat-messages.ts`). A cut at the
+ * first line keeps the first turn's row, its rows gone and settled, since
+ * an agent with no turn at all reads as one that never started. It counts the journal revision up and marks
  * the conversation rewound at it, so a reader holding an older cursor
  * reads the transcript afresh rather than joining what it holds, and
  * keeps the line's client id for the next launch of a Claude Code or
@@ -172,27 +174,64 @@ const findTurnBefore = SqlSchema.findAll({
     ),
 });
 
-const deleteMessagesFrom = SqlSchema.void({
-  Request: Schema.Struct({
-    conversationId: Schema.String,
-    seq: Schema.Number,
-    turnIds: Schema.Array(Schema.String),
-  }),
-  execute: ({ conversationId, seq, turnIds }) =>
-    Database.use((db) =>
-      db
-        .delete(messages)
-        .where(
-          and(
-            eq(messages.conversationId, conversationId),
-            or(
-              and(isNull(messages.turnId), gte(messages.seq, seq)),
-              turnIds.length === 0 ? sql`false` : inArray(messages.turnId, [...turnIds]),
-            ),
-          ),
-        ),
-    ),
+const CutRowsSchema = Schema.Struct({
+  conversationId: Schema.String,
+  seq: Schema.Number,
+  turnIds: Schema.Array(Schema.String),
 });
+
+/** The rows a cut drops: those of a dropped turn, and those no turn owns from the line on. */
+function cutRows({ conversationId, seq, turnIds }: typeof CutRowsSchema.Type) {
+  return and(
+    eq(messages.conversationId, conversationId),
+    or(
+      and(isNull(messages.turnId), gte(messages.seq, seq)),
+      turnIds.length === 0 ? sql`false` : inArray(messages.turnId, [...turnIds]),
+    ),
+  );
+}
+
+/** The developer's lines a cut drops, and the lines of a call it drops with the key each was recorded under. */
+const findCutLines = SqlSchema.findAll({
+  Request: CutRowsSchema,
+  Result: Schema.Struct({
+    id: Schema.String,
+    role: Schema.String,
+    lineKey: Schema.NullOr(Schema.String),
+  }),
+  execute: (cut) =>
+    Database.use((db) => {
+      const lineKey = sql<string | null>`${messages.metadata} ->> 'line_key'`;
+
+      return db
+        .select({ id: messages.id, role: messages.role, lineKey })
+        .from(messages)
+        .where(and(cutRows(cut), or(eq(messages.role, MESSAGE_ROLE.USER), isNotNull(lineKey))));
+    }),
+});
+
+const deleteMessagesFrom = SqlSchema.void({
+  Request: CutRowsSchema,
+  execute: (cut) => Database.use((db) => db.delete(messages).where(cutRows(cut))),
+});
+
+/**
+ * What the cut drops deleted from the chat of the Manager standing on the
+ * conversation, where one does: the messages sent in a dropped turn, a
+ * person's on a dropped line, and a call's dropped lines. Note that it runs
+ * before the turns go, because a message's turn is set null as its turn is
+ * deleted, and it would then be found by nothing.
+ */
+const deleteCutChat = (target: ConversationTarget, cut: typeof CutRowsSchema.Type) =>
+  Effect.gen(function* () {
+    const lines = yield* findCutLines(cut);
+
+    yield* deleteRewoundManagerChat(target.userId, target.conversationId, {
+      turnIds: cut.turnIds,
+      lineIds: lines.flatMap((line) => (line.role === MESSAGE_ROLE.USER ? [line.id] : [])),
+      lineKeys: lines.flatMap((line) => (line.lineKey === null ? [] : [line.lineKey])),
+    });
+  });
 
 const deleteTurns = SqlSchema.void({
   Request: Schema.Struct({ conversationId: Schema.String, turnIds: Schema.Array(Schema.String) }),
@@ -512,6 +551,7 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     const { seq, from } = point.success;
     const { clientId, heard } = yield* harnessCut(conversationId, point.success);
     const turnIds = (yield* findTurnsFrom({ conversationId, from })).map((turn) => turn.id);
+    yield* deleteCutChat(target, { conversationId, seq, turnIds });
     yield* deleteMessagesFrom({ conversationId, seq, turnIds });
     // Note that a cut dropping every turn keeps the first one's row, its work gone and settled, because
     // an agent with no turn at all reads as one that never started, and fails past its grace.
