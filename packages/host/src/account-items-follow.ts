@@ -16,6 +16,7 @@ import { type AccountWideReads, INBOX_ITEM, type InboxChange } from "./inbox-col
 import { KEPT_LIST } from "./kept-lists.js";
 import {
   confirmWrite,
+  droppedParts,
   followTakingRows,
   type LiveFailure,
   restarting,
@@ -124,7 +125,16 @@ export interface AccountItemsDependencies {
   readonly accountWide: AccountWideReads;
   /** The task list's summaries of the tasks `taskIds` names, of those it holds now; none where it holds none, as before it is drawn. */
   readonly tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
+  /** Hears each part of an answer whose reading left rows out, since they did not decode, and how many (`live-follow.ts`). */
+  readonly dropped?: (part: AccountItemsPart, count: number) => void;
 }
+
+/** A part of the account's items read, whose dropped rows are counted by it. */
+export type AccountItemsPart = keyof typeof INBOX_ITEMS_READ.parts;
+
+/** Every part of the account's items read, each counted where its reading drops any rows. */
+// SAFETY: the keys of the read's own parts are its parts, every one of them.
+const ACCOUNT_ITEMS_PARTS = Object.keys(INBOX_ITEMS_READ.parts) as readonly AccountItemsPart[];
 
 type HeldAfterResult = {
   readonly held: Held;
@@ -492,7 +502,13 @@ export function followAccountItems(
         },
         first,
         INBOX_ITEMS_READ.rows,
-        landed,
+        (decoded, standing, read) => {
+          for (const [part, count] of droppedParts(ACCOUNT_ITEMS_PARTS, read, decoded)) {
+            dependencies.dropped?.(part, count);
+          }
+
+          return landed(decoded, standing);
+        },
       ).pipe(Effect.catch(() => Effect.void));
 
       return true;

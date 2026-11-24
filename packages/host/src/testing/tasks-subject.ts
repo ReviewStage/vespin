@@ -1741,6 +1741,7 @@ export function subject(
 
     const tasks = yield* composeTasks({
       kernel,
+      recordProductEvent: () => undefined,
       account,
       client: service,
       accountId,

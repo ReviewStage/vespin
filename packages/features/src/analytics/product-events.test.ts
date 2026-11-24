@@ -247,6 +247,34 @@ test("a launch with no Inbox 10 s in travels the phases it reached and where eac
   );
 });
 
+test("rows a read dropped travel as their kind and a count on a rung, never a raw count or another word", () => {
+  const dropped = {
+    [PRODUCT_EVENT_PROPERTY.ROW_KIND]: "task_list_agents",
+    [PRODUCT_EVENT_PROPERTY.DROPPED]: 5,
+  };
+
+  assert.deepEqual(
+    productEventFromWire({ name: PRODUCT_EVENT.ROWS_DROPPED, at: AT, properties: dropped }),
+    { name: PRODUCT_EVENT.ROWS_DROPPED, at: AT, properties: dropped },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.ROWS_DROPPED,
+      at: AT,
+      properties: { ...dropped, [PRODUCT_EVENT_PROPERTY.DROPPED]: 4391 },
+    }),
+    undefined,
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.ROWS_DROPPED,
+      at: AT,
+      properties: { ...dropped, [PRODUCT_EVENT_PROPERTY.ROW_KIND]: "agents of task-1" },
+    }),
+    undefined,
+  );
+});
+
 test("a reply's wait to stand in its thread travels on a rung, with what it carried, never its words or the raw time", () => {
   assert.equal(productDrawnMilliseconds(640), 500);
   assert.equal(productDrawnMilliseconds(40), 0);
