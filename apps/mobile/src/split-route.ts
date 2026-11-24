@@ -2,15 +2,8 @@
 
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
-import {
-  useFocusEffect,
-  useLocalSearchParams,
-  useNavigation,
-  useNavigationContainerRef,
-  useRouter,
-} from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { type NavigatorState, tabStackBacks, tabsInFront } from "./menu-commands/window-back.js";
 import { showPickedPage } from "./split-columns.js";
 import { useOwnTab } from "./tab-route.js";
 
@@ -55,30 +48,35 @@ function keepPick(tab: SplitTab, id: string | undefined): void {
   told();
 }
 
+/** Each place's root's own pick while it stands, which an iPad's list column hands its picks to. */
+const rootPicks = new Map<SplitTab, (id: string) => void>();
+
 /**
- * How an iPad's list column picks a row of its place: the place's root
- * selects it, beside the list, as a tap on the root's own list would, going
- * back to the root first where a page stands pushed over it, and the page is
- * brought forward where the window stands upright. Note that the stack is
- * read at the press, so the column never draws again as pages come and go.
+ * How an iPad's list column picks a row of its place: through the place's
+ * root, standing in the last column, as a tap on the root's own list would
+ * pick it (`useSplitSelection`), so the root selects it beside the list,
+ * going back to the root first where a page stands pushed over it, and the
+ * page is brought forward where the window stands upright. Note that the
+ * pick goes through the root's own navigation rather than the router's,
+ * because the column stands outside every route, and the router's
+ * `setParams` from there never reached the root's param (vjnatc2's inbox
+ * and keep lanes). Where the root stands nowhere yet, the place is opened
+ * on the row.
  */
 export function usePickInPlace(tab: SplitTab): (id: string) => void {
   const router = useRouter();
-  const navigation = useNavigationContainerRef();
 
   return useCallback(
     (id) => {
+      const pick = rootPicks.get(tab);
+
+      if (pick !== undefined) return pick(id);
+
       keepPick(tab, id);
-      const root: NavigatorState | undefined = navigation.getRootState();
-      const tabs = tabsInFront(root);
-
-      if (tabs !== undefined && tabStackBacks(tabs))
-        router.dismissTo({ pathname: tab, params: { selected: id } });
-      else router.setParams({ selected: id });
-
+      router.navigate({ pathname: tab, params: { selected: id } });
       showPickedPage();
     },
-    [navigation, router, tab],
+    [router, tab],
   );
 }
 
@@ -143,19 +141,27 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
     }, [regular, selected, router, tab]),
   );
 
-  return {
-    selected: held !== undefined && held.over === routed ? held.id : routed,
-    select: (id) => {
-      hold({ id, over: routed });
-      keepPick(tab, id);
+  const select = (id: string) => {
+    hold({ id, over: routed });
+    keepPick(tab, id);
 
-      // Note that a pick from an iPad's list column under a page pushed over the root goes back to the root, as Mail's message list replaces the message, because the list stands beside every page of its place.
-      if (navigation.isFocused()) router.setParams({ selected: id });
-      else router.dismissTo({ pathname: tab, params: { selected: id } });
+    // Note that a pick from an iPad's list column under a page pushed over the root goes back to the root, as Mail's message list replaces the message, because the list stands beside every page of its place.
+    if (navigation.isFocused()) router.setParams({ selected: id });
+    else router.dismissTo({ pathname: tab, params: { selected: id } });
 
-      showPickedPage();
-    },
+    showPickedPage();
   };
+
+  // Note that the root's pick is kept for an iPad's list column as the root draws, its latest kept after each draw, and let go as it leaves, so a pick never reaches a root that is gone.
+  useEffect(() => {
+    rootPicks.set(tab, select);
+
+    return () => {
+      if (rootPicks.get(tab) === select) rootPicks.delete(tab);
+    };
+  });
+
+  return { selected: held !== undefined && held.over === routed ? held.id : routed, select };
 }
 
 /**

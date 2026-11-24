@@ -26,8 +26,7 @@ import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-o
 import { useSettingsAccount } from "../settings-button.js";
 import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
 import { useSidebarTasks } from "../sidebar-tasks.js";
-import { showPickedPage } from "../split-columns.js";
-import { SPLIT_TAB, useSplitPicked } from "../split-route.js";
+import { SPLIT_TAB, usePickInPlace, useSplitPicked } from "../split-route.js";
 import { tabGroupOf, useOnTab } from "../tab-route.js";
 import { useStandingCallCard } from "../voice-call.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -154,6 +153,7 @@ export function AppSidebarPane() {
   const onTab = useOnTab();
   const compose = useComposeAction();
   const call = useStandingCallCard();
+  const pickTask = usePickInPlace(SPLIT_TAB.TASKS);
 
   const go = (id: string) => {
     switch (id) {
@@ -173,9 +173,8 @@ export function AppSidebarPane() {
 
     if (tasks?.opens(id) === true) return;
 
-    // Note that a task opens beside the sidebar on Tasks, handed to its root as a link to it is, which pops any page pushed over the root.
-    router.navigate({ pathname: SPLIT_TAB.TASKS, params: { selected: id } });
-    showPickedPage();
+    // Note that a task opens beside the sidebar on Tasks, picked through Tasks' root as its list column picks it, or opening Tasks on it from another place.
+    pickTask(id);
   };
 
   return (
