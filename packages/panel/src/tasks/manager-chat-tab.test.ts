@@ -34,9 +34,9 @@ import { ManagerChatTab } from "./manager-chat-tab.js";
 /**
  * manager-chat-tab.test.ts -- a Manager's page as its own chat, drawn from
  * the chat's rows: the reader's messages at the right and everyone else's at
- * the left, each sender named over their run, and Reply beside one of the
- * Manager's messages quoting it whole into the box, which sends it to the
- * chat. Synthetic words.
+ * the left, each sender named over their run, and Reply beside any message,
+ * the Manager's or a person's, quoting it whole into the box, which sends it
+ * to the chat. Synthetic words.
  */
 
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
@@ -172,28 +172,35 @@ test("the reader's message stands at the right, and a teammate's and the Manager
   ]);
 });
 
-test("Reply beside a Manager's message quotes the whole message into the box, which sends it to the chat with the words after it", async () => {
-  const told = `**Plan**: the invite flow ships first.\n\n${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}`;
+test.each([
+  ["the Manager's", "told"],
+  ["a teammate's", "seven"],
+])(
+  "Reply beside %s message quotes the whole message into the box, which sends it to the chat with the words after it",
+  async (_sender, messageId) => {
+    const told = `**Plan**: the invite flow ships first.\n\n${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}`;
 
-  const { container, sent } = await drawChat([
-    row("ask", 1, "What first?", DEAN),
-    row("told", 2, told),
-  ]);
+    const { container, sent } = await drawChat([
+      row("ask", 1, "What first?", DEAN),
+      row("told", 2, told),
+      row("seven", 3, told, CHARLES),
+    ]);
 
-  // The pointer comes onto the message, which draws its actions at once.
-  const message = container.querySelector('[data-message-id="told"]');
-  assert.ok(message, "the Manager's message is drawn");
-  pointerCross(document.body, message);
+    // The pointer comes onto the message, which draws its actions at once.
+    const message = container.querySelector(`[data-message-id="${messageId}"]`);
+    assert.ok(message, "the message is drawn");
+    pointerCross(document.body, message);
 
-  const reply = container.querySelector<HTMLButtonElement>('button[aria-label="Reply"]');
-  assert.ok(reply, "Reply stands beside the Manager's message");
-  act(() => reply.click());
-  await settleQueries();
-  typeInComposer(container, "Ship it");
-  pressInComposer(container, "Enter");
-  await settleQueries();
+    const reply = message.querySelector<HTMLButtonElement>('button[aria-label="Reply"]');
+    assert.ok(reply, "Reply stands beside the message");
+    act(() => reply.click());
+    await settleQueries();
+    typeInComposer(container, "Ship it");
+    pressInComposer(container, "Enter");
+    await settleQueries();
 
-  assert.deepEqual(sent, [
-    `> **Plan**: the invite flow ships first.\n>\n> ${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}\n\nShip it`,
-  ]);
-});
+    assert.deepEqual(sent, [
+      `> **Plan**: the invite flow ships first.\n>\n> ${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}\n\nShip it`,
+    ]);
+  },
+);
