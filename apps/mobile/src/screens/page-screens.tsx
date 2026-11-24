@@ -15,6 +15,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { openInSafari } from "../open-link.js";
+import { usePageShownCount } from "../page-shown.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
 
@@ -94,6 +95,7 @@ export function PageScreen({ workspaceId, taskId, pageId, version: asked, title 
   const read = missing ? { failed: true as const } : html.read;
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
+  const shown = usePageShownCount(asked !== undefined, "html" in read);
 
   const empty = (
     <EmptyState
@@ -124,7 +126,11 @@ export function PageScreen({ workspaceId, taskId, pageId, version: asked, title 
         </Stack.Toolbar>
       )}
       {/* Note that the page stands as the screen's root, outside its SwiftUI host, since the web view sizes itself to the screen. */}
-      {"html" in read ? <SealedPage html={read.html} title={named} /> : <Screen>{empty}</Screen>}
+      {"html" in read ? (
+        <SealedPage html={read.html} title={named} onLoaded={shown} />
+      ) : (
+        <Screen>{empty}</Screen>
+      )}
     </>
   );
 }

@@ -132,6 +132,8 @@ type SealedPageProps = {
   readonly html: string;
   /** What the page is, heard in its place. */
   readonly title: string;
+  /** Told once the page has first loaded, as its loading ground starts to fade, so its opener can count how long it took. */
+  readonly onLoaded?: (() => void) | undefined;
 };
 
 /**
@@ -178,6 +180,7 @@ function PageLoading({
 function SealedPageAt({
   html,
   title,
+  onLoaded,
   fontScale,
 }: SealedPageProps & { readonly fontScale: number }) {
   const colors = useColors();
@@ -200,7 +203,10 @@ function SealedPageAt({
         injectedJavaScriptBeforeContentLoaded={textScaleScript(fontScale)}
         originWhitelist={EVERY_ADDRESS}
         onShouldStartLoadWithRequest={staysSealed}
-        onLoadEnd={() => setLoaded(true)}
+        onLoadEnd={() => {
+          setLoaded(true);
+          onLoaded?.();
+        }}
         onContentProcessDidTerminate={() => setLoaded(true)}
         javaScriptEnabled
         domStorageEnabled={false}
@@ -230,9 +236,17 @@ function SealedPageAt({
  * drawn anew as either changes. Until it first loads, the system's spinner
  * stands over it, heard as Loading in the page's place (`PageLoading`).
  */
-export function SealedPage({ html, title }: SealedPageProps) {
+export function SealedPage({ html, title, onLoaded }: SealedPageProps) {
   const { fontScale } = useWindowDimensions();
 
   // Note that the page is drawn anew at a new text size, since its script runs once, before the page, and so waits on its load again.
-  return <SealedPageAt key={fontScale} html={html} title={title} fontScale={fontScale} />;
+  return (
+    <SealedPageAt
+      key={fontScale}
+      html={html}
+      title={title}
+      onLoaded={onLoaded}
+      fontScale={fontScale}
+    />
+  );
 }
