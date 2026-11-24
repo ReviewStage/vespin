@@ -1,0 +1,47 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow fsidea-l
+  > On Flow Complete
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Set orientation LANDSCAPE_LEFT... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Start recording 1-open-thread... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that (Optional) "invite-test-plan\.pdf.*" is visible... COMPLETED
+Run flow when "invite-test-plan\.pdf.*" is not visible...
+Run flow when "invite-test-plan\.pdf.*" is not visible... SKIPPED
+Run flow when "invite-test-plan\.pdf.*" is not visible...
+Run flow when "invite-test-plan\.pdf.*" is not visible... SKIPPED
+Stop recording... COMPLETED
+Take screenshot 1-inbox-thread... COMPLETED
+Take screenshot 1z-pane-top-foot... COMPLETED
+Tap on "Hide Sidebar", Index: 0... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 2-pane-hidden... COMPLETED
+Tap on "Show Sidebar", Index: 0... COMPLETED
+Wait for animation to end... COMPLETED
+Swipe from (15%, 80%) to (15%, 35%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Teammate invit.*", Left of "Search inbox"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 3-task-page... COMPLETED
+Tap on "Build teammate invitations"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 4-agent-page... COMPLETED
+Tap on id: pull-request-card... FAILED
+Set orientation PORTRAIT... COMPLETED
+
+Element not found: Id matching regex: pull-request-card
+
+Element with Id matching regex: pull-request-card not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjsidea/ipad27-land-dark/2026-11-23_215956
