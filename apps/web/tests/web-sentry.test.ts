@@ -2,9 +2,12 @@
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
+import { queryClient } from "@repo/panel/query-client";
+import { stateWith } from "@repo/panel/testing/app-state";
+import { appStateQuery } from "@repo/panel/use-app-state";
 import * as Sentry from "@sentry/browser";
 import { Effect } from "effect";
-import { afterEach, test, vi } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 import { startWebSentry } from "../src/app/web-sentry";
 
 /**
@@ -29,6 +32,24 @@ const { sentBodies } = vi.hoisted(() => {
 const DSN = "https://public@o1.ingest.us.sentry.io/1";
 
 const PRODUCTION = { dsn: DSN, environment: "production", release: "abc123" } as const;
+
+/** The tab's document, its device sharing usage data or not. */
+function sharingUsageData(usageData: boolean): void {
+  const document = stateWith({}, {});
+  const settings = document.settings;
+
+  queryClient.setQueryData(
+    appStateQuery.queryKey,
+    settings
+      ? { ...document, settings: { ...settings, stored: { ...settings.stored, usageData } } }
+      : document,
+  );
+}
+
+// A tab whose device shares usage data, as one does by default, unless a test says otherwise.
+beforeEach(() => {
+  sharingUsageData(true);
+});
 
 afterEach(async () => {
   await Sentry.getClient()?.close();
@@ -194,6 +215,16 @@ it.effect(
       assert.deepEqual(sentExceptions(), ["the host's follow fell over"]);
     }),
 );
+
+test("a tab whose device does not share usage data sends nothing", async () => {
+  sharingUsageData(false);
+  const sentry = startWebSentry(PRODUCTION);
+  await sentry.settled;
+  sentry.reportBlankTab(new Error("nothing drawn"));
+  await Sentry.flush(1_000);
+
+  assert.deepEqual(sentBodies, []);
+});
 
 test("each page load and navigation, and the errors under it, are named by the kind of place it opens, never by its slug or ids", async () => {
   history.replaceState(null, "", "/acme/plan/0b805267-0061-4b69-8e2c-964920ec4a30");
