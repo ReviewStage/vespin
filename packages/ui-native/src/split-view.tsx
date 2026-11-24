@@ -35,13 +35,15 @@ import {
   searchable,
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, memo, type ReactElement, type ReactNode, useEffect } from "react";
+import { useScaledSize } from "./accessibility.js";
 import { BarContent } from "./bar-content.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
-import { TaskStatusMark } from "./marks.js";
+import { MANAGER_FACE_SEAT, ManagerFace, TaskStatusMark } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -353,6 +355,7 @@ function barHolds(bar: ColumnBar): boolean {
 export function PathTitle({
   path,
   status,
+  manager,
   actions = [],
   wrap = false,
 }: {
@@ -360,16 +363,23 @@ export function PathTitle({
   readonly path: readonly string[];
   /** The status of the task it stands in, its ring leading the path; none for an agent's own page. */
   readonly status?: TaskStatus | undefined;
+  /** The face of the Manager it stands under, on no task, leading the path among its words; none for a task's. */
+  readonly manager?: ManagerFaceValue | undefined;
   readonly actions?: BarMenu["actions"] | undefined;
   /** Whether the words wrap rather than cut to one line, as where the path heads the page rather than standing in a bar. */
   readonly wrap?: boolean | undefined;
 }) {
   const colors = useColors();
   const words = path.join(PATH_PART);
+  const faceSize = useScaledSize(MARK_SIZE.GLYPH);
 
   const title = (
     <HStack spacing={SPACE.TIGHT + 2}>
-      {status === undefined ? null : <TaskStatusMark status={status} />}
+      {manager !== undefined ? (
+        <ManagerFace face={manager} size={faceSize} seat={MANAGER_FACE_SEAT.WORDS} />
+      ) : status === undefined ? null : (
+        <TaskStatusMark status={status} />
+      )}
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),

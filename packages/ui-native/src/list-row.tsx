@@ -214,13 +214,28 @@ type RowActs = {
   readonly question?: RowQuestion | undefined;
 };
 
+/**
+ * What holds an Inbox row's thread, named on its first line: a task, its
+ * status ring leading its name, or an agent on no task by its name, a
+ * Manager's face leading it, as `TaskRow`'s lead takes a status or a
+ * Manager, and the panel's row leads with its holder's glyph.
+ */
+type RowHolder = { readonly name: string } & (
+  | { readonly status?: TaskStatus | undefined; readonly manager?: undefined }
+  | {
+      readonly status?: undefined;
+      /** The Manager's face, and whether it works, which the face wears. */
+      readonly manager: { readonly face: ManagerFaceValue; readonly working: boolean };
+    }
+);
+
 type ListRowProps = RowActs & {
   /** The row's id, which its list's `onSelect` is called with. */
   readonly id: string;
   /** The thread's title, the row's first line. */
   readonly title: string;
-  /** What holds the thread: its task, whose status ring and name stand on the row's first line, over its title, or an agent's own by its name alone. */
-  readonly task?: { readonly name: string; readonly status?: TaskStatus | undefined } | undefined;
+  /** What holds the thread: its task, whose status ring and name stand on the row's first line, over its title, or an agent on no task by its name, led by a Manager's face where it is one. */
+  readonly task?: RowHolder | undefined;
   /** What the thread's last line is, which picks the glyph leading it. */
   readonly line?: InboxLineKind | undefined;
   /** The thread's last line: an ask's options or steps, or the last message's words. */
@@ -897,7 +912,11 @@ function TaskLine({
       <UnreadDot unread={unread} faded={done} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
         <HStack modifiers={[frame({ width: leadWidth })]}>
-          {task.status === undefined ? null : <TaskStatusMark status={task.status} />}
+          {task.manager !== undefined ? (
+            <ManagerFace face={task.manager.face} size={leadWidth} working={task.manager.working} />
+          ) : task.status === undefined ? null : (
+            <TaskStatusMark status={task.status} />
+          )}
         </HStack>
         {stacked ? (
           <VStack alignment="leading" spacing={2}>

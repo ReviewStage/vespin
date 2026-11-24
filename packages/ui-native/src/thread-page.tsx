@@ -28,6 +28,7 @@ import {
   scrollDismissesKeyboard,
 } from "@expo/ui/swift-ui/modifiers";
 import type { LinkStanding } from "@repo/features/link-standing-model";
+import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
@@ -166,6 +167,8 @@ type ThreadPageProps = {
   readonly path: readonly string[];
   /** The status of the task it stands in, its ring leading the path; none for an agent's own thread. */
   readonly status?: TaskStatus | undefined;
+  /** The face of the Manager whose thread it is, on no task, leading the path; none for a task's thread. */
+  readonly manager?: ManagerFaceValue | undefined;
   /** What the path opens, such as its task and its agent, as the panel's crumbs open them, which a press on the path offers as a menu; none leaves it words alone. */
   readonly pathActions?: BarMenu["actions"] | undefined;
   /** Whether the path heads the page over its title rather than standing in the bar's middle, as in a split view's detail column, whose bar is left to the page's acts. */
@@ -451,7 +454,16 @@ function MessageView({
   now,
 }: Omit<
   ThreadPageProps,
-  "path" | "status" | "pathActions" | "pathInHead" | "title" | "messages" | "ask" | "menu" | "foot"
+  | "path"
+  | "status"
+  | "manager"
+  | "pathActions"
+  | "pathInHead"
+  | "title"
+  | "messages"
+  | "ask"
+  | "menu"
+  | "foot"
 > & {
   readonly message: ThreadMessage;
   /** Whether it leads its run, which names who wrote it and when; the messages after it stand under that head with none of their own. */
@@ -599,6 +611,7 @@ export function ThreadPage(props: ThreadPageProps) {
   const {
     path,
     status,
+    manager,
     pathActions,
     pathInHead = false,
     title,
@@ -624,7 +637,13 @@ export function ThreadPage(props: ThreadPageProps) {
 
   // Note that the path heading the page wraps, so its words stand uncut, while the bar's keeps to one line.
   const pathTitle = (
-    <PathTitle path={path} status={status} actions={pathActions} wrap={pathInHead} />
+    <PathTitle
+      path={path}
+      status={status}
+      manager={manager}
+      actions={pathActions}
+      wrap={pathInHead}
+    />
   );
 
   // Note that a thread opens at its newest message and keeps to its foot as it grows or the keyboard rises, as Messages does and the panel's board does, while one too short to scroll stands under its heading.
