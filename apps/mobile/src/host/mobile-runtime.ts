@@ -9,6 +9,7 @@
 
 import type { RunProfile } from "@repo/host/app-state";
 import { followStream, type OpenedStream } from "@repo/host/follow-stream";
+import { slicedScheduler } from "@repo/runtime/effect";
 import { Effect, Fiber, Layer, ManagedRuntime, Scheduler } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -20,19 +21,36 @@ import {
 } from "./compose-mobile.js";
 
 /**
- * The scheduler every fiber of the host yields through: each yield a task of
- * its own (`setTimeout`), so React's render and the app's timers run between
- * the host's steps. Note that Effect's default scheduler yields through
- * `setImmediate`, which React Native's new architecture runs as a microtask,
- * so no yield ever left the JS task it began in: the host's work after it
- * stood, its task list drawn a chunk at a time among it, held the screens'
- * first render until all of it was done, about 0.9 s of a cold launch at a
- * busy account's scale on the iPhone 18 Pro simulator.
+ * How long the host's rounds run in one JS task before the next waits for a
+ * task of its own. Note that it is 50 ms because a busy account's launch then
+ * yields about ten times rather than 130, while React draws the screens a
+ * few frames after the host stands rather than once all its work is done
+ * (16 and 100 ms timed about the same on the iPhone 18 Pro simulator).
  */
-const yieldingScheduler = new Scheduler.MixedScheduler("async", (run) => {
-  const timer = setTimeout(run, 0);
+const HOST_SLICE_MS = 50;
 
-  return () => clearTimeout(timer);
+/**
+ * The scheduler every fiber of the host yields through: its rounds stay in
+ * the JS task they began in until a slice of it is spent, then wait one
+ * task, so React's render and the app's timers run between the host's
+ * stretches (`slicedScheduler`). Note that Effect's default scheduler yields
+ * through `setImmediate`, which React Native's new architecture runs as a
+ * microtask, so no yield ever left the JS task it began in: the host's work
+ * after it stood, its task list drawn a chunk at a time among it, held the
+ * screens' first render until all of it was done, about 0.9 s of a cold
+ * launch at a busy account's scale on the iPhone 18 Pro simulator. A task
+ * for every round instead waited about 130 timers, and the task list landed
+ * 2.2 s later.
+ */
+const hostScheduler = slicedScheduler({
+  sliceMs: HOST_SLICE_MS,
+  now: () => performance.now(),
+  microtask: (run) => queueMicrotask(run),
+  task: (run) => {
+    const timer = setTimeout(run, 0);
+
+    return () => clearTimeout(timer);
+  },
 });
 
 /** What the app's root hands the start: the device as the host reads it, and what this launch is. */
@@ -105,7 +123,7 @@ export async function startMobileHost(
       }),
       Layer.merge(
         options.errorReporting ?? Layer.empty,
-        Layer.succeed(Scheduler.Scheduler, yieldingScheduler),
+        Layer.succeed(Scheduler.Scheduler, hostScheduler),
       ),
     ),
   );

@@ -17,4 +17,6 @@ export {
 
 export { singleFlightEffect } from "./single-flight.js";
 
+export { type SliceSeams, slicedScheduler } from "./sliced-scheduler.js";
+
 export { scheduleOnce, scheduleRepeat } from "./timers.js";
