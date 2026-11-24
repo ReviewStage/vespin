@@ -1,0 +1,30 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow .kbd-fnavc
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot tabbar-inbox... COMPLETED
+Tap on id: search-tab... COMPLETED
+Assert that "Search Vespin" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot search-empty... COMPLETED
+Tap on "Search Vespin"... COMPLETED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text auto... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot search-typed-auto... COMPLETED
+Erase text... COMPLETED
+Input text invit... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot search-typed-invit... COMPLETED
+Scrolling DOWN until "Start a task.*" is visible with speed 40, visibility percentage 100%, timeout 6000 ms, with centering disabled... WARNED
+Take screenshot search-typed-invit-start-row... COMPLETED
+Run flow when "Start a task.*" is visible...
+Run flow when "Start a task.*" is visible... SKIPPED

@@ -1,0 +1,9 @@
+pinned to 4430d024f9
+== bundle PJjnavb base 4430d024f9
+  built 4430d024f9 base app Vmain12.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-nav: fails 0 shots 6 
+iphone-dark-nav: fails 0 shots 6 
