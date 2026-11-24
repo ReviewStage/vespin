@@ -259,18 +259,26 @@ patchedDependencies:
 # the Assignee menu leads each member with their face; and `emoji` with
 # `emojiSize`, which draws an emoji into a square image at a menu glyph's
 # size, its rendering kept original, so Move to leads an emoji section with
-# its emoji in the glyph's place and its name lines up. And it hands
+# its emoji in the glyph's place and its name lines up; and `underAssetName`
+# with `underOpacity`, which draws a second catalog symbol faint under the
+# tinted one in the same image, so a priority's lit bars stand over its unlit
+# ones in a menu. And it lets `ContentUnavailableView` draw a symbol of the
+# app's asset catalog (`image`) in `systemImage`'s place, leave out an empty
+# description, and take its primary and secondary inks (`primaryColor`,
+# `secondaryColor`), so an empty state wears the panel's glyph and words'
+# colors rather than the system's grays. And it hands
 # a `List` its edit mode as a binding (`editing`, `onEditingChange`), so a
 # two-finger drag down a list can switch Select mode on. And it gives a
 # `ToolbarItem` a `spacerBefore`, which stands the item after a `Spacer` in
 # one `ToolbarItemGroup`, since iOS 26 centers a keyboard bar's lone item,
 # such as a number pad's Done, which neither a `Spacer` inside the item nor
-# a `ToolbarSpacer` moves to the trailing edge. It patches only `build/`,
-# which Metro and TypeScript read, never `src/`; a modifier alone goes in the
+# a `ToolbarSpacer` moves to the trailing edge. It patches `build/`, which
+# Metro and TypeScript read, and the Swift under `ios/`, never `src/`; a modifier alone goes in the
 # app's own `modules/native-interactions` instead, as `sideMargins` does.
 # 58.0.29 changes none of the files it patches. Delete it when an `@expo/ui`
-# release offers a tinted image, a photo and an emoji a menu keeps, a list's edit mode
-# as a binding, and a toolbar spacer.
+# release offers a tinted image, a layered one, a photo and an emoji a menu
+# keeps, a catalog image and inks on an empty state, a list's edit mode as a
+# binding, and a toolbar spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
