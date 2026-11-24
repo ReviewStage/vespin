@@ -23,6 +23,7 @@ import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { PLUS_TAB } from "../../screens/app-sidebar.js";
 import { useNewTaskAfterSetup } from "../../setup/setup-place.js";
 import { useSidebarChoiceLapse } from "../../sidebar-shown.js";
+import { useTabSurfaceOpen } from "../../surface-open.js";
 import { useKeepStandingTab } from "../../tab-route.js";
 import { useStandingCallCard } from "../../voice-call.js";
 
@@ -127,7 +128,10 @@ export default function TabsLayout() {
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const pathname = usePathname();
   const conversation = iosRouteHidesTabs(pathname);
-  const inboxListStands = useInboxListStands(useSegments());
+  const segments: readonly string[] = useSegments();
+  const inboxListStands = useInboxListStands(segments);
+  // Each tab counted as it comes to stand in front, which this layout hears anyway, rather than once as its list mounts.
+  useTabSurfaceOpen(iosTabOfGroup(segments[1]));
   // The tab standing, which a press names a route on (`useOnTab`), kept here since this layout hears every route anyway.
   useKeepStandingTab();
   // Note that the call's own agent's page holds the call's presses in its composer, so the way back stands aside there rather than repeat them.

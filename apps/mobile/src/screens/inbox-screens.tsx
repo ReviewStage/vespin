@@ -1547,7 +1547,6 @@ export function InboxListScreen() {
   const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
   const [search, setSearch] = useState("");
   const remind = useRemind();
-  useSurfaceOpen(PRODUCT_SURFACE.INBOX);
 
   const held = { search, setSearch, remind };
 

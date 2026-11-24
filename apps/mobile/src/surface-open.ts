@@ -2,10 +2,12 @@
 
 import {
   PRODUCT_LAYOUT,
+  PRODUCT_SURFACE,
   PRODUCT_SURFACE_EVENT,
   type ProductLayout,
   type ProductSurface,
 } from "@repo/features/analytics";
+import { IOS_TAB, type IosTab } from "@repo/features/ios-app-links";
 import {
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -21,6 +23,13 @@ const LAYOUT_OF_SIZE_CLASS = {
   [WINDOW_SIZE_CLASS.REGULAR]: PRODUCT_LAYOUT.WIDE,
   [WINDOW_SIZE_CLASS.COMPACT]: PRODUCT_LAYOUT.NARROW,
 } as const satisfies Record<WindowSizeClass, ProductLayout>;
+
+/** The surface each tab's own list is counted as. */
+const SURFACE_OF_TAB = {
+  [IOS_TAB.INBOX]: PRODUCT_SURFACE.INBOX,
+  [IOS_TAB.TASKS]: PRODUCT_SURFACE.TASKS,
+  [IOS_TAB.SEARCH]: PRODUCT_SURFACE.SEARCH,
+} as const satisfies Record<IosTab, ProductSurface>;
 
 /**
  * How long, in milliseconds, an open a layout change closed waits for the
@@ -91,4 +100,25 @@ export function useSurfaceOpen(surface: ProductSurface | undefined, of?: string)
       handed.set(surface, [...(handed.get(surface) ?? []), { of, at: Date.now() }]);
     };
   }, [count, surface, of]);
+}
+
+/**
+ * Counts each tab as it comes to stand in front, by its list's surface, so
+ * the count says which tabs are visited rather than how often the app
+ * launched, since every tab stays mounted. Note that a sheet standing over
+ * the tabs names no tab, and the tab it stood over counts nothing again as
+ * it closes, because only a move to another tab is a visit.
+ */
+export function useTabSurfaceOpen(tab: IosTab | undefined): void {
+  const count = useHostCount();
+  const last = useRef<IosTab | undefined>(undefined);
+  useEffect(() => {
+    if (tab === undefined || tab === last.current) return;
+
+    last.current = tab;
+    count(PRODUCT_SURFACE_EVENT.SURFACE_OPEN, {
+      surface: SURFACE_OF_TAB[tab],
+      layout: layoutNow(),
+    });
+  }, [count, tab]);
 }
