@@ -1,0 +1,12 @@
+diff --git a/ios/legacy/RNSBarButtonItem.mm b/ios/legacy/RNSBarButtonItem.mm
+--- a/ios/legacy/RNSBarButtonItem.mm
++++ b/ios/legacy/RNSBarButtonItem.mm
+@@ -151,7 +151,7 @@
+ {
+   NSString *sfSymbolName = dict[@"sfSymbolName"];
+   if (sfSymbolName != nil) {
+-    completionBlock([UIImage systemImageNamed:sfSymbolName]);
++    completionBlock([UIImage systemImageNamed:sfSymbolName] ?: [UIImage imageNamed:sfSymbolName]);
+     return;
+   }
+ 

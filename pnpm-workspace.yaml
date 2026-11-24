@@ -72,7 +72,7 @@ catalog:
   posthog-js: 1.418.3
   react-native: 0.88.1
   react-native-safe-area-context: 5.11.1
-  react-native-screens: 4.30.1
+  react-native-screens: 5.0.0-beta.1
   react-native-webview: 14.0.1
   recharts: 3.11.1
   tailwindcss: 4.3.5
@@ -234,20 +234,13 @@ patchedDependencies:
 # `expo-symbols` release loads a symbol set by name.
   expo-symbols@58.0.4: patches/expo-symbols@58.0.4.patch
 #
-# `react-native-screens` 4.30.1 loops over a native-stack header's live
-# subviews in `updateHeaderStateInShadowTreeInContextOfNavigationBar:` while
-# each subview's shadow state update commits and mounts synchronously, so a
-# header item mounted or unmounted mid-loop throws "Collection was mutated
-# while being enumerated" and the app aborts. Turning an iPhone to landscape
-# and back on the Tasks list or the Inbox did it on TestFlight 20, whose bar
-# held two resizing leading items and a title view. The patch loops over a
-# copy, as upstream's react-native-screens#4851 does. And a header button's
-# or a menu item's icon is read as an SF Symbol alone (`systemImageNamed:`),
-# so the Lucide glyphs `@repo/ui-native` draws stood blank in a bar; the patch
-# falls back to the app's asset catalog (`imageNamed:`), as its own tab icons
-# already do. Delete the first when a react-native-screens release carries
-# #4851, and the second when one reads a bar item's symbol from the catalog.
-  react-native-screens@4.30.1: patches/react-native-screens@4.30.1.patch
+# `react-native-screens` 5.0.0-beta.1 reads a header button's or a menu
+# item's icon as an SF Symbol alone (`systemImageNamed:`), so the Lucide
+# glyphs `@repo/ui-native` draws stood blank in a bar; the patch falls back to
+# the app's asset catalog (`imageNamed:`), as its own tab icons already do
+# (`RNSImageLoadingHelper`'s `symbolImageNamed:`). Delete it when a
+# react-native-screens release reads a bar item's symbol from the catalog.
+  react-native-screens@5.0.0-beta.1: patches/react-native-screens@5.0.0-beta.1.patch
 #
 # `@expo/ui` 58.0.27's `Image` colors a symbol only through a `foregroundStyle`
 # modifier, which a system menu drops, drawing every item's icon as a template

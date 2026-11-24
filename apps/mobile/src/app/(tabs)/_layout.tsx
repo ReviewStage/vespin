@@ -9,6 +9,7 @@ import {
 import {
   CallAccessory,
   GLYPH,
+  glyphSymbol,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -162,7 +163,8 @@ export default function TabsLayout() {
         accessibilityLabel="Inbox"
         testID="inbox-tab"
       >
-        <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
+        {/* Note that a tab's glyph is named as a symbol, because react-native-screens 5 refuses an `xcasset` tab icon and reads a symbol's name from the asset catalog where no SF Symbol holds it. */}
+        <NativeTabs.Trigger.Icon sf={glyphSymbol(GLYPH.INBOX)} />
         <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
         {waiting === 0 ? null : (
@@ -170,7 +172,7 @@ export default function TabsLayout() {
         )}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(tasks)" accessibilityLabel="Tasks" testID="tasks-tab">
-        <NativeTabs.Trigger.Icon xcasset={GLYPH.TASK} />
+        <NativeTabs.Trigger.Icon sf={glyphSymbol(GLYPH.TASK)} />
         <NativeTabs.Trigger.Label>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger
@@ -178,7 +180,7 @@ export default function TabsLayout() {
         accessibilityLabel="Automations"
         testID="automations-tab"
       >
-        <NativeTabs.Trigger.Icon xcasset={GLYPH.AUTOMATION} />
+        <NativeTabs.Trigger.Icon sf={glyphSymbol(GLYPH.AUTOMATION)} />
         <NativeTabs.Trigger.Label>Automations</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger
@@ -199,7 +201,7 @@ export default function TabsLayout() {
         accessibilityLabel="New task"
         listeners={{ tabPress: () => router.push("/start-task") }}
       >
-        <NativeTabs.Trigger.Icon xcasset={GLYPH.ADD} />
+        <NativeTabs.Trigger.Icon sf={glyphSymbol(GLYPH.ADD)} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>New task</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
