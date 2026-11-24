@@ -798,7 +798,7 @@ const INBOXES: ReadonlyMap<string, readonly InboxItem[]> = new Map([
  * question, which the Inbox lists under the Manager rather than a task, as
  * the account's feed carries it (`AppInboxItems`' `agents`).
  */
-const AGENT_INBOXES: Readonly<Record<string, readonly InboxItem[]>> = {
+const AGENT_INBOXES = {
   [AGENT.MANAGER]: [
     item(60, AGENT.MANAGER, "cut-the-release", "Cut the release?", [
       agentSaid(
@@ -813,7 +813,7 @@ const AGENT_INBOXES: Readonly<Record<string, readonly InboxItem[]>> = {
       ),
     ]),
   ],
-};
+} satisfies Readonly<Record<string, readonly InboxItem[]>>;
 
 /** How many threads the large Inbox adds beside the staged ones, about as many as a busy real account holds (639 on the one that was timed). */
 const LARGE_THREADS = 600;
