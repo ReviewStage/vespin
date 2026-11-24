@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { HOSTED_SERVICE_PATH, NO_CREDENTIAL } from "@repo/features";
-import { PRODUCT_EVENT, PRODUCT_PLATFORM } from "@repo/features/analytics";
+import {
+  PRODUCT_EVENT,
+  PRODUCT_LAUNCHED_IN,
+  PRODUCT_PLATFORM,
+  type ProductLaunchedIn,
+} from "@repo/features/analytics";
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { THEME } from "@repo/settings";
@@ -24,8 +29,11 @@ import { fixedAccountSource } from "./testing/fixed-account-source.js";
 
 const SERVICE_BASE_URL = "https://app.example.test";
 
-/** A settings concern in a run that sends, over a service that answers every request and keeps what each carried. */
-const sendingSettings = Effect.fnUntraced(function* (packaged: boolean) {
+/** A settings concern in a run that sends, over a service that answers every request and keeps what each carried; the launch begun where `launchedIn` says, where the platform says. */
+const sendingSettings = Effect.fnUntraced(function* (
+  packaged: boolean,
+  launchedIn?: ProductLaunchedIn,
+) {
   const requests: {
     readonly url: string;
     readonly authorization: string | null;
@@ -65,6 +73,7 @@ const sendingSettings = Effect.fnUntraced(function* (packaged: boolean) {
       appVersion: "1.0.0",
       packaged,
       platform: PRODUCT_PLATFORM.DESKTOP,
+      ...(launchedIn === undefined ? undefined : { launchedIn }),
     }),
     fixedAccountSource(),
     NodeFileSystem.layer,
@@ -158,6 +167,24 @@ it.effect("a launch that learns late that usage data is on is counted then, and 
     yield* Effect.orDie(settings.acts.SETTING_UPDATE({ field: "usageData", value: true }));
     yield* flush;
     assert.equal(launches(), 1, "one launch was counted twice");
+  }).pipe(Effect.provide([NodeFileSystem.layer, NodePath.layer])),
+);
+
+it.effect("a launch the system woke in the background says so on its count", () =>
+  Effect.gen(function* () {
+    const { settings, sent, service } = yield* sendingSettings(
+      true,
+      PRODUCT_LAUNCHED_IN.BACKGROUND,
+    );
+
+    yield* Effect.provideService(settings.flushProductEvents, FetchHttpClient.Fetch, service);
+
+    const launch = sent()
+      .flatMap((request) => JSON.parse(request.body).events)
+      .find((event: { name: string }) => event.name === PRODUCT_EVENT.APP_LAUNCH);
+
+    // Note that the key is read as the counted events' wire names it.
+    assert.equal(launch?.properties.launched_in, PRODUCT_LAUNCHED_IN.BACKGROUND);
   }).pipe(Effect.provide([NodeFileSystem.layer, NodePath.layer])),
 );
 

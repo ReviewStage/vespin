@@ -8,12 +8,14 @@
 
 import NetInfo from "@react-native-community/netinfo";
 import { type AccountRenewalWindow, renewalHeldBy } from "@repo/credentials";
+import { PRODUCT_LAUNCHED_IN } from "@repo/features/analytics";
 import { randomUUID } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { openURL } from "expo-linking";
 import { openDatabaseSync } from "expo-sqlite";
 import { AppState } from "react-native";
 import { keepHostLine } from "../crash-reports.js";
+import { launchBeganAway } from "../launch-state.js";
 import { liveActivityModule } from "../live-activity/live-activity-module.js";
 import { openSheetUntilClosed, openSignInSheet, webAuthSession } from "./auth-session.js";
 import type { DeviceSeams } from "./compose-mobile.js";
@@ -89,6 +91,7 @@ export function deviceSeams(): DeviceSeams {
     },
     openSheet: openSheetUntilClosed,
     openSocket: openRelaySocket,
+    launchedIn: launchBeganAway() ? PRODUCT_LAUNCHED_IN.BACKGROUND : PRODUCT_LAUNCHED_IN.FRONT,
     onAppActiveChanged,
     onNetworkChanged,
     tokenVault: keychainTokens,

@@ -157,6 +157,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   PICTURE_FROM: "picture_from",
   PICTURE_KIND: "picture_kind",
   PICTURE_BYTES: "picture_bytes",
+  LAUNCHED_IN: "launched_in",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -535,6 +536,20 @@ export const PRODUCT_READY_AFTER = {
 
 export type ProductReadyAfter = (typeof PRODUCT_READY_AFTER)[keyof typeof PRODUCT_READY_AFTER];
 
+/**
+ * Where a launch began: in front, as a tap opens it, or in the background,
+ * where the system woke the app with nothing on screen, as a push's wake
+ * does on a phone. Note that a launch counted in the background shows its
+ * first screen only once it is brought forward, so the time from its count
+ * to that screen is time spent away, never a launch's wait.
+ */
+export const PRODUCT_LAUNCHED_IN = {
+  FRONT: "front",
+  BACKGROUND: "background",
+} as const;
+
+export type ProductLaunchedIn = (typeof PRODUCT_LAUNCHED_IN)[keyof typeof PRODUCT_LAUNCHED_IN];
+
 /** Where one of a launch's first reads stood: not yet drawn, drawn from the rows the phone kept, the service's answer drawn, or failed. */
 export const PRODUCT_READ_STATE = {
   OUT: "out",
@@ -765,6 +780,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: ProductReadyAfter;
+  [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: ProductLaunchedIn;
   [PRODUCT_EVENT_PROPERTY.INBOX_READ]: ProductReadState;
   [PRODUCT_EVENT_PROPERTY.TASKS_READ]: ProductReadState;
   [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: ProductReadState;
@@ -833,6 +849,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
+  [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: Object.values(PRODUCT_LAUNCHED_IN),
   [PRODUCT_EVENT_PROPERTY.INBOX_READ]: Object.values(PRODUCT_READ_STATE),
   [PRODUCT_EVENT_PROPERTY.TASKS_READ]: Object.values(PRODUCT_READ_STATE),
   [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: Object.values(PRODUCT_READ_STATE),
@@ -923,6 +940,7 @@ const PRODUCT_EVENT_PROPERTIES = {
  * phone has updated.
  */
 const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
+  [PRODUCT_EVENT.APP_LAUNCH]: [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN],
   [PRODUCT_EVENT.APP_READY]: [
     PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
     PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS,
