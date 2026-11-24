@@ -465,8 +465,8 @@ function OwnAgentPage({
 
   // Note that a phone's head has no row for views, so a phone's page keeps the chat alone, as it did before them.
   const manager = agent.kind === AGENT_KIND.MANAGER && away === undefined;
-  // Note that a Manager's page opens on what it is doing, its chat a tab away.
-  const [view, setView] = useState<ManagerView>(MANAGER_VIEW.OVERVIEW);
+  // Note that a Manager's page opens on its chat, what it is doing a tab away.
+  const [view, setView] = useState<ManagerView>(MANAGER_VIEW.MESSAGES);
   const ids = useId();
   const panels = (value: ManagerView) => ({ tab: `${ids}tab-${value}`, panel: `${ids}panel` });
   const shownView = manager ? view : MANAGER_VIEW.AGENT;
