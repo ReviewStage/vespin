@@ -40,7 +40,8 @@ const DAY = 24 * HOUR;
 
 const WORKSPACE_TEAM = "1b4e28ba-2fa1-41d2-883f-0016d3cca427";
 const WORKSPACE_OWN = "6fa459ea-ee8a-4ca4-894e-db77e160355e";
-const ME = { userId: "probeUser0000000000000000000000a", name: "Ada Lovelace" } as const;
+// Note that the reader is the stub's own account (`stub-auth-server.ts`'s `STUB_ACCOUNT.sub`), so the threads that wait on "me" wait on the signed-in reader, as the developer's do.
+const ME = { userId: "stub-account", name: "Ada Lovelace" } as const;
 const PEOPLE = [
   ME,
   { userId: "probeUser0000000000000000000000b", name: "Grace Hopper" },
