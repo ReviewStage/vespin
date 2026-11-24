@@ -302,8 +302,9 @@ function notesOf(...lines: readonly (string | undefined)[]): readonly string[] {
 }
 
 /**
- * The model an agent starts on, alone, "Opus 5.5", led by its harness's
- * mark, its effort left to the sheet as the agent page's chip leaves it: a
+ * The model an agent starts on, "Opus 5.5", in words alone with no harness
+ * mark, as the desktop's model chip stands, its effort left to the sheet as
+ * the agent page's chip leaves it: a
  * capsule that opens the model choices on a tap (`StartModelChip`); where
  * the models could not be read, Try again in its place, the reason said
  * under the words.
@@ -316,16 +317,8 @@ function ModelChip({ pick, onOpen }: { readonly pick: ModelPick; readonly onOpen
   }
 
   const model = labelOf(pick.models, pick.model) ?? WORDS.MODEL;
-  const harness = pick.model === undefined ? undefined : providerOf(pick.model);
 
-  return (
-    <MenuChip
-      look={MENU_CHIP_LOOK.COMPOSER}
-      label={model}
-      {...(harness === undefined ? {} : { harness })}
-      onOpen={onOpen}
-    />
-  );
+  return <MenuChip look={MENU_CHIP_LOOK.COMPOSER} label={model} onOpen={onOpen} />;
 }
 
 /** Whether a start's model choices pop over from its model capsule, as a regular window's pickers do, rather than rising as a sheet: where the window is regular and the capsule holds models rather than Try again. */

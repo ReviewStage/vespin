@@ -42,7 +42,8 @@ builds a control of its own.
   the agent page's own `Composer`, docked on the keyboard, with the + and
   the `MenuChip` capsule menus in a row under its field inside the same
   glass, so the keyboard never covers them, each capsule led by the
-  panel's glyph or a model's harness mark),
+  panel's glyph, but the model's, which is its words alone, as the desktop's
+  model chip stands),
   `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike), `ScriptRow` (a script read whole in the monospaced
   face),
