@@ -3,6 +3,7 @@ import {
   AUTOMATION_RUN_STATUS,
   FIRING_HANDS_OUTSIDE_WORDS,
 } from "@repo/features/automation-wire";
+import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
@@ -670,6 +671,7 @@ const findCommandMachines = SqlSchema.findAll({
   Result: Schema.Struct({
     id: Schema.String,
     name: Schema.String,
+    platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     userId: Schema.String,
     ownerName: Schema.String,
     commandMode: Schema.NullOr(Schema.Literals(Object.values(MACHINE_COMMAND_MODE))),
@@ -683,6 +685,7 @@ const findCommandMachines = SqlSchema.findAll({
         .select({
           id: device.id,
           name: device.name,
+          platform: device.platform,
           userId: device.userId,
           ownerName: user.name,
           commandMode: device.commandMode,
@@ -790,6 +793,8 @@ export function machineRoutingOf(target: ConversationTarget): TaskStoreEffect<Ma
 export interface CommandMachine {
   readonly id: string;
   readonly name: string;
+  /** Its platform, since only a Mac's app takes computer use. */
+  readonly platform: DevicePlatform;
   readonly userId: string;
   readonly ownerName: string;
   readonly commandMode: MachineCommandMode | null;

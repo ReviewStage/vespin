@@ -7,6 +7,7 @@ import {
   type AgentRunsOnRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import { CALL_KIND } from "@repo/features/turn-rows";
@@ -269,8 +270,8 @@ test("the Default machine row names the agent's default with its dot, offline as
             machine: { id: "laptop", name: "Laptop" },
           },
           machines: [
-            { id: "laptop", name: "Laptop", owner, online: false },
-            { id: "studio", name: "Studio", owner, online: true },
+            { id: "laptop", name: "Laptop", owner, platform: DEVICE_PLATFORM.LINUX, online: false },
+            { id: "studio", name: "Studio", owner, platform: DEVICE_PLATFORM.DARWIN, online: true },
           ],
         },
       },
@@ -303,10 +304,10 @@ test("the Default machine row names the agent's default with its dot, offline as
   );
   await settle();
 
-  // Note that the machines are a teammate's, Ada's, so each wears her face, "A", before its name, and a cloud agent's row says the agent keeps running without the machine.
+  // Note that the machines are a teammate's, Ada's, so each wears her face, "A", before its name; and a cloud agent's rows say it keeps running without the machine, and that its app runs terminal commands alone, since the laptop is no Mac.
   assert.deepEqual(rows, [
-    "Agent runs inCloud",
-    "Commands run onVespin there runs its terminal commands, and on a Mac its computer use too. If that machine goes offline, the agent keeps running.ALaptop",
+    "Agent runs inIt keeps running while the machine below is offline.Cloud",
+    "Commands run onVespin there runs its terminal commands.ALaptop",
   ]);
   assert.equal(standing, "Offline");
   assert.equal(machines.length, 2);
@@ -325,6 +326,15 @@ test("the Default machine row names the agent's default with its dot, offline as
     "Agent runs inMini",
     "Commands run onAStudio",
   ]);
+
+  // Note that the studio is a Mac, so the cloud agent's row names its computer use too.
+  act(() => root.render(withQueryClient(createElement(AgentPlace, { agent: { id: AGENT_ID } }))));
+  await settle();
+  act(() => placeChip().click());
+  assert.equal(
+    optionsOf("Where this agent works")[1],
+    "Commands run onVespin there runs its terminal commands and computer use.AStudio",
+  );
 
   // Note that the laptop is picked back while the studio's pick is still out, and its answer comes first; the service's default stands then, never the older pick.
   act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click());

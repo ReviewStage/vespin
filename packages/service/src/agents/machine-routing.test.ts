@@ -33,6 +33,7 @@ import {
   openTaskAgent,
   openWorkspace,
 } from "@repo/database/testing";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
@@ -284,22 +285,30 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   );
 
   it.effect(
-    "an agent's default may be set to a machine of anyone who lets the task's agents use theirs, online or not, and to no machine of a follower whose switch is off",
+    "an agent's default may be set to a machine of anyone who lets the task's agents use theirs, online or not, each with its platform, and to no machine of a follower whose switch is off",
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId, target } = yield* openPeople;
         const laptop = yield* openMachine(owner, "Laptop", false);
         const studio = yield* openMachine(teammate, "Studio", true);
+        yield* Database.use((db) =>
+          db.update(device).set({ platform: DEVICE_PLATFORM.LINUX }).where(eq(device.id, studio)),
+        );
         yield* followTask(owner, { taskId, followerId: teammate, machines: true });
-        const listed = (yield* defaultMachinesOf(target)).map(({ id, online }) => ({ id, online }));
+
+        const listed = (yield* defaultMachinesOf(target)).map(({ id, platform, online }) => ({
+          id,
+          platform,
+          online,
+        }));
         yield* setFollowerMachines(teammate, taskId, false);
         const switchedOff = (yield* defaultMachinesOf(target)).map(({ id }) => id);
 
         assert.deepEqual(
           [...listed].sort((a, b) => a.id.localeCompare(b.id)),
           [
-            { id: laptop, online: false },
-            { id: studio, online: true },
+            { id: laptop, platform: DEVICE_PLATFORM.DARWIN, online: false },
+            { id: studio, platform: DEVICE_PLATFORM.LINUX, online: true },
           ].sort((a, b) => a.id.localeCompare(b.id)),
         );
         assert.deepEqual(switchedOff, [laptop]);

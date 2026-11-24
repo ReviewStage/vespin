@@ -1,3 +1,4 @@
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { machineName } from "@repo/features/machine-name";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -59,8 +60,10 @@ const DEFAULT_MACHINE_ROW = "default-machine";
 /** What the Default machine row and its submenu say. */
 const DEFAULT_MACHINE_WORDS = {
   LABEL: "Commands run on",
-  /** What the row says under its label of an agent that runs apart from the machine, as a cloud agent does; computer use only on a Mac, since only the desktop app ships its helper. */
-  APART: `${PRODUCT_NAME} there runs its terminal commands, and on a Mac its computer use too. If that machine goes offline, the agent keeps running.`,
+  /** What the row says under its label of a cloud agent's Mac, whose app runs computer use too. */
+  RUNS_MAC: `${PRODUCT_NAME} there runs its terminal commands and computer use.`,
+  /** What the row says under its label of a cloud agent's other machine, or one an older service names no platform of, since only a Mac's app ships the computer-use helper. */
+  RUNS_OTHER: `${PRODUCT_NAME} there runs its terminal commands.`,
   HEADING: "Commands run here",
   NONE: "None",
   REFUSED: "The default machine could not be changed.",
@@ -197,19 +200,27 @@ export function MachineValue({
   );
 }
 
+/** The Default machine row of the agent's place popover, and whether it names a machine rather than None. */
+export interface DefaultMachineRow {
+  readonly row: MenuRow;
+  readonly named: boolean;
+}
+
 /**
  * The Default machine row of the agent's place popover, as the module
  * says; none for an agent offered no `run_on_mac`, or before its tools are
- * read. A pick is drawn as the default from the press, while the service
+ * read. For an agent that runs apart from the machine, as a cloud agent
+ * does, the row says under its label that the app there runs its commands,
+ * and its computer use where the machine is a Mac. A pick is drawn as the default from the press, while the service
  * has yet to answer (`usePickedMachine`). Note that a machine none of the list names, as
  * the owner's from before machines were named, is named as the answer
  * names it.
  */
 export function useDefaultMachineRow(
   agentId: string,
-  /** Whether the agent runs apart from the machine its commands go to, as a cloud agent does, so it keeps running while that machine is offline. */
+  /** Whether the agent runs apart from the machine its commands go to, as a cloud agent does. */
   apart = false,
-): MenuRow | undefined {
+): DefaultMachineRow | undefined {
   const tools = useAgentTools(agentId);
   const { mutate: setDefault } = useMutation(defaultMachineMutation(agentId));
   const pickedId = usePickedMachine(agentId);
@@ -228,7 +239,13 @@ export function useDefaultMachineRow(
 
   const chosen = picked ?? standing.machine;
   const owner = picked?.owner ?? standing.owner;
-  const online = machines.find((machine) => machine.id === chosen?.id)?.online ?? standing.on;
+  const chosenListed = machines.find((machine) => machine.id === chosen?.id);
+  const online = chosenListed?.online ?? standing.on;
+
+  const runs =
+    chosenListed?.platform === DEVICE_PLATFORM.DARWIN
+      ? DEFAULT_MACHINE_WORDS.RUNS_MAC
+      : DEFAULT_MACHINE_WORDS.RUNS_OTHER;
 
   // Note that only a teammate's machine wears its owner's face, since the reader's own needs no saying whose it is.
   const faceOf = (owner: DefaultMachine["owner"]) =>
@@ -236,14 +253,14 @@ export function useDefaultMachineRow(
       <ActorMark actor={personActor(owner, members, readerId, former)} size={ACTOR_SIZE.INLINE} />
     );
 
-  return {
+  const row: MenuRow = {
     id: DEFAULT_MACHINE_ROW,
     label: DEFAULT_MACHINE_WORDS.LABEL,
     icon:
       chosen === undefined ? (
         <GLYPH.DESKTOP aria-hidden="true" />
       ) : (
-        <MachineGlyph machine={{ online }} />
+        <MachineGlyph machine={chosenListed ?? { online }} />
       ),
     end: (
       <MachineValue
@@ -251,8 +268,7 @@ export function useDefaultMachineRow(
         face={chosen === undefined ? undefined : faceOf(owner)}
       />
     ),
-    // Note that the line under the label stands only for a cloud agent, which keeps running without the machine.
-    detail: apart && chosen !== undefined ? DEFAULT_MACHINE_WORDS.APART : undefined,
+    detail: apart && chosen !== undefined ? runs : undefined,
     detailUnder: true,
     submenu:
       machines.length === 0
@@ -276,4 +292,6 @@ export function useDefaultMachineRow(
             },
           },
   };
+
+  return { row, named: chosen !== undefined };
 }

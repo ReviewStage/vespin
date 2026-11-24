@@ -137,6 +137,8 @@ const PLACE_WORDS = {
   CPU: "CPU",
   MEMORY: "Memory",
   RUNS_IN: "Agent runs in",
+  /** What a cloud agent's Agent runs in row says under its label where its commands go to a machine. */
+  RUNS_APART: "It keeps running while the machine below is offline.",
   MOVE_TO: "Move this agent to",
 } as const;
 
@@ -228,11 +230,12 @@ function useRunsInRow({
  * name at the row's end, and a chevron where it opens a submenu: Agent runs in, where the agent itself runs and
  * the places to move it to (`useRunsInRow`), and Commands run on, where its
  * terminal commands and computer use go when a call names none
- * (`agent-machines.tsx`), for an agent offered them. Note that the
- * Commands run on row says under its label that the app on that machine runs
- * them, computer use on a Mac alone, and the agent keeps running without it, since a cloud agent's
- * reader otherwise takes the machine for where the agent runs, and the
- * popover stands wide to give that line room.
+ * (`agent-machines.tsx`), for an agent offered them. Note that where its
+ * commands go to a machine, each row says one line under its label: Agent
+ * runs in that the agent keeps running while that machine is offline, and
+ * Commands run on what the app there runs, since a reader otherwise takes
+ * the machine for where the agent runs; the popover then stands wide to
+ * give those lines room.
  */
 function CloudChip({
   agentId,
@@ -278,9 +281,19 @@ function CloudChip({
       title={PLACE_WORDS.TITLE}
       facts={cloudFacts(state, vcpus)}
       menu={{
-        rows: defaultMachine === undefined ? [runsIn] : [runsIn, defaultMachine],
+        rows:
+          defaultMachine === undefined
+            ? [runsIn]
+            : [
+                {
+                  ...runsIn,
+                  detail: defaultMachine.named ? PLACE_WORDS.RUNS_APART : undefined,
+                  detailUnder: true,
+                },
+                defaultMachine.row,
+              ],
         noMatch: RUNS_ON_WORDS.NO_MATCH,
-        width: defaultMachine === undefined ? undefined : POPOVER_WIDTH.WIDE,
+        width: defaultMachine?.named === true ? POPOVER_WIDTH.WIDE : undefined,
       }}
     />
   );
@@ -542,7 +555,7 @@ function MacChip({
   const { readerId } = useMemberDirectory();
   const ownerActor = usePerson(owner);
   const thisMac = useThisMac();
-  const defaultMachine = useDefaultMachineRow(agentId);
+  const defaultMachine = useDefaultMachineRow(agentId)?.row;
   // Note that the clock only redraws the label as a beat ages, since the standing is read off the book's own monotonic clock.
   useSecond();
   const standing = presenceStanding(presence, mac.deviceId);
