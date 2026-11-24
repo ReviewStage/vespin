@@ -24,7 +24,6 @@ import {
   ActivityIndicator,
   findNodeHandle,
   type HostInstance,
-  Image,
   ScrollView,
   type ScrollViewInstance,
   StyleSheet,
@@ -70,6 +69,7 @@ import {
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
 import { COLUMN_BOUNDS, type MediaBounds, type MediaSize, mediaFrame } from "./media-frame.js";
+import { LoaderImage, PICTURE_FIT, type PictureSource, pictureUri } from "./picture-source.js";
 import { Press } from "./press.js";
 import {
   SUGGESTION_LOOK,
@@ -425,8 +425,8 @@ function PictureChip({ name, drawing }: { readonly name: string; readonly drawin
   const { colors, fontScale } = drawing;
   const picture = drawing.wordPicture(name);
   const source = picture?.source;
-  const drawn = useRef<ComponentRef<typeof Image>>(null);
-  const show = usePictureView(source, name, drawn);
+  const drawn = useRef<ComponentRef<typeof View>>(null);
+  const show = usePictureView(source == null ? source : pictureUri(source), name, drawn);
   const unread = source === null;
   const onPress = unread ? picture?.onRetry : show;
   const markSize = ROLE_SIZE.ROW_LINE * fontScale;
@@ -459,7 +459,7 @@ function PictureChip({ name, drawing }: { readonly name: string; readonly drawin
         ]}
       >
         {source != null ? (
-          <Image ref={drawn} source={{ uri: source }} resizeMode="cover" style={thumbnail} />
+          <LoaderImage drawn={drawn} source={source} fit={PICTURE_FIT.COVER} style={thumbnail} />
         ) : (
           <View style={[thumbnail, styles.pending]}>
             <ChipSymbol
@@ -697,7 +697,8 @@ function collectOpenings(
         openings.push({
           name: `open-${openings.length}`,
           label: `${OPEN_WORD} ${run.name}`,
-          onOpen: () => view([{ source, title: run.name, subtitle: undefined }], 0),
+          onOpen: () =>
+            view([{ source: pictureUri(source), title: run.name, subtitle: undefined }], 0),
         });
       }
     } else if (run.kind === MARKDOWN_RUN.SUGGESTION) {
@@ -1216,8 +1217,8 @@ function unreadWords(alt: string): string {
 }
 
 type PictureProps = {
-  /** The address the picture is drawn from; none while its bytes are still on their way, which stands its well alone, and `null` where it could not be read, which says so in its well. */
-  readonly source: string | null | undefined;
+  /** What the picture is drawn from, a file's or the service's address; none while it is still on its way, which stands its well alone, and `null` where it could not be read, which says so in its well. */
+  readonly source: PictureSource | null | undefined;
   /** What the picture shows, heard in its place. */
   readonly alt: string;
   /** A tile's fixed shape, width over height, the picture standing whole inside it, as wide as its tile; the picture's own shape and size, held to `MEDIA_BOUNDS`, where none is given. */
@@ -1257,12 +1258,14 @@ export function Picture({
   const [boxWidth, setBoxWidth] = useState<number | undefined>(undefined);
   const heard = alt === "" ? "Picture" : alt;
 
+  const uri = source == null ? source : pictureUri(source);
+
   const kept: Kept | undefined =
-    source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard };
+    uri == null ? undefined : { kind: KEPT_KIND.PICTURE, source: uri, name: heard };
 
   const acts = useKeptActs(kept);
-  const drawn = useRef<ComponentRef<typeof Image>>(null);
-  const show = usePictureView(source, heard, drawn);
+  const drawn = useRef<ComponentRef<typeof View>>(null);
+  const show = usePictureView(uri, heard, drawn);
 
   // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
   const frame = tileAspect === undefined ? mediaFrame(size ?? natural, bounds) : undefined;
@@ -1315,16 +1318,12 @@ export function Picture({
               accessibilityHint="Opens full screen"
               testID="markdown-picture"
             >
-              <Image
-                ref={drawn}
-                source={{ uri: source }}
-                resizeMode={fill ? "cover" : "contain"}
-                onLoad={(event) => {
-                  const loaded = event.nativeEvent.source;
-
-                  if (loaded.width > 0 && loaded.height > 0) {
-                    setNatural({ width: loaded.width, height: loaded.height });
-                  }
+              <LoaderImage
+                drawn={drawn}
+                source={source}
+                fit={fill ? PICTURE_FIT.COVER : PICTURE_FIT.CONTAIN}
+                onSize={(width, height) => {
+                  if (width > 0 && height > 0) setNatural({ width, height });
                 }}
                 style={well}
               />
@@ -1535,7 +1534,7 @@ type MarkdownProps = {
 
 /** A picture the words name by its marker, as its chip draws it: the address it is drawn from, none while its bytes are on their way and `null` where they could not be read, and what reads it again. */
 export interface MarkdownWordPicture {
-  readonly source: string | null | undefined;
+  readonly source: PictureSource | null | undefined;
   readonly onRetry?: (() => void) | undefined;
 }
 

@@ -19,6 +19,8 @@ export const ACCOUNT_ACT_KIND = {
   ACCOUNT_SIGN_OUT: "account.signOut",
   ACCOUNT_DELETE: "account.delete",
   ACCOUNT_SUPPORT_ACCESS: "account.supportAccess",
+  /** Where the iOS app's image loader reads a picture: the service's address and the account's header, answered only to screens in the host's own process. */
+  ACCOUNT_PICTURE_SOURCE: "account.pictureSource",
 } as const;
 
 /**
@@ -1099,6 +1101,7 @@ export const PORT_ACT_USE = {
   ACCOUNT_SIGN_OUT: ACT_USE.WRITE,
   ACCOUNT_DELETE: ACT_USE.WRITE,
   ACCOUNT_SUPPORT_ACCESS: ACT_USE.WRITE,
+  ACCOUNT_PICTURE_SOURCE: ACT_USE.FETCH,
 
   PROVIDER_KEYS_FOLLOW: ACT_USE.READ,
   PROVIDER_KEYS_RETRY: ACT_USE.READ,

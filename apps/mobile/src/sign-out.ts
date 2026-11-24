@@ -4,6 +4,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { useRef } from "react";
 import { useHostActs } from "./host/host-provider.js";
 import { clearAccountNotifications } from "./notifications.js";
+import { forgetPictureFiles } from "./picture-files.js";
 import { reregisterPushDevice, unregisterPushDevice, useFixtureRun } from "./push-device.js";
 import { useWrite } from "./use-write.js";
 
@@ -16,7 +17,8 @@ interface SignOutSaying {
  * Signs the account out through `useWrite`: the phone unregistered first,
  * while the account's credential still stands, so no push of the account
  * reaches a phone signed out of it (the unregister's own deadline bounds the
- * wait), then the account signed out and its notifications cleared. A press
+ * wait), then the account signed out, its notifications cleared, and the
+ * pictures the image loader kept let go. A press
  * while one runs starts no second one, and answers whether it went. Note that
  * a sign-out the host refuses registers the phone again, since the account
  * still stands and its pushes must too, and says why where it was pressed
@@ -40,9 +42,15 @@ export function useSignOut(): (saying?: SignOutSaying) => Promise<boolean> {
         .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
         .then(
           () =>
-            clearAccountNotifications().catch((cause: unknown) =>
-              console.error("The account's notifications were not cleared.", cause),
-            ),
+            Promise.all([
+              clearAccountNotifications().catch((cause: unknown) =>
+                console.error("The account's notifications were not cleared.", cause),
+              ),
+              // Note that the pictures the image loader kept are let go too, so another account signed in here is never drawn this one's.
+              forgetPictureFiles().catch((cause: unknown) =>
+                console.error("The account's pictures were not let go.", cause),
+              ),
+            ]).then(() => undefined),
           (cause: unknown) => {
             reregisterPushDevice(acts, fixture).catch(() => undefined);
             throw cause;
