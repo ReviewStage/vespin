@@ -48,7 +48,6 @@ import {
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentBrief,
-  type AgentFailure,
   type AgentOrigin,
   type AgentPullRequestAnswer,
   type AgentSender,
@@ -68,7 +67,6 @@ import {
   CONTINUE_IN_CLOUD_LABEL,
   FAILURE_REASON,
   type FailureReason,
-  remedyLabel,
 } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
@@ -192,16 +190,13 @@ import {
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
-  TurnEnd,
   USAGE_LIMIT_NOTICE_LOOK,
   UsageLimitNotice,
-  useAnnounce,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
-import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import {
@@ -292,6 +287,7 @@ import {
 } from "./agent-boot-line.js";
 import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
+import { AgentEndRow, TryAgainPress, useTurnEndSaid } from "./agent-end-row.js";
 import { useForwardToast } from "./agent-forward.js";
 import { GoalConditions, GoalDock, GoalNoticeView } from "./agent-goal.js";
 import { useCallRoute } from "./agent-machines.js";
@@ -312,8 +308,6 @@ import {
   planPayerOf,
   providerOf,
   SENT_LINE_STATE,
-  TRY_AGAIN_LABEL,
-  TRYING_AGAIN_LABEL,
   tabTurnOf,
   teammateStarter,
   transcriptRowKey,
@@ -551,25 +545,6 @@ const selectEnterQueues = (state: AppStateSnapshot): boolean =>
 
 /** The height a transcript's row is taken to have before it is drawn and measured, in pixels: a short turn's, with the log's step before it (`--ui-space-12`), which a row holds itself (tasks.css's `.agent-log-row-next`). */
 const ROW_ESTIMATE_PX = 172;
-
-/**
- * The cause a failed turn is reported under, one per failure word, so a tab
- * drawn again finds the report it made rather than making another.
- */
-const TURN_FAILURE_CAUSE: ReadonlyMap<AgentFailure, { readonly code: AgentFailure }> = new Map(
-  Object.values(AGENT_FAILURE).map((failure) => [failure, { code: failure }]),
-);
-
-/**
- * The failures a turn ends on that something outside named as a refusal,
- * reported as one: the account's own API key, which its provider refused and
- * the reader mends in Settings, and a local agent's machine's own sign-in,
- * which the reader mends on that machine.
- */
-const REFUSED_TURN_FAILURES: ReadonlySet<AgentFailure> = new Set([
-  AGENT_FAILURE.PROVIDER_KEY,
-  AGENT_FAILURE.MACHINE_SIGN_IN,
-]);
 
 /** The servers switched off for a teammate's agent as its mentions read them, whose switches the reader is not handed. */
 const NONE_DISABLED: readonly string[] = [];
@@ -2622,86 +2597,6 @@ function ChatWorkRows({
   );
 }
 
-/**
- * Says the turn's end, a stop or a failure, once, as it lands. Note that it
- * is said by the transcript rather than its end line, because the line
- * mounts with its words and its failure is history, no alert; and that only
- * an end that follows the tab seeing the agent work is said, so the end a
- * tab opens on is history too, while a turn that fails before writing a
- * word is still heard.
- */
-function useTurnEndSaid(ended: EndLineParts | undefined, working: boolean): void {
-  const [sawRunning, setSawRunning] = useState(false);
-
-  if (!sawRunning && working && ended === undefined) setSawRunning(true);
-  useAnnounce(ANNOUNCE.POLITE, sawRunning ? (ended?.words ?? "") : "");
-}
-
-/**
- * The line a transcript ends on once its turn was stopped or failed, and
- * the press on its row (`TurnEnd`): a failure reported under its cause, a
- * stop's words alone. A turn failed on the reader's own refused key offers
- * its harness's row in Settings as the row's press, where no other press
- * stands, since a key the reader mends offers neither Continue nor Try
- * again.
- */
-function AgentEndRow({
-  ended,
-  endReason,
-  keyProvider,
-  onOpenApiKeys,
-  about,
-  press,
-  centered = false,
-}: {
-  ended: EndLineParts;
-  endReason: FailureReason | undefined;
-  keyProvider: ModelProvider | undefined;
-  onOpenApiKeys: (() => void) | undefined;
-  /** The agent and task the failure is about, which its copied details name. */
-  about: FailureAbout;
-  press: ReactNode;
-  /** Whether it stands in the empty state's own centered column, centered as its column is. */
-  centered?: boolean;
-}): React.JSX.Element {
-  // Note that a key refused is mended at its harness's row in Settings, so its row offers that row as its press.
-  const remedy =
-    endReason === FAILURE_REASON.API_KEY
-      ? remedyLabel({ reason: FAILURE_REASON.API_KEY, text: ended.words, provider: keyProvider })
-      : undefined;
-
-  const failure = ended.failed
-    ? failureShown({
-        surface: FAILURE_SURFACE.AGENT_TURN,
-        // Note that the service's word for the failure is its code, so a report names what failed rather than what mends it.
-        cause:
-          (ended.failure === undefined ? undefined : TURN_FAILURE_CAUSE.get(ended.failure)) ??
-          FAILURE_CONDITION.UNREAD,
-        about,
-        ...(ended.failure !== undefined &&
-          REFUSED_TURN_FAILURES.has(ended.failure) && { refused: true }),
-      })
-    : undefined;
-
-  return (
-    <TurnEnd
-      failure={failure}
-      press={
-        remedy === undefined ? (
-          press
-        ) : (
-          <Button variant={BUTTON_VARIANT.OUTLINE} onClick={onOpenApiKeys}>
-            {remedy}
-          </Button>
-        )
-      }
-      centered={centered}
-    >
-      {ended.words}
-    </TurnEnd>
-  );
-}
-
 type AgentMessageProps = Parameters<typeof AgentMessage>[0];
 
 /**
@@ -4518,36 +4413,6 @@ type AgentTabProps = AgentTabDoors &
  * the lines it sends again, or its own line where none was lost, take the
  * end line's place, and a press the service refused offers it again.
  */
-function TryAgainPress({ onPress }: { onPress: () => Promise<boolean> }): React.JSX.Element {
-  // Note that a press taken is kept in a ref as well as drawn, so a press before the draw sends nothing.
-  const taken = useRef(false);
-  const [sent, setSent] = useState(false);
-  const press = useAsyncAction(rejectionWords);
-
-  const tryAgain = () => {
-    if (taken.current) return;
-    void press.run(() =>
-      onPress().then((took) => {
-        taken.current = took;
-        setSent(took);
-      }),
-    );
-  };
-
-  return (
-    <Button
-      variant={BUTTON_VARIANT.OUTLINE}
-      icon={<GLYPH.RETRY />}
-      busy={press.running}
-      busyLabel={TRYING_AGAIN_LABEL}
-      disabled={sent}
-      onClick={tryAgain}
-    >
-      {TRY_AGAIN_LABEL}
-    </Button>
-  );
-}
-
 /**
  * An agent's tab, by the agent's id alone: its transcript is followed from
  * the moment the tab stands, while the agent itself may still be on its way with the task's list of agents. What needs
