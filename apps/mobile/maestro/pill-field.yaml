@@ -38,22 +38,7 @@ appId: dev.vespin.ios
 - takeScreenshot: pill-field-picked
 - runFlow: subflows/lower-keyboard.yaml
 - takeScreenshot: pill-field-written
-# Under the page's own field, a document's field draws its words in the
-# looks the page draws them in as they are written: a heading larger, bold
-# words bold, code in the monospaced face, a list's marks, a quote muted,
-# and the marks that only spell a look (`##`, `**`, the backticks, the
-# fences) faded; with the caret in it, it keeps its looks.
-- scrollUntilVisible:
-    element:
-      id: "pill-field-styled"
-    direction: DOWN
-- waitForAnimationToEnd
-- takeScreenshot: pill-field-styled
-- tapOn:
-    id: "pill-field-styled"
-- waitForAnimationToEnd
-- takeScreenshot: pill-field-styled-caret
-# Under them, the document field a description is edited in, as Notion edits
+# Under it, the document field a description is edited in, as Notion edits
 # a page: each block drawn with no syntax (a heading, bold words, a mention's
 # pill, the lists' bullets, numbers and boxes, a quote, code, a rule), and a
 # table and a diagram, which the phone does not edit, as cards. The Markdown

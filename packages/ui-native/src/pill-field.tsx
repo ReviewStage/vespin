@@ -1,7 +1,6 @@
 // pill-field.tsx -- the app's one field of words that draws mentions and files' markers as pills inside them, as the panel's box draws its chips, while its value stays the Markdown the wire carries.
 
 import { readerZone } from "@repo/features/date-mention";
-import { styledRuns } from "@repo/features/markdown-styles";
 import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
@@ -51,8 +50,6 @@ interface PillFieldProps {
   readonly editable?: boolean | undefined;
   /** Whether the field takes the keyboard as it first stands, as a page that starts work opens on its words. */
   readonly autoFocus?: boolean | undefined;
-  /** Whether the words are drawn in the looks the page draws them in as they are written, as a document edited whole is, the marks that only spell a look faded; plain words, as a message's, where not. */
-  readonly styled?: boolean | undefined;
   /** The `@` word the caret stands in as it changes, which a mention offer reads; none once the caret stands in none. */
   readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
@@ -80,7 +77,6 @@ export function PillField({
   maxLines,
   editable,
   autoFocus,
-  styled,
   onAtWord,
   onFocusChange,
   testID,
@@ -106,18 +102,12 @@ export function PillField({
       pill: { markdown: pill.markdown, ...pillLook(pill, reading, markOf) },
     });
 
-    // Note that the looks are read only for a field that draws them, so a message's box never parses its words on each key.
-    const runs =
-      styled !== true
-        ? pillRuns(value, files).map((run) =>
-            run.kind === PILL_RUN.WORDS ? { text: run.text } : drawn(run.pill),
-          )
-        : styledRuns(value, files).map((run) =>
-            run.kind === PILL_RUN.WORDS ? { text: run.text, styles: run.styles } : drawn(run.pill),
-          );
+    const runs = pillRuns(value, files).map((run) =>
+      run.kind === PILL_RUN.WORDS ? { text: run.text } : drawn(run.pill),
+    );
 
     return { runs, seen };
-  }, [value, files, repository, seen, styled, markOf]);
+  }, [value, files, repository, seen, markOf]);
 
   const look = {
     text: colors.TEXT,

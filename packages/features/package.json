@@ -110,7 +110,6 @@
     "./video-signature": "./src/video-signature.js",
     "./markdown-nesting": "./src/markdown-nesting.js",
     "./markdown-plain-text": "./src/markdown-plain-text.js",
-    "./markdown-styles": "./src/markdown-styles.js",
     "./markdown-tree": "./src/markdown-tree.js",
     "./markdown-slices": "./src/markdown-slices.js",
     "./media-read-words": "./src/media-read-words.js",

@@ -105,12 +105,7 @@ builds a control of its own.
   again by its words where typing moved it, so no pick is dropped, and puts
   pills at the caret,
   such as a file's marker as it is attached (`place`); an agent's composer
-  stands its files so, in the words, rather than in a row over them. A
-  field handed `styled` draws a document's words in the looks the page
-  draws them in as they are written (`@repo/features/markdown-styles`): a
-  heading larger, bold and code in their faces, a list's marks and a quote
-  muted, its words still the Markdown it saves, the marks that only spell a
-  look faded.
+  stands its files so, in the words, rather than in a row over them.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
