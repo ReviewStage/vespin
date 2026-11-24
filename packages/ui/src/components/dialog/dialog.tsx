@@ -106,9 +106,9 @@ import { useHeldFocus } from "./held-focus.js";
  * it has one. What it holds between them is the part that gives way and
  * scrolls (a `min-h-0` middle of the card, with the head and the foot outside
  * it), so its title and its answers stay on screen however short the
- * window is. A picture's card opened from its tile grows from the tile
- * and goes back into it (`expand`), in place of the fade and rise every other
- * card opens with. A dialog with no answers at its foot, one that stands
+ * window is. A picture's card opened from its tile fades in as its picture
+ * flies from the tile, and fades as the picture flies back into it
+ * (`expand`), in place of the fade and rise every other card opens with. A dialog with no answers at its foot, one that stands
  * waiting on something done elsewhere, may stand a close glyph at its title's
  * end (`closeLabel`), which puts it away as Escape does, and a line under its
  * title may say what it is for (`subtitle`), so its head is still the card's
