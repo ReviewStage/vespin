@@ -170,6 +170,8 @@ interface DocumentFieldProps {
   readonly testID?: string | undefined;
   /** Whether the field grows to its words inside the page that holds it, as a description edited in place stands in its task's list, rather than scrolling them itself. */
   readonly fitsWords?: boolean | undefined;
+  /** How far over the keyboard the caret's line keeps clear while something stands over the field's foot, such as what an `@` offers docked over the keyboard (none in a column that ends over its offer, which the field keeps clear of on its own); none while nothing stands there. The caret's line is brought back into sight as it comes and goes. */
+  readonly keepClear?: number | undefined;
   /** Where the field takes the keyboard with its caret once it stands, read as it mounts; none leaves the keyboard alone. */
   readonly opensAt?: DocumentFieldOpening | undefined;
 }
@@ -324,6 +326,7 @@ export function DocumentField({
   style,
   testID,
   fitsWords = false,
+  keepClear,
   opensAt,
 }: DocumentFieldProps) {
   const colors = useColors();
@@ -524,6 +527,7 @@ export function DocumentField({
       ref={native}
       style={fitsWords ? [style, { height: height ?? FIT_LEAST }] : style}
       fitsWords={fitsWords}
+      keepClear={keepClear}
       opening={opening}
       onHeight={fitsWords ? ({ nativeEvent }) => setHeight(nativeEvent.height) : undefined}
       value={handed.value}

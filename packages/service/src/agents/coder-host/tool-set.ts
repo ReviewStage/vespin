@@ -44,8 +44,9 @@ import { connectionToolEntries } from "../../integrations/connection-tools.js";
  * `show_code`, `draw_on_board`, and `look_at_board`, removed with the Code
  * and Board tabs, and a voice call's `queue_question`, `withdraw_question`,
  * and `end_call`, removed with GPT Live, `remember` and `recall`, since
- * named `save_memory` and `search_memory`, and `resolve_thread` and
- * `reopen_thread`, since folded into `update_comment`. A transcript written
+ * named `save_memory` and `search_memory`, `resolve_thread` and
+ * `reopen_thread`, since folded into `update_comment`, and `end_turn`,
+ * removed with Done and follow-ups. A transcript written
  * then names them, and reads back under the same set.
  */
 export const RETIRED_CODER_TOOL = {
@@ -74,6 +75,7 @@ export const RETIRED_CODER_TOOL = {
   RECALL: RETIRED_TOOL.RECALL,
   RESOLVE_THREAD: RETIRED_TOOL.RESOLVE_THREAD,
   REOPEN_THREAD: RETIRED_TOOL.REOPEN_THREAD,
+  END_TURN: RETIRED_TOOL.END_TURN,
 } as const;
 
 const TOOL_INPUT = verbatimJsonSchema(WireValueSchema, {

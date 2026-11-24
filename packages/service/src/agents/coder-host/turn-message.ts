@@ -11,7 +11,6 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
-import { accountExperimentOn } from "@repo/database/models/account-store";
 import { readAccountTimeZone } from "@repo/database/models/account-time-zone";
 import {
   type Agent,
@@ -243,27 +242,10 @@ const memoriesOf = (agent: Agent, words: string) =>
     Effect.catch(() => Effect.succeed(undefined)),
   );
 
-/**
- * How the agent's reply reaches the developer, which its turn's kind words
- * follow: a Manager's by `send_to_user`, never `end_turn`, which it is not
- * offered; another agent's by `end_turn` where the account has it on, which
- * only a spoken turn reads, the one turn its words change on; and its last
- * message otherwise.
- */
-const turnReplyOf = (
-  agent: Agent,
-  turn: CoderTurn,
-): Effect.Effect<TurnReply, never, DatabaseServices> => {
-  if (agent.kind === AGENT_KIND.MANAGER) return Effect.succeed(TURN_REPLY.SEND_TO_USER);
-
-  if (turn.spoken !== true) return Effect.succeed(TURN_REPLY.LAST_MESSAGE);
-
-  return accountExperimentOn(agent.userId, EXPERIMENT.TURN_END).pipe(
-    Effect.tapError(logStoreFailure),
-    Effect.orElseSucceed(() => false),
-    Effect.map((on) => (on ? TURN_REPLY.END_TURN : TURN_REPLY.LAST_MESSAGE)),
-  );
-};
+/** How the agent's reply reaches the developer, which its turn's kind words follow: a Manager's by `send_to_user`, and every other agent's by its last message. */
+function turnReplyOf(agent: Agent): TurnReply {
+  return agent.kind === AGENT_KIND.MANAGER ? TURN_REPLY.SEND_TO_USER : TURN_REPLY.LAST_MESSAGE;
+}
 
 /**
  * The message the agent's turn opens with after the history, and what the
@@ -293,7 +275,7 @@ export function coderTurnMessage(
     const clock = { now, timeZone: zoned.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
 
-    const kind = turnKindWords(handed, turn.spoken === true, yield* turnReplyOf(agent, turn));
+    const kind = turnKindWords(handed, turn.spoken === true, turnReplyOf(agent));
     const resized = handed.resized === undefined ? undefined : resizedWords(handed.resized);
     const moved = handed.moved === undefined ? undefined : movedWords(handed.moved);
     const taskHanded = task === undefined ? handed.task : task.key;

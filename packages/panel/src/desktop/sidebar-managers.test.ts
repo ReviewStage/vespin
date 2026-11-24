@@ -9,6 +9,7 @@ import {
   type ListedAgent,
 } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -40,7 +41,8 @@ import {
  * sidebar-managers.test.ts -- the sidebar's Managers: the workspace's
  * Managers of the live task list's agents, listed under their head where
  * the workspace has the experiment on, each opening its page, and no head
- * at all where it is off; a Manager's row's Settings…, which names it; and
+ * at all where it is off; its View options' sort; a Manager's row's Change
+ * face ›, which changes its face, and Settings…, which names it; and
  * New Manager, whose edited retry is a request of its own. Synthetic
  * throughout.
  */
@@ -70,14 +72,16 @@ const MANAGER: ListedAgent = {
   createdAt: 1,
   status: AGENT_STATUS.COMPLETED,
   turnId: null,
+  settledAt: 10,
 };
 
-/** A second Manager, started later, which no page stands open on. */
+/** A second Manager, started later but settled earlier, which no page stands open on. */
 const BILLING: ListedAgent = {
   ...MANAGER,
   id: "0a1b2c3d-0000-4000-8000-00000000000b",
   title: "Billing Manager",
   createdAt: 2,
+  settledAt: 4,
 };
 
 const { kind: _kind, ...CODER } = MANAGER;
@@ -135,6 +139,7 @@ async function mountSidebar(
   pinned: readonly string[] = [],
   renamed: AgentRenameAsk[] = [],
   chosen: { agentId: string; model: string }[] = [],
+  faced: { agentId: string; face: ManagerFace }[] = [],
 ): Promise<HTMLElement> {
   handState({ [EXPERIMENT.MANAGERS]: on });
   writeListedTasks({
@@ -175,6 +180,11 @@ async function mountSidebar(
           chosen.push({ agentId, model: choice.model });
 
           return Promise.resolve({ agent: { ...MANAGER, model: choice.model } });
+        },
+        onFace: (agentId, face) => {
+          faced.push({ agentId, face });
+
+          return Promise.resolve({ agent: { ...MANAGER, face } });
         },
       }),
     ),
@@ -218,6 +228,33 @@ test("Managers lists the workspace's unarchived Managers of the live list alone,
   assert.ok(row, "the Manager's row is drawn");
   act(() => row.click());
   assert.deepEqual(opened, [FRONTEND]);
+});
+
+test("View options' Sort by › Recent activity lists the Manager that moved last first", async () => {
+  const sidebar = await mountSidebar(true, []);
+  const list = sidebar.querySelector('nav[aria-label="Managers"]') ?? assert.fail("Managers");
+  const order = () => list.textContent?.indexOf("Frontend Manager") ?? -1;
+
+  assert.ok(order() > (list.textContent?.indexOf("Billing Manager") ?? -1), "newest first");
+
+  const options =
+    list.querySelector<HTMLButtonElement>('button[aria-label="View options"]') ??
+    assert.fail("the head offers View options");
+
+  act(() => options.click());
+
+  const item = (name: string) =>
+    [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find((each) =>
+      each.textContent?.startsWith(name),
+    ) ?? assert.fail(`${name} is offered`);
+
+  act(() => item("Sort by").click());
+  act(() => item("Recent activity").click());
+
+  assert.ok(
+    order() < (list.textContent?.indexOf("Billing Manager") ?? -1),
+    "the Manager that settled last stands first",
+  );
 });
 
 test("a Manager the reader pinned stands under Pinned as well as under Managers, and opens its page from there", async () => {
@@ -265,7 +302,48 @@ test("Managers folded leaves the open Manager's row standing and folds the rest 
   assert.deepEqual(named(), ["Frontend Manager"], "the open Manager stays");
 });
 
-test("a Manager's row offers Settings… in Rename's place, New Manager's card filled from the Manager, whose Save names it and changes its model", async () => {
+test("a Manager's row offers Rename and Change face › beside Settings…, and a face picked there is changed and puts the menu away", async () => {
+  const faced: { agentId: string; face: ManagerFace }[] = [];
+  const sidebar = await mountSidebar(true, [], undefined, [], [], [], faced);
+  const list = sidebar.querySelector('nav[aria-label="Managers"]');
+
+  const row =
+    [...(list?.querySelectorAll("button") ?? [])].find((button) =>
+      button.textContent?.includes("Frontend Manager"),
+    ) ?? assert.fail("the Manager's row is drawn");
+
+  act(() => {
+    row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+  });
+
+  const items = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  const labels = items().map((item) => item.textContent ?? "");
+
+  assert.ok(
+    labels.some((label) => label.startsWith("Rename")),
+    "Rename stands",
+  );
+  assert.ok(
+    labels.some((label) => label.startsWith("Settings…")),
+    "Settings… stands",
+  );
+  const change = items().find((item) => item.textContent?.startsWith("Change face"));
+
+  assert.ok(change, "Change face stands");
+  act(() => change.click());
+
+  const purpleCat =
+    document.querySelector<HTMLButtonElement>('button[aria-label="Purple cat"]') ??
+    assert.fail("the picker offers every face");
+
+  act(() => purpleCat.click());
+  await vi.waitFor(() =>
+    assert.deepEqual(faced, [{ agentId: FRONTEND, face: { character: "cat", color: "purple" } }]),
+  );
+  await vi.waitFor(() => assert.equal(items().length, 0, "the menu is put away"));
+});
+
+test("a Manager's row's Settings… opens New Manager's card filled from the Manager, whose Save names it and changes its model", async () => {
   const renamed: AgentRenameAsk[] = [];
   const chosen: { agentId: string; model: string }[] = [];
   const sidebar = await mountSidebar(true, [], undefined, [], renamed, chosen);
@@ -281,9 +359,6 @@ test("a Manager's row offers Settings… in Rename's place, New Manager's card f
   });
 
   const items = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-  const labels = items().map((item) => item.textContent ?? "");
-
-  assert.ok(!labels.some((label) => label.startsWith("Rename")), "no Rename stands beside it");
   const settings = items().find((item) => item.textContent?.startsWith("Settings…"));
 
   assert.ok(settings, "Settings… stands in the menu");

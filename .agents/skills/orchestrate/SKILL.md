@@ -26,8 +26,8 @@ below as that one. You and the workers talk by `message_agent`.
 | Your id, for reports | Nothing to record: a started agent is told your id and your mention link |
 | Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, `status` set to `todo`, and the PR's scope as `description` |
 | Draw a dependency | `update_task` on the subtask of the PR that builds on another, with `blockedBy: { add: [<the other PR's subtask id>] }` |
-| Start a worker | `start_agent` with `taskId` set to its PR's subtask, `title` set to the PR title, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, plus `model` and `effort` (below), `permissionMode` set to `full_access` unless the user named another mode (no one watches a worker to answer its asks), and `runsOn` set to your own from your instructions' own values unless the user named another machine |
-| Start a helper | `start_agent` on your own task (`taskId` set to your own, from your instructions' own values), with the brief as `prompt`, a `model` and `effort` from `list_models`, `permissionMode` set to `full_access`, and your own `runsOn` |
+| Start a worker | `start_agent` with `taskId` set to its PR's subtask, `title` set to the PR title, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, plus `model` and `effort` (below), and `permissionMode` set to `full_access` unless the user named another mode (no one watches a worker to answer its asks); leave `runsOn` out to run it where you run, unless the user named another machine |
+| Start a helper | `start_agent` on your own task (`taskId` set to your own, from your instructions' own values), with the brief as `prompt`, a `model` and `effort` from `list_models`, and `permissionMode` set to `full_access`; leaving `runsOn` out runs it where you run |
 | Worker's base branch | `start_agent`'s `branch` |
 | Open a PR | `open_pull_request` with `repository`, `base`, and `draft: false` |
 | Message a worker | `message_agent` with the worker's agent id |

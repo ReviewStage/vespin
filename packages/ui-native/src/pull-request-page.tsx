@@ -1,10 +1,15 @@
 // pull-request-page.tsx -- a pull request's page: its heading with where it stands, who opened it and its branches, the rows of its checks and reviews, each with its face, the line a change GitHub refused leaves, and the question an act asks first.
 
 import { HStack, Menu, ScrollView, Text, Toggle, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityAddTraits,
+  accessibilityHint,
+  background,
   buttonStyle,
   controlSize,
   disabled,
+  fixedSize,
   font,
   foregroundStyle,
   lineLimit,
@@ -13,33 +18,67 @@ import {
   listRowSeparator,
   menuIndicator,
   monospacedDigit,
+  onTapGesture,
+  padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { GitHubPerson, PullRequestLabel, PullRequestState } from "@repo/features/agent-wire";
+import { BOT_TAG_WORDS, githubLoginName } from "@repo/features/github-login";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { agoText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { FieldChip, LabelChip } from "./button.js";
+import { FieldChip, type FieldMenu, LabelChip } from "./button.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What joins a pull request's branches, the one it merges from after the one it merges into, as GitHub writes it. */
 const BRANCH_ARROW = "←";
 
-/** Someone a pull request names on GitHub, as a face: their login, their avatar, and an App's bot in its rounded square, as the panel draws them. */
+/**
+ * Someone a pull request names on GitHub, as a face, as the panel draws
+ * them (`@repo/ui`'s `githubActor`): a person by their login and avatar in
+ * a circle, and an App's bot by its login without GitHub's `[bot]`, in its
+ * rounded square, wearing the bot tag after its name (`BotTag`). Every
+ * place that names a GitHub author, a review's, a comment's, or the
+ * opener's, draws them through this.
+ */
 export function githubFace(person: GitHubPerson): Face {
   return {
-    name: person.login,
+    name: githubLoginName(person),
     picture: person.avatarUrl,
     kind: person.bot ? FACE_KIND.APP : FACE_KIND.PERSON,
+    bot: person.bot,
   };
+}
+
+/** The quiet tag after an App's bot's name, as the panel's `BotBadge` and GitHub's own pages mark one: "bot", muted on a soft fill, on one line at every size, and heard as its word. */
+export function BotTag() {
+  const colors = useColors();
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.TIME, weight: "medium" }),
+        foregroundStyle(colors.TEXT_MUTED),
+        lineLimit(1),
+        fixedSize(),
+        padding({ horizontal: 5, vertical: 1 }),
+        background(
+          colors.FILL_STRONG,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.TAG }),
+        ),
+      ]}
+    >
+      {BOT_TAG_WORDS}
+    </Text>
+  );
 }
 
 /** Who opened a pull request and when, and when it merged where it has. */
@@ -52,12 +91,16 @@ type Opened = {
 
 type PullRequestHeadProps = {
   readonly title: string;
+  /** What a tap on the title does, opening its edit, and what VoiceOver hears it does ("Edit title"); none where it can't be edited now, as while another change is out. */
+  readonly titleEdit?: { readonly heard: string; readonly onPress: () => void } | undefined;
   readonly number: number;
   readonly state: PullRequestState;
   /** Whether GitHub's merge queue holds it, which its mark says in the merge's glyph. */
   readonly queued: boolean;
   /** Where it stands in a word, as the panel's pill says it: "Open", "Queued #2", "Merged". */
   readonly stateLabel: string;
+  /** What a press on where it stands offers, as the panel's pill opens its menu: Convert to draft, Ready for review, Close, Reopen; none where nothing may change, as once merged. */
+  readonly stateMenu?: FieldMenu | undefined;
   /** The branch it merges into and the one it merges from; none until its read lands. */
   readonly branches?: { readonly base: string; readonly head: string } | undefined;
   /** Whether it would merge as it stands, in GitHub's sentence: "Ready to merge". */
@@ -98,12 +141,16 @@ function Branch({ name, wraps }: { readonly name: string; readonly wraps: boolea
  * phrase: their face and name, then "opened 3h ago", or, once it merged,
  * "opened · merged 1h ago", the moment that matters once it has; without
  * anyone to name, the phrase alone; on one line, or wrapped where `wraps`.
+ * An App's bot's name wears its tag after it, as the panel's does.
  */
 function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps: boolean }) {
   const colors = useColors();
   const face = useScaledSize(MARK_SIZE.FACE);
-  const verb = opened.by === undefined ? "Opened" : "opened";
+  const by = opened.by;
+  const verb = by === undefined ? "Opened" : "opened";
   const now = Date.now();
+  // Note that a bot's name stands as words of its own, since SwiftUI holds no tag inside a run of words, so the tag can follow it.
+  const tagged = by?.bot === true;
 
   const when =
     opened.mergedAt === null
@@ -112,17 +159,26 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
 
   return (
     <HStack spacing={SPACE.TIGHT + 2}>
-      {opened.by === undefined ? null : (
-        <Avatar
-          name={opened.by.name}
-          picture={opened.by.picture}
-          kind={opened.by.kind}
-          size={face}
-        />
+      {by === undefined ? null : (
+        <Avatar name={by.name} picture={by.picture} kind={by.kind} size={face} />
+      )}
+      {by === undefined || !tagged ? null : (
+        <HStack spacing={SPACE.TIGHT}>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(colors.TEXT_BODY),
+              lineLimit(1),
+            ]}
+          >
+            {by.name}
+          </Text>
+          <BotTag />
+        </HStack>
       )}
       <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), ...(wraps ? [] : [lineLimit(1)])]}>
-        {opened.by === undefined ? null : (
-          <Text modifiers={[foregroundStyle(colors.TEXT_BODY)]}>{`${opened.by.name} `}</Text>
+        {by === undefined || tagged ? null : (
+          <Text modifiers={[foregroundStyle(colors.TEXT_BODY)]}>{`${by.name} `}</Text>
         )}
         <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{when}</Text>
       </Text>
@@ -132,8 +188,11 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
 
 /**
  * A pull request's heading, as a list's first row: its title in 20 pt
- * semibold with its number muted after it, then where it stands as a chip,
- * its state's glyph in GitHub's color and its word, then who opened it and
+ * semibold with its number muted after it, which a tap opens to edit where
+ * it may be edited, then where it stands as a chip, its state's glyph in
+ * GitHub's color and its word, which opens the system's menu of what may
+ * change there where it is handed one, as the panel's pill does, then who
+ * opened it and
  * when, by their face, then its labels filled with their colors, scrolling
  * sideways where they run past the row, then its branches on a line of
  * their own, the one it merges into first, then GitHub's sentence of
@@ -143,10 +202,12 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
  */
 export function PullRequestHead({
   title,
+  titleEdit,
   number,
   state,
   queued,
   stateLabel,
+  stateMenu,
   branches,
   sentence,
   opened,
@@ -176,6 +237,14 @@ export function PullRequestHead({
         modifiers={[
           font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
           foregroundStyle(colors.TEXT),
+          // Note that the title opens its edit on a tap, as Notes and Reminders edit a title where it stands, heard as a button with what it does, since nothing marks it to the eye.
+          ...(titleEdit === undefined
+            ? []
+            : [
+                onTapGesture(titleEdit.onPress),
+                accessibilityAddTraits(["isButton"]),
+                accessibilityHint(titleEdit.heard),
+              ]),
         ]}
       >
         <Text>{title}</Text>
@@ -184,7 +253,11 @@ export function PullRequestHead({
         </Text>
       </Text>
       <HStack spacing={SPACE.TIGHT + 2}>
-        <FieldChip label={stateLabel} mark={{ glyph: look.symbol, tone: look.tone }} />
+        <FieldChip
+          label={stateLabel}
+          mark={{ glyph: look.symbol, tone: look.tone }}
+          menu={stateMenu}
+        />
       </HStack>
       {opened === undefined ? null : <OpenedLine opened={opened} wraps={large} />}
       {labels.length === 0 ? null : (
@@ -244,6 +317,8 @@ type MarkRowProps = {
   readonly face?: { readonly of: Face; readonly stands: MarkFace } | undefined;
   /** The address a press on it opens out of the app, such as a check's run, marked at its end by the arrow out; none where it takes no press. */
   readonly opens?: string | undefined;
+  /** Whether a press on it pushes a page of its own, such as the checks' list, marked at its end by the chevron; none where it opens an address or takes no press. */
+  readonly pushes?: boolean | undefined;
 };
 
 /** What a row that opens an address out of the app is heard to do, in the arrow's place: GitHub by name where the address is GitHub's, since a check's run may be another CI's page. */
@@ -271,10 +346,11 @@ function opensHeard(address: string): string {
  * hairline under the words. A reviewer's face takes the lead column, its
  * mark moving to the line's end before its words, as the panel's facepile
  * wears where each stands; a check's App stands by its avatar beside the
- * mark. A row that opens an address out of the app ends in its arrow. The row is heard as one
+ * mark. A row that opens an address out of the app ends in its arrow, and one
+ * that pushes a page of its own, such as the checks' list, in the chevron. The row is heard as one
  * element: its name, where it stands, its words, and where a press goes.
  */
-export function MarkRow({ id, mark, title, detail, standing, face, opens }: MarkRowProps) {
+export function MarkRow({ id, mark, title, detail, standing, face, opens, pushes }: MarkRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.FACE);
   const glyph = <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.ROW_TITLE} />;
@@ -306,6 +382,7 @@ export function MarkRow({ id, mark, title, detail, standing, face, opens }: Mark
       lead={leads ? avatar : glyph}
       beside={leads ? undefined : avatar}
       title={title}
+      after={face?.of.bot === true ? <BotTag /> : undefined}
       ink={colors.TEXT_BODY}
       end={
         leads ? (
@@ -317,7 +394,13 @@ export function MarkRow({ id, mark, title, detail, standing, face, opens }: Mark
           words
         )
       }
-      trail={opens === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.OUT} />}
+      trail={
+        opens !== undefined ? (
+          <GoesMark goes={PUSH_ROW_GOES.OUT} />
+        ) : pushes === true ? (
+          <GoesMark goes={PUSH_ROW_GOES.PAGE} />
+        ) : null
+      }
     />
   );
 
@@ -327,7 +410,12 @@ export function MarkRow({ id, mark, title, detail, standing, face, opens }: Mark
       row={row}
       heard={{
         label: title,
-        value: [standing !== detail && standing, detail, opens !== undefined && opensHeard(opens)],
+        value: [
+          face?.of.bot === true && BOT_TAG_WORDS,
+          standing !== detail && standing,
+          detail,
+          opens !== undefined && opensHeard(opens),
+        ],
       }}
     />
   );

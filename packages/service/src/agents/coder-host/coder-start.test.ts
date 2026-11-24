@@ -609,7 +609,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
 
         assert.deepEqual(lines, [], "making a Manager sends no line");
         assert.ok(
-          managerInstructions({ name: "Billing", deviceId: null }).includes(
+          managerInstructions({ name: "Billing", repositories: [] }).includes(
             managerGreeting("Billing"),
           ),
           "the Manager is told the greeting its page opens on",

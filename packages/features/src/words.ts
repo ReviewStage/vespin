@@ -184,6 +184,9 @@ export function noSelectionWords(noun: Noun): string {
   return `No ${noun.one} selected`;
 }
 
+/** What the foot of words cut short says, which shows them whole. */
+export const SHOW_MORE_WORDS = "Show more";
+
 /** What the foot of a capped list says once it shows every row, which puts them back. */
 export const SHOW_LESS_WORDS = "Show less";
 

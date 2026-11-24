@@ -282,6 +282,7 @@ const LUCIDE_SYMBOLS = {
   EXTERNAL_LINK: "external-link",
   EYE: "eye",
   EYE_OFF: "eye-off",
+  FACE_SLIGHTLY_SMILING_PLUS: "face-slightly-smiling-plus",
   FILE: "file",
   FILE_DIFF: "file-diff",
   FILE_PEN: "file-pen",

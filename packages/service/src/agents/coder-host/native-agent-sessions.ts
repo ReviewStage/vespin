@@ -16,11 +16,13 @@
  */
 
 import { readAccountPreferences } from "@repo/database/models/account-store";
+import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import { type Agent, hasRepository } from "@repo/database/models/agent-store";
 import { readNativeSequence } from "@repo/database/models/native-projection-store";
 import { readTaskHeader } from "@repo/database/models/task-store";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { githubWakesOffFrom } from "@repo/settings";
 import { Effect, Layer, Option } from "effect";
 import { deploymentOrigin } from "../../deployment-origin.js";
@@ -72,6 +74,16 @@ const agentDeveloperName = (agent: Agent) =>
     Effect.orElseSucceed(() => undefined),
   );
 
+/** Every repository a Manager works in, its own first, which it is told to make its tasks in; none read for a coder, nor where the read fails, and its row's alone is told. */
+const managerRepositories = (userId: string, agent: Agent) =>
+  agent.kind !== AGENT_KIND.MANAGER
+    ? Effect.succeed(undefined)
+    : readAgentRepositories(userId, agent.id).pipe(
+        Effect.map((entries) => entries.map((entry) => entry.repository)),
+        Effect.tapError(logStoreFailure),
+        Effect.orElseSucceed(() => undefined),
+      );
+
 /**
  * Our coder instructions for an agent on the harness given, composed on
  * what its row names (`instructions.ts`'s `agentCoderInstructions`): whose its commits are and the
@@ -88,7 +100,7 @@ const nativeCoderInstructions = (
     const target = { userId, conversationId: agent.conversationId };
 
     // Note that we read these together, because none waits on another.
-    const [authorship, workspace, taskNumber, developerName, standing, preferences] =
+    const [authorship, workspace, taskNumber, developerName, standing, preferences, repositories] =
       yield* Effect.all(
         [
           hasRepository(agent) ? agentAuthorship(target, agent) : Effect.succeed(undefined),
@@ -104,6 +116,7 @@ const nativeCoderInstructions = (
             Effect.tapError(logStoreFailure),
             Effect.orElseSucceed(() => undefined),
           ),
+          managerRepositories(userId, agent),
         ],
         { concurrency: "unbounded" },
       );
@@ -116,6 +129,7 @@ const nativeCoderInstructions = (
       standing,
       harness,
       place,
+      repositories,
       wakesOff: githubWakesOffFrom(preferences?.preferences.githubWakesOff),
     });
   });

@@ -6,7 +6,8 @@
  * no generated title ever replaces a Manager's; the repositories it works
  * in, one or more, picked from New task's own list (`RepositoriesChip`),
  * the first its checkout, which stands on New task's own default until a
- * pick (`repository-default.ts`); its Face, none picked until a press, so
+ * pick (`repository-default.ts`); its Face, a well hanging the app's icon
+ * picker over every face (`ManagerFaceWell`), none picked until a press, so
  * the service picks one no other Manager of the workspace wears unless the
  * member picks one, which then stands whoever else wears it; its Machine, where it runs, New task's
  * Runs on chip on the member's last pick (`runs-on.tsx`); and its model and effort, the
@@ -48,7 +49,7 @@ import {
   TextField,
   useConfirmDialog,
 } from "@repo/ui";
-import { ManagerFacePicker } from "@repo/ui/manager-face-picker";
+import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
@@ -183,6 +184,7 @@ export function ManagerCard({
 }): React.JSX.Element {
   const words = CARD_WORDS[look];
   const fixed = look === MANAGER_CARD.EDIT;
+  const [facePicking, setFacePicking] = useState(false);
   const { choice, defaultRead } = model;
 
   return (
@@ -226,11 +228,12 @@ export function ManagerCard({
           label="Face"
           description={face.value === undefined ? FACE_PICKED_FOR_YOU : undefined}
         >
-          {(control) => (
-            <ManagerFacePicker
+          {() => (
+            <ManagerFaceWell
               face={face.value}
+              open={facePicking}
+              onOpenChange={setFacePicking}
               disabled={form.settling}
-              describedBy={control["aria-describedby"]}
               onChange={face.onChange}
             />
           )}

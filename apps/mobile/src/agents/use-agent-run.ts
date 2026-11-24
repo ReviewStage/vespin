@@ -38,8 +38,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { ActPortClient } from "@repo/host/contract";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useIsFocused } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -71,7 +71,8 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
   const acts = useHostActs();
   const write = useWrite();
   const queries = useQueryClient();
-  const focused = useIsFocused();
+  // Note that focus is kept in a ref, heard through `useFocusEffect`, rather than read with `useIsFocused`, because a read of focus draws the whole agent page again as a page is pushed over it, in the frames the push opens in.
+  const focused = useRef(false);
   const agent = useFollowedAgent(agentId);
   const workspaceId = agent?.workspaceId;
 
@@ -113,7 +114,7 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
       const read = shellsOf(query.state.data);
 
       return offered &&
-        focused &&
+        focused.current &&
         (read === undefined || query.state.status === "error" || runningActions(read).size > 0)
         ? SHELLS_LOOK_EVERY_MS
         : false;
@@ -124,10 +125,18 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
 
   const shells = shellsOf(shellsRead);
 
-  // Note that the page coming back to the front reads the shells again, as a page left standing under another may hold a run started elsewhere since.
-  useEffect(() => {
-    if (focused && offered) void refetchShells();
-  }, [focused, offered, refetchShells]);
+  // Note that the page coming back to the front reads the shells again, as a page left standing under another may hold a run started elsewhere since; a page left polls once more at most, since the beat is weighed again as each read lands.
+  useFocusEffect(
+    useCallback(() => {
+      focused.current = true;
+
+      if (offered) void refetchShells();
+
+      return () => {
+        focused.current = false;
+      };
+    }, [offered, refetchShells]),
+  );
   const running = runningActions(shells);
   const stopped = sandboxStopped(shells);
 

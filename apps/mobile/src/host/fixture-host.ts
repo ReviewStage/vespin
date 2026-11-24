@@ -65,13 +65,15 @@ import {
   NEW_MEMORY_ID,
   olderPageAnswer,
   olderPageAppState,
-  type PullRequestMove,
-  pullRequestMoveOf,
+  type PullRequestMoves,
+  pullRequestMovedBy,
   pullRequestPartsAppState,
   queueAfter,
   queuedAppState,
   type SavedMemoryWords,
   savedMemoriesAppState,
+  type ThreadResolves,
+  threadResolveOf,
 } from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { SETUP_AUDIENCE, setupPlaceStored } from "@repo/settings";
@@ -135,13 +137,19 @@ function stagedTasks(
 }
 
 /** The moves each run's changes made to the fixture's pull requests, by the store the run stages, each map replaced whole as a change lands so a staging reads it anew. */
-const MOVES = new WeakMap<object, ReadonlyMap<number, PullRequestMove>>();
+const MOVES = new WeakMap<object, PullRequestMoves>();
 
 /** How many reads of the invitations agent's older page each run's screens asked, by the store the run stages. */
 const OLDER_ASKS = new WeakMap<object, number>();
 
 /** No pull request moved yet. */
-const NO_MOVES: ReadonlyMap<number, PullRequestMove> = new Map();
+const NO_MOVES: PullRequestMoves = new Map();
+
+/** The review threads each run resolved or opened again, by the store the run stages, each map replaced whole as a change lands. */
+const RESOLVES = new WeakMap<object, ThreadResolves>();
+
+/** No thread resolved or opened again yet. */
+const NO_RESOLVES: ThreadResolves = new Map();
 
 /** The reminders each run set on the fixture's items, by the store the run stages, each map replaced whole as one is set. */
 const REMINDERS = new WeakMap<object, InboxReminders>();
@@ -394,7 +402,11 @@ export function stageFixture(
 
   const parts = queuedAppState(
     olderPageAppState(
-      pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
+      pullRequestPartsAppState(
+        inbox,
+        MOVES.get(state) ?? NO_MOVES,
+        RESOLVES.get(state) ?? NO_RESOLVES,
+      ),
       OLDER_ASKS.get(state) ?? 0,
     ),
     QUEUES.get(state) ?? NO_QUEUES,
@@ -600,7 +612,7 @@ function keepQueue(
   stageFixture(state);
 }
 
-/** Keeps how a change the fixture took moved its pull request, and lays it over the document at once; nothing for any other act. */
+/** Keeps how a change the fixture took moved its pull request, or a review thread it resolved or opened again, and lays it over the document at once; nothing for any other act. */
 function keepMove(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
@@ -609,11 +621,20 @@ function keepMove(
   if (kind !== ACT_KIND.PULL_REQUESTS_ACTION) return;
   // SAFETY: the payload is the kind's, which the guard above names.
   const { number, request } = payload as PortActPayload<typeof ACT_KIND.PULL_REQUESTS_ACTION>;
-  const move = pullRequestMoveOf(request);
+  const moves = MOVES.get(state) ?? NO_MOVES;
+  const moved = pullRequestMovedBy(moves.get(number), request);
+  const resolve = threadResolveOf(request);
 
-  if (move === undefined) return;
-  MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
-  stageFixture(state);
+  if (moved !== undefined) MOVES.set(state, new Map(moves).set(number, moved));
+
+  if (resolve !== undefined) {
+    RESOLVES.set(
+      state,
+      new Map(RESOLVES.get(state) ?? NO_RESOLVES).set(resolve.threadId, resolve.resolved),
+    );
+  }
+
+  if (moved !== undefined || resolve !== undefined) stageFixture(state);
 }
 
 /** What a read of the invitations agent's older page answers, counted, its page laid over the document at once where it lands; none for any other act or transcript. */

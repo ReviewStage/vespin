@@ -1,11 +1,15 @@
 import {
   AUTOMATION_NEXT,
+  AUTOMATIONS_ORDER,
+  AUTOMATIONS_ORDER_WORDS,
   type AutomationGroup,
+  type AutomationsOrder,
   automationGroups,
   automationNext,
   automationOwner,
   automationRunStanding,
   automationTriggerText,
+  DEFAULT_AUTOMATIONS_ORDER,
   finishedAutomations,
 } from "@repo/features/automation-list-model";
 import {
@@ -78,9 +82,17 @@ import {
   VisuallyHidden,
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
-import { GLYPH } from "@repo/ui/icons";
+import {
+  ArrowDownAZIcon,
+  CalendarClockIcon,
+  CalendarPlusIcon,
+  GLYPH,
+  HistoryIcon,
+  SlidersHorizontalIcon,
+} from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Schema } from "effect";
 import { PlusIcon, ZapIcon } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import { unreachedAs } from "../act.js";
@@ -88,6 +100,7 @@ import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor } from "../actor-ref.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
+import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
@@ -101,9 +114,10 @@ import { useTaskListCollections } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useToast } from "../toast.js";
+import { keptKey, useKept } from "../use-kept.js";
 import { useExperimentsIn } from "../workspace-experiments.js";
 import { useWorkspacesRead } from "../workspaces-read.js";
-import { type MenuAction, rowMenu } from "./action-menu.js";
+import { type MenuAction, type MenuEntry, rowMenu } from "./action-menu.js";
 import { openRunAgent } from "./automation-agent-run.js";
 import {
   AutomationEditor,
@@ -131,13 +145,14 @@ import {
   WorkspaceRuns,
 } from "./automation-runs-tab.js";
 import { automationDeleteQuestion } from "./automation-words.js";
-import { PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
+import { PhoneHead, PlaceMore, phoneBar, phoneFindGroups, useMenuAsk } from "./phone-head.js";
 import { useWorkspaceRuns, type WorkspaceRunsRead } from "./use-automation-runs.js";
 import {
   type AutomationWriteAnswer,
   useAutomationDeletion,
   useAutomations,
 } from "./use-automations.js";
+import { resetViewAction, VIEW_OPTIONS, ViewOptions } from "./view-options.js";
 
 /**
  * automations-page.tsx -- the window's Automations page: the listed workspace's automations, each with its owner beyond doubt, when it runs next, how its newest run went, and its switch.
@@ -150,6 +165,10 @@ import {
  * building for the workspace and a lock for Only you. A row's glyph wears
  * where its newest run stands, a failure keeps its mark at the row's end,
  * and an automation turned off reads "Off" where its next run would.
+ * View options orders each owner's automations, by when each was made,
+ * its name, its latest run, or its next, the newest made first until the
+ * reader chooses, and keeps the choice on this Mac, as the Tasks page keeps
+ * its view; the owners' groups and Finished stand whatever the order.
  * Under the list, or under the line saying there is none yet, stand the
  * suggested automations: a press opens a new automation's page filled in
  * from the suggestion's preset (`@repo/features/automation-presets`), to
@@ -189,6 +208,48 @@ const WORKSPACES_UNREAD_LINE = "The workspaces could not be read.";
 
 /** Why the bar's two acts are unavailable while no workspace is chosen. */
 const NO_WORKSPACE_HINT = "Choose a workspace first";
+
+/** Each order's glyph on View options' Order by, the Tasks page's own where it orders alike. */
+const ORDER_ICON = {
+  [AUTOMATIONS_ORDER.CREATED]: <CalendarPlusIcon />,
+  [AUTOMATIONS_ORDER.NAME]: <ArrowDownAZIcon />,
+  [AUTOMATIONS_ORDER.LAST_RUN]: <HistoryIcon />,
+  [AUTOMATIONS_ORDER.NEXT_RUN]: <CalendarClockIcon />,
+} as const satisfies Record<AutomationsOrder, React.JSX.Element>;
+
+/** Where the list's order is kept on this Mac. */
+const KEPT_ORDER = keptKey(
+  "app.automationsOrder",
+  Schema.fromJsonString(Schema.Literals(Object.values(AUTOMATIONS_ORDER))),
+);
+
+/** How the list is ordered, and the door that orders it another way: the List tab's own. */
+interface AutomationsOrdering {
+  readonly order: AutomationsOrder;
+  readonly onOrder: (order: AutomationsOrder) => void;
+}
+
+/** View options' menu: Order by, its choice checked, and Reset view. */
+function orderEntries({ order, onOrder }: AutomationsOrdering): MenuEntry[][] {
+  return [
+    [
+      {
+        ...commandHead(PANEL_COMMAND.ORDER_BY),
+        items: Object.values(AUTOMATIONS_ORDER).map((each) => ({
+          label: AUTOMATIONS_ORDER_WORDS[each],
+          icon: ORDER_ICON[each],
+          checked: order === each,
+          onSelect: () => onOrder(each),
+        })),
+      },
+    ],
+    [
+      resetViewAction(order === DEFAULT_AUTOMATIONS_ORDER, () =>
+        onOrder(DEFAULT_AUTOMATIONS_ORDER),
+      ),
+    ],
+  ];
+}
 
 /** Who owns an automation, as its row's column says it: the workspace's photo and its name, or the maker's picture and Only you, its name whole on hover where the column cuts it short. */
 function OwnerCell({
@@ -603,55 +664,85 @@ function useRowDeletion(
   return { asked, confirm, ask };
 }
 
-/** The Automations page's head on both its tabs: its title and its acts, New automation and Create with an agent; on a phone, the place's own head. */
+/** The Automations page's head on both its tabs: its title and its acts, New automation and Create with an agent, and on the List tab View options; on a phone, the place's own head. */
 function AutomationsHead({
   tasks,
   room,
+  ordering,
 }: {
   tasks: TasksControl;
   room: ShellRoom;
+  /** How the List tab orders its automations, which View options offers; none on the Runs tab. */
+  ordering?: AutomationsOrdering | undefined;
 }): React.JSX.Element {
   const door = useAutomationsDoor(tasks);
+  const optionsAsk = useMenuAsk();
   const workspace = tasks.workspace;
   const openNew = () => door.open({ kind: AUTOMATIONS_PAGE.NEW });
+  const narrow = room === SHELL_ROOM.NARROW;
 
-  return room === SHELL_ROOM.NARROW ? (
+  const options =
+    ordering === undefined ? null : (
+      <ViewOptions
+        shown={tasks.shown}
+        asked={narrow ? { ask: optionsAsk.ask } : undefined}
+        groups={() => orderEntries(ordering)}
+      />
+    );
+
+  return narrow ? (
     // A phone heads the list as it heads every place (`phone-head.tsx`): New automation, the title centered, and a ⋯.
-    <PhoneHead
-      place="automations"
-      start={
-        <Tooltip label={NEW_AUTOMATION}>
-          <IconButton
-            icon={<PlusIcon />}
-            label={NEW_AUTOMATION}
-            disabled={workspace === undefined}
-            onClick={openNew}
+    <>
+      <PhoneHead
+        place="automations"
+        start={
+          <Tooltip label={NEW_AUTOMATION}>
+            <IconButton
+              icon={<PlusIcon />}
+              label={NEW_AUTOMATION}
+              disabled={workspace === undefined}
+              onClick={openNew}
+            />
+          </Tooltip>
+        }
+        title={AUTOMATIONS}
+        titleReplayUnmasked
+        end={
+          <PlaceMore
+            thing="Automation list"
+            shown={tasks.shown}
+            replayUnmasked
+            groups={(opener) => [
+              [
+                {
+                  label: CREATE_WITH_AGENT,
+                  icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
+                  disabled: workspace === undefined,
+                  onSelect: tasks.newTask.onOpenForAutomation,
+                },
+              ],
+              ...(ordering === undefined
+                ? []
+                : [
+                    [
+                      {
+                        label: VIEW_OPTIONS,
+                        icon: <SlidersHorizontalIcon />,
+                        opens: true,
+                        onSelect: () => optionsAsk.onAsk(opener),
+                      },
+                    ],
+                  ]),
+              ...phoneFindGroups(),
+            ]}
           />
-        </Tooltip>
-      }
-      title={AUTOMATIONS}
-      titleReplayUnmasked
-      end={
-        <PlaceMore
-          thing="Automation list"
-          shown={tasks.shown}
-          replayUnmasked
-          groups={() => [
-            [
-              {
-                label: CREATE_WITH_AGENT,
-                icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
-                disabled: workspace === undefined,
-                onSelect: tasks.newTask.onOpenForAutomation,
-              },
-            ],
-            ...phoneFindGroups(),
-          ]}
-        />
-      }
-    />
+        }
+      />
+      {options}
+    </>
   ) : (
     <AutomationsToolbar>
+      {options}
       <Tooltip label={workspace === undefined ? NO_WORKSPACE_HINT : undefined}>
         <Button
           variant={BUTTON_VARIANT.PRIMARY}
@@ -836,8 +927,9 @@ function ListPage({
   const workspacesRead = useWorkspacesRead();
   const { read, reload, toggle, change } = automations;
   const listed = read !== undefined && "automations" in read ? read.automations : [];
-  const groups = automationGroups(listed);
-  const finished = finishedAutomations(listed);
+  const [order, onOrder] = useKept(KEPT_ORDER, DEFAULT_AUTOMATIONS_ORDER);
+  const groups = automationGroups(listed, order);
+  const finished = finishedAutomations(listed, order);
 
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
 
@@ -850,7 +942,7 @@ function ListPage({
       <CollectionPage
         frame={PAGE_FRAME.TOOLBAR}
         label="Automations"
-        toolbar={<AutomationsHead tasks={tasks} room={room} />}
+        toolbar={<AutomationsHead tasks={tasks} room={room} ordering={{ order, onOrder }} />}
         filters={<AutomationsTabs tasks={tasks} />}
         intro={<PageIntro intro={INTRO.AUTOMATIONS} />}
         state={listState(workspacesUnread, read)}

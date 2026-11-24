@@ -9,7 +9,9 @@ import {
   openCuts,
   SHOWN_MEDIA,
   shownFiles,
+  shownMediaIds,
   TRANSCRIPT_ITEM,
+  toggledAt,
   transcriptItems,
   transcriptOriginOf,
   withWaitingLine,
@@ -64,6 +66,76 @@ describe("transcriptItems", () => {
         { id: "clip-1", caption: "The chime", label: "The chime", kind: SHOWN_MEDIA.AUDIO },
       ],
     });
+  });
+
+  it("stands a computer call's window in its body once opened, never under its row, and reads it only then", () => {
+    const work = {
+      id: "work",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        {
+          type: "tool-computer",
+          toolCallId: "read",
+          state: "output-available",
+          input: { action: "get_app_state", app: "Mail" },
+          output: { status: "ran", app: { name: "Mail" }, kept: { picture: PICTURE } },
+        },
+      ],
+      finishedAt: 1,
+    };
+
+    const reading = { writing: false, readerId: undefined, now: 2, pullRequests: [] };
+    const closed = transcriptItems([work], { ...reading, toggles: NO_TOGGLES });
+
+    const opened = transcriptItems([work], {
+      ...reading,
+      toggles: { ...NO_TOGGLES, calls: new Set(["read"]) },
+    });
+
+    expect(closed.map((item) => item.kind)).toEqual([TRANSCRIPT_ITEM.CALL]);
+    expect(shownMediaIds(closed)).toEqual([]);
+    expect(opened.map((item) => item.kind)).toEqual([TRANSCRIPT_ITEM.CALL]);
+    expect(opened[0]).toMatchObject({
+      answered: [{ id: "picture-1", label: "Mail", kind: SHOWN_MEDIA.PICTURE }],
+    });
+    expect(shownMediaIds(opened)).toEqual(["picture-1"]);
+  });
+
+  it("leads a computer call's row with its app's icon, lent from an earlier call on the app where it kept none, and reads it", () => {
+    const icon = { ...PICTURE, id: "mail-icon", width: 64, height: 64 };
+
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            {
+              type: "tool-computer",
+              toolCallId: "read",
+              state: "output-available",
+              input: { action: "get_app_state", app: "Mail" },
+              output: { status: "ran", app: { name: "Mail", icon: { picture: icon } } },
+            },
+            {
+              type: "tool-computer",
+              toolCallId: "click",
+              state: "input-available",
+              input: { action: "click", app: "Mail", target: { element_index: 2 } },
+            },
+          ],
+        },
+      ],
+      { writing: true, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    const calls = items.filter((item) => item.kind === TRANSCRIPT_ITEM.CALL);
+
+    expect(calls.map((call) => [call.callId, call.appIcon])).toEqual([
+      ["read", "mail-icon"],
+      ["click", "mail-icon"],
+    ]);
+    expect(shownMediaIds(items)).toContain("mail-icon");
   });
 
   it("draws the pictures a line carried over its words, one kept apart read by its id, and its other files as chips under them", () => {
@@ -295,6 +367,66 @@ describe("transcriptItems", () => {
     );
 
     expect(items).toMatchObject([{ kind: TRANSCRIPT_ITEM.SAID, sender: "Morning triage" }]);
+  });
+
+  it("draws a review GitHub sent as its card, closed under its head rather than the prompt the agent read, until the reader opens it", () => {
+    const review = {
+      id: "review",
+      role: MESSAGE_ROLE.USER,
+      parts: [
+        {
+          type: "text",
+          text: "@grace requested changes on #7.\n\n<github-review>…</github-review>",
+        },
+      ],
+      metadata: {
+        channel: MESSAGE_CHANNEL.GITHUB,
+        event: "review",
+        repository: "ada/relay",
+        number: 7,
+        url: "https://github.com/ada/relay/pull/7#pullrequestreview-1",
+        by: "grace",
+        verdict: "changes_requested",
+        words: "Skip pending members.",
+        comments: [
+          {
+            path: "src/members/list.ts",
+            line: 12,
+            url: "https://github.com/ada/relay/pull/7#discussion_r1",
+            body: "Filter here.",
+          },
+        ],
+      },
+      sentBy: { name: "grace" },
+    } as const;
+
+    const reading = {
+      writing: false,
+      readerId: "u1",
+      toggles: NO_TOGGLES,
+      now: 1,
+      pullRequests: [],
+    };
+
+    const [closed] = transcriptItems([review], reading);
+
+    expect(closed).toMatchObject({
+      kind: TRANSCRIPT_ITEM.GITHUB,
+      open: false,
+      fold: {
+        by: "grace",
+        does: "requested changes on",
+        target: "#7",
+        heard: "grace requested changes on #7, 1 comment",
+        folds: true,
+      },
+    });
+
+    const toggles = closed === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, closed);
+
+    expect(transcriptItems([review], { ...reading, toggles })).toMatchObject([
+      { kind: TRANSCRIPT_ITEM.GITHUB, open: true },
+    ]);
   });
 
   it("heads a line sent from a suggestion by the agent that suggested it", () => {

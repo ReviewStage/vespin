@@ -593,10 +593,25 @@ function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxR
   return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.TASK]));
 }
 
-/** What the Inbox groups its holders by of the document: the account's feed, each task's items by the task's id, and the tasks holding items, the task whose item changed latest first. */
+/**
+ * What the Inbox groups its holders by of the document: the account's feed,
+ * each task's items by the task's id, the tasks holding items, the task
+ * whose item changed latest first, and, while the task list is still read or
+ * drawn, the tasks the phone kept beside its kept Inbox (`AppInboxRead`'s
+ * `keptHolders`), which stand in for the list's own until it is drawn.
+ */
 export interface InboxHoldings {
   readonly read: InboxReads;
   readonly tasks: readonly { readonly taskId: string }[];
+  readonly keptHolders: readonly TaskSummary[];
+}
+
+/** No task kept beside the Inbox: what the holdings name once the task list is drawn, or where nothing was kept. */
+const NO_KEPT_HOLDERS: readonly TaskSummary[] = [];
+
+/** Whether the task list is still being read or drawn, so a window has none of its tasks to group under yet. */
+function taskListPending(listStatus: AppStateSnapshot["tasks"]["listStatus"]): boolean {
+  return listStatus === TASKS_READ.IDLE || listStatus === TASKS_READ.READING;
 }
 
 /** The tasks the feed's items are on, the task whose item changed latest first, as the account's read of what waits lists them. */
@@ -619,11 +634,21 @@ function tasksOfFeed(read: InboxReads): readonly { readonly taskId: string }[] {
  * draws its kept rows at once rather than after a round trip.
  */
 export const selectInboxHoldings = memoizedSelect(
-  (state: AppStateSnapshot) => [state[LIVE_READ.INBOX_ITEMS], state.inbox.tasks],
-  (feed, tasks): InboxHoldings => {
+  (state: AppStateSnapshot) => [
+    state[LIVE_READ.INBOX_ITEMS],
+    state.inbox.tasks,
+    state.tasks.listStatus,
+  ],
+  (feed, tasks, listStatus): InboxHoldings => {
     const read = feedReads(feed);
 
-    return { read, tasks: feed.kept === true && tasks.length === 0 ? tasksOfFeed(read) : tasks };
+    return {
+      read,
+      tasks: feed.kept === true && tasks.length === 0 ? tasksOfFeed(read) : tasks,
+      keptHolders: taskListPending(listStatus)
+        ? (feed.keptHolders ?? NO_KEPT_HOLDERS)
+        : NO_KEPT_HOLDERS,
+    };
   },
 );
 
@@ -634,19 +659,24 @@ export const selectInboxHoldings = memoizedSelect(
  * list as the window's collections hold it, holds, with every item of
  * theirs the account's feed holds, settled ones too, so a scope of the list
  * model reads them as the panel's Inbox, which lists the chosen workspace's
- * alone, does. No workspace named groups every workspace's.
+ * alone, does. No workspace named groups every workspace's. A task the
+ * list holds none of yet, while it is still read or drawn, is grouped under
+ * as the phone kept it (`keptHolders`), so a launch draws its kept Inbox
+ * before the whole list.
  */
 export function inboxGroupsIn(
   holdings: InboxHoldings,
   listed: readonly TaskSummary[],
   workspaceId: string | undefined,
 ): readonly InboxGroup[] {
+  const held = new Set(listed.map((task) => task.id));
+  const kept = holdings.keptHolders.filter((task) => !held.has(task.id));
+  const tasks = kept.length === 0 ? listed : [...listed, ...kept];
+
   return inboxGroups(holdings.read, {
     tasks: holdings.tasks,
     listed:
-      workspaceId === undefined
-        ? listed
-        : listed.filter((task) => task.workspaceId === workspaceId),
+      workspaceId === undefined ? tasks : tasks.filter((task) => task.workspaceId === workspaceId),
   });
 }
 
@@ -671,16 +701,30 @@ export type InboxFeed = (typeof INBOX_FEED)[keyof typeof INBOX_FEED];
  * a later failure leaving the rows it held standing. Note that rows held
  * while the task list is still being read or drawn read as the first read
  * still, since the Inbox groups its threads under the list's tasks
- * (`inboxGroupsIn`), and would stand empty until the list is drawn.
+ * (`inboxGroupsIn`), and would stand empty until the list is drawn, unless
+ * the tasks the phone kept beside them hold every one they stand on.
  */
 export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
   const feed = state[LIVE_READ.INBOX_ITEMS];
-  const { listStatus } = state.tasks;
-  const listing = listStatus === TASKS_READ.IDLE || listStatus === TASKS_READ.READING;
 
-  if (feed.rows !== undefined) return listing ? INBOX_FEED.READING : INBOX_FEED.ANSWERED;
+  if (feed.rows !== undefined) {
+    return taskListPending(state.tasks.listStatus) && !keptHoldersHoldAll(feed)
+      ? INBOX_FEED.READING
+      : INBOX_FEED.ANSWERED;
+  }
 
   return feed.failed === true ? INBOX_FEED.FAILED : INBOX_FEED.READING;
+}
+
+/** Whether the tasks kept beside the feed's rows hold every task one of them stands on, so the Inbox groups them all before the task list is drawn. */
+function keptHoldersHoldAll(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): boolean {
+  const kept = new Set((feed.keptHolders ?? NO_KEPT_HOLDERS).map((task) => task.id));
+  const rows = feed.rows?.[INBOX_SCOPE_KIND.TASK] ?? {};
+
+  return (
+    kept.size > 0 &&
+    Object.entries(rows).every(([taskId, items]) => items.length === 0 || kept.has(taskId))
+  );
 }
 
 /**
@@ -839,4 +883,21 @@ export function selectRepositoryList(
   scope: string,
 ): (state: AppStateSnapshot) => AppHostRead<GitHubRepositoriesAnswer> | undefined {
   return (state) => state[LIVE_READ.REPOSITORY_LISTS][scope];
+}
+
+/** What a read of an answer view holds once it landed; none while it is on its way or failed. */
+export function landedAnswer<Answer extends object>(
+  read: AppHostRead<Answer> | undefined,
+): Exclude<Answer, { failure: unknown }> | undefined {
+  const rows = read?.rows;
+
+  if (rows === undefined || "failure" in rows) return undefined;
+
+  // SAFETY: an answer view is its answer or a failure, and the failure was ruled out above.
+  return rows as Exclude<Answer, { failure: unknown }>;
+}
+
+/** Whether a read of an answer view failed before any answer landed, which its place says rather than reading on for good. */
+export function answerFailed(read: AppHostRead<object> | undefined): boolean {
+  return read?.failed === true || (read?.rows !== undefined && "failure" in read.rows);
 }

@@ -39,7 +39,9 @@ export {
   type ButtonLook,
   type ButtonSize,
   Chip,
+  type FieldAct,
   FieldChip,
+  type FieldMenu,
   FollowingChip,
   LabelChip,
   type ListScopes,
@@ -61,6 +63,8 @@ export {
 } from "./call.js";
 
 export type { CaretAtWord } from "./caret-at-word.js";
+
+export { ChangedFileRow } from "./changed-file-row.js";
 
 export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
@@ -100,6 +104,13 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
+export {
+  ConversationEntryRow,
+  type EntryStanding,
+  type ThreadComment,
+  ThreadRow,
+} from "./conversation-rows.js";
+
 export { type DockChip, DockChips, DockPanel } from "./dock-chips.js";
 
 export {
@@ -134,7 +145,7 @@ export { releaseFields } from "./field-focus.js";
 
 export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
 
-export { GlassBar, GlassDock } from "./glass-bar.js";
+export { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 
 export {
   GLYPH,
@@ -162,6 +173,7 @@ export {
   type HeldAct,
   type Keeping,
   KeepingProvider,
+  usePicturesView,
   type ViewedPicture,
 } from "./held-menu.js";
 
@@ -266,12 +278,19 @@ export {
 export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 
 export {
+  type PullRequestChipFacts,
+  type PullRequestChipLook,
+  pullRequestChipLook,
+} from "./pull-request-chip-model.js";
+
+export {
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
   REVIEW_LOOK,
 } from "./pull-request-look.js";
 
 export {
+  BotTag,
   githubFace,
   MARK_FACE,
   type MarkFace,
