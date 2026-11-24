@@ -1,0 +1,47 @@
+pinned to 06de0d4208
+== bundle PJjxcold11d base 06de0d42087
+  built 06de0d42087 base app Vmain13.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(337,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(341,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(361,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(394,185): error TS18048: 'item.thread' is possibly 'undefined'.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+t1 (9128ae4f7a) bundle 25280 KB over Vmain13.app
+seed (holders, t1 06de0d4208): 28136 KB
+source maps: index-e7516f08ce926be313f487ab12cb0045.hbc.map (67204 KB); hbc matches the installed main.jsbundle
+sign-in: fails 0 shots 3 
+xctrace attach check: '--attach PID' works on pid 83921 (rows exported)
+  touch-1 fresh: launch-probe.json written +80.1 s wallAtLoad +3235 ms; launch-profile-60.json written +80.1 s; launch-profile.json written +80.1 s; launch-watch-65.json written +80.1 s; launch-watch-76.json written +80.1 s; launch-watch.json written +80.1 s
+  touch-1 trace: time-profile.xml.gz 2252 KB, trace 25444 KB
+touch-1: pid 84072, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-1 watch:profile marks: [{"n": "watch:profile-start", "t": 92.1, "d": {"started": true}}]
+  touch-1 cpu peak 134.5% (at 60 s: 52.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 14, inbox rows 0, probe-touch: 
+touch-1: 
+  idle-1 fresh: launch-probe.json written +80.4 s wallAtLoad +3481 ms; launch-profile-60.json written +80.4 s; launch-profile.json written +80.4 s; launch-watch-65.json written +80.4 s; launch-watch-76.json written +80.4 s; launch-watch.json written +80.4 s
+  idle-1 trace: time-profile.xml.gz 656 KB, trace 21156 KB
+idle-1: pid 86165, probe ok, watch MISSING, profile MISSING
+  idle-1 watch:profile marks: [{"n": "watch:profile-start", "t": 139.2, "d": {"started": true}}]
+  idle-1 cpu peak 102.8% (at 60 s: 1.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 3 s: Inbox on screen: task rows 0, inbox rows 10, at 10 s: HUNG/MISSING
+idle-1: 
+  touch-2 fresh: launch-probe.json written +80.1 s wallAtLoad +7343 ms; launch-profile-60.json written +80.2 s; launch-profile.json written +80.2 s; launch-watch-65.json written +80.2 s; launch-watch-76.json.missing MISSING; launch-watch.json written +80.2 s
+  touch-2 trace: time-profile.xml.gz 2440 KB, trace 26044 KB
+touch-2: pid 87482, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-2 watch:profile marks: [{"n": "watch:profile-start", "t": 193.2, "d": {"started": true}}]
+  touch-2 cpu peak 163.2% (at 60 s: 60.4%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json.missing launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 17, inbox rows 0, probe-touch: 
+touch-2: 
+  touch-3 fresh: launch-probe.json written +81.0 s wallAtLoad +4528 ms; launch-profile-60.json written +81.0 s; launch-profile.json written +81.0 s; launch-watch-65.json written +81.0 s; launch-watch-76.json written +81.0 s; launch-watch.json written +81.0 s
+  touch-3 trace: time-profile.xml.gz 2384 KB, trace 24844 KB
+touch-3: pid 90591, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-3 watch:profile marks: [{"n": "watch:profile-start", "t": 310.4, "d": {"started": true}}]
+  touch-3 cpu peak 129.4% (at 60 s: 19.0%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 16, inbox rows 0, probe-touch: 
+touch-3: 
+  touch-4 fresh: launch-probe.json written +80.0 s wallAtLoad +3750 ms; launch-profile-60.json written +80.0 s; launch-profile.json written +80.0 s; launch-watch-65.json written +80.0 s; launch-watch-76.json written +80.0 s; launch-watch.json written +80.0 s
+  touch-4 trace: time-profile.xml.gz 2304 KB, trace 25548 KB
+touch-4: pid 92388, probe ok, watch MISSING, profile MISSING, maestro FAILED
+  touch-4 watch:profile marks: [{"n": "watch:profile-start", "t": 125.4, "d": {"started": true}}]
+  touch-4 cpu peak 105.6% (at 60 s: 24.3%), sample ok, at80: launch-probe.json launch-profile-60.json launch-profile.json launch-watch-65.json launch-watch-76.json launch-watch.json , hierarchy at 81 s: Tasks on screen: task rows 15, inbox rows 0, probe-touch: 
+touch-4: 
