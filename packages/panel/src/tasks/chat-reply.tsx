@@ -1,13 +1,11 @@
-import { chatWorkWords } from "@repo/features/manager-chat";
 import { replyOf } from "@repo/features/reply-quote";
 import type { ContextMenuProps } from "@repo/ui";
 import { CopyIcon, useMenu } from "@repo/ui";
-import { ListTreeIcon, ReplyIcon } from "@repo/ui/icons";
+import { ReplyIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";
 import { MessageAction } from "../ai-elements/message.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
-import type { ChatWorkToggle } from "./chat-work.js";
 import { useReplyDoor } from "./reply-to-selection.js";
 
 /**
@@ -62,11 +60,8 @@ interface ChatMessageMenu {
   readonly menu: ReactNode;
 }
 
-/** A chat message's right-click menu, Reply and Copy of its Markdown `words`, and Show work where the message keeps work of its own (`work`). */
-export function useChatMessageMenu(
-  words: string,
-  work?: ChatWorkToggle | undefined,
-): ChatMessageMenu {
+/** A chat message's right-click menu: Reply and Copy of its Markdown `words`. */
+export function useChatMessageMenu(words: string): ChatMessageMenu {
   const quote = useQuoteMessage(words);
   const copy = useCopyToast();
   const menu = useMenu(true);
@@ -81,15 +76,6 @@ export function useChatMessageMenu(
       icon: <CopyIcon aria-hidden="true" />,
       onSelect: () => copy(words, REPLY_WORDS.COPIED),
     },
-    ...(work === undefined
-      ? []
-      : [
-          {
-            label: chatWorkWords(work.shown),
-            icon: <ListTreeIcon aria-hidden="true" />,
-            onSelect: work.onToggle,
-          },
-        ]),
   ];
 
   return {
