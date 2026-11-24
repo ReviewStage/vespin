@@ -41,9 +41,6 @@ import "@formatjs/intl-datetimeformat/locale-data/en.js";
 import "@formatjs/intl-datetimeformat/add-all-tz.js";
 import "@formatjs/intl-listformat/polyfill.js";
 import "@formatjs/intl-listformat/locale-data/en.js";
-// `Intl.Segmenter`: Hermes lacks it, and a task section's emoji is told
-// from a word by its graphemes (`@repo/features/task-section-wire.ts`).
-import "@formatjs/intl-segmenter/polyfill.js";
 import type { DateTimeFormatConstructor as FormatJsDateTimeFormat } from "@formatjs/intl-datetimeformat";
 import type { WireValue } from "@repo/wire";
 import { fetch as streamingFetch } from "expo/fetch";
@@ -63,6 +60,24 @@ if (deviceZone && "polyfilled" in Intl.DateTimeFormat) {
   } catch {
     // The zone is one FormatJS cannot place, and UTC stands.
   }
+}
+
+// `Intl.Segmenter`: Hermes lacks it, and a task section's emoji and a
+// workspace tile's letter are told from a word by their graphemes
+// (`@repo/features/task-section-wire.ts`, `workspace-tile.ts`). Note that
+// nothing reads it as the app launches, so FormatJS's 140 KB of its rules is
+// installed as `Intl.Segmenter` is first read rather than run before the
+// first frame: the getter stands in its place until then, and the polyfill
+// defines the constructor itself over it.
+if (!("Segmenter" in Intl)) {
+  Object.defineProperty(Intl, "Segmenter", {
+    configurable: true,
+    get: () => {
+      require("@formatjs/intl-segmenter/polyfill-force.js");
+
+      return Intl.Segmenter;
+    },
+  });
 }
 
 /** The digests the web's `crypto.subtle.digest` names, as `expo-crypto` names them. */
