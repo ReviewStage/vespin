@@ -152,6 +152,26 @@ function KeptDraftBox(): ReactNode {
     : null;
 }
 
+/** The agent's box, its control handed to the case, which lays a message back in once the box stands, as Edit and Retry do. */
+function HandedBox({
+  hand,
+}: {
+  hand: (composer: ReturnType<typeof useAgentComposer>) => void;
+}): ReactNode {
+  const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
+    agentId: "agent-1",
+    taskId: "plan-1",
+    messages: [],
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
+  });
+
+  hand(composer);
+
+  return createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined });
+}
+
 /** The boxes that take files, each drawn alone. */
 const BOXES = {
   agent: () => createElement(AgentBox),
@@ -337,6 +357,30 @@ test("a file laid in as its chip before closing punctuation takes no space befor
   assert.equal(editor.getText(), "See [Picture 1],.");
 });
 
+test("a message laid back into a box that stands, its words and files together as Edit and Retry lay them, holds each file's chip where its marker stands", async () => {
+  let composer: ReturnType<typeof useAgentComposer> | undefined;
+
+  const container = await drawn(
+    createElement(HandedBox, {
+      hand: (each) => {
+        composer = each;
+      },
+    }),
+  );
+
+  act(() =>
+    composer?.updateHeld(() => ({
+      text: "Like [Picture 1]",
+      attachments: [
+        { name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" },
+      ],
+    })),
+  );
+  await settle();
+
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
+});
+
 /** The box's words selected from the first to the last and copied, as a drag over them and ⌘C do: what the copy wrote to the clipboard, by type. */
 function copyAll(container: HTMLElement): Map<string, string> {
   const written = new Map<string, string>();
@@ -405,7 +449,7 @@ test("a sent line copied with Copy message and pasted into the agent's box comes
         id: "line",
         role: MESSAGE_ROLE.USER,
         parts: [
-          { type: "text", text: `Look at [Picture 1] in ${store}` },
+          { type: "text", text: `Look at [Picture 1], not \\[Picture 1], in ${store}` },
           {
             type: "file",
             mediaType: AGENT_ATTACHMENT_TYPE.PNG,
@@ -430,7 +474,8 @@ test("a sent line copied with Copy message and pasted into the agent's box comes
   await act(async () => copy.click());
 
   const [copied] = written;
-  assert.equal(copied?.text, `Look at [Picture 1] in ${store}`);
+  // Note that the marker typed as words is copied as the words it reads as, without its escape.
+  assert.equal(copied?.text, `Look at [Picture 1], not [Picture 1], in ${store}`);
 
   const to = await mounted("agent");
   // Note that this box's own picture is another picture, of other bytes, under the same name.
@@ -450,7 +495,7 @@ test("a sent line copied with Copy message and pasted into the agent's box comes
 
   const editor = composerEditor(to).editor ?? assert.fail("the box's editor is running");
   // Note that the editor's own text reads a chip out as its words, and a link's words alone.
-  assert.equal(editor.getText(), `[Picture 1] Look at [Picture 2] in ${store}`);
+  assert.equal(editor.getText(), `[Picture 1] Look at [Picture 2], not [Picture 1], in ${store}`);
   assert.deepEqual(held(to), {
     chips: [],
     pictures: ["Open Picture 1", "Open Picture 2"],
