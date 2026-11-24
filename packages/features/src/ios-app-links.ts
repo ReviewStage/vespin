@@ -307,13 +307,14 @@ export function iosPullRequestCommentRoute(pullRequest: {
 /**
  * The tabs whose stacks the app's pages are pushed onto, each mounting the
  * thread, task, and agent screens in a route group of its own name
- * (`(inbox)`, `(tasks)`, `(search)`), so one tab's link can open on another's
- * stack.
+ * (`(inbox)`, `(tasks)`, `(search)`, `(automations)`), so one tab's link can
+ * open on another's stack.
  */
 export const IOS_TAB = {
   INBOX: "inbox",
   TASKS: "tasks",
   SEARCH: "search",
+  AUTOMATIONS: "automations",
 } as const;
 
 export type IosTab = (typeof IOS_TAB)[keyof typeof IOS_TAB];
