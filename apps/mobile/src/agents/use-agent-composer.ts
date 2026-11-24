@@ -138,6 +138,15 @@ interface Sent {
  */
 const heldSends = new Map<string, Sent>();
 
+/** A file a chat message went with as the field holds it again: its picture drawn from its own bytes, a text file with no thumbnail. */
+function heldPictureOf(file: AgentAttachment): HeldPicture {
+  const address = file.mediaType.startsWith("image/")
+    ? `data:${file.mediaType};base64,${file.data}`
+    : undefined;
+
+  return { id: randomUUID(), file, address };
+}
+
 /** Whether this phone holds every file a refused line went with, so its Retry sends it as it went. */
 export function undeliveredWhole(line: SendingMessage): boolean {
   const files = (line.files ?? []).length;
@@ -630,9 +639,14 @@ export function useAgentComposer(
     heldSends.delete(clientKey);
     void acts[ACT_KIND.AGENTS_CHAT_UNSEND]({ agentId, clientKey }).catch(() => undefined);
 
+    // Note that the host keeps every file the message went with, so one this phone no longer holds, as after a relaunch, comes back into the field from those, each picture drawn from its bytes.
     if (edits) {
       handBack(
-        { id: clientKey, words: held?.words ?? line.text, pictures: held?.pictures ?? [] },
+        {
+          id: clientKey,
+          words: held?.words ?? line.text,
+          pictures: held?.pictures ?? (line.attachments ?? []).map(heldPictureOf),
+        },
         undefined,
       );
     }
