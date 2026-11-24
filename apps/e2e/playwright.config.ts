@@ -34,12 +34,10 @@ const LOCAL_SERVER_ENV = {
 /**
  * Specs are `*.e2e.ts`, a name no vitest config collects, so `vitest run`
  * never picks a journey up. A failed test is never retried, so a flaky one
- * fails the run rather than passing on a second try: the one way out of the
- * gate is the `@quarantine` tag, which `test:e2e` leaves out and the nightly
- * `test:e2e:quarantine` runs alone (`README.md`, "Quarantine"). On CI the
- * run reports to the job's log and annotations (`github`) and writes the
- * HTML report, which carries each failed test's trace and video for the job
- * to upload.
+ * fails the run rather than passing on a second try, and is fixed or
+ * deleted. On CI the run reports to the job's log and annotations (`github`)
+ * and writes the HTML report, which carries each failed test's trace and
+ * video for the job to upload.
  *
  * The suite's database is the first server: `tools/demo-postgres`, a new
  * empty Postgres for the run, migrated and seeded, then stopped and deleted
