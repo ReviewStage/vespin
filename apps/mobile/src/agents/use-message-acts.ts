@@ -11,7 +11,8 @@
  * (`revertAsk`), and sends the panel's `AGENTS_REWIND`; only the
  * conversation goes back from the phone, the files staying as they are.
  * Edit lays the line's words in the composer, which sends them in its place
- * (`use-agent-composer.ts`); a line that carried files is written again only
+ * (`use-agent-composer.ts`), a Manager's chat message edited as the line it
+ * went as (its row's `lineId`); a line that carried files is written again only
  * on the desktop and the web, since the phone does not read a line's files
  * back into its field. Fork to new agent opens New agent as the panel's
  * fork opens its draft (`@repo/features/agent-fork-model`), on a turn of
@@ -67,8 +68,10 @@ export function useMessageActs(input: {
   readonly readerId: string | undefined;
   readonly composer: Pick<AgentComposer, "editMessage">;
   readonly calling: boolean;
+  /** Each person's message of a Manager's chat by its row's id, to the transcript line it went as (`lineId`), which its Edit takes the Manager back to; none for any other agent. */
+  readonly chatLines?: ReadonlyMap<string, string> | undefined;
 }): MessageActs {
-  const { agentId, agent, transcript, readerId, composer, calling } = input;
+  const { agentId, agent, transcript, readerId, composer, calling, chatLines } = input;
   const acts = useHostActs();
   const write = useWrite();
   const router = useRouter();
@@ -113,7 +116,10 @@ export function useMessageActs(input: {
 
   /** A line's Edit, where it opened a turn a person wrote, carried words alone, and the agent takes messages. */
   const lineActs = (item: SaidItem): readonly HeldAct[] => {
-    const id = item.place.row;
+    // Note that a chat message stands under its row's id, and is edited as the transcript line it went as, so one with no line, the Manager's own, offers no Edit.
+    const id = chatLines === undefined ? item.place.row : chatLines.get(item.place.row);
+
+    if (id === undefined) return [];
     const line = byId.get(id);
     const { words } = item;
 

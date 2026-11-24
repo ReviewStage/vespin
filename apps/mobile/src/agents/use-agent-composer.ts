@@ -6,7 +6,10 @@
  * host draws on its way on the chat and keeps there marked Not delivered
  * where the service refused it, its Retry sending it again under its key
  * and its Edit and Delete letting it go (`AGENTS_CHAT_UNSEND`); it never
- * queues, since the Manager takes each line as it stands. To any other
+ * queues, since the Manager takes each line as it stands, and a sent
+ * message's Edit takes the Manager back to just before its line
+ * (`AGENTS_REWIND`), which drops its row and every row after it, and sends
+ * the words as a message of the chat's own. To any other
  * agent, while no turn runs, Send opens one (`AGENTS_MESSAGE`); while one runs, it steers
  * that turn, or, where the member's Follow-up behavior is Queue, waits
  * behind it (`AGENTS_QUEUE`'s `add`), as the panel's Enter does. The queue
@@ -444,25 +447,7 @@ export function useAgentComposer(
     }
 
     // Note that a Manager's chat takes every message as a row of its own, the Manager taking it in as a turn's line or a steer as it stands, so it neither queues nor steers here; the host draws it on its way on the chat, and keeps one refused there marked Not delivered.
-    if (chat) {
-      heldSends.set(sent.id, sent);
-      write(
-        () =>
-          acts[ACT_KIND.AGENTS_CHAT_SEND]({ agentId, text, clientKey: sent.id, ...attachments }),
-        {
-          ...saying,
-          inPlace: (refusal: string) => {
-            if (mounted.current) setNote(refusal);
-          },
-          done: () => heldSends.delete(sent.id),
-          refused: (answer) =>
-            "failure" in answer ? messageFailureWords(answer.failure) : undefined,
-          unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
-        },
-      );
-
-      return;
-    }
+    if (chat) return sendChat(sent, attachments?.attachments);
 
     if (sendQueues) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;
@@ -504,6 +489,30 @@ export function useAgentComposer(
     });
   };
 
+  /** A message to a Manager's chat, which the host draws on its way and keeps marked Not delivered where the service refused it, with the pictures it went with held for its Retry and Edit. */
+  const sendChat = (sent: Sent, attachments: readonly AgentAttachment[] | undefined) => {
+    heldSends.set(sent.id, sent);
+    write(
+      () =>
+        acts[ACT_KIND.AGENTS_CHAT_SEND]({
+          agentId,
+          text: sent.words,
+          clientKey: sent.id,
+          ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
+        }),
+      {
+        went: BUZZ.SUCCESS,
+        inPlace: (refusal: string) => {
+          if (mounted.current) setNote(refusal);
+        },
+        done: () => heldSends.delete(sent.id),
+        refused: (answer) =>
+          "failure" in answer ? messageFailureWords(answer.failure) : undefined,
+        unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+      },
+    );
+  };
+
   /** The field given back the words and pictures it held before a sent line's edit, the edit's own let go. */
   const giveBackRewritten = (stash: Rewriting) => {
     pictures.take();
@@ -528,9 +537,25 @@ export function useAgentComposer(
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
 
     const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
-    heldSends.set(sentLineId(sent.id), sent);
     setNote(undefined);
     giveBackRewritten(stash);
+
+    // Note that a Manager's chat is taken back to just before the line first, which drops the line's row and every row after it, and the words then go as a message of the chat's own; a rewind refused hands them back to the field, since nothing went.
+    if (chat) {
+      write(() => acts[ACT_KIND.AGENTS_REWIND]({ agentId, messageId: stash.line.messageId }), {
+        inPlace: (refusal: string) => {
+          if (mounted.current) handBack(sent, refusal);
+        },
+        refused: (answer) =>
+          "failure" in answer ? messageFailureWords(answer.failure) : undefined,
+        unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+        done: () => sendChat(sent, attachments?.attachments),
+      });
+
+      return;
+    }
+
+    heldSends.set(sentLineId(sent.id), sent);
     write(
       () =>
         acts[ACT_KIND.AGENTS_MESSAGE]({

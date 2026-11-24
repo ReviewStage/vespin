@@ -1169,6 +1169,19 @@ const AgentConversation = memo(function AgentConversation({
   const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
 
+  // Each person's chat message by its row, to the line it went as, which its Edit rewinds to.
+  const chatLines = useMemo(
+    () =>
+      chat
+        ? new Map(
+            (chatPage?.messages ?? []).flatMap((message) =>
+              message.lineId === null ? [] : [[message.id, message.lineId] as const],
+            ),
+          )
+        : undefined,
+    [chat, chatPage?.messages],
+  );
+
   const messageActs = useMessageActs({
     agentId: id,
     agent: shown,
@@ -1176,6 +1189,7 @@ const AgentConversation = memo(function AgentConversation({
     readerId,
     composer,
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
+    chatLines,
   });
 
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
