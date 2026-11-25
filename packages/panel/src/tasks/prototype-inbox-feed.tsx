@@ -42,10 +42,12 @@ import {
 } from "@repo/host/fixture-inbox";
 import {
   BackButton,
-  Badge,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
+  CARD_LOOK,
+  CARD_PADDING,
+  Card,
   CHOICE_BAR_LOOK,
   ChannelMessage,
   ChoiceBar,
@@ -55,21 +57,27 @@ import {
   EmptyState,
   GlyphSlot,
   IconButton,
-  LIST_ROW_CURRENT,
-  LIST_ROW_META,
-  ListRow,
   type MenuAction,
   OneLine,
-  ShowMoreRow,
-  STATUS_TONE,
+  TEXT_BUTTON_TONE,
+  TextButton,
   ThreadReplies,
   ThreadRule,
   TIME_LOOK,
   Time,
   Tooltip,
+  UnreadMark,
   useMenu,
 } from "@repo/ui";
-import { AlarmClockIcon, CheckCheckIcon, ICON_SIZE, MailIcon } from "@repo/ui/icons";
+import {
+  AlarmClockIcon,
+  CheckCheckIcon,
+  CheckIcon,
+  ICON_SIZE,
+  MailIcon,
+  MessagesSquareIcon,
+  XIcon,
+} from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
@@ -152,6 +160,8 @@ interface FeedThread {
   readonly id: string;
   readonly place: FeedPlace;
   readonly title: string;
+  /** Where an activity line says it happened, quiet under its words; none for a thread. */
+  readonly activity?: string;
 }
 
 /** A task agent's message. */
@@ -267,6 +277,7 @@ const THREADS: readonly FeedThread[] = [
       agentName: "Build teammate invitations",
     },
     title: "#128 Invite a teammate by email",
+    activity: "Pull request merged in Teammate invitations",
   },
   {
     id: "t-rounding",
@@ -277,6 +288,7 @@ const THREADS: readonly FeedThread[] = [
       agentName: "Fix ledger rounding",
     },
     title: "Fix ledger rounding",
+    activity: "Agent finished in Ledger rounding",
   },
   {
     id: "t-alerts",
@@ -287,6 +299,18 @@ const THREADS: readonly FeedThread[] = [
       agentName: "Wire usage alerts",
     },
     title: "Wire usage alerts",
+    activity: "Agent failed in Usage alerts",
+  },
+  {
+    id: "t-billing",
+    place: {
+      kind: "task",
+      taskId: "c526e869-a1d2-4efb-96bd-d2e3f405162c",
+      taskName: "Billing export",
+      agentName: "Export invoices to CSV",
+    },
+    title: "Export invoices to CSV",
+    activity: "Agent finished in Billing export",
   },
 ];
 
@@ -303,14 +327,14 @@ const taskMessages = new Map<string, FeedMessage[]>([
         "s0",
         "Send the weekly digest",
         "The digest needs a subject line. I'd lead with the week's count: \"Your week: 12 tasks done\".",
-        5 * HOUR,
+        30 * HOUR,
       ),
-      personSaid("s1", READER, "Lead with the count, but say the workspace's name too.", 4 * HOUR),
+      personSaid("s1", READER, "Lead with the count, but say the workspace's name too.", 29 * HOUR),
       agentSaid(
         "s2",
         "Send the weekly digest",
         'Done: "Acme, your week: 12 tasks done".',
-        4 * HOUR - 10 * MINUTE,
+        28 * HOUR,
       ),
       personSaid("s3", GRACE, "Can we drop the colon? It reads like a log line.", 50 * MINUTE),
       agentSaid(
@@ -325,12 +349,6 @@ const taskMessages = new Map<string, FeedMessage[]>([
   [
     "t-merged",
     [
-      agentSaid(
-        "g0",
-        "Build teammate invitations",
-        "#128 is ready: invites by email, with resend and expiry.",
-        3 * HOUR,
-      ),
       agentSaid(
         "g1",
         "Build teammate invitations",
@@ -347,7 +365,19 @@ const taskMessages = new Map<string, FeedMessage[]>([
         "r0",
         "Fix ledger rounding",
         "Finished in 42m without posting anything. Its last turn changed 3 files and the tests pass.",
-        2 * HOUR,
+        26 * HOUR,
+        FEED_EVENT.FINISHED,
+      ),
+    ],
+  ],
+  [
+    "t-billing",
+    [
+      agentSaid(
+        "b0",
+        "Export invoices to CSV",
+        "Finished in 18m without posting anything. The export runs nightly now.",
+        52 * HOUR,
         FEED_EVENT.FINISHED,
       ),
     ],
@@ -358,7 +388,7 @@ const taskMessages = new Map<string, FeedMessage[]>([
       agentSaid(
         "a0",
         "Wire usage alerts",
-        "Failed: the sandbox ran out of disk while installing dependencies.",
+        "The sandbox ran out of disk while installing dependencies.",
         70 * MINUTE,
         FEED_EVENT.FAILED,
       ),
@@ -371,7 +401,8 @@ const markers = new Map<string, number>([
   ["m-checklist", 13],
   ["m-merge", 99],
   ["t-subject", 3],
-  ["t-merged", 1],
+  ["t-rounding", 1],
+  ["t-billing", 1],
 ]);
 
 /** The task agents' asks the reader answered, by item. */
@@ -436,11 +467,6 @@ const FEED_REASON = {
 } as const;
 
 type FeedReason = (typeof FEED_REASON)[keyof typeof FEED_REASON];
-
-/** Whether a reason is the reader's to handle, which stays until handled, rather than a look, which clears once read. */
-function needsYou(reason: FeedReason | undefined): boolean {
-  return reason === FEED_REASON.ASK || reason === FEED_REASON.MENTION;
-}
 
 /** A thread as the reader stands with it. */
 interface ThreadStanding {
@@ -552,59 +578,17 @@ function nameOf(by: FeedAuthor): string {
   return by.name;
 }
 
-/** The badge an event wears under its words. */
-function EventBadge({ event }: { event: FeedEvent }): React.JSX.Element {
-  if (event === FEED_EVENT.FINISHED) return <Badge tone={STATUS_TONE.COMPLETE}>Finished</Badge>;
-
-  if (event === FEED_EVENT.FAILED) return <Badge tone={STATUS_TONE.DANGER}>Failed</Badge>;
-
-  return <Badge tone={STATUS_TONE.MERGED}>Merged</Badge>;
-}
-
-/** What an ask asks for, in a badge's one word or two. */
-function askKindWords(thread: FeedThread): string {
-  const ask =
-    thread.place.kind === "manager"
-      ? prototypeChatAsk(thread.place.root)?.message.ask
-      : WITHDRAW_ASK.ask;
-
-  if (ask?.type === INBOX_ASK.DO) return "To do";
-
-  if (ask?.type === INBOX_ASK.ANSWER) return "Fill in";
-
-  return "Decide";
-}
-
-/** What a row says it is listed for. */
-function ReasonBadge({ standing }: { standing: ThreadStanding }): React.JSX.Element | null {
-  const { reason, unread } = standing;
-
-  switch (reason) {
-    case FEED_REASON.ASK:
-      return <Badge tone={STATUS_TONE.ATTENTION}>{askKindWords(standing.thread)}</Badge>;
-    case FEED_REASON.MENTION:
-      return <Badge tone={STATUS_TONE.ATTENTION}>Mention</Badge>;
-    case FEED_REASON.REPLIES:
-      return <Badge tone={STATUS_TONE.NEUTRAL}>{`${unread.length} new`}</Badge>;
-    case FEED_REASON.FINISHED:
-      return <Badge tone={STATUS_TONE.COMPLETE}>Finished</Badge>;
-    case FEED_REASON.FAILED:
-      return <Badge tone={STATUS_TONE.DANGER}>Failed</Badge>;
-    case FEED_REASON.MERGED:
-      return <Badge tone={STATUS_TONE.MERGED}>Merged</Badge>;
-    default:
-      return null;
-  }
-}
-
 /** One message of a thread in the feed, with "Mark unread from here" among its actions. */
 function FeedLine({
   message,
   onMarkUnread,
+  onView,
   under,
 }: {
   message: FeedMessage;
   onMarkUnread: () => void;
+  /** Opens the whole thread beside the feed; none where it stands open there already. */
+  onView?: (() => void) | undefined;
   under?: React.ReactNode;
 }): React.JSX.Element {
   return (
@@ -614,20 +598,18 @@ function FeedLine({
       name={nameOf(message.by)}
       at={<Time at={message.at} look={TIME_LOOK.DAY} />}
       actions={
-        <MessageAction label="Mark unread from here" tooltip onClick={onMarkUnread}>
-          <MailIcon />
-        </MessageAction>
-      }
-      under={
         <>
-          {message.event === undefined ? null : (
-            <span className="flex">
-              <EventBadge event={message.event} />
-            </span>
+          {onView === undefined ? null : (
+            <MessageAction label="View thread" tooltip onClick={onView}>
+              <MessagesSquareIcon />
+            </MessageAction>
           )}
-          {under}
+          <MessageAction label="Mark unread from here" tooltip onClick={onMarkUnread}>
+            <MailIcon />
+          </MessageAction>
         </>
       }
+      under={under}
     >
       <TranscriptWords text={message.text} />
     </ChannelMessage>
@@ -659,7 +641,12 @@ function ReplyBox({ onSend }: { onSend: (text: string) => void }): React.JSX.Ele
 
   return (
     <ComposerFrame look={COMPOSER_LOOK.CARD}>
-      <MessageField box={box} look={COMPOSER_LOOK.BARE} />
+      <MessageField
+        box={box}
+        look={COMPOSER_LOOK.BARE}
+        // PROTOTYPE: the editor keeps its overscroll to itself, which would stop the feed's scroll over every card's box.
+        className="[&_.composer-editor]:overscroll-auto!"
+      />
       <ComposerFoot send={{ label: "Reply", empty: words.trim() === "", onSend: send }} />
     </ComposerFrame>
   );
@@ -669,19 +656,26 @@ function ReplyBox({ onSend }: { onSend: (text: string) => void }): React.JSX.Ele
 function ThreadBody({
   standing,
   shownFrom,
+  whole = false,
+  onView,
   onMarkUnreadFrom,
   readInboxImage,
 }: {
   standing: ThreadStanding;
   /** Where the reader's marker stood as the thread opened, which New stands at. */
   shownFrom: number;
+  /** Whether every reply stands, as the thread beside the feed draws it, rather than the read ones folded. */
+  whole?: boolean | undefined;
+  onView?: (() => void) | undefined;
   onMarkUnreadFrom: (at: number) => void;
   readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
 }): React.JSX.Element {
-  const [earlierShown, setEarlierShown] = useState(false);
+  const [earlierShown, setEarlierShown] = useState(whole);
   const { messages, thread } = standing;
-  // Note that the first message always stands, so the marker never folds it.
-  const marker = Math.max(Math.min(shownFrom, messages.length), 1);
+  // Note that the first message always stands, so the marker never folds it, and a thread read through shows its latest reply under the fold, as Slack's Threads does.
+  const read = Math.max(Math.min(shownFrom, messages.length), 1);
+  const marker =
+    !whole && read >= messages.length && messages.length > 1 ? messages.length - 1 : read;
   const earlier = messages.slice(1, marker);
   const after = messages.slice(marker);
   const root = messages[0];
@@ -734,9 +728,14 @@ function ThreadBody({
   return (
     <div className="flex min-w-0 flex-col gap-tight-gap" data-prototype-feed-body={thread.id}>
       {root === undefined ? null : (
-        <FeedLine message={root} onMarkUnread={() => onMarkUnreadFrom(0)} under={askCard} />
+        <FeedLine
+          message={root}
+          onMarkUnread={() => onMarkUnreadFrom(0)}
+          onView={onView}
+          under={askCard}
+        />
       )}
-      {earlier.length === 0 ? null : (
+      {earlier.length === 0 || whole ? null : (
         <div className="ps-ui-8">
           <ThreadReplies
             count={earlier.length}
@@ -744,10 +743,10 @@ function ThreadBody({
             open={earlierShown}
             label={
               earlierShown
-                ? "Hide earlier replies"
+                ? "Show fewer replies"
                 : earlier.length === 1
-                  ? "1 earlier reply"
-                  : `${earlier.length} earlier replies`
+                  ? "Show 1 more reply"
+                  : `Show ${earlier.length} more replies`
             }
             onOpen={() => setEarlierShown((was) => !was)}
           />
@@ -759,22 +758,28 @@ function ThreadBody({
               key={message.id}
               message={message}
               onMarkUnread={() => onMarkUnreadFrom(at + 1)}
+              onView={onView}
             />
           ))
         : null}
-      {after.length === 0 || shownFrom === 0 ? null : <ThreadRule count={1} label="New" />}
+      {after.length === 0 || shownFrom === 0 || read >= messages.length ? null : (
+        <div data-prototype-feed-new="">
+          <ThreadRule count={1} label="New" />
+        </div>
+      )}
       {after.map((message, at) => (
         <FeedLine
           key={message.id}
           message={message}
           onMarkUnread={() => onMarkUnreadFrom(marker + at)}
+          onView={onView}
         />
       ))}
     </div>
   );
 }
 
-/** Where a row's holder is named: the Manager's face, or the task's glyph. */
+/** Where a thread stands: the Manager's face, or the task's glyph. */
 function HolderGlyph({ place }: { place: FeedPlace }): React.JSX.Element {
   return place.kind === "manager" ? (
     <ManagerFace face={MANAGER_FACE} size={MANAGER_FACE_SIZE.ROW} />
@@ -789,28 +794,9 @@ function holderName(place: FeedPlace): string {
   return place.kind === "manager" ? "Release manager" : place.taskName;
 }
 
-/** A message's words as a row's one line reads them: a mention as its name. */
-function plainWords(text: string): string {
-  return text.replace(/\[@([^\]]+)\]\([^)]*\)/gu, "@$1").replace(/[`*]/gu, "");
-}
-
-/** The thread's latest activity as its row says it: who, and what. */
-function latestWords(standing: ThreadStanding): string {
-  const latest = standing.unread.at(-1) ?? standing.messages.at(-1);
-
-  if (latest === undefined) return holderName(standing.thread.place);
-  const who =
-    latest.by.kind === "person" && latest.by.userId === READER.userId ? "You" : nameOf(latest.by);
-  const holder = holderName(standing.thread.place);
-
-  return who === holder
-    ? `${holder}: ${plainWords(latest.text)}`
-    : `${holder} · ${who}: ${plainWords(latest.text)}`;
-}
-
-/** Whether a row reads unread: something new, or an ask still waiting. */
-function rowUnread(standing: ThreadStanding): boolean {
-  return standing.unread.length > 0 || standing.openAsk;
+/** Whether something of the thread is new to the reader. */
+function isUnread(standing: ThreadStanding): boolean {
+  return standing.unread.length > 0;
 }
 
 /** The reader's reminder on a thread, as the Inbox's Remind me sets one. */
@@ -827,15 +813,9 @@ function remindActions(onAt: (at: number) => void): MenuAction[] {
   }));
 }
 
-/** Remind me, the Inbox's own times, on the thread shown. */
-function RemindButton({
-  shown,
-  onAt,
-}: {
-  shown: boolean;
-  onAt: (at: number) => void;
-}): React.JSX.Element {
-  const menu = useMenu(shown);
+/** Remind me, the Inbox's own times. */
+function RemindButton({ onAt }: { onAt: (at: number) => void }): React.JSX.Element {
+  const menu = useMenu(true);
 
   return (
     <>
@@ -859,109 +839,249 @@ function RemindButton({
   );
 }
 
-/** The thread shown beside the list: its head with its acts, the thread at the reader's marker, and its box. */
-function ThreadPane({
+/** Mark as read, as a check, where something of it is new. */
+function MarkReadButton({ onPress }: { onPress: () => void }): React.JSX.Element {
+  return (
+    <Tooltip label="Mark as read">
+      <IconButton
+        icon={<CheckIcon />}
+        label="Mark as read"
+        size={BUTTON_SIZE.COMPACT}
+        onClick={onPress}
+      />
+    </Tooltip>
+  );
+}
+
+/** The acts a card or a line offers its reader: Remind me, and Mark as read where something is new. */
+interface EntryDoors {
+  readonly onView: () => void;
+  readonly onRead: () => void;
+  readonly onRemind: (at: number) => void;
+  readonly onMarkUnreadFrom: (at: number) => void;
+  readonly readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
+}
+
+/**
+ * A thread as the feed draws it, Slack's Threads card: where it stands and
+ * what it is about, its first message with its ask, the replies before the
+ * reader's marker folded, New, the replies after, and its own box.
+ */
+function ThreadCard({
   standing,
   shownFrom,
-  narrow,
-  onBack,
-  onOpen,
-  onToggleRead,
-  onRemind,
-  onMarkUnreadFrom,
-  readInboxImage,
+  doors,
 }: {
   standing: ThreadStanding;
   shownFrom: number;
-  narrow: boolean;
-  onBack: () => void;
-  onOpen: () => void;
-  onToggleRead: () => void;
-  onRemind: (at: number) => void;
-  onMarkUnreadFrom: (at: number) => void;
-  readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
+  doors: EntryDoors;
 }): React.JSX.Element {
   const { thread } = standing;
-  const unread = standing.unread.length > 0;
+  const unread = isUnread(standing);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-prototype-feed-pane={thread.id}>
-      <div className="flex flex-none flex-wrap items-center gap-control-gap border-b border-border px-list-inset py-tight-gap">
-        {narrow ? <BackButton label="Inbox" place="inbox" onBack={onBack} /> : null}
-        <span
-          className={`flex min-w-0 items-center gap-icon-gap ${narrow ? "order-last basis-full" : "flex-1"}`}
+    <Card
+      look={CARD_LOOK.SURFACE}
+      padding={CARD_PADDING.FLUSH}
+      data-prototype-feed-card={thread.id}
+    >
+      <div className="flex min-w-0 items-center gap-icon-gap px-card-head-inline pt-card-head-block">
+        <UnreadMark unread={unread} />
+        <HolderGlyph place={thread.place} />
+        <span className="flex min-w-0 flex-1 items-baseline gap-icon-gap">
+          <OneLine className="font-ui-semibold text-foreground">{holderName(thread.place)}</OneLine>
+          <OneLine className="text-caption text-muted-foreground">{thread.title}</OneLine>
+        </span>
+        <RemindButton onAt={doors.onRemind} />
+        {unread ? <MarkReadButton onPress={doors.onRead} /> : null}
+      </div>
+      <div className="flex min-w-0 flex-col gap-tight-gap px-card-head-inline pb-card-head-block">
+        <ThreadBody
+          key={`${thread.id}-${shownFrom}`}
+          standing={standing}
+          shownFrom={shownFrom}
+          onView={doors.onView}
+          onMarkUnreadFrom={doors.onMarkUnreadFrom}
+          readInboxImage={doors.readInboxImage}
+        />
+        <ReplyBox onSend={(text) => reply(standing, text)} />
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * An agent that finished or failed without posting, or a pull request
+ * merged, as one line of the feed, Slack's Activity row: who, when, what,
+ * and where, quiet under it, with Mark as read beside it while it is new.
+ */
+function ActivityLine({
+  standing,
+  doors,
+}: {
+  standing: ThreadStanding;
+  doors: EntryDoors;
+}): React.JSX.Element {
+  const message = standing.messages.at(-1);
+  const unread = isUnread(standing);
+
+  if (message === undefined) return <></>;
+
+  return (
+    <div className="flex min-w-0 items-start" data-prototype-feed-activity={standing.thread.id}>
+      <span className="pt-ui-12">
+        <UnreadMark unread={unread} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <ChannelMessage
+          messageId={message.id}
+          avatar={<Avatar by={message.by} />}
+          name={nameOf(message.by)}
+          at={<Time at={message.at} look={TIME_LOOK.DAY} />}
+          actions={
+            <>
+              {unread ? (
+                <MessageAction label="Mark as read" tooltip onClick={doors.onRead}>
+                  <CheckIcon />
+                </MessageAction>
+              ) : (
+                <MessageAction
+                  label="Mark unread"
+                  tooltip
+                  onClick={() => doors.onMarkUnreadFrom(0)}
+                >
+                  <MailIcon />
+                </MessageAction>
+              )}
+            </>
+          }
+          under={
+            <span className="text-caption text-muted-foreground">{standing.thread.activity}</span>
+          }
         >
-          <HolderGlyph place={thread.place} />
-          <span className="flex min-w-0 flex-col">
-            <OneLine className="font-ui-semibold text-foreground">{thread.title}</OneLine>
-            <OneLine className="text-caption text-muted-foreground">
-              {holderName(thread.place)}
-            </OneLine>
-          </span>
-        </span>
-        <span className="ms-auto flex flex-none items-center gap-control-gap">
-          <ReasonBadge standing={standing} />
-          <Tooltip label={unread ? "Mark read (U)" : "Mark unread (U)"}>
-            <IconButton
-              icon={unread ? <CheckCheckIcon /> : <MailIcon />}
-              label={unread ? "Mark read" : "Mark unread"}
-              size={BUTTON_SIZE.COMPACT}
-              onClick={onToggleRead}
-            />
-          </Tooltip>
-          <RemindButton shown onAt={onRemind} />
-          <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onOpen}>
-            {thread.place.kind === "manager" ? "Open in chat" : "Open task"}
-          </Button>
-        </span>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-list-inset py-list-inset">
-        <div className="mx-auto w-full max-w-[760px]">
-          <ThreadBody
-            key={thread.id}
-            standing={standing}
-            shownFrom={shownFrom}
-            onMarkUnreadFrom={onMarkUnreadFrom}
-            readInboxImage={readInboxImage}
-          />
-        </div>
-      </div>
-      <div className="flex-none px-list-inset pb-list-inset">
-        <div className="mx-auto w-full max-w-[760px]">
-          <ReplyBox key={thread.id} onSend={(text) => reply(standing, text)} />
-        </div>
+          <TranscriptWords text={message.text} />
+        </ChannelMessage>
       </div>
     </div>
   );
 }
 
-/** The feed's filters. */
-const FEED_FILTER = {
-  NEEDS_YOU: "needs-you",
-  EVERYTHING: "everything",
-} as const;
+/** The whole thread beside the feed, Slack's Thread panel: where it stands, which opens it, every message, and its box. */
+function ThreadSide({
+  standing,
+  shownFrom,
+  narrow,
+  onClose,
+  onOpenPlace,
+  doors,
+}: {
+  standing: ThreadStanding;
+  shownFrom: number;
+  narrow: boolean;
+  onClose: () => void;
+  onOpenPlace: () => void;
+  doors: EntryDoors;
+}): React.JSX.Element {
+  const { thread } = standing;
+  const scroller = useRef<HTMLDivElement>(null);
 
-type FeedFilter = (typeof FEED_FILTER)[keyof typeof FEED_FILTER];
+  // Note that the thread opens at New, as Slack's lands at the first unread, scrolling its own box alone.
+  useEffect(() => {
+    const box = scroller.current;
+    const rule = box?.querySelector<HTMLElement>("[data-prototype-feed-new]");
 
-/** Whether a key press stands in a field, where J and K are words. */
-function typing(target: EventTarget | null): boolean {
+    if (box !== null && box !== undefined && rule !== null && rule !== undefined) {
+      box.scrollTop = rule.offsetTop - box.offsetTop - 120;
+    }
+  }, [thread.id]);
+
   return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+    <div
+      className={`flex min-h-0 min-w-0 flex-col ${narrow ? "flex-1" : "w-[440px] flex-none border-s border-border"}`}
+      data-prototype-feed-side={thread.id}
+    >
+      <div className="flex flex-none items-center gap-control-gap border-b border-border px-list-inset py-tight-gap">
+        {narrow ? <BackButton label="Inbox" place="inbox" onBack={onClose} /> : null}
+        <span className="flex min-w-0 flex-1 items-baseline gap-icon-gap">
+          <span className="font-ui-semibold text-foreground">Thread</span>
+          <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={onOpenPlace}>
+            {holderName(thread.place)}
+          </TextButton>
+        </span>
+        {narrow ? null : (
+          <IconButton
+            icon={<XIcon />}
+            label="Close thread"
+            size={BUTTON_SIZE.COMPACT}
+            onClick={onClose}
+          />
+        )}
+      </div>
+      <div
+        ref={scroller}
+        className="relative min-h-0 flex-1 overflow-y-auto px-list-inset py-list-inset"
+      >
+        <ThreadBody
+          key={`${thread.id}-${shownFrom}`}
+          standing={standing}
+          shownFrom={shownFrom}
+          whole
+          onMarkUnreadFrom={doors.onMarkUnreadFrom}
+          readInboxImage={doors.readInboxImage}
+        />
+      </div>
+      <div className="flex-none px-list-inset pb-list-inset">
+        <ReplyBox key={thread.id} onSend={(text) => reply(standing, text)} />
+      </div>
+    </div>
   );
 }
 
+/** Which threads the feed lists, as today's Inbox's views choose them. */
+const FEED_VIEW = {
+  QUESTIONS: "questions",
+  OPEN: "open",
+  ALL: "all",
+  REMINDERS: "reminders",
+} as const;
+
+type FeedView = (typeof FEED_VIEW)[keyof typeof FEED_VIEW];
+
+/** Whether the feed lists activity lines beside its threads, the prototype's one fork. */
+const FEED_SHAPE = {
+  WITH_ACTIVITY: "with-activity",
+  THREADS: "threads",
+} as const;
+
+type FeedShape = (typeof FEED_SHAPE)[keyof typeof FEED_SHAPE];
+
+/** The day a moment falls on, as the feed heads its days: Today, Yesterday, or the weekday and date. */
+function dayWords(at: number, now: number): string {
+  const day = new Date(at);
+  const today = new Date(now);
+  const startOf = (date: Date) =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round((startOf(today) - startOf(day)) / (24 * HOUR));
+
+  if (days === 0) return "Today";
+
+  if (days === 1) return "Yesterday";
+
+  return day.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+}
+
 /**
- * The Inbox as one feed of threads, Linear's Inbox in shape (see the
- * file's header): a list of threads on the left, Needs you or Everything,
- * the latest first, and the thread chosen open on the right at the
- * reader's marker, with its box. Opening a thread that only informs reads
- * it, as Linear's does; one that needs the reader stays until handled. A
- * row listed while the feed stands keeps its place once read, until the
- * filter moves; one reminded leaves until its time. J and K step, U marks
- * read or unread, ⌥U marks every one read. `only` narrows it to
- * the Manager's threads, as its page's Inbox tab draws it; `narrow`, a
- * phone's room, shows the list or the thread.
+ * The Inbox as one feed, Slack's Threads and Activity in one stream: each
+ * thread a card, each agent that ended or pull request merged a line,
+ * newest first under its day, in today's Inbox's views (Questions, the asks
+ * waiting on the reader; Open, what they are not done with; All; and
+ * Reminders), Unreads narrowing any view to what is new. Nothing leaves the
+ * stream as it is read or answered: it stands where it was, read or
+ * answered, and a view lets go of it only once the reader moves to
+ * another. View thread opens the whole thread beside the feed, which reads
+ * it, its head naming the Manager or the task it opens. `only` narrows the
+ * feed to the Manager's threads, as its page's Inbox tab draws it;
+ * `narrow`, a phone's room, shows the feed or the thread.
  */
 export function PrototypeInboxFeed({
   only,
@@ -977,17 +1097,15 @@ export function PrototypeInboxFeed({
   readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
 }): React.JSX.Element {
   const feedVersion = useFeedVersion();
-  const [filter, setFilter] = useState<FeedFilter>(FEED_FILTER.NEEDS_YOU);
-  const [chosen, setChosen] = useState<string | undefined>(undefined);
+  const [view, setView] = useState<FeedView>(FEED_VIEW.OPEN);
+  const [unreadsOnly, setUnreadsOnly] = useState(false);
+  const [shape, setShape] = useState<FeedShape>(FEED_SHAPE.WITH_ACTIVITY);
+  const [viewing, setViewing] = useState<string | undefined>(undefined);
   const [shownFrom, setShownFrom] = useState<ReadonlyMap<string, number>>(new Map());
-  const [snoozedShown, setSnoozedShown] = useState(false);
-  const [held, setHeld] = useState<{
-    readonly filter: FeedFilter;
-    readonly ids: ReadonlySet<string>;
-  }>({
-    filter,
-    ids: new Set(),
-  });
+  const listing = `${view}-${unreadsOnly}-${shape}`;
+  const [held, setHeld] = useState<{ readonly listing: string; readonly ids: ReadonlySet<string> }>(
+    { listing, ids: new Set() },
+  );
 
   // Note that the version is read so every act draws the feed again.
   const standings = useMemo(
@@ -1003,225 +1121,210 @@ export function PrototypeInboxFeed({
   const now = Date.now();
   const isSnoozed = (standing: ThreadStanding) => (snoozed.get(standing.thread.id) ?? 0) > now;
 
-  const listedNow = (standing: ThreadStanding, by: FeedFilter) =>
-    !isSnoozed(standing) &&
-    (by === FEED_FILTER.NEEDS_YOU ? needsYou(standing.reason) : standing.reason !== undefined);
+  /** Whether a view lists a thread now, as today's Inbox's views read an item. */
+  const inView = (standing: ThreadStanding, by: FeedView) => {
+    if (by === FEED_VIEW.REMINDERS) return isSnoozed(standing);
 
-  // Note that a row listed while the feed stands stays in its place once handled or read, until the filter moves; one reminded leaves at once.
-  const heldIds = held.filter === filter ? held.ids : new Set<string>();
+    if (isSnoozed(standing)) return false;
+
+    if (by === FEED_VIEW.QUESTIONS) return standing.openAsk;
+
+    if (by === FEED_VIEW.OPEN) return standing.openAsk || isUnread(standing);
+
+    return true;
+  };
+
+  const listedNow = (standing: ThreadStanding) =>
+    (shape === FEED_SHAPE.WITH_ACTIVITY || standing.thread.activity === undefined) &&
+    inView(standing, view) &&
+    (!unreadsOnly || isUnread(standing));
+
+  // Note that what a listing showed stays in its place once read or answered, until the reader moves to another listing; one reminded leaves at once.
+  const heldIds = held.listing === listing ? held.ids : new Set<string>();
 
   const listed = standings.filter(
-    (each) => listedNow(each, filter) || (heldIds.has(each.thread.id) && !isSnoozed(each)),
+    (each) =>
+      listedNow(each) ||
+      (heldIds.has(each.thread.id) && (view === FEED_VIEW.REMINDERS || !isSnoozed(each))),
   );
 
-  const nextHeld = new Set(listed.map((each) => each.thread.id));
-
-  if (held.filter !== filter || [...nextHeld].some((id) => !held.ids.has(id))) {
-    setHeld({ filter, ids: new Set([...(held.filter === filter ? held.ids : []), ...nextHeld]) });
+  if (held.listing !== listing || listed.some((each) => !held.ids.has(each.thread.id))) {
+    setHeld({
+      listing,
+      ids: new Set([...heldIds, ...listed.map((each) => each.thread.id)]),
+    });
   }
 
-  const snoozedRows = standings.filter(isSnoozed);
-  const needsCount = standings.filter((each) => listedNow(each, FEED_FILTER.NEEDS_YOU)).length;
-  const newCount = standings.filter((each) => listedNow(each, FEED_FILTER.EVERYTHING)).length;
-  const shown = standings.find((each) => each.thread.id === chosen);
+  const count = (by: FeedView) =>
+    standings.filter(
+      (each) =>
+        (shape === FEED_SHAPE.WITH_ACTIVITY || each.thread.activity === undefined) &&
+        inView(each, by),
+    ).length;
 
-  /** Opens a thread on the right at the reader's marker; one that only informs is read as it opens. */
-  const choose = (standing: ThreadStanding) => {
-    setChosen(standing.thread.id);
-    setShownFrom((was) => new Map(was).set(standing.thread.id, standing.marker));
+  const shown = standings.find((each) => each.thread.id === viewing);
 
-    if (!needsYou(standing.reason) && standing.unread.length > 0) markRead(standing);
-  };
-
-  const toggleRead = (standing: ThreadStanding) => {
-    if (standing.unread.length > 0) {
+  const doorsOf = (standing: ThreadStanding): EntryDoors => ({
+    onView: () => {
+      // Note that the thread opens at the reader's marker, and opening it reads it.
+      setViewing(standing.thread.id);
+      setShownFrom((was) => new Map(was).set(standing.thread.id, standing.marker));
       markRead(standing);
-
-      return;
-    }
-
-    // Note that marking unread brings back its last message, as Linear's U does.
-    const at = Math.max(standing.messages.length - 1, 0);
-    markUnreadFrom(standing, at);
-    setShownFrom((was) => new Map(was).set(standing.thread.id, at));
-  };
-
-  const remind = (standing: ThreadStanding, at: number) => {
-    snoozed.set(standing.thread.id, at);
-    setChosen(undefined);
-    moved();
-  };
+    },
+    onRead: () => markRead(standing),
+    onRemind: (at) => {
+      snoozed.set(standing.thread.id, at);
+      moved();
+    },
+    onMarkUnreadFrom: (at) => {
+      markUnreadFrom(standing, at);
+      setShownFrom((was) => new Map(was).set(standing.thread.id, at));
+    },
+    readInboxImage,
+  });
 
   const markAllRead = () => {
     for (const each of listed) markers.set(each.thread.id, each.messages.length);
     moved();
   };
 
-  // J and K step through the list, U marks read or unread, ⌥U marks all read, as Linear's Inbox keys them.
-  const keys = useRef({ listed, shown, choose, toggleRead, remind, markAllRead });
-  keys.current = { listed, shown, choose, toggleRead, remind, markAllRead };
-  useEffect(() => {
-    const heard = (event: KeyboardEvent) => {
-      if (typing(event.target) || event.metaKey || event.ctrlKey) return;
-      const {
-        listed: rows,
-        shown: open,
-        choose: pick,
-        toggleRead: read,
-        markAllRead: all,
-      } = keys.current;
-      const at = rows.findIndex((each) => each.thread.id === open?.thread.id);
+  // The feed's entries under their days, newest first.
+  const days: { readonly day: string; readonly entries: ThreadStanding[] }[] = [];
 
-      if (event.altKey && event.code === "KeyU") {
-        event.preventDefault();
-        all();
+  for (const each of listed) {
+    const day = dayWords(each.lastAt, now);
+    const last = days.at(-1);
 
-        return;
-      }
+    if (last?.day === day) last.entries.push(each);
+    else days.push({ day, entries: [each] });
+  }
 
-      if (event.altKey) return;
-      const step = event.key === "j" ? 1 : event.key === "k" ? -1 : 0;
-
-      if (step !== 0) {
-        const next = rows[Math.min(Math.max(at + step, 0), rows.length - 1)];
-
-        if (next !== undefined) pick(next);
-
-        return;
-      }
-
-      if (event.key === "u" && open !== undefined) read(open);
-    };
-    document.addEventListener("keydown", heard);
-
-    return () => document.removeEventListener("keydown", heard);
-  }, []);
-
-  const rowOf = (standing: ThreadStanding) => {
-    const reminded = snoozed.get(standing.thread.id);
-
-    return (
-      <ListRow
+  const entryOf = (standing: ThreadStanding) =>
+    standing.thread.activity === undefined ? (
+      <ThreadCard
         key={standing.thread.id}
-        leading={<HolderGlyph place={standing.thread.place} />}
-        title={standing.thread.title}
-        description={latestWords(standing)}
-        meta={
-          <span className="flex items-center gap-ui-4">
-            <ReasonBadge standing={standing} />
-            <span className="text-caption text-muted-foreground">
-              {reminded !== undefined && reminded > now ? (
-                remindWords(reminded, now)
-              ) : (
-                <Time at={standing.lastAt} look={TIME_LOOK.SINCE} />
-              )}
-            </span>
-          </span>
-        }
-        metaAt={LIST_ROW_META.TITLE}
-        unread={rowUnread(standing)}
-        current={standing.thread.id === chosen ? LIST_ROW_CURRENT.ITEM : undefined}
-        onPress={() => choose(standing)}
-        id={`prototype-feed-row-${standing.thread.id}`}
+        standing={standing}
+        shownFrom={shownFrom.get(standing.thread.id) ?? standing.marker}
+        doors={doorsOf(standing)}
       />
+    ) : (
+      <ActivityLine key={standing.thread.id} standing={standing} doors={doorsOf(standing)} />
     );
+
+  const counted = (by: FeedView) => {
+    const n = count(by);
+
+    return n === 0 ? undefined : [{ text: String(n) }];
   };
 
-  const list = (
-    <div className="flex min-h-0 min-w-0 flex-col" data-prototype-feed-list="">
-      <div className="flex flex-none items-center gap-control-gap px-list-inset pt-list-inset pb-tight-gap">
-        <span className="min-w-0 flex-1">
-          <ChoiceBar
-            label="Inbox filter"
-            items={[
-              {
-                value: FEED_FILTER.NEEDS_YOU,
-                label: "Needs you",
-                count: needsCount === 0 ? undefined : [{ text: String(needsCount) }],
-              },
-              {
-                value: FEED_FILTER.EVERYTHING,
-                label: "Everything",
-                count: newCount === 0 ? undefined : [{ text: String(newCount) }],
-              },
-            ]}
-            value={filter}
-            look={CHOICE_BAR_LOOK.FILL}
-            onChange={setFilter}
-          />
-        </span>
-        <Tooltip label="Mark all as read (⌥U)">
-          <IconButton
-            icon={<CheckCheckIcon />}
-            label="Mark all as read"
-            size={BUTTON_SIZE.COMPACT}
-            onClick={markAllRead}
-          />
-        </Tooltip>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-list-inset pb-list-inset">
-        {listed.length === 0 ? (
-          <EmptyState icon={<EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />}>
-            {filter === FEED_FILTER.NEEDS_YOU ? "Nothing needs you." : "Nothing new."}
-          </EmptyState>
-        ) : (
-          <div className="flex flex-col">{listed.map(rowOf)}</div>
-        )}
-        {snoozedRows.length === 0 ? null : (
-          <div className="flex flex-col pt-tight-gap">
-            {snoozedShown ? <ThreadRule count={1} label="Reminders" /> : null}
-            {snoozedShown ? snoozedRows.map(rowOf) : null}
-            <ShowMoreRow
-              more={snoozedRows.length}
-              shown={snoozedShown}
-              onToggle={() => setSnoozedShown((was) => !was)}
+  const feed = (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-prototype-feed-stream="">
+      <div className="flex flex-none justify-center px-list-inset pt-list-inset pb-tight-gap">
+        <div className="flex w-full max-w-[760px] flex-wrap items-center gap-control-gap">
+          <span className="min-w-0 flex-1">
+            <ChoiceBar
+              label="Inbox view"
+              items={[
+                {
+                  value: FEED_VIEW.QUESTIONS,
+                  label: "Questions",
+                  count: counted(FEED_VIEW.QUESTIONS),
+                },
+                { value: FEED_VIEW.OPEN, label: "Open", count: counted(FEED_VIEW.OPEN) },
+                { value: FEED_VIEW.ALL, label: "All" },
+                {
+                  value: FEED_VIEW.REMINDERS,
+                  label: "Reminders",
+                  count: counted(FEED_VIEW.REMINDERS),
+                },
+              ]}
+              value={view}
+              look={CHOICE_BAR_LOOK.FILL}
+              onChange={setView}
             />
-          </div>
-        )}
+          </span>
+          <Button
+            variant={BUTTON_VARIANT.QUIET}
+            size={BUTTON_SIZE.COMPACT}
+            pressed={unreadsOnly}
+            onClick={() => setUnreadsOnly((was) => !was)}
+          >
+            Unreads
+          </Button>
+          <Tooltip label="Mark all as read">
+            <IconButton
+              icon={<CheckCheckIcon />}
+              label="Mark all as read"
+              size={BUTTON_SIZE.COMPACT}
+              onClick={markAllRead}
+            />
+          </Tooltip>
+        </div>
+      </div>
+      <div className="flex flex-none justify-center px-list-inset pb-tight-gap">
+        <div className="flex w-full max-w-[760px] items-center gap-control-gap">
+          <span className="text-caption text-muted-foreground">Prototype variant</span>
+          <span className="min-w-0 flex-1">
+            <ChoiceBar
+              label="Prototype variant"
+              items={[
+                { value: FEED_SHAPE.WITH_ACTIVITY, label: "Threads and activity" },
+                { value: FEED_SHAPE.THREADS, label: "Threads only" },
+              ]}
+              value={shape}
+              look={CHOICE_BAR_LOOK.FILL}
+              onChange={setShape}
+            />
+          </span>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-[760px] flex-col gap-tight-gap px-list-inset pb-list-inset">
+          {listed.length === 0 ? (
+            <EmptyState icon={<EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />}>
+              {unreadsOnly ? "Nothing unread here." : "Nothing here."}
+            </EmptyState>
+          ) : (
+            days.map(({ day, entries }) => (
+              <div key={day} className="flex flex-col gap-tight-gap">
+                <ThreadRule count={1} label={day} />
+                {entries.map(entryOf)}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
 
-  const pane =
-    shown === undefined ? (
-      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
-        <EmptyState icon={<EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />}>
-          Choose a thread, or step with J and K
-        </EmptyState>
-      </div>
-    ) : (
-      <ThreadPane
+  const side =
+    shown === undefined ? null : (
+      <ThreadSide
         standing={shown}
         shownFrom={shownFrom.get(shown.thread.id) ?? shown.marker}
         narrow={narrow}
-        onBack={() => setChosen(undefined)}
-        onOpen={() =>
+        onClose={() => setViewing(undefined)}
+        onOpenPlace={() =>
           shown.thread.place.kind === "manager"
             ? onOpenManagerThread(shown.thread.place.root)
             : onOpenTask(shown.thread.place.taskId)
         }
-        onToggleRead={() => toggleRead(shown)}
-        onRemind={(at) => remind(shown, at)}
-        onMarkUnreadFrom={(at) => {
-          markUnreadFrom(shown, at);
-          setShownFrom((was) => new Map(was).set(shown.thread.id, at));
-        }}
-        readInboxImage={readInboxImage}
+        doors={doorsOf(shown)}
       />
     );
 
   if (narrow) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-prototype-feed="">
-        {shown === undefined ? list : pane}
+        {side ?? feed}
       </div>
     );
   }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1" data-prototype-feed="">
-      <div className="flex min-h-0 w-[380px] flex-none flex-col border-e border-border">{list}</div>
-      {pane}
+      {feed}
+      {side}
     </div>
   );
 }

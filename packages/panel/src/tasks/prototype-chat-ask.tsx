@@ -39,7 +39,6 @@ import {
   prototypeChatVersion,
 } from "@repo/host/fixture-inbox";
 import {
-  Badge,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
@@ -48,7 +47,6 @@ import {
   Card,
   CardHead,
   QuietWords,
-  STATUS_TONE,
 } from "@repo/ui";
 import { CheckIcon } from "@repo/ui/icons";
 import { useState, useSyncExternalStore } from "react";
@@ -59,6 +57,7 @@ import {
   HeldControls,
   INBOX_ASK_BOX,
   INBOX_ASK_KIND,
+  INBOX_ASK_STANDING,
 } from "./inbox-ask-controls.js";
 import { InboxPictures } from "./inbox-pictures.js";
 
@@ -155,18 +154,20 @@ function Standing({
   waitsOnReader: boolean;
   waitsOnName: string;
 }): React.JSX.Element {
+  // Note that it says where the ask stands in words, as today's Inbox card does, with no badge.
   if (answered) {
     return (
-      <Badge tone={STATUS_TONE.COMPLETE} icon={<CheckIcon aria-hidden="true" />}>
+      <span className={INBOX_ASK_STANDING}>
+        <CheckIcon aria-hidden="true" />
         Answered
-      </Badge>
+      </span>
     );
   }
 
   return (
-    <Badge tone={waitsOnReader ? STATUS_TONE.ATTENTION : STATUS_TONE.NEUTRAL}>
+    <span className="text-caption text-muted-foreground">
       {waitsOnReader ? "Waiting on you" : `Waiting on ${waitsOnName}`}
-    </Badge>
+    </span>
   );
 }
 
