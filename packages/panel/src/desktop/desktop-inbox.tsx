@@ -655,6 +655,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                     shown: tasks.shown && !sidePanel.fullScreen,
                     // Note that a task's items are listed whole, so its Inbox offers no view's menu.
                     view: narrowedTask === undefined ? choices : undefined,
+                    order: narrowedTask === undefined ? choices : undefined,
                     search,
                     phone:
                       room === SHELL_ROOM.NARROW

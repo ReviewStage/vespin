@@ -1,6 +1,7 @@
 import {
   EVERYONES,
   INBOX_SHOW,
+  INBOX_WHOSE,
   type InboxAnyHolder,
   type InboxListed,
   inboxAtNow,
@@ -9,10 +10,11 @@ import {
   listedItems,
   NOTHING_HERE,
 } from "@repo/features/inbox-list-model";
+import { searchTokens } from "@repo/features/search-tokens";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BackButton, FILL_ELEMENT, Fill, Toolbar, useMinute } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { useBackOr } from "../places/narrow-backs.js";
 import { useInboxResolver } from "../tasks/inbox-close.js";
@@ -31,6 +33,7 @@ import { useInboxReadMarks, useNodOnOpen, useReadOnOpen } from "../tasks/use-inb
 import type { TaskInboxControl } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { paneDoors, startedThreads } from "./desktop-inbox.js";
+import { useInboxViewChoices } from "./folded-groups.js";
 
 /**
  * agent-threads.tsx -- an agent's threads inside its card in the task's column: the Inbox's list of the items it posted beside the one chosen, both the window's Inbox's own.
@@ -60,7 +63,11 @@ import { paneDoors, startedThreads } from "./desktop-inbox.js";
  * tab rather than the step behind: the tab row names the list, so the list
  * stands with no bar of its own, and the thread's ⋯ stands at its title
  * (`INBOX_PANE_ACTIONS.SUBJECT`), as the window's Inbox's title starts at
- * the pane's top.
+ * the pane's top. Its list offers the window's Inbox's search and view's
+ * menu, its scope and Addressed to, the choices the window's Inbox keeps
+ * and shares with it (`useInboxViewChoices`), so either narrowed narrows
+ * both; Pinned tasks first is left out, since the Manager holds its
+ * threads itself rather than under a task to pin.
  *
  * Each agent keeps whether its card shows its threads, and which
  * (`tasks/agent-thread-views.ts`), so going to another agent's tab and back
@@ -153,7 +160,14 @@ export function AgentThreads({
     [holder, open, settled, agentId, now],
   );
 
-  const filter = useMemo(() => ({ ...AGENT_LISTS, readerId: me }), [me]);
+  // Note that a Manager's Inbox tab lists as the window's Inbox's choices say, where a task's card lists every item.
+  const choices = useInboxViewChoices();
+  const { show, whose } = tabbed === true ? choices : AGENT_LISTS;
+  const [query, setQuery] = useState("");
+  const search = useMemo(() => searchTokens(query), [query]);
+
+  const filter = useMemo(() => ({ show, whose, search, readerId: me }), [show, whose, search, me]);
+
   const { list, steps, onPointing } = useHeldInboxList(standing, filter, chosen, shown);
   const listedRows = useMemo(() => listedItems(list), [list]);
 
@@ -162,7 +176,16 @@ export function AgentThreads({
     [steps, chosen],
   );
 
-  const counts = useMemo(() => inboxCounts(standing, me), [standing, me]);
+  const counts = useMemo(() => inboxCounts(standing, me, whose), [standing, me, whose]);
+  const searched = search.length > 0 ? query : undefined;
+
+  // Note that a scope leaving out every item the agent holds is said apart from an agent holding none, as the window's Inbox says it.
+  const filteredOut =
+    tabbed === true &&
+    searched === undefined &&
+    listedRows.length === 0 &&
+    (show !== INBOX_SHOW.ALL || whose.kind !== INBOX_WHOSE.EVERYONE) &&
+    standing.some(({ items }) => items.length > 0);
 
   // Note that the narrow card's ‹ back to the list is the window's Back, as the Inbox's is, the list taking the thread's step only where none stands behind.
   const backOr = useBackOr();
@@ -201,7 +224,7 @@ export function AgentThreads({
   // Note that under a tab row, which names the list, the list draws no bar of its own, and the thread's ⋯ stands at its title.
   const head =
     tabbed === true
-      ? { shown: active, view: undefined, bare: true }
+      ? { shown: active, view: choices, search: { query, onQuery: setQuery }, bare: true }
       : {
           shown: active,
           view: undefined,
@@ -235,10 +258,11 @@ export function AgentThreads({
               reading={inbox.reading}
               empty={listedRows.length === 0}
               alone={columns.shown === INBOX_COLUMNS.LIST}
-              filteredOut={undefined}
+              filteredOut={filteredOut ? choices : undefined}
               counts={counts}
               onList={columns.onList}
               onRetry={inbox.onRetry}
+              searched={searched}
               none={NOTHING_HERE}
             />
           }
