@@ -1,5 +1,5 @@
 /**
- * bench.ts -- times what one step of a moving row costs the web client's window, in builds side by side: script time and the components each step draws again.
+ * bench.ts -- times what one step costs the web client's window, a moving row or a press on a row, in builds side by side: script time and the components each step draws again.
  *
  * Each scene is an address of a served build of `apps/web`, the large stage
  * of the tasks-open fixture (`?fixture=tasks-open&scale=large&move=…&every=0`,
@@ -21,6 +21,13 @@
  *   flags of the commit it last rendered in;
  * - commits: how many commits React made.
  *
+ * A press scene (`--press label=<selector>`) steps by pressing a row rather
+ * than through the stage's door: each step clicks, with the mouse as a
+ * person does, the next of the elements the selector matches, in turn, and
+ * also reads the browser's Event Timing for that press, as the window's own
+ * `press.row` span does: how long from the press to the paint after it, and
+ * that time split into input delay, handlers, and presentation.
+ *
  * Each figure is the median step of a round; a cell is the range of the
  * rounds' medians. `--names` adds a row for each component named, how many
  * times it rendered per step. It is not a test: nothing is asserted, no CI
@@ -39,6 +46,10 @@ interface Scene {
   readonly label: string;
   readonly address: string;
   readonly setup: string | undefined;
+  /** The elements a press scene presses in turn, by a CSS selector; none for a scene the stage steps. */
+  readonly press: string | undefined;
+  /** The elements pressed in turn after each press, untimed, to stand the window back where the next press does something; none to press straight on. */
+  readonly back: string | undefined;
 }
 
 /** A build to time: its label and the base it is served at. */
@@ -47,12 +58,30 @@ interface Build {
   readonly base: string;
 }
 
+/** A press's Event Timing: from the press to the paint after it, and that time's three parts. */
+interface PressTiming {
+  readonly paintMs: number;
+  readonly inputDelayMs: number;
+  readonly processingMs: number;
+  readonly presentationMs: number;
+  /** When the press began, on the page's clock: its earliest entry's start. */
+  readonly startedAt: number;
+}
+
 /** What one step cost. */
 interface StepCost {
   readonly scriptMs: number;
   readonly components: number;
+  /** Of `components`, those that stood before the step and rendered again, rather than mounted. */
+  readonly again: number;
   readonly commits: number;
   readonly named: ReadonlyMap<string, number>;
+  /** Of `named`, the renders again. */
+  readonly namedAgain: ReadonlyMap<string, number>;
+  /** The press's timing in a press scene; none in a scene the stage steps, or for a press painted within 16 ms, which the browser does not report. */
+  readonly press: PressTiming | undefined;
+  /** From the press to the step's last commit, when what the press opened stands drawn; none but for a timed press that committed. */
+  readonly settledMs: number | undefined;
 }
 
 /** The little of Playwright this script drives. */
@@ -72,6 +101,7 @@ interface Context {
 }
 
 interface Page {
+  mouse: { click(x: number, y: number): Promise<void> };
   addInitScript(script: { content: string }): Promise<void>;
   goto(url: string, options: { waitUntil: "load" }): Promise<void>;
   waitForFunction(script: string, arg: undefined, options: { timeout: number }): Promise<void>;
@@ -87,6 +117,9 @@ interface CdpSession {
 /** The window's size, the one Vespin opens in. */
 const VIEWPORT = { width: 1280, height: 840 } as const;
 
+/** How long a press step waits for the browser to report the press, past which it was painted within 16 ms or not at all. */
+const PRESS_WAIT_MS = 5000;
+
 /**
  * The shim standing in for React DevTools' hook, laid before the page's
  * scripts: it counts each commit and the components rendered in it into
@@ -97,7 +130,7 @@ const VIEWPORT = { width: 1280, height: 840 } as const;
 const RENDER_SHIM = `(() => {
   const COMPONENT_TAGS = new Set([0, 1, 11, 14, 15]);
   const PERFORMED_WORK = 1;
-  const tally = { commits: 0, components: 0, named: {} };
+  const tally = { commits: 0, components: 0, again: 0, named: {}, namedAgain: {}, lastCommitAt: undefined };
   window.__benchRenders = tally;
   const nameOf = (fiber) => {
     const type = fiber.type && fiber.type.type ? fiber.type.type : fiber.type;
@@ -110,6 +143,10 @@ const RENDER_SHIM = `(() => {
       tally.components += 1;
       const name = nameOf(fiber);
       tally.named[name] = (tally.named[name] || 0) + 1;
+      if (previous !== null) {
+        tally.again += 1;
+        tally.namedAgain[name] = (tally.namedAgain[name] || 0) + 1;
+      }
     }
     if (previous !== null && previous.child === fiber.child) return;
     for (let child = fiber.child; child !== null; child = child.sibling) walk(child, child.alternate);
@@ -125,6 +162,7 @@ const RENDER_SHIM = `(() => {
     onPostCommitFiberRoot() {},
     onCommitFiberRoot(_id, root) {
       tally.commits += 1;
+      tally.lastCommitAt = performance.now();
       const current = root.current;
       const previous = current.alternate;
       if (previous !== null && previous.child === current.child) return;
@@ -133,11 +171,75 @@ const RENDER_SHIM = `(() => {
   };
 })();`;
 
+/**
+ * The browser's Event Timing for each press, laid before the page's scripts:
+ * every entry of an interaction (`interactionId` past 0) into
+ * `window.__benchPresses`, which the bench reads and clears around a step.
+ * 16 ms is the least threshold the browser takes.
+ */
+const PRESS_SHIM = `(() => {
+  const presses = [];
+  window.__benchPresses = presses;
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      if (entry.interactionId > 0) presses.push({
+        duration: entry.duration,
+        startTime: entry.startTime,
+        processingStart: entry.processingStart,
+        processingEnd: entry.processingEnd,
+      });
+    }
+  }).observe({ type: "event", durationThreshold: 16, buffered: true });
+})();`;
+
+/**
+ * Takes the timing of the step's press and clears the entries: the
+ * interaction's latency is its longest entry (the click's, where its
+ * handler opens the row), split as Event Timing splits it.
+ */
+const TAKE_PRESS = `(() => {
+  const presses = window.__benchPresses.splice(0);
+  if (presses.length === 0) return null;
+  const longest = presses.reduce((one, other) =>
+    other.duration > one.duration ||
+    (other.duration === one.duration && other.processingEnd > one.processingEnd) ? other : one);
+  return {
+    paintMs: longest.duration,
+    inputDelayMs: longest.processingStart - longest.startTime,
+    processingMs: longest.processingEnd - longest.processingStart,
+    presentationMs: longest.startTime + longest.duration - longest.processingEnd,
+    startedAt: Math.min(...presses.map((press) => press.startTime)),
+  };
+})()`;
+
+/** Whether the browser reported the step's press yet. */
+const PRESS_REPORTED = "window.__benchPresses.length > 0";
+
+/**
+ * Where to press the `at`th element the selector matches, in turn over
+ * them: its middle, once it is scrolled into the list's view. A selector
+ * that matches nothing throws, so a scene naming no row fails at once.
+ */
+function pressPlace(selector: string, at: number): string {
+  return `(() => {
+  const matched = [...document.querySelectorAll(${JSON.stringify(selector)})];
+  if (matched.length === 0) throw new Error("matches nothing: " + ${JSON.stringify(selector)});
+  const element = matched[${at} % matched.length];
+  element.scrollIntoView({ block: "nearest" });
+  const box = element.getBoundingClientRect();
+  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+})()`;
+}
+
 /** Reads and clears the shim's tally. */
 const TAKE_RENDERS = `(() => {
   const tally = window.__benchRenders;
-  const taken = { commits: tally.commits, components: tally.components, named: tally.named };
-  tally.commits = 0; tally.components = 0; tally.named = {};
+  const taken = {
+    commits: tally.commits, components: tally.components, again: tally.again,
+    named: tally.named, namedAgain: tally.namedAgain, lastCommitAt: tally.lastCommitAt ?? null,
+  };
+  tally.commits = 0; tally.components = 0; tally.again = 0; tally.named = {}; tally.namedAgain = {};
+  tally.lastCommitAt = undefined;
   return taken;
 })()`;
 
@@ -182,6 +284,17 @@ function labeled(flag: string, what: string): LabeledFlag {
   return { label: flag.slice(0, at), value: flag.slice(at + 1) };
 }
 
+/** The `label=value` flags named `what`, by label. */
+function byLabel(flags: readonly string[] | undefined, what: string): Map<string, string> {
+  return new Map(
+    (flags ?? []).map((flag) => {
+      const { label, value } = labeled(flag, what);
+
+      return [label, value] as const;
+    }),
+  );
+}
+
 /** The median of `values`. */
 function median(values: readonly number[]): number {
   const sorted = values.toSorted((one, other) => one - other);
@@ -199,6 +312,71 @@ async function scriptMs(session: CdpSession): Promise<number> {
   return (metrics.find((metric) => metric.name === "ScriptDuration")?.value ?? 0) * 1000;
 }
 
+/** The renders the shim tallied, as `TAKE_RENDERS` reads them. */
+interface Renders {
+  readonly commits: number;
+  readonly components: number;
+  readonly again: number;
+  readonly named: Record<string, number>;
+  readonly namedAgain: Record<string, number>;
+  /** When the step's last commit landed, on the page's clock; none where it made none. */
+  readonly lastCommitAt: number | null;
+}
+
+/** Takes one step on the page, the stage's own or a press on the scene's next row, and what it cost. */
+async function takeStep(
+  page: Page,
+  session: CdpSession,
+  scene: Scene,
+  step: number,
+  settle: number,
+): Promise<StepCost> {
+  const place =
+    scene.press === undefined
+      ? undefined
+      : await page.evaluate<{ x: number; y: number }>(pressPlace(scene.press, step));
+
+  await page.evaluate(TAKE_RENDERS);
+  await page.evaluate(TAKE_PRESS);
+  const before = await scriptMs(session);
+
+  if (place === undefined) {
+    await page.evaluate("window.vespinFixtureStep()");
+  } else {
+    await page.mouse.click(place.x, place.y);
+    // Note that we wait for the press's timing before settling, because the browser reports it only once the paint after it stands.
+    await page
+      .waitForFunction(PRESS_REPORTED, undefined, { timeout: PRESS_WAIT_MS })
+      .catch(() => undefined);
+  }
+
+  await page.waitForTimeout(settle);
+  const after = await scriptMs(session);
+  const press = place === undefined ? null : await page.evaluate<PressTiming | null>(TAKE_PRESS);
+  const renders = await page.evaluate<Renders>(TAKE_RENDERS);
+
+  if (scene.back !== undefined) {
+    const back = await page.evaluate<{ x: number; y: number }>(pressPlace(scene.back, step));
+
+    await page.mouse.click(back.x, back.y);
+    await page.waitForTimeout(settle);
+  }
+
+  return {
+    scriptMs: after - before,
+    components: renders.components,
+    again: renders.again,
+    commits: renders.commits,
+    named: new Map(Object.entries(renders.named)),
+    namedAgain: new Map(Object.entries(renders.namedAgain)),
+    press: press ?? undefined,
+    settledMs:
+      press === null || renders.lastCommitAt === null
+        ? undefined
+        : renders.lastCommitAt - press.startedAt,
+  };
+}
+
 /** Opens `scene` on `build` and times `steps` steps after `warm` uncounted ones. */
 async function timeScene(
   browser: Browser,
@@ -211,6 +389,7 @@ async function timeScene(
   try {
     const page = await context.newPage();
     await page.addInitScript({ content: RENDER_SHIM });
+    await page.addInitScript({ content: PRESS_SHIM });
     const session = await context.newCDPSession(page);
     await session.send("Performance.enable");
     await page.goto(new URL(scene.address, build.base).toString(), { waitUntil: "load" });
@@ -227,25 +406,9 @@ async function timeScene(
     const costs: StepCost[] = [];
 
     for (let step = 0; step < options.warm + options.steps; step += 1) {
-      await page.evaluate(TAKE_RENDERS);
-      const before = await scriptMs(session);
-      await page.evaluate("window.vespinFixtureStep()");
-      await page.waitForTimeout(options.settle);
-      const after = await scriptMs(session);
+      const cost = await takeStep(page, session, scene, step, options.settle);
 
-      const renders = await page.evaluate<{
-        commits: number;
-        components: number;
-        named: Record<string, number>;
-      }>(TAKE_RENDERS);
-
-      if (step < options.warm) continue;
-      costs.push({
-        scriptMs: after - before,
-        components: renders.components,
-        commits: renders.commits,
-        named: new Map(Object.entries(renders.named)),
-      });
+      if (step >= options.warm) costs.push(cost);
     }
 
     return costs;
@@ -285,29 +448,67 @@ function printScene(
     say(`| ${label} | ${cells.join(" | ")} |`);
   };
 
+  if (scene.press !== undefined) {
+    const timed = (figure: (timing: PressTiming) => number) => (cost: StepCost) =>
+      cost.press === undefined ? 0 : figure(cost.press);
+
+    row(
+      "press → paint ms",
+      timed((timing) => timing.paintMs),
+      0,
+    );
+    row(
+      "· input delay ms",
+      timed((timing) => timing.inputDelayMs),
+      0,
+    );
+    row(
+      "· handlers ms",
+      timed((timing) => timing.processingMs),
+      0,
+    );
+    row(
+      "· presentation ms",
+      timed((timing) => timing.presentationMs),
+      0,
+    );
+    row("press → last commit ms", (cost) => cost.settledMs ?? 0, 0);
+  }
+
   row("script ms", (cost) => cost.scriptMs, 1);
   row("components rendered", (cost) => cost.components, 0);
+  row("· rendered again", (cost) => cost.again, 0);
   row("commits", (cost) => cost.commits, 1);
 
   for (const name of names) row(`\`${name}\` renders`, (cost) => cost.named.get(name) ?? 0, 1);
 }
 
-/** Prints the components rendered most in the last round of each build, for finding what to name with `--names`. */
+/** The `top` components of the last round's steps by `counts`, each with its renders per step. */
+function ranked(
+  last: readonly StepCost[],
+  counts: (cost: StepCost) => ReadonlyMap<string, number>,
+  top: number,
+): string {
+  const totals = new Map<string, number>();
+
+  for (const cost of last) {
+    for (const [name, count] of counts(cost)) totals.set(name, (totals.get(name) ?? 0) + count);
+  }
+
+  return [...totals]
+    .toSorted((one, other) => other[1] - one[1])
+    .slice(0, top)
+    .map(([name, count]) => `${name} ${(count / Math.max(last.length, 1)).toFixed(1)}`)
+    .join(", ");
+}
+
+/** Prints the components rendered most in the last round of each build, and those rendered again most, for finding what to name with `--names`. */
 function printTop(scene: Scene, rounds: ReadonlyMap<string, StepCost[][]>, top: number): void {
   for (const [label, costs] of rounds) {
-    const totals = new Map<string, number>();
     const last = costs.at(-1) ?? [];
 
-    for (const cost of last) {
-      for (const [name, count] of cost.named) totals.set(name, (totals.get(name) ?? 0) + count);
-    }
-
-    const ranked = [...totals]
-      .toSorted((one, other) => other[1] - one[1])
-      .slice(0, top)
-      .map(([name, count]) => `${name} ${(count / Math.max(last.length, 1)).toFixed(1)}`);
-
-    say(`  ${scene.label} · ${label}: ${ranked.join(", ")}`);
+    say(`  ${scene.label} · ${label}: ${ranked(last, (cost) => cost.named, top)}`);
+    say(`  ${scene.label} · ${label}, again: ${ranked(last, (cost) => cost.namedAgain, top)}`);
   }
 }
 
@@ -316,6 +517,8 @@ const { values } = parseArgs({
     build: { type: "string", multiple: true },
     scene: { type: "string", multiple: true },
     setup: { type: "string", multiple: true },
+    press: { type: "string", multiple: true },
+    back: { type: "string", multiple: true },
     rounds: { type: "string", default: "3" },
     steps: { type: "string", default: "20" },
     warm: { type: "string", default: "3" },
@@ -332,6 +535,8 @@ if (values.help || values.build === undefined || values.scene === undefined) {
   --build    a served build: before=http://localhost:4310 (one or more)
   --scene    an address under each build: open=/app?fixture=tasks-open&scale=large&move=task&every=0
   --setup    label=<script> run on that scene's page once it stands, a step to another place say
+  --press    label=<selector> steps that scene by clicking the elements it matches in turn, timing each press to its paint
+  --back     label=<selector> clicks the elements it matches in turn after each press, untimed, to stand the window back
   --rounds   interleaved rounds (3)      --steps   steps timed per page (20)
   --warm     steps taken first, uncounted (3)
   --settle   milliseconds waited after each step for the window to draw (150)
@@ -348,18 +553,20 @@ const builds = values.build.map((flag) => {
   return { label, base: value };
 });
 
-const setups = new Map(
-  (values.setup ?? []).map((flag) => {
-    const { label, value } = labeled(flag, "setup");
-
-    return [label, value] as const;
-  }),
-);
+const setups = byLabel(values.setup, "setup");
+const presses = byLabel(values.press, "press");
+const backs = byLabel(values.back, "back");
 
 const scenes: Scene[] = values.scene.map((flag) => {
   const { label, value } = labeled(flag, "scene");
 
-  return { label, address: value, setup: setups.get(label) };
+  return {
+    label,
+    address: value,
+    setup: setups.get(label),
+    press: presses.get(label),
+    back: backs.get(label),
+  };
 });
 
 const options = {
