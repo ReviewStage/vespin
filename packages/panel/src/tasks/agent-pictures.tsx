@@ -70,7 +70,7 @@ import { useWordFiles, WordFilesContext } from "./file-chips.js";
  * (`@repo/ui`'s `AudioPlayer`). An image a line handed
  * the agent, which its row names by the picture it was kept as rather than
  * carrying its bytes, is read the same way and drawn among the line's files
- * (`MessageFileChips`).
+ * (`SentMessage`).
  */
 
 /** Where an agent's or a worker's pictures are read through: the scope the window keeps them under, and the read. */
@@ -684,24 +684,6 @@ export function useLineAttachments(message: AgentTranscriptMessage): UseLineAtta
   return { attachments, reading };
 }
 
-/**
- * The files on a line of the transcript, as chips: each from the bytes its
- * row carries, and an image its row names by the picture it was kept as
- * read through the agent's door, so it draws its thumbnail and opens once
- * the read lands, and is its name alone while read or where it is gone.
- * A line still on its way draws its files going up.
- */
-export function MessageFileChips({
-  message,
-  sending = false,
-}: {
-  message: AgentTranscriptMessage;
-  /** Whether the line is still on its way, its row not yet read back. */
-  sending?: boolean;
-}): ReactNode {
-  return <KeptFileChips files={messageFileChips(message)} sending={sending} />;
-}
-
 /** A line's files as chips, each one kept as a picture read through the agent's pictures, its bytes once they land. */
 function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
   const door = useContext(AgentPicturesContext);
@@ -721,37 +703,9 @@ function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
 }
 
 /**
- * The files a sent line names in its words (`@repo/features/file-marker`),
- * handed to the words under it, which draw each marker as its file's chip
- * (`SentWords`), and to its files' row, which leaves those out; a press opens
- * a file over the window, walking the files in the order the words name
- * them. A line whose words name none of its files, as every line sent before
- * markers, draws as it did. While the line is on its way, its files' row
- * wears the upload's cover, and the chips in its words open nothing.
- */
-export function MessageFiles({
-  message,
-  words,
-  sending = false,
-  children,
-}: {
-  message: AgentTranscriptMessage;
-  words: string;
-  /** Whether the line is still on its way, its row not yet read back. */
-  sending?: boolean;
-  children: ReactNode;
-}): ReactNode {
-  return (
-    <WordFilesOf files={messageFileChips(message)} words={words} sending={sending}>
-      {children}
-    </WordFilesOf>
-  );
-}
-
-/**
  * The files a line names in its words, each kept as a picture read through
  * the agent's pictures, handed to the words and the files' row under it as
- * `MessageFiles` hands a transcript line's: a queued message's too, whose
+ * `SentMessage` hands a sent line's: a queued message's too, whose
  * files the queue names by the id their bytes are read by.
  */
 export function WordFilesOf({
@@ -781,7 +735,7 @@ export function WordFilesOf({
 /**
  * Files as a line draws them, each one that names a picture rather than
  * carrying its bytes read through the agent's pictures, its thumbnail drawn
- * once they land: a transcript row's (`MessageFileChips`), and a queued
+ * once they land: a sent line's (`SentMessage`), and a queued
  * message's, whose files the queue names by the id their bytes are read by.
  */
 export function KeptFileChips({

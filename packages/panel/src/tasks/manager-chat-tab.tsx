@@ -134,6 +134,7 @@ import {
 import { useMoveToCloud } from "./move-agent.js";
 import { ReplyDoorProvider, ReplyToSelection, useBoxReplyDoor } from "./reply-to-selection.js";
 import { RewindProvider, useMessageEdit } from "./rewind-action.js";
+import { SentMessage } from "./skill-chip.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
 import { TranscriptWords } from "./transcript-blocks.js";
 import { OlderReadFailed, TranscriptReadFailed } from "./transcript-read-failed.js";
@@ -410,36 +411,40 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
 
   return (
     <>
-      <ChannelMessage
-        messageId={message.id}
-        avatar={<ActorMark actor={sender} size={ACTOR_SIZE.CARD} />}
-        name={message.authorName}
-        at={sentTime(message.createdAt)}
-        continues={!place.opens}
-        contextMenu={menu.contextMenu}
-        actions={
-          // Note that a message of files alone has no words to copy or quote, so it offers its thread alone.
-          message.text === "" ? (
-            thread.action
-          ) : (
-            <CopyMessageAction
-              words={message.text}
-              messageId={ownLine === undefined ? undefined : lineId}
-              rewind={ownLine === undefined ? undefined : REWIND_ACTION.EDIT}
-              lead={
-                <>
-                  {thread.action}
-                  <ReplyMessageAction words={message.text} />
-                </>
-              }
-            />
-          )
-        }
-        under={thread.summary}
-      >
-        {files.length === 0 ? null : <KeptFileChips files={files} />}
-        {message.text === "" ? null : <TranscriptWords text={message.text} />}
-      </ChannelMessage>
+      <SentMessage files={files} words={message.text}>
+        {(body) => (
+          <ChannelMessage
+            messageId={message.id}
+            avatar={<ActorMark actor={sender} size={ACTOR_SIZE.CARD} />}
+            name={message.authorName}
+            at={sentTime(message.createdAt)}
+            continues={!place.opens}
+            contextMenu={menu.contextMenu}
+            actions={
+              // Note that a message of files alone has no words to copy or quote, so it offers its thread alone.
+              message.text === "" ? (
+                thread.action
+              ) : (
+                <CopyMessageAction
+                  words={message.text}
+                  messageId={ownLine === undefined ? undefined : lineId}
+                  rewind={ownLine === undefined ? undefined : REWIND_ACTION.EDIT}
+                  lead={
+                    <>
+                      {thread.action}
+                      <ReplyMessageAction words={message.text} />
+                    </>
+                  }
+                />
+              )
+            }
+            under={thread.summary}
+          >
+            {body.files}
+            {body.words}
+          </ChannelMessage>
+        )}
+      </SentMessage>
       {menu.menu}
     </>
   );
@@ -463,17 +468,21 @@ function SendingLine({
   );
 
   return (
-    <div data-message-id={line.id} data-undelivered={refused ? "" : undefined}>
-      <ChannelMessage
-        avatar={<ActorMark actor={reader} size={ACTOR_SIZE.CARD} />}
-        name={name}
-        at={refused ? sentTime(line.sentAt) : undefined}
-        under={refused ? <UndeliveredMark messageId={line.id} /> : undefined}
-      >
-        {files.length === 0 ? null : <KeptFileChips files={files} sending={!refused} />}
-        <TranscriptWords text={line.text} />
-      </ChannelMessage>
-    </div>
+    <SentMessage files={files} words={line.text} sending={!refused}>
+      {(body) => (
+        <div data-message-id={line.id} data-undelivered={refused ? "" : undefined}>
+          <ChannelMessage
+            avatar={<ActorMark actor={reader} size={ACTOR_SIZE.CARD} />}
+            name={name}
+            at={refused ? sentTime(line.sentAt) : undefined}
+            under={refused ? <UndeliveredMark messageId={line.id} /> : undefined}
+          >
+            {body.files}
+            {body.words}
+          </ChannelMessage>
+        </div>
+      )}
+    </SentMessage>
   );
 }
 
