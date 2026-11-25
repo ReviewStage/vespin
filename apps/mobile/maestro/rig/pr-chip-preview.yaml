@@ -1,0 +1,101 @@
+# pr-chip-preview.yaml -- a rig flow, never in the screenshot run: a pull request's chip held inside a message lifts its own preview and menu and never the message's; the message held elsewhere opens the message's menu alone; a tap on the chip opens the pull request; and the task page's agent row ends its pull request's mark with +N −M.
+#
+# Launched on the Inbox fixture, whose "Recorded the invite flow" message
+# holds the #128 chip on a line of its own, GitHub's answer for it staged
+# (`INVITES_LINK_STANDING` in `@repo/host/fixture-inbox`), so no server is
+# reached.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- waitForAnimationToEnd
+# 1. The chip held: its preview (title, state, checks, lines) over its own
+# menu, and nothing of the message's. Note that the chip is no element of its
+# own, so it is held a little in from its line's leading edge.
+- runFlow:
+    file: ../subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*is ready for review.*"
+- longPressOn:
+    text: ".*is ready for review.*"
+    point: "6%, 50%"
+- extendedWaitUntil:
+    visible: "Invite a teammate by email"
+    timeout: 5000
+- assertVisible: "Open link"
+- assertVisible: "Copy link"
+- assertVisible: "Checks passing"
+- assertVisible: "\\+412"
+- assertNotVisible: "Copy message"
+- assertNotVisible: "Select text"
+- waitForAnimationToEnd
+- takeScreenshot: pr-chip-preview
+# Put away by its own Copy link, which writes only the simulator's pasteboard.
+- tapOn: "Copy link"
+- waitForAnimationToEnd
+- assertNotVisible: "Copy link"
+- assertNotVisible: "Checks passing"
+- assertVisible: ".*is ready for review.*"
+# 2. The message held on plain words beside it: the message's own menu, with
+# no chip preview.
+- runFlow:
+    file: ../subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The recording is under this.*"
+      DIRECTION: UP
+- longPressOn: "The recording is under this.*"
+- assertVisible: "Copy message"
+- assertNotVisible: "Checks passing"
+- assertNotVisible: "Open link"
+- waitForAnimationToEnd
+- takeScreenshot: pr-chip-message-menu
+- runFlow:
+    file: ../subflows/dismiss.yaml
+    env:
+      POINT: "94%, 60%"
+- assertNotVisible: "Copy message"
+# 3. A plain tap on the chip opens the pull request, pushed over the thread.
+- runFlow:
+    file: ../subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*is ready for review.*"
+- tapOn:
+    text: ".*is ready for review.*"
+    point: "6%, 50%"
+- waitForAnimationToEnd
+- assertNotVisible: "Copy link"
+- assertNotVisible: ".*is ready for review.*"
+- takeScreenshot: pr-chip-tapped
+- runFlow:
+    when:
+      visible:
+        id: "BackButton"
+    commands:
+      - tapOn:
+          id: "BackButton"
+      - waitForAnimationToEnd
+- assertVisible: ".*is ready for review.*"
+# 4. The task page's agent row: its pull request's mark ends with +412 −37.
+- runFlow:
+    file: ../subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*holds the rest of the work.*"
+- tapOn:
+    text: ".*holds the rest of the work.*"
+    point: "6%, 50%"
+- extendedWaitUntil:
+    visible: "Agents"
+    timeout: 10000
+- runFlow:
+    file: ../subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Build teammate invitations"
+- waitForAnimationToEnd
+- takeScreenshot: pr-row-lines

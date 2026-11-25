@@ -670,6 +670,9 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             // A chip mid-line has no element of its own until React Native's paragraph lists its inline views as accessibility elements, the follow-up to #10919, which moves it back mid-line and holds it by its element.
             "[@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60) holds the rest of the work.",
             "",
+            // Note that the pull request's chip leads its own line too, so `pr-chip-preview.yaml` holds it near the line's start; GitHub's answer for it is staged (`INVITES_LINK_STANDING`), so its hold lifts its preview.
+            "[@#128 Invite a teammate by email](https://github.com/ada/relay/pull/128) is ready for review.",
+            "",
             // Note that each person's chip leads its own line, so `person.yaml` taps it near the line's start, since a chip mid-line has no element of its own.
             "[@Grace Hopper](https://vespin.dev/personal/person/user-grace) reviewed the flow.",
             "",
@@ -1255,6 +1258,28 @@ const INVITES_PULL_REQUEST = {
   checks: CHECK_SUMMARY.PASSING,
   additions: 412,
   deletions: 37,
+} as const;
+
+/** What GitHub answered for the invites pull request's link, as a chip reads it: its size, its branches, who opened it, and when, so its hold lifts its preview. */
+const INVITES_LINK_STANDING = {
+  rows: {
+    pullRequest: {
+      number: INVITES_PULL_REQUEST.number,
+      title: INVITES_PULL_REQUEST.title,
+      url: INVITES_PULL_REQUEST.url,
+      state: INVITES_PULL_REQUEST.state,
+      author: "ada",
+      additions: INVITES_PULL_REQUEST.additions,
+      deletions: INVITES_PULL_REQUEST.deletions,
+      changedFiles: 14,
+      openedAt: LANDED - 2 * DAY,
+      baseRef: "main",
+      headRef: "agent/invite-by-email",
+      labels: [],
+      comments: 3,
+      commits: 6,
+    },
+  },
 } as const;
 
 /** The fixture's workspace where a list names none, as the panel's tasks fixture names it, with Task descriptions and Managers on. */
@@ -2858,6 +2883,13 @@ export function inboxAppState(
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.INTEGRATION_TOOLS]: INTEGRATION_TOOLS,
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
+    [LIVE_READ.LINK_STANDINGS]: {
+      ...state[LIVE_READ.LINK_STANDINGS],
+      [FIXTURE_IDS.WORKSPACE]: {
+        ...state[LIVE_READ.LINK_STANDINGS][FIXTURE_IDS.WORKSPACE],
+        [INVITES_PULL_REQUEST.url]: INVITES_LINK_STANDING,
+      },
+    },
     // Note that Relay, the team a flow switches to, holds no memories and none of its own skills, so its pages draw their empty states rather than reading for good; the account's own skills stand in every workspace.
     [LIVE_READ.MEMORIES]: {
       [FIXTURE_IDS.WORKSPACE]: {

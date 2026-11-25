@@ -1,4 +1,4 @@
-// pull-request-look.ts -- the glyphs and tones a pull request's page wears: each check, how its checks went, and each reviewer, as the panel's Pull request tab draws them.
+// pull-request-look.ts -- the glyphs and tones a pull request's page wears: each check, how its checks went, and each reviewer, as the panel's Pull request tab draws them; and its line counts as every card and preview says them.
 
 import {
   CHECK_STATE,
@@ -66,4 +66,11 @@ export function githubLineLook(mark: GitHubLineMark): MarkLook {
     case GITHUB_LINE_MARK.CLOSED:
       return PULL_REQUEST_LOOK[PULL_REQUEST_STATE.CLOSED];
   }
+}
+
+/** A line count as the card ends with it: "+1.9k", "−312". */
+export function lineCount(sign: string, count: number): string {
+  const short = count >= 1000 ? `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(count);
+
+  return `${sign}${short}`;
 }

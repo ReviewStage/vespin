@@ -86,7 +86,7 @@ public final class NativeInteractionsModule: Module {
 
     // A view of React Native views that a long press opens UIKit's own menu on, from a menu's tree (`ContextMenuView.swift`).
     View(ContextMenuView.self) {
-      Events("onPressPlace")
+      Events("onPressPlace", "onPressPreview")
 
       Prop("menu") { (view: ContextMenuView, menu: String) in
         view.menu = menu

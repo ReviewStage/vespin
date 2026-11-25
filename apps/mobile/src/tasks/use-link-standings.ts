@@ -5,9 +5,12 @@
  * where that workspace's GitHub App is connected, so a page read through
  * another workspace's connection is never drawn in this one, and a chip in a
  * workspace without the App asks nothing. Until the host answers, or where it
- * never does, a chip says what its link says.
+ * never does, a chip says what its link says. A pull request one of the
+ * member's agents opened carries how its checks went too, from the task
+ * list's read of it, since GitHub's answer for a link carries none.
  */
 
+import type { CheckSummary } from "@repo/features/agent-wire";
 import {
   githubPageAsked,
   type LinkStanding,
@@ -18,14 +21,26 @@ import { keptMarkdownTree, markdownTree } from "@repo/features/markdown-tree";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { markdownGithubPages } from "@repo/ui-native";
+import { useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
 import { useLiveFollows } from "../host/live-follow.js";
 
 /** No pages to follow. */
 const NO_PAGES: readonly string[] = [];
+
+/** How each pull request the member's agents opened stands on its checks, by its page on GitHub, from the task list's read of it. */
+function useChecksByPage(): ReadonlyMap<string, CheckSummary> {
+  const collections = useTaskListCollections();
+  const rows = useLiveQuery((q) => q.from({ pullRequest: collections.agentPullRequests })).data;
+
+  return useMemo(
+    () => new Map((rows ?? []).map(({ pullRequest }) => [pullRequest.url, pullRequest.checks])),
+    [rows],
+  );
+}
 
 /**
  * What GitHub holds of the pull requests and issues `words` link to, each
@@ -67,13 +82,22 @@ export function useLinkStandings(
       workspaceId === undefined ? undefined : state[LIVE_READ.LINK_STANDINGS][workspaceId],
   });
 
+  const checksByPage = useChecksByPage();
+
   return useCallback(
     (page: string) => {
       const asked = githubPageAsked(page);
       const rows = held?.[page]?.rows;
 
-      return asked === undefined || rows === undefined ? undefined : linkStandingOf(asked, rows);
+      const standing =
+        asked === undefined || rows === undefined ? undefined : linkStandingOf(asked, rows);
+
+      const checks = checksByPage.get(page);
+
+      return standing?.pullRequest === undefined || checks === undefined
+        ? standing
+        : { ...standing, pullRequest: { ...standing.pullRequest, checks } };
     },
-    [held],
+    [held, checksByPage],
   );
 }

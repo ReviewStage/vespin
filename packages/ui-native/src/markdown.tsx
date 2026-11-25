@@ -68,6 +68,7 @@ import {
 } from "./picture-source.js";
 import { Press } from "./press.js";
 import { type LongPressGroup, ROW_ACTION_TONE } from "./row-menu-model.js";
+import { pullRequestPreview, type RowPreview } from "./row-preview-model.js";
 import {
   SUGGESTION_LOOK,
   SUGGESTION_SENT_WORDS,
@@ -328,6 +329,34 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
+/**
+ * What a chip of a pull request lifts over its menu, as Safari lifts a held
+ * link's page: its key and state over its title, how its checks went where
+ * the app holds them, the lines it adds and removes with how many files,
+ * who opened it, and its branches, each as GitHub answered for the link;
+ * none for any other chip, or before GitHub has answered, where the chip
+ * itself lifts under its name.
+ */
+function chipPreview(chip: MarkdownChip, drawing: Drawing): RowPreview | undefined {
+  const standing = chip.github === undefined ? undefined : drawing.linkStanding(chip.github);
+  const pullRequest = standing?.pullRequest;
+
+  if (standing === undefined || pullRequest === undefined) return undefined;
+
+  return pullRequestPreview({
+    key: standing.key,
+    number: pullRequest.number,
+    title: standing.title,
+    state: pullRequest.state,
+    queued: pullRequest.queued,
+    checks: pullRequest.checks,
+    lines: pullRequest.lines,
+    files: pullRequest.files,
+    opener: standing.opener?.login,
+    branches: pullRequest.branches,
+  });
+}
+
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere, and held for Open link and Copy link (`useChipMenu`). */
 function MentionChip({
   chip,
@@ -343,6 +372,7 @@ function MentionChip({
   const heard = standing?.heard ?? chip.heard;
   const name = standing?.name ?? chip.name;
   const menu = useChipMenu(chip.target, onPress);
+  const preview = chipPreview(chip, drawing);
 
   // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
   const mark =
@@ -352,7 +382,12 @@ function MentionChip({
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
-      <ContextMenu groups={menu} title={name}>
+      <ContextMenu
+        groups={menu}
+        title={preview === undefined ? name : undefined}
+        preview={preview}
+        onOpenPreview={onPress}
+      >
         <Press
           onPress={onPress}
           disabled={onPress === undefined}

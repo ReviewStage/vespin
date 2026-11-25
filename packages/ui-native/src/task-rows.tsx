@@ -13,6 +13,7 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityHidden,
   accessibilityLabel,
   accessibilityValue,
   buttonStyle,
@@ -79,6 +80,7 @@ import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import { AgentTile, Avatar, type Face, FailedMark, ToneGlyph, WorkingMark } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
+import { lineCount } from "./pull-request-look.js";
 import { useRollingCount } from "./rolling-count.js";
 import type { RowPreview } from "./row-preview-model.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
@@ -255,6 +257,9 @@ type AgentRowProps = {
         readonly state: PullRequestState;
         /** Whether GitHub's merge queue holds it, which its glyph says as the panel's does. */
         readonly queued?: true | undefined;
+        /** The lines it adds and removes, which its mark ends with in green and red, as the desktop's task card ends its line; none where GitHub answered neither. */
+        readonly additions?: number | undefined;
+        readonly deletions?: number | undefined;
         readonly onPress: () => void;
       }
     | undefined;
@@ -303,14 +308,28 @@ function agentHeard(props: AgentRowProps) {
       (started?.working ?? 0) > 0 && startedHeard(started?.working ?? 0, STARTED_STANDING.WORKING),
       (started?.failed ?? 0) > 0 && startedHeard(started?.failed ?? 0, STARTED_STANDING.FAILED),
       pullRequest !== undefined &&
-        `Pull request #${pullRequest.number}, ${pullRequestMarkLabel(pullRequest)}`,
+        [
+          `Pull request #${pullRequest.number}, ${pullRequestMarkLabel(pullRequest)}`,
+          linesHeard(pullRequest),
+        ]
+          .filter((part) => part !== undefined)
+          .join(", "),
       waiting > 0 && needsYouWords(waiting),
       fold !== undefined && (fold.open ? STARTED_SHOWN : STARTED_HIDDEN),
     ],
   };
 }
 
-/** An agent's pull request in its line: its state's glyph and its number, which the row's long-press menu opens. */
+/** What a pull request's lines are heard as, where GitHub answered both: "412 lines added, 37 removed". */
+function linesHeard(pullRequest: NonNullable<AgentRowProps["pullRequest"]>): string | undefined {
+  const { additions, deletions } = pullRequest;
+
+  return additions === undefined || deletions === undefined
+    ? undefined
+    : `${additions} ${additions === 1 ? "line" : "lines"} added, ${deletions} removed`;
+}
+
+/** An agent's pull request in its line: its state's glyph, its number, and the lines it adds and removes in green and red, as the desktop's task card ends its line, which the row's long-press menu opens. */
 function PullRequestMark({
   pullRequest,
 }: {
@@ -318,6 +337,7 @@ function PullRequestMark({
 }) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
+  const count = [font({ textStyle: TYPE_ROLE.ROW_LINE }), monospacedDigit()];
 
   return (
     <HStack spacing={SPACE.TIGHT}>
@@ -332,6 +352,16 @@ function PullRequestMark({
       >
         {`#${pullRequest.number}`}
       </Text>
+      {pullRequest.additions === undefined || pullRequest.deletions === undefined ? null : (
+        <HStack spacing={SPACE.TIGHT} modifiers={[accessibilityHidden(true)]}>
+          <Text modifiers={[...count, foregroundStyle(colors.COMPLETE)]}>
+            {lineCount("+", pullRequest.additions)}
+          </Text>
+          <Text modifiers={[...count, foregroundStyle(colors.DANGER_TEXT)]}>
+            {lineCount("−", pullRequest.deletions)}
+          </Text>
+        </HStack>
+      )}
     </HStack>
   );
 }

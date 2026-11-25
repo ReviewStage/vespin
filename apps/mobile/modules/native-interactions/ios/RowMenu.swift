@@ -318,6 +318,17 @@ func treeUIMenu(_ json: String, press: @escaping ([Int]) -> Void) -> UIMenu? {
   return UIMenu(title: tree.title ?? "", children: groups)
 }
 
+/// A menu's preview as a view controller UIKit lifts over its menu (`ContextMenuView`), drawn by the same SwiftUI card a row's preview is (`PreviewCard`), sized to fit it; nothing where the tree holds no preview, so UIKit lifts the held view itself.
+func treePreviewController(_ json: String) -> UIViewController? {
+  guard let tree = readTree(json, as: RowMenuData.self)?.preview else { return nil }
+  let controller = UIHostingController(rootView: PreviewCard(tree: tree))
+  controller.view.backgroundColor = UIColor(Color(vespinHex: tree.ground))
+  controller.preferredContentSize = controller.sizeThatFits(
+    in: CGSize(width: CGFloat(tree.width), height: .greatestFiniteMagnitude)
+  )
+  return controller
+}
+
 // MARK: - Modifiers
 
 /// A row's long press menu, SwiftUI's own, built from its tree only as a long press opens it, and the preview it lifts where `previewed`; a press sends the place of the item pressed (`rowMenu` in `interactions.ts`).

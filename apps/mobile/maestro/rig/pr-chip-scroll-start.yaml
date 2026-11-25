@@ -1,0 +1,18 @@
+# pr-chip-scroll-start.yaml -- a rig flow, run by `pr-chip-scroll.sh`: opens the Inbox fixture's "Recorded the invite flow" thread and centers the #128 chip's line, for the script to read where the chip stands.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- runFlow:
+    file: ../subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*is ready for review.*"
+- waitForAnimationToEnd
+- takeScreenshot: pr-chip-scroll-before

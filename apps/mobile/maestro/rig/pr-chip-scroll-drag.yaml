@@ -1,0 +1,11 @@
+# pr-chip-scroll-drag.yaml -- a rig flow, run by `pr-chip-scroll.sh`: a drag that starts on the #128 chip, at `START`, up to `END`, at a scroll's pace, which must scroll the thread and open no menu.
+appId: dev.vespin.ios
+---
+- swipe:
+    start: "${START}"
+    end: "${END}"
+    duration: 400
+- waitForAnimationToEnd
+- assertNotVisible: "Copy link"
+- assertNotVisible: "Copy message"
+- takeScreenshot: pr-chip-scroll-after

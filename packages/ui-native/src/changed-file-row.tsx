@@ -16,7 +16,7 @@ import type { ReactElement } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { UnreadDot } from "./marks.js";
-import { lineCount } from "./pull-request-card.js";
+import { lineCount } from "./pull-request-look.js";
 import { STATUS_TONE, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

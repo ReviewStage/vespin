@@ -2579,6 +2579,8 @@ export function TaskAgentRow({
               number: pullRequest.number,
               state: pullRequest.state,
               queued: pullRequest.queued,
+              additions: pullRequest.additions,
+              deletions: pullRequest.deletions,
               onPress: () => {
                 const named = pullRequestAddressOf(pullRequest.url);
 

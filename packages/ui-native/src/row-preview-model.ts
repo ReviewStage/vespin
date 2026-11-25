@@ -1,13 +1,22 @@
 // row-preview-model.ts -- what a row's long press preview says, a thread's newest messages, a task's Overview at a glance, or an agent's latest step, and the plain tree of words and marks the app's native module draws it from when the menu opens.
 
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
-import type { AgentStatus, PullRequestState } from "@repo/features/agent-wire";
+import {
+  type AgentStatus,
+  type CheckSummary,
+  PULL_REQUEST_STATE,
+  type PullRequestState,
+} from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import { type InboxThreadMessage, needsYouWords } from "@repo/features/inbox-list-model";
 import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { plainWords } from "@repo/features/plain-words";
-import { pullRequestMarkState } from "@repo/features/pull-request-model";
+import {
+  CHECK_SUMMARY_WORDS,
+  pullRequestMarkLabel,
+  pullRequestMarkState,
+} from "@repo/features/pull-request-model";
 import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceText } from "@repo/features/time-format";
@@ -30,11 +39,12 @@ import {
   WORKING_SIDE,
   WORKING_TRACK,
 } from "./mark-look.js";
+import { CHECK_SUMMARY_LOOK, lineCount } from "./pull-request-look.js";
 import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 import type { BrandColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import type { StatusTone } from "./tokens/status-tone.js";
+import { STATUS_TONE, type StatusTone } from "./tokens/status-tone.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { TRANSCRIPT_ITEM, type TranscriptItem } from "./transcript-model.js";
 import { tileHue } from "./workspace-tile-model.js";
@@ -157,6 +167,15 @@ const ROW_PREVIEW = {
   THREAD: "thread",
   TASK: "task",
   AGENT: "agent",
+  PULL_REQUEST: "pull-request",
+} as const;
+
+/** What a pull request's preview says of its checks and its size. */
+const PULL_REQUEST_WORDS = {
+  CHECKS: (checks: CheckSummary) => `Checks ${CHECK_SUMMARY_WORDS[checks]}`,
+  FILES: (count: number) => (count === 1 ? "1 file" : `${count} files`),
+  OPENED_BY: (login: string) => `Opened by ${login}`,
+  BRANCHES: (base: string, head: string) => `${base} ← ${head}`,
 } as const;
 
 /** A task as a preview's path names it: its name, after its status's ring where it has one. */
@@ -210,15 +229,35 @@ type AgentPreviewFacts = {
         readonly number: number;
         readonly state: PullRequestState;
         readonly queued?: true | undefined;
+        /** The lines it adds and removes, which its line ends with, as the task's row ends its mark with them. */
+        readonly additions?: number | undefined;
+        readonly deletions?: number | undefined;
       }
     | undefined;
+};
+
+/** What a pull request's preview draws: its repository and number with its state's mark over its title, its checks, its size, who opened it, and its branches, each where GitHub answered it. */
+type PullRequestPreviewFacts = {
+  /** Its repository's name and number, as a chip's key names it: `relay#128`. */
+  readonly key: string;
+  readonly number: number;
+  readonly title: string;
+  readonly state: PullRequestState;
+  readonly queued?: true | undefined;
+  /** How its checks went; none where the app holds no read of them, as GitHub's answer for a link carries none. */
+  readonly checks?: CheckSummary | undefined;
+  readonly lines?: { readonly additions: number; readonly deletions: number } | undefined;
+  readonly files?: number | undefined;
+  readonly opener?: string | undefined;
+  readonly branches?: { readonly base: string; readonly head: string } | undefined;
 };
 
 /** What a row's long press lifts over its menu, a glance at what the row opens, as the system's own apps lift one: a thread's, a task's, or an agent's. */
 export type RowPreview =
   | ({ readonly kind: typeof ROW_PREVIEW.THREAD } & ThreadPreviewFacts)
   | ({ readonly kind: typeof ROW_PREVIEW.TASK } & TaskPreviewFacts)
-  | ({ readonly kind: typeof ROW_PREVIEW.AGENT } & AgentPreviewFacts);
+  | ({ readonly kind: typeof ROW_PREVIEW.AGENT } & AgentPreviewFacts)
+  | ({ readonly kind: typeof ROW_PREVIEW.PULL_REQUEST } & PullRequestPreviewFacts);
 
 /** A thread's preview: its task's ring and name, its title, and its newest messages, each under its writer and time, cut to a few lines, as Mail's preview shows the message a long press lifts. */
 export function threadPreview(facts: ThreadPreviewFacts): RowPreview {
@@ -233,6 +272,11 @@ export function taskPreview(facts: TaskPreviewFacts): RowPreview {
 /** An agent's preview: its task's ring and name, its tile and name as its page heads it, where it stands, its latest step where the app holds its transcript, its pull request, and how many of its threads need the reader. */
 export function agentPreview(facts: AgentPreviewFacts): RowPreview {
   return { kind: ROW_PREVIEW.AGENT, ...facts };
+}
+
+/** A pull request's preview, as a link held in Safari lifts its page: its repository, number and state over its title, then how its checks went, the lines it adds and removes in green and red with how many files, who opened it, and its branches. */
+export function pullRequestPreview(facts: PullRequestPreviewFacts): RowPreview {
+  return { kind: ROW_PREVIEW.PULL_REQUEST, ...facts };
 }
 
 /** What a node of a preview's tree is: a column or a row of nodes, words, a glyph, the working mark, an agent's tile, a person's face, or a hairline. */
@@ -332,7 +376,15 @@ export type PreviewTree = {
 export type PreviewLook = {
   readonly colors: Pick<
     BrandColors,
-    "GROUND" | "TEXT" | "TEXT_BODY" | "TEXT_MUTED" | "ACCENT_TEXT" | "CHIP_EDGE" | "WELL" | "DANGER"
+    | "GROUND"
+    | "TEXT"
+    | "TEXT_BODY"
+    | "TEXT_MUTED"
+    | "ACCENT_TEXT"
+    | "CHIP_EDGE"
+    | "WELL"
+    | "DANGER"
+    | "DANGER_TEXT"
   >;
   readonly tone: (tone: StatusTone) => string;
   readonly scale: number;
@@ -623,6 +675,73 @@ function taskNodes(
   ];
 }
 
+/** The lines a pull request adds and removes, in the complete green and the danger red, in tabular figures, as `PullRequestCard` ends with them; none where either is unknown. */
+function linesNodes(
+  additions: number | undefined,
+  deletions: number | undefined,
+  look: PreviewLook,
+): readonly PreviewNode[] {
+  if (additions === undefined || deletions === undefined) return [];
+
+  const count = (words: string, ink: string): PreviewNode => ({
+    kind: PREVIEW_NODE.TEXT,
+    words,
+    style: TYPE_ROLE.ROW_LINE,
+    ink,
+    digits: true,
+    fixed: true,
+  });
+
+  return [
+    count(lineCount("+", additions), look.tone(STATUS_TONE.COMPLETE)),
+    count(lineCount("−", deletions), look.colors.DANGER_TEXT),
+  ];
+}
+
+/** A pull request's preview's nodes. */
+function pullRequestNodes(
+  facts: PullRequestPreviewFacts,
+  look: PreviewLook,
+): readonly (PreviewNode | undefined)[] {
+  const mark = PULL_REQUEST_LOOK[pullRequestMarkState(facts)];
+  const checks = facts.checks === undefined ? undefined : CHECK_SUMMARY_LOOK[facts.checks];
+
+  const settled =
+    facts.state === PULL_REQUEST_STATE.MERGED || facts.state === PULL_REQUEST_STATE.CLOSED;
+
+  return [
+    path(
+      toneGlyph(mark.symbol, mark.tone, TYPE_ROLE.ROW_LINE, look),
+      lineOf([facts.key, pullRequestMarkLabel(facts)]),
+      look,
+    ),
+    heading(facts.title, look),
+    rule(look),
+    checks === undefined || facts.checks === undefined || settled
+      ? undefined
+      : row(SPACE.TIGHT + 2, [
+          toneGlyph(checks.symbol, checks.tone, TYPE_ROLE.ROW_LINE, look),
+          line(PULL_REQUEST_WORDS.CHECKS(facts.checks), look),
+        ]),
+    facts.lines === undefined
+      ? undefined
+      : row(SPACE.TIGHT + 2, [
+          ...linesNodes(facts.lines.additions, facts.lines.deletions, look),
+          facts.files === undefined ? undefined : line(PULL_REQUEST_WORDS.FILES(facts.files), look),
+        ]),
+    facts.opener === undefined ? undefined : line(PULL_REQUEST_WORDS.OPENED_BY(facts.opener), look),
+    facts.branches === undefined
+      ? undefined
+      : {
+          kind: PREVIEW_NODE.TEXT,
+          words: PULL_REQUEST_WORDS.BRANCHES(facts.branches.base, facts.branches.head),
+          style: TYPE_ROLE.TIME,
+          ink: look.colors.TEXT_MUTED,
+          lines: PREVIEW_LINES.PATH,
+        },
+  ];
+}
+
 /** An agent's preview's nodes. */
 function agentNodes(
   facts: AgentPreviewFacts,
@@ -649,6 +768,7 @@ function agentNodes(
       : row(SPACE.TIGHT, [
           toneGlyph(pull.symbol, pull.tone, TYPE_ROLE.ROW_LINE, look),
           line(`#${facts.pullRequest.number}`, look),
+          ...linesNodes(facts.pullRequest.additions, facts.pullRequest.deletions, look),
         ]),
     facts.waiting === 0
       ? undefined
@@ -668,7 +788,9 @@ export function previewTree(preview: RowPreview, look: PreviewLook): PreviewTree
       ? threadNodes(preview, look)
       : preview.kind === ROW_PREVIEW.TASK
         ? taskNodes(preview, look)
-        : agentNodes(preview, look);
+        : preview.kind === ROW_PREVIEW.AGENT
+          ? agentNodes(preview, look)
+          : pullRequestNodes(preview, look);
 
   return {
     width: PREVIEW_WIDTH,

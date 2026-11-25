@@ -1,4 +1,4 @@
-// ContextMenuView.swift -- a view of React Native views that a long press opens UIKit's own context menu on, built from the same tree a row's menu is (`treeUIMenu`), so a mention's chip held in a message opens its own menu and never the message's too.
+// ContextMenuView.swift -- a view of React Native views that a long press opens UIKit's own context menu on, built from the same tree a row's menu is (`treeUIMenu`), lifting the tree's preview where it has one (`treePreviewController`), so a mention's chip held in a message opens its own menu and never the message's too.
 //
 // Note that it is UIKit's `UIContextMenuInteraction` on the chip's own view
 // rather than SwiftUI's `contextMenu` or `@expo/ui`'s `ContextMenu`, because
@@ -17,6 +17,7 @@ import UIKit
 
 final class ContextMenuView: ExpoView, UIContextMenuInteractionDelegate {
   let onPressPlace = EventDispatcher()
+  let onPressPreview = EventDispatcher()
 
   /// The menu's tree as JSON, read only as a long press opens it.
   var menu = ""
@@ -30,8 +31,19 @@ final class ContextMenuView: ExpoView, UIContextMenuInteractionDelegate {
     _ interaction: UIContextMenuInteraction,
     configurationForMenuAtLocation location: CGPoint
   ) -> UIContextMenuConfiguration? {
-    let built = treeUIMenu(menu) { [weak self] place in self?.onPressPlace(["path": place]) }
+    let json = menu
+    let built = treeUIMenu(json) { [weak self] place in self?.onPressPlace(["path": place]) }
     guard let built else { return nil }
-    return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in built }
+    return UIContextMenuConfiguration(identifier: nil, previewProvider: { treePreviewController(json) }) { _ in built }
+  }
+
+  /// A press on the lifted preview: the menu closes, then what the preview shows opens, as Safari opens a held link's page from its preview. Note that it asks only once the menu is gone, so the page it opens is never pushed under the menu's own dismissal.
+  func contextMenuInteraction(
+    _ interaction: UIContextMenuInteraction,
+    willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
+    animator: UIContextMenuInteractionCommitAnimating
+  ) {
+    animator.preferredCommitStyle = .dismiss
+    animator.addCompletion { [weak self] in self?.onPressPreview([:]) }
   }
 }

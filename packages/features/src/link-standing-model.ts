@@ -6,7 +6,12 @@
  * this reads that answer, so the panel's chip and the iOS app's say the same.
  */
 
-import { type GitHubPerson, PULL_REQUEST_STATE, type PullRequestState } from "./agent-wire.js";
+import {
+  type CheckSummary,
+  type GitHubPerson,
+  PULL_REQUEST_STATE,
+  type PullRequestState,
+} from "./agent-wire.js";
 import { isBotLogin } from "./github-login.js";
 import type {
   GitHubPullRequestSummary,
@@ -57,6 +62,8 @@ export interface StandingPullRequest {
   readonly commits: number | undefined;
   /** True where it is open and GitHub's merge queue holds it, which its mark and its words say as its Pull request tab does. */
   readonly queued?: true;
+  /** How its checks went, where a client holds an agent's read of the same pull request; GitHub's answer for a link carries none. */
+  readonly checks?: CheckSummary;
 }
 
 /** The moment a pull request's card names when it says how long ago: when it was opened, merged, or closed. */

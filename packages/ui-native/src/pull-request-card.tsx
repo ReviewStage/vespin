@@ -17,6 +17,7 @@ import { Button as Act, BUTTON_LOOK, BUTTON_SIZE } from "./button.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { type LongPressGroup, LongPressMenu } from "./list-row.js";
 import { ToneGlyph } from "./marks.js";
+import { lineCount } from "./pull-request-look.js";
 import { useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -46,13 +47,6 @@ type PullRequestCardProps = {
   /** What its long press holds, as the panel's pull request row's right-click offers it: Copy GitHub link, then where a press does not open it; nothing where none is given. */
   readonly menu?: readonly LongPressGroup[] | undefined;
 };
-
-/** A line count as the card ends with it: "+1.9k", "−312". */
-export function lineCount(sign: string, count: number): string {
-  const short = count >= 1000 ? `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(count);
-
-  return `${sign}${short}`;
-}
 
 /**
  * A pull request on a page: its state's glyph in GitHub's color, the one

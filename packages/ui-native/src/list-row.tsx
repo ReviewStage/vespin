@@ -495,7 +495,7 @@ export function rowPlacement(
 }
 
 /** A long press menu's tree as the native module reads it, SwiftUI's menu (`rowMenu`) and UIKit's (`ContextMenu`) alike: its groups (`menuTree`) in the menu's muted ink, headed by `title` where it has one. */
-export function longPressTree(
+function longPressTree(
   groups: readonly LongPressGroup[],
   title: string | undefined,
   colors: BrandColors,
