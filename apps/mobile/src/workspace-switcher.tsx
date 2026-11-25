@@ -1,11 +1,13 @@
-// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the system's menu of every workspace, New workspace and Workspace settings, then the account opening Settings.
+// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the system's menu of every workspace, New workspace, Workspace settings, and for an admin Admin, then the account opening Settings.
 
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectAdminAccess, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  adminAction,
   MARK_SIZE,
   newWorkspaceAction,
   type SwitcherWorkspace,
@@ -18,6 +20,7 @@ import { type ComponentProps, useMemo } from "react";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { type MenuPictures, menuAddress, useMenuPictures } from "./menu-photos.js";
+import { openInSafari } from "./open-link.js";
 import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
 
 /** No workspaces read yet, one list for every render. */
@@ -81,8 +84,10 @@ function menuPictureAddress(photo: string | undefined, picture: string | undefin
  * choice is kept as the phone's (`chosen-workspace.ts`), which the Inbox, its
  * count, Tasks, and New task follow at once; the account opens Settings on
  * its main list, as Notion's one workspace button does, so the bar holds no
- * photo of its own beside it; New workspace opens its sheet, and Workspace
- * settings opens Settings on the chosen workspace's page. A landscape iPad's
+ * photo of its own beside it; New workspace opens its sheet, Workspace
+ * settings opens Settings on the chosen workspace's page, and Admin, offered
+ * to an admin alone as the panel's switcher offers it, opens Admin on
+ * vespin.dev in Safari, since the app draws no Admin of its own. A landscape iPad's
  * sidebar draws it without the account, which its foot holds instead. Each
  * workspace's photo and the account's are kept as files for the menu to
  * draw. None before the account's workspaces are read.
@@ -98,6 +103,7 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   });
 
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
+  const admin = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
   const { chosen, choose } = useChosenWorkspace(workspaces);
   const signedIn = account !== undefined;
   const accountName = account?.name;
@@ -143,6 +149,13 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
       actions: [
         newWorkspaceAction(() => router.push("/new-workspace")),
         workspaceSettingsAction(() => openSettings(SETTINGS_ROUTE.WORKSPACE)),
+        ...(admin
+          ? [
+              adminAction(() =>
+                openInSafari(linkOf({ kind: LINK_DESTINATION.ADMIN }, chosen.slug ?? chosen.id)),
+              ),
+            ]
+          : []),
       ],
     };
   }, [
@@ -157,5 +170,6 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     router,
     pictures,
     accountMenuPhoto,
+    admin,
   ]);
 }
