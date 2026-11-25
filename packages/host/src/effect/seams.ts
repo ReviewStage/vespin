@@ -126,6 +126,16 @@ export class PlatformFileDownload extends Context.Service<PlatformFileDownload, 
   "@repo/host/PlatformFileDownload",
 ) {}
 
+/**
+ * That the platform's screens run in the host's own process, as the
+ * iPhone's do, so the account's header may reach them for its image loader
+ * (`ACCOUNT_PICTURE_SOURCE`). The desktop's and the web's windows stand
+ * apart from the host and provide none, so the act answers them nothing.
+ */
+export class PlatformScreensInProcess extends Context.Service<PlatformScreensInProcess, true>()(
+  "@repo/host/PlatformScreensInProcess",
+) {}
+
 /** The ids the host mints for its own records. */
 export interface IdSourceSeam {
   readonly create: () => string;

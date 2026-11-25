@@ -67,6 +67,7 @@ export {
   type MirrorPlatformSeam,
   PlatformFileDownload,
   PlatformRenewalWindow,
+  PlatformScreensInProcess,
   PlatformTokenVault,
   type ReportAttributes,
   RunMode,

@@ -194,6 +194,11 @@ const PICTURE_BYTES = byDesign(
   "The desktop and the web draw a picture from its bytes (AGENTS_PICTURE); only the phone downloads one straight into a file",
 );
 
+/** A window apart from the host's process never holds the account's header; it draws a picture from the bytes the host reads (AGENTS_PICTURE). */
+const PICTURE_HEADER = byDesign(
+  "The desktop's and the web's windows draw a picture from the bytes the host reads; only the phone's loader reads one under the account's header",
+);
+
 /** The panel draws a page in a frame of the service's, so it never reads the page's HTML itself. */
 const PANEL_PAGE_FRAME = byDesign("The panel frames a page through the service (pageFrameUrl)");
 
@@ -220,6 +225,11 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.ACCOUNT_SIGN_OUT]: EVERYWHERE,
   [PORT_ACT_KIND.ACCOUNT_DELETE]: EVERYWHERE,
   [PORT_ACT_KIND.ACCOUNT_SUPPORT_ACCESS]: EVERYWHERE,
+  [PORT_ACT_KIND.ACCOUNT_PICTURE_SOURCE]: {
+    desktop: PICTURE_HEADER,
+    web: PICTURE_HEADER,
+    ios: YES,
+  },
 
   [PORT_ACT_KIND.PROVIDER_KEYS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.PROVIDER_KEYS_RETRY]: EVERYWHERE,
