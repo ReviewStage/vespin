@@ -28,7 +28,7 @@
     "@repo/settings": "workspace:*",
     "@repo/ui": "workspace:*",
     "@repo/wire": "workspace:*",
-    "@sentry/esbuild-plugin": "catalog:",
+    "@sentry/cli": "2.58.6",
     "@tailwindcss/node": "4.3.5",
     "@tanstack/react-query": "catalog:",
     "@tailwindcss/oxide": "4.3.5",

@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,6 @@ import {
   REDIRECTED,
   redirectOf,
 } from "@repo/panel/build-table";
-import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
 import { build } from "esbuild";
 import { e2eBuildDefine, replayProjectKeyDefine, signingModeDefine } from "./package-config.mjs";
 import { tailwindPlugin } from "./tailwind.mjs";
@@ -31,7 +30,11 @@ const appVersion = JSON.parse(
 // and the upload below files the maps under it, so the two cannot drift.
 const sentryRelease = `Vespin@${appVersion}`;
 
-// Whether this build uploads its source maps (`sentryPlugins` below): where
+// The Sentry organization and project every desktop process reports to, as
+// `sentry-cli` reads them from its environment.
+const SENTRY_PROJECT = { SENTRY_ORG: "stage-review", SENTRY_PROJECT: "vespin-desktop" };
+
+// Whether this build uploads its source maps (`uploadSourceMaps` below): where
 // the token is set, unless the build is a Release workflow rehearsal (a
 // manual dispatch), which publishes no release and so must not file maps
 // under the real one. A tag's build and a release cut by hand both upload.
@@ -185,27 +188,41 @@ async function assertModuleEntry(document, entry) {
   }
 }
 
-// The source-map upload, for a build that uploads (`uploadsSourceMaps`). A
-// refused release or upload warns and the build goes on, so Sentry being
-// down never holds a release back; its traces stay unreadable until maps are
-// uploaded for it by hand. The maps ship in no package either way, since
-// electron-builder's `files` (`electron-builder-config.mjs`) leaves them out.
-function sentryPlugins() {
-  if (!uploadsSourceMaps) return [];
+// One step of the source-map upload, run with `sentry-cli`; whether it succeeded.
+function sentryCli(...args) {
+  const env = { ...process.env, ...SENTRY_PROJECT };
 
-  return [
-    sentryEsbuildPlugin({
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-      org: "stage-review",
-      project: "vespin-desktop",
-      release: { name: sentryRelease },
-      errorHandler: (error) => {
-        console.warn(
-          `warning: Sentry source-map upload failed, so the build goes on without it: ${error.message}`,
-        );
-      },
-    }),
-  ];
+  return spawnSync("sentry-cli", args, { cwd: appRoot, env, stdio: "inherit" }).status === 0;
+}
+
+// The source-map upload, for a build that uploads (`uploadsSourceMaps`), run
+// once every bundle is written and before electron-builder packages them.
+// Every JavaScript file is stamped with a debug ID, which its map takes too
+// and every event, span, and profile names its frames' files by, so Sentry
+// matches each frame to its map whatever chunk it ran in. Note that this is
+// `sentry-cli`'s pass over the whole output rather than Sentry's esbuild
+// plugin, because the plugin stamps only an entry point, and the renderer's
+// split chunks, which hold most of its code, went unstamped and so were
+// never uploaded. A refused release or upload warns and the build goes on,
+// so Sentry being down never holds a release back; its traces stay
+// unreadable until maps are uploaded for it by hand. The maps ship in no
+// package either way, since electron-builder's `files`
+// (`electron-builder-config.mjs`) leaves them out.
+function uploadSourceMaps() {
+  const released = sentryCli("releases", "new", sentryRelease);
+
+  // A release's commits are a nicety: one Sentry cannot read holds back no upload.
+  if (released) sentryCli("releases", "set-commits", sentryRelease, "--auto", "--ignore-missing");
+
+  const uploaded =
+    released &&
+    sentryCli("sourcemaps", "inject", outputRoot) &&
+    sentryCli("sourcemaps", "upload", "--release", sentryRelease, outputRoot) &&
+    sentryCli("releases", "finalize", sentryRelease);
+
+  if (!uploaded) {
+    console.warn("warning: Sentry source-map upload failed, so the build goes on without it");
+  }
 }
 
 await fs.rm(outputRoot, { recursive: true, force: true });
@@ -271,7 +288,7 @@ const rendererBuild = build({
   jsx: "automatic",
   minify: true,
   conditions: ["production"],
-  plugins: [panelRedirects, lucideWholeOnDemand, sideStylesheetsLinked, ...sentryPlugins()],
+  plugins: [panelRedirects, lucideWholeOnDemand, sideStylesheetsLinked],
   // Every map is written beside its file and named by none: the maps stay
   // out of the app (`electron-builder-config.mjs`), so a comment would point
   // at a file that is not there. The upload finds each by `<file>.map`.
@@ -299,7 +316,6 @@ await Promise.all([
     format: "cjs",
     target: "node22",
     external: ["electron"],
-    plugins: sentryPlugins(),
     define: {
       PACKAGED_SENTRY_DSN: JSON.stringify(process.env.SENTRY_DSN ?? ""),
       PACKAGED_SENTRY_RELEASE: JSON.stringify(sentryRelease),
@@ -325,7 +341,6 @@ await Promise.all([
     format: "cjs",
     target: "node22",
     external: ["electron"],
-    plugins: sentryPlugins(),
     sourcemap: "external",
     logLevel: "info",
   }),
@@ -337,7 +352,6 @@ await Promise.all([
     format: "cjs",
     target: "node22",
     external: ["electron"],
-    plugins: sentryPlugins(),
     sourcemap: "external",
     logLevel: "info",
   }),
@@ -396,3 +410,5 @@ await Promise.all(
     fs.copyFile(path.join(brandRoot, "icon", source), path.join(outputRoot, "icon", name)),
   ),
 );
+
+if (uploadsSourceMaps) uploadSourceMaps();

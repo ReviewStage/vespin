@@ -495,9 +495,9 @@ importers:
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
-      '@sentry/esbuild-plugin':
-        specifier: 'catalog:'
-        version: 5.4.0(rollup@4.62.4)
+      '@sentry/cli':
+        specifier: 2.58.6
+        version: 2.58.6
       '@tailwindcss/node':
         specifier: 4.3.5
         version: 4.3.5
