@@ -312,19 +312,7 @@ function ChannelSaid({
           },
         ];
 
-  // Note that the Manager's message that opens a finished turn offers Show work, or Hide work while its work stands open under it, in its long press, as the panel's message menu offers it, rather than a fold over it.
-  const workAct: readonly HeldAct[] =
-    item.workShown === undefined
-      ? []
-      : [
-          {
-            label: chatWorkWords(item.workShown),
-            symbol: GLYPH.SHOW_WORK,
-            onPress: () => drawing.onToggle(item),
-          },
-        ];
-
-  const threadAct = [...replyAct, ...workAct];
+  const threadAct = [...replyAct, ...turnWorkActs(item, drawing)];
 
   const message = (
     <ChannelMessage sender={sender} faces={faces} opens={!item.joinsAbove} stamp={item.stamp}>
@@ -1017,6 +1005,30 @@ function workActs(
   ];
 }
 
+/**
+ * Show work, or Hide work while it stands open under the message, where the
+ * Manager's message, or the pictures it showed, opens a finished turn's work
+ * (`workShown`), as the panel's message menu offers it rather than a fold
+ * over the message; none where it opens none.
+ */
+function turnWorkActs(
+  item: Extract<
+    TranscriptItem,
+    { kind: typeof TRANSCRIPT_ITEM.SAID | typeof TRANSCRIPT_ITEM.MEDIA }
+  >,
+  drawing: RowDrawing,
+): readonly HeldAct[] {
+  if (item.workShown === undefined) return [];
+
+  return [
+    {
+      label: chatWorkWords(item.workShown),
+      symbol: GLYPH.SHOW_WORK,
+      onPress: () => drawing.onToggle(item),
+    },
+  ];
+}
+
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -1255,6 +1267,9 @@ function TranscriptRow({
           ? inset(item.depth)
           : { paddingLeft: SPACE.EDGE + CHANNEL_SEAT };
 
+      // Note that each picture's long press leads with Show work where its message opens a turn's work, since a message of pictures alone joined to the run above draws no row of its own to hold.
+      const workActs = turnWorkActs(item, drawing);
+
       // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
       if (
         item.media.length > 1 &&
@@ -1262,35 +1277,39 @@ function TranscriptRow({
       ) {
         return (
           <View style={[styles.row, mediaInset, styles.media]}>
-            <PictureSet
-              pictures={item.media.map((shown) => ({
-                key: shown.id,
-                source: drawing.mediaSource(shown.id),
-                alt: shown.label,
-                onRetry: retryOf(drawing, shown.id),
-              }))}
-            />
+            <HeldLeadProvider acts={workActs}>
+              <PictureSet
+                pictures={item.media.map((shown) => ({
+                  key: shown.id,
+                  source: drawing.mediaSource(shown.id),
+                  alt: shown.label,
+                  onRetry: retryOf(drawing, shown.id),
+                }))}
+              />
+            </HeldLeadProvider>
           </View>
         );
       }
 
       return (
         <View style={[styles.row, mediaInset, styles.media]}>
-          {item.media.map((shown) => (
-            <View key={shown.id} style={styles.shown}>
-              <ShownMediaView
-                shown={shown}
-                source={drawing.mediaSource(shown.id)}
-                onOpenElsewhere={drawing.onOpenElsewhere}
-                onRetry={retryOf(drawing, shown.id)}
-              />
-              {shown.caption === "" ? null : (
-                <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
-                  {shown.caption}
-                </Text>
-              )}
-            </View>
-          ))}
+          <HeldLeadProvider acts={workActs}>
+            {item.media.map((shown) => (
+              <View key={shown.id} style={styles.shown}>
+                <ShownMediaView
+                  shown={shown}
+                  source={drawing.mediaSource(shown.id)}
+                  onOpenElsewhere={drawing.onOpenElsewhere}
+                  onRetry={retryOf(drawing, shown.id)}
+                />
+                {shown.caption === "" ? null : (
+                  <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+                    {shown.caption}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </HeldLeadProvider>
         </View>
       );
     }

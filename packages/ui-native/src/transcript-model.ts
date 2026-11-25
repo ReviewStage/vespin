@@ -340,7 +340,12 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       /** When that message was sent, beside the sender's name. */
       readonly stamp?: string | undefined;
     }
-  | { readonly kind: typeof TRANSCRIPT_ITEM.MEDIA; readonly media: readonly ShownMedia[] }
+  | {
+      readonly kind: typeof TRANSCRIPT_ITEM.MEDIA;
+      readonly media: readonly ShownMedia[];
+      /** Whether the finished turn's work its message opens stands open, which each picture's long press offers as Show work too, since a message of pictures alone may draw no row of its own to hold; none for a message that opens no turn's work. */
+      readonly workShown?: boolean | undefined;
+    }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.FOOT;
       readonly words: string;
@@ -1540,6 +1545,7 @@ function chatLineItems(
             place: pieceOf(base.place, TRANSCRIPT_PIECE.MEDIA),
             kind: TRANSCRIPT_ITEM.MEDIA,
             media,
+            workShown: work.shown,
           },
         ]),
     ...work.items,
