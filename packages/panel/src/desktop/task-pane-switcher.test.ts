@@ -366,7 +366,7 @@ test("on a phone a tab of the panel is pushed over the column, titled by the tab
   assert.deepEqual(page.told, ["toggle"]);
 });
 
-test("on a phone ⌘K's Change repository shows Overview from under the panel, and opens the repository's menu under the plan's path only once the description is in sight", async () => {
+test("on a phone ⌘K's Change repository shows Overview from under the panel, and opens the repository's menu at the head of the description, which draws no path, only once the description is in sight", async () => {
   const page = mount(SHELL_ROOM.NARROW, true);
   page.draw(true, SIDE_PANEL_TAB.COMMENTS, 1);
   await act(async () => undefined);
@@ -374,9 +374,10 @@ test("on a phone ⌘K's Change repository shows Overview from under the panel, a
   page.draw(false, SIDE_PANEL_TAB.COMMENTS, 1);
   await act(async () => undefined);
   assert.ok(
-    page.container.querySelector('.plan-task-path [role="dialog"][aria-label="Repository"]'),
+    page.container.querySelector('[role="dialog"][aria-label="Repository"]'),
     "the repository's menu opens for the ask",
   );
+  assert.equal(page.container.querySelector(".plan-task-path"), null, "the bar names the path");
 });
 
 test("on a phone the ⋯'s Rename edits the task's name in the row's title", async () => {
