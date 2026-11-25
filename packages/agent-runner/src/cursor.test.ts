@@ -369,7 +369,7 @@ it.effect(
 );
 
 it.effect(
-  "posts each model call Cursor hands the send alone as a message of its own, ahead of the message streamed after it",
+  "posts each model call Cursor hands the send alone as a message of its own, ahead of the message streamed after it or at the stream's end",
   () =>
     Effect.gen(function* () {
       const service = fakeService();
@@ -395,13 +395,14 @@ it.effect(
         usage: ended,
       });
 
-      // The first call ends once the read completes, and the last before the turn's usage.
+      // The first call ends once the read completes, the second before the turn's usage, and a third after the run's last message.
       const turn = [
         ...RECORDED_TURN.slice(0, 5),
         said("model-call-1", usage.first),
         ...RECORDED_TURN.slice(5, 6),
         said("model-call-2", usage.last),
         ...RECORDED_TURN.slice(6),
+        said("model-call-3", usage.last),
       ];
 
       const { write, run } = yield* launch([{ messages: turn }], service);
@@ -416,6 +417,7 @@ it.effect(
         ...RECORDED_TURN.slice(5, 6),
         posted("model-call-2", usage.last),
         ...RECORDED_TURN.slice(6),
+        posted("model-call-3", usage.last),
       ]);
     }),
 );
