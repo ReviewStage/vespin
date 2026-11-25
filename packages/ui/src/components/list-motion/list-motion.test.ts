@@ -15,17 +15,18 @@ import {
 } from "./list-motion.js";
 
 /**
- * list-motion.test.ts -- a row arriving in a list slides in as it fades in,
- * a row leaving slides out where it stood and is let go once that has
- * played, a row listed again before it had gone stands again and comes back
- * the same way, a row moved from one list to another glides across rather
- * than leaving and arriving, a row in a list a transform around it draws
- * smaller glides as far as its layout moved it, a change landing while rows still move adds
- * onto what they play rather than stopping it, a row arriving while the
- * lists are still read only fades in, nothing plays where no motion is
- * to play, a row out of the reader's sight plays nothing, so a change
- * of thousands of rows plays a screenful, and the rows under a fold glide
- * up once its body has gone.
+ * list-motion.test.ts -- a row arriving in a list stands at once and the
+ * rows it pushed down glide, a row leaving goes at once and the rows under
+ * it close over it while the list holds its height at the scroller's end,
+ * a row moved from one list to another glides across rather than leaving
+ * and arriving, a row in a list a transform around it draws smaller glides
+ * as far as its layout moved it, a change landing while rows still move
+ * adds onto what they play rather than stopping it, nothing plays where no
+ * motion is to play, an unrolling list's row rolls up and is let go once
+ * that has played, or stands again and comes back the way it went, a row
+ * out of the reader's sight plays nothing, so a change of thousands of rows
+ * plays a screenful, and the rows under a fold glide up once its body has
+ * gone.
  * jsdom lays nothing out and plays nothing, so each row's place is given
  * and each motion recorded.
  */
@@ -47,8 +48,6 @@ const TOKENS = {
   "--ui-duration-quick": "140ms",
   "--ui-duration-shape": "460ms",
   "--ui-spring": "ease-out",
-  "--ui-row-stagger": "32ms",
-  "--ui-list-travel": "16px",
 } as const;
 
 /** A motion played: the element, its keyframes and timing, a way to have it finish, and whether it was stopped. */
@@ -179,18 +178,16 @@ function Rows({
   );
 }
 
-/** Lists side by side, each by its rows' keys, under one motion where `moving`, still being read where `reading`, as the scene `scene`, their rows placed by the lists where `placed`, arriving and leaving `way`. */
+/** Lists side by side, each by its rows' keys, under one motion where `moving`, as the scene `scene`, their rows placed by the lists where `placed`, arriving and leaving `way`. */
 function Lists({
   lists,
   moving,
-  reading,
   scene,
   placed,
   way,
 }: {
   lists: readonly (readonly string[])[];
   moving: boolean;
-  reading: boolean;
   scene?: string | undefined;
   placed: boolean;
   way: ListMotionWay;
@@ -203,30 +200,26 @@ function Lists({
     lists.map((keys, at) => createElement(Rows, { key: String(at), keys, placed })),
   );
 
-  return moving
-    ? createElement(ListMotion, { root: box, reading, scene, way, children: drawn })
-    : drawn;
+  return moving ? createElement(ListMotion, { root: box, scene, way, children: drawn }) : drawn;
 }
 
-/** Draws `lists`, the motion's tokens set where `tokens`, their rows placed by the lists where `placed`, and hands back a way to draw others, still being read where it says, as the scene it names. */
+/** Draws `lists`, the motion's tokens set where `tokens`, their rows placed by the lists where `placed`, and hands back a way to draw others, as the scene it names. */
 function draw(
   lists: readonly (readonly string[])[],
   {
     moving = true,
     tokens = true,
-    reading = false,
     scene,
     placed = false,
-    way = LIST_MOTION_WAY.SLIDE,
+    way = LIST_MOTION_WAY.AT_ONCE,
   }: {
     moving?: boolean;
     tokens?: boolean;
-    reading?: boolean;
     scene?: string;
     placed?: boolean;
     way?: ListMotionWay;
   } = {},
-): (next: readonly (readonly string[])[], stillReading?: boolean, nextScene?: string) => void {
+): (next: readonly (readonly string[])[], nextScene?: string) => void {
   if (tokens) {
     for (const [name, value] of Object.entries(TOKENS)) {
       document.documentElement.style.setProperty(name, value);
@@ -235,20 +228,11 @@ function draw(
 
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(createElement(Lists, { lists, moving, reading, scene, placed, way })));
+  act(() => root?.render(createElement(Lists, { lists, moving, scene, placed, way })));
 
-  return (next, stillReading = false, nextScene = scene) =>
+  return (next, nextScene = scene) =>
     act(() =>
-      root?.render(
-        createElement(Lists, {
-          lists: next,
-          moving,
-          reading: stillReading,
-          scene: nextScene,
-          placed,
-          way,
-        }),
-      ),
+      root?.render(createElement(Lists, { lists: next, moving, scene: nextScene, placed, way })),
     );
 }
 
@@ -284,15 +268,12 @@ test("nothing plays the first time a list is drawn", () => {
   expect(played).toEqual([]);
 });
 
-test("a row arriving fades in and slides in from the leading edge, and the row it pushed down glides from where it stood", () => {
+test("a row arriving stands at once, and the row it pushed down glides from where it stood", () => {
   const show = draw([["A", "B"]]);
 
   show([["A", "N", "B"]]);
 
-  expect(motionsOf(rowOf("N"))).toEqual([
-    [{ opacity: 0 }, { opacity: 1 }],
-    [{ transform: "translateX(-16px)" }, { transform: "none" }],
-  ]);
+  expect(motionsOf(rowOf("N"))).toEqual([]);
   expect(motionsOf(rowOf("B"))).toEqual([
     [{ transform: `translate(0px, ${-ROW}px)` }, { transform: "none" }],
   ]);
@@ -373,22 +354,10 @@ test("a row pushed down in a list a transform around it draws at half its size g
 test("a list drawn as another scene plays nothing, and what the last scene drew goes at once", () => {
   const show = draw([["A", "B"]], { scene: "app" });
 
-  show([["C", "D"]], false, "design");
+  show([["C", "D"]], "design");
 
   expect(played).toEqual([]);
   expect(drawn()).toEqual([["C", "D"]]);
-});
-
-test("rows arriving together arrive a stagger apart", () => {
-  const show = draw([["A"]]);
-
-  show([["A", "B", "C"]]);
-
-  const delays = ["B", "C"].map(
-    (key) => played.find((each) => each.element === rowOf(key))?.timing.delay,
-  );
-
-  expect(delays).toEqual([0, 32]);
 });
 
 test("a change landing while rows still move stops none of what they play, and adds the glide it asks for onto it", () => {
@@ -406,25 +375,43 @@ test("a change landing while rows still move stops none of what they play, and a
   expect(travels.map((each) => each.timing.composite)).toEqual(travels.map(() => "add"));
 });
 
-test("while the lists are still read, rows arriving fade in where they stand, together, the change that ends the read included", () => {
-  const show = draw([["A"]], { reading: true });
+test("a row leaving goes at once, and the rows under it close over it", () => {
+  const show = draw([["A", "B", "C"]]);
 
-  show([["A", "B", "C"]], true);
-  show([["A", "B", "C", "D"]], false);
+  show([["A", "C"]]);
 
-  for (const key of ["B", "C", "D"]) {
-    expect(motionsOf(rowOf(key))).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
-  }
-
-  const delays = ["B", "C"].map(
-    (key) => played.find((each) => each.element === rowOf(key))?.timing.delay,
-  );
-
-  expect(delays).toEqual([0, 0]);
+  expect(drawn()).toEqual([["A", "C"]]);
+  expect(played.filter((each) => each.element.textContent === "B")).toEqual([]);
+  expect(motionsOf(rowOf("C"))).toEqual([
+    [{ transform: `translate(0px, ${ROW}px)` }, { transform: "none" }],
+  ]);
 });
 
-test("a row leaving slides out out of reach where it stood, and the rows under it glide up after it has gone first", () => {
+test("a row leaving a list scrolled down holds the list as tall as it stood, so the scroller is not scrolled back", () => {
   const show = draw([["A", "B", "C"]]);
+  const box = document.querySelector("ul")?.parentElement;
+  const scroller = box?.parentElement;
+
+  if (!(box instanceof HTMLElement && scroller instanceof HTMLElement)) throw new Error("no list");
+  scroller.style.overflowY = "auto";
+  scroller.scrollTop = ROW;
+  vi.spyOn(box, "offsetHeight", "get").mockReturnValue(3 * ROW);
+  const laidOut = vi.mocked(HTMLElement.prototype.getBoundingClientRect).getMockImplementation();
+
+  if (laidOut === undefined) throw new Error("no layout given");
+  vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this === scroller ? new DOMRect(0, 0, COLUMN, 10 * ROW) : laidOut.call(this);
+  });
+
+  show([["A", "C"]]);
+
+  expect(box.style.getPropertyValue("--ui-list-held-height")).toBe(`${3 * ROW}px`);
+});
+
+test("a row leaving an unrolling list rolls up out of reach where it stood, as the rows under it close over it, and is let go once that has played", () => {
+  const show = draw([["A", "B", "C"]], { way: LIST_MOTION_WAY.UNROLL });
 
   show([["A", "C"]]);
 
@@ -432,13 +419,13 @@ test("a row leaving slides out out of reach where it stood, and the rows under i
   expect(leaving?.hasAttribute("inert")).toBe(true);
   expect(motionsOf(leaving)).toEqual([
     [
-      { opacity: "1", transform: "none" },
-      { opacity: 0, transform: "translateX(-16px)" },
+      { opacity: "1", clipPath: "inset(0)" },
+      { opacity: 0, clipPath: "inset(0 0 100% 0)" },
     ],
   ]);
   const glide = played.find((each) => each.element === rowOf("C"));
   expect(glide?.keyframes[0]).toEqual({ transform: `translate(0px, ${ROW}px)` });
-  expect(glide?.timing.delay).toBe(90);
+  expect(glide?.timing.duration).toBe(90);
   expect(drawn()).toEqual([["A", "B", "C"]]);
 
   act(() => played.find((each) => each.element === leaving)?.finish());
@@ -447,7 +434,7 @@ test("a row leaving slides out out of reach where it stood, and the rows under i
 });
 
 test("a row listed again before its exit has played stands again, and comes back the way it went", () => {
-  const show = draw([["A", "B", "C"]]);
+  const show = draw([["A", "B", "C"]], { way: LIST_MOTION_WAY.UNROLL });
   show([["A", "C"]]);
   const leaving = rowOf("B", true);
   played = [];
@@ -459,7 +446,7 @@ test("a row listed again before its exit has played stands again, and comes back
   expect(back?.hasAttribute("inert")).toBe(false);
   expect(motionsOf(back)).toEqual([
     [{ opacity: 0 }, { opacity: 1 }],
-    [{ transform: "translateX(-16px)" }, { transform: "none" }],
+    [{ clipPath: "inset(0 0 100% 0)" }, { clipPath: "inset(0)" }],
   ]);
 });
 
@@ -504,7 +491,7 @@ test("a row listed again by its own list before the motion took its exit stands,
 });
 
 test("a row its list places itself, as a virtual run does, stands again where it is placed, not over the run's first row", () => {
-  const show = draw([["A", "B", "C"]], { placed: true });
+  const show = draw([["A", "B", "C"]], { placed: true, way: LIST_MOTION_WAY.UNROLL });
   show([["A", "C"]]);
   const leaving = rowOf("B", true);
 
@@ -543,7 +530,7 @@ test("a row moved into another list glides across from where it stood rather tha
 test("a row arriving or leaving below the window's foot plays nothing, and one leaving there goes at once", () => {
   // Note that jsdom's window is 768px tall, so of these 40px rows the first stand in it and the last far below it.
   const many = Array.from({ length: 40 }, (_, at) => `R${at}`);
-  const show = draw([["A"]]);
+  const show = draw([["A"]], { way: LIST_MOTION_WAY.UNROLL });
 
   show([["A", ...many]]);
 
@@ -575,35 +562,6 @@ test("with no motion around it, a list lets a leaving row go at once", async () 
   await act(async () => undefined);
 
   expect(drawn()).toEqual([["A"]]);
-});
-
-test("a list whose rows scale rather than slide scales a leaving row out where it stands", () => {
-  for (const [name, value] of Object.entries(TOKENS)) {
-    document.documentElement.style.setProperty(name, value);
-  }
-
-  function Chips({ keys }: { keys: readonly string[] }): React.JSX.Element {
-    const box = useRef<HTMLDivElement>(null);
-
-    return createElement(ListMotion, {
-      root: box,
-      way: LIST_MOTION_WAY.SCALE,
-      children: createElement("div", { ref: box }, createElement(Rows, { keys })),
-    });
-  }
-
-  const container = document.body.appendChild(document.createElement("div"));
-  root = createRoot(container);
-  act(() => root?.render(createElement(Chips, { keys: ["A", "B"] })));
-
-  act(() => root?.render(createElement(Chips, { keys: ["A"] })));
-
-  expect(motionsOf(rowOf("B", true))).toEqual([
-    [
-      { opacity: "1", transform: "none" },
-      { opacity: 0, transform: "scale(0.6)" },
-    ],
-  ]);
 });
 
 test("the rows under a fold glide down as a press opens it, and up once its body has faded and gone", () => {
@@ -656,7 +614,7 @@ test("the rows under a fold glide down as a press opens it, and up once its body
   ]);
 });
 
-test("rows that unroll in together arrive at once, one edge across them, as a fold's body does", () => {
+test("rows that unroll in together share one edge across them, as a fold's body does", () => {
   // Note that each row stands a row tall, as the rows' rects say, so the edge travels from the top of B to the foot of C.
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(ROW);
   const show = draw([["A", "D"]], { way: LIST_MOTION_WAY.UNROLL });
@@ -671,7 +629,4 @@ test("rows that unroll in together arrive at once, one edge across them, as a fo
     { clipPath: `inset(0px 0px ${2 * ROW}px 0px)` },
     { clipPath: "inset(0px 0px 0px 0px)" },
   ]);
-  expect(
-    ["B", "C"].map((key) => played.find((each) => each.element === rowOf(key))?.timing.delay),
-  ).toEqual([0, 0]);
 });

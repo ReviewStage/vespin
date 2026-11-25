@@ -185,9 +185,9 @@ import { useAutomations } from "./use-automations.js";
  * row opens what it names, and its ⋯, a right-click, and the menu key open
  * its acts: a task's the sidebar's, an agent's Copy link and Archive, an
  * Item's and an automation's Copy link, each link written under the
- * workspace the page stands in. Its lists move: a row arriving slides in, one
- * leaving slides out, and one taken from a section into another glides
- * across. Each section folds on a press on its head, its count read with
+ * workspace the page stands in. Its lists move: a row arriving or leaving
+ * stands or goes at once, the rows it moved glide, and one taken from a
+ * section into another glides across. Each section folds on a press on its head, its count read with
  * its noun, as a task's Overview's groups do.
  */
 
@@ -1320,15 +1320,7 @@ function PersonColumn({
         // A phone's page offers its acts from its bar's one ⋯ instead.
         actions={away === undefined ? actions : undefined}
       >
-        <PersonBody
-          reading={
-            !tasks.listRead ||
-            read.reading ||
-            theirAutomations.reading ||
-            theirMachines.reading ||
-            unnamed
-          }
-        >
+        <PersonBody>
           <PersonTop>{note}</PersonTop>
           {tasks.listFailed ? (
             <div className="home-note my-tight-gap">

@@ -6,7 +6,6 @@ import {
   Button,
   DocumentIcon,
   ImageIcon,
-  LIST_MOTION_WAY,
   ListMotion,
   motionRows,
   useLeaving,
@@ -71,7 +70,7 @@ const FILES: readonly SampleFile[] = [
   { name: "trace.txt", openable: false },
 ];
 
-/** The row's chips, each followed by its file's name, in a component of their own under the row's `ListMotion`, whose context `useLeaving` reads, so a file taken off scales out. */
+/** The row's chips, each followed by its file's name, in a component of their own under the row's `ListMotion`, whose context `useLeaving` reads, so the chips a file taken off moved glide. */
 function AttachmentList({
   row,
   files,
@@ -115,7 +114,7 @@ function AttachmentRow({ busy }: { busy: boolean }): React.JSX.Element {
 
   return (
     <>
-      <ListMotion root={row} way={LIST_MOTION_WAY.SCALE}>
+      <ListMotion root={row}>
         <AttachmentList
           row={row}
           files={files}

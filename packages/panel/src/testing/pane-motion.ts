@@ -61,7 +61,6 @@ const LIST_MOTION_TOKENS = {
   "--ui-motion-exit": "ease",
   "--ui-duration-shape": "460ms",
   "--ui-spring": "ease-out",
-  "--ui-list-travel": "16px",
 };
 
 /**

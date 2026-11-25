@@ -336,7 +336,7 @@ export function DesktopHome({
             <Arrival reading={arriving} label={READING_TASKS}>
               {/* The Inbox's rows name who started each agent, and Recent's who is on each task, read against the listed workspace's members. */}
               <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
-                <PersonBody reading={false}>
+                <PersonBody>
                   {inboxOn ? <HomeInbox tasks={tasks} read={read} waiting={waiting} /> : null}
                   <HomeRecent tasks={tasks} room={room} staged={staged} />
                 </PersonBody>

@@ -44,8 +44,7 @@
   /* A removable chip was added to the field it stands in, so it springs in
      from a smaller size as it arrives, its opacity over the quick beat and
      its scale on the fast spring. One a `ListMotion` follows
-     (`data-motion-key`) arrives and leaves by the motion instead, which
-     scales it the same way, so the two never play at once. Note that the
+     (`data-motion-key`) stands at once, as its list's rows do. Note that the
      keyframes stay here, because `attachment-chip.css` springs in by them. */
   .ui-chip[data-removable="true"]:not([data-motion-key]) {
     animation:

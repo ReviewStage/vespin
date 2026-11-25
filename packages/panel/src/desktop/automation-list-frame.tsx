@@ -77,7 +77,7 @@ export function AutomationsActsSkeleton(): React.JSX.Element {
  * as theirs do. A lone owner's list is still a region named by its owner, as a
  * headed one is by its heading, so a reader moving by landmark hears whose
  * automations they are either way. Its rows move (`ListMotion`): one made
- * slides in, one deleted slides out, and the rows under it glide up.
+ * or deleted stands or goes at once, and the rows under it glide.
  */
 export function AutomationGroupList({
   name,

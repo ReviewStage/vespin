@@ -16,7 +16,6 @@ export const MOTION_DURATION_MS = {
 } as const;
 
 export const MOTION_DELAY_MS = {
-  ROW_STAGGER: 32,
   HINT: 500,
   LATE: 1000,
   CONFIRM: 1200,

@@ -1,9 +1,9 @@
 /* list-motion.css -- the lists `ListMotion` moves (list-motion.tsx).
 
-   A leaving row is laid over the place it held, from the list it stands in,
-   which is positioned so the row is placed from it and scrolls with it, and
-   takes no pointer while it slides out; one leaving out of sight is gone at
-   once. The root holds the height the motion
+   A row leaving an unrolling list is laid over the place it held, from the
+   list it stands in, which is positioned so the row is placed from it and
+   scrolls with it, and takes no pointer while it rolls up; any other leaving
+   row is gone at once. The root holds the height the motion
    gives it while a row leaves near the scroller's end, so what stays in sight
    is not scrolled back; a root with a minimum of its own folds the held one
    into it. */

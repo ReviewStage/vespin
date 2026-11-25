@@ -3,7 +3,7 @@ import { ListMotion, useLeaving } from "../list-motion/list-motion.js";
 import { List } from "../list-row/list-row.js";
 
 /**
- * landing-motion.tsx -- a scene's list moving as the app's lists move: a row arriving slides in, a row leaving slides out, and the rows it moved glide.
+ * landing-motion.tsx -- a scene's list moving as the app's lists move: a row arriving or leaving stands or goes at once, and the rows it moved glide.
  *
  * A scene's story adds and takes rows away, as an Inbox's question arrives
  * and is resolved, and its list plays the app's own motion for it
@@ -12,7 +12,7 @@ import { List } from "../list-row/list-row.js";
  * the motion follows it by.
  */
 
-/** The list's rows, held while one leaves so its exit plays; a component of their own, because `useLeaving` reads the motion it stands under. */
+/** The list's rows, held while one leaves so the motion reads its going; a component of their own, because `useLeaving` reads the motion it stands under. */
 function MovingRows<T>({
   label,
   items,

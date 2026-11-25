@@ -65,7 +65,6 @@ import {
   GAP,
   Inline,
   LAYOUT_ELEMENT,
-  LIST_MOTION_WAY,
   ListMotion,
   TEXT_AREA_LOOK,
   TEXT_ELEMENT,
@@ -193,7 +192,7 @@ function FeedbackImages({
   const row = useRef<HTMLUListElement | null>(null);
 
   return (
-    <ListMotion root={row} way={LIST_MOTION_WAY.SCALE} scene={kind}>
+    <ListMotion root={row} scene={kind}>
       <FeedbackImageRow row={row} {...props} />
     </ListMotion>
   );

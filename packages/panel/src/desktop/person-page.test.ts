@@ -57,7 +57,6 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
-import { playListMotions } from "../testing/pane-motion.js";
 import {
   agentsControl,
   handInbox,
@@ -1369,28 +1368,6 @@ test("a waiting item's row offers Copy link, written under the page's workspace"
   await settle();
 
   assert.ok(openRowMenu(page, "Retry 429s too?", "Inbox item").includes("Copy link"));
-});
-
-test("a task no longer theirs slides out of its section, drawn on out of reach until its exit has played", async () => {
-  const motions = playListMotions();
-  onTestFinished(motions.remove);
-  const { page, redraw } = mount(CHARLES.userId);
-  await settle();
-
-  const left = TASKS.filter((each) => each.id !== DASHBOARD.id);
-  redraw({ tasks: left });
-  const leaving = page.querySelector(`[data-motion-key="${DASHBOARD.id}"]`);
-  assert.equal(leaving?.hasAttribute("data-leaving"), true, "drawn on while it goes");
-  assert.equal(leaving?.hasAttribute("inert"), true, "out of reach");
-  assert.ok(
-    motions.played.some((motion) => motion.element === leaving),
-    "its exit plays",
-  );
-
-  act(() => {
-    for (const each of motions.played.splice(0)) each.finish();
-  });
-  assert.deepEqual(sections(page).Created, ["Relay retries on 502"]);
 });
 
 test("a teammate's agent at rest is archived from its row at once, read again by its own id though no task is open", async () => {

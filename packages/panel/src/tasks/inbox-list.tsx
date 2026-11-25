@@ -59,7 +59,6 @@ import {
   INSET,
   joinRefs,
   LIST_LEAVING_SELECTOR,
-  LIST_MOTION_WAY,
   LIST_ROW_CURRENT,
   LIST_ROW_CURRENT_LOOK,
   LIST_ROW_INK,
@@ -869,7 +868,7 @@ function FilterChipLine({
  * and a × that lists every task's items again; and, while Addressed to
  * names a teammate, their face and name, and a × that lists the reader's
  * own again (`@repo/ui`'s removable filter chip, as the sidebar's Created
- * by stands over its tasks). Each scales in as it is chosen and out as its
+ * by stands over its tasks). Each stands as it is chosen and goes as its
  * × lifts it, as the Tasks page's filter chips do.
  */
 function FilterChips({
@@ -884,7 +883,7 @@ function FilterChips({
   const line = useRef<HTMLDivElement | null>(null);
 
   return (
-    <ListMotion root={line} way={LIST_MOTION_WAY.SCALE}>
+    <ListMotion root={line}>
       <FilterChipLine line={line} whose={whose} task={task} readerId={readerId} />
     </ListMotion>
   );
@@ -1707,7 +1706,6 @@ export function InboxList({
   readerId,
   columns,
   rows,
-  reading = false,
   onChoose,
   onMark,
   onClose,
@@ -1724,8 +1722,6 @@ export function InboxList({
   head: InboxListHead;
   /** What stands under the rows: the list's empty line, placeholder rows while it is read, or a read that did not answer. */
   note: React.ReactNode;
-  /** Whether the list is still being read, as its reads land one after another while the window opens, so a row arriving fades in where it stands rather than sliding in as a new one does. */
-  reading?: boolean;
   columns: InboxColumnsShown;
   rows: InboxRowPresses;
   onChoose: (listed: InboxListed<InboxAnyHolder>) => void;
@@ -1931,7 +1927,7 @@ export function InboxList({
         }
       />
       <RevealArea root={bodyRef}>
-        <ListMotion root={bodyRef} change={laidOut} reading={reading}>
+        <ListMotion root={bodyRef} change={laidOut}>
           <SelectionRegion
             id={regionId}
             selection={{ selected: picked, onChange: setPicked }}

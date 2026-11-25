@@ -228,7 +228,6 @@ export function AgentThreads({
           head={head}
           models={agents.models}
           readerId={me}
-          reading={inbox.reading}
           note={
             <InboxListNote
               failed={inbox.failed}

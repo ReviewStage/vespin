@@ -16,7 +16,6 @@ import {
   GAP,
   Inline,
   LAYOUT_ELEMENT,
-  LIST_MOTION_WAY,
   ListMotion,
   useLeaving,
 } from "@repo/ui";
@@ -36,8 +35,8 @@ import { FileTypeIcon } from "./file-type-icon.js";
  * opens its file over the window (`attachment-viewer.tsx`), walking the
  * message's files from there; a chip's way off in the box takes it off
  * without opening it, at once, so a message sent the moment after carries
- * nothing it took off, while the row's `ListMotion` holds the chip drawn as
- * it scales out, and scales in each file the box takes. The box's chips are
+ * nothing it took off, while the row's `ListMotion` glides the chips that
+ * close over it, and those each file the box takes moves. The box's chips are
  * followed by the file each stands for: `attachmentChips` answers one chip
  * for each file the box holds, the same chip each time it is asked, and the
  * row names each by an id it mints for that chip, since two files the box
@@ -133,8 +132,8 @@ function FileChipOf({
  * because `useLeaving` finds the motion through the context the motion
  * provides, and called above it would find none and let a chip go at once.
  * The row stands, hidden, while the box holds no file, because the motion
- * plays an arrival only into a list that stood before the change, so the
- * first file taken on scales in as every later one does.
+ * reads an arrival only into a list that stood before the change, so the
+ * first file taken on arrives as every later one does.
  */
 function BoxRow({
   row,
@@ -191,7 +190,7 @@ function BoxRow({
   );
 }
 
-/** The message box's row, under its `ListMotion`: a file taken off scales out where it stood, and one taken on scales in. */
+/** The message box's row, under its `ListMotion`: a file taken off or on goes or stands at once, and the chips it moved glide. */
 function BoxFileChips({
   files,
   onRemove,
@@ -204,7 +203,7 @@ function BoxFileChips({
   const row = useRef<HTMLUListElement | null>(null);
 
   return (
-    <ListMotion root={row} way={LIST_MOTION_WAY.SCALE}>
+    <ListMotion root={row}>
       <BoxRow row={row} files={files} onRemove={onRemove} onOpen={onOpen} />
     </ListMotion>
   );

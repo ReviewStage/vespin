@@ -386,9 +386,8 @@ body,
   margin-top: var(--ui-section-gap);
 }
 
-/* A group leaving is laid over the place it held as it slides out
-   (`ListMotion`), so the room above the group after it counts only the
-   groups still in the layout, and that group's glide ends where it stands
+/* A group leaving is out of the layout (`ListMotion`), so the room above
+   the group after it counts only the groups still in the layout, and that group's glide ends where it stands
    once the leaving one is gone rather than a margin short. */
 .sidebar-group > .sidebar-repository[data-leaving] + .sidebar-repository {
   margin-top: 0;

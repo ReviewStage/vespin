@@ -277,7 +277,7 @@ interface RunsShown {
  * The runs under their heading, or none where the screen is headed Runs
  * already, scrolling by themselves: quiet blocks in
  * their place while they are first read, or that there are none yet, or
- * that they could not be read. A run that starts slides in at the top, and
+ * that they could not be read. A run that starts stands at the top, and
  * the runs under it glide down (`ListMotion`).
  */
 function RunsBody({

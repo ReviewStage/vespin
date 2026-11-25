@@ -120,7 +120,7 @@ Every token is a `--ui-*` custom property under `src/tokens/`.
 - **Motion** (`motion-tokens.css`, generated from `@repo/brand`'s tables by
   `pnpm --filter @repo/brand generate`; `motion.css`): `--ui-duration-*`,
   `--ui-duration-shape`, `--ui-spring`, `--ui-spring-fast`, `--ui-motion-exit|pane`,
-  `--ui-row-stagger`, `--ui-hint-delay`, `--ui-late-delay`,
+  `--ui-hint-delay`, `--ui-late-delay`,
   `--ui-confirm-delay` (how long a `SavedTick` stands, which reduced motion
   keeps, so the words stay to be read), `--ui-settle-delay` (the beat a hover
   card or a delayed spinner waits to see whether the state settles), and

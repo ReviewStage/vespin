@@ -52,9 +52,8 @@ import type { VisuallyHiddenUnder } from "../visually-hidden/visually-hidden.js"
  * since a button holds no button, and whose words may carry a hint
  * (`hint`), said on a rest, under a finger, and to a reader, as why an
  * address is wrong. It springs in as
- * it arrives; its exit is the list's that draws it, a `ListMotion`
- * following it by its `motionKey`, which plays its arrival in its place,
- * since its caller has already let it go.
+ * it arrives, unless a `ListMotion` follows it by its `motionKey`, under
+ * which it stands and goes at once as its list's rows do.
  *
  * A chip comes at the control's size, or compact (`size`), a caption
  * line's pill, where it is one of a row of small counts (a pull request's
@@ -191,7 +190,7 @@ type RemovableChipProps = ChipFace & {
   removeLabel: string;
   /** Opens what the chip names, a press on its words; without it the words take no press. */
   onOpen?: (() => void) | undefined;
-  /** The key a `ListMotion` around its row follows it by, which plays its arrival and its exit. */
+  /** The key a `ListMotion` around its row follows it by, which glides it where its row moves it. */
   motionKey?: string | undefined;
   /** What the chip's words say on a rest, under a finger's long press or tap, and to a reader as their description (`Tooltip`). */
   hint?: string | undefined;

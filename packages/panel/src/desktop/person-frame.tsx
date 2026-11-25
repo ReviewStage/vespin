@@ -107,24 +107,14 @@ export function PersonTop({ children }: { children?: ReactNode }): React.JSX.Ele
  * their lists move under (`ListMotion`). Each block in it moves too,
  * carrying its rows, so a section folded or a list grown glides every
  * section under it, its head and its rows as one, rather than its rows
- * gliding past a head that jumped. While what the page lists is still
- * being read (`reading`), a row arriving fades in where it stands rather
- * than slides in after the last.
+ * gliding past a head that jumped.
  */
-export function PersonBody({
-  reading,
-  children,
-}: {
-  reading: boolean;
-  children: ReactNode;
-}): React.JSX.Element {
+export function PersonBody({ children }: { children: ReactNode }): React.JSX.Element {
   const root = useRef<HTMLDivElement | null>(null);
 
   return (
     <div ref={root} {...motionRows()}>
-      <ListMotion root={root} reading={reading}>
-        {children}
-      </ListMotion>
+      <ListMotion root={root}>{children}</ListMotion>
     </div>
   );
 }

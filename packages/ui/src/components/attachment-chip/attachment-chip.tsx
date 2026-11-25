@@ -30,10 +30,9 @@ import { UPLOAD_METER_PLACE, UploadMeter } from "../upload-cover/upload-meter.js
  * chip carries its way off on its corner, a real button named
  * "Remove <name>", unavailable while `removeDisabled` holds, which its
  * caller answers at once, so the file is off on the press. A chip with a way
- * off was added to what it comes along with, so it springs in as it arrives;
- * its exit is the list's that draws it, a `ListMotion` following it by its
- * `motionKey`, which plays its arrival in its place, since its caller has
- * already let it go.
+ * off was added to what it comes along with, so it springs in as it arrives,
+ * unless a `ListMotion` follows it by its `motionKey`, under which it stands
+ * and goes at once as its list's rows do.
  *
  * A file whose bytes are still read stands as a thumbnail's place holding
  * the spinner, said to a reader as reading the file. One that failed to
@@ -300,7 +299,7 @@ export function AttachmentChip({
   reported?: ReportedFailure | Unreported | undefined;
   /** Whether a file seen going up takes its check as it stands up; off where the request it goes up in may fail and leave it standing as it was. */
   lands?: boolean | undefined;
-  /** The key a `ListMotion` around its list follows it by, which plays its arrival and its exit. */
+  /** The key a `ListMotion` around its list follows it by, which glides it where its list moves it. */
   motionKey?: string | undefined;
   /** The head of a text file's words, which its card shows under its name; none for a file with no words to show. */
   peek?: string | undefined;

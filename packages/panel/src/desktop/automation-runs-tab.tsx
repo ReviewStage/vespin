@@ -32,7 +32,7 @@ import type { WorkspaceRunsRead } from "./use-automation-runs.js";
  * draws (`automation-runs-panel.tsx`), its automation named on a line of
  * its own, and the tab narrows them to the runs still working or the ones
  * that failed. A run with nothing of its own to open opens its automation,
- * as the automation's row in the list does. A run that starts slides in at
+ * as the automation's row in the list does. A run that starts stands at
  * the top.
  */
 

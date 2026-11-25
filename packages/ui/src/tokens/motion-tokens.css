@@ -73,7 +73,6 @@
   --ui-duration-showcase: 1000ms;
   --ui-motion-exit: cubic-bezier(0.4, 0, 0.6, 1);
   --ui-motion-pane: cubic-bezier(0.2, 0, 0, 1);
-  --ui-row-stagger: 32ms;
   --ui-hint-delay: 500ms;
   --ui-late-delay: 1000ms;
   --ui-confirm-delay: 1200ms;

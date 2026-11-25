@@ -37,7 +37,6 @@ const TOKENS = {
   "--ui-duration-quick": "140ms",
   "--ui-duration-shape": "460ms",
   "--ui-spring": "ease-out",
-  "--ui-row-stagger": "32ms",
 } as const;
 
 /** The clips a reveal's rows unroll from and to. */
@@ -198,7 +197,6 @@ test("a setting turned off holds its rows drawn as they roll up, the row under t
   ]);
   const close = played.find((each) => each.element === rowOf("Under"));
   expect(close?.keyframes[0]).toEqual({ transform: `translate(0px, ${2 * ROW}px)` });
-  expect(close?.timing.delay).toBe(0);
   expect(close?.timing.duration).toBe(90);
 
   act(() => played.find((each) => each.element === box)?.finish());

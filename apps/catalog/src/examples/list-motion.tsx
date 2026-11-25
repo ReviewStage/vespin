@@ -19,10 +19,10 @@ import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**
- * list-motion.tsx -- lists under one `ListMotion`: a task added arrives and
- * the rows under it make room, a task pinned or unpinned glides between
- * Pinned and Tasks, and a task archived slides out and comes back the same
- * way on Undo.
+ * list-motion.tsx -- lists under one `ListMotion`: a task added stands at
+ * once and the rows under it glide to make room, a task pinned or unpinned
+ * glides between Pinned and Tasks, and a task archived goes at once, the
+ * rows under it closing over it, and comes back on Undo.
  */
 
 /** One synthetic task: its id and its name. */

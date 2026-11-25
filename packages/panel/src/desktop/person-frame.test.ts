@@ -29,7 +29,6 @@ const TOKENS = {
   "--ui-duration-quick": "140ms",
   "--ui-duration-shape": "460ms",
   "--ui-spring": "ease-out",
-  "--ui-row-stagger": "32ms",
 } as const;
 
 let root: Root | undefined;
@@ -105,7 +104,6 @@ test("a section folded glides the section under it up as one, its rows carried w
   act(() =>
     root?.render(
       createElement(PersonBody, {
-        reading: false,
         children: [section("Waiting", ["First", "Second"]), section("Assigned", ["Third"])],
       }),
     ),

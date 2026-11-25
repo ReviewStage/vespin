@@ -22,7 +22,7 @@ stands on the window's own edge and a spring's overshoot would part the two
 for a frame. Durations and delays come only from the tokens in
 `packages/ui/src/tokens/motion-tokens.css` (`--ui-duration-shape`,
 `--ui-duration-exit`, `--ui-duration-quick`, `--ui-duration-fast`, `--ui-duration-hover`,
-`--ui-duration-pane`, `--ui-motion-exit`, `--ui-motion-pane`, `--ui-row-stagger`,
+`--ui-duration-pane`, `--ui-motion-exit`, `--ui-motion-pane`,
 `--ui-hint-delay`, `--ui-late-delay`, `--ui-settle-delay`, and `--ui-confirm-delay`, how long an
 autosave's Saved stands). Never write a literal millisecond into a
 rule: reduced motion and capture runs zero the tokens, and a literal is a
@@ -81,8 +81,7 @@ a component tells the stylesheet a measured distance.
 ## Every layer of one gesture shares a beat
 
 A gesture that moves several elements gives each the same duration and
-spring and staggers only the delay, so the whole reads as one object. Stagger
-a list that arrives together by `--ui-row-stagger` per step.
+spring and staggers only the delay, so the whole reads as one object.
 
 Something that opens or closes in place, a fold (`disclosure.css`) or a
 setting's revealed rows (`reveal.tsx`), is one gesture with what stands under

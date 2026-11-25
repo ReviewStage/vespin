@@ -18,7 +18,6 @@ import {
   GAP,
   IconButton,
   Inline,
-  LIST_MOTION_WAY,
   ListMotion,
   Tooltip,
   useLeaving,
@@ -202,7 +201,7 @@ export function PeopleFilterChips(props: PeopleFilterProps): React.JSX.Element {
   const line = useRef<HTMLElement | null>(null);
 
   return (
-    <ListMotion root={line} way={LIST_MOTION_WAY.SCALE}>
+    <ListMotion root={line}>
       <PeopleFilterLine line={line} {...props} />
     </ListMotion>
   );

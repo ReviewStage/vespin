@@ -43,7 +43,6 @@ import {
   ChipName,
   CornerDot,
   IconButton,
-  LIST_MOTION_WAY,
   ListMotion,
   MENU_DETAIL,
   MENU_ITEM_MARK,
@@ -685,8 +684,8 @@ function FilterLine({
 /**
  * The chips on the page's filter line, a field a chip, its values named,
  * its × lifting it, and Clear lifting them all. The line stands, hidden,
- * while the filter keeps nothing, so a field's chip scales in as it is
- * filtered and out as it is lifted, the last one too, under the line's
+ * while the filter keeps nothing, so the chips a field's chip moves as it
+ * is filtered or lifted glide, the last one's too, under the line's
  * `ListMotion`; Clear comes and goes with the first chip and the last.
  */
 export function TasksFilterChips({
@@ -701,7 +700,7 @@ export function TasksFilterChips({
   const line = useRef<HTMLDivElement | null>(null);
 
   return (
-    <ListMotion root={line} way={LIST_MOTION_WAY.SCALE}>
+    <ListMotion root={line}>
       <FilterLine line={line} tasks={tasks} filter={filter} onFilter={onFilter} />
     </ListMotion>
   );
