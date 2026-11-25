@@ -188,6 +188,12 @@ export function Conversation({
     return () => heard.disconnect();
   }, [list]);
 
+  // Note that the log asks as it opens too, since lines drawn before its scroll box stood asked of no box,
+  // and a log that opens on all its lines draws none anew; its own effects run once its box's ref is set.
+  useLayoutEffect(() => {
+    askOlder();
+  }, [askOlder]);
+
   const onScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
       const element = event.currentTarget;
@@ -270,11 +276,6 @@ export function ConversationContent({
       </div>
     </ScrollArea>
   );
-}
-
-/** Whether two runs of lines name the same lines in the same order. */
-function sameLines(a: readonly string[], b: readonly string[]): boolean {
-  return a === b || (a.length === b.length && a.every((key, at) => key === b[at]));
 }
 
 /**
@@ -366,18 +367,10 @@ export function ConversationRows({
       scrollBy: (delta) => now()?.scrollBy(delta),
     };
   }, []);
-  // Note that the lines changing may leave the box unfilled, which no scroll would say, so each run of
-  // lines asks once the box stands. Note too that the lines are compared by what they name, because a
-  // caller may hand the same lines anew on every draw, and an ask that draws again, as a read of older
-  // lines starting does, would then ask without end.
-  const asked = useRef<readonly string[] | undefined>(undefined);
+  // Note that the lines changing may leave the box unfilled, which no scroll would say.
   useLayoutEffect(() => {
-    const was = asked.current;
-
-    if (list.current === null || (was !== undefined && sameLines(was, keys))) return;
-    asked.current = keys;
     askOlder();
-  });
+  }, [keys, askOlder]);
 
   return (
     <VirtualRows

@@ -22,7 +22,7 @@ import { STATUS_TONE } from "@repo/ui";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
 import { DRAFT_PLACE, type Draft, EMPTY_DRAFT, useDraft } from "../composer-drafts.js";
 import { keepPictureRead, pictureNow } from "../picture-query.js";
@@ -408,8 +408,14 @@ export function useAgentComposer(input: {
 
   const closed = ending === undefined ? undefined : noteOf(ending)?.text;
 
-  const sent = sending.map((message) =>
-    lineOf(message, filesHeld(queryClient, agentId, message.files), closed !== undefined),
+  // Note that the lines are built once for each record the host draws, so a surface keyed on them,
+  // as a log asking for older lines as its lines change is, is not handed new ones on every draw.
+  const sent = useMemo(
+    () =>
+      sending.map((message) =>
+        lineOf(message, filesHeld(queryClient, agentId, message.files), closed !== undefined),
+      ),
+    [sending, queryClient, agentId, closed],
   );
 
   // The newest refusal mended elsewhere is offered under the box too, with its remedy.
