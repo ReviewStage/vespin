@@ -41,7 +41,8 @@
  * tables that names the reader's account, what admits it to the rows,
  * answers it whole, as a reader too far behind is; one that names no sync
  * id is answered as a snapshot's reader is. Every table such a read reads
- * is logged.
+ * is logged. Where it binds pages (`page`), a whole answer to a build that
+ * reads them comes a few parents at a time, newest first (`./live-pages.ts`).
  *
  * Each part's statement is built through `liveRowsStatement`, whose
  * selection compiles only where its columns are the part's declared row on
@@ -83,6 +84,7 @@ import { Duration, type Effect, Option, type Schema } from "effect";
 import type { HostedRefusal } from "../http/http-effect.js";
 import type { WebServices } from "../runtime.js";
 import type { LiveReadName, LiveTopics, SyncMoved } from "../sync/live-query.js";
+import type { LivePage, LivePageBinding } from "./live-pages.js";
 
 /** How often a held poll looks at a read a surface watches closely, such as a Mac's commands or an agent's browser tabs. */
 export const WATCHED_LOOK = Duration.seconds(1);
@@ -288,6 +290,8 @@ interface LiveDeltaBinding<Read extends AnyLiveRead> {
   readonly own: Readonly<Partial<Record<PartOf<Read>, OwnSource | readonly OwnSource[]>>>;
   /** The read's statements, each narrowed to the rows what moved could move. */
   statements(params: LiveReadParams<Read>, moved: SyncMoved): PartStatements<Read>;
+  /** How its whole answer comes in pages to a build that reads them (`./live-pages.ts`); in one answer where left out. */
+  readonly page?: LivePageBinding<LiveReadParams<Read>, PartStatements<Read>>;
 }
 
 /** The read's query as the reader asked it, each field as text or left out: for a check a param bound as text cannot make, such as whether the reader named it at all. */
@@ -341,6 +345,10 @@ interface BoundDelta<Read extends AnyLiveRead> {
     params: LiveReadParams<Read>,
     moved: SyncMoved,
   ): Option.Option<Readonly<Record<PartOf<Read>, LiveStatement>>>;
+  readonly page?: LivePageBinding<
+    LiveReadParams<Read>,
+    Option.Option<Readonly<Record<PartOf<Read>, LiveStatement>>>
+  >;
 }
 
 /** A declared read bound: the live read Sync wakes under its declaration's name, its params, the tables it reads, and how its caller is admitted and its answer completed. */
@@ -473,13 +481,26 @@ export function bindLiveRead<
     // SAFETY: a declaration's params are its keys, each bound as text.
     params: Object.keys(read.params) as (keyof Read["params"] & string)[],
     statements: (params, past) => allBuilt(statements(params, past)),
-    ...(delta === undefined
+    ...(delta === undefined ? undefined : { delta: boundDelta(read, delta) }),
+  };
+}
+
+/** A delta read's binding as the procedures read it: its own parts keyed, and its statements, a page's among them, each built or none. */
+function boundDelta<Read extends AnyLiveRead>(
+  read: Read,
+  { page, statements, own, ...delta }: LiveDeltaBinding<Read>,
+): BoundDelta<Read> {
+  return {
+    ...delta,
+    own: ownParts(read, own),
+    statements: (params, moved) => allBuilt(statements(params, moved)),
+    ...(page === undefined
       ? undefined
       : {
-          delta: {
-            ...delta,
-            own: ownParts(read, delta.own),
-            statements: (params, moved) => allBuilt(delta.statements(params, moved)),
+          page: {
+            ...page,
+            statements: (params: LiveReadParams<Read>, parents: LivePage) =>
+              allBuilt(page.statements(params, parents)),
           },
         }),
   };

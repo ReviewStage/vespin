@@ -70,6 +70,12 @@ export function defaultMachineChoices(
   target: ConversationTarget,
 ): TaskStoreEffect<readonly DefaultMachine[]> {
   return Effect.map(defaultMachinesOf(target), (machines) =>
-    machines.map(({ id, name, owner, online }) => ({ id, name, owner, online })),
+    machines.map(({ id, name, owner, platform, online }) => ({
+      id,
+      name,
+      owner,
+      platform,
+      online,
+    })),
   );
 }

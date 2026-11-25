@@ -61,6 +61,13 @@
     padding: var(--ui-page-inset);
   }
 
+  /* A page in a dialog's card stands its top and foot at the card's own
+     inset, its sides and measure still a page's. Note that a phone's bar
+     over it sets its top in a utility, which outranks this. */
+  .ui-settings-page[data-look="dialog"] > .ui-settings-page-column {
+    padding-block: var(--ui-dialog-inset);
+  }
+
   /* A page whose content is an empty state gives it the room under the
      title, the column filling the page's height at its measure, and the
      state standing in the middle of what the head leaves. */

@@ -5,6 +5,7 @@ import type { FieldControl } from "@repo/ui";
 import { useEffect } from "react";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";
+import { useHandedWords } from "./box-words.js";
 import { MessageField, useMessageBox } from "./message-box.js";
 import type { SkillSource } from "./skill-picker.js";
 
@@ -62,7 +63,7 @@ export function InboxFormText({
   const { labelId } = control;
 
   const box = useMessageBox({
-    draft: value,
+    draft: useHandedWords(value),
     setDraft: (typed) => onChange(typed === "" ? undefined : typed),
     placeholder: "",
     label: field.label,

@@ -9,11 +9,12 @@ import {
   inboxFormValueSchema,
 } from "@repo/features/inbox-wire";
 import { type DraftSuggestion, draftSuggestionSchema } from "@repo/features/suggestion-model";
-import { createWait, type Wait } from "@repo/ui";
+import { createRest, type Rest } from "@repo/ui";
 import { createStore, type ReadonlyStore, Store, useSelector } from "@tanstack/react-store";
-import { Duration, Effect, Equal, Schema, SchemaTransformation } from "effect";
-import { useEffect, useLayoutEffect, useRef } from "react";
-import { readKept, writeKept } from "./kept-storage.js";
+import { Duration, Equal, Option, Schema, SchemaTransformation } from "effect";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { readKept, readKeptText, writeKept, writeKeptText } from "./kept-storage.js";
+import type { BoxWords } from "./tasks/box-words.js";
 
 /**
  * composer-drafts.ts -- what the developer typed in a box and has not sent, kept per destination on this Mac, so switching away and back finds it where it was left.
@@ -57,8 +58,11 @@ import { readKept, writeKept } from "./kept-storage.js";
  * because another panel's window keeps its drafts there too. A change is the
  * window's at once and reaches storage once the typing rests
  * (`STORE_PAUSE`), or sooner where the box loses focus, the window is hidden
- * or closed, or another account signs in to it, so a burst of keys reads and
- * writes the whole store once rather than on every key.
+ * or closed, or another account signs in to it, so a burst of keys writes
+ * once rather than on every key. Where storage still holds what this window
+ * last wrote there, the write lays only the places the window changed over
+ * it, each entry encoded once (`storedOver`); where another window wrote
+ * since, it reads the whole store again first.
  */
 
 /** Where the drafts are kept in the renderer's storage. */
@@ -106,6 +110,8 @@ const draftPlaceSchema = Schema.Union([
     /** The agent's plan, which the sidebar marks; null for an agent with none. */
     taskId: Schema.NullOr(Schema.String),
     agentId: Schema.String,
+    /** The thread of a Manager's chat the box replies in, by the message it stands on, so each thread keeps its words apart from the chat's own box; none for that box. */
+    thread: Schema.optionalKey(Schema.String),
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.NEW_AGENT),
@@ -288,26 +294,25 @@ const pageElementSchema = Schema.Struct({
 /** The element of a page a thread being started there is on: its path, its words, the heading it stands under, and whether the words are selected in it. */
 export type DraftPageElement = typeof pageElementSchema.Type;
 
-/** The drafts as storage keeps them: each place's words, a card's picks where it holds some, and the account that wrote them, the latest written last. */
-const storedDrafts = Schema.fromJsonString(
-  Schema.Array(
-    Schema.Struct({
-      accountId: Schema.NullOr(Schema.String),
-      place: storedPlaceSchema,
-      text: Schema.String,
-      choices: Schema.optionalKey(Schema.Array(Schema.String)),
-      values: Schema.optionalKey(Schema.Array(inboxFormValueSchema)),
-      steps: Schema.optionalKey(Schema.Array(Schema.Number)),
-      press: Schema.optionalKey(Schema.Literals(Object.values(INBOX_REPLY))),
-      dropped: Schema.optionalKey(Schema.Array(Schema.String)),
-      revision: Schema.optionalKey(Schema.Number),
-      element: Schema.optionalKey(pageElementSchema),
-      suggestion: Schema.optionalKey(draftSuggestionSchema),
-    }),
-  ),
-);
+/** One place's draft as storage keeps it: its words, a card's picks where it holds some, and the account that wrote it. */
+const storedDraftSchema = Schema.Struct({
+  accountId: Schema.NullOr(Schema.String),
+  place: storedPlaceSchema,
+  text: Schema.String,
+  choices: Schema.optionalKey(Schema.Array(Schema.String)),
+  values: Schema.optionalKey(Schema.Array(inboxFormValueSchema)),
+  steps: Schema.optionalKey(Schema.Array(Schema.Number)),
+  press: Schema.optionalKey(Schema.Literals(Object.values(INBOX_REPLY))),
+  dropped: Schema.optionalKey(Schema.Array(Schema.String)),
+  revision: Schema.optionalKey(Schema.Number),
+  element: Schema.optionalKey(pageElementSchema),
+  suggestion: Schema.optionalKey(draftSuggestionSchema),
+});
 
-type StoredDraft = (typeof storedDrafts.Type)[number];
+/** The drafts as storage keeps them, the latest written last. */
+const storedDrafts = Schema.fromJsonString(Schema.Array(storedDraftSchema));
+
+type StoredDraft = typeof storedDraftSchema.Type;
 
 /** The account a window's drafts are written by: the one signed in, none before its state is read, as in a test. */
 type Owner = string | null;
@@ -374,9 +379,60 @@ function holds(draft: Draft): boolean {
   return stored(draft) || draft.attachments.length > 0;
 }
 
-/** Every account's kept drafts, none where none were kept or they no longer read. */
+/** Storage's text under the drafts' key, and the entries it reads as. */
+interface StoredRead {
+  readonly text: string | null;
+  readonly entries: readonly StoredDraft[];
+}
+
+/** What storage held under the drafts' key as this window last read or wrote it. */
+let storedLast: StoredRead = { text: null, entries: [] };
+
+/** Each entry as storage spells it, kept per entry so a write encodes only the entries it made. */
+const entryTexts = new WeakMap<StoredDraft, string>();
+
+/** One entry as storage spells it. */
+function entryText(entry: StoredDraft): string {
+  const known = entryTexts.get(entry);
+
+  if (known !== undefined) return known;
+  const text = JSON.stringify(Schema.encodeSync(storedDraftSchema)(entry));
+  entryTexts.set(entry, text);
+
+  return text;
+}
+
+/**
+ * Every account's kept drafts, none where none were kept or they no longer
+ * read. Note that storage holding the text it held last is not decoded
+ * again, so a read finding what this window wrote costs one comparison.
+ */
 function readStored(): readonly StoredDraft[] {
-  return readKept(STORAGE_KEY, storedDrafts, []);
+  const text = readKeptText(STORAGE_KEY);
+
+  if (text === storedLast.text) return storedLast.entries;
+
+  const entries =
+    text === null ? [] : Option.getOrElse(Schema.decodeUnknownOption(storedDrafts)(text), () => []);
+
+  storedLast = { text, entries };
+
+  return entries;
+}
+
+/**
+ * Keeps every account's drafts, answering whether storage took them; a write
+ * that fails leaves those kept before. The text is the one `storedDrafts`
+ * encodes, joined from each entry's own (`entryText`), so an entry written
+ * before is not encoded again.
+ */
+function writeStored(entries: readonly StoredDraft[]): boolean {
+  const text = `[${entries.map(entryText).join(",")}]`;
+
+  if (!writeKeptText(STORAGE_KEY, text)) return false;
+  storedLast = { text, entries };
+
+  return true;
 }
 
 /** The owner's kept drafts; storage keeps no files, and no draft of files alone, or of a place no box opens now. */
@@ -493,7 +549,8 @@ function writeDrafts(owner: Owner, drafts: readonly KeptDraft[]): readonly KeptD
   );
 
   const entries = [...standing, ...written].slice(-MAX_KEPT);
-  writeKept(STORAGE_KEY, storedDrafts, entries);
+
+  if (writeStored(entries)) syncedByOwner.set(owner, storedLast.text);
 
   return drafts.filter(
     (draft) => !stored(draft) || entries.some((entry) => storedAs(owner, draft, entry)),
@@ -508,7 +565,20 @@ function withDraft(
 ): readonly KeptDraft[] {
   const others = drafts.filter((kept) => !Equal.equals(kept.place, place));
 
-  return holds(draft) ? [...others, { ...draft, place }] : others;
+  return holds(draft) ? [...others, keptAt(draft, place)] : others;
+}
+
+/** Whether a draft is one kept at a place, as the drafts held hand one to a change. */
+function isKept(draft: Draft): draft is KeptDraft {
+  return "place" in draft;
+}
+
+/**
+ * `draft` kept at `place`: the very draft where it already stands there, so
+ * a reader comparing drafts by identity draws again only as one changes.
+ */
+function keptAt(draft: Draft, place: DraftPlace): KeptDraft {
+  return isKept(draft) && Equal.equals(draft.place, place) ? draft : { ...draft, place };
 }
 
 /** A change to the drafts: one place's draft moved on from what it holds, the drafts a predicate names let go, what the window changed written to storage, storage read again, the files an account held under its address taken on as its id's, or what the window holds let go of for storage's alone. */
@@ -549,26 +619,26 @@ function unstoredOf(owner: Owner): Unstored {
 }
 
 /**
- * The wait before each account's drafts are written to storage, by account.
+ * The rest before each account's drafts are written to storage, by account.
  * Note that the module holds it rather than the box that typed, because a
  * draft must still reach storage after its box goes (`@repo/ui`'s `wait.ts`).
  */
-const storeLaterByOwner = new Map<Owner, Wait>();
+const storeLaterByOwner = new Map<Owner, Rest<Owner>>();
 
 /**
- * Writes one account's drafts to storage once the typing rests: starting the
- * wait again starts the pause over and calls off the one standing, so a burst
- * of keys writes once, after the last.
+ * Writes one account's drafts to storage once the typing rests: aiming the
+ * rest again starts the pause over, so a burst of keys writes once, after the
+ * last. Note that a key re-aims the rest standing rather than starting a wait
+ * of its own, because a fiber started and interrupted on every key cost the
+ * keystroke more than the rest of the draft's change.
  */
 function storeLater(owner: Owner): void {
-  const wait = storeLaterByOwner.get(owner) ?? createWait();
-  storeLaterByOwner.set(owner, wait);
-  wait.start(
-    Effect.andThen(
-      Effect.sleep(STORE_PAUSE),
-      Effect.sync(() => changeDrafts(owner, STORE)),
-    ),
-  );
+  const rest =
+    storeLaterByOwner.get(owner) ??
+    createRest<Owner>(STORE_PAUSE, (resting) => changeDrafts(resting, STORE));
+
+  storeLaterByOwner.set(owner, rest);
+  rest.aim(owner);
 }
 
 /**
@@ -739,6 +809,52 @@ function draftsOf(owner: Owner): Store<readonly KeptDraft[]> {
   return made;
 }
 
+/**
+ * What storage held under the drafts' key just after each account's drafts
+ * were last written whole (`writeDrafts`), by account: the owner's entries
+ * then were exactly the drafts the window held, so while storage still holds
+ * it, only the places changed since differ.
+ */
+const syncedByOwner = new Map<Owner, string | null>();
+
+/**
+ * Writes the places the window changed over what storage holds, where it
+ * still holds what the window last wrote whole there, answering whether it
+ * did; where another window wrote since, or the write would let the oldest
+ * drafts go, it writes nothing, and the store reads storage whole again. A
+ * place whose draft storage already holds as it is stands where it stood, as
+ * a whole write keeps it, and every other one changed moves last, or goes
+ * where it holds nothing storage keeps.
+ */
+function storedOver(owner: Owner, held: readonly KeptDraft[], unstored: Unstored): boolean {
+  const synced = syncedByOwner.get(owner);
+
+  if (synced === undefined || readKeptText(STORAGE_KEY) !== synced) return false;
+
+  const entries = unstored.reduce<readonly StoredDraft[]>((laid, { place }) => {
+    const draft = held.find((kept) => Equal.equals(kept.place, place));
+
+    const at = laid.findIndex(
+      (entry) => entry.accountId === owner && Equal.equals(entry.place, place),
+    );
+
+    const standing = at === -1 ? undefined : laid[at];
+
+    if (draft !== undefined && standing !== undefined && storedAs(owner, draft, standing)) {
+      return laid;
+    }
+
+    const without = at === -1 ? laid : laid.toSpliced(at, 1);
+
+    return draft !== undefined && stored(draft) ? [...without, entryOf(owner, draft)] : without;
+  }, readStored());
+
+  if (entries.length > MAX_KEPT || !writeStored(entries)) return false;
+  syncedByOwner.set(owner, storedLast.text);
+
+  return true;
+}
+
 /** Lands a change on one account's drafts, as `DraftChange` names it. */
 function changeDrafts(owner: Owner, change: DraftChange): void {
   const drafts = draftsOf(owner);
@@ -771,6 +887,14 @@ function changeDrafts(owner: Owner, change: DraftChange): void {
 
   // A store with nothing unwritten reads nothing, so a pause ending after a flush costs nothing.
   if ("store" in change && nothingUnstored(unstored)) return;
+
+  // Note that a store over what this window wrote last lays only its changes on it, and the drafts held stand as they are.
+  if ("store" in change && storedOver(owner, held, unstored)) {
+    unstoredByOwner.delete(owner);
+
+    return;
+  }
+
   const standing = readBeside(owner, held);
   const writing = "reread" in change ? unstoredBeside(owner, unstored, standing) : unstored;
   unstoredByOwner.delete(owner);
@@ -982,7 +1106,7 @@ function adoptHeld(address: string, accountId: string): void {
  * recovering from a throw draws it, finds what the window held where it was.
  */
 function forgetWindow(): void {
-  for (const wait of storeLaterByOwner.values()) wait.stop();
+  for (const rest of storeLaterByOwner.values()) rest.stop();
   storeLaterByOwner.clear();
 
   for (const owner of draftsByOwner.keys()) changeDrafts(owner, FORGET);
@@ -1014,7 +1138,7 @@ function adoptDrafts(address: string, accountId: string): void {
         .some((later) => later.accountId === accountId && Equal.equals(later.place, entry.place)),
   );
 
-  writeKept(STORAGE_KEY, storedDrafts, latest);
+  writeStored(latest);
 }
 
 /**
@@ -1123,25 +1247,110 @@ function useStoreOnLeave(): void {
   useEffect(() => () => changeOwned(STORE), []);
 }
 
+/** The draft `drafts` hold for `place`, empty where they hold none. */
+function draftIn(drafts: readonly KeptDraft[], place: DraftPlace): Draft {
+  return drafts.find((kept) => Equal.equals(kept.place, place)) ?? EMPTY_DRAFT;
+}
+
 /** The draft kept for `place`, empty where none is. */
 export function useDraft(place: DraftPlace): DraftControl {
-  const draft = useSelector(
-    draftsStore,
-    (drafts) => drafts.find((kept) => Equal.equals(kept.place, place)) ?? EMPTY_DRAFT,
-  );
+  const draft = useSelector(draftsStore, (drafts) => draftIn(drafts, place));
 
   useStoreOnLeave();
 
   return { draft, update: (next) => changeOwned({ place, next }) };
 }
 
+/** A draft with its words left out, as an owner drawn around its box reads it (`useDraftBeside`). */
+export type DraftBeside = Omit<Draft, "text">;
+
+/** One box's draft as an owner drawn around the box reads it: everything but the words, the whole draft as it stands now, and the presses that change it. */
+export interface DraftBesideControl {
+  readonly draft: DraftBeside;
+  /** The whole draft, its words with it, as it stands at the moment of asking. */
+  readonly now: () => Draft;
+  /** Moves the draft on from what it holds as the change lands, which a file read late needs. */
+  readonly update: (next: (was: Draft) => Draft) => void;
+}
+
+/** A draft's fields beside its words. */
+type BesideWords = keyof DraftBeside;
+
+/**
+ * Every field of a draft beside its words, which `sameBesideWords` compares;
+ * a field added to `Draft` and left out here does not compile.
+ */
+const BESIDE_WORDS: Readonly<Record<BesideWords, true>> = {
+  attachments: true,
+  choices: true,
+  values: true,
+  steps: true,
+  press: true,
+  dropped: true,
+  revision: true,
+  element: true,
+  suggestion: true,
+};
+
+/** Whether two drafts hold the very same but for their words, each field by identity, as a change through `update` keeps every field it does not set. */
+function sameBesideWords(one: Draft, other: Draft): boolean {
+  if (one === other) return true;
+  // SAFETY: `BESIDE_WORDS` is typed as a record of exactly the fields beside the words, so its keys are those fields.
+  const fields = Object.keys(BESIDE_WORDS) as BesideWords[];
+
+  return fields.every((field) => one[field] === other[field]);
+}
+
+/**
+ * The draft kept for `place` without its words, empty where none is. Note
+ * that a word typed draws the owner again only where it reads the draft
+ * itself, because the words change on every key while the rest changes as
+ * a file, a pick, or a suggestion does: the box reads the words where it
+ * draws them (`useKeptDraft`), and a press reads them through `now`.
+ */
+export function useDraftBeside(place: DraftPlace): DraftBesideControl {
+  const draft = useSelector(draftsStore, (drafts) => draftIn(drafts, place), {
+    compare: sameBesideWords,
+  });
+
+  useStoreOnLeave();
+
+  return {
+    draft,
+    now: () => draftIn(draftsStore.state, place),
+    update: (next) => changeOwned({ place, next }),
+  };
+}
+
 /** What a place holds unsent, read without a box to write it in, as a page pinning its comment's draft reads it; nothing where no place is named. */
 export function useKeptDraft(place: DraftPlace | undefined): Draft {
   return useSelector(draftsStore, (drafts) =>
-    place === undefined
-      ? EMPTY_DRAFT
-      : (drafts.find((kept) => Equal.equals(kept.place, place)) ?? EMPTY_DRAFT),
+    place === undefined ? EMPTY_DRAFT : draftIn(drafts, place),
   );
+}
+
+/**
+ * The words kept for `place`, as the box writing them reads them
+ * (`./tasks/box-words.ts`): the same source across draws, reading the place
+ * handed last, and none of its words where `shown` is false, as a closed
+ * box draws none. Note that whoever hands it reads no words as it draws, so
+ * a word typed draws only the parts of the box that read it.
+ */
+export function useDraftWords(place: DraftPlace, shown = true): BoxWords {
+  const latest = useRef({ place, shown });
+  latest.current = { place, shown };
+
+  const [words] = useState<BoxWords>(() => {
+    const get = () => {
+      const now = latest.current;
+
+      return now.shown ? draftIn(draftsStore.state, now.place).text : "";
+    };
+
+    return { get, subscribe: (listener) => draftsStore.subscribe(() => listener(get())) };
+  });
+
+  return words;
 }
 
 /** Whether a draft is a plan's draft agent's. */
@@ -1352,18 +1561,28 @@ export function rowPicks(
 
 /**
  * The inbox cards' drafts of a plan, or of the agents with none where it is
- * null. Note that the list answered is the very one it was until one of its
- * drafts changes, so the inbox reading it draws again only then, never on a
- * word typed in another box.
+ * null, without their words, as the pane around their boxes reads them
+ * (`useDraftBeside`). Note that the list answered is the very one it was
+ * until a draft comes, goes, or changes beside its words, so the inbox
+ * reading it draws again only then, never on a word typed: each draft's
+ * words are those it held as the list last changed, and a box reads its own
+ * where it stands (`useKeptDraft`).
  */
-export function useInboxDrafts(taskId: string | null): readonly KeptDraft<InboxPlace>[] {
+export function useInboxDraftsBeside(taskId: string | null): readonly KeptDraft<InboxPlace>[] {
   const last = useRef<readonly KeptDraft<InboxPlace>[]>([]);
 
   return useSelector(draftsStore, (drafts) => {
     const found = drafts.filter(isInbox).filter((kept) => kept.place.taskId === taskId);
 
     const same =
-      found.length === last.current.length && found.every((kept, at) => kept === last.current[at]);
+      found.length === last.current.length &&
+      found.every((kept, at) => {
+        const was = last.current[at];
+
+        return (
+          was !== undefined && Equal.equals(kept.place, was.place) && sameBesideWords(kept, was)
+        );
+      });
 
     if (!same) last.current = found;
 

@@ -9,6 +9,7 @@ import {
 } from "@repo/wire/testing";
 import { Duration, Effect, Layer, Result } from "effect";
 import { TestClock } from "effect/testing";
+import { keptAfterResponse } from "../http/after-response.js";
 import { ModelCatalog, modelCatalogLayer, validateModelChoice } from "./model-catalog.js";
 
 /**
@@ -115,7 +116,7 @@ const CATALOG: JsonValue = {
 };
 
 /** The catalog layer over a gateway answering as scripted, with the requests it saw. */
-function gateway(answers: (request: RecordedRequest) => Response) {
+function gateway(answers: (request: RecordedRequest) => Response | Promise<Response>) {
   const http = recordingHttpClient(answers);
   const layer = modelCatalogLayer.pipe(Layer.provide(http.layer));
 
@@ -201,4 +202,59 @@ it.effect("a refetch that fails past the hour answers the catalog read before it
     );
     assert.ok(after.some((model) => model.id === "anthropic/claude-opus-5.5"));
   }),
+);
+
+it.effect(
+  "a read past the hour answers the catalog held at once, while the refetch it started is still under way",
+  () =>
+    Effect.gen(function* () {
+      let answered = false;
+
+      // Note that the refetch never answers, so a read that waited on it would never return.
+      const { http, layer } = gateway(() => {
+        if (answered) return new Promise<Response>(() => undefined);
+        answered = true;
+
+        return jsonResponse(CATALOG);
+      });
+
+      const [before, after] = yield* Effect.gen(function* () {
+        const first = yield* readCatalog;
+        yield* TestClock.adjust(Duration.hours(2));
+
+        return [first, yield* readCatalog] as const;
+      }).pipe(Effect.provide(layer));
+
+      assert.deepEqual(after, before);
+      assert.equal(http.requests.length, 2);
+    }),
+);
+
+it.effect(
+  "a refetch past the hour is handed past the answer where the runtime keeps such work, and the catalog it reads is answered from then on",
+  () =>
+    Effect.gen(function* () {
+      let refetched = false;
+
+      const { http, layer } = gateway(() =>
+        jsonResponse(refetched ? { object: "list", data: [] } : CATALOG),
+      );
+
+      const kept = keptAfterResponse();
+
+      const [stale, fresh] = yield* Effect.gen(function* () {
+        yield* readCatalog;
+        refetched = true;
+        yield* TestClock.adjust(Duration.hours(2));
+        const answered = yield* readCatalog;
+        assert.equal(http.requests.length, 1);
+        yield* kept.run;
+
+        return [answered, yield* readCatalog] as const;
+      }).pipe(Effect.provide(Layer.merge(layer, kept.layer)));
+
+      assert.ok(stale.some((model) => model.id === "anthropic/claude-opus-5.5"));
+      assert.deepEqual(fresh, []);
+      assert.equal(http.requests.length, 2);
+    }),
 );

@@ -76,6 +76,9 @@ onFlowComplete:
       - assertVisible: "Ada Lovelace"
       - runFlow:
           file: subflows/close-sheet.yaml
+      - extendedWaitUntil:
+          notVisible: "Ada Lovelace"
+          timeout: 5000
       - setOrientation: PORTRAIT
       - waitForAnimationToEnd
 # A compact window, the iPhone's, names its workspace as the Inbox's one
@@ -101,6 +104,9 @@ onFlowComplete:
       - assertVisible: "Ada Lovelace"
       - runFlow:
           file: subflows/close-sheet.yaml
+      - extendedWaitUntil:
+          notVisible: "Ada Lovelace"
+          timeout: 5000
       - runFlow:
           file: subflows/tab.yaml
           env:

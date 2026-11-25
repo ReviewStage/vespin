@@ -30,7 +30,13 @@ import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js
 import { listedAgent } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
-import { type AgentsControl, MODELS_READ, useAgents, useTaskAgents } from "./use-agents.js";
+import {
+  type AgentsControl,
+  MODELS_READ,
+  type ModelsRead,
+  useAgents,
+  useTaskAgents,
+} from "./use-agents.js";
 
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
@@ -154,6 +160,7 @@ function mount(initial: Standing, keyPrefix = "key") {
   const answers = new Map<AnyKind, Queued[]>();
   let keys = 0;
   let control: AgentsControl | undefined;
+  let modelsRead: ModelsRead | undefined;
   let restand: ((next: Standing) => void) | undefined;
 
   /** One ask answered from its kind's queue, and written down. */
@@ -192,21 +199,23 @@ function mount(initial: Standing, keyPrefix = "key") {
   function Probe() {
     const [held, setHeld] = useState(initial);
     restand = setHeld;
-    control = useTaskAgents(
-      useAgents({
-        taskId: held.taskId,
-        repository: held.repository,
-        agentsFollowed: true,
-        onOpenIntegrations: () => undefined,
-        onOpenApiKeys: () => undefined,
-        onStarted: (agentId) => started.push(agentId),
-        mintKey: () => {
-          keys += 1;
 
-          return `${keyPrefix}-${keys}`;
-        },
-      }),
-    );
+    const agents = useAgents({
+      taskId: held.taskId,
+      repository: held.repository,
+      agentsFollowed: true,
+      onOpenIntegrations: () => undefined,
+      onOpenApiKeys: () => undefined,
+      onStarted: (agentId) => started.push(agentId),
+      mintKey: () => {
+        keys += 1;
+
+        return `${keyPrefix}-${keys}`;
+      },
+    });
+
+    control = useTaskAgents(agents.control);
+    modelsRead = agents.modelsRead;
 
     return null;
   }
@@ -242,6 +251,12 @@ function mount(initial: Standing, keyPrefix = "key") {
       assert.ok(control);
 
       return control;
+    },
+    /** Where the newest read of the models stands, as the hook hands it beside the control. */
+    modelsRead: () => {
+      assert.ok(modelsRead);
+
+      return modelsRead;
     },
     stand: async (next: Partial<Standing>) => {
       act(() => {
@@ -279,7 +294,7 @@ test("an ask of the models that never lands is said as failed past its bound, on
     await tab.mount();
     act(() => tab.control().readModels());
     await settle();
-    assert.equal(tab.control().modelsRead.state, MODELS_READ.READING);
+    assert.equal(tab.modelsRead().state, MODELS_READ.READING);
 
     // The bound the requirement sets: fifteen seconds, past the host's own ten on the call.
     await act(() => vi.advanceTimersByTimeAsync(15_000));
@@ -289,13 +304,13 @@ test("an ask of the models that never lands is said as failed past its bound, on
     deliverModels({ failed: true });
     act(() => tab.control().readModels());
     await settle();
-    assert.equal(tab.control().modelsRead.state, MODELS_READ.FAILED);
+    assert.equal(tab.modelsRead().state, MODELS_READ.FAILED);
     assert.equal(tab.control().macs, undefined);
 
     deliverModels({ rows: { models: [] } });
     act(() => tab.control().readModels());
     await settle();
-    assert.equal(tab.control().modelsRead.state, MODELS_READ.READ);
+    assert.equal(tab.modelsRead().state, MODELS_READ.READ);
     assert.deepEqual(tab.control().macs, []);
 
     // Note that the list read before stays held, so only the ask's own refusal can say this one failed.
@@ -304,7 +319,7 @@ test("an ask of the models that never lands is said as failed past its bound, on
     });
     act(() => tab.control().readModels());
     await settle();
-    assert.equal(tab.control().modelsRead.state, MODELS_READ.FAILED);
+    assert.equal(tab.modelsRead().state, MODELS_READ.FAILED);
   } finally {
     vi.useRealTimers();
   }

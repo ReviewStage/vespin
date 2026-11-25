@@ -1027,6 +1027,10 @@ export type DescriptionSectionEdit = typeof descriptionSectionEditSchema.Type;
 export const taskSchema = EffectSchema.Struct({
   ...taskSummaryFields,
   description: descriptionSchema,
+  /** The media type of each picture, video, or file the description keeps, by its id, so a reader draws each by its kind before its bytes arrive; absent where it keeps none, and from a service before it. */
+  fileTypes: EffectSchema.optionalKey(
+    EffectSchema.Record(EffectSchema.String, EffectSchema.String),
+  ),
   /** Optional on the wire so a task from a service without the journal still reads; none is no edits. */
   agentEdits: EffectSchema.optionalKey(
     EffectSchema.Array(agentEditLineSchema).check(EffectSchema.isMaxLength(MAX_AGENT_EDITS)),

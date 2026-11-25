@@ -54,32 +54,3 @@ export function playMotions() {
     },
   };
 }
-
-/** The list motion's tokens, as the app's sheets set them. */
-const LIST_MOTION_TOKENS = {
-  "--ui-duration-exit": "90ms",
-  "--ui-motion-exit": "ease",
-  "--ui-duration-shape": "460ms",
-  "--ui-spring": "ease-out",
-  "--ui-list-travel": "16px",
-};
-
-/**
- * `playMotions` with the list's tokens beside the pane's, taken away again
- * with the motions; answers what was played, and a way to take both away.
- */
-export function playListMotions() {
-  const motions = playMotions();
-  const root = document.documentElement.style;
-
-  for (const [name, value] of Object.entries(LIST_MOTION_TOKENS)) root.setProperty(name, value);
-
-  return {
-    played: motions.played,
-    remove: () => {
-      motions.remove();
-
-      for (const name of Object.keys(LIST_MOTION_TOKENS)) root.removeProperty(name);
-    },
-  };
-}

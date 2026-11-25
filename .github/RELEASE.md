@@ -37,9 +37,11 @@ Every build's Sentry SDK reports under the release `Vespin@X.Y.Z`, the name the
 build bakes into main beside the one it uploads maps under, and under the
 environment of the Vespin it is: `production` for a Developer ID package, `test`
 for an ad-hoc `Vespin Test` package, and `development` for `electron .`. When
-`SENTRY_AUTH_TOKEN` is present, the final esbuild plugin on the main, preload,
-and renderer JavaScript builds uploads their source maps to that release before
-electron-builder packages the app; a refused upload warns and the build goes on. The
+`SENTRY_AUTH_TOKEN` is present, the build ends with `sentry-cli`: it creates that
+release, stamps every JavaScript file it wrote (main, the preload, the code coloring
+process, and every renderer entry and split chunk) and its map with a debug ID, and
+uploads the maps, before electron-builder packages the app; a refused upload warns and
+the build goes on. The
 maps are written beside the bundles, named by no `sourceMappingURL` comment,
 and excluded from the app bundle; ordinary local builds need neither Sentry
 value and upload nothing, and neither does a rehearsal (below).

@@ -141,6 +141,8 @@ export const DIALOG_SIZE = {
   WINDOW: "window",
   /** A sheet risen from the window's foot, as a phone's menu stands (`menu-sheet.tsx`'s `MenuSheetFrame`): the window's width up to a wide card's, its look its content's own. */
   SHEET: "sheet",
+  /** A settings dialog's card (`settings-dialog.tsx`), its section list beside the section shown at Settings' measure, at a height held from section to section, flush so the list's ground meets its edge; on a phone, the window's whole room. */
+  SECTIONS: "sections",
 } as const;
 
 export type DialogSize = (typeof DIALOG_SIZE)[keyof typeof DIALOG_SIZE];
@@ -203,6 +205,7 @@ const CARD_LOOK = [
   "data-[size=media]:w-auto data-[size=media]:min-w-dialog-media-min data-[size=media]:max-w-dialog-media-max data-[size=media]:gap-0 data-[size=media]:overflow-hidden data-[size=media]:p-0",
   "data-[size=window]:w-auto data-[size=window]:max-h-none data-[size=window]:max-w-none data-[size=window]:place-self-stretch data-[size=window]:min-h-0 data-[size=window]:min-w-0 data-[size=window]:gap-0 data-[size=window]:rounded-none data-[size=window]:border-0 data-[size=window]:bg-transparent data-[size=window]:p-0 data-[size=window]:shadow-none data-[size=window]:ml-[max(var(--spacing-ui-16),env(safe-area-inset-left,0px))] data-[size=window]:mr-[max(var(--spacing-ui-16),env(safe-area-inset-right,0px))] data-[size=window]:mb-[max(var(--spacing-ui-16),env(safe-area-inset-bottom,0px)_-_var(--ui-keyboard-inset))] data-[size=window]:mt-[max(var(--spacing-dialog-window-top),env(safe-area-inset-top,0px))] @min-[1024px]/ui-dialog-room:data-[size=window]:mx-ui-48 @min-[1024px]/ui-dialog-room:data-[size=window]:mb-ui-24",
   "data-[size=sheet]:w-dialog-wide data-[size=sheet]:gap-0 data-[size=sheet]:rounded-none data-[size=sheet]:border-0 data-[size=sheet]:bg-transparent data-[size=sheet]:p-0 data-[size=sheet]:shadow-none data-[size=sheet]:animate-none data-[size=sheet]:data-ending-style:animate-sheet-leave",
+  "data-[size=sections]:w-dialog-sections data-[size=sections]:h-dialog-sections-height data-[size=sections]:gap-0 data-[size=sections]:overflow-hidden data-[size=sections]:p-0 room-narrow:data-[size=sections]:w-full room-narrow:data-[size=sections]:h-dialog-room",
   "data-[expanding=true]:animate-none",
   "data-[dropping=true]:shadow-dialog-drop",
   "data-[nudge=true]:animate-dialog-nudge",
@@ -215,8 +218,8 @@ const CARD_LOOK = [
  * own gap) so what it holds keeps the spacing it had as the card's children.
  * Note that it clips what it holds, so it draws a control's ring inside the
  * control, as a `Card` does, rather than clipped at the edge; that a
- * picture's card (`media`) and a bare one (`window`) draw their own head and
- * scroller, so its middle lays nothing out; and that a composer's card
+ * picture's card (`media`), a bare one (`window`), and a settings dialog's
+ * (`sections`) draw their own head and scroller, so its middle lays nothing out; and that a composer's card
  * does not scroll its middle, because its chips hang lists (the repository's,
  * the `@` menu) past the card's inner edges, which a scroller would clip and
  * a picker would take for its room (`roomAround`). Its middle still gives
@@ -224,7 +227,7 @@ const CARD_LOOK = [
  * so its field yields to a short window (`desktop.css`) and its foot stays.
  */
 const MIDDLE =
-  "flex min-h-0 flex-1 flex-col gap-[inherit] overflow-x-hidden overflow-y-auto overscroll-contain [--ui-focus-ring-offset:var(--ui-focus-ring-inset)] data-[size=media]:contents data-[size=window]:contents data-[size=sheet]:contents data-[size=composer]:overflow-visible";
+  "flex min-h-0 flex-1 flex-col gap-[inherit] overflow-x-hidden overflow-y-auto overscroll-contain [--ui-focus-ring-offset:var(--ui-focus-ring-inset)] data-[size=media]:contents data-[size=window]:contents data-[size=sheet]:contents data-[size=sections]:contents data-[size=composer]:overflow-visible";
 
 /** What marks the part of a bare dialog that stands for the dimmed window. */
 const VEIL_ATTRIBUTE = "data-dialog-veil";

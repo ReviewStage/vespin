@@ -21,9 +21,9 @@
  * After that only its model and effort change, from its own box. Where the
  * member's last pick is a device, Create waits on a read of the member's
  * devices made since the card opened (`useDevicesRead`), as New task's
- * Start does, since a Create before it would name none. The card itself is
- * `ManagerCard`, which a Manager's Settings draws too in its edit look
- * (`manager-settings-dialog.tsx`), so the two never look apart.
+ * Start does, since a Create before it would name none. A Manager's
+ * Settings changes it afterwards, row by row, in New Manager's order
+ * (`manager-settings-dialog.tsx`).
  */
 
 import { managerCreateRefusalWords, startFailureWords } from "@repo/features/agent-refusal-words";
@@ -70,6 +70,7 @@ import {
   useNewTaskRunsOn,
   useOwnedMachines,
 } from "../tasks/runs-on.js";
+import { useNewTaskShown } from "../tasks/use-new-task.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { type FormDialog, useFormDialog } from "./use-form-dialog.js";
 
@@ -101,30 +102,16 @@ function refused(reason: string): ActionResult {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason };
 }
 
-/** Which card a Manager's card is: New Manager, which makes one, or a Manager's Settings, which changes one. */
-export const MANAGER_CARD = {
-  CREATE: "create",
-  EDIT: "edit",
-} as const;
-
-type ManagerCardLook = (typeof MANAGER_CARD)[keyof typeof MANAGER_CARD];
-
-/** What each card is titled and what its act says. */
+/** What the card is titled and what its act says. */
 const CARD_WORDS = {
-  [MANAGER_CARD.CREATE]: {
-    title: NEW_MANAGER,
-    verb: "Create Manager",
-    running: "Creating Manager",
-  },
-  [MANAGER_CARD.EDIT]: { title: "Manager settings", verb: "Save", running: "Saving" },
-} as const satisfies Record<ManagerCardLook, { title: string; verb: string; running: string }>;
+  title: NEW_MANAGER,
+  verb: "Create Manager",
+  running: "Creating Manager",
+} as const;
 
 /** What the Face row says in New Manager while no face is picked, where the service picks one. */
 const FACE_PICKED_FOR_YOU =
   "One no other Manager here wears is picked for you, unless you choose one.";
-
-/** What the Repositories and Machine rows say in a Manager's Settings, where they stand as made. */
-const FIXED_AFTER_CREATE = "Fixed once the Manager is made.";
 
 /** What a Manager's card draws its Model row from: the choice standing, how it changes, and the catalog it is picked from. */
 export interface ManagerCardModel {
@@ -142,14 +129,11 @@ export interface ManagerCardModel {
 }
 
 /**
- * A Manager's card, New Manager's and a Manager's Settings' alike, so the
- * two never look apart: its Name, its Face, its Repositories, its Machine,
- * and its Model, in that order. In a Manager's Settings (`MANAGER_CARD.EDIT`) its
- * Repositories and Machine stand as it was made, held and saying so, and its
- * act is Save; a field added to a Manager slots in here for both.
+ * New Manager's card: its Name, its Face, its Repositories, its Machine,
+ * and its Model, in that order, the order a Manager's Settings lists them
+ * in too, so a field added to a Manager slots in at the same place in both.
  */
-export function ManagerCard({
-  look,
+function ManagerCard({
   form,
   field,
   name,
@@ -158,7 +142,6 @@ export function ManagerCard({
   machine,
   model,
 }: {
-  look: ManagerCardLook;
   form: FormDialog;
   field: React.RefObject<HTMLInputElement | null>;
   name: { readonly value: string; readonly onChange: (next: string) => void };
@@ -182,8 +165,7 @@ export function ManagerCard({
   };
   model: ManagerCardModel;
 }): React.JSX.Element {
-  const words = CARD_WORDS[look];
-  const fixed = look === MANAGER_CARD.EDIT;
+  const words = CARD_WORDS;
   const [facePicking, setFacePicking] = useState(false);
   const { choice, defaultRead } = model;
 
@@ -238,13 +220,12 @@ export function ManagerCard({
             />
           )}
         </FormField>
-        <FormField label="Repositories" description={fixed ? FIXED_AFTER_CREATE : undefined}>
+        <FormField label="Repositories">
           {(control) => (
             <RepositoriesChip
               place={CHIP_PLACE.FIELD}
               width={CHIP_WIDTH.FIELD}
               describedBy={control["aria-describedby"]}
-              held={fixed ? FIXED_AFTER_CREATE : undefined}
               values={repositories.values}
               chooser={repositories.chooser}
               onToggle={repositories.onToggle}
@@ -252,13 +233,13 @@ export function ManagerCard({
             />
           )}
         </FormField>
-        <FormField label="Machine" description={fixed ? FIXED_AFTER_CREATE : undefined}>
+        <FormField label="Machine">
           {() => (
             <NewTaskRunsOnChip
               devices={machine.devices}
               owned={machine.owned}
               place={machine.place}
-              disabled={fixed || form.settling}
+              disabled={form.settling}
               narrow={false}
               look={CHIP_LOOK.FIELD}
               width={CHIP_WIDTH.FIELD}
@@ -277,7 +258,7 @@ export function ManagerCard({
                 usage={undefined}
                 look={CHIP_LOOK.FIELD}
                 width={CHIP_WIDTH.FIELD}
-                startsNew={!fixed}
+                startsNew
               />
             ) : defaultRead?.failed === true ? (
               <ErrorState
@@ -339,7 +320,8 @@ export function useNewManagerDialog({
   const device = deviceOfPlace(place);
   // Note that the card stays mounted between openings, so each waits on a devices' read made since it opened.
   const [openedOn, setOpenedOn] = useState<number | undefined>(undefined);
-  const devicesUnread = useDevicesRead(newTask.modelsRead, keptDevice, openedOn).unread;
+  const { modelsRead } = useNewTaskShown();
+  const devicesUnread = useDevicesRead(modelsRead, keptDevice, openedOn).unread;
   // Note that a model nothing of the account's pays for runs all the same on a picked device that runs its harness, on the device's own sign-in.
   const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
 
@@ -428,7 +410,6 @@ export function useNewManagerDialog({
 
   const dialog = (
     <ManagerCard
-      look={MANAGER_CARD.CREATE}
       form={form}
       field={field}
       name={{
@@ -479,7 +460,7 @@ export function useNewManagerDialog({
     ask: () => {
       key.current = crypto.randomUUID();
       sentOn.current = undefined;
-      setOpenedOn(newTask.modelsRead.generation);
+      setOpenedOn(modelsRead.generation);
       setName("");
       setPicks(undefined);
       setPicked(undefined);

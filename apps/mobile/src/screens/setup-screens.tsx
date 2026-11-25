@@ -1,5 +1,6 @@
 // setup-screens.tsx -- a new account's setup, alone in the app after sign-in, one screen per step of setup's stack: who it is for, a few questions about the person, a team's workspace where there is one, an agent, GitHub, and the tools, as the panel's setup walks them.
 
+import { LINK_PAGE } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { ACT_UNREACHED_WORDS } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
@@ -21,6 +22,7 @@ import {
   ActionRow,
   EmptyState,
   FOOTER_TONE,
+  footerToneOf,
   GLYPH,
   glyphSymbol,
   ListSection,
@@ -58,6 +60,7 @@ import {
 import { useSurvey } from "../setup/use-survey.js";
 import { useSignOut } from "../sign-out.js";
 import { useWorkspaceRepositories } from "../tasks/use-start.js";
+import { useUsageDataSwitch } from "../usage-data-switch.js";
 import { useWrite } from "../use-write.js";
 
 /** Setup's words, as the panel's setup says them. */
@@ -77,6 +80,10 @@ const WORDS = {
   TOOLS: "Connect your tools",
   TOOLS_PURPOSE:
     "Agents read and update Linear, Slack, Sentry, and Notion with your own access. Connect them anytime in Settings › Integrations.",
+  USAGE_DATA: "Usage data",
+  // Note that these keep to `PRIVACY.md`'s words for the iOS app, which records nothing, so they name no recordings as the desktop's and the web's do.
+  USAGE_DATA_NOTE: `${PRODUCT_NAME} collects counts of the features you use, and error and crash reports. This app's counts and crash reports are anonymous: they never name your account.`,
+  PRIVACY_POLICY: "Privacy policy",
   CONTINUE: "Continue",
   SKIP: "Skip",
   FINISH: "Finish",
@@ -121,6 +128,27 @@ function useSetupWorkspace(read: SetupPlaceRead) {
   };
 }
 
+/**
+ * What usage data the app sends, on setup's first step, with Settings ›
+ * Account's own switch under it and a link to the privacy policy: a notice
+ * rather than a question, as the panel's setup says it, so the switch stands
+ * as it is set and turning it off here turns it off in Settings.
+ */
+function UsageDataSection() {
+  const usage = useUsageDataSwitch();
+
+  return (
+    <ListSection
+      title={WORDS.USAGE_DATA}
+      footer={usage.refusal ?? WORDS.USAGE_DATA_NOTE}
+      footerTone={footerToneOf(usage.refusal)}
+      footerLink={{ label: WORDS.PRIVACY_POLICY, address: LINK_PAGE.PRIVACY }}
+    >
+      {usage.row}
+    </ListSection>
+  );
+}
+
 /** Sign out, alone at the foot of setup's first step, since setup stands with no Settings to sign out from. */
 function SignOutSection() {
   const signOut = useSignOut();
@@ -134,7 +162,8 @@ function SignOutSection() {
 
 /**
  * A step's frame: its title in the bar, its way on at the bar's end, and its
- * rows in a form, Sign out at the foot of the first. Back is the stack's own;
+ * rows in a form, usage data and Sign out at the foot of the first, Welcome
+ * or an invited account's survey alike. Back is the stack's own;
  * a step setup resumed at, with no step under it, offers a Back of its own,
  * which stands the step before in its place.
  */
@@ -187,7 +216,12 @@ function StepFrame({
       <Screen ground={SCREEN_GROUND.GROUPED} subtitle={subtitle}>
         <SettingsForm>
           {children}
-          {at === 0 ? <SignOutSection /> : null}
+          {at === 0 ? (
+            <>
+              <UsageDataSection />
+              <SignOutSection />
+            </>
+          ) : null}
         </SettingsForm>
       </Screen>
     </>

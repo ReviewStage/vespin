@@ -1,5 +1,5 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
-import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
+import { NO_ITEMS, taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   LINK_DESTINATION,
@@ -111,6 +111,7 @@ import { agentsNow, useTaskAgentName, useTaskPullRequestsOf } from "../tasks/use
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
+import { useNewTaskShown } from "../tasks/use-new-task.js";
 import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/use-open-link.js";
 import { usePins } from "../tasks/use-pin-writes.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
@@ -1413,8 +1414,9 @@ function DescriptionDocument({
       <AgentThreads
         key={tabAgent}
         agentId={tabAgent}
-        task={listed}
+        holder={taskHolder(listed)}
         tasks={tasks}
+        agentsOf={tasks.agents}
         inbox={inbox}
         chosen={threadsShown.itemId}
         shown={tasks.shown && !sidePanel.fullScreen}
@@ -1861,13 +1863,25 @@ interface WorkColumnProps {
   away?: TaskHeadBack | undefined;
 }
 
-/** A task New task is starting with its agent, which stands as its page until the start answers, wherever it was started. */
-function startingPage(
-  tasks: TasksControl,
-  room: ShellRoom,
-  away: TaskHeadBack | undefined,
-): React.JSX.Element | undefined {
-  if (!tasks.newTask.starting) return undefined;
+/**
+ * A task New task is starting with its agent, which stands as its page until
+ * the start answers, wherever it was started; else the page itself
+ * (`children`). Note that it reads whether a start is under way itself, so
+ * New task moving draws it alone, and the page it hands back, made by its
+ * owner's last draw, is not drawn again.
+ */
+function StartingOr({
+  tasks,
+  room,
+  away,
+  children,
+}: {
+  tasks: TasksControl;
+  room: ShellRoom;
+  away: TaskHeadBack | undefined;
+  children: React.ReactNode;
+}): React.ReactNode {
+  if (!useNewTaskShown().starting) return children;
 
   return (
     <StartingTaskPage
@@ -1931,31 +1945,31 @@ export const DesktopTasks = memo(function DesktopTasks({
   room = SHELL_ROOM.WIDE,
   away,
 }: WorkColumnProps): React.JSX.Element {
-  const starting = startingPage(tasks, room, away);
-
-  if (starting !== undefined) return starting;
-
-  if (tasks.page === TASKS_PAGE.HOME) return <TaskOpening tasks={tasks} room={room} away={away} />;
-
   return (
-    <SkillFiles
-      source={tasks.agents.readSkills}
-      // Note that a skill's file opens as a file a chip names does, whole, through the window's
-      // one door for a press (`tab-press.ts`), so its tab stands on this task though the app never showed it.
-      onOpen={(skill) =>
-        pressTab(
-          { ...tasks, onKeys: tasks.onTabKeys },
-          { kind: TAB_PRESS.FILE, ref: { path: skill.path } },
-        )
-      }
-    >
-      <DescriptionDocument
-        tasks={tasks}
-        looks={looks}
-        room={room}
-        away={away ?? { label: HOME_BACK, onPress: tasks.onGoHome }}
-      />
-    </SkillFiles>
+    <StartingOr tasks={tasks} room={room} away={away}>
+      {tasks.page === TASKS_PAGE.HOME ? (
+        <TaskOpening tasks={tasks} room={room} away={away} />
+      ) : (
+        <SkillFiles
+          source={tasks.agents.readSkills}
+          // Note that a skill's file opens as a file a chip names does, whole, through the window's
+          // one door for a press (`tab-press.ts`), so its tab stands on this task though the app never showed it.
+          onOpen={(skill) =>
+            pressTab(
+              { ...tasks, onKeys: tasks.onTabKeys },
+              { kind: TAB_PRESS.FILE, ref: { path: skill.path } },
+            )
+          }
+        >
+          <DescriptionDocument
+            tasks={tasks}
+            looks={looks}
+            room={room}
+            away={away ?? { label: HOME_BACK, onPress: tasks.onGoHome }}
+          />
+        </SkillFiles>
+      )}
+    </StartingOr>
   );
 }, sameWorkColumn);
 
@@ -1971,18 +1985,14 @@ export const DesktopHomePage = memo(function DesktopHomePage({
   accountName,
   staged = false,
 }: WorkColumnProps): React.JSX.Element {
-  const starting = startingPage(tasks, room, away);
-
-  if (starting !== undefined) return starting;
-
   return (
-    <>
+    <StartingOr tasks={tasks} room={room} away={away}>
       <div className="desktop-drag-strip" />
       <PageFind page={FIND_PAGE.HOME} active={tasks.shown}>
         <Fill as={FILL_ELEMENT.SECTION} className="home" aria-label="Home">
           <DesktopHome tasks={tasks} room={room} accountName={accountName} staged={staged} />
         </Fill>
       </PageFind>
-    </>
+    </StartingOr>
   );
 });

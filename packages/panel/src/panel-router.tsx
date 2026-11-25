@@ -412,11 +412,15 @@ const automationsIndexRoute = createRoute({ getParentRoute: () => automationsRou
 
 const automationsRunsRoute = createRoute({ getParentRoute: () => automationsRoute, path: "runs" });
 
-/** A new automation's address names the suggestion it was opened from, if any, as `?preset=`. */
+/** A new automation's address names the suggestion it was opened from, if any, as `?preset=`, and the agent its runs go to, if any, as `?target=`. */
 const automationsNewSearchSchema = Schema.toStandardSchemaV1(
-  Schema.StructWithRest(Schema.Struct({ preset: Schema.optionalKey(Schema.String) }), [
-    Schema.Record(Schema.String, Schema.String),
-  ]),
+  Schema.StructWithRest(
+    Schema.Struct({
+      preset: Schema.optionalKey(Schema.String),
+      target: Schema.optionalKey(Schema.String),
+    }),
+    [Schema.Record(Schema.String, Schema.String)],
+  ),
 );
 
 const automationsNewRoute = createRoute({

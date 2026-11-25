@@ -16,9 +16,11 @@ import { Stack, useIsFocused } from "expo-router";
 import type { ReactElement, ReactNode } from "react";
 import { MachineAsks } from "../../agents/machine-asks.js";
 import { useAppNotReadyCount } from "../../app-ready.js";
+import { useCrashReports } from "../../crash-reports.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostConnectLink } from "../../host-connect-link.js";
 import { useInboxWidget } from "../../inbox-widget/use-inbox-widget.js";
+import { useLaunchLoadCount } from "../../launch-load.js";
 import { useLiveActivity } from "../../live-activity/use-live-activity.js";
 import { MenuCommands } from "../../menu-commands/menu-commands.js";
 import { useNewTaskDraftsSignOut } from "../../new-task-draft.js";
@@ -146,6 +148,7 @@ export default function GuardedScreens() {
   });
 
   useAppNotReadyCount(signedIn && !updateNeeded);
+  useLaunchLoadCount();
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
@@ -153,6 +156,7 @@ export default function GuardedScreens() {
   useSystemActivity(signedIn);
   useRecentOpenedSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
+  useCrashReports();
   useOfflineNotice();
   useNoticeForAccount();
   useShareSheet(updateNeeded);

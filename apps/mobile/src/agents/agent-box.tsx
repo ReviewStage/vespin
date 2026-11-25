@@ -46,7 +46,7 @@ const MODEL_CHIP_ID = "agent-model-chip";
 const MACHINE_CHIP_ID = "agent-machine-chip";
 
 /** What the Machine chip's menu heads where commands go, as the panel's place chip names its Default machine row. */
-const COMMANDS_WORDS = { LABEL: "Terminal and computer use" } as const;
+const COMMANDS_WORDS = { LABEL: "Commands run on" } as const;
 
 /** No servers to offer, held as one value so a menu with none reads the same each time. */
 const NO_SUBMENUS: readonly BarMenu[] = [];

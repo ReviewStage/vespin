@@ -443,6 +443,8 @@ type ListSectionProps = {
   readonly footer?: string | undefined;
   /** What the footer says: a note on the section, in the footnote's own ink, or why a send did not go, as every refusal reads (`ProblemLine`) and told to VoiceOver at once. */
   readonly footerTone?: FooterTone | undefined;
+  /** A link at the end of a note's footer, such as a privacy policy, which the system opens; none on a failure, whose words are only why. */
+  readonly footerLink?: FooterLink | undefined;
   /** Called with the link a row dragged onto the header carries (`RowFrame`'s `link`), such as a task's to move it into the section; the header takes no drop where none is given. */
   readonly onDropLink?: ((url: string) => void) | undefined;
   /** How many of what it holds are finished of all of them, drawn as `2/5` in the count's place, such as a task's sub-tasks. */
@@ -655,6 +657,12 @@ export const FOOTER_TONE = {
 
 export type FooterTone = (typeof FOOTER_TONE)[keyof typeof FOOTER_TONE];
 
+/** A link a section's footer ends with: its words, and the web address the system opens on a tap. */
+type FooterLink = {
+  readonly label: string;
+  readonly address: string;
+};
+
 /** A footer's tone where it says a refusal while one stands and a note otherwise: a failure while `refusal` holds words. */
 export function footerToneOf(refusal: string | undefined): FooterTone {
   return refusal === undefined ? FOOTER_TONE.NOTE : FOOTER_TONE.FAILURE;
@@ -664,14 +672,27 @@ export function footerToneOf(refusal: string | undefined): FooterTone {
 export function SectionFooter({
   words,
   tone,
+  link,
 }: {
   readonly words: string;
   readonly tone: FooterTone;
+  readonly link?: FooterLink | undefined;
 }) {
+  const colors = useColors();
   const failure = tone === FOOTER_TONE.FAILURE;
   useAnnounced(failure ? words : undefined, true);
 
-  return failure ? <ProblemLine text={words} /> : <Text>{words}</Text>;
+  if (failure) return <ProblemLine text={words} />;
+
+  if (link === undefined) return <Text>{words}</Text>;
+
+  // Note that only the link is read as Markdown, so the note's own words stand as written; SwiftUI draws it in the tint, the accent here since the app's own tint is the text's ink, and opens it with the system's `openURL`, as a Settings footer's link opens.
+  return (
+    <Text modifiers={[tint(colors.ACCENT)]}>
+      {`${words} `}
+      <Text markdownEnabled>{`[${link.label}](${link.address})`}</Text>
+    </Text>
+  );
 }
 
 /**
@@ -735,6 +756,7 @@ export function ListSection({
   onFold,
   footer,
   footerTone = FOOTER_TONE.NOTE,
+  footerLink,
   onDropLink,
   add,
   more,
@@ -876,7 +898,7 @@ export function ListSection({
       {...(grounded === undefined ? {} : { header: grounded })}
       {...(footer === undefined
         ? {}
-        : { footer: <SectionFooter words={footer} tone={footerTone} /> })}
+        : { footer: <SectionFooter words={footer} tone={footerTone} link={footerLink} /> })}
     >
       {foldable && folded ? [] : children}
     </Section>

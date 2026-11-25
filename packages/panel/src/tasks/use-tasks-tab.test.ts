@@ -157,6 +157,7 @@ import { MAIN_TAB, PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./task-tab-model.js
 import { loadedTasksFixture, loadTasksFixture } from "./tasks-fixture-loader.js";
 import { HISTORY_READ } from "./use-description-history.js";
 import { useListedInbox } from "./use-inbox-slices.js";
+import type { NewTaskShown } from "./use-new-task.js";
 import { type TasksControl, useTasksTab } from "./use-tasks-tab.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
@@ -405,6 +406,7 @@ function mount(
   };
 
   let control: TasksControl | undefined;
+  let newTaskShown: NewTaskShown | undefined;
   let listedNow: readonly TaskSummary[] = [];
   let everyNow: readonly TaskSummary[] = [];
   let restand: ((next: Standing) => void) | undefined;
@@ -523,7 +525,7 @@ function mount(
     restand = setHeld;
     const here = useWindowPlace();
     const taskView = useTaskRoute();
-    control = useTasksTab({
+    ({ control, newTaskShown } = useTasksTab({
       tasks: held.tasks,
       run: { fixtureMode: held.fixtureMode, profile: held.profile },
       signedIn: held.signedIn,
@@ -547,7 +549,7 @@ function mount(
       openTask: (at, taskId) => windowHistory?.onOpenTask(at, taskId) ?? false,
       startStands: () => windowHistory?.onStartStands(),
       leaveStart: () => windowHistory?.onLeaveStart() ?? false,
-    });
+    }));
     // What the sidebar lists, the listed workspace's tasks, and every task, as the window's surfaces read them.
     listedNow = useNamedTasks(control.typedNames, NAMED_ORDER.PINNED_FIRST, control.workspace?.id);
     everyNow = useNamedTasks(control.typedNames, NAMED_ORDER.PINNED_FIRST);
@@ -590,7 +592,7 @@ function mount(
           })
         : null,
       held.homeComposer === true && control.atHome
-        ? createElement(HomeComposerWords, { asks: control.newTask.homeAsks })
+        ? createElement(HomeComposerWords, { asks: newTaskShown.homeAsks })
         : null,
     );
   }
@@ -643,6 +645,12 @@ function mount(
       assert.ok(control);
 
       return control;
+    },
+    /** What of New task moves, as the window provides it apart from the tab (`NewTaskShownContext`). */
+    newTaskShown: () => {
+      assert.ok(newTaskShown);
+
+      return newTaskShown;
     },
     /** The ids of the tasks the sidebar lists, the listed workspace's, pinned first. */
     listed: () => listedNow.map((task) => task.id),
@@ -832,15 +840,15 @@ test("New plan opens its dialog over the open plan, which stays open; a second p
 
   act(() => tab.control().newTask.onOpen());
   act(() => tab.control().newTask.onClose());
-  assert.equal(tab.control().newTask.open, false, "Cancel puts the dialog away");
+  assert.equal(tab.newTaskShown().open, false, "Cancel puts the dialog away");
   act(() => tab.control().newTask.onOpenIn("acme/web"));
-  assert.equal(tab.control().newTask.open, true);
-  assert.deepEqual(tab.control().newTask.preset, { repository: "acme/web" });
+  assert.equal(tab.newTaskShown().open, true);
+  assert.deepEqual(tab.newTaskShown().preset, { repository: "acme/web" });
   assert.equal(tab.control().page, TASKS_PAGE.TASK, "the plan behind the dialog stays open");
   assert.ok(!tab.told.includes(ACT_KIND.TASKS_CLOSE), "nothing left the plan");
   act(() => tab.control().newTask.onOpen());
   assert.deepEqual(
-    tab.control().newTask.preset,
+    tab.newTaskShown().preset,
     { repository: "acme/web" },
     "a press while the dialog stands leaves it as it is",
   );
@@ -852,19 +860,19 @@ test("New plan opens its dialog over the open plan, which stays open; a second p
       .newTask.start("Dark mode", "acme/web", tab.control().newTask.workspaceId);
   });
   assert.ok(note, "a refusal says why");
-  assert.equal(tab.control().newTask.open, true, "a refusal keeps the dialog");
+  assert.equal(tab.newTaskShown().open, true, "a refusal keeps the dialog");
   await act(async () => {
     note = await tab
       .control()
       .newTask.start("Dark mode", "acme/web", tab.control().newTask.workspaceId);
   });
   assert.equal(note, undefined);
-  assert.equal(tab.control().newTask.open, false, "a plan started closes the dialog");
+  assert.equal(tab.newTaskShown().open, false, "a plan started closes the dialog");
 
   act(() => tab.control().newTask.onOpen());
   tab.stand({ shown: false });
   tab.stand({ shown: true });
-  assert.equal(tab.control().newTask.open, false, "Settings taking the window put the dialog away");
+  assert.equal(tab.newTaskShown().open, false, "Settings taking the window put the dialog away");
 });
 
 test("a task started from a section's New task is filed on top of that section", async () => {
@@ -888,7 +896,7 @@ test("a task started from a section's New task is filed on top of that section",
   );
 
   act(() => tab.control().newTask.onOpenInSection(launch));
-  const { sectionId } = tab.control().newTask.preset ?? {};
+  const { sectionId } = tab.newTaskShown().preset ?? {};
   await act(async () => {
     await tab.control().newTask.start("Launch email", null, TASK.workspaceId, { sectionId });
   });
@@ -917,13 +925,13 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
   });
 
   act(() => home.control().newTask.onOpen());
-  assert.equal(home.control().newTask.open, false, "no dialog over Home");
-  assert.equal(home.control().newTask.homeAsks, 1, "Home's composer is asked for the caret");
+  assert.equal(home.newTaskShown().open, false, "no dialog over Home");
+  assert.equal(home.newTaskShown().homeAsks, 1, "Home's composer is asked for the caret");
 
   act(() => inboxDoorNow().open());
   act(() => home.control().newTask.onOpen());
-  assert.equal(home.control().newTask.open, true, "the Inbox gets the dialog");
-  assert.equal(home.control().newTask.homeAsks, 1);
+  assert.equal(home.newTaskShown().open, true, "the Inbox gets the dialog");
+  assert.equal(home.newTaskShown().homeAsks, 1);
 });
 
 test("New task pressed on Settings, which it leaves for Home, asks Home's own composer for the caret rather than opening the dialog over it", () => {
@@ -941,7 +949,7 @@ test("New task pressed on Settings, which it leaves for Home, asks Home's own co
     settings.stand({ shown: true });
     onOpen();
   });
-  assert.equal(settings.control().newTask.open, false, "no dialog over Home");
+  assert.equal(settings.newTaskShown().open, false, "no dialog over Home");
   // Note that Home's composer is first drawn by the press itself, and its first draw takes no caret on a phone.
   assert.equal(
     document.activeElement,
@@ -968,10 +976,10 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
       card: { ...card, press: { key, ask } },
     });
   });
-  const refused = tab.control().newTask.homeRefused?.refused;
+  const refused = tab.newTaskShown().homeRefused?.refused;
 
   const refusedOnHome = {
-    dialog: tab.control().newTask.open,
+    dialog: tab.newTaskShown().open,
     words: refused?.card.words,
     repository: refused?.card.repository,
     says: refused?.note.text.length !== 0,
@@ -990,7 +998,7 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
       },
     });
   });
-  const keptUnder = tab.control().newTask.homeRefused?.refused.card.repository;
+  const keptUnder = tab.newTaskShown().homeRefused?.refused.card.repository;
   act(() => inboxDoorNow().open());
   act(() => tab.control().onGoHome());
 
@@ -1002,7 +1010,7 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
   });
   assert.equal(keptUnder, "acme/api", "a dialog's refused start leaves Home's refusal standing");
   assert.equal(
-    tab.control().newTask.homeRefused,
+    tab.newTaskShown().homeRefused,
     undefined,
     "Home opened again after the Inbox opens on its draft alone",
   );
@@ -1052,7 +1060,7 @@ test("with Open a task once it starts off, New task starts the task and its agen
     quiet: tab.payloads
       .filter((asked) => asked.kind === ACT_KIND.TASKS_START)
       .map((asked) => Option.getOrUndefined(readQuiet(asked.payload))?.quiet),
-    dialog: tab.control().newTask.open,
+    dialog: tab.newTaskShown().open,
     says: newestToastSays(),
   };
 
@@ -4376,8 +4384,8 @@ test("New sub-task on the open task the list has not read opens New task as a su
 
   act(() => tab.control().newTask.onOpenRelated(TASK.id, TASK_CREATE_RELATION_KIND.SUB_TASK_OF));
 
-  assert.equal(tab.control().newTask.open, true);
-  const relation = tab.control().newTask.preset?.relation;
+  assert.equal(tab.newTaskShown().open, true);
+  const relation = tab.newTaskShown().preset?.relation;
   assert.equal(relation?.kind, "sub-task-of");
   assert.equal(relation?.task.id, TASK.id);
   assert.equal(relation?.task.workspaceId, "workspace-personal");
@@ -4397,7 +4405,7 @@ test("New task's Agent mode sends one start carrying the agent, its words and mo
   const { choice, prompt, note, starts } = await startAgentTask(tab);
 
   assert.equal(note, undefined);
-  assert.equal(tab.control().newTask.open, false, "the dialog closes");
+  assert.equal(tab.newTaskShown().open, false, "the dialog closes");
   assert.equal(starts.length, 1);
   const { idempotencyKey, ...agent } = starts[0]?.agent ?? { idempotencyKey: "" };
   assert.equal(starts[0]?.planning, false);
@@ -4608,8 +4616,8 @@ test("New task's agent start opens its page at once, before the service answers,
     });
   });
 
-  assert.equal(tab.control().newTask.open, false, "the dialog closes as Start is pressed");
-  assert.equal(tab.control().newTask.starting, true, "the page stands at once");
+  assert.equal(tab.newTaskShown().open, false, "the dialog closes as Start is pressed");
+  assert.equal(tab.newTaskShown().starting, true, "the page stands at once");
 
   await act(async () => {
     await vi.waitFor(() => assert.ok(answers.length > 0));
@@ -4618,7 +4626,7 @@ test("New task's agent start opens its page at once, before the service answers,
   });
   tab.stand({ tasks: AGENT_TASK });
   await settle();
-  assert.equal(tab.control().newTask.starting, false, "the task's own page takes its place");
+  assert.equal(tab.newTaskShown().starting, false, "the task's own page takes its place");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
 });
 
@@ -4653,8 +4661,8 @@ test("what the developer opened while New task's agent start was out, a page and
     await note;
   });
   assert.equal(views?.automations !== undefined, true, "the page stands");
-  assert.equal(tab.control().newTask.open, true, "New task stands");
-  assert.equal(tab.control().newTask.starting, false);
+  assert.equal(tab.newTaskShown().open, true, "New task stands");
+  assert.equal(tab.newTaskShown().starting, false);
 });
 
 test("New task's agent start refused after its page opened opens the card again on the repository, model, and press it held, saying why, over the version history it was asked from", async () => {
@@ -4700,7 +4708,7 @@ test("New task's agent start refused after its page opened opens the card again 
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, { handed, card });
   });
-  assert.equal(tab.control().newTask.open, false);
+  assert.equal(tab.newTaskShown().open, false);
 
   let refused: Failure | undefined;
   await act(async () => {
@@ -4709,9 +4717,9 @@ test("New task's agent start refused after its page opened opens the card again 
     refused = await note;
   });
   assert.ok(refused !== undefined);
-  assert.equal(tab.control().newTask.starting, false, "the page gives way");
-  assert.equal(tab.control().newTask.open, true, "the card opens again");
-  assert.deepEqual(tab.control().newTask.preset?.refused, { card, note: refused });
+  assert.equal(tab.newTaskShown().starting, false, "the page gives way");
+  assert.equal(tab.newTaskShown().open, true, "the card opens again");
+  assert.deepEqual(tab.newTaskShown().preset?.refused, { card, note: refused });
   assert.equal(tab.control().history.open, true, "the version history stands behind it again");
 });
 
@@ -4725,8 +4733,8 @@ test("Create with an agent opens New task's card for an automation's agent over 
 
   act(() => automationsDoor?.open());
   act(() => tab.control().newTask.onOpenForAutomation());
-  assert.equal(tab.control().newTask.open, true);
-  assert.deepEqual(tab.control().newTask.preset, { purpose: NEW_TASK_PURPOSE.AUTOMATION });
+  assert.equal(tab.newTaskShown().open, true);
+  assert.deepEqual(tab.newTaskShown().preset, { purpose: NEW_TASK_PURPOSE.AUTOMATION });
   assert.equal(views?.automations !== undefined, true, "the page stands behind the card");
 
   const handed = {
@@ -4753,15 +4761,15 @@ test("Create with an agent opens New task's card for an automation's agent over 
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, { handed, card });
   });
-  assert.equal(tab.control().newTask.open, false);
+  assert.equal(tab.newTaskShown().open, false);
   await act(async () => {
     await vi.waitFor(() => assert.ok(answers.length > 0));
     answers[0]?.({ failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE });
     await note;
   });
-  assert.equal(tab.control().newTask.open, true, "the card opens again");
+  assert.equal(tab.newTaskShown().open, true, "the card opens again");
   assert.equal(
-    tab.control().newTask.preset?.purpose,
+    tab.newTaskShown().preset?.purpose,
     NEW_TASK_PURPOSE.AUTOMATION,
     "for an automation's agent",
   );
@@ -4799,7 +4807,7 @@ test("an agent refused as New task's Agent mode started its task opens the task 
   const draft = tab.control().agents.draft;
 
   assert.equal(note, undefined, "the task started, so the card says nothing");
-  assert.equal(tab.control().newTask.open, false, "the dialog closes");
+  assert.equal(tab.newTaskShown().open, false, "the dialog closes");
   assert.ok(draft, "the new task holds a draft agent");
   assert.deepEqual(
     { prompt: draft.prompt, choice: draft.choice },
@@ -5277,5 +5285,5 @@ it.effect(
 test("New task over Home under Admin opens its dialog, since Home's composer is not on screen", () => {
   const tab = mount({ shown: true, admin: true });
   act(() => tab.control().newTask.onOpen());
-  assert.equal(tab.control().newTask.open, true);
+  assert.equal(tab.newTaskShown().open, true);
 });

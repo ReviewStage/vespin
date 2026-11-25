@@ -6,9 +6,11 @@
  * the SQL those share.
  */
 
+import { inboxItem } from "@repo/database/schemas/inbox";
 import { TOPIC } from "@repo/database/sync/notification";
 import { attachmentSync, inboxItemSync, inboxMessageSync } from "@repo/database/sync/tables";
 import { INBOX_ITEMS_READ } from "@repo/features/inbox-live";
+import { ORDER } from "@repo/features/live-read";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { Clock, Effect } from "effect";
 import { TASKLESS_LIVE, tasklessLiveParam } from "../../agents/taskless-reads.js";
@@ -19,8 +21,10 @@ import {
 import { HOSTED_REFUSAL } from "../../http/http-effect.js";
 import {
   type AccountItemsReader,
+  accountItemsCarried,
   accountItemsDeltaStatements,
   accountItemsLiveStatements,
+  accountItemsPageStatements,
 } from "../../inbox/inbox-store.js";
 import { instantParam } from "../../sync/live-param.js";
 import { readerAndWorkspaceTopics } from "../../sync/reader-topics.js";
@@ -51,7 +55,18 @@ import { ITEM_GATES, SCOPE_INBOX_READS } from "./scope-inbox.js";
  * a file names only its item's task and agent, so its rows are taken
  * whatever they name. An item that leaves by the clock, past thirty days
  * settled, logs nothing, and the reader drops it itself.
+ *
+ * A whole answer to a build that reads pages comes `ITEMS_A_PAGE` items at
+ * a time, the latest changed first, each with its stamp and, where it
+ * changed since the reader's `since`, its row, thread, and files.
  */
+/**
+ * How many items a page of a whole answer carries: some 7 rows each, its
+ * stamp, its row, some 4 messages, and a file, so a page stays near 200
+ * rows, which a phone decodes in some 25 ms (`../live-pages.ts`).
+ */
+const ITEMS_A_PAGE = 25;
+
 /** Whose items the read carries, as its params bind them (`AccountItemsReader`). */
 function itemsReaderOf(params: {
   readonly userId: string;
@@ -94,5 +109,18 @@ export const inboxItemsRead = bindLiveRead(INBOX_ITEMS_READ, {
     reach: ({ userId }) => readerAndWorkspaceTopics(userId),
     own: { stamps: inboxItemSync, items: inboxItemSync },
     statements: (params, moved) => accountItemsDeltaStatements(itemsReaderOf(params), moved),
+    page: {
+      size: ITEMS_A_PAGE,
+      order: [
+        [inboxItem.updatedAt, ORDER.DESC],
+        [inboxItem.id, ORDER.DESC],
+      ],
+      parents: (params) => ({
+        table: inboxItem,
+        where: accountItemsCarried(itemsReaderOf(params)),
+      }),
+      statements: (params, { keys }) =>
+        accountItemsPageStatements(itemsReaderOf(params), instantParam(params.since), keys),
+    },
   },
 });

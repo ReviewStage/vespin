@@ -11,7 +11,7 @@ import { handHostReads, holdRepositoryLists, type RepositoriesRead } from "../te
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
+import { NO_REPOSITORIES, tasksControl, withNewTaskShown } from "../testing/tasks-control.js";
 import { NewTaskDialog } from "./new-task-dialog.js";
 import type { RepositoryChooser } from "./repository-chip.js";
 
@@ -133,21 +133,22 @@ async function openNewTask(workspaceId: string, preset?: string) {
     act(() =>
       root.render(
         withQueryClient(
-          createElement(NewTaskDialog, {
-            newTask: {
-              ...control.newTask,
-              open: true,
-              preset: preset === undefined ? undefined : { repository: preset },
-              workspaces: [PERSONAL, ACME],
-              workspaceId: listed,
-              repositoriesIn: chooserFor,
-              start: (_name, repository, startsIn) => {
-                starts.push([repository, startsIn]);
+          withNewTaskShown(
+            { open: true, preset: preset === undefined ? undefined : { repository: preset } },
+            createElement(NewTaskDialog, {
+              newTask: {
+                ...control.newTask,
+                workspaces: [PERSONAL, ACME],
+                workspaceId: listed,
+                repositoriesIn: chooserFor,
+                start: (_name, repository, startsIn) => {
+                  starts.push([repository, startsIn]);
 
-                return Promise.resolve(undefined);
+                  return Promise.resolve(undefined);
+                },
               },
-            },
-          }),
+            }),
+          ),
         ),
       ),
     );

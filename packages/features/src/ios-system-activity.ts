@@ -178,7 +178,8 @@ export type HandoffActivity = typeof handoffActivitySchema.Type;
 
 /** What the window holds that a link names only by its number: its tasks and their workspaces. */
 export interface HandoffReads {
-  readonly tasks: readonly Pick<TaskSummary, "id" | "number" | "workspaceId">[];
+  /** The tasks a task's link may name, walked only where the window shows a task, and only as far as the one it names. */
+  readonly tasks: Iterable<Pick<TaskSummary, "id" | "number" | "workspaceId">>;
   readonly workspaces: readonly Workspace[];
 }
 
@@ -209,15 +210,18 @@ export function desktopHandoffOf(link: ReadLink, reads: HandoffReads): HandoffAc
     }
 
     case LINK_DESTINATION.TASK: {
-      const task = reads.tasks.find(
-        (each) =>
-          taskLinkStep(each) === place.taskId &&
-          linkWorkspaceStep(each.workspaceId, reads.workspaces) === workspace,
-      );
+      for (const task of reads.tasks) {
+        if (
+          taskLinkStep(task) === place.taskId &&
+          linkWorkspaceStep(task.workspaceId, reads.workspaces) === workspace
+        ) {
+          return {
+            webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, taskId: task.id }, workspace),
+          };
+        }
+      }
 
-      if (task === undefined) return undefined;
-
-      return { webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, taskId: task.id }, workspace) };
+      return undefined;
     }
 
     default:

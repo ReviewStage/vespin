@@ -16,11 +16,8 @@ import {
   GAP,
   Inline,
   LAYOUT_ELEMENT,
-  LIST_MOTION_WAY,
-  ListMotion,
-  useLeaving,
 } from "@repo/ui";
-import { type ReactNode, type RefObject, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useMemo, useRef, useState } from "react";
 import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 
@@ -36,15 +33,14 @@ import { FileTypeIcon } from "./file-type-icon.js";
  * opens its file over the window (`attachment-viewer.tsx`), walking the
  * message's files from there; a chip's way off in the box takes it off
  * without opening it, at once, so a message sent the moment after carries
- * nothing it took off, while the row's `ListMotion` holds the chip drawn as
- * it scales out, and scales in each file the box takes. The box's chips are
+ * nothing it took off, and the chips after it close over it at once. The box's chips are
  * followed by the file each stands for: `attachmentChips` answers one chip
  * for each file the box holds, the same chip each time it is asked, and the
  * row names each by an id it mints for that chip, since two files the box
  * holds may carry the same name and bytes. An image the service kept beside the transcript is
  * named on its row by the picture's id rather than carried as bytes
  * (`@repo/features/message-files`'s `messageFileChips`), and the transcript reads it through the agent's
- * pictures (`agent-pictures.tsx`'s `MessageFileChips`). A file the service
+ * pictures (`skill-chip.tsx`'s `SentMessage`). A file the service
  * kept no bytes of, one the retired runtime staged in the sandbox before the row was
  * written, is drawn by its name alone, with nothing to open and nothing to
  * walk to.
@@ -90,13 +86,11 @@ function wordsOf(base64: string): string | undefined {
 /** One file's chip in a row: its thumbnail or its type's icon, its name and size, its open, and its way off where the row has one. */
 function FileChipOf({
   file,
-  motionKey,
   onOpen,
   onRemove,
   uploading = false,
 }: {
   file: FileChip;
-  motionKey?: string | undefined;
   onOpen: (() => void) | undefined;
   onRemove: (() => void) | undefined;
   /** Whether the file is on its way up with the line it came on. */
@@ -121,28 +115,17 @@ function FileChipOf({
       peek={text === undefined ? undefined : peekOf(text)}
       onOpen={base64 === "" ? undefined : onOpen}
       onRemove={onRemove}
-      motionKey={motionKey}
       state={uploading ? ATTACHMENT_CHIP_STATE.UPLOADING : ATTACHMENT_CHIP_STATE.READY}
     />
   );
 }
 
-/**
- * The message box's chips, each followed by an id minted for its file's
- * chip. Note that it is its own component under the row's `ListMotion`,
- * because `useLeaving` finds the motion through the context the motion
- * provides, and called above it would find none and let a chip go at once.
- * The row stands, hidden, while the box holds no file, because the motion
- * plays an arrival only into a list that stood before the change, so the
- * first file taken on scales in as every later one does.
- */
-function BoxRow({
-  row,
+/** The message box's row: each file's chip keyed by an id minted for its file, so a file taken off leaves the others' chips standing as they were. */
+function BoxFileChips({
   files,
   onRemove,
   onOpen,
 }: {
-  row: RefObject<HTMLUListElement | null>;
   files: readonly FileChip[];
   onRemove: (index: number) => void;
   onOpen: (file: FileChip) => void;
@@ -161,56 +144,28 @@ function BoxRow({
     return id;
   };
 
-  const drawn = useLeaving(files, idOf);
-
   return (
     <Inline
       as={LAYOUT_ELEMENT.UL}
       gap={GAP.CONTROL}
       align={ALIGN.STRETCH}
-      ref={row}
       className="attached-files"
       aria-label="Attached files"
-      hidden={drawn.length === 0}
-      moves
+      hidden={files.length === 0}
     >
-      {drawn.map((entry) => {
-        const index = files.indexOf(entry.value);
-
-        return (
-          <FileChipOf
-            key={entry.key}
-            file={entry.value}
-            motionKey={entry.key}
-            onOpen={entry.leaving ? undefined : () => onOpen(entry.value)}
-            onRemove={entry.leaving || index === -1 ? undefined : () => onRemove(index)}
-          />
-        );
-      })}
+      {files.map((file, index) => (
+        <FileChipOf
+          key={idOf(file)}
+          file={file}
+          onOpen={() => onOpen(file)}
+          onRemove={() => onRemove(index)}
+        />
+      ))}
     </Inline>
   );
 }
 
-/** The message box's row, under its `ListMotion`: a file taken off scales out where it stood, and one taken on scales in. */
-function BoxFileChips({
-  files,
-  onRemove,
-  onOpen,
-}: {
-  files: readonly FileChip[];
-  onRemove: (index: number) => void;
-  onOpen: (file: FileChip) => void;
-}): ReactNode {
-  const row = useRef<HTMLUListElement | null>(null);
-
-  return (
-    <ListMotion root={row} way={LIST_MOTION_WAY.SCALE}>
-      <BoxRow row={row} files={files} onRemove={onRemove} onOpen={onOpen} />
-    </ListMotion>
-  );
-}
-
-export function AttachedFileChips({
+export const AttachedFileChips = memo(function AttachedFileChips({
   files,
   onRemove,
   uploading = false,
@@ -271,4 +226,4 @@ export function AttachedFileChips({
       {viewer}
     </Inline>
   );
-}
+});

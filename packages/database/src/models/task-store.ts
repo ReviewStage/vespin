@@ -56,6 +56,7 @@ import { taskSectionEntry } from "../schemas/task-section.js";
 import { agentAutomationNameSql } from "./agent-name.js";
 import { ArchivedByColumnSchema, InstantColumnSchema } from "./columns.js";
 import { deleteConversations } from "./conversation-delete.js";
+import { readDescriptionFileTypes } from "./description-attachments.js";
 import { readLastEdit, readSectionWriters } from "./description-revisions.js";
 import { type Device, devicesNamed } from "./device-store.js";
 import { settleAgentInboxItems, settleTaskInboxItems } from "./inbox-settle.js";
@@ -659,6 +660,7 @@ function storedTaskOf(userId: string, row: TaskRow): TaskStoreEffect<StoredTask>
         ),
         lastRevision: readLastEdit(row.id),
         blocks: readTaskBlocks(userId, row.id),
+        fileTypes: readDescriptionFileTypes(row.id),
       },
       { concurrency: yield* readConcurrency },
     );
@@ -687,6 +689,7 @@ function storedTaskOf(userId: string, row: TaskRow): TaskStoreEffect<StoredTask>
         agentEdits: agentEdits.map(({ agentId, label, at }) => ({ agentId, label, at })),
         ...(Option.isSome(lastEdit) ? { lastEdit: lastEdit.value } : undefined),
         description: { body: row.description, assumptions: [] },
+        ...(Object.keys(read.fileTypes).length === 0 ? undefined : { fileTypes: read.fileTypes }),
         sectionEdits: sectionWriters.map((writer) => sectionEditOf(writer, labels)),
         ...Option.getOrUndefined(read.blocks),
       },

@@ -156,6 +156,7 @@ import { useTaskListCollections, useTaskListRow } from "../task-list-collections
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { attachmentChips } from "./attached-file-chips.js";
+import { useHandedWords } from "./box-words.js";
 import { CommentMenu, CommentTools } from "./comment-menu.js";
 import { REPLY_LOOK, REPLY_VARIANT, type ReplyVariant } from "./comment-variant.js";
 import {
@@ -971,7 +972,7 @@ function CommentEditField({
   ];
 
   const box = useMessageBox({
-    draft: value,
+    draft: useHandedWords(value),
     setDraft: onChange,
     placeholder: COMMENT_WORDS.EDIT,
     label: COMMENT_WORDS.EDIT,
@@ -1241,7 +1242,7 @@ function ReplyField({
   const setWords = (text: string) => update((was) => ({ ...was, text }));
 
   const box = useMessageBox({
-    draft: words,
+    draft: useHandedWords(words),
     setDraft: setWords,
     placeholder: label,
     label,

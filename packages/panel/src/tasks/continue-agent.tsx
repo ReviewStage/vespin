@@ -93,15 +93,23 @@ const CONTINUED_COPY = {
   CONNECT_HINT: "Connect another harness to continue on its models.",
 } as const;
 
-/** What a closed box hands the press: its words and the files attached to them, and the agent's task, under which they are kept. */
-export interface ContinueCarry {
+/** What a box carried into a continue: its words and the files attached to them. */
+interface Carried {
   readonly words: string;
   readonly attachments: readonly AgentAttachment[];
+}
+
+/** What a closed box hands the press: its words and the files attached to them as they stand when it is pressed, and the agent's task, under which they are kept. */
+export interface ContinueCarry {
+  readonly now: () => Carried;
   readonly taskId: string | null;
 }
 
+/** What a press that carries nothing carries. */
+const NOTHING_CARRIED: Carried = { words: "", attachments: [] };
+
 /** Whether a draft still holds what a press carried: the same words and the same files in order. */
-function holdsCarried(draft: Draft, carry: ContinueCarry): boolean {
+function holdsCarried(draft: Draft, carry: Carried): boolean {
   return (
     draft.text === carry.words &&
     draft.attachments.length === carry.attachments.length &&
@@ -114,7 +122,7 @@ type UseContinueStartResult = {
   readonly note: Failure | undefined;
   readonly start: (choice?: ModelChoice) => void;
   /** Lets the box's words go where it still holds what the press carried. */
-  readonly letGo: () => void;
+  readonly letGo: (carried: Carried) => void;
 };
 
 /**
@@ -134,26 +142,27 @@ function useContinueStart(
   const { continueAgent } = control;
   useAnnounceShown(ANNOUNCE.ALERT, note?.text ?? "");
 
-  const letGo = () => {
+  const letGo = (carried: Carried) => {
     if (carry === undefined) return;
     writer.update({ kind: DRAFT_PLACE.AGENT, taskId: carry.taskId, agentId }, (now) =>
-      holdsCarried(now, carry) ? EMPTY_DRAFT : now,
+      holdsCarried(now, carried) ? EMPTY_DRAFT : now,
     );
   };
 
   const start = (choice?: ModelChoice) => {
     if (continueAgent === undefined) return;
-    const words = carry?.words.trim() ?? "";
+    const carried = carry?.now() ?? NOTHING_CARRIED;
+    const words = carried.words.trim();
     void starting.run(() =>
       continueAgent(
         agentId,
         words === "" ? undefined : words,
-        carry?.attachments ?? [],
+        carried.attachments,
         undefined,
         choice,
       ).then((failed) => {
         // The words went on into the new agent, so the box lets them go, where nothing newer stands.
-        if (failed === undefined) letGo();
+        if (failed === undefined) letGo(carried);
 
         return failed;
       }),
@@ -187,8 +196,9 @@ export function ContinueAgent({
   const press = () => {
     // Where the place opens a draft, the words move into the continue's draft, sent once the developer sends it.
     if (opensDraft !== undefined && control.continueAgent !== undefined) {
-      opensDraft(carry?.words ?? "", carry?.attachments ?? []);
-      letGo();
+      const carried = carry?.now() ?? NOTHING_CARRIED;
+      opensDraft(carried.words, carried.attachments);
+      letGo(carried);
 
       return;
     }

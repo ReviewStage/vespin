@@ -4,7 +4,7 @@
 
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
-import { OnAccentInk, useColors } from "./tokens/colors.js";
+import { useColors } from "./tokens/colors.js";
 import { RADIUS } from "./tokens/space.js";
 
 /** Which side of the chat sent the message: the reader, at the column's trailing side, or anyone else, at its leading side. */
@@ -136,35 +136,27 @@ function BubbleTail({ side, fill }: { readonly side: ChatSide; readonly fill: st
  * One message's bubble, `children` its words, as Messages draws one: round
  * at every corner, at most `BUBBLE_SHARE` of its row, and, as the last of
  * its sender's run or a bubble alone, curling a tail out of its foot toward
- * its own side. In a Manager's chat (`accent`) the reader's own
- * (`CHAT_SIDE.SENT`) stands in copper with every ink inside it read on
- * copper (`OnAccentInk`), as Messages draws yours in its blue; anyone
- * else's, and the reader's own in an agent's transcript, in the raised fill
- * under the page's ink.
- * It is the one bubble of every chat: a Manager's, and the lines sent to
- * any agent. Where it stands in its row, and the spacing of its run, are
- * its caller's.
+ * its own side, in the raised fill under the page's ink. It is the bubble
+ * of the lines sent to any agent; a Manager's chat stands as a channel
+ * (`channel-row.tsx`). Where it stands in its row, and the spacing of its
+ * run, are its caller's.
  */
 export function ChatBubble({
   side,
   run,
-  accent = false,
   children,
 }: {
   readonly side: ChatSide;
   readonly run: ChatRun;
-  /** Whether the reader's own bubble stands in copper, as a Manager's chat draws it; in the raised fill where not, as an agent's transcript draws the lines sent it. */
-  readonly accent?: boolean | undefined;
   readonly children: ReactNode;
 }) {
   const colors = useColors();
-  const copper = accent && side === CHAT_SIDE.SENT;
-  const fill = copper ? colors.ACCENT : overGround(colors.FILL_STRONG, colors.GROUND);
+  const fill = overGround(colors.FILL_STRONG, colors.GROUND);
 
   return (
     <View style={[styles.bubble, { backgroundColor: fill }]}>
       {TAILED[run] ? <BubbleTail side={side} fill={fill} /> : null}
-      {copper ? <OnAccentInk>{children}</OnAccentInk> : children}
+      {children}
     </View>
   );
 }

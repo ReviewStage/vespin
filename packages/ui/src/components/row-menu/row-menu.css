@@ -16,7 +16,11 @@
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
 
-  [data-row-menu]:is(:has(:focus-visible), [data-menu-open="true"]) .ui-row-more {
+  [data-row-menu]:is(
+      :is(:where(:root[data-keyboard="true"]) :focus-within),
+      [data-menu-open="true"]
+    )
+    .ui-row-more {
     opacity: 1;
   }
 

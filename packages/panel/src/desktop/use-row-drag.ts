@@ -214,9 +214,9 @@ export interface RowDragOptions<Row = number> {
 /** What the list's owner hears from a drop: the row `from` now stands at `to` among the list's rows, which differs from where it stood. */
 export type RowMove<Row = number> = (from: Row, to: number) => void;
 
-/** The list's rows that move, its items of the kind (`item`); one on its way out (`ListMotion`) is no longer one of them. */
+/** The list's rows that move, its items of the kind (`item`). */
 function rowsIn(list: HTMLElement, item: string): HTMLElement[] {
-  return [...list.querySelectorAll<HTMLElement>(`:scope > ${item}:not([data-leaving])`)];
+  return [...list.querySelectorAll<HTMLElement>(`:scope > ${item}`)];
 }
 
 /**
@@ -239,9 +239,7 @@ function placeAmong(press: RowPress, rows: readonly HTMLElement[], at: number): 
 
 /** A drop zone's rows of the kind (`item`), where it keeps an order of its own that a drop lands at a place in. */
 function zoneRowsIn(zone: HTMLElement, item: string): HTMLElement[] {
-  return [
-    ...zone.querySelectorAll<HTMLElement>(`[data-row-drop-rows] > ${item}:not([data-leaving])`),
-  ];
+  return [...zone.querySelectorAll<HTMLElement>(`[data-row-drop-rows] > ${item}`)];
 }
 
 /** The copy's travel down the list, the pointer's own and the list's scrolling since the press, held between the first row's top and the last row's foot. */

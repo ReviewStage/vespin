@@ -1,6 +1,7 @@
 // automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each in the order View options chose, a finished one-time automation folded under Finished, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
 
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
+import { firingMark } from "@repo/features/automation-firing-mark";
 import {
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
@@ -38,6 +39,7 @@ import {
   type BarMenu,
   ConfirmAsk,
   EmptyState,
+  firingLook,
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
@@ -578,7 +580,7 @@ function AutomationListRow({
       line={automationPhoneLine(automation, now)}
       standing={automationRunStanding(automation.lastRun)}
       standingWords={automationLastRunWords(automation)}
-      symbol={GLYPH.AUTOMATION}
+      {...firingLook(firingMark(automation.trigger))}
       when={lastRunWhen(automation, now)}
       faded={!automation.enabled}
       onPress={onOpen}

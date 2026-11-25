@@ -188,6 +188,12 @@ export function Conversation({
     return () => heard.disconnect();
   }, [list]);
 
+  // Note that the log asks as it opens too, since lines drawn before its scroll box stood asked of no box,
+  // and a log that opens on all its lines draws none anew; its own effects run once its box's ref is set.
+  useLayoutEffect(() => {
+    askOlder();
+  }, [askOlder]);
+
   const onScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
       const element = event.currentTarget;

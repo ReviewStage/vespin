@@ -19,6 +19,8 @@ export const ACCOUNT_ACT_KIND = {
   ACCOUNT_SIGN_OUT: "account.signOut",
   ACCOUNT_DELETE: "account.delete",
   ACCOUNT_SUPPORT_ACCESS: "account.supportAccess",
+  /** Where the iOS app's image loader reads a picture: the service's address and the account's header, answered only to screens in the host's own process. */
+  ACCOUNT_PICTURE_SOURCE: "account.pictureSource",
 } as const;
 
 /**
@@ -298,6 +300,16 @@ export const AGENT_ACT_KIND = {
   AGENTS_PERMISSION_MODE: "agents.permissionMode",
   /** A Manager's face changed, which every place it is drawn then draws (`manager-face.ts`). */
   AGENTS_FACE: "agents.face",
+  /** A Manager's followers read of the service as its Settings › People shows them, held nowhere here; answers them, its owner first, or why there is no answer. */
+  AGENTS_FOLLOWERS: "agents.followers",
+  /** The account follows a Manager on the service, its machines off, or stops, which its owner may not; answers its followers as they then stand, or why they are unchanged. */
+  AGENTS_FOLLOW: "agents.follow",
+  AGENTS_UNFOLLOW: "agents.unfollow",
+  /** The account's own switch on a Manager it follows, whether it may use the account's machines, set on the service; answers as a follow does. */
+  AGENTS_SET_FOLLOWER_MACHINES: "agents.setFollowerMachines",
+  /** Another member of the Manager's workspace added as a follower on the service, their machines off, or taken away, which its owner may not be; answers as a follow does. */
+  AGENTS_ADD_FOLLOWER: "agents.addFollower",
+  AGENTS_REMOVE_FOLLOWER: "agents.removeFollower",
   /** One tool call an agent holds answered: allowed, allowed for the agent, or denied with words (`agent-approval-wire.ts`). */
   AGENTS_ANSWER_APPROVAL: "agents.answerApproval",
   AGENTS_QUEUE: "agents.queue",
@@ -1009,11 +1021,6 @@ export const WINDOW_SURFACE_ACT_KIND = {
   WINDOW_COPY_RICH: "window.copyRich",
   WINDOW_SAVE_FILE: "window.saveFile",
   /**
-   * A downscaled still of part of the asking panel, as ⌃Tab's card previews a
-   * tab it left: answered to that panel alone and kept nowhere else.
-   */
-  WINDOW_CAPTURE: "window.capture",
-  /**
    * Whether the asking panel holds work it has not saved, told each time
    * that changes, so a quit, a restart to update, and a sign-out ask first
    * while it does.
@@ -1114,6 +1121,7 @@ export const PORT_ACT_USE = {
   ACCOUNT_SIGN_OUT: ACT_USE.WRITE,
   ACCOUNT_DELETE: ACT_USE.WRITE,
   ACCOUNT_SUPPORT_ACCESS: ACT_USE.WRITE,
+  ACCOUNT_PICTURE_SOURCE: ACT_USE.FETCH,
 
   PROVIDER_KEYS_FOLLOW: ACT_USE.READ,
   PROVIDER_KEYS_RETRY: ACT_USE.READ,
@@ -1196,6 +1204,12 @@ export const PORT_ACT_USE = {
   AGENTS_SERVERS: ACT_USE.WRITE,
   AGENTS_PERMISSION_MODE: ACT_USE.WRITE,
   AGENTS_FACE: ACT_USE.WRITE,
+  AGENTS_FOLLOWERS: ACT_USE.FETCH,
+  AGENTS_FOLLOW: ACT_USE.WRITE,
+  AGENTS_UNFOLLOW: ACT_USE.WRITE,
+  AGENTS_SET_FOLLOWER_MACHINES: ACT_USE.WRITE,
+  AGENTS_ADD_FOLLOWER: ACT_USE.WRITE,
+  AGENTS_REMOVE_FOLLOWER: ACT_USE.WRITE,
   AGENTS_ANSWER_APPROVAL: ACT_USE.WRITE,
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,
@@ -1410,7 +1424,6 @@ export const PORT_ACT_USE = {
   WINDOW_COPY_IMAGE: ACT_USE.WRITE,
   WINDOW_COPY_RICH: ACT_USE.WRITE,
   WINDOW_SAVE_FILE: ACT_USE.WRITE,
-  WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
   WINDOW_MENU_OFFERS: ACT_USE.WRITE,
   WINDOW_HANDOFF: ACT_USE.WRITE,

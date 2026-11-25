@@ -84,6 +84,7 @@ import {
   oauthVaultAccountSourceLayerFor,
   PlatformFileDownload,
   PlatformRenewalWindow,
+  PlatformScreensInProcess,
   PlatformTokenVault,
   RunMode,
   reporterLayer,
@@ -256,6 +257,8 @@ function seamLayers(options: MobileHostOptions) {
     device.fileDownload === undefined
       ? Layer.empty
       : Layer.succeed(PlatformFileDownload, device.fileDownload),
+    // Note that the screens run in this process, so a picture's source may carry the account's header to their image loader (`ACCOUNT_PICTURE_SOURCE`).
+    Layer.succeed(PlatformScreensInProcess, true),
   );
 }
 

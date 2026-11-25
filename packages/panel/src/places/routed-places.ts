@@ -813,6 +813,9 @@ export function routedStepStands(
   return !place.listedOnly || params.workspace === undefined || there.listed(params.workspace);
 }
 
+/** A router as the window's readers of its address read it. */
+type Router = ReturnType<typeof useRouter>;
+
 /** The entry each router's history stood on as the readers of its address last read it. */
 const entriesRead = new WeakMap<RouterHistory, HistoryLocation>();
 
@@ -834,6 +837,32 @@ function entryOf(history: RouterHistory): HistoryLocation {
   entriesRead.set(history, now);
 
   return now;
+}
+
+/** The path each route table last matched, and the routes it matched there (`matchesAt`). */
+const matchedAt = new WeakMap<
+  object,
+  { readonly pathname: string; readonly matches: readonly RouteMatchSeen[] }
+>();
+
+/**
+ * The routes `pathname` matches in `router`'s table, matched once while the
+ * window stands on it. Note that the window's readers of where it stands are
+ * many, the sidebar's and the root's route hooks among them, and each matched
+ * the path itself as it was drawn, so a task's opening matched one address
+ * over and over. What a path matches is the table's answer for that path
+ * alone, so the last answer stands for every reader until the path moves,
+ * Back's and Forward's moves among them, and a table replaced starts afresh.
+ */
+function matchesAt(router: Router, pathname: string): readonly RouteMatchSeen[] {
+  const table: object = router.routeTree;
+  const last = matchedAt.get(table);
+
+  if (last?.pathname === pathname) return last.matches;
+  const matches = router.matchRoutes(pathname);
+  matchedAt.set(table, { pathname, matches });
+
+  return matches;
 }
 
 /** The entry the router's history stands on, redrawn as it moves to another (`entryOf`). */
@@ -882,7 +911,7 @@ export function useWindowPlace(): WindowPlace {
   const router = useRouter();
   const access = useRouteAccess();
   const { pathname, href, search } = useHistoryLocation();
-  const matches = useMemo(() => router.matchRoutes(pathname), [router, pathname]);
+  const matches = matchesAt(router, pathname);
 
   return useMemo(
     () => windowPlaceOf(matches, access, href, search),
@@ -904,7 +933,7 @@ export function useWindowPlaceOf<Answer>(select: (here: WindowPlace) => Answer):
   return useSyncExternalStore(history.subscribe, () => {
     const { pathname, href, search } = entryOf(history);
 
-    return select(windowPlaceOf(router.matchRoutes(pathname), access, href, search));
+    return select(windowPlaceOf(matchesAt(router, pathname), access, href, search));
   });
 }
 

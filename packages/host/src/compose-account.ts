@@ -4,11 +4,19 @@ import {
   type AccountSnapshot,
   signedInAccountId,
 } from "@repo/credentials/snapshot";
-import type { AccountToken, CallCredential } from "@repo/features";
+import { type AccountToken, type CallCredential, resolvedCredential } from "@repo/features";
 import { PRODUCT_ACCOUNT_ACTION, PRODUCT_EVENT } from "@repo/features/analytics";
+import {
+  PICTURE_SOURCE_FAILURE,
+  type PictureSourceParams,
+  type PictureSourceView,
+  picturePathOf,
+} from "@repo/features/picture-source-wire";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import { SIGN_IN_FAILURE, type SignInFailure } from "@repo/features/words";
 import { carried, GATEWAY_EVENT, GATEWAY_METHOD, RefusedRefusal } from "@repo/gateway";
-import { Effect, FiberSet, Result, type Scope, Stream } from "effect";
+import { withoutTrailingSlash } from "@repo/wire";
+import { Effect, FiberSet, Option, Result, type Scope, Stream } from "effect";
 import { AccountAccessClient, accountAccessHolder } from "./account-access-client.js";
 import { type AccountSession, DeletionSessionExpired } from "./account-source.js";
 import {
@@ -20,7 +28,7 @@ import type { SettingsComposer } from "./compose-settings.js";
 import type { Composer } from "./composer.js";
 import type { ACCOUNT_ACTS } from "./contract/index.js";
 import { HostKernelTag, lateService } from "./effect/kernel.js";
-import { AccountSource } from "./effect/seams.js";
+import { AccountSource, PlatformScreensInProcess } from "./effect/seams.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { ActRefused, type HostActTable } from "./host-acts.js";
 
@@ -77,6 +85,12 @@ export interface AccountComposer extends Composer {
   link: (links: AccountLinks) => Effect.Effect<void>;
 }
 
+/** What a picture's source answers where the screens stand apart from the host. */
+const PICTURE_SOURCE_UNOFFERED = { failure: PICTURE_SOURCE_FAILURE.UNOFFERED } as const;
+
+/** What a picture's source answers while no account is signed in. */
+const PICTURE_SOURCE_SIGNED_OUT = { failure: PICTURE_SOURCE_FAILURE.SIGNED_OUT } as const;
+
 interface AccountDependencies {
   settings: SettingsComposer;
 }
@@ -97,6 +111,9 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
   const source = yield* AccountSource;
   const { runMode, report } = kernel;
   const late = yield* lateService<AccountLinks>();
+  // Note that the account's header reaches a picture's source only where the screens run in this process, as the phone's do; a window apart from it is answered nothing.
+  const screensInProcess = Option.isSome(yield* Effect.serviceOption(PlatformScreensInProcess));
+  const serviceOrigin = withoutTrailingSlash(kernel.hostedServiceBaseUrl);
 
   // The capability pair is awaited rather than read, because a link read
   // at construction would be read before `link()` has run.
@@ -310,6 +327,30 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
     }
   };
 
+  /**
+   * Where the iOS app's image loader reads a picture: the service's address
+   * for it and the header the account's calls carry, renewed first where a
+   * read the service refused asks, so one refused read is tried once more
+   * under a new header. The header goes to the loader's source alone, never
+   * to a report. Note that the phone asks for a recording's MP4 copy, which
+   * the system's player plays, where the service keeps one; a picture is
+   * answered as it is.
+   */
+  const pictureSource = (picture: PictureSourceParams): Effect.Effect<PictureSourceView> =>
+    Effect.gen(function* () {
+      const current = yield* resolvedCredential(session.credential);
+
+      if (picture.renew === true) yield* Effect.ignore(current.renew?.() ?? Effect.void);
+      const authorization = yield* current.authorization?.() ?? Effect.succeed(undefined);
+
+      if (authorization === undefined) return PICTURE_SOURCE_SIGNED_OUT;
+
+      return {
+        uri: `${serviceOrigin}${picturePathOf(picture)}`,
+        headers: { authorization, accept: MP4_TYPE },
+      };
+    });
+
   const methods: HostMethodTable = {
     [GATEWAY_METHOD.ACCOUNT_SNAPSHOT]: () =>
       Effect.succeed({ account: carried(session.snapshot()) }),
@@ -400,6 +441,8 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
 
         return { supportAccessUntil: written.success.supportAccessUntil };
       }),
+    ACCOUNT_PICTURE_SOURCE: (picture) =>
+      screensInProcess ? pictureSource(picture) : Effect.succeed(PICTURE_SOURCE_UNOFFERED),
   };
 
   return {

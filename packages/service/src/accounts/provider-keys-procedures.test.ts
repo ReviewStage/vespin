@@ -1123,6 +1123,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const { owner, ask } = yield* openAccounts({ ring: KEK.ONE, auth: device.auth });
         yield* TestClock.adjust("1 hour");
         yield* connectPlan(ask, owner);
+        const [plan] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+        assert.ok(plan, "the plan is connected");
         const now = new Date(yield* Clock.currentTimeMillis);
         const resetsAt = new Date(now.getTime() + 30 * 60_000);
         yield* setPlanStatus(
@@ -1133,6 +1135,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           resetsAt,
           now,
           now,
+          plan.id,
         );
 
         const standing = (read: Answer) =>
@@ -1163,6 +1166,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const { owner, ask } = yield* openAccounts({ ring: KEK.ONE, auth: device.auth });
         yield* TestClock.adjust("1 hour");
         yield* connectPlan(ask, owner);
+        const [plan] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+        assert.ok(plan, "the plan is connected");
         const now = new Date(yield* Clock.currentTimeMillis);
         const session = { usedPercent: 42, windowMins: 300, resetsAt: now.getTime() + 30 * 60_000 };
 
@@ -1180,6 +1185,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             window,
             now,
             now,
+            plan.id,
           );
         }
 
@@ -1296,6 +1302,59 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         yield* refresh(other);
 
         assert.deepEqual([byOwner, asked()], [2, 2]);
+      }),
+  );
+
+  it.effect(
+    "a read of a Codex plan's usage that shows room lifts a limit a turn wrote with no reset named, and one that shows a window spent keeps it",
+    () =>
+      Effect.gen(function* () {
+        const standingAfter = (sessionUsedPercent: number) =>
+          Effect.gen(function* () {
+            const device = fakeDeviceAuth();
+            device.state.codePollStatus = HTTP_STATUS.OK;
+
+            const window = (usedPercent: number, seconds: number) => ({
+              used_percent: usedPercent,
+              limit_window_seconds: seconds,
+              reset_after_seconds: 0,
+              reset_at: 1_800_000_000,
+            });
+
+            const { owner, ask } = yield* openAccounts({
+              ring: KEK.ONE,
+              auth: device.auth,
+              usage: () =>
+                jsonResponse({
+                  rate_limit: {
+                    primary_window: window(sessionUsedPercent, 18_000),
+                    secondary_window: window(40, 604_800),
+                  },
+                }),
+            });
+
+            yield* connectPlan(ask, owner);
+            const [plan] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+            assert.ok(plan, "the plan is connected");
+            yield* TestClock.adjust("5 minutes");
+            const now = new Date(yield* Clock.currentTimeMillis);
+            // A turn that met the limit before Codex reported a reset names none, so no reset lifts it.
+            yield* setPlanStatus(
+              owner,
+              PROVIDER_KEY_PROVIDER.OPENAI,
+              PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+              PROVIDER_KEY_STATUS.LIMIT_REACHED,
+              undefined,
+              now,
+              now,
+              plan.id,
+            );
+
+            return keysOf(yield* ask(request(owner))).subscriptions?.[0]?.status;
+          });
+
+        assert.equal(yield* standingAfter(12), PROVIDER_KEY_STATUS.VERIFIED);
+        assert.equal(yield* standingAfter(100), PROVIDER_KEY_STATUS.LIMIT_REACHED);
       }),
   );
 

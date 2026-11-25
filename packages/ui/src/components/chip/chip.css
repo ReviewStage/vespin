@@ -41,30 +41,6 @@
     white-space: pre;
   }
 
-  /* A removable chip was added to the field it stands in, so it springs in
-     from a smaller size as it arrives, its opacity over the quick beat and
-     its scale on the fast spring. One a `ListMotion` follows
-     (`data-motion-key`) arrives and leaves by the motion instead, which
-     scales it the same way, so the two never play at once. Note that the
-     keyframes stay here, because `attachment-chip.css` springs in by them. */
-  .ui-chip[data-removable="true"]:not([data-motion-key]) {
-    animation:
-      ui-chip-fade-in var(--ui-duration-quick) var(--ui-motion-exit) backwards,
-      ui-chip-pop var(--ui-duration-fast) var(--ui-spring-fast) backwards;
-  }
-
-  @keyframes ui-chip-fade-in {
-    from {
-      opacity: 0;
-    }
-  }
-
-  @keyframes ui-chip-pop {
-    from {
-      transform: scale(0.6);
-    }
-  }
-
   /* A tone is said in the chip's mark alone, whatever its look: its leading
      glyph wears the state's ink, or, where it leads with none, a dot of it
      stands before its words, as a task's status mark says where it stands.

@@ -91,7 +91,6 @@ import {
   useLandingTeammate,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
-import { MovingList } from "./landing-motion.js";
 import { heldStill } from "./landing-paint.js";
 import { DemoPointer, usePointer } from "./landing-pointer.js";
 import { MINUTE, STORY_NOW, still, useStory, useTimeline, useTyping } from "./landing-story.js";
@@ -220,7 +219,6 @@ function InboxRow({ item }: { item: InboxItem }): React.JSX.Element {
 
   return (
     <ListRow
-      motionKey={item.id}
       ink={LIST_ROW_INK.SIDEBAR}
       currentLook={LIST_ROW_CURRENT_LOOK.TINT}
       leading={<UnreadMark unread={item.unread === true} />}
@@ -754,12 +752,11 @@ function InboxScene(): React.JSX.Element {
         >
           <div className="ui-landing-demo" data-open={open}>
             <div className="ui-landing-demo-list ui-landing-rows">
-              <MovingList
-                label="Inbox items"
-                items={inboxItems(listStep(beat))}
-                keyOf={(item) => item.id}
-                row={(item) => <InboxRow key={item.id} item={item} />}
-              />
+              <List label="Inbox items">
+                {inboxItems(listStep(beat)).map((item) => (
+                  <InboxRow key={item.id} item={item} />
+                ))}
+              </List>
             </div>
             <div className="ui-landing-demo-thread">
               <QuestionThread
@@ -1187,7 +1184,6 @@ function AutomationRuns({ step }: { step: number }): React.JSX.Element {
           return (
             <ListRow
               key={run.id}
-              motionKey={run.id}
               leading={
                 <Avatar
                   name={run.title}

@@ -132,7 +132,6 @@ export function OverviewPages({
             cells={PAGE_ROW_CELLS}
             more={more}
             selection={{ selected, onChange: setChosen }}
-            moves
           >
             {listed.map((page) => (
               <PageListRow

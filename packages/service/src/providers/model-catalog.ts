@@ -13,10 +13,23 @@ import {
   standardModelIdOf,
 } from "@repo/features/models-wire";
 import { FAST_ACCESS, type FastAccess } from "@repo/features/provider-key-wire";
-import { Context, Data, Duration, Effect, Exit, Layer, Option, Ref, Result, Schema } from "effect";
+import {
+  Clock,
+  Context,
+  Data,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  Ref,
+  Result,
+  Schema,
+} from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { AfterResponse } from "../http/after-response.js";
 
 /**
  * model-catalog.ts -- the models a coding agent may run on, read from AI Gateway's public catalog.
@@ -31,10 +44,10 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
  * the boundary is its standard window, which a choice opts into, and the
  * whole window is the long one, which every choice runs on unless it names
  * the other. A model priced the same across its whole window has that one
- * window, since a smaller one would buy nothing the provider names. The read is cached per instance for
- * `MODEL_CATALOG_TTL`, a failed read for no time at all, so an outage at the
- * catalog is retried on the next request rather than remembered; while it
- * lasts, a read answers the last catalog this instance read, if any.
+ * window, since a smaller one would buy nothing the provider names. The read is held per instance, and
+ * past `MODEL_CATALOG_TTL` refreshed in the background while the held one is
+ * answered; a failed read is held for no time at all, so an outage at the
+ * catalog is retried on the next read rather than remembered.
  *
  * Model calls themselves go straight to each provider on the account's own
  * keys, never through AI Gateway, so `providerModelOf` is the one translation
@@ -497,33 +510,58 @@ const fetchOfferedModels = /* @__PURE__ */ Effect.fnUntraced(function* (
   return offeredModels(answer);
 });
 
+/** A catalog this instance read, and when, which a read past `MODEL_CATALOG_TTL` refreshes. */
+interface HeldCatalog {
+  readonly offered: readonly OfferedModel[];
+  readonly readAt: number;
+}
+
 /**
- * The catalog as this instance's one cached read over the ambient client. A
- * success stands for the TTL; a failure stands for no time, so the next
- * request asks again rather than answering the outage for an hour, and
- * answers the last success meanwhile where there was one.
+ * The catalog as this instance's one cached read over the ambient client.
+ * Only an instance that holds no catalog yet waits on the gateway; one that
+ * holds a catalog answers it at once, and once it is past the TTL starts a
+ * refetch in the background, so no request waits on the gateway once the
+ * instance has read it. Concurrent reads share one fetch. A failed refetch
+ * leaves the held catalog standing, and the next read past the TTL asks
+ * again, because a caller told no models guesses instead: a 200K window for
+ * every agent, and no prices.
  */
 export const modelCatalogLayer: Layer.Layer<ModelCatalog, never, HttpClient.HttpClient> =
   Layer.effect(
     ModelCatalog,
     Effect.gen(function* () {
       const client = yield* HttpClient.HttpClient;
-      const lastRead = yield* Ref.make<readonly OfferedModel[] | undefined>(undefined);
+      const scope = yield* Effect.scope;
+      const held = yield* Ref.make<HeldCatalog | undefined>(undefined);
 
-      const cached = yield* Effect.cachedWithTTL(fetchOfferedModels(client), (exit) =>
-        Exit.isSuccess(exit) ? MODEL_CATALOG_TTL : Duration.zero,
-      );
-
-      // Note that a failed refetch answers the last read, because a caller told no models
-      // guesses instead: a 200K window for every agent, and no prices.
-      const read = cached.pipe(
-        Effect.tap((offered) => Ref.set(lastRead, offered)),
-        Effect.catch((unavailable) =>
-          Effect.flatMap(Ref.get(lastRead), (held) =>
-            held === undefined ? Effect.fail(unavailable) : Effect.succeed(held),
+      const fetched = yield* Effect.cachedWithTTL(
+        fetchOfferedModels(client).pipe(
+          Effect.tap((offered) =>
+            Effect.flatMap(Clock.currentTimeMillis, (readAt) => Ref.set(held, { offered, readAt })),
           ),
         ),
+        (exit) => (Exit.isSuccess(exit) ? MODEL_CATALOG_TTL : Duration.zero),
       );
+
+      // Note that the refetch outlives the request that started it: handed past the answer where the runtime keeps such work (`AfterResponse`, over the platform's `waitUntil`), so a frozen instance never holds it half done, and otherwise run in the instance's own scope.
+      const refresh = Effect.gen(function* () {
+        const work = Effect.ignore(fetched);
+        const after = yield* Effect.serviceOption(AfterResponse);
+
+        if (Option.isSome(after)) return yield* after.value.keep(work);
+        yield* Effect.forkIn(work, scope, { startImmediately: true });
+      });
+
+      const read = Effect.gen(function* () {
+        const standing = yield* Ref.get(held);
+
+        if (standing === undefined) return yield* fetched;
+        const now = yield* Clock.currentTimeMillis;
+
+        if (now - standing.readAt >= Duration.toMillis(MODEL_CATALOG_TTL)) yield* refresh;
+
+        return standing.offered;
+      });
 
       return { read };
     }),

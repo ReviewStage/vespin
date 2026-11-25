@@ -87,8 +87,10 @@ import {
   EVERY_WORKSPACE,
   HOST_READ_SLICE,
   KEYS_ON,
+  memoriesHolder,
   OWN_TRANSCRIPT,
   READ_KEY_DEPTH,
+  WORKSPACE_OWN_MEMORIES,
 } from "@repo/host/app-state";
 import {
   type Query,
@@ -271,8 +273,11 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.WORKSPACE_TOOLS]: ([agentId = ""]) =>
     askAct(ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW, { agentId: String(agentId) }),
   [LIVE_READ.MCP_CLIENTS]: () => askAct(ACT_KIND.MCP_CLIENTS_FOLLOW),
-  [LIVE_READ.MEMORIES]: ([workspaceId = ""]) =>
-    askAct(ACT_KIND.MEMORIES_FOLLOW, { workspaceId: String(workspaceId) }),
+  [LIVE_READ.MEMORIES]: ([workspaceId = "", holder = WORKSPACE_OWN_MEMORIES]) =>
+    askAct(ACT_KIND.MEMORIES_FOLLOW, {
+      workspaceId: String(workspaceId),
+      ...(holder !== WORKSPACE_OWN_MEMORIES && { managerId: String(holder) }),
+    }),
   [LIVE_READ.REPOSITORY_LISTS]: ([workspace = ""]) =>
     askAct(ACT_KIND.TASKS_REPOSITORIES_FOLLOW, repositoryScope(String(workspace))),
   [LIVE_READ.SLACK_CHANNELS]: ([workspaceId = ""]) =>
@@ -709,9 +714,12 @@ export const workspaceToolsQuery = (agentId: string | undefined) =>
 export const mcpClientsQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.MCP_CLIENTS, accountIds(accountId));
 
-/** A workspace's memories, by the workspace. */
-export const memoriesQuery = (workspaceId: string | undefined) =>
-  liveReadQuery(LIVE_READ.MEMORIES, oneId(workspaceId));
+/** A workspace's memories, or one Manager's own in it where `managerId` names one, by the workspace and then whose they are. */
+export const memoriesQuery = (workspaceId: string | undefined, managerId: string | undefined) =>
+  liveReadQuery(
+    LIVE_READ.MEMORIES,
+    workspaceId === undefined ? undefined : [workspaceId, memoriesHolder(managerId)],
+  );
 
 /** The repositories the account reaches, by the workspace or every one (`EVERY_WORKSPACE`). */
 export const repositoryListsQuery = (workspace: string | undefined) =>

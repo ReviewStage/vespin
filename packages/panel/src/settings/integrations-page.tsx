@@ -1,6 +1,5 @@
 import {
   namedServers,
-  type ProviderGroup,
   providerGroups,
   type ServerRow,
   searchServers,
@@ -24,8 +23,6 @@ import {
   ANNOUNCE,
   commandKeyshortcuts,
   GAP,
-  ListMotion,
-  motionKey,
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_SKELETON_CONTROL,
   SearchField,
@@ -69,9 +66,8 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  * the row every surface connects it from (`IntegrationRow`): what it gives
  * agents, and Connect; a sign-in begun waits on the browser with Reopen and
  * Cancel, and one that failed or never finished says so with Try again
- * (`integration-sign-in.ts`). A row that connects or disconnects glides
- * from one section into the other (`ListMotion`), and holds still under
- * reduced motion. A connection is said to work only once its server
+ * (`integration-sign-in.ts`). A row that connects or disconnects moves
+ * from one section into the other at once. A connection is said to work only once its server
  * answered with its tools; one whose server answered why it would not says
  * why instead (`integration-health.ts`). GitHub is granted by the
  * account's own GitHub (`integration-grant.ts`), which lets agents use
@@ -205,62 +201,6 @@ function NoMatchNote({ query }: { query: string }): React.JSX.Element {
   );
 }
 
-/** The rows each section stands, by its heading, as the providers or connections the rows are followed by. */
-type SectionPlaces = readonly (readonly [string | undefined, readonly string[]])[];
-
-/** Whether two placings stand the same rows in the same sections, in the same order. */
-function samePlaces(one: SectionPlaces, other: SectionPlaces): boolean {
-  return (
-    one.length === other.length &&
-    one.every(([heading, rows], at) => {
-      const [otherHeading, otherRows] = other[at] ?? [];
-
-      return (
-        heading === otherHeading &&
-        rows.length === otherRows?.length &&
-        rows.every((row, place) => row === otherRows[place])
-      );
-    })
-  );
-}
-
-/**
- * The page's sections, which move (`ListMotion`): a provider that connects or
- * disconnects glides from the section it stood in to the other, followed
- * by its key, and the sections and rows it moved glide with it.
- */
-function MovingSections({
-  found,
-  children,
-}: {
-  found: readonly ProviderGroup[];
-  children: React.ReactNode;
-}): React.JSX.Element {
-  const moving = useRef<HTMLElement | null>(null);
-
-  const places: SectionPlaces = found.map((group) => [
-    group.heading,
-    group.providers.flatMap((rows) => rows.map((row) => row.connection)),
-  ]);
-
-  const [placed, setPlaced] = useState(() => ({ places, change: {} }));
-  // Note that the placing follows the rows as they render, React's way of keeping what an earlier render drew, so the commit that moves a row is the one that plays.
-  let { change } = placed;
-
-  if (!samePlaces(placed.places, places)) {
-    change = {};
-    setPlaced({ places, change });
-  }
-
-  return (
-    <ListMotion root={moving} change={change}>
-      <Stack gap={GAP.PAGE} moves ref={moving}>
-        {children}
-      </Stack>
-    </ListMotion>
-  );
-}
-
 /**
  * Every offered provider's row, once where they stand has been read, so each
  * row is drawn whole at once, under the page's search; a read that failed
@@ -322,7 +262,7 @@ function IntegrationRows({
   const found = providerGroups(rows.filter((row) => foundProviders.has(row.provider)));
 
   return (
-    <MovingSections found={found}>
+    <Stack gap={GAP.PAGE}>
       {statuses.readFailed ? (
         <SettingsSection>
           <ReadFailed
@@ -352,7 +292,7 @@ function IntegrationRows({
           ))}
         </SettingsSection>
       ))}
-    </MovingSections>
+    </Stack>
   );
 }
 
@@ -390,7 +330,7 @@ function ProviderRows({
   if (held) {
     return (
       // Note that a provider is followed by its own name, which the row it is drawn as before it connects carries too, so it glides from one section to the other.
-      <Stack gap={GAP.NONE} {...motionKey(provider)}>
+      <Stack gap={GAP.NONE}>
         <IntegrationLinkRow
           provider={provider}
           rows={rows}

@@ -386,15 +386,7 @@ body,
   margin-top: var(--ui-section-gap);
 }
 
-/* A group leaving is laid over the place it held as it slides out
-   (`ListMotion`), so the room above the group after it counts only the
-   groups still in the layout, and that group's glide ends where it stands
-   once the leaving one is gone rather than a margin short. */
-.sidebar-group > .sidebar-repository[data-leaving] + .sidebar-repository {
-  margin-top: 0;
-}
-
-.sidebar-group > .sidebar-repository:not([data-leaving]) ~ .sidebar-repository:not([data-leaving]) {
+.sidebar-group > .sidebar-repository ~ .sidebar-repository {
   margin-top: var(--ui-section-gap);
 }
 
@@ -1210,21 +1202,13 @@ body,
 }
 
 /* The Inbox's intro (`page-intro.tsx`) stands at the head of the rows, a
-   section's gap above the first, and rolls up as the rows close over it. */
+   section's gap above the first. */
 .inbox-tasks-body > .ui-reveal {
   margin-block-end: var(--ui-section-gap);
 }
 
-/* A group's room above it counts only the groups still in the layout, so a
-   group stands as it will once the one leaving before it is gone, and its
-   glide ends there rather than a margin short. */
-.inbox-tasks-body > [data-leaving] + .sidebar-repository {
-  margin-top: 0;
-}
-
-.inbox-tasks-body
-  > .sidebar-repository:not([data-leaving])
-  ~ .sidebar-repository:not([data-leaving]) {
+/* The Inbox's groups stand a control's gap apart, closer than the sidebar's. */
+.inbox-tasks-body > .sidebar-repository ~ .sidebar-repository {
   margin-top: var(--ui-control-gap);
 }
 
@@ -1610,6 +1594,15 @@ body,
   padding-left: 0;
 }
 
+/* Where the window draws no panel toggle, as a Manager's page draws none,
+   the row keeps it no room: on the frame its last control ends on one line
+   with its sheet's edge below, as its first tab starts. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell[data-panel-toggle="false"]
+  .side-panel-bar {
+  padding-right: 0;
+}
+
 [data-ui-profile="desktop"] .side-panel-bar {
   -webkit-app-region: drag;
 }
@@ -1836,7 +1829,7 @@ body,
 
 /* The card holding the keyboard, or whose menu is open, stands over its
    neighbors, so its ring and its menu are drawn over the next card. */
-.tasks-board-card:has(:focus-visible),
+.tasks-board-card:is(:where(:root[data-keyboard="true"]) :focus-within),
 .tasks-board-card[data-menu-open="true"],
 .tasks-board-card:has([aria-expanded="true"]) {
   z-index: 2;

@@ -140,6 +140,25 @@ export function KeepingProvider({
   return <KeepingDoor value={keeping}>{children}</KeepingDoor>;
 }
 
+/** The acts every picture, recording, and file under it leads its long press menu with, ahead of its own; none outside one. */
+const LeadDoor = createContext<readonly HeldAct[]>([]);
+
+/**
+ * Hands every picture, recording, and file under it the acts its long press
+ * menu leads with, ahead of its own Copy, Save, and Share, as Messages leads
+ * a photo's with Reply, such as a chat message's Reply in thread, so a
+ * message of files alone offers what its words' menu would.
+ */
+export function HeldLeadProvider({
+  acts,
+  children,
+}: {
+  readonly acts: readonly HeldAct[];
+  readonly children: ReactNode;
+}) {
+  return <LeadDoor value={acts}>{children}</LeadDoor>;
+}
+
 /** Names who showed the pictures under it and when, for their viewer's bar. */
 export function PictureOriginProvider({
   origin,
@@ -268,17 +287,23 @@ export function useCopyWords(): ((words: string) => void) | undefined {
   return useContext(KeepingDoor)?.copyWords;
 }
 
-/** The acts a kept thing's menu offers, in their order; none where nothing is kept yet, or no app answers them. */
+/** The acts a kept thing's menu offers, in their order, led by any its holder hands it (`HeldLeadProvider`); none where nothing is kept yet. */
 export function useKeptActs(kept: Kept | undefined): readonly HeldAct[] {
   const keeping = useContext(KeepingDoor);
+  const lead = useContext(LeadDoor);
 
-  if (keeping === undefined || kept === undefined) return [];
+  if (kept === undefined) return [];
 
-  return keepActs(kept).map((act) => ({
-    label: KEEP_WORDS[act],
-    symbol: KEEP_SYMBOL[act],
-    onPress: () => keeping.keep(kept, act),
-  }));
+  const own =
+    keeping === undefined
+      ? []
+      : keepActs(kept).map((act) => ({
+          label: KEEP_WORDS[act],
+          symbol: KEEP_SYMBOL[act],
+          onPress: () => keeping.keep(kept, act),
+        }));
+
+  return [...lead, ...own];
 }
 
 /**

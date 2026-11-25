@@ -47,6 +47,19 @@ export type DescriptionAttachmentKeep =
 /** A description's pictures among every attachment: the ones its task owns alone. */
 const descriptionPicture = ownedByTaskAlone(attachment);
 
+/** The media type of each file the description keeps, by its id. */
+const findFileTypes = SqlSchema.findAll({
+  Request: Schema.Struct({ taskId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String, contentType: Schema.String }),
+  execute: ({ taskId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: attachment.id, contentType: attachment.contentType })
+        .from(attachment)
+        .where(and(eq(attachment.taskId, taskId), descriptionPicture)),
+    ),
+});
+
 /** The plan's id and workspace under its row's lock, where the account reaches it; nothing otherwise. */
 const lockOpenTask = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, taskId: Schema.String }),
@@ -214,6 +227,20 @@ export function keepDescriptionAttachment(
         return { status: DESCRIPTION_ATTACHMENT_KEEP.KEPT, id } as const;
       }),
     ),
+  );
+}
+
+/**
+ * The media type of each picture, video, or file the plan's description
+ * keeps, by its id, so a reader draws each by its kind before its bytes
+ * arrive. Note that the task is the one a read of it already reached, so no
+ * account is named here.
+ */
+export function readDescriptionFileTypes(
+  taskId: string,
+): TaskStoreEffect<Readonly<Record<string, string>>> {
+  return Effect.map(findFileTypes({ taskId }), (rows) =>
+    Object.fromEntries(rows.map((row) => [row.id, row.contentType])),
   );
 }
 

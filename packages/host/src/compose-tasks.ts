@@ -74,6 +74,7 @@ import {
   HOST_LIVE,
   IDLE_TASKS_VIEW,
   type ListedTasksView,
+  listedApart,
   NO_TASK_LIST,
   TASK_CALL_FAILURE,
   TASKS_READ,
@@ -174,7 +175,6 @@ import {
   keptOfTask,
   PageVersionKey,
 } from "./kept-content.js";
-import { drawnAs } from "./list-moves.js";
 import { type HeldAnswers, heldSlice, rowWriteOn } from "./live-collection.js";
 import {
   confirmWrite,
@@ -192,7 +192,7 @@ import {
 import { type OfflineRefused, TASK_QUEUED_WRITE, untaken } from "./queued-writes.js";
 import type { RunMode } from "./run-mode.js";
 import { sidebarCollections, sidebarWrites } from "./sidebar-collections.js";
-import { PLAN, taskListCollections } from "./task-list-collections.js";
+import { PLAN, type TaskListCollections, taskListCollections } from "./task-list-collections.js";
 import { followTaskList } from "./task-list-follow.js";
 import { type TaskListDrawn, type TaskListMoved, taskListMoved } from "./task-list-moved.js";
 import type { PlanRow } from "./task-list-rows.js";
@@ -704,6 +704,21 @@ function rowFollowerFields(followers: readonly RowFollower[]): Partial<PlanRow> 
  */
 const RESYNC_SETTLE = Duration.seconds(10);
 
+/**
+ * One pass of the tasks the Inbox named outside the list (`inboxNamed`):
+ * the list it reads them into, where that list's follow stood as it began,
+ * and each task read and not yet drawn, by its id, drawn together once the
+ * pass ends, since every drawing of the list walks the whole of it.
+ */
+interface ColdPass {
+  readonly collections: TaskListCollections;
+  readonly mark: ReturnType<TaskListCollections["mark"]>;
+  readonly rows: Map<string, TaskListLiveRows>;
+}
+
+/** No task read outside the list yet: the tally a launch's count starts from. */
+const NO_COLD_READS = { count: 0, drawMs: 0 } as const;
+
 /** How many of the tasks the Inbox names are read outside the list at once (`inboxNamed`). */
 const INBOX_READS_AT_ONCE = 4;
 
@@ -914,17 +929,29 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    */
   let screenAsks = 0;
 
+  /**
+   * Tells the view, where it says anything new, sharing every part that did
+   * not move with the one told before, so a view that says nothing new is
+   * that one. Note that only the document's part is walked for that
+   * (`keepIdentity`), and the task list's lists are told as they were drawn,
+   * because each is already a drawing whose unchanged rows are the very
+   * objects drawn before (`task-list-tasks.ts`), logged with the rows that
+   * moved (`list-moves.ts`): walking them again found nothing `===` did not,
+   * at a cost of the whole account on every draw, and of opening every
+   * summary against its neighbor where a row came or moved mid-list.
+   */
   function publish(): void {
-    const drawn = view;
-    // Note that the view keeps the identity of what it shares with the one
-    // last told, so a view that says nothing new is that one, and what is
-    // told shares every part that did not move with what was told before.
-    view = keepIdentity(published, view);
+    const told = listedApart(published).tasks;
+    const { tasks: standing, lists } = listedApart(view);
+    const kept = keepIdentity(told, standing);
 
-    // Note that a list laid anew over the one told is the drawing it was laid from, so its delivery is told what moved in it rather than walking it (`list-moves.ts`).
-    for (const part of TASK_LIST_PARTS) drawnAs(view[part], drawn[part]);
+    if (kept === told && TASK_LIST_PARTS.every((part) => view[part] === published[part])) {
+      view = published;
 
-    if (view === published) return;
+      return;
+    }
+
+    view = { ...kept, ...lists };
     published = view;
     kernel.emit(GATEWAY_EVENT.TASKS_CHANGED, carried(view));
   }
@@ -1309,15 +1336,6 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /** The ids opened while the list could not be read outside of: signed out, or not answered yet, since until then every task is outside it, and those whose read the service did not answer. Each is read once the list answers, where it holds it not. */
   const coldWaiting = new Set<string>();
 
-  /**
-   * The task or the agent `id` names, read from the service with the task's
-   * agents where the list holds neither, and drawn in it as a cold task
-   * (`task-list-collections.ts`), behind the open that asked: answered at
-   * once, the read running on. A task once read stands in the list, so a
-   * second open reads nothing while it does; one the follow later lets go
-   * is read again. A list replaced by a sign-out meanwhile draws nothing of
-   * it.
-   */
   /** Whether a task outside the list can be read into it now: signed in, and the list answered, since until then every task is outside it. */
   const readableOutside = (): boolean =>
     gate() && dependencies.accountId() !== undefined && view.listStatus === TASKS_READ.READY;
@@ -1342,12 +1360,62 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       return Option.getOrUndefined(decodeTaskRows({ tasks: tasks.rows, agents: agents.rows }));
     });
 
-  const readOutside = (id: string): Effect.Effect<void> =>
+  /** Draws `rows` read outside the list as cold tasks, asked at `mark`, timing the drawing onto the view's tally (`launch:load`), which the view's next telling carries rather than one of its own. */
+  const drawCold = (
+    collections: TaskListCollections,
+    rows: TaskListLiveRows,
+    mark: ReturnType<TaskListCollections["mark"]>,
+  ): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const drawingFrom = yield* Clock.currentTimeMillis;
+      yield* collections.cold(rows, mark);
+      const drawing = (yield* Clock.currentTimeMillis) - drawingFrom;
+      const after = view.coldReads ?? NO_COLD_READS;
+      view = { ...view, coldReads: { count: after.count, drawMs: after.drawMs + drawing } };
+    });
+
+  /** Counts one task read outside the list on the view's tally, before it draws, so the drawing that carries it tells it. */
+  const countCold = (): void => {
+    const before = view.coldReads ?? NO_COLD_READS;
+    view = { ...view, coldReads: { count: before.count + 1, drawMs: before.drawMs } };
+  };
+
+  /** The Inbox's pass now, whose reads are drawn together as it ends (`readInboxTasks`); none between passes. */
+  let coldPass: ColdPass | undefined;
+
+  /** The tasks a window asked for while the Inbox's pass reads them, each drawn as its read lands rather than with the pass. */
+  const coldWanted = new Set<string>();
+
+  /**
+   * The task or the agent `id` names, read from the service with the task's
+   * agents where the list holds neither, and drawn in it as a cold task
+   * (`task-list-collections.ts`), behind the open that asked: answered at
+   * once, the read running on. A task once read stands in the list, so a
+   * second open reads nothing while it does; one the follow later lets go
+   * is read again. A list replaced by a sign-out meanwhile draws nothing of
+   * it. A read the Inbox's pass asked (`pass`) is held and drawn with the
+   * pass, unless a window asks for the task meanwhile, which draws it as its
+   * read lands, or at once where the pass already holds it.
+   */
+  const readOutside = (id: string, pass?: ColdPass): Effect.Effect<void> =>
     Effect.suspend(() => {
       const userId = dependencies.accountId();
       const { collections } = taskList;
+      const held = pass === undefined ? coldPass?.rows.get(id) : undefined;
+
+      // Note that a window asking for a task the pass holds unread draws it now, since the window waits on it and the pass may run on for a minute.
+      if (held !== undefined && coldPass !== undefined) {
+        const holding = coldPass;
+        holding.rows.delete(id);
+
+        return taskList.collections === holding.collections
+          ? drawCold(holding.collections, held, holding.mark)
+          : Effect.void;
+      }
 
       if (coldNone.has(id) || collections.holds(id)) return Effect.void;
+
+      if (pass === undefined) coldWanted.add(id);
 
       if (!readableOutside() || userId === undefined) {
         coldWaiting.add(id);
@@ -1380,14 +1448,26 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         }
 
         coldRead.add(id);
-        yield* collections.cold(rows.value, mark);
+        countCold();
+
+        // Note that a read of the Inbox's pass still running, and wanted by no window, waits for the pass to draw it with the rest.
+        if (pass !== undefined && coldPass === pass && !coldWanted.has(id)) {
+          pass.rows.set(id, rows.value);
+
+          return;
+        }
+
+        yield* drawCold(collections, rows.value, mark);
       });
 
       coldPending.add(id);
 
       const pending = Effect.ensuring(
         read,
-        Effect.sync(() => coldPending.delete(id)),
+        Effect.sync(() => {
+          coldPending.delete(id);
+          coldWanted.delete(id);
+        }),
       );
 
       return Effect.asVoid(FiberMap.run(coldReads, id, pending, { onlyIfMissing: true }));
@@ -1478,35 +1558,67 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /** The Inbox's reads outside the list now, which the next naming stands in place of. */
   const inboxReads = yield* FiberHandle.make<void>();
 
-  /** One task the Inbox names, read outside the list as a window's open reads it, and waited for. */
-  const readForInbox = (id: string): Effect.Effect<void> =>
+  /** One task the Inbox names, read outside the list in its pass, and waited for. */
+  const readForInbox = (id: string, pass: ColdPass): Effect.Effect<void> =>
     Effect.gen(function* () {
       if (!coldPending.has(id) && !taskList.collections.holds(id) && !coldNone.has(id)) {
         inboxAsked.add(id);
       }
 
-      yield* readOutside(id);
+      yield* readOutside(id, pass);
       const pending = yield* FiberMap.get(coldReads, id);
 
       if (Option.isSome(pending)) yield* Fiber.await(pending.value);
     });
 
   /**
+   * Draws the tasks the Inbox's pass `pass` read, at once, as the pass ends,
+   * however it ends, since its reads are drawn nowhere else; nothing where
+   * the list it read them for was replaced meanwhile, as a sign-out does.
+   * Note that they are drawn as of where the follow stood as the pass began,
+   * so a task the follow let go meanwhile is read again rather than drawn.
+   */
+  const drawPass = (pass: ColdPass): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      if (coldPass === pass) coldPass = undefined;
+      const read = [...pass.rows.values()];
+      pass.rows.clear();
+      const [first] = read;
+
+      if (first === undefined || taskList.collections !== pass.collections) return Effect.void;
+
+      return drawCold(
+        pass.collections,
+        {
+          ...first,
+          tasks: read.flatMap((rows) => rows.tasks),
+          agents: read.flatMap((rows) => rows.agents),
+        },
+        pass.mark,
+      );
+    });
+
+  /**
    * Each task the Inbox last named that the list holds not, read into it a
    * few at a time (`INBOX_READS_AT_ONCE`), so an account whose Inbox names
    * many finished tasks never asks every one at once over the socket the
-   * list is followed on; nothing while the list cannot be read outside of,
-   * whose first answer reads them.
+   * list is followed on, and drawn together once the last is read
+   * (`drawPass`), since each drawing walks the whole list and one for each
+   * held the JS thread for the pass's length; nothing while the list cannot
+   * be read outside of, whose first answer reads them.
    */
   const readInboxTasks = Effect.suspend(() => {
     inboxWaiting = !readableOutside();
 
-    return inboxWaiting
-      ? Effect.void
-      : Effect.forEach(inboxTaskIds, readForInbox, {
-          concurrency: INBOX_READS_AT_ONCE,
-          discard: true,
-        });
+    if (inboxWaiting) return Effect.void;
+    const { collections } = taskList;
+    const pass: ColdPass = { collections, mark: collections.mark(), rows: new Map() };
+    coldPass = pass;
+
+    return Effect.forEach(inboxTaskIds, (id) => readForInbox(id, pass), {
+      concurrency: INBOX_READS_AT_ONCE,
+      discard: true,
+    }).pipe(Effect.ensuring(drawPass(pass)));
   });
 
   const inboxNamed = (taskIds: readonly string[]): Effect.Effect<void> =>

@@ -103,7 +103,6 @@ const MOTION_DURATION_MS = {
 };
 
 const MOTION_DELAY_MS = {
-  ROW_STAGGER: 32,
   // How long a pointer rests on a control before its hover hint shows.
   HINT: 500,
   // How long a state that often heals at once (a dropped connection being
@@ -549,7 +548,6 @@ function uiMotionTokensCss() {
   --ui-duration-showcase: ${ms(MOTION_DURATION_MS.SHOWCASE)};
   --ui-motion-exit: ${MOTION_EXIT};
   --ui-motion-pane: ${MOTION_PANE};
-  --ui-row-stagger: ${ms(MOTION_DELAY_MS.ROW_STAGGER)};
   --ui-hint-delay: ${ms(MOTION_DELAY_MS.HINT)};
   --ui-late-delay: ${ms(MOTION_DELAY_MS.LATE)};
   --ui-confirm-delay: ${ms(MOTION_DELAY_MS.CONFIRM)};

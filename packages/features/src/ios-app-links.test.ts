@@ -116,6 +116,7 @@ describe("the tab bar on a route", () => {
     ["/tasks/task-1", false],
     ["/tasks/agent/agent-1", true],
     ["/tasks/agent/agent-1/pull/42", true],
+    ["/tasks/agent/agent-1/thread/message-1", true],
     ["/tasks/pull/acme-ws/acme/relay/42", true],
     ["/tasks/agent/agent-1/page", false],
     ["/tasks/page/page-1", false],

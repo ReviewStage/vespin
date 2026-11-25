@@ -28,7 +28,8 @@
  * a turn Cursor stopped answering ends rather than holding until a Stop or
  * the service's progress deadline (`watchSilence`). A call the model wrote
  * past no longer counts as running, since Cursor can leave one it gave up on
- * running for good.
+ * running for good. A run the SDK never starts within that limit, a
+ * summary's or a message's, ends the launch the same way (`runStarted`).
  * Cursor keeps no goal, so a line marked `goal` goes as words, as it does to
  * a runner from before the mark.
  *
@@ -50,6 +51,11 @@
  * Skills. The SDK takes no folder of skills, so the member's installed
  * skills are linked into the checkout's `.agents/skills`, kept out of git,
  * before the agent is made (`cursor-skills.ts`).
+ *
+ * Usage. The SDK streams a turn's usage once it ends, as the sum of its
+ * model calls, and hands each call's own to the send's `onDelta` alone. So
+ * the launch posts each call as a message of its own (`CursorModelCall`),
+ * from which the service reads the context the last call read.
  *
  * Secrets. The key is handed the SDK as its `apiKey`. The SDK runs the
  * agent's shell from this process, so before the agent is made the key, the
@@ -103,9 +109,11 @@ import {
   type CheckoutSnapshot,
   type ContentBlock,
   CURSOR_AGENT_PREFIX,
+  CURSOR_MODEL_CALL,
   CURSOR_SIGNED_OUT_DETAIL,
   CURSOR_SILENT_DETAIL,
   type CursorConfig,
+  type CursorModelCall,
   type CursorModelSelection,
   INPUT_LINE,
   type InputLine,
@@ -145,6 +153,9 @@ const MESSAGE = {
   SUMMARY: "summary",
 } as const;
 
+/** The SDK's update for a model call ended, which it hands a send's `onDelta` alone and streams no message of. */
+const MODEL_CALL_COMPLETED = "model-call-completed";
+
 /** The SDK's word for a summary written, which drops the instructions the conversation began with. */
 const SUMMARY_COMPLETED = "completed";
 
@@ -175,6 +186,12 @@ const STORE_RETRY_DELAY = Duration.seconds(1);
 
 /** What a launch with no key to run Cursor on ends with. */
 const NO_KEY = "no Cursor API key was handed to the launch";
+
+/** The runs the log names where the SDK never starts one. */
+const RUN_STARTED = {
+  MESSAGE: "message's run",
+  SUMMARY: "summary",
+} as const;
 
 /** Why the SDK refused a step of the launch, which ends it. */
 class CursorFailed extends Data.TaggedError("CursorFailed")<{ readonly detail: string }> {}
@@ -273,6 +290,8 @@ interface CursorLaunch {
   /** The snapshot the turn under way opened on, until its end reads the turn's files from it. */
   opening: string | undefined;
   readonly filesSince: (from: string) => Effect.Effect<TurnFilesSummary | undefined>;
+  /** The model calls Cursor said ended that the launch has not posted yet, in the order it said them. */
+  readonly calls: CursorModelCall[];
 }
 
 /** Ends the launch: the outcome the controller's loop stops on. */
@@ -416,7 +435,22 @@ const watchSilence = Effect.fn("agent-runner/cursor/watchSilence")(function* (
   yield* Queue.offer(launch.signals, { kind: SIGNAL.RUN_SILENT, run });
 });
 
-/** Posts a run's messages as the SDK streams them, and signals its end with its outcome, or its silence where it goes quiet first. */
+/** Posts the model calls Cursor said ended since the launch last posted, in the order it said them, read as the effect runs rather than as it is built. */
+function postCalls(launch: CursorLaunch): Effect.Effect<void> {
+  return Effect.suspend(() =>
+    Effect.forEach(launch.calls.splice(0), (call) => launch.context.sink.emit(call), {
+      discard: true,
+    }),
+  );
+}
+
+/**
+ * Posts a run's messages as the SDK streams them, and signals its end with
+ * its outcome, or its silence where it goes quiet first. Each model call
+ * Cursor said ended is posted ahead of the next message, and any left at
+ * the stream's end after it, so a call is posted no later than the message
+ * Cursor streamed after it; the SDK hands a send's `onDelta` the call alone.
+ */
 const follow = Effect.fn("agent-runner/cursor/follow")(function* (
   launch: CursorLaunch,
   run: CursorRun,
@@ -433,9 +467,11 @@ const follow = Effect.fn("agent-runner/cursor/follow")(function* (
           launch.store.dueInstructions(launch.session, true);
         }
 
+        yield* postCalls(launch);
         yield* launch.context.sink.emit(message);
       }),
     ),
+    Effect.andThen(postCalls(launch)),
     Effect.andThen(Effect.tryPromise(() => run.wait())),
     Effect.match({
       onSuccess: (result): Signal => ({
@@ -460,13 +496,47 @@ const follow = Effect.fn("agent-runner/cursor/follow")(function* (
   );
 });
 
-/** The send options of the launch's next run: its model, and our tools as they now stand. */
+/** The send options of the launch's next run: its model, our tools as they now stand, and its model calls kept to post as they end. */
 function sendOptionsOf(launch: CursorLaunch): SendOptions {
   return {
     model: modelSelectionOf(launch.model),
     local: { customTools: launch.tools.current() },
+    onDelta: ({ update }) => {
+      if (update.type !== MODEL_CALL_COMPLETED) return;
+      launch.calls.push({
+        type: CURSOR_MODEL_CALL,
+        agent_id: launch.session,
+        model_call_id: update.modelCallId,
+        usage: update.usage,
+      });
+    },
   };
 }
+
+/**
+ * The run the SDK starts, asked for by `start`, `what` naming it in the log.
+ * Note that the start is bounded by `RUNNER_UNANSWERED.SILENCE_MS`, as a run
+ * that streams nothing is, because the silence watch begins only once a run
+ * is in hand and the controller waits on the start meanwhile.
+ */
+const runStarted = Effect.fn("agent-runner/cursor/runStarted")(function* (
+  what: string,
+  start: () => Promise<CursorRun>,
+) {
+  return yield* Effect.tryPromise({
+    try: start,
+    catch: (cause) => new CursorFailed({ detail: detailOf(cause) }),
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: Duration.millis(RUNNER_UNANSWERED.SILENCE_MS),
+      orElse: () =>
+        Effect.andThen(
+          Effect.logWarning(`agent-runner: Cursor never started the ${what}`),
+          Effect.fail(new CursorFailed({ detail: CURSOR_SILENT_DETAIL })),
+        ),
+    }),
+  );
+});
 
 /** Sends the messages given, merged, as the agent's next run. */
 const sendRun = Effect.fn("agent-runner/cursor/sendRun")(function* (
@@ -491,10 +561,9 @@ const sendRun = Effect.fn("agent-runner/cursor/sendRun")(function* (
   // The checkpoint the agent stands at is where a rewind or a fork before this line resumes it.
   if (first !== undefined) launch.store.markCut(launch.session, first);
 
-  const run = yield* Effect.tryPromise({
-    try: () => launch.agent.send(message, sendOptionsOf(launch)),
-    catch: (cause) => new CursorFailed({ detail: detailOf(cause) }),
-  });
+  const run = yield* runStarted(RUN_STARTED.MESSAGE, () =>
+    launch.agent.send(message, sendOptionsOf(launch)),
+  );
 
   launch.store.dueInstructions(launch.session, false);
   launch.state = { kind: LAUNCH_STATE.RUN, run, summary: false, stopping: false };
@@ -516,10 +585,7 @@ const startSummary = Effect.fn("agent-runner/cursor/startSummary")(function* (
 
   if (!launch.store.conversed(launch.session)) return yield* turnOver(launch);
 
-  const run = yield* Effect.tryPromise({
-    try: () => launch.agent.summarize(),
-    catch: (cause) => new CursorFailed({ detail: detailOf(cause) }),
-  });
+  const run = yield* runStarted(RUN_STARTED.SUMMARY, () => launch.agent.summarize());
 
   launch.state = { kind: LAUNCH_STATE.RUN, run, summary: true, stopping: false };
   yield* follow(launch, run);
@@ -985,6 +1051,7 @@ const openLaunch = Effect.fn("agent-runner/cursor/openLaunch")(function* (
         : snapshots.take(config.cwd, config.agentId, lineId),
     opening: undefined,
     filesSince: (from) => snapshots.summarize(config.cwd, from),
+    calls: [],
   };
 
   yield* forwardLines(context, signals);

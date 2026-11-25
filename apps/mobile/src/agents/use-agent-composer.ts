@@ -68,6 +68,7 @@ import {
   type AgentStatus,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
+import { CHAT_THREAD_WORDS } from "@repo/features/manager-chat-view";
 import {
   QUEUE_EDIT_SEND,
   type QueueEditSend,
@@ -115,10 +116,39 @@ const PLACEHOLDER = "Send a follow-up";
  * detail, each drawing its own, and the page drawn anew lays no suggestion
  * in again.
  */
-const unsentWords = new Map<
-  string,
-  { readonly words: string; readonly laidFor: string | undefined }
->();
+const unsentWords = new Map<string, UnsentDraft>();
+
+/** Words typed and not yet sent, with the suggestion last laid into them. */
+interface UnsentDraft {
+  readonly words: string;
+  readonly laidFor: string | undefined;
+}
+
+/** Each reply typed in a Manager chat's thread and not yet sent, by the Manager and then the message the thread hangs on, so each thread keeps a draft of its own, as the panel's thread box does. */
+const unsentReplies = new Map<string, Map<string, UnsentDraft>>();
+
+/** The draft kept for the agent's own box, or for one of its chat's threads (`thread`, by its root). */
+function keptDraft(agentId: string, thread: string | undefined): UnsentDraft | undefined {
+  return thread === undefined ? unsentWords.get(agentId) : unsentReplies.get(agentId)?.get(thread);
+}
+
+/** Keeps the draft of the agent's box or one of its threads, or lets it go where `draft` is none. */
+function keepDraft(agentId: string, thread: string | undefined, draft: UnsentDraft | undefined) {
+  if (thread === undefined) {
+    if (draft === undefined) unsentWords.delete(agentId);
+    else unsentWords.set(agentId, draft);
+
+    return;
+  }
+
+  const replies = unsentReplies.get(agentId) ?? new Map<string, UnsentDraft>();
+
+  if (draft === undefined) replies.delete(thread);
+  else replies.set(thread, draft);
+
+  if (replies.size === 0) unsentReplies.delete(agentId);
+  else unsentReplies.set(agentId, replies);
+}
 
 /** A send out on the act port: what it carries, so a refusal hands it back. */
 interface Sent {
@@ -295,6 +325,8 @@ export function useAgentComposer(
   status: AgentStatus | undefined,
   onMessage?: (taken: Promise<boolean>) => void,
   suggested?: SuggestedSend | undefined,
+  /** The message of a Manager's chat whose thread the box replies in, by its id; none for the agent's own box. */
+  thread?: string | undefined,
 ): AgentComposer {
   const acts = useHostActs();
   const write = useWrite();
@@ -305,9 +337,9 @@ export function useAgentComposer(
   });
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const [words, setWords] = useState(() => unsentWords.get(agentId)?.words ?? "");
+  const [words, setWords] = useState(() => keptDraft(agentId, thread)?.words ?? "");
   // The suggestion whose words the box last laid in, so each is laid in once.
-  const [laidFor, setLaidFor] = useState(() => unsentWords.get(agentId)?.laidFor);
+  const [laidFor, setLaidFor] = useState(() => keptDraft(agentId, thread)?.laidFor);
 
   // The queued message whose words the field holds, and the field's own words and pictures kept aside meanwhile; none while it holds its own.
   const [editing, setEditing] = useState<EditStash | undefined>(undefined);
@@ -321,9 +353,12 @@ export function useAgentComposer(
 
   // Note that the words and the suggestion laid in are kept beside the agent as they change, so a page drawn anew for it opens on them.
   useEffect(() => {
-    if (ownWords === "" && laidFor === undefined) unsentWords.delete(agentId);
-    else unsentWords.set(agentId, { words: ownWords, laidFor });
-  }, [agentId, ownWords, laidFor]);
+    keepDraft(
+      agentId,
+      thread,
+      ownWords === "" && laidFor === undefined ? undefined : { words: ownWords, laidFor },
+    );
+  }, [agentId, thread, ownWords, laidFor]);
 
   if (suggested !== undefined && suggested.key !== laidFor) {
     setLaidFor(suggested.key);
@@ -358,8 +393,11 @@ export function useAgentComposer(
 
   // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
   const sendQueues = suggested === undefined && writing && enterQueues && controlsQueue;
-  // Whether the agent is a Manager, whose messages are its chat's rows (`AGENTS_CHAT_SEND`), drawn on their way on its chat as the host holds it.
-  const chat = suggested === undefined && agent?.kind === AGENT_KIND.MANAGER;
+
+  // Whether the agent is a Manager, whose messages are its chat's rows (`AGENTS_CHAT_SEND`), drawn on their way on its chat as the host holds it. Note that a thread's box is a Manager chat's whatever the task list holds, so a reply never goes as a message to the agent.
+  const chat =
+    suggested === undefined && (thread !== undefined || agent?.kind === AGENT_KIND.MANAGER);
+
   const chatSelect = useMemo(() => selectManagerChat(agentId), [agentId]);
   const { data: chatHeld } = useQuery({ ...appStateQuery, select: chatSelect });
   const chatSending = chatHeld?.rows?.sending;
@@ -512,6 +550,7 @@ export function useAgentComposer(
           text: sent.words,
           clientKey: sent.id,
           ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
+          ...(thread === undefined ? undefined : { threadRoot: thread }),
         }),
       {
         went: BUZZ.SUCCESS,
@@ -615,6 +654,7 @@ export function useAgentComposer(
           text: line.text,
           clientKey,
           ...(line.attachments === undefined ? undefined : { attachments: line.attachments }),
+          ...(line.threadRoot === undefined ? undefined : { threadRoot: line.threadRoot }),
           retry: true,
         }),
       {
@@ -901,7 +941,7 @@ export function useAgentComposer(
   }));
 
   return {
-    placeholder: PLACEHOLDER,
+    placeholder: thread === undefined ? PLACEHOLDER : CHAT_THREAD_WORDS.BOX,
     sendQueues,
     words,
     onWords: (typed) => {
@@ -913,7 +953,8 @@ export function useAgentComposer(
     attach: pictures.attach,
     dropPictures: pictures.drop,
     pasteText: pictures.pasteText,
-    stop: writing ? stop : undefined,
+    // Note that a thread's reply is no turn of its own, so its box offers no Stop, as the panel's thread box stands none.
+    stop: writing && thread === undefined ? stop : undefined,
     stopping,
     queued,
     paused: paused === undefined ? undefined : pausedWords(paused),

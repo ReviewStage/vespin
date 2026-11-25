@@ -20,10 +20,11 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import { type PressedRows, pressRows, type RowWrite } from "../undo-stack.js";
 import { appStateIn } from "../use-app-state.js";
 
@@ -111,8 +112,8 @@ export interface InboxPresses {
 /** The inbox's presses, their items read off the window's document and their inverses sent on its own mutations. */
 export function useInboxPresses(): InboxPresses {
   const client = useQueryClient();
-  const { mutateAsync: sendMark } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_READ_STATE));
-  const { mutateAsync: sendRemind } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_REMIND));
+  const { mutateAsync: sendMark } = useMutationCalls(actMutation(ACT_KIND.AGENTS_INBOX_READ_STATE));
+  const { mutateAsync: sendRemind } = useMutationCalls(actMutation(ACT_KIND.AGENTS_INBOX_REMIND));
   const rows = useCallback(() => appStateIn(client), [client]);
 
   return useMemo(

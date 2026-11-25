@@ -6,7 +6,8 @@ import { MIRROR_FILE_MODE } from "@repo/features/sandbox-mirror-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { Effect, Layer, Path } from "effect";
 import * as FileSystem from "effect/FileSystem";
-import { mirrorMatched, mirrorWritten } from "./mirror-disk.js";
+import { TestClock } from "effect/testing";
+import { type KnownHashes, mirrorMatched, mirrorWritten } from "./mirror-disk.js";
 
 const encoder = new TextEncoder();
 
@@ -88,5 +89,40 @@ describe("mirror-disk", () => {
         "same.txt",
       ]);
     }).pipe(Effect.provide(disk)),
+  );
+  it.effect(
+    "a match takes the hash it kept for a file whose size and time stand, and reads again one whose time moved",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const root = yield* temporaryDirectoryScoped("mirror-known-");
+        const kept = path.join(root, "kept.txt");
+        const moved = path.join(root, "moved.txt");
+        const hourAgo = new Date("2026-06-01T11:00:00Z");
+        yield* TestClock.setTime(Date.parse("2026-06-01T12:00:00Z"));
+        yield* fileSystem.writeFileString(kept, "aaaa");
+        yield* fileSystem.writeFileString(moved, "aaaa");
+        yield* fileSystem.utimes(kept, hourAgo, hourAgo);
+        yield* fileSystem.utimes(moved, hourAgo, hourAgo);
+        const listed = ["kept.txt", "moved.txt"];
+
+        const manifest = [
+          { path: "kept.txt", size: 4, hash: sha256("aaaa") },
+          { path: "moved.txt", size: 4, hash: sha256("aaaa") },
+        ];
+
+        const known: KnownHashes = new Map();
+        assert.deepEqual(yield* mirrorMatched(root, listed, manifest, known), []);
+
+        // Both change at the same size; only moved.txt's time says so, as an edit's would.
+        yield* fileSystem.writeFileString(kept, "bbbb");
+        yield* fileSystem.writeFileString(moved, "bbbb");
+        yield* fileSystem.utimes(kept, hourAgo, hourAgo);
+        const later = new Date("2026-06-01T11:30:00Z");
+        yield* fileSystem.utimes(moved, later, later);
+
+        assert.deepEqual(yield* mirrorMatched(root, listed, manifest, known), ["moved.txt"]);
+      }).pipe(Effect.provide(disk)),
   );
 });

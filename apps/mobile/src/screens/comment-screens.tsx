@@ -1,8 +1,10 @@
 // comment-screens.tsx -- one thread of a task's description comments, pushed from the task's Overview: its comments as a thread's messages, the words it stands on as its heading, Resolve or Reopen in its bar, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
 
+import { PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
 import { agentName, providerOf } from "@repo/features/model-label";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import {
@@ -40,6 +42,7 @@ import {
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
 import { type TaskOverview, useTaskOverview } from "../tasks/use-tasks.js";
+import { PicturesProvider } from "../use-pictures.js";
 import { TaskMissing } from "./task-missing.js";
 
 /** The panel's words for a thread: what its field says before anything is typed, how a resolved one ended, and what stands for words since deleted. */
@@ -281,18 +284,25 @@ function CommentThread({
     onDropPictures: reply.pictures.drop,
   };
 
+  // Note that each picture of the thread reads its own source where it is drawn, under the task it belongs to, so one landing draws that picture alone.
   const page =
-    thread === undefined ? undefined : (
-      <ThreadPage
-        quoted
-        path={path}
-        status={task?.status}
-        title={quoteOf(thread.quote, thread.anchor !== undefined)}
-        messages={threadMessages(thread, agents, pictureOf, media)}
-        repository={task?.repository}
-        onOpenLink={openLink}
-        standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
-      />
+    thread === undefined || task === undefined ? undefined : (
+      <PicturesProvider
+        owner={PICTURE_OWNER.TASK}
+        ownerId={task.id}
+        kind={PRODUCT_PICTURE_KIND.COMMENT}
+      >
+        <ThreadPage
+          quoted
+          path={path}
+          status={task.status}
+          title={quoteOf(thread.quote, thread.anchor !== undefined)}
+          messages={threadMessages(thread, agents, pictureOf, media)}
+          repository={task.repository}
+          onOpenLink={openLink}
+          standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
+        />
+      </PicturesProvider>
     );
 
   return (

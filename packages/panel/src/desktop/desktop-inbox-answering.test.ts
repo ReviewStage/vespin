@@ -1071,6 +1071,33 @@ test("picking an option in the draft reply stands it picked and lights Send, the
   ]);
 });
 
+test("an option picked after words are written leaves every word in the box, and the reply sent carries both", async () => {
+  const shown = threadItem([askingMessage(EXPIRY_ASK)]);
+  const pane = await mountThread(shown);
+  const sent = heldMessages(repliedOn(shown, "e1b2c3d4-0000-4000-8000-000000000011"));
+
+  // The words are written in two goes, so the second lands on a draft the box already holds.
+  typeInComposer(pane, "Most teams");
+  typeInComposer(pane, " asked for it.");
+  await settle();
+  act(() => openOptions(pane)[1]?.click());
+  await settle();
+  act(() =>
+    pane.querySelector<HTMLButtonElement>('form.inbox-answer button[type="submit"]')?.click(),
+  );
+  await settle();
+
+  assert.deepEqual(
+    sent.map(({ text, answers }) => ({ text, answers })),
+    [
+      {
+        text: "Most teams asked for it.",
+        answers: { ask: ASKING_ID, reply: INBOX_REPLY.CHOSE, choices: ["7 days"] },
+      },
+    ],
+  );
+});
+
 test("an approve-or-request-changes ask is two small buttons in the draft reply, the one the agent recommends saying so: the one pressed stands pressed, pressed again it is let go, and the reply sent with words carries it, stamped as requested changes", async () => {
   const shown = threadItem([
     askingMessage({

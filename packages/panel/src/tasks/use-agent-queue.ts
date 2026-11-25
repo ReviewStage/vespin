@@ -262,7 +262,7 @@ export interface QueueEditing {
  * went under, so queueing it again as it went can never queue it twice.
  */
 export function useQueueEditing(
-  composer: Pick<HeldComposer, "held" | "updateHeld">,
+  composer: Pick<HeldComposer, "heldNow" | "updateHeld">,
   queue: Pick<AgentQueueControl, "change" | "listed">,
   files: AgentPictureDoor,
 ): QueueEditing {
@@ -320,7 +320,7 @@ export function useQueueEditing(
   /** The edit saved or steered with what the box holds, once its files are read; given up where the box was emptied. */
   const sendEdit = (way: QueueEditSend) => {
     if (stashed === undefined || reading.current === stashed.id) return;
-    const edit = queueEditChange(way, stashed.id, composer.held);
+    const edit = queueEditChange(way, stashed.id, composer.heldNow());
 
     if (edit === undefined) return cancel();
     closing(stashed, edit);
@@ -329,8 +329,9 @@ export function useQueueEditing(
   return {
     editing: stashed?.id,
     queue: () => {
-      const text = composer.held.text.trim();
-      const { attachments } = composer.held;
+      const held = composer.heldNow();
+      const text = held.text.trim();
+      const { attachments } = held;
 
       if (!hasWordsOrFiles(text, attachments)) return;
       const again = refused.current;
@@ -363,7 +364,7 @@ export function useQueueEditing(
       if (stashed !== undefined)
         void change({ change: QUEUE_CHANGE.HOLD, messageId: stashed.id, held: false });
 
-      const stash = queueEditStash(stashed, message.id, composer.held);
+      const stash = queueEditStash(stashed, message.id, composer.heldNow());
       setStashed(stash);
       composer.updateHeld(() => ({ text: message.text, attachments: [] }));
       // A message the queue would not mark, already on its way, is no longer the box's to edit.

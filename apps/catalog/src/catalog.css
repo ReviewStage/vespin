@@ -14,10 +14,16 @@
 @import "@repo/ui/tailwind/sources.css";
 @import "@repo/ui/tailwind/theme.css";
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+/* Note that the reset stands in the base layer, as the apps' does
+   (`packages/panel/src/styles/base.css`), so a component that sets its own
+   box, a settings page's column at its measure inside its inset, keeps it
+   here as it does there. */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 }
 
 html,

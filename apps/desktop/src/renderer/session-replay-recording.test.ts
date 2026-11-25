@@ -112,7 +112,7 @@ function drawPage(): void {
         <p>typed-secret <span contenteditable="false" data-chip="skill"><span class="skill-chip">/feature-branch</span></span></p>
       </div>
       <ul>
-        <li class="sidebar-repository" data-motion-key="acme/launch-plans">
+        <li class="sidebar-repository">
           <span id="thread-9b1c" data-thread="thread-9b1c">roadmap</span>
           <label for="thread-9b1c" aria-describedby="thread-9b1c">Folder</label>
         </li>
