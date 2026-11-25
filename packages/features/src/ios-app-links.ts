@@ -90,6 +90,8 @@ const IOS_ROUTE = {
   PULL_REQUEST_COMMENT: "comment",
   /** A person's page in the workspace the phone works in. */
   PERSON: "/tasks/person",
+  /** One thread of a Manager's chat, by the message it hangs on, under its agent's route. */
+  CHAT_THREAD: "thread",
 } as const;
 
 /** A place the app draws a screen for, which always has a route of the app's. */
@@ -358,7 +360,7 @@ export function iosRouteOnTab(route: string, standing: IosTab | undefined): stri
  * Whether the route is a conversation, which a compact window's tab bar
  * steps aside for, as Messages hides its tabs in a chat so the composer
  * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, a
- * pull request it opened, or a comment's thread on a task's description or a
+ * thread of a Manager's chat, a pull request it opened, or a comment's thread on a task's description or a
  * new comment, each ending in its reply field. A list, a task, and a page the
  * agent showed keep the bar.
  */
@@ -374,7 +376,7 @@ export function iosRouteHidesTabs(pathname: string): boolean {
 
   if (`${route}/${first ?? ""}` !== IOS_ROUTE.AGENT || second === undefined) return false;
 
-  return third === undefined || third === IOS_ROUTE.PULL_REQUEST;
+  return third === undefined || third === IOS_ROUTE.PULL_REQUEST || third === IOS_ROUTE.CHAT_THREAD;
 }
 
 /**

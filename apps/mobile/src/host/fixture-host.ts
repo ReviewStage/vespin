@@ -13,9 +13,10 @@
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
-import { signedInAccountId } from "@repo/credentials/snapshot";
+import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, type SendingMessage } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
@@ -297,6 +298,70 @@ const KEPT_SENDS = new WeakMap<object, ReadonlyMap<string, readonly SendingMessa
 /** No messages sent. */
 const NO_KEPT_SENDS: ReadonlyMap<string, readonly SendingMessage[]> = new Map();
 
+/** The messages and thread replies the run sent a Manager's chat, by the Manager, oldest first, each as the row the chat lands it as. */
+const KEPT_CHAT = new WeakMap<object, ReadonlyMap<string, readonly ManagerChatLiveMessage[]>>();
+
+/** No message sent a Manager's chat. */
+const NO_KEPT_CHAT: ReadonlyMap<string, readonly ManagerChatLiveMessage[]> = new Map();
+
+/**
+ * Keeps a message the run took for a Manager's chat, or a reply in one of
+ * its threads, as the row the chat lands it as, under the key it went
+ * under, written by the signed-in account, and lays it over the document at
+ * once; nothing for any other act.
+ */
+function keepChatSend(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.AGENTS_CHAT_SEND) return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const sent = payload as PortActPayload<typeof ACT_KIND.AGENTS_CHAT_SEND>;
+  const { account } = state.snapshot();
+  const held = KEPT_CHAT.get(state) ?? NO_KEPT_CHAT;
+  const rows = (held.get(sent.agentId) ?? []).filter((row) => row.clientKey !== sent.clientKey);
+
+  const row: ManagerChatLiveMessage = {
+    id: sent.clientKey,
+    clientKey: sent.clientKey,
+    seq: Number.MAX_SAFE_INTEGER - rows.length,
+    authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+    authorUserId: signedInAccountId(account) ?? null,
+    authorName: account.status === ACCOUNT_STATUS.SIGNED_IN ? (account.name ?? "") : "",
+    text: sent.text,
+    attachments: [],
+    threadRoot: sent.threadRoot ?? null,
+    broadcast: false,
+    turnId: null,
+    lineId: null,
+    createdAt: Date.now(),
+    editedAt: null,
+  };
+
+  KEPT_CHAT.set(state, new Map(held).set(sent.agentId, [...rows, row]));
+  stageFixture(state);
+}
+
+/** The document with each message the run sent a Manager's chat standing as the newest of its rows, as the chat's next read carries it. */
+function chatSentAppState(
+  state: AppStateSnapshot,
+  sent: ReadonlyMap<string, readonly ManagerChatLiveMessage[]>,
+): AppStateSnapshot {
+  if (sent.size === 0) return state;
+  const held = state[LIVE_READ.MANAGER_CHAT];
+  const laid = { ...held };
+
+  for (const [agentId, rows] of sent) {
+    const chat = held[agentId]?.rows;
+
+    if (chat !== undefined)
+      laid[agentId] = { rows: { ...chat, messages: [...rows.toReversed(), ...chat.messages] } };
+  }
+
+  return { ...state, [LIVE_READ.MANAGER_CHAT]: laid };
+}
+
 /**
  * The document with each message the run sent standing in its agent's
  * transcript as the host draws one (`AppTranscript.sending`): one taken on
@@ -423,7 +488,11 @@ export function stageFixture(
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
 
-  const sendsKept = sendsAppState(saved, KEPT_SENDS.get(state) ?? NO_KEPT_SENDS);
+  const sendsKept = chatSentAppState(
+    sendsAppState(saved, KEPT_SENDS.get(state) ?? NO_KEPT_SENDS),
+    KEPT_CHAT.get(state) ?? NO_KEPT_CHAT,
+  );
+
   const switched = inboxAutomationsAppState(sendsKept, SWITCHES.get(state) ?? NO_SWITCHES);
 
   const reminded = MACHINE_ASKED.has(state)
@@ -852,6 +921,9 @@ export function fixtureActs(
         // Note that a message the run took stands in its agent's transcript on its way, as a sent line does until its row lands, since nothing the run stages moves.
         // SAFETY: as above.
         keepSend(state, kind as PortActKind, payload, false);
+        // Note that a message the run took for a Manager's chat lands as its row at once, a reply in its thread's, as the chat's next read carries it.
+        // SAFETY: as above.
+        keepChatSend(state, kind as PortActKind, payload);
 
         return Promise.resolve(staged.answer);
       };

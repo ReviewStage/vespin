@@ -1267,7 +1267,7 @@ function threadBoxOf(box: AgentBox): AgentBox {
 }
 
 /** What a thread's tab says once the message it stood on is gone from the chat. */
-const THREAD_GONE_WORDS = "This thread is no longer in the chat.";
+const THREAD_GONE_WORDS = THREAD_WORDS.GONE;
 
 /** What a thread's box asks for and calls its field. */
 const THREAD_BOX_WORDS: ComposerWords = {

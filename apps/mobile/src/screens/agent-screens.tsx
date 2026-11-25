@@ -169,7 +169,7 @@ import {
 } from "../agents/use-agent-pictures.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
-import { useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
+import { useChatFaces, useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
@@ -885,6 +885,7 @@ const AgentConversation = memo(function AgentConversation({
   // Note that a Manager's page is its chat, never its transcript, as the panel draws it: the chat's own rows (`managerChat`), its transcript read only for the work each turn did.
   const chat = shown?.kind === AGENT_KIND.MANAGER;
   useManagerChatLooks(shown);
+  const chatFaces = useChatFaces(chat ? shown : undefined, readerId);
   const chatHeld = useManagerChat(id, chat);
   const chatPage = chatHeld?.rows;
 
@@ -923,6 +924,8 @@ const AgentConversation = memo(function AgentConversation({
               suggestionAddress,
               waitingCalls,
               sending: chatPage.sending,
+              managerName: chatFaces?.managerName,
+              readerName: chatFaces?.readerName,
               // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
               greeting:
                 shown !== undefined && chatPage.before === undefined
@@ -944,6 +947,7 @@ const AgentConversation = memo(function AgentConversation({
       suggestionAddress,
       waitingCalls,
       shown,
+      chatFaces,
     ],
   );
 
@@ -1243,6 +1247,10 @@ const AgentConversation = memo(function AgentConversation({
   const openThread = (threadId: string) =>
     router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: threadId })));
 
+  // Note that a chat message's thread opens on its own page pushed over the chat, on iPhone and iPad alike, as Slack's app pushes a thread.
+  const openChatThread = (root: string) =>
+    router.push({ pathname: onOwnTab("/tasks/agent/[id]/thread/[root]"), params: { id, root } });
+
   // Note that a pull request the agent's workspace is not read for yet opens on GitHub, which reads it whoever opened it.
   const openPullRequest = (url: string) => {
     const key = keyOf(url);
@@ -1338,7 +1346,8 @@ const AgentConversation = memo(function AgentConversation({
         onOpenAddress={openInSafari}
         messageLink={messageLink}
         messageMore={messageActs.more}
-        managerFace={chat ? shown?.face : undefined}
+        channel={chatFaces?.faces}
+        onOpenChatThread={chat ? openChatThread : undefined}
         onOpenThread={openThread}
         undelivered={undelivered}
         onOpenPullRequest={(item) => openPullRequest(item.url)}

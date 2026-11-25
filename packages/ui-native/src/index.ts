@@ -66,6 +66,8 @@ export type { CaretAtWord } from "./caret-at-word.js";
 
 export { ChangedFileRow } from "./changed-file-row.js";
 
+export type { ChannelFaces } from "./channel-row.js";
+
 export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
 export {
@@ -528,6 +530,7 @@ export {
 export {
   drawnCallIds,
   managerChatItems,
+  managerThreadItems,
   NO_TOGGLES,
   openCuts,
   rowsNear,

@@ -20,24 +20,14 @@
  */
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { repliesWords } from "@repo/features/manager-chat-view";
 import type { ReactNode } from "react";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { OneLine } from "../one-line/one-line.js";
 import { MessageActions, MessageFrame } from "./message.js";
 
-/** What the channel's rows say in words of their own. */
-const CHANNEL_WORDS = {
-  REPLY: "reply",
-  REPLIES: "replies",
-} as const;
-
 /** How many of a thread's repliers' faces its summary shows, the rest counted in its words alone. */
 const REPLIER_FACES = 3;
-
-/** How a thread's replies are counted: "1 reply", "3 replies". */
-export function repliesWords(count: number): string {
-  return `${count} ${count === 1 ? CHANNEL_WORDS.REPLY : CHANNEL_WORDS.REPLIES}`;
-}
 
 /**
  * One message of a channel: `avatar` and `name` over its words with `at`
