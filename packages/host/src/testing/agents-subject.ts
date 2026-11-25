@@ -297,8 +297,14 @@ function fakeService() {
   // Each page read at once, in turn; the last stands once the others are read.
   let pagesNow: readonly (TranscriptNowAnswer | { readonly failure: "unanswered" })[] = [];
   let pageGate: Effect.Effect<void> = Effect.void;
+
   // The newest page, as the follow opens with it; none answers one with something on it.
-  let newestPage: AgentNewestAnswer | { readonly failure: "unanswered" } | undefined;
+  let newestPage:
+    | AgentNewestAnswer
+    | { readonly failure: "unanswered" }
+    | typeof OFFLINE
+    | undefined;
+
   // The transaction a pin answers it committed in, where it answers one.
   let startTxid: string | undefined;
   // Whether a Start goes unanswered, as one sent offline does.
@@ -589,7 +595,9 @@ function fakeService() {
             : `worker-newest:${agentId}:${callId}`) + (cut === true ? ":cut" : ""),
         );
 
-        // Note that the service answers an agent the account does not reach not found on every read alike.
+        // Note that a newest page the test says fails fails so, the network's failure among them; otherwise the service answers an agent the account does not reach not found on every read alike.
+        if (newestPage !== undefined && "failure" in newestPage) return newestPage;
+
         if (Predicate.isObjectKeyword(transcript)) return transcript;
 
         return newestPage ?? { ...SAID, cursor: "1:0" };
@@ -1045,7 +1053,7 @@ function fakeService() {
       pageGate = gate;
     },
     /** The newest page the service answers. */
-    pageNewest: (page: AgentNewestAnswer | { readonly failure: "unanswered" }) => {
+    pageNewest: (page: AgentNewestAnswer | { readonly failure: "unanswered" } | typeof OFFLINE) => {
       newestPage = page;
     },
     /** The transaction the service answers a sent message with. */
