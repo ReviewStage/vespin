@@ -199,6 +199,11 @@ import type { PlanRow } from "./task-list-rows.js";
 import type { WindowFocus } from "./window-focus.js";
 import { followSidebarRows } from "./workspaces-follow.js";
 
+
+/** PROBE ONLY (STAG-3917's catch-up trace): notes a host delivery through the probe's hook, where the probe set one. */
+const probeMark = (n: string, d?: unknown): void =>
+  (globalThis as { __probeMark?: (n: string, d?: unknown) => void }).__probeMark?.(n, d);
+
 /**
  * compose-tasks.ts -- the panel's named tasks, read from the service: the list, the one active task, and the descriptions the windows opened.
  *
@@ -1266,6 +1271,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           taskAgentPins,
           pendingTasks,
         }) => {
+          probeMark("tasks:draw", { tasks: list.tasks.length });
           const { pendingTasks: _held, ...rest } = view;
           view = pendingTasks.length === 0 ? rest : { ...rest, pendingTasks };
           write({
@@ -1380,7 +1386,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         }
 
         coldRead.add(id);
+        const coldAt = performance.now();
         yield* collections.cold(rows.value, mark);
+        probeMark("cold:drawn", { ms: Math.round(performance.now() - coldAt) });
       });
 
       coldPending.add(id);
@@ -1512,6 +1520,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const inboxNamed = (taskIds: readonly string[]): Effect.Effect<void> =>
     Effect.suspend(() => {
       inboxTaskIds = taskIds;
+      probeMark("waits:named", { tasks: taskIds.length });
 
       return Effect.asVoid(FiberHandle.run(inboxReads, readInboxTasks));
     });

@@ -13,7 +13,7 @@ const perfAtLoad = performance.now();
 /** A gap between ticks longer than this is the JS thread held by work. */
 const STALL_MS = 34;
 const TICK_MS = 8;
-const WATCH_MS = 78_000;
+const WATCH_MS = 185_000;
 
 /** Notes a mark, every time it is called. */
 export function probe(n: string, d?: unknown): void {
@@ -107,4 +107,8 @@ export function probeFlush(reason: string): void {
 probe("probe-loaded");
 setTimeout(() => probeFlush("t24"), 24_200);
 // Note that the stalls are watched to 78 s, for what still holds the JS thread after the first minute, and written again then.
-setTimeout(() => probeFlush("t78"), WATCH_MS + 200);
+setTimeout(() => probeFlush("t78"), 78_200);
+setTimeout(() => probeFlush("t125"), 125_000);
+setTimeout(() => probeFlush("t185"), WATCH_MS + 200);
+// Note that the host's own code notes its deliveries through this hook, which only the probe sets.
+(globalThis as { __probeMark?: (n: string, d?: unknown) => void }).__probeMark = probe;

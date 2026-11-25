@@ -19,9 +19,9 @@ import {
   type InboxMessage,
   inboxItemSchema,
 } from "@repo/features/inbox-wire";
-import { INBOX_ITEMS_READ, inboxInOrder, inboxOfLiveRows } from "@repo/features/inbox-live";
+import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, inboxInOrder, inboxOfLiveRows } from "@repo/features/inbox-live";
 import { LIVE_POLL_URL } from "@repo/features/live-wire";
-import { TASK_LIST_READ, taskSummaryOf } from "@repo/features/task-list-live";
+import { TASK_LIST_READ, TASK_ROWS_READ, taskSummaryOf } from "@repo/features/task-list-live";
 import { TASK_PRIORITY, TASK_STATUS } from "@repo/features/task-wire";
 import { workspaceSchema } from "@repo/features/workspace-wire";
 import { Effect, Layer, Schema } from "effect";
@@ -32,7 +32,11 @@ import { nodeSqliteDriverLayer } from "./node/index.js";
 import type { AgentRow, PlanRow } from "./task-list-rows.js";
 
 // Note that the Inbox is the developer's first whole read's size, 639 threads at about 4 MB (STAG-1359's follow-ups), all of it invented.
-const SCALE = { PLANS: 3240, AGENTS: 4831, INBOX: 639 } as const;
+const PROBE_SCALE = Number(process.env.PROBE_SCALE ?? "1");
+/** PROBE: whether the Inbox's threads past the first 220 each sit on an old settled task the live list never holds, read one by one as "what waits" names it (`PROBE_OLD_HOLDERS=1`). */
+const OLD_HOLDERS = process.env.PROBE_OLD_HOLDERS === "1";
+const OPEN_HOLDERS = 220;
+export const SCALE = { PLANS: Math.round(3240 * PROBE_SCALE), AGENTS: Math.round(4831 * PROBE_SCALE), INBOX: Math.round(639 * PROBE_SCALE) } as const;
 const NOW = Date.now();
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -76,7 +80,7 @@ function uuid(kind: number, index: number): string {
 
 const at = <T>(list: readonly T[], index: number): T => list[index % list.length] as T;
 
-function planAt(index: number): PlanRow {
+export function planAt(index: number): PlanRow {
   const created = NOW - index * 3 * HOUR;
   const owner = at(PEOPLE, index);
   const assignee = at(PEOPLE, index + 1);
@@ -239,7 +243,8 @@ function said(
 
 /** The `n`th Inbox item, on the `n`th open plan's first agent, `n` × 40 minutes back. */
 function inboxAt(n: number): { readonly item: InboxItem; readonly taskId: string } {
-  const plan = n % 220;
+  const old = OLD_HOLDERS && n >= OPEN_HOLDERS;
+  const plan = old ? SCALE.PLANS + (n - OPEN_HOLDERS) : n % 220;
   const ago = (n + 1) * 40 * MINUTE;
   const thread = [
     said(n * 10, ago, "agent"),
@@ -257,7 +262,7 @@ function inboxAt(n: number): { readonly item: InboxItem; readonly taskId: string
 
   const item = {
     id: uuid(4, n),
-    agentId: uuid(2, plan),
+    agentId: old ? uuid(2, SCALE.AGENTS + (n - OPEN_HOLDERS)) : uuid(2, plan),
     key: `probe-${n}`,
     revision: thread.length,
     version: INBOX_WIRE_VERSION,
@@ -398,6 +403,93 @@ function inboxWholeBody(inbox: readonly { readonly item: InboxItem; readonly tas
   return JSON.stringify(body);
 }
 
+/** The `k`th old task: done six weeks back and more, outside the live list's thirty days, so only a read of it alone draws it. */
+function oldPlanAt(k: number): PlanRow {
+  const plan = planAt(SCALE.PLANS + k);
+  const at = NOW - 45 * DAY - k * HOUR;
+
+  return { ...plan, status: TASK_STATUS.DONE, completedAt: at, updatedAt: at } as PlanRow;
+}
+
+/** The `k`th old task's one agent, archived with it. */
+function oldAgentAt(k: number): AgentRow {
+  const agent = agentAt(SCALE.AGENTS + k);
+
+  return { ...agent, id: uuid(2, SCALE.AGENTS + k), taskId: uuid(1, SCALE.PLANS + k) } as AgentRow;
+}
+
+/** "What waits" whole: every task holding a thread, as the account's read of it answers, so each the list does not hold is read alone. */
+function whatWaitsBody(inbox: readonly { readonly item: InboxItem; readonly taskId: string }[]): string {
+  const sync = { next: "1" };
+  const byTask = new Map<string, { items: number; updatedAt: number }>();
+  for (const { item, taskId } of inbox) {
+    const held = byTask.get(taskId) ?? { items: 0, updatedAt: 0 };
+    byTask.set(taskId, { items: held.items + 1, updatedAt: Math.max(held.updatedAt, item.updatedAt) });
+  }
+  const tasks = [...byTask].map(([taskId, { items, updatedAt }]) => ({ taskId, items, toDo: items, updatedAt }));
+  const answer = {
+    url: LIVE_POLL_URL,
+    queries: {
+      items: sealedPart("items", [], sync),
+      taskless: sealedPart("taskless", [], sync),
+      tasks: sealedPart("tasks", tasks, sync),
+      automations: sealedPart("automations", [], sync),
+      agents: sealedPart("agents", [], sync),
+      failedRuns: sealedPart("failedRuns", [], sync),
+    },
+  };
+  const body = Schema.encodeSync(ACCOUNT_INBOX_READ.answer)(answer as never);
+  Schema.decodeUnknownSync(ACCOUNT_INBOX_READ.answer)(body);
+
+  return JSON.stringify(body);
+}
+
+/** One old task read alone, its plan and its agent, as the service answers a read of a task outside the list. */
+function taskRowsBody(k: number): string {
+  const sync = { next: "1" };
+  const answer = {
+    url: LIVE_POLL_URL,
+    queries: { tasks: sealedPart("tasks", [oldPlanAt(k)], sync), agents: sealedPart("agents", [oldAgentAt(k)], sync) },
+  };
+  const body = Schema.encodeSync(TASK_ROWS_READ.answer)(answer as never);
+  Schema.decodeUnknownSync(TASK_ROWS_READ.answer)(body);
+
+  return JSON.stringify(body);
+}
+
+/** The newest agents' rows as the wire writes them, which the stub moves one a second past the kept sync id, as a busy account's turns move. */
+function movingAgentsBody(agents: readonly AgentRow[]): string {
+  const sync = { past: "1", next: "2" };
+  const answer = {
+    url: LIVE_POLL_URL,
+    queries: { tasks: sealedPart("tasks", [], sync), agents: sealedPart("agents", agents.slice(0, 200), sync), issues: sealedPart("issues", [], sync) },
+    taskWorkspaces: [WORKSPACE_TEAM, WORKSPACE_OWN],
+  };
+  const body = Schema.encodeSync(TASK_LIST_READ.answer)(answer as never) as { queries: { agents: { rows: string } } };
+
+  return body.queries.agents.rows;
+}
+
+/** A hundred Inbox moves as the wire writes them: thread `n` takes a new message, so it moves to the head, each its stamp, item, and message. */
+function inboxMovesBody(inboxBody: string): string {
+  const encoded = JSON.parse(inboxBody) as { queries: Record<string, { rows: string }> };
+  const raw = Object.fromEntries(Object.entries(encoded.queries).map(([part, query]) => [part, JSON.parse(query.rows) as Record<string, unknown>[]]));
+  const moves = Array.from({ length: 100 }, (_, n) => {
+    const index = (n * 7) % raw.items.length;
+    const item = raw.items[index] as Record<string, unknown>;
+    const last = raw.messages.find((message) => message.itemId === item.id) as Record<string, unknown>;
+
+    return {
+      index,
+      stamp: raw.stamps[index],
+      item,
+      message: { ...last, id: uuid(9, n) },
+    };
+  });
+
+  return JSON.stringify(moves);
+}
+
 /** The task list read past its kept sync id: the five newest agents moved, as a busy account's list moves between launches. */
 function tasksDeltaBody(agents: readonly AgentRow[]): string {
   const sync = { past: String(PROBE_SYNC.TASKS_KEPT), next: String(PROBE_SYNC.TASKS_KEPT + 1) };
@@ -423,7 +515,7 @@ function tasksDeltaBody(agents: readonly AgentRow[]): string {
 
 const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeSqliteDriverLayer);
 
-it.effect("writes the probe's synthetic local database", () =>
+(process.env.NO_SEED === "1" ? it.skip : it.effect)("writes the probe's synthetic local database", () =>
   Effect.gen(function* () {
     const root = process.env.PROBE_SEED_DIR ?? "/tmp/probe-seed";
     const plans = Array.from({ length: SCALE.PLANS }, (_, index) => planAt(index));
@@ -509,6 +601,13 @@ it.effect("writes the probe's synthetic local database", () =>
     const inboxBody = inboxWholeBody(inbox);
     writeFileSync(`${answers}/inbox-whole.json`, inboxBody);
     writeFileSync(`${answers}/tasks-delta.json`, tasksDeltaBody(agents));
+    writeFileSync(`${answers}/what-waits.json`, whatWaitsBody(inbox));
+    writeFileSync(`${answers}/moving-agents.json`, movingAgentsBody(agents));
+    writeFileSync(`${answers}/inbox-moves.json`, inboxMovesBody(inboxBody));
+    const olds = OLD_HOLDERS ? Math.max(0, SCALE.INBOX - OPEN_HOLDERS) : 0;
+    mkdirSync(`${answers}/task-rows`, { recursive: true });
+    for (let k = 0; k < olds; k += 1) writeFileSync(`${answers}/task-rows/${uuid(1, SCALE.PLANS + k)}.json`, taskRowsBody(k));
+    console.log(`probe seed: ${olds} Inbox threads on old tasks outside the live list, each read alone`);
     console.log(
       `probe seed: kept ${keptInbox.length} of ${inbox.length} Inbox items (${keptChars > KEPT_INBOX_CHARACTERS ? "capped" : "whole"}); answers at ${answers}: inbox-whole ${inboxBody.length} chars`,
     );

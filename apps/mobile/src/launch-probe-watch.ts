@@ -135,8 +135,9 @@ function profileAgain(): void {
 
 // Note that the mark runs after the profile starts, once the bundle's own evaluation is done.
 setTimeout(probeClockMark, 50);
-setTimeout(() => written("launch-watch.json", "launch-profile.json"), WATCH_MS);
-// Note that the first profile runs to 40 s, past a Tasks tap and its paint; a second runs from 45 to 65 s, and the long tasks and events are kept to 76 s.
-setTimeout(profileAgain, 45_000);
-setTimeout(() => written("launch-watch-65.json", "launch-profile-60.json"), 65_000);
-setTimeout(() => written("launch-watch-76.json", "launch-profile-unused.json"), 76_000);
+// Note that the moving-account run (STAG-3917's catch-up trace) is watched for three minutes: three profiles of 60 s each, the long tasks and events written beside each.
+setTimeout(() => written("launch-watch-60.json", "launch-profile-0.json"), 60_000);
+setTimeout(profileAgain, 61_000);
+setTimeout(() => written("launch-watch-120.json", "launch-profile-60.json"), 120_000);
+setTimeout(profileAgain, 121_000);
+setTimeout(() => written("launch-watch-180.json", "launch-profile-120.json"), 180_000);
