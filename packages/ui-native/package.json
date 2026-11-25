@@ -5,7 +5,8 @@
   "type": "module",
   "description": "The iOS app's design system: React Native components over @expo/ui's SwiftUI, and the brand's tokens for them",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./thread-panel-model": "./src/thread-panel-model.js"
   },
   "types": "./src/index.ts",
   "scripts": {

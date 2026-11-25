@@ -1,0 +1,18 @@
+# leave-thread.yaml -- leaves a Manager chat's open thread for the chat: Back on the thread's page in a compact window, and on an iPad the chat bar's Hide thread, which hides the split view's inspector it stands in.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Back"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "Hide thread"
+      - extendedWaitUntil:
+          notVisible: "Hide thread"
+          timeout: 10000
