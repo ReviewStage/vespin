@@ -492,10 +492,8 @@ export function agentsProcedures(
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
       const macs = yield* hostedStoreOrUnavailable(machinesNamed(summaryDevices([agent])));
 
-      // Note that they are read as the account the agent works for, as it reads them itself, since the reader already reaches the agent.
-      const repositories = yield* hostedStoreOrUnavailable(
-        readAgentRepositories(agent.userId, agent.id),
-      );
+      // Note that they are read as the reader, who reached the agent above, since its starter may have left the workspace.
+      const repositories = yield* hostedStoreOrUnavailable(readAgentRepositories(userId, agent.id));
 
       const now = yield* Clock.currentTimeMillis;
 
