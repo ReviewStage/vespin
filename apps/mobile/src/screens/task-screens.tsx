@@ -223,6 +223,7 @@ import { useTabDrawnCount } from "../tab-drawn.js";
 
 import { useOnOwnTab } from "../tab-route.js";
 import { standingPressed, useStandingDrawnCount } from "../tasks/standing-drawn.js";
+import { useTreeFolds } from "../tasks/tree-folds.js";
 import {
   threadComments,
   threadOpen,
@@ -1059,7 +1060,9 @@ type TreeHold = {
 };
 
 /**
- * The tree's hold: which parents stand open and which groups stand folded.
+ * The tree's hold: which parents stand open and which groups stand folded,
+ * the folds kept across launches (`useTreeFolds`), as the panel's sidebar
+ * keeps them.
  * Note that it is held above the rows, since a recycled row draws another
  * task once scrolled past and a folded section drops its rows, and above the
  * Tasks tab's two layouts, since a fold or an unfold of the iPhone Duo, or a
@@ -1069,7 +1072,7 @@ type TreeHold = {
  */
 function useTreeHoldState(): TreeHold {
   const [opened, setOpened] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
-  const [folded, setFoldedSet] = useState<ReadonlySet<string>>(NONE_OPEN);
+  const { folded, setFolded } = useTreeFolds();
 
   const toggleParent = (group: string, taskId: string) =>
     setOpened((was) => {
@@ -1078,16 +1081,6 @@ function useTreeHoldState(): TreeHold {
       if (!parents.delete(taskId)) parents.add(taskId);
 
       return new Map(was).set(group, parents);
-    });
-
-  const setFolded = (group: string, shut: boolean) =>
-    setFoldedSet((was) => {
-      const next = new Set(was);
-
-      if (shut) next.add(group);
-      else next.delete(group);
-
-      return next;
     });
 
   return { opened, toggleParent, folded, setFolded };

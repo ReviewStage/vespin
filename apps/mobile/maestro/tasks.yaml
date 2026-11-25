@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, its empty sections standing as their headers, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link in More copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its archive confirmed, the agent then folded under Archived, its page standing Unarchive in the composer's place, and its row's Unarchive bringing it back, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, its empty sections standing as their headers, a group folded and kept folded across a launch, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link in More copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its archive confirmed, the agent then folded under Archived, its page standing Unarchive in the composer's place, and its row's Unarchive bringing it back, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -32,15 +32,31 @@ env:
 - waitForAnimationToEnd
 - takeScreenshot: tasks-list
 # A group folds under its header, heard by its title and count (whether it is
-# collapsed or expanded is its value, which Maestro does not match), and
-# opens again. Note that the header's title is pressed, as a child of the
-# header, because the iPad's floating sidebar stands over the header's
-# leading half, where a press at the whole header's middle folded nothing,
-# and the sidebar's own Launch row has no such parent.
+# collapsed or expanded is its value, which Maestro does not match), stays
+# folded once the app is launched again, as the desktop's sidebar keeps its
+# folds, and opens again. Note that the header's title is pressed, as a
+# child of the header, because the iPad's floating sidebar stands over the
+# header's leading half, where a press at the whole header's middle folded
+# nothing, and the sidebar's own Launch row has no such parent.
 - tapOn:
     text: "Launch"
     childOf: "Launch, [0-9]+"
 - assertNotVisible: "Launch checklist"
+- waitForAnimationToEnd
+- launchApp:
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- assertVisible: "Pinned"
+- assertVisible:
+    text: "Launch"
+    childOf: "Launch, [0-9]+"
+- assertNotVisible: "Launch checklist"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-fold-kept
 - tapOn:
     text: "Launch"
     childOf: "Launch, [0-9]+"
