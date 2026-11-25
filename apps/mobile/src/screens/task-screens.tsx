@@ -1384,10 +1384,8 @@ type GroupMenuDoors = {
  * on one of the member's sections, New task, then Rename, Change icon (Add
  * icon where it wears none, `iconSubmenu`) and Mark all as read, then
  * Delete section, its Undo in the notice; on a repository's group, Keep at
- * top and Open on GitHub, then Mark all as read; and on My tasks, which
- * heads the reader's tasks where the list draws no repository headings,
- * New section first, as the panel's Tasks head offers it and the web's
- * phone holds it in its long press.
+ * top and Open on GitHub, then Mark all as read. My tasks, above them all,
+ * holds its own (`MyTasksSection`).
  */
 function groupMenu(group: TaskTreeGroup, doors: GroupMenuDoors): readonly LongPressGroup[] {
   const { listing, newTaskIn, dark } = doors;
@@ -1449,24 +1447,8 @@ function groupMenu(group: TaskTreeGroup, doors: GroupMenuDoors): readonly LongPr
     ];
   }
 
-  // Note that My tasks offers New section only where the workspace is read, since a section is made in it.
-  const make = placing.newSection;
-
-  const newSection: LongPressGroup =
-    group.title === undefined && make !== undefined
-      ? [
-          {
-            label: NEW_SECTION,
-            symbol: GLYPH.ADD_SECTION,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => askNewSection({ newSection: make }),
-          },
-        ]
-      : [];
-
   if (group.kind === TASK_TREE_GROUP.REPOSITORY && group.key !== NO_REPOSITORY_KEY) {
     return [
-      newSection,
       [
         keepAtTopAct(group.key, placing),
         {
@@ -1480,7 +1462,7 @@ function groupMenu(group: TaskTreeGroup, doors: GroupMenuDoors): readonly LongPr
     ];
   }
 
-  return [newSection, read];
+  return [read];
 }
 
 /** Opens New task on one of the member's sections, which files the task in it once it starts, as the panel's section header's + and New task open its card. */
@@ -1527,6 +1509,51 @@ function groupAdd(
 }
 
 /**
+ * My tasks, the header the panel's sidebar heads the reader's own tasks
+ * with, drawn whatever the list's grouping, as the desktop's and the web's
+ * phone's Tasks head stands: over the member's sections and the groups of
+ * the rest, counting their tasks, and folding them all away together. Its
+ * + and its long press hold New section, as the head's button does on the
+ * desktop and its long press on the web's phone; neither stands before the
+ * workspace is read, since a section is made in it.
+ */
+function MyTasksSection({
+  listing,
+  hold,
+  count,
+}: {
+  readonly listing: TasksListing;
+  readonly hold: TreeHold;
+  /** How many tasks stand under it, its sections' and its groups'. */
+  readonly count: number;
+}) {
+  const make = listing.placing.newSection;
+
+  const act =
+    make === undefined
+      ? undefined
+      : {
+          label: NEW_SECTION,
+          symbol: GLYPH.ADD_SECTION,
+          onPress: () => askNewSection({ newSection: make }),
+        };
+
+  return (
+    <ListSection
+      title={listing.tree.tasksHead}
+      menu={act === undefined ? undefined : [[{ ...act, tone: ROW_ACTION_TONE.NEUTRAL }]]}
+      count={count}
+      foldable={count > 0}
+      folded={hold.tasksFolded}
+      onFold={(shut) => hold.setTasksFolded(shut)}
+      add={act === undefined ? undefined : { label: NEW_SECTION, acts: [act] }}
+    >
+      {null}
+    </ListSection>
+  );
+}
+
+/**
  * One group of the tree as its section: Pinned, Following, a section of the
  * member's, or a repository, folding under its header and count; My tasks
  * heads a repository group the tree draws no heading for. A section of the
@@ -1548,21 +1575,24 @@ function GroupSection({
   const newTaskInRepository = useNewTaskInRepository();
   const dark = useColorScheme() === "dark";
 
+  // Note that a group the tree heads with nothing, the reader's tasks where no repository headings stand, draws its rows under My tasks with no header of its own, which nothing could unfold.
+  const headed = group.title !== undefined;
+
   return (
     <ListSection
-      menu={groupMenu(group, { listing, newTaskIn, dark })}
-      title={group.title ?? listing.tree.tasksHead}
-      glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      menu={headed ? groupMenu(group, { listing, newTaskIn, dark }) : undefined}
+      title={group.title}
+      glyph={headed ? groupHeadGlyph(group) : undefined}
       glyphColor={
         group.kind === TASK_TREE_GROUP.SECTION ? sectionGlyphColor(group.icon) : undefined
       }
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
       count={group.rows.length}
-      foldable={group.rows.length > 0}
-      folded={hold.folded(group)}
+      foldable={headed && group.rows.length > 0}
+      folded={headed && hold.folded(group)}
       onFold={(shut) => hold.setFolded(group, shut)}
-      onDropLink={dropOnto(group, listing)}
+      onDropLink={headed ? dropOnto(group, listing) : undefined}
       add={groupAdd(group, newTaskIn, newTaskInRepository)}
     >
       <FoldedRows rows={group.rows} listing={listing} parents={treeParents(hold)} />
@@ -1627,8 +1657,8 @@ type TasksTreeProps = {
 
 /**
  * The Tasks list as the panel's phone Tasks draws it: Pinned, Following,
- * the member's sections, and the repository groups, each folding under its
- * header and count, a task's sub-tasks folded under it; or, while a search
+ * then My tasks heading the member's sections and the repository groups,
+ * each folding under its header and count, a task's sub-tasks folded under it; or, while a search
  * is typed, every task it finds. A pull reads it again.
  */
 function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
@@ -1694,8 +1724,8 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
 }
 
 /**
- * The tree's sections inside a list: Managers, Pinned, Following, the
- * member's sections, and the repository groups, as the Tasks list and an
+ * The tree's sections inside a list: Managers, Pinned, Following, then My
+ * tasks heading the member's sections and the repository groups, as the Tasks list and an
  * iPad's sidebar both draw them, as the panel's sidebar does.
  */
 function TreeSections({
@@ -1712,6 +1742,13 @@ function TreeSections({
 }) {
   const { tree } = listing;
 
+  const underMyTasks = [...tree.sections, ...tree.tasks].reduce(
+    (count, group) => count + group.rows.length,
+    0,
+  );
+
+  const myTasksFolded = hold.tasksFolded;
+
   return (
     <>
       <ManagersSection
@@ -1726,12 +1763,12 @@ function TreeSections({
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} hold={hold} />
       )}
-      {tree.sections.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
-      ))}
-      {tree.tasks.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
-      ))}
+      <MyTasksSection listing={listing} hold={hold} count={underMyTasks} />
+      {myTasksFolded
+        ? null
+        : [...tree.sections, ...tree.tasks].map((group) => (
+            <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+          ))}
     </>
   );
 }
