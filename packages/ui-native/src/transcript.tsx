@@ -1475,19 +1475,6 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
   );
 }
 
-/**
- * Where a transcript too short to fill the screen stands: at the foot, by the
- * composer, as Messages stands a short conversation, or from the top, as the
- * panel's log stands one, such as a Manager chat thread's in its Thread tab.
- * Either way a long one opens at its newest row.
- */
-export const TRANSCRIPT_SHORT = {
-  AT_FOOT: "at-foot",
-  FROM_TOP: "from-top",
-} as const;
-
-export type TranscriptShort = (typeof TRANSCRIPT_SHORT)[keyof typeof TRANSCRIPT_SHORT];
-
 type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
   /** The rows, oldest first (`transcriptItems`). */
   readonly items: readonly TranscriptItem[];
@@ -1503,8 +1490,6 @@ type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
   readonly reveal?: TranscriptReveal | undefined;
   /** Told the rows on screen each time they change, so a page reads only what it shows, such as a pull request card's state or a picture's bytes. */
   readonly onRowsShown?: ((items: readonly TranscriptItem[]) => void) | undefined;
-  /** Where the rows stand while too few to fill the screen; at the foot where none is given. */
-  readonly short?: TranscriptShort | undefined;
 };
 
 /** A call's row the transcript is asked to bring into view, the ask told apart by its serial. */
@@ -1519,14 +1504,14 @@ const REVEAL_POSITION = 0.35;
 /**
  * An agent's transcript as one lazy list, the app's one React Native list,
  * since SwiftUI has no piece for its rows: FlashList's own chat list, which
- * opens at its newest row (`startRenderingFromBottom`) and keeps it in view
+ * opens at its newest row (`initialScrollIndex`) and keeps it in view
  * as rows land while the reader stands near it (`autoscrollToBottomThreshold`),
  * while one that lands as they read back holds their place; a line the reader
  * sends brings it into view wherever they stood, just over the composer's
  * stack, as Messages' does; a reader scrolled back is offered Jump to latest.
  * Only the rows near the screen are drawn, however long the transcript runs.
- * A short one stands at the foot, by the composer, unless the page asks it
- * to read from the top (`short`).
+ * One too short to fill the screen stands from the top, as the panel's log
+ * stands one, never set at the foot by the composer.
  */
 export function AgentTranscript({
   items,
@@ -1536,7 +1521,6 @@ export function AgentTranscript({
   older,
   reveal,
   onRowsShown,
-  short = TRANSCRIPT_SHORT.AT_FOOT,
   ...drawing
 }: AgentTranscriptProps) {
   const colors = useColors();
@@ -1750,9 +1734,8 @@ export function AgentTranscript({
           initialScrollIndex={hasRows ? items.length - 1 : undefined}
           initialScrollIndexParams={{ viewOffset: OPEN_PAST_NEWEST }}
           // Note that the list opens at its newest row, keeps it in view as rows land while the reader stands near it, and, as an older page lands before the oldest row, leaves the row the reader reads where it stood, as FlashList's chat lists do.
-          // Note that a list standing a short transcript from the top leaves FlashList's start from the bottom off, which sets a few rows at the foot; `initialScrollIndex` still opens a long one at its newest row.
+          // Note that FlashList's start from the bottom is left off, since it sets a few rows at the foot, where the panel's log stands them from the top; `initialScrollIndex` still opens a long one at its newest row.
           maintainVisibleContentPosition={{
-            startRenderingFromBottom: short === TRANSCRIPT_SHORT.AT_FOOT,
             autoscrollToBottomThreshold: AUTOSCROLL_SHARE,
             animateAutoScrollToBottom: false,
           }}

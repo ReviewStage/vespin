@@ -23,7 +23,6 @@ import {
   shownFiles,
   shownMediaIds,
   shownPictureIds,
-  TRANSCRIPT_SHORT,
   type TranscriptItem,
   type TranscriptToggles,
   toggledAt,
@@ -300,8 +299,6 @@ export function ManagerThreadScreen() {
             messageMore={messageActs.more}
             channel={chatFaces?.faces}
             undelivered={undelivered}
-            // Note that a short thread reads from the top, its message over its replies, as the panel's Thread tab stands it; a long one still opens at its newest reply.
-            short={TRANSCRIPT_SHORT.FROM_TOP}
           />
         </PicturesProvider>
       </GlassDock>

@@ -526,9 +526,7 @@ export {
   AgentTranscript,
   type MessageItem,
   type OlderPages,
-  TRANSCRIPT_SHORT,
   type TranscriptReveal,
-  type TranscriptShort,
 } from "./transcript.js";
 
 export {
