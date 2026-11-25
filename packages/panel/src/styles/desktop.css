@@ -206,6 +206,17 @@ body,
   --agent-composer-field-cap: calc(var(--ui-stage-height) * 0.3);
 }
 
+/* A phone's Inbox box is docked under the thread (`inbox-pane.tsx`), its
+   open ask over its field. The ask stops growing at the field's own share
+   of what is seen and scrolls past it, so however tall a form, and however
+   short the screen or the room the keyboard leaves, its fields, the box's
+   field and Send, and the thread over the box each keep a part of it. */
+.inbox-answer-dock .inbox-draft-ask {
+  max-height: calc(var(--ui-stage-height) * 0.3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* A thread opened over a narrow room's description spans the column rather than
    standing a margin card's width at its right over the words, so its reply
    box has the column's room. */
