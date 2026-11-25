@@ -1,0 +1,63 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow .kbd-pull-request
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Repeat while "The dialog takes an address and a role.*" is not visible (up to 10 times)...
+  Swipe from (75%, 35%) to (75%, 75%) in 400 ms... COMPLETED
+Repeat while "The dialog takes an address and a role.*" is not visible (up to 10 times)... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "Merge", Below "Approval" is visible...
+  Swipe from (75%, 60%) to (75%, 35%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run flow when "Merge", Below "Approval" is visible... COMPLETED
+Take screenshot pull-request-card... COMPLETED
+Tap on "Merge", Below "The dialog takes an address and a role.*"... COMPLETED
+Assert that "Merge this pull request?" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-card-merge... COMPLETED
+Run subflows/dismiss-ask.yaml...
+  Run flow when "Cancel" is not visible...
+  Run flow when "Cancel" is not visible... SKIPPED
+  Run flow when "Cancel" is visible...
+    Tap on "Cancel"... COMPLETED
+  Run flow when "Cancel" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "${QUESTION}" is not visible... COMPLETED
+Run subflows/dismiss-ask.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "#128 Invite a teammate by email.*"... COMPLETED
+Assert that "Ready to merge" is visible... COMPLETED
+Assert that "Adds Invite by email.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-ready... COMPLETED
+Tap on "Invite a teammate by email #128"... COMPLETED
+Assert that "Edit title" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-title-edit... COMPLETED
+Erase text... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text Invite teammates by email... COMPLETED
+Tap on "Save"... COMPLETED
+Assert that "Invite teammates by email #128" is visible... FAILED
+
+Assertion is false: "Invite teammates by email #128" is visible
+
+Assertion '"Invite teammates by email #128" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjsend1b/iphone-light-pull-request-before/2026-11-25_145718
