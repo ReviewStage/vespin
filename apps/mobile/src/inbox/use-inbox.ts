@@ -26,11 +26,15 @@ import {
   type InboxGroup,
   type InboxListed,
   type InboxMessageMedia,
+  type InboxPinnedRun,
+  type InboxRun,
   type InboxShow,
   inboxAtNow,
   inboxCounts,
   inboxGroup,
   inboxList,
+  inboxPinnedRuns,
+  inboxShownItems,
   isUnread,
   MINE,
   settledOnRead,
@@ -93,6 +97,7 @@ import { dismissThreadNotifications } from "../notification-task.js";
 import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsIn } from "./inbox-groups.js";
+import { useInboxRunFolds } from "./inbox-runs.js";
 import { useInboxShown } from "./inbox-shown.js";
 import {
   refusedWords,
@@ -175,23 +180,36 @@ export function useInboxScope(): UseInboxScopeResult {
 
 /** What the Inbox lists: its rows in the list's order, what each scope counts, whether any row is unread, the reader they were read for, and where the feed they come from stands. */
 export interface InboxListing {
+  /** Every thread listed, in the list's order, a folded run's among them. */
   readonly listed: readonly InboxListed<InboxAnyHolder>[];
+  /** The rows drawn, which Select mode and the steps reach: every thread listed but those of a run folded, bar the thread chosen (`inboxShownItems`). */
+  readonly shown: readonly InboxListed<InboxAnyHolder>[];
+  /** Where the pinned tasks' threads stand first, Pinned and Everything else, each under its heading (`inboxPinnedRuns`); none where every row stands in one run. */
+  readonly runs: readonly InboxPinnedRun<InboxAnyHolder>[] | undefined;
   readonly feed: InboxFeed;
   readonly counts: InboxCounts;
   readonly readerId: string | undefined;
 }
 
+/** No run folded, for a listing whose pinned tasks' threads do not stand first. */
+const NO_FOLDS: ReadonlySet<InboxRun> = new Set();
+
 /**
  * The Inbox under `show`, narrowed by `search`, the reader's own items alone
  * as the panel's Inbox lists them until told otherwise, the item `chosen`
  * kept among them whatever the scope, as the panel keeps the item its pane
- * shows. Note that a reminder is weighed on the clock as the list is drawn,
- * so an item comes back the next time the document moves after it comes due.
+ * shows. Where `pinnedFirst` asks it, as the Inbox tab's list and its steps
+ * do, the pinned tasks' threads stand first under Pinned and the rest under
+ * Everything else, as the panel's Inbox stands them, and a run the reader
+ * folded (`useInboxRunFolds`) draws none of its rows. Note that a reminder is
+ * weighed on the clock as the list is drawn, so an item comes back the next
+ * time the document moves after it comes due.
  */
 export function useInboxListing(view: {
   readonly show: InboxShow;
   readonly search: string;
   readonly chosen?: string | undefined;
+  readonly pinnedFirst?: boolean | undefined;
 }): InboxListing {
   const groups = useInboxGroups();
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
@@ -201,23 +219,34 @@ export function useInboxListing(view: {
     select: selectInboxFeed,
   });
 
-  const { show, search, chosen } = view;
+  const { show, search, chosen, pinnedFirst = false } = view;
+  const folds = useInboxRunFolds();
+  const folded = pinnedFirst ? folds.folded : NO_FOLDS;
   // Note that the last listing is kept where the new one lists the same rows, because a new array resets every row its list holds (`RowForEach`), as a pick in a split view's list would on each press.
   const [keep] = useState(answerKeeper<InboxListing>);
 
   return useMemo(() => {
     const standing = inboxAtNow(groups, Date.now());
 
-    const listed = inboxList(standing, {
+    const list = inboxList(standing, {
       show,
       chosen,
       readerId,
       whose: MINE,
       search: searchTokens(search),
-    }).items;
+      pinnedFirst,
+      folded,
+    });
 
-    return keep({ listed, feed, counts: inboxCounts(standing, readerId, MINE), readerId });
-  }, [keep, groups, readerId, feed, show, search, chosen]);
+    return keep({
+      listed: list.items,
+      shown: inboxShownItems(list, chosen),
+      runs: inboxPinnedRuns(list),
+      feed,
+      counts: inboxCounts(standing, readerId, MINE),
+      readerId,
+    });
+  }, [keep, groups, readerId, feed, show, search, chosen, pinnedFirst, folded]);
 }
 
 /** The threads either side of the thread in front, by id, and how its screen opens one; none at an end. */
