@@ -84,11 +84,20 @@ const WRITTEN_PATH_BYTES = 512;
 type ContentPart = Exclude<UserContent, string>[number];
 
 /** The types an attached file is a picture under, which a conversation keeps. */
-const IMAGE_TYPES: ReadonlySet<string> = new Set([
+const KEPT_IMAGE_TYPES: ReadonlySet<string> = new Set([
   AGENT_ATTACHMENT_TYPE.PNG,
   AGENT_ATTACHMENT_TYPE.JPEG,
   AGENT_ATTACHMENT_TYPE.WEBP,
 ]);
+
+/**
+ * The types an attached file is handed to a session as a picture under,
+ * ahead of the words: the kept ones and a still GIF. Note that a GIF is not
+ * kept beside the conversation, because a transcript's picture a released
+ * client reads is one of the kept three alone, so its row keeps its bytes as
+ * a PDF's does.
+ */
+const IMAGE_TYPES: ReadonlySet<string> = new Set([...KEPT_IMAGE_TYPES, AGENT_ATTACHMENT_TYPE.GIF]);
 
 /** One image kept beside the conversation, as its bytes are sniffed and measured, or why it was not kept. */
 function keptImage(
@@ -128,7 +137,7 @@ export function keptHandedImages(
   files: readonly AgentAttachment[],
 ): Effect.Effect<readonly HandedFile[], TaskStoreFailure, DatabaseServices> {
   return Effect.forEach(files, (file) =>
-    IMAGE_TYPES.has(file.mediaType)
+    KEPT_IMAGE_TYPES.has(file.mediaType)
       ? Effect.map(keptImage(target, file), (kept): HandedFile => ({ ...file, kept }))
       : Effect.succeed<HandedFile>(file),
   );
