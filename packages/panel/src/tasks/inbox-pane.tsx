@@ -1907,11 +1907,12 @@ export function InboxPane({
         />
       )}
       <Fill className="desktop-inbox">
-        <Conversation list={board}>
-          <ConversationContent
-            className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
-          >
-            <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
+        {/* Note that the item's words stand around the thread and the docked box alike, so an ask's pictures drawn through the box read and open as the thread's do. */}
+        <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
+          <Conversation list={board}>
+            <ConversationContent
+              className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
+            >
               <Subject
                 item={item}
                 heading={setHeading}
@@ -2000,11 +2001,11 @@ export function InboxPane({
                   }}
                 </ConversationRows>
               </ReplyDoorProvider>
-            </ItemWords>
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
-        {docked ? <div className="inbox-answer-dock flex-none">{answerBox}</div> : null}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+          {docked ? <div className="inbox-answer-dock flex-none">{answerBox}</div> : null}
+        </ItemWords>
       </Fill>
     </section>
   );
