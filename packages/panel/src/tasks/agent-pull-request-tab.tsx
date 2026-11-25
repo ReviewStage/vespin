@@ -70,6 +70,7 @@ import {
   ChipCount,
   ChipName,
   ChoiceBar,
+  ChoiceCount,
   type ChoiceItem,
   Comment,
   CornerDot,
@@ -142,6 +143,7 @@ import {
 import { landedMark } from "@repo/ui/landed";
 import { LazyBoundary } from "@repo/ui/lazy-boundary";
 import { PICTURE_STATE, usePicture } from "@repo/ui/picture-read";
+import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { samePullRequestAddress } from "@repo/ui/tab-strip-model";
 import {
   VIRTUAL_ROWS_ANCHOR,
@@ -171,6 +173,7 @@ import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
+import { useHandedPhoneStep } from "../desktop/phone-step.js";
 import {
   type HandTabActions,
   HandTabActionsContext,
@@ -371,6 +374,10 @@ const PULL_REQUEST_WORDS = {
   READING_DESCRIPTION: "Reading description",
   READING_CONVERSATION: PULL_REQUEST_READ_WORDS.READING_CONVERSATION,
   READING_CHAPTERS: "Reading chapters",
+  /** What a phone's page is called where a view pushed over it goes back to it. */
+  PULL_REQUEST: "Pull request",
+  /** What a phone's rows that push the views are called, together. */
+  PAGES: "Pull request pages",
   FAILED: PULL_REQUEST_READ_WORDS.FAILED,
   CHECKS_FAILED: PULL_REQUEST_READ_WORDS.CHECKS_FAILED,
   CONVERSATION_FAILED: PULL_REQUEST_READ_WORDS.CONVERSATION_FAILED,
@@ -2630,6 +2637,41 @@ function tabsOf(
 }
 
 /**
+ * A phone's rows in the tabs' place, standing on the page the Conversation
+ * is: each other view as a row of its glyph, its name, and the count its
+ * tab wears, whose press pushes the view as a page of its own, as the iOS
+ * app's Checks and Files changed rows push theirs.
+ */
+function PageRows({
+  items,
+  onView,
+}: {
+  items: readonly ChoiceItem<PullRequestView>[];
+  onView: (view: PullRequestView) => void;
+}): React.JSX.Element {
+  return (
+    <section className="pull-request-section" aria-label={PULL_REQUEST_WORDS.PAGES}>
+      <ReplayUnmask>
+        <List label={PULL_REQUEST_WORDS.PAGES} density={LIST_DENSITY.DENSE}>
+          {items.map((item) =>
+            item.value === PULL_REQUEST_VIEW.CONVERSATION ? null : (
+              <ListRow
+                key={item.value}
+                leading={item.icon}
+                title={item.label}
+                meta={<ChoiceCount count={item.count} />}
+                chevron
+                onPress={() => onView(item.value)}
+              />
+            ),
+          )}
+        </List>
+      </ReplayUnmask>
+    </section>
+  );
+}
+
+/**
  * The Conversation's View options, as the Tasks page keeps its own
  * (`desktop/tasks-page-options.tsx`): one button at the end of the
  * Conversation's heading, marked while a filter leaves something out, whose
@@ -2715,6 +2757,7 @@ function ConversationView({
   kept,
   landing,
   shown: viewShown,
+  pages,
 }: {
   pictures: GitHubPictureScope;
   parts: OverviewParts;
@@ -2727,6 +2770,8 @@ function ConversationView({
   landing: ThreadLanding | undefined;
   /** Whether the view is the one the tab shows, which alone a find over the tab searches. */
   shown: boolean;
+  /** A phone's rows pushing the other views, after the description, as the iOS app stands them; none elsewhere, where tabs stand over the view. */
+  pages?: ReactNode;
 }): React.JSX.Element {
   const now = useMinute();
   const picture = usePictureDrawer(pictures);
@@ -2789,6 +2834,7 @@ function ConversationView({
             onOpenChange: (descriptionOpen) => change({ descriptionOpen }),
           }}
         />
+        {pages}
         <ThreadLandingProvider value={landing}>
           <ConversationPart
             parts={parts}
@@ -3589,6 +3635,34 @@ function PullRequestTabBody({
 
   const fold = useHeaderFold(phone);
   const listRoom = phone && fold.extent.lead ? fold.extent.room : 0;
+  const tabs = tabsOf(parts, published, held, changes, chapters);
+  // A phone stands the Conversation as the pull request's one page, under its header, and pushes each other view over it as a page of its own, which the phone's header names and goes back from.
+  const paged = phone && view !== PULL_REQUEST_VIEW.CONVERSATION;
+  const pagedTitle = tabs.find((each) => each.value === view)?.label;
+  useHandedPhoneStep(
+    paged && shown && !none && pagedTitle !== undefined
+      ? {
+          title: pagedTitle,
+          back: PULL_REQUEST_WORDS.PULL_REQUEST,
+          onBack: () => onView(PULL_REQUEST_VIEW.CONVERSATION),
+        }
+      : undefined,
+  );
+
+  // Each view is a tab's panel where tabs stand over them; a phone's are pages, which no tab names.
+  const panelOf = (each: PullRequestView) =>
+    phone ? {} : { role: "tabpanel", id: ids(each).panel, "aria-labelledby": ids(each).tab };
+
+  const reviewPress = reviewable ? (
+    <PullRequestReview
+      writes={review}
+      pending={pendingReview}
+      pendingItems={drafts?.map((draft) => ({
+        key: draft.id,
+        comment: <PendingDraft draft={draft} now={now} picture={picture} />,
+      }))}
+    />
+  ) : null;
 
   // Every review thread the tab draws, in the Conversation or on its line, replies and resolves on this pull request.
   const page = (
@@ -3622,6 +3696,7 @@ function PullRequestTabBody({
                 <header
                   ref={fold.header}
                   className="pull-request-header relative z-1 flex-none px-column-inset py-row-inset"
+                  hidden={paged}
                 >
                   <div className="pull-request-title-row">
                     <HeaderTitle title={title} writes={writes} />
@@ -3642,6 +3717,8 @@ function PullRequestTabBody({
                     )}
                     <div className="pull-request-title-actions">
                       {overview === undefined ? null : <MergeStatus pullRequest={overview} />}
+                      {/* A phone draws no tabs, so Review stands beside the title, as the tabs' end stands it elsewhere. */}
+                      {phone ? reviewPress : null}
                       {held === undefined ? null : <OpenOnGitHubButton url={held.url} />}
                       {phone ? null : (
                         <PreviewControl checks={landed(parts.checks)} shown={shown} />
@@ -3677,36 +3754,25 @@ function PullRequestTabBody({
                   />
                   {phone ? <CompactTitle ref={fold.compact} title={title} /> : null}
                 </header>
-                <PaneBar
-                  middle={
-                    <ChoiceBar<PullRequestView>
-                      label="Pull request"
-                      items={tabsOf(parts, published, held, changes, chapters)}
-                      value={view}
-                      onChange={onView}
-                      look={CHOICE_BAR_LOOK.FILL}
-                      fold={tabsFold}
-                      panels={ids}
-                    />
-                  }
-                  actions={
-                    reviewable ? (
-                      <PullRequestReview
-                        writes={review}
-                        pending={pendingReview}
-                        pendingItems={drafts?.map((draft) => ({
-                          key: draft.id,
-                          comment: <PendingDraft draft={draft} now={now} picture={picture} />,
-                        }))}
+                {phone ? null : (
+                  <PaneBar
+                    middle={
+                      <ChoiceBar<PullRequestView>
+                        label={PULL_REQUEST_WORDS.PULL_REQUEST}
+                        items={tabs}
+                        value={view}
+                        onChange={onView}
+                        look={CHOICE_BAR_LOOK.FILL}
+                        fold={tabsFold}
+                        panels={ids}
                       />
-                    ) : null
-                  }
-                />
+                    }
+                    actions={reviewPress}
+                  />
+                )}
                 <Fill
                   className={VIEW_CLASS}
-                  role="tabpanel"
-                  id={ids(PULL_REQUEST_VIEW.CONVERSATION).panel}
-                  aria-labelledby={ids(PULL_REQUEST_VIEW.CONVERSATION).tab}
+                  {...panelOf(PULL_REQUEST_VIEW.CONVERSATION)}
                   hidden={view !== PULL_REQUEST_VIEW.CONVERSATION}
                 >
                   <ConversationView
@@ -3717,13 +3783,12 @@ function PullRequestTabBody({
                     kept={kept}
                     landing={threadJumps.conversationLanding ?? anchors.landing}
                     shown={view === PULL_REQUEST_VIEW.CONVERSATION}
+                    pages={phone ? <PageRows items={tabs} onView={onView} /> : undefined}
                   />
                 </Fill>
                 <Fill
                   className={VIEW_CLASS}
-                  role="tabpanel"
-                  id={ids(PULL_REQUEST_VIEW.CHECKS).panel}
-                  aria-labelledby={ids(PULL_REQUEST_VIEW.CHECKS).tab}
+                  {...panelOf(PULL_REQUEST_VIEW.CHECKS)}
                   hidden={view !== PULL_REQUEST_VIEW.CHECKS}
                 >
                   <DetailPage
@@ -3740,9 +3805,7 @@ function PullRequestTabBody({
                 </Fill>
                 <Fill
                   className={VIEW_CLASS}
-                  role="tabpanel"
-                  id={ids(PULL_REQUEST_VIEW.CHAPTERS).panel}
-                  aria-labelledby={ids(PULL_REQUEST_VIEW.CHAPTERS).tab}
+                  {...panelOf(PULL_REQUEST_VIEW.CHAPTERS)}
                   hidden={view !== PULL_REQUEST_VIEW.CHAPTERS}
                 >
                   {chaptersSeen ? (
@@ -3771,9 +3834,7 @@ function PullRequestTabBody({
             )}
             <Fill
               className={VIEW_CLASS}
-              role="tabpanel"
-              id={ids(PULL_REQUEST_VIEW.FILES).panel}
-              aria-labelledby={ids(PULL_REQUEST_VIEW.FILES).tab}
+              {...panelOf(PULL_REQUEST_VIEW.FILES)}
               hidden={none || view !== PULL_REQUEST_VIEW.FILES}
             >
               <DiffListTopRoomContext value={listRoom}>

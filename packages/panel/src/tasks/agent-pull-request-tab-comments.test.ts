@@ -36,8 +36,6 @@ import { act, createElement, useState } from "react";
 import { test, vi } from "vitest";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { DIFF_SELECTION_SIDE, type DiffListSelection } from "../diff-view/contract.js";
-import { SHELL_ROOM } from "../shell-room.js";
-import { ShellRoomContext } from "../stage-room.js";
 import {
   AGENT,
   answerQuestion,
@@ -67,6 +65,7 @@ import {
   PULL_REQUEST,
   PULL_REQUEST_KEY,
   partsOf,
+  phoneSwitching,
   pillOf,
   pressAction,
   pressBox,
@@ -2922,16 +2921,8 @@ test("on a phone no Preview stands beside the title, and Files changed draws no 
     readChanges,
   );
 
-  const tab = await drawn(
-    createElement(
-      ShellRoomContext.Provider,
-      { value: SHELL_ROOM.NARROW },
-      createElement(Switching, {
-        control,
-        first: PULL_REQUEST_VIEW.CONVERSATION,
-      }),
-    ),
-  );
+  const phone = phoneSwitching(control);
+  const tab = await drawn(phone.element);
 
   assert.deepEqual(
     words(tab, ".pull-request-title-actions button").filter((each) => /Preview/u.test(each)),
@@ -2961,7 +2952,8 @@ test("on a phone no Preview stands beside the title, and Files changed draws no 
     "Download patch",
   ]);
 
-  await choose(tab, "Conversation");
+  act(() => phone.pushed.step?.onBack());
+  await settle();
   assert.deepEqual(
     toolbarItems(tab).slice(4),
     [],

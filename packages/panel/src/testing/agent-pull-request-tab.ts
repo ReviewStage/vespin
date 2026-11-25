@@ -48,15 +48,18 @@ import type { AppWorkspaceMembers } from "@repo/host/app-state";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import type { Editor, TiptapEditorHTMLElement } from "@tiptap/core";
 import { Effect, Predicate } from "effect";
-import { act, createElement, Fragment, useState } from "react";
+import { act, createElement, Fragment, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, assert, beforeAll, beforeEach, vi } from "vitest";
 import type { SideBundles } from "../bundle-loader.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
+import { type PhoneStep, PhoneStepContext } from "../desktop/phone-step.js";
 import { handedCommand, type TabActionGroups } from "../desktop/strip-tabs.js";
 import type { DiffListProps, DiffViewModule, DiffViewProps } from "../diff-view/contract.js";
 import type { FileTreeModule } from "../file-tree/contract.js";
 import { type GitHubConnectControl, GitHubConnectProvider } from "../github-connect.js";
+import { SHELL_ROOM } from "../shell-room.js";
+import { ShellRoomContext } from "../stage-room.js";
 import { PullRequestTab } from "../tasks/agent-pull-request-tab.js";
 import { OpenPullRequestProvider } from "../tasks/open-pull-request.js";
 import { PULL_REQUEST_VIEW, type PullRequestView } from "../tasks/task-tab-model.js";
@@ -512,6 +515,42 @@ export function Switching({
   );
 }
 
+/** The page a phone's tab pushed over itself, as the phone's header holding it last heard it. */
+interface PhonePushed {
+  step: PhoneStep | undefined;
+}
+
+/** The tab drawn on a phone, and what its header heard. */
+interface PhoneSwitching {
+  readonly element: ReactElement;
+  readonly pushed: PhonePushed;
+}
+
+/**
+ * The tab switching views on a phone, opened on the conversation, under a
+ * header that hears the page it pushes over itself, as a phone's task page
+ * heads it (`phone-step.ts`).
+ */
+export function phoneSwitching(control: AgentsControl): PhoneSwitching {
+  const pushed: PhonePushed = { step: undefined };
+
+  const element = createElement(
+    ShellRoomContext.Provider,
+    { value: SHELL_ROOM.NARROW },
+    createElement(
+      PhoneStepContext.Provider,
+      {
+        value: (step: PhoneStep | undefined) => {
+          pushed.step = step;
+        },
+      },
+      createElement(Switching, { control, first: PULL_REQUEST_VIEW.CONVERSATION }),
+    ),
+  );
+
+  return { element, pushed };
+}
+
 /** What the side panel's toolbar ⋯ offers for the tab, as a row of presses: its items as the tab hands them up, and ⇧⌘O as the panel runs it from them. */
 function Toolbar({ actions }: { actions: TabActionGroups | undefined }) {
   const chord = handedCommand(actions ?? [], APP_COMMAND.OPEN_ON_GITHUB);
@@ -687,9 +726,16 @@ export function checksGlyph(tab: HTMLElement): string | null | undefined {
   return option(tab, "Checks").querySelector('[role="img"]')?.getAttribute("aria-label");
 }
 
-/** The tab named as given chosen, and what it reads landed. */
+/** A phone's row pushing the view named as given, where tabs stand on a wider room. */
+function pageRow(tab: HTMLElement, name: string): HTMLButtonElement | undefined {
+  return [
+    ...tab.querySelectorAll<HTMLButtonElement>('[aria-label="Pull request pages"] button'),
+  ].find((each) => each.textContent?.startsWith(name) === true);
+}
+
+/** The tab named as given chosen, or on a phone its row pressed, and what it reads landed. */
 export async function choose(tab: HTMLElement, name: string): Promise<void> {
-  act(() => option(tab, name).click());
+  act(() => (pageRow(tab, name) ?? option(tab, name)).click());
   await settle();
 
   // Note that Files changed reads its changes through a query, so it is chosen once it no longer reads them.

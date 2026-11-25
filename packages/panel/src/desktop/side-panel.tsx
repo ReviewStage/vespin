@@ -106,6 +106,7 @@ import {
   Fragment,
   type ReactNode,
   useCallback,
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
@@ -223,6 +224,7 @@ import { AgentMenuTab } from "./main-tabs.js";
 import { PULL_REQUEST_TAB, pullRequestTabLoaded, TURN_CHANGES_TAB } from "./pages-on-demand.js";
 import { paneTiming, pastRightEdge } from "./pane-motion.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneFindGroups } from "./phone-head.js";
+import { type PhoneStep, PhoneStepContext, usePhoneStepHeld } from "./phone-step.js";
 import {
   type AddEntry,
   AddTabButton,
@@ -245,6 +247,7 @@ import {
 import { LOOK_STRIP, useStripLooks } from "./switcher-looks.js";
 import { type CardSubject, tabCard } from "./tab-card.js";
 import { TabStrip } from "./tab-strip.js";
+import { screenBack } from "./task-pane-switcher.js";
 
 /** A phone's Activity, as the panel's strip is handed it: where it lists the tabs, how a row's press leaves the list, none where the panel lists none (a task's), and where the tab shown is handed on. */
 interface StripActivity {
@@ -2960,6 +2963,10 @@ export function SidePanel({
       : undefined;
 
   const activity = taskActivity ?? ownActivity;
+  // The page the tab shown pushed over itself, which the panel's own header heads where it heads itself, and the header holding the panel heads elsewhere (`phone-step.ts`).
+  const pushed = usePhoneStepHeld();
+  const outerStep = useContext(PhoneStepContext);
+  const handStep = ownActivity === undefined ? outerStep : pushed.hand;
   // Where a phone's Activity lists the tabs, drawn there from the strip, which holds how each tab looks.
   const [activitySlot, setActivitySlot] = useState<HTMLElement | null>(null);
   const switched = activity !== undefined && panel.fullScreenOnly;
@@ -3274,6 +3281,7 @@ export function SidePanel({
           {switched && ownActivity !== undefined && phone !== undefined ? (
             <PanelPhoneHead
               back={phone}
+              step={listing ? undefined : pushed.step}
               title={listing ? TABS : (label ?? PANEL_LABEL)}
               titleReplayUnmasked={listing || label === undefined}
               listing={listing}
@@ -3390,40 +3398,42 @@ export function SidePanel({
             onTabActions={handTabActions}
           />
           {/* Note that whatever the tab's body hands its ⋯ is handed for this tab, at any depth of the body (`useTabActions`). */}
-          <HandTabActionsContext value={(actions) => handTabActions(tab, actions)}>
-            <TabContent
-              tab={tab}
-              taskId={taskId}
-              workspaceId={workspaceId}
-              codeFilesRead={holder === SIDE_PANEL_HOLDER.TASK}
-              pagePlace={pagePlace}
-              repository={repository}
-              files={files}
-              pages={pageTabs}
-              agents={agents}
-              agentsOf={agentsOf}
-              standings={standings}
-              shown={keys}
-              onOpenTarget={onOpenTarget}
-              cards={cards}
-              onWorkerStatus={views.onWorkerStatus}
-              onWorkerHeld={views.onWorkerHeld}
-              fileTree={fileTree}
-              onBrowseFile={panel.onBrowseFile}
-              onFileHistory={panel.onFileHistory}
-              onCloseTab={panel.onClose}
-              pullRequestViews={panel.pullRequestViews}
-              onPullRequestView={panel.onPullRequestView}
-              onOpenPullRequest={(pullRequest) =>
-                showPullRequest(panel, pullRequest, PULL_REQUEST_VIEW.CONVERSATION)
-              }
-              cloudBrowsers={cloudBrowsers}
-              cloudDrafts={cloudDrafts}
-              transcript={transcript}
-              thread={thread}
-              onTabActions={handTabActions}
-            />
-          </HandTabActionsContext>
+          <PhoneStepContext value={handStep}>
+            <HandTabActionsContext value={(actions) => handTabActions(tab, actions)}>
+              <TabContent
+                tab={tab}
+                taskId={taskId}
+                workspaceId={workspaceId}
+                codeFilesRead={holder === SIDE_PANEL_HOLDER.TASK}
+                pagePlace={pagePlace}
+                repository={repository}
+                files={files}
+                pages={pageTabs}
+                agents={agents}
+                agentsOf={agentsOf}
+                standings={standings}
+                shown={keys}
+                onOpenTarget={onOpenTarget}
+                cards={cards}
+                onWorkerStatus={views.onWorkerStatus}
+                onWorkerHeld={views.onWorkerHeld}
+                fileTree={fileTree}
+                onBrowseFile={panel.onBrowseFile}
+                onFileHistory={panel.onFileHistory}
+                onCloseTab={panel.onClose}
+                pullRequestViews={panel.pullRequestViews}
+                onPullRequestView={panel.onPullRequestView}
+                onOpenPullRequest={(pullRequest) =>
+                  showPullRequest(panel, pullRequest, PULL_REQUEST_VIEW.CONVERSATION)
+                }
+                cloudBrowsers={cloudBrowsers}
+                cloudDrafts={cloudDrafts}
+                transcript={transcript}
+                thread={thread}
+                onTabActions={handTabActions}
+              />
+            </HandTabActionsContext>
+          </PhoneStepContext>
         </FindScope>
       )}
     </PanelFrame>
@@ -3477,6 +3487,7 @@ const PANEL_LABEL = "Panel";
  */
 function PanelPhoneHead({
   back,
+  step,
   title,
   titleReplayUnmasked,
   listing,
@@ -3485,6 +3496,8 @@ function PanelPhoneHead({
   onCloseShown,
 }: {
   back: { readonly back: string; readonly onBack: () => void };
+  /** The page the tab shown pushed over itself, which the header names, its way back returning to the tab; none heads the tab. */
+  step: PhoneStep | undefined;
   title: string;
   /** Whether the title is the app's own words, never a tab's. */
   titleReplayUnmasked: boolean;
@@ -3497,9 +3510,17 @@ function PanelPhoneHead({
   return (
     <PhoneHead
       place="panel"
-      start={<PhoneBack back={{ label: back.back, onPress: back.onBack }} />}
-      title={title}
-      titleReplayUnmasked={titleReplayUnmasked}
+      start={
+        <PhoneBack
+          back={
+            step === undefined
+              ? { label: back.back, onPress: back.onBack }
+              : screenBack(step.back, step.onBack)
+          }
+        />
+      }
+      title={step?.title ?? title}
+      titleReplayUnmasked={step !== undefined || titleReplayUnmasked}
       end={
         <PlaceMore
           thing={PANEL_THING}

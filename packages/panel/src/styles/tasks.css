@@ -1106,31 +1106,19 @@
    so it folds away over the view as the view scrolls, at the finger's own
    pace, to its title's one line, and back as the view returns to its top
    (`useHeaderFold`, which writes the properties read here on the tab's
-   root). The header and the tabs under it stand over the view's top by the
-   room the header folds away (`--pull-request-fold-room`), and slide up by
-   as far as the view is scrolled (`--pull-request-fold`), so they uncover
+   root). A phone draws no tabs under it, the other views standing behind
+   rows on the Conversation's page, so the header stands over the view's top
+   by the room it folds away (`--pull-request-fold-room`), and slides up by
+   as far as the view is scrolled (`--pull-request-fold`), so it uncovers
    what the view holds rather than moving it. Note that the header is cut at
    its own top as it slides, so it never passes over what stands above the
    tab, while the merge control's panel hung from its foot stands whole. */
-.pull-request-tab[data-header-fold] > .pull-request-header,
-.pull-request-tab[data-header-fold] > .ui-pane-bar {
-  translate: 0 calc(-1 * var(--pull-request-fold, 0px));
-}
-
 .pull-request-tab[data-header-fold] > .pull-request-header {
   z-index: 3;
-  background: var(--side-panel-ground);
-  clip-path: inset(var(--pull-request-fold, 0px) -100vmax -100vmax);
-}
-
-/* Note that the tabs' own fill is translucent, so it is laid over the
-   panel's ground, or what scrolls under them would show through. */
-.pull-request-tab[data-header-fold] > .ui-pane-bar {
-  position: relative;
-  z-index: 2;
   margin-bottom: calc(-1 * var(--pull-request-fold-room, 0px));
-  background: linear-gradient(var(--ui-color-fill-hover), var(--ui-color-fill-hover))
-    var(--side-panel-ground);
+  background: var(--side-panel-ground);
+  translate: 0 calc(-1 * var(--pull-request-fold, 0px));
+  clip-path: inset(var(--pull-request-fold, 0px) -100vmax -100vmax);
 }
 
 /* The room stands at the top of what the shown view's scroller holds where

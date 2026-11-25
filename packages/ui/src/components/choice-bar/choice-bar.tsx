@@ -796,6 +796,11 @@ function countOf(count: ChoiceItem<string>["count"]): ReactNode {
   return <CountParts parts={isParts(count) ? count : [{ text: count }]} />;
 }
 
+/** An option's count where the option stands outside a bar, as a phone's row standing for a tab draws it (`countOf`). */
+export function ChoiceCount({ count }: { count: ChoiceItem<string>["count"] }): ReactNode {
+  return countOf(count);
+}
+
 /** How the bar draws its options and which stand, in order: what moves the thumb without resizing what it watches. */
 interface OptionsPlaced {
   readonly look: ChoiceBarLook;

@@ -43,8 +43,6 @@ import { TestClock } from "effect/testing";
 import { act, createElement } from "react";
 import { onTestFinished, test, vi } from "vitest";
 import { installShownFailureReporter } from "../failure-report.js";
-import { SHELL_ROOM } from "../shell-room.js";
-import { ShellRoomContext } from "../stage-room.js";
 import {
   AGENT,
   answerQuestion,
@@ -74,6 +72,7 @@ import {
   PIXEL,
   PULL_REQUEST,
   PULL_REQUEST_KEY,
+  phoneSwitching,
   pill,
   pillOf,
   pillPress,
@@ -1609,16 +1608,8 @@ function scrollTo(box: Element, top: number): void {
 
 /** A Pull request tab on a phone's Conversation, the header, its one-line title, and the conversation's scroller given the boxes a phone lays them out in, so the header folds away 160 pixels. */
 async function phoneTab(conversationRuns: number) {
-  const tab = await drawn(
-    createElement(
-      ShellRoomContext.Provider,
-      { value: SHELL_ROOM.NARROW },
-      createElement(Switching, {
-        control: controlAnswering(),
-        first: PULL_REQUEST_VIEW.CONVERSATION,
-      }),
-    ),
-  );
+  const { element, pushed } = phoneSwitching(controlAnswering());
+  const tab = await drawn(element);
 
   const header = tab.querySelector(".pull-request-header") ?? assert.fail("the header stands");
 
@@ -1634,7 +1625,13 @@ async function phoneTab(conversationRuns: number) {
   sized(conversation, { height: 400, content: conversationRuns });
   act(() => relayout());
 
-  return { tab, conversation, folded: () => header.hasAttribute("data-folded") };
+  return {
+    tab,
+    header,
+    conversation,
+    pushed,
+    folded: () => header.hasAttribute("data-folded"),
+  };
 }
 
 /** Lets `box` be scrolled to where a scroll the tab makes asks, at once, as a glide lands. */
@@ -1656,8 +1653,8 @@ function rest(box: Element, top: number): void {
   });
 }
 
-test("on a phone the header folds away as far as the view under it is scrolled, folded once past its room and back with the finger, and another view follows its own scroll", async () => {
-  const { tab, conversation, folded } = await phoneTab(2000);
+test("on a phone the header folds away as far as the view under it is scrolled, folded once past its room and back with the finger", async () => {
+  const { conversation, folded } = await phoneTab(2000);
 
   scrollTo(conversation, 100);
   assert.equal(folded(), false, "part-way, the header is still folding away");
@@ -1667,10 +1664,24 @@ test("on a phone the header folds away as far as the view under it is scrolled, 
   assert.equal(folded(), true);
   scrollTo(conversation, 159);
   assert.equal(folded(), false, "scrolled back a pixel, it comes back with the finger");
+});
 
-  scrollTo(conversation, 400);
+test("on a phone the tabs are rows on the conversation's page, each pushing its view as a page the phone's header names, with no header of the pull request's over it, and Back returns to the page", async () => {
+  const { tab, header, conversation, pushed } = await phoneTab(2000);
+  assert.equal(tab.querySelector('[role="tab"]'), null, "no tab stands");
+  assert.equal(pushed.step, undefined, "the page itself pushes nothing");
+
   await choose(tab, "Checks");
-  assert.equal(folded(), false, "another view, at its top, shows the header whole");
+  assert.equal(pushed.step?.title, "Checks");
+  assert.equal(pushed.step?.back, "Pull request");
+  assert.equal(header.hidden, true, "the pushed page stands alone");
+  assert.equal(conversation.closest<HTMLElement>(".pull-request-view")?.hidden, true);
+
+  act(() => pushed.step?.onBack());
+  await settle();
+  assert.equal(pushed.step, undefined, "back on the page, the header heads the tab again");
+  assert.equal(header.hidden, false);
+  assert.equal(conversation.closest<HTMLElement>(".pull-request-view")?.hidden, false);
 });
 
 test("a box scrolled inside the view, a comment's field, folds nothing; only the view's own scroller does", async () => {

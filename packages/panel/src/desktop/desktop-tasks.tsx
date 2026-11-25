@@ -153,6 +153,7 @@ import {
   phoneFindGroups,
   type TaskHeadBack,
 } from "./phone-head.js";
+import { PhoneStepContext, usePhoneStepHeld } from "./phone-step.js";
 import {
   listedAgentOf,
   SIDE_PANEL_HOLDER,
@@ -491,6 +492,8 @@ function DescriptionDocument({
   // The tab a phone's panel shows past the plan, which its header is named by, and the tab its column shows, whose menu the header's ⋯ offers on the agent's screen (`strip-tabs.tsx`'s `ShownTab`).
   const [shownTab, setShownTab] = useState<ShownTab | undefined>(undefined);
   const [shownAgentTab, setShownAgentTab] = useState<ShownTab | undefined>(undefined);
+  // The page the panel's tab pushed over itself, which the header heads in the tab's place (`phone-step.ts`).
+  const pushed = usePhoneStepHeld();
   const phone = room === SHELL_ROOM.NARROW;
   const drawing = useSidePanelDrawing(tasks.sidePanel);
   const views = useTabViews();
@@ -1521,16 +1524,21 @@ function DescriptionDocument({
   const chooseOverview = () => mainTabs.onChoose(MAIN_TAB.OVERVIEW);
   const overview = { column: MAIN_TAB.OVERVIEW, panel: { open: false, tab: undefined } };
 
+  // A page the panel's tab pushed over itself goes back to the tab, which heads the header again.
+  const step = pane === TASK_PANE.PANEL ? pushed.step : undefined;
+
   const back =
     pane === TASK_PANE.OVERVIEW
       ? away
-      : pane === TASK_PANE.PANEL
-        ? screenBack(columnLabel ?? planLabel, sidePanel.onToggle)
-        : screenBack(planLabel, () =>
-            taskId === undefined
-              ? chooseOverview()
-              : backToOr({ task: { taskId, ...overview } }, chooseOverview),
-          );
+      : step !== undefined
+        ? screenBack(step.back, step.onBack)
+        : pane === TASK_PANE.PANEL
+          ? screenBack(columnLabel ?? planLabel, sidePanel.onToggle)
+          : screenBack(planLabel, () =>
+              taskId === undefined
+                ? chooseOverview()
+                : backToOr({ task: { taskId, ...overview } }, chooseOverview),
+            );
 
   // What the header's ⋯ offers follows what is on screen: the task's own menu on Overview, the
   // agent's on its screen, Discard draft on a draft's, and the tab's on one of the panel's, each
@@ -1558,7 +1566,7 @@ function DescriptionDocument({
         rename.editing
           ? (rename.asked ?? task.name)
           : pane === TASK_PANE.PANEL
-            ? shownTab?.label
+            ? (step?.title ?? shownTab?.label)
             : pane === TASK_PANE.AGENT
               ? columnLabel
               : undefined
@@ -1754,29 +1762,31 @@ function DescriptionDocument({
           when the details are left. */}
                     {drawing.panel !== undefined || sidePanel.toggleAsked ? (
                       <Activity mode={detailsWide ? "hidden" : "visible"}>
-                        <SidePanel
-                          {...drawing}
-                          panel={drawing.panel ?? sidePanel}
-                          unread={tasks.unreadTabs}
-                          holder={SIDE_PANEL_HOLDER.TASK}
-                          taskId={task.id}
-                          workspaceId={openedWorkspace}
-                          repository={task.repository}
-                          pages={tasks.pages}
-                          agents={agents}
-                          openAgents={mainTabs.openAgents}
-                          shownAgent={followedAgent(mainTabs.tab, {
-                            shown: tasks.shown,
-                            covered: sidePanel.fullScreen,
-                          })}
-                          views={views}
-                          shown={tasks.shown}
-                          focused={sideFocused}
-                          onOpenTarget={openTarget}
-                          banner={stranded.banner}
-                          taskOfTab={tasks}
-                          activity={phone ? { onShown: setShownTab } : undefined}
-                        />
+                        <PhoneStepContext value={phone ? pushed.hand : undefined}>
+                          <SidePanel
+                            {...drawing}
+                            panel={drawing.panel ?? sidePanel}
+                            unread={tasks.unreadTabs}
+                            holder={SIDE_PANEL_HOLDER.TASK}
+                            taskId={task.id}
+                            workspaceId={openedWorkspace}
+                            repository={task.repository}
+                            pages={tasks.pages}
+                            agents={agents}
+                            openAgents={mainTabs.openAgents}
+                            shownAgent={followedAgent(mainTabs.tab, {
+                              shown: tasks.shown,
+                              covered: sidePanel.fullScreen,
+                            })}
+                            views={views}
+                            shown={tasks.shown}
+                            focused={sideFocused}
+                            onOpenTarget={openTarget}
+                            banner={stranded.banner}
+                            taskOfTab={tasks}
+                            activity={phone ? { onShown: setShownTab } : undefined}
+                          />
+                        </PhoneStepContext>
                       </Activity>
                     ) : null}
                     {stranded.dialog}
