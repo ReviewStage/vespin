@@ -203,7 +203,7 @@ import {
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
-import { fixtureChanges } from "./fixture-pull-requests.js";
+import { FIXTURE_PULL_REQUEST, fixtureChanges } from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
 export {
@@ -2639,10 +2639,15 @@ const MERGE_QUEUES: MergeQueueAnswer = {
           },
           40 * MINUTE,
         ),
+        // Note that second in the queue is the pull request whose own page says Queued #2 (`fixture-pull-requests.ts`), so its state chip's View merge queue opens on its row.
         queuedEntry(
           2,
           "ada/relay",
-          { number: 131, title: "Let an owner resend an invite that expired", author: "grace-h" },
+          {
+            number: FIXTURE_PULL_REQUEST.QUEUED,
+            title: "Send the invite email from the workspace",
+            author: "ada",
+          },
           {
             state: MERGE_QUEUE_ENTRY_STATE.AWAITING_CHECKS,
             checks: { total: 12, passed: 7, failedCount: 0, failed: [] },
