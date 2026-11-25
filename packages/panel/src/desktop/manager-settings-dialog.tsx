@@ -2,20 +2,19 @@
  * manager-settings-dialog.tsx -- a Manager's Settings: the sectioned settings dialog its Settings button and its menu's Settings… open, its General section changing the Manager as it stands, each row saving itself.
  *
  * The dialog is `@repo/ui`'s `SettingsDialog`, named by the Manager and
- * listing its sections down its start; General alone stands so far. Its
- * first card holds the Manager's Name, its Face, its Repositories, its
- * Machine, and its Model, in New Manager's order (`new-manager-dialog.tsx`),
- * and each saves as it is set, as a Settings row does, so the card has no
- * Save: the name as Return is pressed in it or the caret leaves it, through
- * the agent's rename (`AgentsControl.rename`), the act a coder's Rename
- * sends, a name emptied going back to the one standing; the face as it is
- * picked (`AgentsControl.onFace`) and the model and effort as they are
- * chosen (`AgentsControl.onChoose`), which the host draws at once wherever
- * the Manager is drawn. Repositories and Machine stand as it was made, held
- * and saying so, since neither changes after; of those the client holds
- * only the first repository, its checkout (`ListedAgent.repository`), so
- * that is the one the row names. A refusal is said under its row, what was
- * typed kept for another try.
+ * listing its sections down its start; General alone stands so far. General
+ * reads as the rest of Settings does, each row saving itself, so the card has
+ * no Save. It opens as workspace Settings opens on its workspace: one row
+ * leading with the Manager's face, picked from the face itself
+ * (`ManagerFaceWell`, saved through `AgentsControl.onFace`), and its name,
+ * renamed by pressing it (`RenamableName`), as a workspace's name and a
+ * machine's are, through the agent's own rename. Under it every row is what
+ * a coding agent shows of the same thing: its repositories, named, since an
+ * agent's repositories are fixed once it starts, whatever its kind; and,
+ * read off its own message box (`useAgentBox`), so they cannot drift from
+ * it, where it runs, the box's place chip, moving it where a coder's moves,
+ * and its model, the box's model chip with its permission mode and the
+ * models its machine runs. A refusal is said under its row.
  *
  * Its second card holds what a Manager's menu offers beside Settings: its
  * Archive, or its Unarchive once archived, which puts the dialog away as it
@@ -25,40 +24,35 @@
  * the workspace may delete a Manager, as with any agent.
  */
 
-import { chooseFailureNote } from "@repo/features/agent-refusal-words";
-import {
-  AGENT_BOUNDS,
-  AGENT_MACHINE,
-  type AgentSummary,
-  agentMachineOf,
-} from "@repo/features/agent-wire";
+import type { AgentSummary } from "@repo/features/agent-wire";
 import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
-import type { MacOffer } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   BUTTON_VARIANT,
   Button,
   CHIP_LOOK,
   CHIP_WIDTH,
+  RenamableName,
+  SETTINGS_ROW_LEAD,
   SettingsDialog,
   type SettingsDialogSection,
   SettingsRow,
+  SettingsRowValue,
   SettingsSection,
-  TextField,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useInlineRename } from "@repo/ui/use-inline-rename";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { appPlatform } from "../app-platform.js";
 import { refusedShown } from "../failure-report.js";
+import { renameWrite } from "../rename-write.js";
 import { replayMaskedError } from "../settings/marks.js";
+import { type AgentBox, useAgentBox } from "../tasks/agent-box.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
-import { CHIP_PLACE, RepositoriesChip, type RepositoryChooser } from "../tasks/repository-chip.js";
-import { NewTaskRunsOnChip, type OfferedPlace } from "../tasks/runs-on.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import type { MenuAction } from "./action-menu.js";
 
 /** The sections a Manager's Settings list. */
@@ -75,11 +69,13 @@ const SECTIONS: readonly SettingsDialogSection<Section>[] = [
 /** What the dialog is named for a Manager drawn with no name. */
 const UNNAMED = "Manager settings";
 
-/** What the Repositories and Machine rows say, where they stand as made. */
-const FIXED_AFTER_CREATE = "Fixed once the Manager is made.";
-
-/** What the Archive and Delete rows say. */
-const ARCHIVE_WORDS = {
+/** What the rows say. */
+const WORDS = {
+  NAME: "Manager name",
+  MANAGER: "Manager",
+  REPOSITORIES: "Repositories",
+  MACHINE: "Machine",
+  MODEL: "Model",
   ARCHIVE: "Archive",
   ARCHIVE_LINE: "It stops and leaves the sidebar. Unarchive brings it back.",
   READING: "Reading",
@@ -90,31 +86,16 @@ const ARCHIVE_WORDS = {
   DELETE_LINE: "It and its conversation go for good.",
 } as const;
 
-/** No device, while the member's devices are not read. */
-const NO_DEVICES: readonly MacOffer[] = [];
-
-/** No repository, for a Manager the client holds none of. */
-const NO_REPOSITORIES: readonly string[] = [];
-
 /** What a Manager's Settings reads of it. */
-export type ManagerSettingsSubject = Pick<
-  AgentSummary,
-  | "id"
-  | "title"
-  | "model"
-  | "effort"
-  | "contextWindow"
-  | "runtime"
-  | "machine"
-  | "mac"
-  | "face"
-  | "archivedAt"
-> & {
-  /** The workspace it is in, whose repositories its chip names; none where the surface does not know it. */
+export type ManagerSettingsSubject = AgentSummary & {
+  /** The workspace it is in; none where the surface does not know it. */
   readonly workspaceId?: string | undefined;
   /** Its checkout, the first repository it works in; none where the surface does not know it. */
   readonly repository?: string | null | undefined;
 };
+
+/** What a Manager's Settings saves through: the control its agent is listed in, as its box reads it. */
+type ManagerSettingsDoors = AgentsControl;
 
 /** What a Manager's Settings acts through beyond its own rows: its menu's Archive or Unarchive, and its Permanently delete. */
 export interface ManagerSettingsActs {
@@ -131,180 +112,94 @@ export interface ManagerSettingsAsk {
   readonly dialog: React.JSX.Element;
 }
 
-/** Where a Manager runs: the device it runs on, from the member's devices where they list it, else as the Manager names it, or the workspace's machine as it names it; none for one in the cloud. */
-function placeOf(
-  agent: ManagerSettingsSubject,
-  devices: readonly MacOffer[],
-): OfferedPlace | undefined {
-  const { mac } = agent;
+/** The name a rename ends on, or none where it keeps the one standing: an Escape, an emptied name, or the same one. */
+function renamedTo(typed: string | undefined, standing: string): string | undefined {
+  const name = typed?.trim();
 
-  if (mac?.deviceId === undefined) return undefined;
-
-  switch (agentMachineOf(agent)) {
-    case AGENT_MACHINE.VERCEL:
-      return undefined;
-    case AGENT_MACHINE.DEVICE:
-      return {
-        machine: AGENT_MACHINE.DEVICE,
-        device: devices.find((each) => each.deviceId === mac.deviceId) ?? {
-          deviceId: mac.deviceId,
-          name: mac.name,
-          providers: [],
-        },
-      };
-    case AGENT_MACHINE.WORKSPACE:
-      return {
-        machine: AGENT_MACHINE.WORKSPACE,
-        deviceId: mac.deviceId,
-        name: mac.name,
-        owned: undefined,
-      };
-  }
+  return name === undefined || name === "" || name === standing ? undefined : name;
 }
 
-/** The Name row: a field holding the Manager's name, saved as Return is pressed or the caret leaves it; an emptied name goes back to the one standing. */
-function NameRow({
+/**
+ * The Manager's own row, as workspace Settings heads its page with its
+ * workspace: its face, picked from the face, and its name, renamed by
+ * pressing it. A refused rename or face is said under the row.
+ */
+function IdentityRow({
   agent,
-  rename,
+  agents,
 }: {
   agent: ManagerSettingsSubject;
-  rename: AgentsControl["rename"];
+  agents: Pick<AgentsControl, "rename" | "onFace">;
 }): React.JSX.Element {
-  const standing = agent.title ?? "";
-  // Note that what was typed stands until its rename lands, so a refused one is kept for another try.
-  const [typed, setTyped] = useState<string | undefined>(undefined);
-  const [refused, setRefused] = useState(false);
-  const renaming = useMutation(rename.options);
-
-  const save = () => {
-    if (typed === undefined) return;
-    const name = typed.trim();
-
-    if (name === "" || name === standing) {
-      setTyped(undefined);
-      setRefused(false);
-
-      return;
-    }
-
-    setRefused(false);
-    renaming.mutate(rename.ask(agent.id, name), {
-      onSuccess: (answer) => {
-        if (rename.refused(answer)) setRefused(true);
-        else setTyped(undefined);
-      },
-      onError: () => setRefused(true),
-    });
-  };
-
-  return (
-    <SettingsRow
-      label="Name"
-      error={replayMaskedError(
-        refusedShown(refused ? RENAME_FAILED : undefined, FAILURE_SURFACE.MANAGER_SETTINGS, {
-          agentId: agent.id,
-        }),
-      )}
-    >
-      {(control) => (
-        <TextField
-          label="Name"
-          describedBy={control["aria-describedby"]}
-          invalid={refused}
-          spellCheck={false}
-          maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
-          value={typed ?? standing}
-          disabled={renaming.isPending}
-          onChange={setTyped}
-          onEnter={save}
-          onBlur={save}
-          onEscape={() => {
-            setTyped(undefined);
-            setRefused(false);
-          }}
-        />
-      )}
-    </SettingsRow>
-  );
-}
-
-/** The Face row: the Manager's face, saved as one is picked. */
-function FaceRow({
-  agent,
-  onFace,
-}: {
-  agent: ManagerSettingsSubject;
-  onFace: AgentsControl["onFace"];
-}): React.JSX.Element {
+  const name = agent.title ?? "";
+  const renaming = useMutation(agents.rename.options);
+  const rename = useInlineRename(agent.id, renameWrite(renaming, agents.rename));
   const [picking, setPicking] = useState(false);
-  const [refused, setRefused] = useState(false);
+  const [faceRefused, setFaceRefused] = useState(false);
 
   const pick = (face: ManagerFace) => {
-    setRefused(false);
-    void onFace(agent.id, face).then((answer) => setRefused("failure" in answer));
+    setFaceRefused(false);
+    void agents.onFace(agent.id, face).then((answer) => setFaceRefused("failure" in answer));
   };
+
+  // Note that a rename's refusal is the rename's own, so a face picked meanwhile does not erase it.
+  const refusal = rename.refused ? RENAME_FAILED : faceRefused ? MANAGER_FACE_FAILED : undefined;
 
   return (
     <SettingsRow
-      label="Face"
-      error={refusedShown(refused ? MANAGER_FACE_FAILED : undefined, FAILURE_SURFACE.MANAGER_FACE, {
-        agentId: agent.id,
-      })}
-    >
-      {() => (
+      lead={SETTINGS_ROW_LEAD.FACE}
+      leading={
         <ManagerFaceWell
           face={agent.face}
           open={picking}
           onOpenChange={setPicking}
           onChange={pick}
         />
+      }
+      label={
+        <ReplayMask>
+          <RenamableName
+            value={rename.asked ?? name}
+            label={WORDS.NAME}
+            editing={rename.editing}
+            onBegin={rename.begin}
+            onEnd={({ value }) => rename.end(renamedTo(value, name))}
+          />
+        </ReplayMask>
+      }
+      description={WORDS.MANAGER}
+      editing={rename.editing}
+      error={replayMaskedError(
+        refusedShown(refusal, FAILURE_SURFACE.MANAGER_SETTINGS, { agentId: agent.id }),
       )}
-    </SettingsRow>
+    />
   );
 }
 
-/** The Model row: the Manager's model and effort, saved as they are chosen. */
-function ModelRow({
-  agent,
-  agents,
-}: {
-  agent: ManagerSettingsSubject;
-  agents: Pick<AgentsControl, "onChoose" | "models" | "modelsFailed" | "readModels">;
-}): React.JSX.Element {
-  const [refusal, setRefusal] = useState<string | undefined>(undefined);
-
-  const choice = {
-    model: agent.model,
-    effort: agent.effort,
-    ...(agent.contextWindow === undefined ? undefined : { contextWindow: agent.contextWindow }),
-  };
+/** The Model row: the agent box's own model chip, as the box draws it. */
+function ModelRow({ agentId, box }: { agentId: string; box: AgentBox }): React.JSX.Element {
+  const { model } = box;
 
   return (
     <SettingsRow
-      label="Model"
-      error={refusedShown(refusal, FAILURE_SURFACE.MANAGER_SETTINGS, { agentId: agent.id })}
+      label={WORDS.MODEL}
+      error={refusedShown(model?.note, FAILURE_SURFACE.MANAGER_SETTINGS, { agentId })}
     >
-      {() => (
-        <AgentModelChip
-          model={{
-            choice,
-            note: undefined,
-            runtime: agent.runtime,
-            choose: (next) => {
-              setRefusal(undefined);
-              void agents.onChoose(agent.id, next).then((answer) => {
-                if ("failure" in answer) setRefusal(chooseFailureNote(answer.failure));
-              });
-            },
-          }}
-          models={agents.models}
-          modelsFailed={agents.modelsFailed}
-          readModels={agents.readModels}
-          usage={undefined}
-          look={CHIP_LOOK.FIELD}
-          width={CHIP_WIDTH.FIELD}
-        />
-      )}
+      {() =>
+        model === undefined ? null : (
+          <AgentModelChip
+            model={model}
+            models={box.models}
+            modelsFailed={box.modelsFailed}
+            readModels={box.readModels}
+            usage={undefined}
+            owner={box.owner}
+            permissions={box.mode}
+            look={CHIP_LOOK.FIELD}
+            width={CHIP_WIDTH.FIELD}
+          />
+        )
+      }
     </SettingsRow>
   );
 }
@@ -317,83 +212,54 @@ function GeneralSection({
   onClose,
 }: {
   agent: ManagerSettingsSubject;
-  agents: Pick<
-    AgentsControl,
-    "rename" | "onChoose" | "onFace" | "models" | "modelsFailed" | "readModels" | "macs"
-  >;
+  agents: ManagerSettingsDoors;
   acts: ManagerSettingsActs;
   onClose: () => void;
 }): React.JSX.Element {
-  const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
-  const devices = agents.macs ?? NO_DEVICES;
   const archived = agent.archivedAt !== undefined;
-
-  // Note that the chip is held, so its chooser lists the workspace's repositories only to name the one it holds.
-  const chooser: RepositoryChooser = {
-    recent: NO_REPOSITORIES,
-    openGitHub: (url) => appPlatform().openWeb(url),
-    pictures: !staged,
-    scope: agent.workspaceId,
-    manages: false,
-  };
+  // Note that the rows draw the agent's own box's chips, so they cannot drift from its box.
+  const box = useAgentBox({ agentId: agent.id, agent, agents });
 
   return (
     <>
       <SettingsSection>
-        <NameRow agent={agent} rename={agents.rename} />
-        <FaceRow agent={agent} onFace={agents.onFace} />
-        <SettingsRow label="Repositories" description={FIXED_AFTER_CREATE}>
-          {(control) => (
-            <RepositoriesChip
-              place={CHIP_PLACE.FIELD}
-              width={CHIP_WIDTH.FIELD}
-              describedBy={control["aria-describedby"]}
-              held={FIXED_AFTER_CREATE}
-              values={agent.repository == null ? NO_REPOSITORIES : [agent.repository]}
-              chooser={chooser}
-              onToggle={() => undefined}
-            />
-          )}
-        </SettingsRow>
-        <SettingsRow label="Machine" description={FIXED_AFTER_CREATE}>
-          {() => (
-            <NewTaskRunsOnChip
-              devices={devices}
-              place={placeOf(agent, devices)}
-              disabled
-              narrow={false}
-              look={CHIP_LOOK.FIELD}
-              width={CHIP_WIDTH.FIELD}
-              onChoose={() => undefined}
-            />
-          )}
-        </SettingsRow>
-        <ModelRow agent={agent} agents={agents} />
+        <IdentityRow agent={agent} agents={agents} />
+        {agent.repository == null ? null : (
+          <SettingsRow label={WORDS.REPOSITORIES}>
+            {() => (
+              <SettingsRowValue>
+                <ReplayMask>{agent.repository}</ReplayMask>
+              </SettingsRowValue>
+            )}
+          </SettingsRow>
+        )}
+        <SettingsRow label={WORDS.MACHINE}>{() => box.place(false)}</SettingsRow>
+        <ModelRow agentId={agent.id} box={box} />
       </SettingsSection>
       <SettingsSection>
         <SettingsRow
-          label={archived ? ARCHIVE_WORDS.UNARCHIVE : ARCHIVE_WORDS.ARCHIVE}
-          description={archived ? ARCHIVE_WORDS.UNARCHIVE_LINE : ARCHIVE_WORDS.ARCHIVE_LINE}
+          label={archived ? WORDS.UNARCHIVE : WORDS.ARCHIVE}
+          description={archived ? WORDS.UNARCHIVE_LINE : WORDS.ARCHIVE_LINE}
         >
           {() => (
             <Button
               variant={BUTTON_VARIANT.OUTLINE}
               busy={acts.archiving}
-              busyLabel={ARCHIVE_WORDS.READING}
+              busyLabel={WORDS.READING}
               onClick={() => {
                 // Note that the dialog goes as the Manager leaves the sidebar, so a question its stop asks stands alone.
                 onClose();
                 acts.archive.onSelect();
               }}
             >
-              {archived ? ARCHIVE_WORDS.UNARCHIVE : ARCHIVE_WORDS.ARCHIVE}
+              {archived ? WORDS.UNARCHIVE : WORDS.ARCHIVE}
             </Button>
           )}
         </SettingsRow>
-        <SettingsRow label={ARCHIVE_WORDS.DELETE_ROW} description={ARCHIVE_WORDS.DELETE_LINE}>
+        <SettingsRow label={WORDS.DELETE_ROW} description={WORDS.DELETE_LINE}>
           {() => (
             <Button variant={BUTTON_VARIANT.DANGER_OUTLINE} onClick={acts.deletion.onSelect}>
-              {ARCHIVE_WORDS.DELETE}
+              {WORDS.DELETE}
             </Button>
           )}
         </SettingsRow>
@@ -405,10 +271,7 @@ function GeneralSection({
 /** The Settings dialog for `agent`, a Manager, saved through `agents` and archived or deleted through `acts`; it stands only while `shown`. */
 export function useManagerSettingsDialog(
   agent: ManagerSettingsSubject,
-  agents: Pick<
-    AgentsControl,
-    "rename" | "onChoose" | "onFace" | "models" | "modelsFailed" | "readModels" | "macs"
-  >,
+  agents: ManagerSettingsDoors,
   acts: ManagerSettingsActs,
   shown: boolean,
 ): ManagerSettingsAsk {

@@ -42,7 +42,8 @@ import {
  * Managers of the live task list's agents, listed under their head where
  * the workspace has the experiment on, each opening its page, and no head
  * at all where it is off; its View options' sort; a Manager's row's Change
- * face ›, which changes its face, and Settings…, which names it; and
+ * face ›, which changes its face, and Settings…, which renames it and
+ * changes its model; and
  * New Manager, whose edited retry is a request of its own. Synthetic
  * throughout.
  */
@@ -344,7 +345,7 @@ test("a Manager's row offers Rename and Change face › beside Settings…, and 
   await vi.waitFor(() => assert.equal(items().length, 0, "the menu is put away"));
 });
 
-test("a Manager's row's Settings… opens New Manager's card filled from the Manager, whose Save names it and changes its model", async () => {
+test("a Manager's row's Settings… opens its settings, whose name renames it in place and whose model chip changes its model as picked", async () => {
   const renamed: AgentRenameAsk[] = [];
   const chosen: { agentId: string; model: string }[] = [];
   const sidebar = await mountSidebar(true, [], undefined, [], renamed, chosen);
@@ -365,19 +366,28 @@ test("a Manager's row's Settings… opens New Manager's card filled from the Man
   assert.ok(settings, "Settings… stands in the menu");
   act(() => settings.click());
 
+  const name =
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (button) =>
+        button.textContent === "Frontend Manager" &&
+        button.getAttribute("aria-description") === "Rename",
+    ) ?? assert.fail("the Manager's name is drawn, pressed to rename it");
+
+  act(() => name.click());
+
   const field =
     document.querySelector<HTMLInputElement>('[role="dialog"] input') ??
-    assert.fail("the Name field is drawn");
+    assert.fail("the name opens in a field");
 
   assert.equal(field.value, "Frontend Manager");
-  assert.ok(
-    document.querySelector('[role="dialog"] [aria-disabled="true"]'),
-    "its Repositories stand held as it was made",
-  );
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, " Web ");
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  act(() => {
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  await vi.waitFor(() => assert.deepEqual(renamed, [{ agentId: FRONTEND, title: "Web" }]));
 
   const chip =
     document.querySelector<HTMLButtonElement>('[role="dialog"] .agent-model-chip button') ??
@@ -391,15 +401,7 @@ test("a Manager's row's Settings… opens New Manager's card filled from the Man
     ) ?? assert.fail("the chip lists the second model");
 
   act(() => sonnet.click());
-
-  const save =
-    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
-      (button) => button.textContent === "Save",
-    ) ?? assert.fail("Save is drawn");
-
-  act(() => save.click());
   await vi.waitFor(() => assert.deepEqual(chosen, [{ agentId: FRONTEND, model: SONNET }]));
-  assert.deepEqual(renamed, [{ agentId: FRONTEND, title: "Web" }]);
 });
 
 /** A Mac the member registered, their last Runs on pick. */
