@@ -780,6 +780,7 @@ export function followTakingRows<
     }
 
     paging = undefined;
+
     const standing: SyncStanding = {
       past: "",
       next: said.next,
