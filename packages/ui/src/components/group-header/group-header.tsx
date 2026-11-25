@@ -538,11 +538,9 @@ export function GroupHeader({
   // Note that a group with no head has nothing to press, so it folds nothing.
   const folds = fold !== undefined && headed;
 
-  // Note that a group leaving rows standing once folded fades its rows where they stand, so what stands under it moves once, by what the standing rows leave.
   const { state, details } = useDisclosureFold(
     fold !== undefined && "defaultOpen" in fold ? fold.defaultOpen : true,
     fold !== undefined && "open" in fold ? fold : undefined,
-    !said(standing),
   );
 
   // Note that the rows a fold last drew are held through its exit, because a holder that hands none the moment it folds would take them out before they fade.

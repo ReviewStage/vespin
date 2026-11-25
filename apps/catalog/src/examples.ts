@@ -83,7 +83,6 @@ import { LAYOUT_EXAMPLE } from "./examples/layout";
 import { LENGTH_COUNTERS_EXAMPLE } from "./examples/length-counters";
 import { LINE_BUTTONS_EXAMPLE } from "./examples/line-buttons";
 import { LINK_FIELD_EXAMPLE } from "./examples/link-field";
-import { LIST_MOTION_EXAMPLE } from "./examples/list-motion";
 import { LIST_ROW_EXAMPLE } from "./examples/list-row";
 import { LOADING_INDICATORS_EXAMPLE } from "./examples/loading-indicators";
 import { MANAGER_FACE_PICKER_EXAMPLE } from "./examples/manager-face-picker";
@@ -286,7 +285,6 @@ export const EXAMPLES: readonly Example[] = [
   ICON_PICKER_EXAMPLE,
   MANAGER_FACE_PICKER_EXAMPLE,
   SELECTION_EXAMPLE,
-  LIST_MOTION_EXAMPLE,
   ROVING_KEYS_EXAMPLE,
   MENU_EXAMPLE,
   MENU_SECTIONS_EXAMPLE,

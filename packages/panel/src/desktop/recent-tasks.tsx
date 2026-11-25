@@ -85,13 +85,11 @@ function GlanceRows({
   label,
   cells,
   joinsWalk,
-  moves,
   children,
 }: {
   label: string;
   cells: readonly (TaskRowCell & ListColumn)[];
   joinsWalk: boolean;
-  moves: boolean;
   children: (cells: readonly TaskRowCell[], more: boolean) => ReactNode;
 }): React.JSX.Element {
   const [list, setList] = useState<HTMLDivElement | null>(null);
@@ -107,7 +105,6 @@ function GlanceRows({
         more={more}
         edges={TASK_ROW_EDGES.UNCHOSEN}
         joinsWalk={joinsWalk}
-        moves={moves}
       >
         {children(fitted, more)}
       </TaskRows>
@@ -179,7 +176,6 @@ export function RecentTasks({
   onOpen,
   face = true,
   joinsWalk = false,
-  moves = false,
 }: {
   tasks: TasksControl;
   /** What the list is called. */
@@ -194,8 +190,6 @@ export function RecentTasks({
   face?: boolean | undefined;
   /** Whether its rows join the walk of the rows of the lists beside it (`TaskRows`'s `joinsWalk`). */
   joinsWalk?: boolean | undefined;
-  /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion`. */
-  moves?: boolean | undefined;
 }): React.JSX.Element {
   const standing = useStandingDoor(tasks);
   const open = useSteadyDoor(onOpen);
@@ -203,7 +197,7 @@ export function RecentTasks({
 
   return (
     <>
-      <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk} moves={moves}>
+      <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk}>
         {(cells, more) =>
           listed.map((handed) => (
             <GlanceTaskRow
@@ -252,7 +246,7 @@ export function RecentTasksSkeleton({
   return (
     <SectionSkeleton fold={fold}>
       <SkeletonRegion label={label}>
-        <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={false} moves={false}>
+        <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={false}>
           {(cells) =>
             SKELETON_NAMES.map((name) => (
               <TaskRowSkeleton

@@ -29,9 +29,8 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
  * refused goes back to where the task stands. A task new to the list, or
  * one the filter or the completed window left out, stands where it is now,
  * and one gone from it is gone. The groups as last drawn are handed back
- * while a draw lays them out alike, so what reads them, a group's leaving
- * rows (`useLeaving`) and the page's motion (`ListMotion`'s `change`), is
- * moved only by a draw that moved a task.
+ * while a draw lays them out alike, so what reads them is drawn again only
+ * by a draw that moved a task.
  */
 
 /** No task waiting on the view. */

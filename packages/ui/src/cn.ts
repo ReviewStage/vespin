@@ -171,7 +171,6 @@ const PANEL_WINDOW = {
     "actor-for-y",
     "actor-overlap",
     "corner-dot",
-    "list-held",
     "offline-glyph",
     "offline-mark",
     "section-icon-scroll",
@@ -274,7 +273,6 @@ const PANEL_INBOX = {
     "inbox-field-short",
     "inbox-field-words",
     "inbox-line",
-    "list-held-least",
     "pick-glyph-lift",
   ],
 } as const;

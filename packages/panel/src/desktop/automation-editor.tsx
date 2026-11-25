@@ -122,9 +122,7 @@ import {
   PAGE_FRAME,
   POPOVER_ALIGN,
   Reveal,
-  RevealArea,
   RevealChoice,
-  revealArea,
   SETTINGS_SECTION_FRAME,
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
@@ -2134,7 +2132,6 @@ function EditorForm({
       : AUTOMATION_TRIGGERS;
 
   // The form is the area its reveals move, so the groups under a trigger's rows glide as they unroll.
-  const form = useRef<HTMLDivElement>(null);
   const workspaceName = workspace?.name ?? "Workspace";
   const mine = automation === undefined || automation.mine === true;
 
@@ -2151,119 +2148,117 @@ function EditorForm({
   ] as const;
 
   return (
-    <RevealArea root={form}>
-      <AutomationForm ref={form} {...revealArea()}>
-        {offersOwner ? (
-          <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.SHARING}</ReplayUnmask>}>
-            <OwnerRow
-              owner={draft.owner}
-              owners={owners}
-              mine={mine}
-              maker={maker}
-              workspace={workspace}
-              onOwner={(owner) => onDraft({ owner })}
-            />
-            {automation === undefined ? null : <MakerRow maker={maker} at={automation.createdAt} />}
-          </SettingsSection>
-        ) : null}
-        <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.TRIGGER}</ReplayUnmask>}>
-          <SelectRow
-            width={CHIP_WIDTH.MIN_FIELD}
-            label="Type"
-            labelReplayUnmasked
-            value={draft.triggerKind}
-            options={triggers}
-            parse={triggerKindOf}
-            error={
-              draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE
-                ? undefined
-                : inputProblem(problems[DRAFT_FIELD.SCHEDULE])
-            }
-            onChange={(triggerKind) => onDraft({ triggerKind })}
-          />
-          <RevealChoice value={draft.triggerKind}>
-            {(kind) =>
-              kind === AUTOMATION_TRIGGER.SCHEDULE ? (
-                <ScheduleRows
-                  draft={draft}
-                  problem={problems[DRAFT_FIELD.SCHEDULE]}
-                  onSchedule={(schedule) => onDraft({ schedule })}
-                  onTimezone={(timezone) => onDraft({ timezone })}
-                  onUnreadable={onUnreadable}
-                />
-              ) : kind === AUTOMATION_TRIGGER.GITHUB ? (
-                <>
-                  <SelectRow
-                    width={CHIP_WIDTH.MIN_FIELD}
-                    label="Event"
-                    labelReplayUnmasked
-                    value={draft.githubEvent}
-                    options={GITHUB_EVENTS}
-                    parse={githubEventOf}
-                    onChange={(event) => onDraft(withGithubEvent(draft, event))}
-                  />
-                  <GitHubSettingsRows
-                    event={draft.githubEvent}
-                    settings={draft.githubSettings}
-                    onSettings={(githubSettings) => onDraft({ githubSettings })}
-                  />
-                </>
-              ) : kind === AUTOMATION_TRIGGER.INTEGRATION ? (
-                <SentryRows
-                  draft={draft}
-                  sentry={sentry}
-                  withheld={sentryWithheld(sentry, automation, draft)}
-                  problems={problems}
-                  onDraft={onDraft}
-                />
-              ) : (
-                <WebhookRows
-                  automation={automation}
-                  writes={writes}
-                  secret={shownSecret}
-                  onSecret={onSecret}
-                />
-              )
-            }
-          </RevealChoice>
-        </SettingsSection>
-        <SettingsSection
-          title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.PROMPT}</ReplayUnmask>}
-          frame={SETTINGS_SECTION_FRAME.NONE}
-        >
-          <AutomationPrompt
+    <AutomationForm>
+      {offersOwner ? (
+        <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.SHARING}</ReplayUnmask>}>
+          <OwnerRow
+            owner={draft.owner}
+            owners={owners}
+            mine={mine}
+            maker={maker}
             workspace={workspace}
-            repository={draft.repository}
-            disabledServers={draft.disabledServers}
-            label="Prompt"
-            rows={PROMPT_ROWS}
-            value={draft.prompt}
-            invalid={problems[DRAFT_FIELD.PROMPT] !== undefined}
-            onChange={(text) => onDraft({ prompt: text })}
-            onSave={onSave}
+            onOwner={(owner) => onDraft({ owner })}
           />
-          {/* What stops a save, said under the prompt once a save was pressed. */}
-          {problems[DRAFT_FIELD.PROMPT] === undefined ? null : (
-            <ErrorState failure={UNREPORTED.INPUT}>
-              <ReplayUnmask>{problems[DRAFT_FIELD.PROMPT]}</ReplayUnmask>
-            </ErrorState>
-          )}
+          {automation === undefined ? null : <MakerRow maker={maker} at={automation.createdAt} />}
         </SettingsSection>
-        <RunsGroup
-          draft={draft}
-          mine={mine}
-          maker={maker}
-          savedAgentId={savedAgentId}
-          workspace={workspace}
-          problems={problems}
-          taskBacked={taskBacked}
-          repositories={repositories}
-          // A saved delivery stays offered once the bot is gone, so it can still be turned off.
-          slackOffered={slackBot || automation?.slackDelivery === true}
-          onDraft={onDraft}
+      ) : null}
+      <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.TRIGGER}</ReplayUnmask>}>
+        <SelectRow
+          width={CHIP_WIDTH.MIN_FIELD}
+          label="Type"
+          labelReplayUnmasked
+          value={draft.triggerKind}
+          options={triggers}
+          parse={triggerKindOf}
+          error={
+            draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE
+              ? undefined
+              : inputProblem(problems[DRAFT_FIELD.SCHEDULE])
+          }
+          onChange={(triggerKind) => onDraft({ triggerKind })}
         />
-      </AutomationForm>
-    </RevealArea>
+        <RevealChoice value={draft.triggerKind}>
+          {(kind) =>
+            kind === AUTOMATION_TRIGGER.SCHEDULE ? (
+              <ScheduleRows
+                draft={draft}
+                problem={problems[DRAFT_FIELD.SCHEDULE]}
+                onSchedule={(schedule) => onDraft({ schedule })}
+                onTimezone={(timezone) => onDraft({ timezone })}
+                onUnreadable={onUnreadable}
+              />
+            ) : kind === AUTOMATION_TRIGGER.GITHUB ? (
+              <>
+                <SelectRow
+                  width={CHIP_WIDTH.MIN_FIELD}
+                  label="Event"
+                  labelReplayUnmasked
+                  value={draft.githubEvent}
+                  options={GITHUB_EVENTS}
+                  parse={githubEventOf}
+                  onChange={(event) => onDraft(withGithubEvent(draft, event))}
+                />
+                <GitHubSettingsRows
+                  event={draft.githubEvent}
+                  settings={draft.githubSettings}
+                  onSettings={(githubSettings) => onDraft({ githubSettings })}
+                />
+              </>
+            ) : kind === AUTOMATION_TRIGGER.INTEGRATION ? (
+              <SentryRows
+                draft={draft}
+                sentry={sentry}
+                withheld={sentryWithheld(sentry, automation, draft)}
+                problems={problems}
+                onDraft={onDraft}
+              />
+            ) : (
+              <WebhookRows
+                automation={automation}
+                writes={writes}
+                secret={shownSecret}
+                onSecret={onSecret}
+              />
+            )
+          }
+        </RevealChoice>
+      </SettingsSection>
+      <SettingsSection
+        title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.PROMPT}</ReplayUnmask>}
+        frame={SETTINGS_SECTION_FRAME.NONE}
+      >
+        <AutomationPrompt
+          workspace={workspace}
+          repository={draft.repository}
+          disabledServers={draft.disabledServers}
+          label="Prompt"
+          rows={PROMPT_ROWS}
+          value={draft.prompt}
+          invalid={problems[DRAFT_FIELD.PROMPT] !== undefined}
+          onChange={(text) => onDraft({ prompt: text })}
+          onSave={onSave}
+        />
+        {/* What stops a save, said under the prompt once a save was pressed. */}
+        {problems[DRAFT_FIELD.PROMPT] === undefined ? null : (
+          <ErrorState failure={UNREPORTED.INPUT}>
+            <ReplayUnmask>{problems[DRAFT_FIELD.PROMPT]}</ReplayUnmask>
+          </ErrorState>
+        )}
+      </SettingsSection>
+      <RunsGroup
+        draft={draft}
+        mine={mine}
+        maker={maker}
+        savedAgentId={savedAgentId}
+        workspace={workspace}
+        problems={problems}
+        taskBacked={taskBacked}
+        repositories={repositories}
+        // A saved delivery stays offered once the bot is gone, so it can still be turned off.
+        slackOffered={slackBot || automation?.slackDelivery === true}
+        onDraft={onDraft}
+      />
+    </AutomationForm>
   );
 }
 
@@ -2318,20 +2313,9 @@ function AutomationSetup({ children }: { children: ReactNode }): React.JSX.Eleme
 }
 
 /** The form, as Settings draws a page: each group's name over its card, the groups a section apart. */
-function AutomationForm({
-  ref,
-  children,
-  ...area
-}: {
-  ref?: Ref<HTMLDivElement> | undefined;
-  children: ReactNode;
-} & Partial<ReturnType<typeof revealArea>>): React.JSX.Element {
+function AutomationForm({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <div
-      ref={ref}
-      className="automation-form flex flex-col gap-page-section-gap [&_.settings-picker]:max-w-full"
-      {...area}
-    >
+    <div className="automation-form flex flex-col gap-page-section-gap [&_.settings-picker]:max-w-full">
       {children}
     </div>
   );

@@ -47,7 +47,6 @@ import {
   LAYOUT_ELEMENT,
   type ListRowNest,
   MoreButton,
-  motionKey,
   NOTE_LINE_LOOK,
   NoteLine,
   nextRowOrHead,
@@ -60,7 +59,6 @@ import {
   TextField,
   TrashIcon,
   useConfirmDialog,
-  useLeaving,
   useMenu,
 } from "@repo/ui";
 import { FolderPlusIcon, GLYPH, MailOpenIcon, SmilePlusIcon } from "@repo/ui/icons";
@@ -77,7 +75,7 @@ import { useReadMark } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
-import { listedSlot, movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
+import { movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
 import { NewTaskInButton } from "./new-task-button.js";
 import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-moves.js";
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
@@ -855,19 +853,10 @@ function SectionRows({
   const nested = useNestedRows(tasks, context.opened, context.current, context.every);
   const layout = useMemo(() => sectionLayout(drawn, nested, managers), [drawn, nested, managers]);
   const { rows } = layout;
-  // Note that a row on its way out has no place among the rows a drag or a menu moves.
-  const shown = useLeaving(rows, sectionDrawnKey);
-  const keys = useMemo(() => shown.map(({ key }) => key), [shown]);
-  const listedAt = new Map(rows.map((row, at) => [sectionDrawnKey(row), at]));
+  const keys = useMemo(() => rows.map(sectionDrawnKey), [rows]);
+  const listedAt = new Map(keys.map((key, at) => [key, at]));
   const depths = rows.map(sectionDepthOf);
   const sectionId = drawn.section.id;
-
-  // Note that a row is heard by its place among the rows drawn, rows on their way out among them, and found among those listed by its key, as the slot it is carried to is (`listedSlot`).
-  const fromListed = (from: number) => {
-    const key = shown[from]?.key;
-
-    return key === undefined ? undefined : listedAt.get(key);
-  };
 
   // Note that a move lands the row's entry beside its sibling's, which alone orders the two as they are drawn.
   const besideSibling = (from: number, beside: number | undefined) => {
@@ -880,16 +869,11 @@ function SectionRows({
 
   const move = folded
     ? undefined
-    : (from: number, to: number) => {
-        const at = fromListed(from);
-
-        if (at !== undefined)
-          besideSibling(at, movedBeside(depths, at, listedSlot(shown, from, to)));
-      };
+    : (from: number, to: number) => besideSibling(from, movedBeside(depths, from, to));
 
   const drag = useRunRowDrag(move, {
     onDropOut: (from, zone, at) => {
-      const held = shown[from]?.value;
+      const held = rows[from];
 
       if (held === undefined) return;
 
@@ -900,7 +884,7 @@ function SectionRows({
   });
 
   const moveKeys = useRowMoveKeys(move);
-  const nests = nestsOf(shown.map(({ value }) => sectionDepthOf(value)));
+  const nests = nestsOf(depths);
   const rowsShown = context.tasks.shown && context.inSight;
 
   const placeOf = (key: string) => {
@@ -929,15 +913,16 @@ function SectionRows({
       block={moveKeys}
     >
       {(index, place) => {
-        const entry = shown[index];
+        const entry = rows[index];
+        const key = keys[index];
 
-        if (entry === undefined) return null;
+        if (entry === undefined || key === undefined) return null;
         const nest = nests[index];
 
         return (
-          <RowPlaced key={entry.key} place={placeOf(entry.key)}>
+          <RowPlaced key={key} place={placeOf(key)}>
             <SidebarEntryRow
-              entry={entry.value}
+              entry={entry}
               tasks={context.tasks}
               shown={rowsShown}
               place={place}
@@ -1138,11 +1123,6 @@ function SidebarSection({
   );
 }
 
-/** A section's key, by which it leaves the list. */
-function sectionKeyOf(drawn: DrawnSection): string {
-  return drawn.section.id;
-}
-
 /**
  * The account's sections in the listed workspace, between Pinned and Tasks,
  * in the order dragged: a section's header is its handle, so a press on one
@@ -1168,9 +1148,6 @@ export function SidebarSections({
 
   const drag = useRowDrag(move, { handle: SECTION_HANDLE });
   const keys = useRowMoveKeys(move);
-  // Note that a section on its way out, deleted or moved away, is drawn on where it stood until its exit has played.
-  const shown = useLeaving(sections, sectionKeyOf);
-  const listedAt = new Map(sections.map((drawn, at) => [sectionKeyOf(drawn), at]));
   const { edits } = context;
 
   const creating =
@@ -1178,7 +1155,7 @@ export function SidebarSections({
       ? edits.inPlace
       : undefined;
 
-  if (shown.length === 0 && creating === undefined) return null;
+  if (sections.length === 0 && creating === undefined) return null;
 
   const created = (end: GroupHeaderEditEnd, icon: TaskSectionIcon | undefined) => {
     if (creating === undefined) return;
@@ -1202,16 +1179,15 @@ export function SidebarSections({
         as={LAYOUT_ELEMENT.UL}
         gap={GAP.SECTION}
         className="sidebar-sections"
-        moves
         onPointerDown={drag}
         {...keys}
       >
-        {shown.map(({ key, value: drawn }, drawnAt) => (
-          <li key={key} className="sidebar-sections-item" {...motionKey(key)}>
+        {sections.map((drawn, at) => (
+          <li key={drawn.section.id} className="sidebar-sections-item">
             <SidebarSection
               drawn={drawn}
               context={context}
-              place={{ at: listedAt.get(key) ?? drawnAt, count: sections.length, onMove: move }}
+              place={{ at, count: sections.length, onMove: move }}
             />
           </li>
         ))}

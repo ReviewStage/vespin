@@ -15,7 +15,6 @@ import { ReplayMask } from "../../session-replay-marks.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { CardPress, SELECT_BOX_PLACE } from "../card-press/card-press.js";
-import { motionKey, motionRows } from "../list-motion/list-motion.js";
 import { type ListRowFold, type ListRowNest, nestedItem } from "../list-row/list-row.js";
 import type { ListRowHint } from "../list-row/list-row-hint.js";
 import { OneLine } from "../one-line/one-line.js";
@@ -854,7 +853,6 @@ export function TaskRow({
       edges={edges}
       placed={place !== undefined}
       data-task-id={taskId}
-      {...motionKey(taskId)}
       {...rowMenu.props}
       data-editing={editor === undefined ? undefined : "true"}
       data-depth={depth === 0 ? undefined : depth}
@@ -992,9 +990,7 @@ export function TaskRowDraft({
  * (`joinsWalk`), as a `List`'s may; and, where it is asked to
  * (`selection`), chosen together as a Mac's list chooses them, by the box
  * in a row's gutter, ⌘-click, ⇧-click, ⇧↑↓, ⌘A, and Esc
- * (`SelectionRegion`), a plain press still opening the task. Under a
- * `ListMotion` its rows may move as they arrive, leave, and change places
- * (`moves`), as a `List`'s do.
+ * (`SelectionRegion`), a plain press still opening the task.
  */
 export function TaskRows({
   id,
@@ -1004,7 +1000,6 @@ export function TaskRows({
   edges = TASK_ROW_EDGES.LIST,
   selection,
   joinsWalk = false,
-  moves = false,
   fit,
   children,
 }: {
@@ -1021,8 +1016,6 @@ export function TaskRows({
   selection?: ListSelection | undefined;
   /** Whether its rows join the walk of a `useRovingKeys` box around it, with the rows of the lists beside it, rather than walk alone. */
   joinsWalk?: boolean | undefined;
-  /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion`. */
-  moves?: boolean | undefined;
   /** How wide its columns before the name stand (`taskRowFit`), where lists beside it must line their names up with its; each as wide as its own widest, unless said. */
   fit?: CSSProperties | undefined;
   /** Its `TaskRow`s. */
@@ -1042,7 +1035,6 @@ export function TaskRows({
           "--tasks-list-columns": taskRowColumns(cells, more && edges !== TASK_ROW_EDGES.BARE),
         }),
       }}
-      {...(moves ? motionRows() : {})}
     >
       {children}
     </ul>
@@ -1083,7 +1075,6 @@ export function VirtualTaskRows({
   more = true,
   edges = TASK_ROW_EDGES.LIST,
   selection,
-  moves = false,
   scroller,
   shiftedBy,
   keys,
@@ -1103,8 +1094,6 @@ export function VirtualTaskRows({
   edges?: TaskRowEdges | undefined;
   /** Which rows are chosen and what hears the next set, where the list chooses rows at all; only a list's edges choose any. */
   selection?: ListSelection | undefined;
-  /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion`. */
-  moves?: boolean | undefined;
   /** Lines standing after the run in a list of the run's own columns, named `after.label`: a quick add's draft (`TaskRowDraft`), say; none where nothing follows. */
   after?: { readonly label: string; readonly lines: ReactNode } | undefined;
   /** The element that scrolls, which the rows stand in. */
@@ -1142,7 +1131,6 @@ export function VirtualTaskRows({
         overscan={overscan}
         anchor={VIRTUAL_ROWS_ANCHOR.START}
         listItems
-        moves={moves}
         holdsFocus
         className="ui-task-rows"
         aria-label={label}
@@ -1152,7 +1140,7 @@ export function VirtualTaskRows({
       </VirtualRows>
       {/* Note that what follows the run stands in a grid of its own on the run's columns, since a run draws only its rows. */}
       {after === undefined ? null : (
-        <ul className={ROWS} aria-label={after.label} {...motionRows()}>
+        <ul className={ROWS} aria-label={after.label}>
           {after.lines}
         </ul>
       )}

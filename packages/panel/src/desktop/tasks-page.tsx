@@ -352,7 +352,7 @@ export function TasksPage({
     />
   );
 
-  // Note that the line stands while nothing is filtered, hidden, so its first chip scales in and its last scales out.
+  // Note that the line stands while nothing is filtered, hidden, so the chips beside its first and its last glide as they come and go.
   const chips = <TasksFilterChips tasks={listed} filter={filter} onFilter={onFilter} />;
 
   const frame = {

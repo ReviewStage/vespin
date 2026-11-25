@@ -679,7 +679,6 @@ export const DesktopInbox = memo(function DesktopInbox({
                   }}
                   models={named.models}
                   readerId={tasks.me}
-                  reading={reading}
                   note={
                     <InboxListNote
                       failed={failed}

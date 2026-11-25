@@ -45,7 +45,6 @@ import {
   LIST_DENSITY,
   List,
   type ListRowNest,
-  motionKey,
   NOTE_LINE_LOOK,
   NoteLine,
   PlusIcon,
@@ -78,9 +77,6 @@ import { useRowDrag } from "./use-row-drag.js";
 
 /** What the section is called, on its head and its list alike. */
 const MANAGERS_HEAD = "Managers";
-
-/** Its key, by which the groups under it glide as it comes and goes. */
-const MANAGERS_KEY = "managers";
 
 /** What View options is called, on its button and its menu alike, as the Tasks head's is. */
 const VIEW_OPTIONS = "View options";
@@ -232,7 +228,6 @@ export function ManagerRows({
         label={MANAGERS_HEAD}
         density={LIST_DENSITY.DENSE}
         joinsWalk
-        moves
         onPointerDown={drops === undefined ? undefined : drag}
       >
         {managers.map((agent) => (
@@ -351,7 +346,6 @@ export function SidebarManagers({
       className="sidebar-group"
       aria-label={MANAGERS_HEAD}
       data-row-drop={drops === undefined ? undefined : MANAGERS_DROP_ZONE}
-      {...motionKey(MANAGERS_KEY)}
     >
       <GroupHeader
         {...sidebarHead({

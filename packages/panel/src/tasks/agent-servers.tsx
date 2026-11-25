@@ -33,7 +33,6 @@ import {
   LIST_DENSITY,
   LIST_ROW_CURRENT,
   List,
-  ListMotion,
   ListRow,
   type ListRowHint,
   McpIcon,
@@ -366,7 +365,6 @@ function ServersPopover({
 }): React.JSX.Element {
   const field = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const moving = useRef<HTMLDivElement>(null);
   const rowsId = useId();
   const rows = useServerRows(statuses, servers.disabled);
 
@@ -529,7 +527,6 @@ function ServersPopover({
           tabbable={false}
           onPress={press(row)}
           // Note that a server's row is followed by its connection, because a server that connects leaves Not connected for Connected and glides across rather than leaving one list and arriving in the other.
-          motionKey={row.connection}
           hint={{ Hint: PointerHighlight, label: row.name }}
         />
       </RowHighlight>
@@ -565,34 +562,32 @@ function ServersPopover({
         <ReplayUnmask>
           <div className={SERVERS_SCROLL_CLASS}>
             <ScrollArea ref={list} size={SCROLL_SIZE.CONTENT}>
-              <div ref={moving} className="agent-servers-list p-menu-inset">
-                <ListMotion root={moving}>
-                  {rows.length === 0 ? <ServersNote words={SERVERS_NONE} /> : null}
-                  {rows.length > 0 && groups.length === 0 ? (
-                    <ServersNote words={SEARCH.NONE} />
-                  ) : null}
-                  {groups.map((group) =>
-                    group.heading === undefined ? (
-                      <List key="unread" label={SERVERS_LABEL} density={LIST_DENSITY.COMPACT} moves>
+              <div className="agent-servers-list p-menu-inset">
+                {rows.length === 0 ? <ServersNote words={SERVERS_NONE} /> : null}
+                {rows.length > 0 && groups.length === 0 ? (
+                  <ServersNote words={SEARCH.NONE} />
+                ) : null}
+                {groups.map((group) =>
+                  group.heading === undefined ? (
+                    <List key="unread" label={SERVERS_LABEL} density={LIST_DENSITY.COMPACT}>
+                      {group.rows.map(serverRow)}
+                    </List>
+                  ) : (
+                    <MenuSection
+                      key={group.heading}
+                      heading={group.heading}
+                      count={
+                        group.heading === SERVER_SECTION.CONNECTED
+                          ? serversOnWords(group.rows)
+                          : undefined
+                      }
+                    >
+                      <List label={group.heading} density={LIST_DENSITY.COMPACT}>
                         {group.rows.map(serverRow)}
                       </List>
-                    ) : (
-                      <MenuSection
-                        key={group.heading}
-                        heading={group.heading}
-                        count={
-                          group.heading === SERVER_SECTION.CONNECTED
-                            ? serversOnWords(group.rows)
-                            : undefined
-                        }
-                      >
-                        <List label={group.heading} density={LIST_DENSITY.COMPACT} moves>
-                          {group.rows.map(serverRow)}
-                        </List>
-                      </MenuSection>
-                    ),
-                  )}
-                </ListMotion>
+                    </MenuSection>
+                  ),
+                )}
               </div>
             </ScrollArea>
           </div>
