@@ -1,7 +1,12 @@
 // start-screens.tsx -- the two pages that start work, each a new conversation's page over the agent page's composer: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus under the composer's field; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules.
 
 import { type AgentFork, FORK_WORDS, forkChoice } from "@repo/features/agent-fork-model";
-import { AGENT_BOUNDS, type AgentRunsOnRequest, hasWordsOrFiles } from "@repo/features/agent-wire";
+import {
+  AGENT_BOUNDS,
+  type AgentAttachment,
+  type AgentRunsOnRequest,
+  hasWordsOrFiles,
+} from "@repo/features/agent-wire";
 import {
   automationAgentBrief,
   CREATE_WITH_AGENT_WORDS,
@@ -842,8 +847,9 @@ export function NewAgentScreen({
   const startSuggested = async (
     suggestion: OpenedSuggestion["suggestion"],
     asked: string,
+    files: readonly AgentAttachment[],
   ): Promise<StartAnswer> => {
-    const sent = sentOf(suggestion, asked, pictures.files ?? [], pick.picked);
+    const sent = sentOf(suggestion, asked, files, pick.picked);
 
     const result = await sendSuggestion(
       { agentId: suggestion.agentId, buttonId: suggestion.buttonId, sent },
@@ -874,8 +880,9 @@ export function NewAgentScreen({
    * its link in the field of pills. Note that New agent's own start closes
    * the sheet at once, as New task's does, while a suggestion's keeps it up
    * until the service answers, since it goes through the suggestion once,
-   * as the panel's draft sends one, and lays the words back where it was
-   * refused, so the sheet stands with them.
+   * as the panel's draft sends one, taking its words and pictures off the
+   * sheet as it goes and laying them back where it was refused, so the sheet
+   * stands with them.
    */
   const start = (typed: string): boolean => {
     const asked = typed.trim();
@@ -897,14 +904,33 @@ export function NewAgentScreen({
       );
     }
 
+    if (sheet.starting) return false;
+
+    // A picture past a bound holds the start back, saying why, before any picture is taken off the sheet.
+    if (pictures.refusal !== undefined) {
+      setNote(pictures.refusal);
+      buzz(BUZZ.WARNING);
+
+      return false;
+    }
+
+    const carried = pictures.take();
+
     return sheet.go(
       () =>
-        startSuggested(opened.suggestion, asked).then((answer) => {
-          if ("refused" in answer) setPrompt((now) => wordsHandedBack(typed, now));
+        startSuggested(
+          opened.suggestion,
+          asked,
+          carried.map(({ file }) => file),
+        ).then((answer) => {
+          if ("refused" in answer) {
+            setPrompt((now) => wordsHandedBack(typed, now));
+            pictures.putBack(carried);
+          }
 
           return answer;
         }),
-      pictures.refusal,
+      undefined,
       // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
       opened.suggestion.title ?? asked,
     );

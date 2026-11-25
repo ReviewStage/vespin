@@ -41,9 +41,11 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "What about the release"
     timeout: 60000
+# Note that the field's own label is its placeholder, so any of the typed
+# words standing in it, whole or a part left behind, is found by its value.
 - assertNotVisible:
     id: "composer-field"
-    text: "What about the release"
+    text: ".*(What|abou?|release).*"
 - assertNotVisible: "What abou?"
 - assertNotVisible:
     text: "What about the release"

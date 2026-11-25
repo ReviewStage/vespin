@@ -687,13 +687,20 @@ function useComposerParts(props: ComposerProps): ComposerParts {
    * every key typed while JavaScript was busy, and hands them to `act`;
    * words `act` did not take go back in the field. Note that the field
    * empties as it answers, so a second press that reaches JavaScript with
-   * the first, before any render, takes nothing.
+   * the first, before any render, takes nothing; and a press made on Send
+   * drawn over words that finds the field empty does nothing, since what it
+   * pressed for already went, where its holder would read an empty field as
+   * an empty one pressed for its own sake, as Got it or a Save that gives an
+   * edit up. A press drawn over an empty field still acts on it.
    */
   const takeFor = (act: ComposerSend) => {
     const field = door.current;
+    const pressedOverWords = words.trim() !== "";
 
     if (field === null) return;
     void field.take().then((taken) => {
+      if (taken.words === "" && pressedOverWords) return;
+
       if (!act(taken.words)) taken.giveBack();
     });
   };
