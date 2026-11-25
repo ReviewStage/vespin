@@ -7,6 +7,7 @@ import {
   readAccountPreferences,
   writeAccountPreferences,
 } from "@repo/database/models/account-store";
+import { recordAgentPullRequests } from "@repo/database/models/agent-pull-requests";
 import {
   agentTaskId,
   archiveAgent,
@@ -85,7 +86,9 @@ import {
   AGENT_RUNTIME,
   AGENT_STATUS,
   agentMessageReplyLine,
+  CHECK_SUMMARY,
   CONTEXT_WINDOW,
+  PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
@@ -933,7 +936,7 @@ test("list_agents names every other agent of the caller's workspace, on any task
   assert.equal(agentSessions.sent.length, 0, "a list sends nothing");
 });
 
-test("list_agents narrows by archive, by whose agents, by an automation's runs, and by where their task stands, refusing a starter named by no person or by the retired mine", async () => {
+test("list_agents narrows by archive, by whose agents, by an automation's runs, by where their task stands, and by the pull request they linked, refusing a starter named by no person or by the retired mine", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -962,6 +965,28 @@ test("list_agents narrows by archive, by whose agents, by an automation's runs, 
 
   const bobsLink = `[@Bob](https://vespin.dev/workspace-${workspaceId}/person/${agents.teammates.userId})`;
 
+  // The same pull request linked in another workspace the caller is also in is none of this list's.
+  for (const agent of [agents.teammates, agents.otherWorkspaces]) {
+    await database.run(
+      recordAgentPullRequests(agent.userId, agent.id, [
+        {
+          repository: RELAY_FULL_NAME,
+          headBranch: "agent/billing",
+          pullRequest: {
+            number: 57,
+            title: "Bill by the seat",
+            url: `https://github.com/${RELAY_FULL_NAME}/pull/57`,
+            state: PULL_REQUEST_STATE.OPEN,
+            checks: CHECK_SUMMARY.PASSING,
+            additions: 30,
+            deletions: 2,
+            changedFiles: 3,
+          },
+        },
+      ]),
+    );
+  }
+
   // The caller's own task's agents come first, then the rest newest first.
   assert.deepEqual(await idsOf({}), [agents.archived.id, sweeper.id, agents.teammates.id]);
   assert.deepEqual(await idsOf({ archived: true }), [agents.archived.id]);
@@ -971,6 +996,10 @@ test("list_agents narrows by archive, by whose agents, by an automation's runs, 
   assert.deepEqual(await idsOf({ automation: false }), [agents.archived.id, agents.teammates.id]);
   assert.deepEqual(await idsOf({ automationId }), [sweeper.id]);
   assert.deepEqual(await idsOf({ taskStatus: TASK_STATUS.DONE }), [agents.teammates.id]);
+  assert.deepEqual(await idsOf({ pullRequest: { repository: RELAY_FULL_NAME, number: 57 } }), [
+    agents.teammates.id,
+  ]);
+  assert.deepEqual(await idsOf({ pullRequest: { repository: RELAY_FULL_NAME, number: 58 } }), []);
   assert.deepEqual(await call(AGENT_TOOL.LIST_AGENTS, { mine: true }), {
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: AGENT_LIST_FILTER_REFUSAL.MINE_KEY,
