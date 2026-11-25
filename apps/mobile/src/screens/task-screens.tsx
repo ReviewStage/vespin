@@ -875,11 +875,9 @@ function rowFace(face: TaskRowFace | undefined, pictureOf: (userId: string) => s
   return { assignee };
 }
 
-/** A task's path, as the bar names it: its repository's name and its key. */
+/** A task's path, as the bar names it: its repository's `owner/name`, as the panel's crumb names it, and its key. */
 function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly string[] {
-  const repository = task.repository?.split("/").at(-1);
-
-  return [repository, keyOf(task, workspace)].filter(
+  return [task.repository, keyOf(task, workspace)].filter(
     (step): step is string => step !== undefined && step !== "",
   );
 }
