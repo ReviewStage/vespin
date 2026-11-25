@@ -146,7 +146,7 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
       .as("last_run");
 
     const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
-    const { nextRunAt, createdAt, updatedAt: _updatedAt, ...columns } = AUTOMATION_COLUMNS;
+    const { nextRunAt, createdAt, updatedAt, ...columns } = AUTOMATION_COLUMNS;
 
     const own = {
       columns: {
@@ -160,7 +160,7 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
         taskRepository: LIVE_NO_TASK,
         mine: sql<boolean>`${eq(automation.userId, userId)}`,
       },
-      instants: { nextRunAt, createdAt },
+      instants: { nextRunAt, createdAt, updatedAt },
     };
 
     const run = {
