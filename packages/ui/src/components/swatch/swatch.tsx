@@ -1,6 +1,5 @@
 import type { Ref } from "react";
 import { cssCustomProperties } from "../../css.js";
-import { pulseOnPress } from "../../press-pulse.js";
 
 /**
  * swatch.tsx -- a color dot a reader presses to choose that color.
@@ -40,7 +39,7 @@ export function Swatch({
       tabIndex={tabbable === false ? -1 : undefined}
       data-none={color === undefined || undefined}
       style={color === undefined ? undefined : cssCustomProperties({ "--ui-swatch": color })}
-      onClick={pulseOnPress(onClick)}
+      onClick={onClick}
     />
   );
 }

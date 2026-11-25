@@ -45,7 +45,6 @@ import { Predicate } from "effect";
 import type { FocusEventHandler, MouseEvent, PointerEventHandler, ReactNode } from "react";
 import { ArrowUpRightIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { TEXT_FONT, type TextFont } from "../text/text.js";
 import { TEXT_ROLE_CLASS, TEXT_VARIANT, type TextVariant } from "../text/text-role.js";
 import { TEXT_LINK_LOOK, type TextLinkLook } from "./text-link-look.js";
@@ -218,8 +217,6 @@ export function TextLink({
     </>
   );
 
-  const press = pulseOnPress(onClick, PRESS_PULSE.WORDS);
-
   const face = {
     "data-look": look,
     "data-variant": variant,
@@ -244,8 +241,8 @@ export function TextLink({
       aria-current={current}
       target={newTab ? "_blank" : undefined}
       rel={newTab ? "noreferrer" : undefined}
-      onClick={press}
-      onAuxClick={onClick === undefined ? undefined : middlePressOf(press)}
+      onClick={onClick}
+      onAuxClick={onClick === undefined ? undefined : middlePressOf(onClick)}
     >
       {words}
     </a>
