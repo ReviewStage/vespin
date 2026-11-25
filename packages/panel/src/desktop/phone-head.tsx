@@ -10,6 +10,7 @@ import {
   TOOLBAR_INSET,
   TOOLBAR_LOOK,
   Toolbar,
+  type ToolbarCorners,
   type ToolbarPickUp,
   type ToolbarProps,
   type ToolbarTitleEdit,
@@ -30,7 +31,9 @@ import { OfflineStrip } from "./offline-mark.js";
  * end corner holding everything else the page offers; and the title of what
  * is on screen between them. The corners are one control wide each, so the
  * title's center is the row's, and it truncates between them (`Toolbar`'s
- * phone look). A corner's control draws its glyph alone, named still, so a
+ * phone look). A page stepped through as Mail steps its messages, an Inbox
+ * thread, stands its arrows before the ⋯, the corners then as wide as the
+ * wider one's controls (`TOOLBAR_CORNERS.FIT`). A corner's control draws its glyph alone, named still, so a
  * way back (`BackButton`) is its back glyph, hinted "Back to {place}".
  *
  * A menu the page already drops from a button of its own, its View options
@@ -105,8 +108,10 @@ export interface PhoneHeadSlots {
   pickUp?: ToolbarPickUp | undefined;
   /** What names the page's state, after the title on its baseline (an experiment's mark). */
   tag?: React.ReactNode;
-  /** The end corner's one control, the ⋯. */
+  /** The end corner's one control, the ⋯, or the controls it leads with where the corners fit them (`corners`). */
   end: React.ReactNode;
+  /** How wide the corners stand: one control each where none is named, or as wide as the wider corner's controls, as a thread's arrows stand before its ⋯ (`TOOLBAR_CORNERS.FIT`). */
+  corners?: ToolbarCorners | undefined;
 }
 
 /** The bar a phone's row is, as `Toolbar` takes it, for a state that draws its own bar (`NotFound`). */
@@ -119,9 +124,11 @@ export function phoneBar({
   pickUp,
   tag,
   end,
+  corners,
 }: PhoneHeadSlots): ToolbarProps {
   return {
     look: TOOLBAR_LOOK.PHONE,
+    corners,
     place,
     start: TOOLBAR_INSET.COLUMN,
     end: TOOLBAR_INSET.COLUMN,
