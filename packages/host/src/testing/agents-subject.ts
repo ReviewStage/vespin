@@ -320,6 +320,7 @@ function fakeService() {
   let messageSendGate: Effect.Effect<void> = Effect.void;
   // What a message sent to a Manager's chat answers; none answers it taken, under one id.
   let chatAnswer: AgentChatSendAnswerView | undefined;
+  let chatSendGate: Effect.Effect<void> = Effect.void;
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -604,11 +605,14 @@ function fakeService() {
         return { messages: SAID.messages, before: "3" };
       }),
     chatSend: (agentId, request) =>
-      Effect.sync(() => {
-        asked.push(`chatSend:${agentId}:${request.clientKey}:${request.text}`);
+      Effect.andThen(
+        Effect.suspend(() => chatSendGate),
+        Effect.sync(() => {
+          asked.push(`chatSend:${agentId}:${request.clientKey}:${request.text}`);
 
-        return chatAnswer ?? { agent: AGENT, messageId: "a1b2c3d4" };
-      }),
+          return chatAnswer ?? { agent: AGENT, messageId: "a1b2c3d4" };
+        }),
+      ),
     message: (agentId, request) =>
       Effect.andThen(
         Effect.suspend(() => messageSendGate),
@@ -1066,9 +1070,10 @@ function fakeService() {
       messageAnswer = answer;
       messageSendGate = gate;
     },
-    /** What a message sent to a Manager's chat answers from now on. */
-    answerChat: (answer: AgentChatSendAnswerView) => {
+    /** What a message sent to a Manager's chat answers from now on, once `gate` lets it. */
+    answerChat: (answer: AgentChatSendAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       chatAnswer = answer;
+      chatSendGate = gate;
     },
     /** What a change of an agent's queue answers from now on, once `gate` lets it. */
     answerQueue: (answer: AgentQueueAnswerView, gate: Effect.Effect<void> = Effect.void) => {
