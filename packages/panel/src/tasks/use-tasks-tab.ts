@@ -172,7 +172,8 @@ import { usePinnedTabTasks } from "./use-pinned-tab-tasks.js";
 import {
   DRAWN_KINDS,
   type SidebarPin,
-  type SidePanelControl,
+  type SidePanelDoors,
+  type SidePanelPlace,
   type SidePanelTab,
   type TaskHolds,
   useSidePanel,
@@ -366,7 +367,7 @@ export interface TasksControl {
   /** The task's column's tabs: its agents' and its draft's, and which is shown. */
   mainTabs: MainTabsControl;
   /** The side panel beside the open task's column: shown or not, its tab, and its width. */
-  sidePanel: SidePanelControl;
+  sidePanel: SidePanelDoors;
   /** The side panel's tabs holding something that arrived while the panel showed another, and the agents' tabs that ended unseen, each until it is shown. */
   unreadTabs: readonly StripTab[];
   /** The pages agents wrote for the open task, each by its newest version, as the window holds them (`LIVE_READ.PAGES`); none until read. */
@@ -717,6 +718,8 @@ function readInboxItemHome(
 export interface TasksTab {
   readonly control: TasksControl;
   readonly newTaskShown: NewTaskShown;
+  /** Where the side panel stands, which the window provides apart too (`SidePanelPlaceContext`). */
+  readonly sidePanelPlace: SidePanelPlace;
 }
 
 export function useTasksTab(input: {
@@ -3496,6 +3499,15 @@ export function useTasksTab(input: {
     ? { onToggle: paneBack, onToggleFullScreen: paneBack, onClose: closePane }
     : { onToggle: toggleSidePanel, onClose: closeSidePanelTab };
 
+  // Where the panel stands moves with every task or item opened, so it is handed apart from the tab, read where the panel is drawn.
+  const { stop: panelStop, agent: panelAgent, ...panelDrawn } = sidePanel;
+  const panelStopNow = useSteadyDoor(() => panelStop);
+
+  const sidePanelPlace = useMemo(
+    (): SidePanelPlace => ({ stop: panelStop, agent: panelAgent }),
+    [panelStop, panelAgent],
+  );
+
   // Note that the tab is handed back steady, so a part that holds while its share of the tab does (`memo`) holds for every draw that moved nothing it reads.
   const steady = useSteadyDoors<TasksControl>({
     page,
@@ -3532,7 +3544,7 @@ export function useTasksTab(input: {
     region,
     copy: { onPress: pressCopy },
     mainTabs: { ...mainTabs, onClose: closeColumnTab },
-    sidePanel: { ...sidePanel, ...panelWays },
+    sidePanel: { ...panelDrawn, ...panelWays, stopNow: panelStopNow },
     unreadTabs,
     pages: taskPages,
     agents,
@@ -3713,5 +3725,5 @@ export function useTasksTab(input: {
     agentsCarried,
   });
 
-  return { control: steady, newTaskShown };
+  return { control: steady, newTaskShown, sidePanelPlace };
 }

@@ -45,7 +45,6 @@ import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { SHELL_ROOM } from "../shell-room.js";
-import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -134,7 +133,7 @@ import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { chooseMenuItem, menuItems } from "../testing/phone-head.js";
 import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { sidePanelControl } from "../testing/tasks-control.js";
 import { viewerPlace } from "../testing/viewer-place.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
@@ -1541,10 +1540,9 @@ test("in the window's Inbox a skill an answer's words name is the chip a sent me
   const opened = skillReads();
   const files: string[] = [];
 
-  const panel: SidePanelControl = {
-    ...tasksControl().sidePanel,
+  const panel = sidePanelControl({
     onOpenFile: (ref) => files.push(ref.path),
-  };
+  });
 
   const { page } = mount({ panel });
   await settle();

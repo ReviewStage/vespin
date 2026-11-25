@@ -72,7 +72,12 @@ import { DesktopInbox } from "../desktop/desktop-inbox.js";
 import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
 import { useInboxRoute } from "../inbox-route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
+import {
+  NO_PANEL_PLACE,
+  type SidePanelControl,
+  SidePanelPlaceContext,
+  useSidePanel,
+} from "../tasks/use-side-panel.js";
 import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import { forgetToasts, ToastHost } from "../toast.js";
 import { appStateQuery, selectTasks } from "../use-app-state.js";
@@ -102,7 +107,13 @@ import { restOn } from "./hint-rest.js";
 import { relayout } from "./resize-observer.js";
 import { installScrollIntoView } from "./scroll-into-view.js";
 import { onSideBundles } from "./side-bundles.js";
-import { listedAgent, newTaskControl, tasksControl, waitingOf } from "./tasks-control.js";
+import {
+  heldSidePanel,
+  listedAgent,
+  newTaskControl,
+  tasksControl,
+  waitingOf,
+} from "./tasks-control.js";
 import { holdingInboxChoice, leavingBy, windowRouter } from "./window-router.js";
 
 /** Where the window's router stands as the Inbox is drawn: Acme's Inbox. */
@@ -778,6 +789,8 @@ export function mount({
   };
 
   function Page({ sidePanel }: { sidePanel?: SidePanelControl | undefined }) {
+    // A panel handed in stands where it says, its place provided apart as the window provides it.
+    const panelHeld = sidePanel === undefined ? undefined : heldSidePanel(sidePanel);
     // The drafts are handed to the account signed in, none here, as the panel's root hands them.
     useDraftsOwner(undefined);
     // Note that the Inbox stands, its item chosen, and its list narrowed as its address says, as the window's router stands them.
@@ -844,7 +857,7 @@ export function mount({
       // Whether the task list followed live carries the agents, which it lays in the window's collections; none while it has carried none yet.
       agentsCarried: !world.agentListHeld,
       listRead,
-      sidePanel: sidePanel ?? {
+      sidePanel: panelHeld?.doors ?? {
         ...tasksControl().sidePanel,
         onOpen: (tab) => {
           if (!Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.TRANSCRIPT) {
@@ -875,7 +888,11 @@ export function mount({
     const inbox =
       drawnWhileOpen && !inboxOpen
         ? null
-        : createElement(DesktopInbox, { tasks: control, room: room ?? SHELL_ROOM.WIDE });
+        : createElement(
+            SidePanelPlaceContext,
+            { value: panelHeld?.place ?? NO_PANEL_PLACE },
+            createElement(DesktopInbox, { tasks: control, room: room ?? SHELL_ROOM.WIDE }),
+          );
 
     return withSidebar
       ? createElement(Fragment, null, createElement(DesktopSidebar, sidebarProps(control)), inbox)

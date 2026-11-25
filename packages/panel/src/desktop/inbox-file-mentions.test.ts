@@ -22,7 +22,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { useInboxRoute } from "../inbox-route.js";
 import { useInboxTaskAgents } from "../tasks/use-inbox-task-agents.js";
 import { OpenLinkProvider } from "../tasks/use-open-link.js";
-import { useSidePanel } from "../tasks/use-side-panel.js";
+import { SidePanelPlaceContext, useSidePanel } from "../tasks/use-side-panel.js";
 import {
   FAKE_ANSWER,
   type FakeActAnswer,
@@ -34,7 +34,7 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handInboxItems, handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
-import { listedAgent, tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { heldSidePanel, listedAgent, tasksControl, waitingOf } from "../testing/tasks-control.js";
 import { holdingInboxChoice, windowRouter } from "../testing/window-router.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 
@@ -177,20 +177,26 @@ async function inbox() {
       taskAgents.heldIds,
     );
 
+    const panel = heldSidePanel(sidePanel);
+
     return createElement(
       OpenLinkProvider,
       { value: (link: ReadLink) => links.push(link) },
-      createElement(DesktopInbox, {
-        tasks: tasksControl({
-          workspace: ACME,
-          tasks: [TASK],
-          inboxView: { ...tasksControl().inboxView, pages: [], onTaskAgents: taskAgents.onRead },
-          sidePanel,
-          onShowFile: (taskId: string, ref: CodeRef, commit: string | undefined) =>
-            went.push(`${taskId} file ${JSON.stringify(ref)} ${commit}`),
-          onShowPanelTab: (taskId, tab) => went.push(`${taskId} ${JSON.stringify(tab)}`),
+      createElement(
+        SidePanelPlaceContext,
+        { value: panel.place },
+        createElement(DesktopInbox, {
+          tasks: tasksControl({
+            workspace: ACME,
+            tasks: [TASK],
+            inboxView: { ...tasksControl().inboxView, pages: [], onTaskAgents: taskAgents.onRead },
+            sidePanel: panel.doors,
+            onShowFile: (taskId: string, ref: CodeRef, commit: string | undefined) =>
+              went.push(`${taskId} file ${JSON.stringify(ref)} ${commit}`),
+            onShowPanelTab: (taskId, tab) => went.push(`${taskId} ${JSON.stringify(tab)}`),
+          }),
         }),
-      }),
+      ),
     );
   }
 

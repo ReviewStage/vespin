@@ -19,7 +19,7 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import type { SidePanelControl, SidePanelTab } from "../tasks/use-side-panel.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, sidePanelControl } from "../testing/tasks-control.js";
 import {
   ActivityList,
   changesOffers,
@@ -208,7 +208,7 @@ test("the phone's Activity list hangs each tab's card on its row, as the tab han
 test("a panel shut by going to another stop is drawn there no longer, rather than slid out over it", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  const shut = tasksControl().sidePanel;
+  const shut = sidePanelControl();
   let drawing: SidePanelDrawing | undefined;
 
   const Drawn = ({ panel }: { panel: SidePanelControl }) => {

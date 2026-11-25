@@ -921,7 +921,7 @@ function onTabs(input: {
     sidePanel: {
       ...base.sidePanel,
       open: input.side !== undefined,
-      stop: TASK_ID,
+      stopNow: () => TASK_ID,
       tab: input.side ?? SIDE_PANEL_TAB.INBOX,
       opened: input.opened ?? 0,
       onShow: (_taskId, tab) =>
@@ -1174,7 +1174,7 @@ test("an Inbox item's step holds the panel beside it, so Back from the next item
       sidePanel: {
         ...base.sidePanel,
         open: side !== undefined,
-        stop: itemId,
+        stopNow: () => itemId,
         tab: side,
         opened,
         onShow: (holder, tab) =>
@@ -1220,7 +1220,7 @@ test("Back to another task whose panel stood shut leaves the panel to shut as th
       sidePanel: {
         ...base.sidePanel,
         open: side !== undefined,
-        stop: taskId,
+        stopNow: () => taskId,
         tab: side,
         onSetOpen: (open) => done.push(open ? "side:open" : "side:shut"),
       },

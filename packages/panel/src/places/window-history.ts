@@ -1185,7 +1185,7 @@ export function useWindowHistory(input: {
   // shutting it here first would slide it out over the place the window is leaving.
   const standSide = (holder: string | undefined, stop: string | undefined, side: SideStep) => {
     if (side === null) {
-      if (stop === tasks.sidePanel.stop) tasks.sidePanel.onSetOpen(false);
+      if (stop === tasks.sidePanel.stopNow()) tasks.sidePanel.onSetOpen(false);
     } else if (side !== undefined && holder !== undefined) tasks.sidePanel.onShow(holder, side);
   };
 
@@ -1194,7 +1194,7 @@ export function useWindowHistory(input: {
     const { sidePanel } = tasks;
 
     if (panel.open && panel.tab !== undefined) sidePanel.onShow(taskId, panel.tab);
-    else if (taskId === sidePanel.stop) sidePanel.onSetOpen(panel.open);
+    else if (taskId === sidePanel.stopNow()) sidePanel.onSetOpen(panel.open);
   };
 
   const record = recordOf(router.history);

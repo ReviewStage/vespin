@@ -42,7 +42,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
 import { RoutedExitsProvider } from "../places/routed-exits.js";
-import { useSidePanel } from "../tasks/use-side-panel.js";
+import { SidePanelPlaceContext, useSidePanel } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -56,7 +56,7 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { ACME, SHOW_KEY, WHOSE_KEY } from "../testing/desktop-inbox.js";
 import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { pushedTranscripts, tasksControl } from "../testing/tasks-control.js";
+import { heldSidePanel, pushedTranscripts, tasksControl } from "../testing/tasks-control.js";
 import { AgentRoutePage } from "./desktop-agent-page.js";
 
 const MANAGER: ListedAgent = {
@@ -363,7 +363,13 @@ test("a page a Manager's words link opens in the panel beside its chat, read on 
       stop: MANAGER.id,
     });
 
-    return createElement(AgentRoutePage, { tasks: { ...listed, sidePanel } });
+    const panel = heldSidePanel(sidePanel);
+
+    return createElement(
+      SidePanelPlaceContext,
+      { value: panel.place },
+      createElement(AgentRoutePage, { tasks: { ...listed, sidePanel: panel.doors } }),
+    );
   }
 
   const container = await mountAgentPage(history, listed, Paneled);

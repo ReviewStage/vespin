@@ -114,7 +114,7 @@ import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
 import { useNewTaskShown } from "../tasks/use-new-task.js";
 import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/use-open-link.js";
 import { usePins } from "../tasks/use-pin-writes.js";
-import type { SidePanelTab } from "../tasks/use-side-panel.js";
+import { type SidePanelTab, useSidePanelControl } from "../tasks/use-side-panel.js";
 import { useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TaskLooks } from "../tasks/use-task-looks.js";
 import { useTaskRelationWrites } from "../tasks/use-task-relation-writes.js";
@@ -492,7 +492,8 @@ function DescriptionDocument({
   const [shownTab, setShownTab] = useState<ShownTab | undefined>(undefined);
   const [shownAgentTab, setShownAgentTab] = useState<ShownTab | undefined>(undefined);
   const phone = room === SHELL_ROOM.NARROW;
-  const drawing = useSidePanelDrawing(tasks.sidePanel);
+  const sidePanel = useSidePanelControl(tasks.sidePanel);
+  const drawing = useSidePanelDrawing(sidePanel);
   const views = useTabViews();
   const inboxTaskId = region.kind === TASK_REGION.READY ? region.task.id : undefined;
 
@@ -563,12 +564,12 @@ function DescriptionDocument({
   );
 
   // The description is shown while the column is on Overview, with no panel filling the window over it.
-  const descriptionShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
+  const descriptionShown = isOverviewTab(tasks.mainTabs.tab) && !sidePanel.fullScreen;
   const { onChoose: chooseColumnTab } = tasks.mainTabs;
 
   // Overview shown, a panel filling the window over the column giving way, as a row opening a tab of the column does.
   const showOverview = useSteadyDoor(() => {
-    if (tasks.sidePanel.fullScreen) tasks.sidePanel.onToggleFullScreen();
+    if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
     chooseColumnTab(MAIN_TAB.OVERVIEW);
   });
 
@@ -576,7 +577,7 @@ function DescriptionDocument({
   // agent's tab's Show terminal always opens that agent's own.
   const showSide = () => setFocus(COLUMN.SIDE);
   // Show terminal opens an agent's terminal as on every surface that draws it (`agent-actions.tsx`).
-  const terminalDoors = useAgentTerminalDoors(tasks.sidePanel, showSide);
+  const terminalDoors = useAgentTerminalDoors(sidePanel, showSide);
   // A refusal is said beside the chip, under the task it was about and no
   // other. Note that it is held above the states with no document, because
   // a task opened from the list is drawn reading before its read lands, and
@@ -639,7 +640,7 @@ function DescriptionDocument({
   const openMention = tasks.onShowMention;
   const revealed = tasks.sectionReveal;
   // Note that the open task's agents' rows are read by the parts drawing them, never here, so a step of a turn draws none of the page but them.
-  const { mainTabs, sidePanel, agents, agentThreads } = tasks;
+  const { mainTabs, agents, agentThreads } = tasks;
   const backToOr = useBackToOr();
 
   // What a row, a link, or a chip on the page names opens through the window's one door for a press,
@@ -1808,7 +1809,8 @@ function StartingTaskPage({
   /** A phone's way back, which heads the page as the task's will be (`TaskWaitHead`); none elsewhere. */
   phoneAway: TaskHeadBack | undefined;
 }): React.JSX.Element {
-  const drawing = { ...useSidePanelDrawing(tasks.sidePanel), panel: undefined };
+  const sidePanel = useSidePanelControl(tasks.sidePanel);
+  const drawing = { ...useSidePanelDrawing(sidePanel), panel: undefined };
 
   return (
     <TaskPageSkeleton
@@ -1833,7 +1835,8 @@ function TaskOpening({
   room?: ShellRoom;
   away?: TaskHeadBack | undefined;
 }): React.JSX.Element {
-  const drawing = useSidePanelDrawing(tasks.sidePanel);
+  const sidePanel = useSidePanelControl(tasks.sidePanel);
+  const drawing = useSidePanelDrawing(sidePanel);
 
   const phoneAway =
     room === SHELL_ROOM.NARROW

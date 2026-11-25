@@ -8,7 +8,7 @@ import { afterEach, test } from "vitest";
 import { NOTHING_HELD } from "../tasks/agent-ref.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, sidePanelControl, tasksControl } from "../testing/tasks-control.js";
 import { agentEntries } from "./agent-entries.js";
 import { type PanelCards, panelEntries } from "./side-panel.js";
 import { type AddEntry, AddTabButton } from "./strip-tabs.js";
@@ -110,8 +110,6 @@ test("a failed agent's row in the column's \"+\" wears the failed mark and a hea
 });
 
 test("a Terminal row in the side panel's \"+\" hangs its agent's card", async () => {
-  const base = tasksControl();
-
   const cards: PanelCards = {
     agents: agentsControl({ agents: [BROKEN], agentIds: [BROKEN.id] }),
     held: NOTHING_HELD,
@@ -123,7 +121,7 @@ test("a Terminal row in the side panel's \"+\" hangs its agent's card", async ()
 
   const options = await opened(
     panelEntries({
-      panel: base.sidePanel,
+      panel: sidePanelControl(),
       kinds: [],
       terminals: {
         offers: [{ agent: BROKEN, label: "Billing export", showsOnChord: false }],

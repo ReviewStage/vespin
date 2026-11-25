@@ -20,7 +20,7 @@ import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { useStageRoom } from "../stage-room.js";
 import { MAIN_TAB } from "../tasks/task-tab-model.js";
-import { useSidePanel } from "../tasks/use-side-panel.js";
+import { SidePanelPlaceContext, useSidePanel } from "../tasks/use-side-panel.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, withExperiments } from "../testing/app-state.js";
@@ -28,7 +28,7 @@ import { layContainersAt } from "../testing/container-width.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { relayout } from "../testing/resize-observer.js";
 import { SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { heldSidePanel, tasksControl } from "../testing/tasks-control.js";
 import { DesktopShell } from "./desktop-shell.js";
 import { useSidebarCollapse } from "./sidebar-collapse.js";
 
@@ -153,7 +153,7 @@ function Window({ onTask }: { onTask: boolean }): React.JSX.Element {
   const stage = useStageRoom();
   const room = stage.room;
   const sidebar = useSidebarCollapse(false, stage.compact);
-  const sidePanel = useSidePanel(undefined, OPEN_TASK, [AGENT], [], [], [AGENT], room);
+  const panel = heldSidePanel(useSidePanel(undefined, OPEN_TASK, [AGENT], [], [], [AGENT], room));
   const [tab, setTab] = useState<PanelTab>(PANEL_TAB.TASKS);
 
   const shell = createElement(DesktopShell, {
@@ -171,7 +171,7 @@ function Window({ onTask }: { onTask: boolean }): React.JSX.Element {
         tabs: [MAIN_TAB.OVERVIEW, draftTab("draft")],
         tab: draftTab("draft"),
       },
-      sidePanel,
+      sidePanel: panel.doors,
     }),
     history: {
       canGoBack: false,
@@ -190,7 +190,11 @@ function Window({ onTask }: { onTask: boolean }): React.JSX.Element {
     settings: SETTINGS,
   });
 
-  return createElement("div", { ref: stage.ref, className: "app-stage" }, shell);
+  return createElement(
+    SidePanelPlaceContext,
+    { value: panel.place },
+    createElement("div", { ref: stage.ref, className: "app-stage" }, shell),
+  );
 }
 
 /** The window on a stage of a width, the open task's page drawn, or the page it rests on with none. */

@@ -105,7 +105,7 @@ import type { AgentThreads } from "../tasks/threads-dock.js";
 import { useListedPullRequest } from "../tasks/use-agent-pull-request.js";
 import { type AgentsControl, placeAgents } from "../tasks/use-agents.js";
 import { OpenAddressesHere, openPullRequestsHere } from "../tasks/use-open-link.js";
-import type { SidePanelTab } from "../tasks/use-side-panel.js";
+import { type SidePanelTab, useSidePanelControl } from "../tasks/use-side-panel.js";
 import { type TaskInboxControl, useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu } from "./action-menu.js";
@@ -470,7 +470,7 @@ function OwnAgentPage({
   away: TaskHeadBack | undefined;
   staged: boolean;
 }): React.JSX.Element {
-  const { sidePanel } = tasks;
+  const sidePanel = useSidePanelControl(tasks.sidePanel);
   const { onArea, focus, setFocus } = useColumnFocus(tasks.tabKeys, tasks.onTabKeysTaken);
   const { workspaceId, repository } = agent;
 

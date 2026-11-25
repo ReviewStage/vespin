@@ -210,6 +210,7 @@ import {
   type OpenPage,
   type PinHolder,
   type SidePanelControl,
+  type SidePanelPlace,
   type SidePanelTab,
   sameHolder,
 } from "../tasks/use-side-panel.js";
@@ -2616,6 +2617,9 @@ function TabContent({
   }
 }
 
+/** The panel as its toggle reads it, wherever it stands: none of where it stands (`SidePanelPlace`), which a toggle draws nothing of. */
+type PanelDrawnAnywhere = Omit<SidePanelControl, keyof SidePanelPlace>;
+
 /**
  * Shows and hides the panel. It stands at the window's top right, beside
  * neither top row it serves, the way the sidebar's toggle stands beside the
@@ -2635,7 +2639,7 @@ export function SidePanelToggle({
   panel,
   disabled,
 }: {
-  panel: SidePanelControl;
+  panel: PanelDrawnAnywhere;
   disabled: boolean;
 }): React.JSX.Element {
   // A panel standing only full screen covers the whole window, so its toggle is the way out of it.
@@ -2669,7 +2673,7 @@ export function SidePanelChord({
   panel,
   disabled,
 }: {
-  panel: SidePanelControl;
+  panel: PanelDrawnAnywhere;
   disabled: boolean;
 }): null {
   useAppCommand(APP_COMMAND.TOGGLE_SIDE_PANEL, disabled ? undefined : panel.onToggle);

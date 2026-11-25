@@ -16,7 +16,6 @@ import { beforeAll, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM } from "../shell-room.js";
-import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -62,7 +61,7 @@ import {
   world,
 } from "../testing/desktop-inbox.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { sidePanelControl } from "../testing/tasks-control.js";
 import { standWindowEscape } from "../testing/window-escape.js";
 
 // Landed before any box renders, as the panel lands it after its first paint.
@@ -756,15 +755,14 @@ test("on a phone an item is headed by its way back's glyph, its task centered, w
 test("on a phone the panel open over an item heads itself: the way back to the item, what it shows centered, and one ⋯ listing its tabs, in place of its bar", async () => {
   let shut = 0;
 
-  const panel: SidePanelControl = {
-    ...tasksControl().sidePanel,
+  const panel = sidePanelControl({
     open: true,
     fullScreen: true,
     fullScreenOnly: true,
     onToggle: () => {
       shut += 1;
     },
-  };
+  });
 
   const { page } = mount({ room: SHELL_ROOM.NARROW, panel });
   await settle();
@@ -794,14 +792,13 @@ test("on a phone the panel open over an item heads itself: the way back to the i
 test("Escape over the Inbox takes a side panel filling the window back beside the item, and the Inbox stands", async () => {
   let exited = 0;
 
-  const panel: SidePanelControl = {
-    ...tasksControl().sidePanel,
+  const panel = sidePanelControl({
     open: true,
     fullScreen: true,
     onToggleFullScreen: () => {
       exited += 1;
     },
-  };
+  });
 
   const windowEscape = standWindowEscape();
   const { page, asked } = mount({ chosen: ON_THRESHOLD, panel });

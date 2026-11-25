@@ -79,7 +79,12 @@ import {
   placeOfMention,
   useLinkRouter,
 } from "../tasks/use-open-link.js";
-import type { FileReads, SidePanelControl, SidePanelTab } from "../tasks/use-side-panel.js";
+import {
+  type FileReads,
+  type SidePanelControl,
+  type SidePanelTab,
+  useSidePanelControl,
+} from "../tasks/use-side-panel.js";
 import { type HeldTaskInboxControl, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";
@@ -323,7 +328,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     : undefined;
 
   const listedWorkspace = tasks.workspace;
-  const { sidePanel } = tasks;
+  const sidePanel = useSidePanelControl(tasks.sidePanel);
   const { onArea, focus, setFocus } = useColumnFocus(tasks.tabKeys, tasks.onTabKeysTaken);
 
   // What the item names opens beside the Inbox through the window's one door for a press, the panel

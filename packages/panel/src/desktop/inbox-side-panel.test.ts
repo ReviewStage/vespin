@@ -37,7 +37,11 @@ import { useAppKeymap } from "../app-commands.js";
 import { useInboxRoute } from "../inbox-route.js";
 import { useInboxTaskAgents } from "../tasks/use-inbox-task-agents.js";
 import { OpenLinkProvider } from "../tasks/use-open-link.js";
-import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
+import {
+  type SidePanelControl,
+  SidePanelPlaceContext,
+  useSidePanel,
+} from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -53,6 +57,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { underWindowRouter } from "../testing/link-router.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import {
+  heldSidePanel,
   listedAgent,
   pushedTranscripts,
   tasksControl,
@@ -319,6 +324,7 @@ async function inbox(
     );
 
     control = sidePanel;
+    const panel = heldSidePanel(sidePanel);
     // The window's keymap, which hears a chord as the window's root mounts it.
     useAppKeymap(true);
 
@@ -326,7 +332,7 @@ async function inbox(
       workspace: ACME,
       tasks: [TASK, OTHER],
       inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
-      sidePanel,
+      sidePanel: panel.doors,
       onShowTask: (taskId) => left.tasks.push(taskId),
       onShowPanelTab: (taskId, tab) => left.went.push(`${taskId} ${JSON.stringify(tab)}`),
       onShowAgent: (taskId, agentId) => left.went.push(`${taskId} agent ${agentId}`),
@@ -335,7 +341,11 @@ async function inbox(
     return createElement(
       OpenLinkProvider,
       { value: (link: ReadLink) => left.links.push(link) },
-      createElement(DesktopInbox, { tasks }),
+      createElement(
+        SidePanelPlaceContext,
+        { value: panel.place },
+        createElement(DesktopInbox, { tasks }),
+      ),
     );
   }
 

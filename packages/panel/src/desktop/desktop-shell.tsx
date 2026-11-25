@@ -37,6 +37,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Outlet, useMatch } from "@tanstack/react-router";
 import {
   Activity,
+  type ComponentProps,
   createContext,
   type RefObject,
   useContext,
@@ -77,6 +78,7 @@ import { ChipCards, type TaskFocus } from "../tasks/chip-cards.js";
 import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
 import { isOverviewTab } from "../tasks/use-main-tabs.js";
+import { useSidePanelPlace } from "../tasks/use-side-panel.js";
 import { useTaskLooks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAdminAccess, selectAdminAccessPending } from "../use-app-state.js";
@@ -1265,9 +1267,8 @@ export function ShellPlaces(): React.JSX.Element {
         </div>
       ) : null}
       {newTaskDialog}
-      <PaneGlide
+      <PaneGlideAtStop
         root={shell}
-        place={tasks.sidePanel.stop}
         layout={{
           sidebarCollapsed: sidebar.collapsed,
           panelOpen: tasks.sidePanel.open,
@@ -1276,6 +1277,17 @@ export function ShellPlaces(): React.JSX.Element {
       />
     </div>
   );
+}
+
+/**
+ * The panes' glide over the stop the side panel stands at (`PaneGlide`'s
+ * `place`). Note that it reads the stop itself, so opening another task or
+ * item draws it and not the shell around it.
+ */
+function PaneGlideAtStop(
+  props: Omit<ComponentProps<typeof PaneGlide>, "place">,
+): React.JSX.Element {
+  return <PaneGlide {...props} place={useSidePanelPlace().stop} />;
 }
 
 /**

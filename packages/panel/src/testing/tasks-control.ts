@@ -44,7 +44,12 @@ import {
   type NewTaskShown,
   NewTaskShownContext,
 } from "../tasks/use-new-task.js";
-import { DRAWN_KINDS } from "../tasks/use-side-panel.js";
+import {
+  DRAWN_KINDS,
+  type SidePanelControl,
+  type SidePanelDoors,
+  type SidePanelPlace,
+} from "../tasks/use-side-panel.js";
 import {
   type TasksControl,
   taskMoveMutation,
@@ -527,6 +532,26 @@ export function withNewTaskShown(
   return createElement(NewTaskShownContext, { value: { ...NEW_TASK_UNSHOWN, ...shown } }, element);
 }
 
+/** A side panel a test draws whole, shut at no stop, but where `overrides` say otherwise. */
+export function sidePanelControl(overrides: Partial<SidePanelControl> = {}): SidePanelControl {
+  const { stopNow: _stopNow, ...drawn } = tasksControl().sidePanel;
+
+  return { ...drawn, stop: undefined, agent: undefined, ...overrides };
+}
+
+/** A side panel a test stands, as the tab hands its doors and the window provides where it stands apart (`SidePanelPlaceContext`). */
+export interface HeldSidePanel {
+  readonly doors: SidePanelDoors;
+  readonly place: SidePanelPlace;
+}
+
+/** `panel` split as the window splits it: its doors for the tab, and where it stands. */
+export function heldSidePanel(panel: SidePanelControl): HeldSidePanel {
+  const { stop, agent, ...drawn } = panel;
+
+  return { doors: { ...drawn, stopNow: () => stop }, place: { stop, agent } };
+}
+
 /** What a test sets of a Tasks tab, and the tasks and agents its window's task list holds (`tasks`, `listedAgents`), which the tab itself never carries. */
 export type TasksControlOverrides = Partial<TasksControl> & {
   readonly tasks?: readonly TaskSummary[];
@@ -604,7 +629,7 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
     },
     sidePanel: {
       open: false,
-      stop: undefined,
+      stopNow: () => undefined,
       fullScreen: false,
       fullScreenOnly: false,
       expands: true,
@@ -646,7 +671,6 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
       onRenamePins: ignore,
       onPlacePins: ignore,
       onOpen: ignore,
-      agent: undefined,
       ownerOf: () => undefined,
       onOpenFile: ignore,
       onBrowseFile: ignore,

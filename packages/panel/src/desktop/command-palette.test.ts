@@ -57,7 +57,7 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
 import { fileLook } from "../tasks/file-ref.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
-import type { SidePanelControl } from "../tasks/use-side-panel.js";
+import type { SidePanelDoors } from "../tasks/use-side-panel.js";
 import { NO_LOOKS, useTaskLooks } from "../tasks/use-task-looks.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
@@ -1307,7 +1307,7 @@ test("a file found wears its type's look, hangs the file's card, and opens throu
   const opened: unknown[][] = [];
   const base = tasksControl();
 
-  const sidePanel: SidePanelControl = {
+  const sidePanel: SidePanelDoors = {
     ...base.sidePanel,
     onOpenFile: (...asked) => opened.push(asked),
   };

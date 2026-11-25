@@ -257,7 +257,11 @@ import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { useServiceTaskSearch } from "../tasks/use-service-task-search.js";
-import { SIDE_PANEL_TAB_KIND, type SidePanelControl } from "../tasks/use-side-panel.js";
+import {
+  SIDE_PANEL_TAB_KIND,
+  type SidePanelControl,
+  useSidePanelControl,
+} from "../tasks/use-side-panel.js";
 import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
 import { type ReadMarks, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskOrigin } from "../tasks/use-task-origin.js";
@@ -1050,6 +1054,7 @@ function paletteEntries(entry: AddEntry): readonly AddEntry[] {
  */
 function agentRows(
   tasks: TasksControl,
+  sidePanel: SidePanelControl,
   taskAgents: AgentsControl,
   rows: TaskListRows,
   inboxWaiting: readonly AppInboxTask[],
@@ -1096,7 +1101,7 @@ function agentRows(
     ? panelOffers({
         holder,
         taskId,
-        panel: tasks.sidePanel,
+        panel: sidePanel,
         agents: taskAgents,
         pages,
         account: doors.account,
@@ -2312,13 +2317,14 @@ export function CommandPalette({
   const changes = { people: changesPeople, pullRequests: taskPullRequests };
 
   // The run actions of the agent the open task's column shows (`runRows`).
-  const showShell = useShowShellTab(tasks.sidePanel, noFocusMove);
+  const sidePanel = useSidePanelControl(tasks.sidePanel);
+  const showShell = useShowShellTab(sidePanel, noFocusMove);
 
   const terminalsRun =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.TERMINALS) }).data ===
     true;
 
-  const runAgentId = tasks.sidePanel.agent;
+  const runAgentId = sidePanel.agent;
 
   const runAgent = taskAgents.agents?.find(
     (agent) => agent.id === runAgentId && agent.archivedAt === undefined,
@@ -2433,6 +2439,7 @@ export function CommandPalette({
       [
         ...agentRows(
           tasks,
+          sidePanel,
           taskAgents,
           rows,
           inboxWaiting,

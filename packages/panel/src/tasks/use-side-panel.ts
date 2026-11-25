@@ -31,7 +31,15 @@ import {
 } from "@repo/ui/tab-strip-model";
 import { absurd, Option, Predicate, Schema, SchemaTransformation } from "effect";
 import { InboxIcon } from "lucide-react";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import {
   type ByPullRequest,
@@ -580,6 +588,51 @@ const FIRST_LAUNCH: SidePanelState = {
   tabs: SIDE_PANEL_TABS,
   width: SIDE_PANEL_WIDTH.DEFAULT,
 };
+
+/**
+ * Where the side panel stands as the window moves between places: the stop
+ * it belongs to and the agent whose strip it draws. Note that it reaches
+ * the parts that draw the panel through a context of its own
+ * (`SidePanelPlaceContext`), never the Tasks tab, because both move on
+ * every task or Inbox item opened, and the tab handed to most of the window
+ * drew all of it again for them.
+ */
+export interface SidePanelPlace {
+  readonly stop: string | undefined;
+  readonly agent: string | undefined;
+}
+
+/** The panel at no stop, as a window drawing no Tasks tab stands. */
+export const NO_PANEL_PLACE: SidePanelPlace = { stop: undefined, agent: undefined };
+
+/** Where the side panel stands, as the window stands (`AppWindow` provides it). */
+export const SidePanelPlaceContext = createContext<SidePanelPlace>(NO_PANEL_PLACE);
+
+/** Where the side panel stands, read where it is drawn. */
+export function useSidePanelPlace(): SidePanelPlace {
+  return useContext(SidePanelPlaceContext);
+}
+
+/** The side panel's doors and drawing as the Tasks tab hands them, without where it stands (`SidePanelPlace`); the stop read at a call through `stopNow`. */
+export type SidePanelDoors = Omit<SidePanelControl, keyof SidePanelPlace> & {
+  /** The stop the panel belongs to as it stands at the call, for a door that acts on it. */
+  readonly stopNow: () => string | undefined;
+};
+
+/**
+ * The side panel as a part that draws it reads it: the tab's doors with
+ * where it stands, read here, so the part draws again as the panel moves
+ * and nothing else of the window does.
+ */
+export function useSidePanelControl(doors: SidePanelDoors): SidePanelControl {
+  const place = useSidePanelPlace();
+
+  return useMemo(() => {
+    const { stopNow: _stopNow, ...drawn } = doors;
+
+    return { ...drawn, ...place };
+  }, [doors, place]);
+}
 
 /** What the panel and its toggle draw, and their presses. */
 export interface SidePanelControl {
