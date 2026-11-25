@@ -204,6 +204,10 @@ import { followSidebarRows } from "./workspaces-follow.js";
 const probeMark = (n: string, d?: unknown): void =>
   (globalThis as { __probeMark?: (n: string, d?: unknown) => void }).__probeMark?.(n, d);
 
+/** PROBE ONLY: whether the run ablates `which` (`-probeAblate a2`, `a3`, or `a23`), as the probe set it. */
+const probeAblates = (which: string): boolean =>
+  String((globalThis as { __probeAblate?: string }).__probeAblate ?? "").includes(which);
+
 /**
  * compose-tasks.ts -- the panel's named tasks, read from the service: the list, the one active task, and the descriptions the windows opened.
  *
@@ -1386,6 +1390,15 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         }
 
         coldRead.add(id);
+
+        // PROBE ONLY (ablation A3): the Inbox's named tasks are held and drawn once, after the last is read.
+        if (probeAblates("3") && inboxAsked.has(id)) {
+          coldBatch.rows.push(rows.value);
+          coldBatch.mark ??= mark;
+          probeMark("cold:batched");
+
+          return;
+        }
         const coldAt = performance.now();
         yield* collections.cold(rows.value, mark);
         probeMark("cold:drawn", { ms: Math.round(performance.now() - coldAt) });
@@ -1477,6 +1490,27 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       return readOutside(id);
     });
 
+  /** PROBE ONLY (ablation A3): the Inbox's named tasks read and not yet drawn, and the first read's mark. */
+  let coldBatch: { rows: TaskListLiveRows[]; mark: ReturnType<typeof taskList.collections.mark> | undefined } = { rows: [], mark: undefined };
+
+  /** PROBE ONLY (ablation A3): draws every Inbox-named task held so far, at once. */
+  const drawColdBatch = Effect.suspend(() => {
+    const batch = coldBatch;
+    coldBatch = { rows: [], mark: undefined };
+
+    if (batch.rows.length === 0 || batch.mark === undefined) return Effect.void;
+    const merged = {
+      ...batch.rows[0],
+      tasks: batch.rows.flatMap((rows) => rows.tasks),
+      agents: batch.rows.flatMap((rows) => rows.agents),
+    } as TaskListLiveRows;
+    const at = performance.now();
+
+    return Effect.tap(taskList.collections.cold(merged, batch.mark), () =>
+      Effect.sync(() => probeMark("cold:batch-drawn", { tasks: batch.rows.length, ms: Math.round(performance.now() - at) })),
+    );
+  });
+
   /** The tasks the account's Inbox last named (`inboxNamed`). */
   let inboxTaskIds: readonly string[] = [];
   /** Whether the Inbox named tasks while the list could not be read outside of, which are read once it answers. */
@@ -1511,10 +1545,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
     return inboxWaiting
       ? Effect.void
-      : Effect.forEach(inboxTaskIds, readForInbox, {
-          concurrency: INBOX_READS_AT_ONCE,
-          discard: true,
-        });
+      : Effect.andThen(
+          Effect.forEach(inboxTaskIds, readForInbox, {
+            concurrency: INBOX_READS_AT_ONCE,
+            discard: true,
+          }),
+          drawColdBatch,
+        );
   });
 
   const inboxNamed = (taskIds: readonly string[]): Effect.Effect<void> =>

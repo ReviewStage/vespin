@@ -1,6 +1,7 @@
 // launch-probe.ts -- PROBE ONLY, never merged: a cold launch's marks and the JS thread's stalls, written to Documents/launch-probe.json for the Mac rig to read.
 
 import { File, Paths } from "expo-file-system";
+import { Settings } from "react-native";
 
 type Mark = { n: string; t: number; d?: unknown };
 
@@ -112,3 +113,6 @@ setTimeout(() => probeFlush("t125"), 125_000);
 setTimeout(() => probeFlush("t185"), WATCH_MS + 200);
 // Note that the host's own code notes its deliveries through this hook, which only the probe sets.
 (globalThis as { __probeMark?: (n: string, d?: unknown) => void }).__probeMark = probe;
+// Note that an ablation run (`-probeAblate a2`, `a3`, or `a23`) is named here, before the host or any screen reads it.
+(globalThis as { __probeAblate?: string }).__probeAblate = String(Settings.get("probeAblate") ?? "");
+probe("probe:ablate", { which: (globalThis as { __probeAblate?: string }).__probeAblate });
