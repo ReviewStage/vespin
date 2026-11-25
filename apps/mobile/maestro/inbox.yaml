@@ -97,28 +97,13 @@ env:
 - tapOn: "invite-test-plan.pdf, PDF.*"
 # The PDF opens in the system's Quick Look, titled with its name, and its
 # close button closes it. Note that the button is found by Quick Look's own
-# id, since it reads "Done" on an iPhone and "close" on an iPad, and that an
-# iPad's Quick Look hides its bar a moment after it opens, so a tap on the
-# page brings the bar back first where the button no longer stands. The page
-# is found by Quick Look's own id for its view, since PDFKit hands none of
-# the PDF's words to the accessibility tree.
+# id, since it reads "Done" on an iPhone and "close" on an iPad.
 - extendedWaitUntil:
     visible:
       id: "QLOverlayDoneButtonAccessibilityIdentifier"
     timeout: 15000
 - waitForAnimationToEnd
 - takeScreenshot: inbox-pdf
-- runFlow:
-    when:
-      notVisible:
-        id: "QLOverlayDoneButtonAccessibilityIdentifier"
-    commands:
-      - tapOn:
-          id: "QLPreviewControllerView"
-      - extendedWaitUntil:
-          visible:
-            id: "QLOverlayDoneButtonAccessibilityIdentifier"
-          timeout: 5000
 - tapOn:
     id: "QLOverlayDoneButtonAccessibilityIdentifier"
 - waitForAnimationToEnd
