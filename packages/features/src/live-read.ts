@@ -94,14 +94,15 @@ const MODE_FIELDS = {
     [LIVE_POLL.QUERY]: Schema.optionalKey(Schema.Literal(LIVE_POLL.ON)),
     [LIVE_POLL.AFTER]: Schema.optionalKey(Schema.String),
     [LIVE_POLL.SYNC]: Schema.optionalKey(Schema.String),
+    [LIVE_POLL.PAGE]: Schema.optionalKey(Schema.String),
   },
 } as const;
 
-/** The field a reader asks a read with beside its params, by its mode: where it holds a cursor read's cursor parts, or the sync id it holds a delta read's rows at. */
+/** The field a reader asks a read with beside its params, by its mode: where it holds a cursor read's cursor parts, or the sync id it holds a delta read's rows at and the page of a whole answer it asks for next. */
 type ModeAsked<Mode extends LiveMode> = Mode extends typeof LIVE_MODE.CURSOR
   ? { readonly [LIVE_POLL.CURSOR]?: string }
   : Mode extends typeof LIVE_MODE.DELTA
-    ? { readonly [LIVE_POLL.SYNC]?: string }
+    ? { readonly [LIVE_POLL.SYNC]?: string; readonly [LIVE_POLL.PAGE]?: string }
     : unknown;
 
 /** A path the hosted service answers at. */

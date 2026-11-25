@@ -69,6 +69,7 @@ import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { BROWSER_CURSOR_KIND } from "@repo/features/browser-agent-actions";
 import { TASK_BROWSER_TABS_READ } from "@repo/features/browser-tabs-live";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
+import { CLIENT_HEADER } from "@repo/features/client-identity";
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
 import {
@@ -2662,7 +2663,13 @@ it.layer(getTestDB())("a pull request's move's live read", (it) => {
 });
 
 /** A live read at `path` asked as `bearer`, polled, in delta mode past `sync` where it names one ("" for none yet), on the test's clock and on `hub` where one is named; its answer's body. */
-const askHeld = (bearer: string, path: string, sync?: string, hub?: SyncService) =>
+const askHeld = (
+  bearer: string,
+  path: string,
+  sync?: string,
+  hub?: SyncService,
+  paging?: { readonly page?: string },
+) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
@@ -2682,16 +2689,56 @@ const askHeld = (bearer: string, path: string, sync?: string, hub?: SyncService)
 
     if (sync !== undefined) url.searchParams.set(LIVE_POLL.SYNC, sync);
 
+    if (paging?.page !== undefined) url.searchParams.set(LIVE_POLL.PAGE, paging.page);
+
     const response = yield* hostedAnswer(
       { live: procedures },
       services,
-      new Request(url, { headers: { authorization: `Bearer ${bearer}` } }),
+      new Request(url, {
+        headers: {
+          authorization: `Bearer ${bearer}`,
+          ...(paging === undefined ? undefined : PAGED_BUILD),
+        },
+      }),
     );
 
     assert.equal(response.status, HOSTED_HTTP_STATUS.OK);
     const body: unknown = JSON.parse(yield* Effect.promise(() => response.text()));
 
     return body;
+  });
+
+/** The headers of a build that reads a whole answer in pages: an iPhone's at the first hosted API version that does. */
+const PAGED_BUILD = { [CLIENT_HEADER.CLIENT]: "ios/1.0", [CLIENT_HEADER.API_VERSION]: "10" };
+
+/** The task list asked as a build that reads pages, as `bearer`, past `sync`, or the page `page` names, its parts decoded. */
+const askTaskPage = (bearer: string, sync: string, page?: string) =>
+  Effect.map(
+    askHeld(bearer, "/api/live/tasks", sync, undefined, page === undefined ? {} : { page }),
+    (body) => Schema.decodeUnknownSync(TASK_LIST_READ.answer)(body).queries,
+  );
+
+/** Tasks of the member's own test workspace, written in one statement, each made at the instant beside its name, so a test stands more than a page of them in a moment; their ids. */
+const writeTasks = (userId: string, made: readonly (readonly [string, Date])[]) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const first = yield* startTask(userId, { name: "Seed" });
+
+    const written = yield* db
+      .insert(task)
+      .values(
+        made.map(([name, createdAt], at) => ({
+          userId,
+          organizationId: first.workspaceId,
+          name,
+          number: 1_000 + at,
+          description: "",
+          createdAt,
+        })),
+      )
+      .returning({ id: task.id });
+
+    return { seed: first.id, workspaceId: first.workspaceId, ids: written.map(({ id }) => id) };
   });
 
 /** The task list asked as `bearer`, in delta mode past `sync` where it names one, on `hub` where one is named, its parts decoded. */
@@ -2778,6 +2825,69 @@ const agentRowOf = (part: { readonly rows?: readonly unknown[] }, agentId: strin
     | undefined;
 
 it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
+  it.effect(
+    "a build that reads pages is answered whole a page at a time, the newest first, and a write between pages arrives past the first page's id",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        // Note that the tasks are made after the clock's now, where the store makes its own, and two share each instant, so a page that ends between them reads the second by its id.
+        const base = (yield* Clock.currentTimeMillis) + 86_400_000;
+
+        const made = Array.from(
+          { length: 80 },
+          (_, at) => [`Task ${at}`, new Date(base + Math.floor(at / 2) * 1_000)] as const,
+        );
+
+        const { seed, workspaceId, ids } = yield* writeTasks(dana, made);
+        const agentId = yield* openTaskAgent(dana, workspaceId, seed);
+
+        const first = yield* askTaskPage(dana, "");
+        const at = first.tasks.sync?.next;
+        const page = first.tasks.sync?.page;
+        assert.ok(at !== undefined && page !== undefined);
+        assert.equal(first.tasks.snapshot, undefined);
+        assert.deepEqual(idsOf(first.tasks), ids.toSorted());
+        assert.deepEqual(idsOf(first.agents), []);
+
+        const renamed = ids[0] ?? "";
+        yield* updateTask(dana, renamed, { name: "Renamed between pages" });
+        const last = yield* askTaskPage(dana, "", page);
+        assert.deepEqual(idsOf(last.tasks), [seed]);
+        assert.deepEqual(idsOf(last.agents), [agentId]);
+        assert.equal(last.tasks.sync?.next, at);
+        assert.equal(last.tasks.sync?.page, undefined);
+
+        const caught = yield* askTasks(dana, at);
+        assert.deepEqual(idsOf(caught.tasks), [renamed]);
+      }),
+  );
+
+  it.effect(
+    "a page named by another reader's answer reads the asker's own tasks past it and none of the other's",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const erin = yield* openUser;
+        const base = (yield* Clock.currentTimeMillis) + 86_400_000;
+
+        const { ids } = yield* writeTasks(
+          dana,
+          Array.from(
+            { length: 80 },
+            (_, at) => [`Task ${at}`, new Date(base + at * 1_000)] as const,
+          ),
+        );
+
+        const erins = yield* writeTasks(erin, [["Billing", new Date(base - 60_000)]]);
+        const page = (yield* askTaskPage(dana, "")).tasks.sync?.page;
+        assert.ok(page !== undefined);
+
+        const asked = yield* askTaskPage(erin, "", page);
+        assert.deepEqual(idsOf(asked.tasks), [erins.seed, ...erins.ids].toSorted());
+        assert.ok(!idsOf(asked.tasks).some((id) => ids.includes(id)));
+      }),
+  );
+
   it.effect(
     "a reader past its sync id is answered what moved alone: a task added, one deleted gone, an agent whose turn started, and nothing of another workspace's",
     () =>
@@ -3005,6 +3115,23 @@ const clientKeysOf = (part: { readonly rows?: readonly unknown[] }) =>
   (part.rows ?? []).map((row) => (row as { readonly clientKey: string | null }).clientKey);
 
 it.layer(getTestDB())("the account's inbox items' live read in delta mode", (it) => {
+  it.effect("a build that reads pages is answered each item with its stamp and thread", () =>
+    Effect.gen(function* () {
+      const dana = yield* openUser;
+      const itemId = yield* openItem(dana);
+
+      const answered = Schema.decodeUnknownSync(INBOX_ITEMS_READ.answer)(
+        yield* askHeld(dana, "/api/live/inbox-items", "", undefined, {}),
+      ).queries;
+
+      assert.deepEqual(idsOf(answered.stamps), [itemId]);
+      assert.deepEqual(idsOf(answered.items), [itemId]);
+      assert.ok(clientKeysOf(answered.messages).length > 0, "the item's thread comes with it");
+      assert.ok(answered.items.sync?.next !== undefined);
+      assert.equal(answered.items.sync?.page, undefined);
+    }),
+  );
+
   it.effect(
     "a message withdrawn moves its item, answered whole without it in every part, and nothing of another workspace's",
     () =>
