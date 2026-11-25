@@ -66,6 +66,7 @@ import {
   useSearchRecent,
 } from "../search/use-search.js";
 import { SEARCH_FOCUS_PARAM, useRefilledSearchField } from "../search-field.js";
+import { useSearchSwitchProbe } from "../search-switch-probe.js";
 import { SettingsBarButton, useOpenSettings } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
@@ -410,6 +411,8 @@ function FoundList({
  */
 function SearchRecentList({ leave }: { readonly leave: (() => void) | undefined }) {
   const recent = useSearchRecent();
+  // PROBE: Recent stands drawn once the task list it reads has rows, whether or not anything was opened recently.
+  useSearchSwitchProbe(recent.rows.length > 0 || recent.listing.found.length > 0);
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
   const doors = useTaskRowDoors(recent.listing.workspace?.id);
