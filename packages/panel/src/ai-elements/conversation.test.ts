@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { holdFrames, settleFrames } from "@repo/ui/testing/frames";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
@@ -78,16 +79,19 @@ function logsLaidOut(): void {
 const WAY_BACK = "[aria-label='Scroll to the newest line']";
 
 /** Scrolls `box` to `top` as the browser would, so the log hears it. */
-function scroll(box: HTMLElement, top: number): void {
+/** Scrolls the log's box to `top`, and lets the frame after it pass, in which the log reads whether it stands at its end. */
+async function scroll(box: HTMLElement, top: number): Promise<void> {
   box.scrollTop = top;
   act(() => {
     box.dispatchEvent(new Event("scroll", { bubbles: true }));
   });
+  await settleFrames();
 }
 
 /** Draws a long log of ten lines, asking for older lines through `onNearTop` where one is handed, and answers its box and a way to draw it again with room floating over its end. */
 function mountLog(onNearTop?: () => void) {
   logsLaidOut();
+  holdFrames();
   // jsdom has no `scrollTo` on an element, which the virtualizer writes through.
   Object.defineProperty(HTMLElement.prototype, "scrollTo", {
     configurable: true,
@@ -130,46 +134,46 @@ function mountLog(onNearTop?: () => void) {
   return { container, box, float };
 }
 
-test("a long log opens on its newest line, and offers the way back to it once the reader scrolls away", () => {
+test("a long log opens on its newest line, and offers the way back to it once the reader scrolls away", async () => {
   const { container, box } = mountLog();
-  scroll(box, box.scrollTop);
+  await scroll(box, box.scrollTop);
   assert.equal(box.scrollTop, 1400, "the log stands at its end");
   assert.equal(container.querySelector(WAY_BACK), null, "at its end it offers no way back");
-  scroll(box, 300);
+  await scroll(box, 300);
   const back = container.querySelector<HTMLButtonElement>(WAY_BACK) ?? assert.fail("the way back");
   act(() => back.click());
-  scroll(box, box.scrollTop);
+  await scroll(box, box.scrollTop);
   assert.equal(box.scrollTop, 1400, "the way back takes the log to its end");
   assert.equal(container.querySelector(WAY_BACK), null);
 });
 
-test("a log standing at its end keeps to it as something floating over its end takes more room", () => {
+test("a log standing at its end keeps to it as something floating over its end takes more room", async () => {
   const { container, box, float } = mountLog();
-  scroll(box, box.scrollTop);
+  await scroll(box, box.scrollTop);
   assert.equal(box.scrollTop, 1400);
   float(300);
-  scroll(box, box.scrollTop);
+  await scroll(box, box.scrollTop);
   assert.equal(box.scrollTop, 1700, "the log follows its end past the room");
   assert.equal(container.querySelector(WAY_BACK), null, "at its end it offers no way back");
 });
 
-test("a log standing at its end keeps to it as its box shrinks, as a phone's keyboard shrinks it", () => {
+test("a log standing at its end keeps to it as its box shrinks, as a phone's keyboard shrinks it", async () => {
   const { box } = mountLog();
-  scroll(box, box.scrollTop);
+  await scroll(box, box.scrollTop);
   assert.equal(box.scrollTop, 1400);
   boxHeight = 300;
   act(() => relayout());
-  scroll(box, box.scrollTop);
+  await scroll(box, box.scrollTop);
   assert.equal(box.scrollTop, 1700, "the log keeps its newest line in view");
 });
 
-test("a log asks for its older lines as the reader scrolls up near its top", () => {
+test("a log asks for its older lines as the reader scrolls up near its top", async () => {
   const asked: string[] = [];
   const { box } = mountLog(() => void asked.push("older"));
-  scroll(box, 1400);
+  await scroll(box, 1400);
   asked.splice(0);
-  scroll(box, 1000);
+  await scroll(box, 1000);
   assert.deepEqual(asked, [], "a scroll up far from the top asks for nothing");
-  scroll(box, 400);
+  await scroll(box, 400);
   assert.deepEqual(asked, ["older"], "a scroll up within a screen of the top asks for older lines");
 });

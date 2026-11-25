@@ -584,6 +584,29 @@ export function VirtualRows({
   // The virtualizer, once made, which the run's first offset is read from.
   const made = useRef<Virtualizer<HTMLElement, HTMLElement> | null>(null);
 
+  // Whether the scroller stands at its end, read once a frame rather than at each change of the virtualizer's state.
+  // Note that it reads the scroller's size, and a change lands between the virtualizer's writes to the rows, so a read at
+  // each one laid the whole page out again, many times over as a log first measures its lines.
+  const atEnd = useRef(onAtEnd);
+  atEnd.current = onAtEnd;
+  const endAsked = useRef<number | undefined>(undefined);
+
+  const askAtEnd = useCallback((instance: Virtualizer<HTMLElement, HTMLElement>) => {
+    if (atEnd.current === undefined || endAsked.current !== undefined) return;
+
+    endAsked.current = requestAnimationFrame(() => {
+      endAsked.current = undefined;
+      atEnd.current?.(instance.isAtEnd());
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (endAsked.current !== undefined) cancelAnimationFrame(endAsked.current);
+    },
+    [],
+  );
+
   const virtualizer = useVirtualizer<HTMLElement, HTMLElement>({
     count: keys.length,
     getScrollElement: () => scroller.current,
@@ -608,7 +631,7 @@ export function VirtualRows({
     measureElement: measured,
     observeElementRect: sizeWhileShown,
     initialRect: windowRect(),
-    onChange: (instance) => onAtEnd?.(instance.isAtEnd()),
+    onChange: askAtEnd,
     directDomUpdates: true,
     directDomUpdatesMode: "position",
   });
