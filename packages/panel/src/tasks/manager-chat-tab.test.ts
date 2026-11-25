@@ -324,6 +324,32 @@ test("each message is a row under its sender's name where their run opens, a thr
   assert.deepEqual(threads, ["first"]);
 });
 
+test("a message's menu, a right-click or a long press, leads with Reply in thread, which opens its thread beside the chat", async () => {
+  const { container } = await drawChat([row("first", 1, "On it.")]);
+
+  const words =
+    [...container.querySelectorAll(".ui-channel-message-words")].find(
+      (each) => each.textContent === "On it.",
+    ) ?? assert.fail("the message stands");
+
+  act(() => {
+    words.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+    );
+  });
+
+  const items = [...document.querySelectorAll<HTMLElement>("[role='menuitem']")];
+  assert.deepEqual(
+    items.map((item) => item.textContent),
+    ["Reply in thread", "Reply", "Copy"],
+  );
+
+  act(() => items[0]?.click());
+  await settleQueries();
+
+  assert.ok(container.querySelector("[data-thread-tab]"), "the thread opens beside the chat");
+});
+
 test("a person's picture stands as its chip where their words name it, not as a marker over a copy of it, and each line they typed stays its own", async () => {
   const { container } = await drawChat([
     {

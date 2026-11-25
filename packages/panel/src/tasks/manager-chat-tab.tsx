@@ -181,16 +181,19 @@ interface ChatThreadDoors {
 interface RowThread {
   readonly action: ReactNode;
   readonly summary: ReactNode;
+  /** Opens the thread, which its menu's Reply in thread presses; none in a thread's tab. */
+  readonly onOpen: (() => void) | undefined;
 }
 
 function threadOf(message: ManagerChatLiveMessage, doors: ChatDoors): RowThread {
   const { thread } = doors;
 
-  if (thread === undefined) return { action: null, summary: null };
+  if (thread === undefined) return { action: null, summary: null, onOpen: undefined };
   const root = message.threadRoot ?? message.id;
   const onOpen = () => thread.onOpen(root);
 
   return {
+    onOpen,
     action: <ThreadReplyAction onOpen={onOpen} />,
     summary: (
       <ThreadSummary
@@ -319,11 +322,11 @@ function ManagerMessage({
   work: TurnWork | null;
 }): ReactNode {
   const { message, place } = line;
-  const menu = useChatMessageMenu(message.text);
+  const thread = threadOf(message, doors);
+  const menu = useChatMessageMenu(message.text, thread.onOpen);
   // Note that the Manager's pictures kept with their size stand as the set it showed, as the transcript draws a shown set.
   const shown = shownOf(message);
   const files = fileChipsOf(message, shown);
-  const thread = threadOf(message, doors);
 
   return (
     <>
@@ -403,13 +406,12 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const ownLine = lineId === undefined ? undefined : doors.lines.get(lineId);
   const editor = useMessageEdit(lineId ?? "");
   // Note that any message of the chat is answered as the Manager's is: Reply quotes it whole into the box, beside its Copy and in its menu.
-  const menu = useChatMessageMenu(message.text);
+  const thread = threadOf(message, doors);
+  const menu = useChatMessageMenu(message.text, thread.onOpen);
 
   if (ownLine !== undefined && editor !== undefined) {
     return <EditComposer message={ownLine} words={message.text} edit={editor} />;
   }
-
-  const thread = threadOf(message, doors);
 
   return (
     <>

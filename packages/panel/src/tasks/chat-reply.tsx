@@ -1,11 +1,12 @@
 import { replyOf } from "@repo/features/reply-quote";
 import type { ContextMenuProps } from "@repo/ui";
 import { CopyIcon, useMenu } from "@repo/ui";
-import { ReplyIcon } from "@repo/ui/icons";
+import { MessageSquareReplyIcon, ReplyIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";
 import { MessageAction } from "../ai-elements/message.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
+import { THREAD_WORDS } from "./manager-chat-threads.js";
 import { useReplyDoor } from "./reply-to-selection.js";
 
 /**
@@ -54,28 +55,50 @@ export function ReplyMessageAction({ words }: { words: string }): ReactNode {
   );
 }
 
-/** A chat message's right-click menu: what its bubble spreads to open it, none for a message of no words, and the menu to draw beside the bubble. */
+/** A chat message's right-click menu: what its bubble spreads to open it, none for a message with nothing to offer, and the menu to draw beside the bubble. */
 interface ChatMessageMenu {
   readonly contextMenu: ContextMenuProps | undefined;
   readonly menu: ReactNode;
 }
 
-/** A chat message's right-click menu: Reply and Copy of its Markdown `words`. */
-export function useChatMessageMenu(words: string): ChatMessageMenu {
+/**
+ * A chat message's right-click menu, a phone's long press: Reply in thread
+ * first where the message opens a thread (`onThread`), as the actions beside
+ * it lead with it, then Reply and Copy of its Markdown `words`, where it has
+ * any.
+ */
+export function useChatMessageMenu(
+  words: string,
+  onThread: (() => void) | undefined,
+): ChatMessageMenu {
   const quote = useQuoteMessage(words);
   const copy = useCopyToast();
   const menu = useMenu(true);
-  const offered = words !== "";
+  const worded = words !== "";
+  const offered = worded || onThread !== undefined;
 
   const items = [
+    ...(onThread === undefined
+      ? []
+      : [
+          {
+            label: THREAD_WORDS.REPLY,
+            icon: <MessageSquareReplyIcon aria-hidden="true" />,
+            onSelect: onThread,
+          },
+        ]),
     ...(quote === undefined
       ? []
       : [{ label: REPLY_WORDS.ACTION, icon: <ReplyIcon aria-hidden="true" />, onSelect: quote }]),
-    {
-      label: REPLY_WORDS.COPY,
-      icon: <CopyIcon aria-hidden="true" />,
-      onSelect: () => copy(words, REPLY_WORDS.COPIED),
-    },
+    ...(worded
+      ? [
+          {
+            label: REPLY_WORDS.COPY,
+            icon: <CopyIcon aria-hidden="true" />,
+            onSelect: () => copy(words, REPLY_WORDS.COPIED),
+          },
+        ]
+      : []),
   ];
 
   return {
