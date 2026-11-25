@@ -1016,7 +1016,7 @@ describe("managerChatItems", () => {
     expect(managerThreadItems(view, "gone", [], reading)).toBeUndefined();
   });
 
-  it("folds a finished turn's work over the Manager's message that opens it, under the Manager's head, saying how long it worked, and opens it on the work", () => {
+  it("offers a finished turn's work in the long press of the Manager's message that opens it, with no line over it, and stands the work under it once shown", () => {
     const said = row("m1", 1, {
       authorKind: MANAGER_CHAT_AUTHOR.AGENT,
       text: "Nothing open.",
@@ -1054,23 +1054,17 @@ describe("managerChatItems", () => {
       );
 
     const closed = read(NO_TOGGLES);
-    const fold = closed[0];
+    const message = closed[0];
 
-    expect(closed.map((item) => [item.kind, item.depth])).toEqual([
-      [TRANSCRIPT_ITEM.FOLD, 0],
-      [TRANSCRIPT_ITEM.SAID, 0],
-    ]);
-    expect(fold).toMatchObject({ summary: "Worked for 1m 18s", open: false });
-    // Note that the fold stands under the Manager's head, as the panel's stands under the name, and the message under it goes on the run with no head of its own.
-    expect(fold).toMatchObject({ channel: { name: "Pat", manager: true } });
-    expect(closed[1]).toMatchObject({ joinsAbove: true, stamp: undefined });
+    expect(closed.map((item) => [item.kind, item.depth])).toEqual([[TRANSCRIPT_ITEM.SAID, 0]]);
+    expect(message).toMatchObject({ workShown: false, channel: { name: "Pat", manager: true } });
 
-    const opened = read(fold === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, fold));
+    const opened = read(message === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, message));
 
     expect(opened.map((item) => [item.kind, item.depth])).toEqual([
-      [TRANSCRIPT_ITEM.FOLD, 0],
-      [TRANSCRIPT_ITEM.CALL, 1],
       [TRANSCRIPT_ITEM.SAID, 0],
+      [TRANSCRIPT_ITEM.CALL, 1],
     ]);
+    expect(opened[0]).toMatchObject({ workShown: true });
   });
 });

@@ -301,7 +301,7 @@ function ChannelSaid({
   const thread = open === undefined ? undefined : item.thread;
   const wordless = item.words.trim() === "";
 
-  const threadAct: readonly HeldAct[] =
+  const replyAct: readonly HeldAct[] =
     thread === undefined || open === undefined
       ? []
       : [
@@ -311,6 +311,20 @@ function ChannelSaid({
             onPress: () => open(thread.root),
           },
         ];
+
+  // Note that the Manager's message that opens a finished turn offers Show work, or Hide work while its work stands open under it, in its long press, as the panel's message menu offers it, rather than a fold over it.
+  const workAct: readonly HeldAct[] =
+    item.workShown === undefined
+      ? []
+      : [
+          {
+            label: chatWorkWords(item.workShown),
+            symbol: GLYPH.SHOW_WORK,
+            onPress: () => drawing.onToggle(item),
+          },
+        ];
+
+  const threadAct = [...replyAct, ...workAct];
 
   const message = (
     <ChannelMessage sender={sender} faces={faces} opens={!item.joinsAbove} stamp={item.stamp}>
@@ -987,7 +1001,7 @@ function ShownMediaView({
   }
 }
 
-/** Show work, or Hide work while it stands open, where a Manager's working line's turn has done work (`workShown`); none where it has done none. A finished turn's work stands in its fold over its first message instead. */
+/** Show work, or Hide work while it stands open, where a Manager's working line's turn has done work (`workShown`); none where it has done none. A finished turn's work is offered in its first message's long press instead (`ChannelSaid`). */
 function workActs(
   item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.WORKING }>,
   drawing: RowDrawing,
