@@ -32,6 +32,7 @@ import { READING_AUTOMATIONS } from "@repo/features/automation-words";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { EXPERIMENT } from "@repo/settings";
 import {
   BUTTON_VARIANT,
   Button,
@@ -62,11 +63,12 @@ import { renameWrite } from "../rename-write.js";
 import { replayMaskedError } from "../settings/marks.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { type AgentBox, useAgentBox } from "../tasks/agent-box.js";
-import { RENAME_FAILED } from "../tasks/agent-model.js";
+import { RENAME_FAILED, teammateStarter } from "../tasks/agent-model.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuAction } from "./action-menu.js";
 import { AutomationRows } from "./automations-page.js";
 import { useAutomations } from "./use-automations.js";
@@ -110,6 +112,10 @@ const WORDS = {
   ADD_AUTOMATION: "Add automation",
   NO_AUTOMATIONS: "No automations send it work yet.",
   AUTOMATIONS_UNREAD: "The automations could not be read.",
+  RUNS_ON_YOURS: "Runs on your subscriptions.",
+  RUNS_ON_PREFIX: "Runs on ",
+  RUNS_ON_SUFFIX: "'s subscriptions.",
+  STARTS_ON_YOURS: " Agents it starts for you run on yours.",
 } as const;
 
 /** What a Manager's Settings reads of it. */
@@ -201,13 +207,55 @@ function IdentityRow({
   );
 }
 
-/** The Model row: the agent box's own model chip, as the box draws it. */
-function ModelRow({ agentId, box }: { agentId: string; box: AgentBox }): React.JSX.Element {
+/**
+ * Who pays for the Manager's turns, said under its Model: its starter's
+ * subscriptions, named as the reader's own where they started it. With the
+ * Manager acting for whoever asks (`MANAGER_ACTS_FOR_ASKER`), what it starts
+ * for a reader who is not its starter runs on that reader's, as the experiment's own line says; its starter hears nothing more, since everything already runs on theirs.
+ */
+function PayerLine({
+  agent,
+  me,
+}: {
+  agent: ManagerSettingsSubject;
+  me: string | undefined;
+}): React.JSX.Element {
+  const owner = teammateStarter(agent.startedBy, me);
+  const forAsker = useWorkspaceExperiment(agent.workspaceId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER);
+
+  return (
+    <>
+      {owner === undefined ? (
+        WORDS.RUNS_ON_YOURS
+      ) : (
+        <>
+          {WORDS.RUNS_ON_PREFIX}
+          <ReplayMask>{owner}</ReplayMask>
+          {WORDS.RUNS_ON_SUFFIX}
+        </>
+      )}
+      {forAsker && owner !== undefined ? WORDS.STARTS_ON_YOURS : null}
+    </>
+  );
+}
+
+/** The Model row: the agent box's own model chip, as the box draws it, over who pays for the Manager's turns. */
+function ModelRow({
+  agent,
+  me,
+  box,
+}: {
+  agent: ManagerSettingsSubject;
+  me: string | undefined;
+  box: AgentBox;
+}): React.JSX.Element {
   const { model } = box;
+  const agentId = agent.id;
 
   return (
     <SettingsRow
       label={WORDS.MODEL}
+      description={<PayerLine agent={agent} me={me} />}
       error={refusedShown(model?.note, FAILURE_SURFACE.MANAGER_SETTINGS, { agentId })}
     >
       {() =>
@@ -259,7 +307,7 @@ function GeneralSection({
           </SettingsRow>
         )}
         <SettingsRow label={WORDS.MACHINE}>{() => box.place(false)}</SettingsRow>
-        <ModelRow agentId={agent.id} box={box} />
+        <ModelRow agent={agent} me={agents.me} box={box} />
       </SettingsSection>
       <SettingsSection>
         <SettingsRow
