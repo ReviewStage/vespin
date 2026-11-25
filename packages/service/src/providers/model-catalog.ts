@@ -29,6 +29,7 @@ import {
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { AfterResponse } from "../http/after-response.js";
 
 /**
  * model-catalog.ts -- the models a coding agent may run on, read from AI Gateway's public catalog.
@@ -542,8 +543,14 @@ export const modelCatalogLayer: Layer.Layer<ModelCatalog, never, HttpClient.Http
         (exit) => (Exit.isSuccess(exit) ? MODEL_CATALOG_TTL : Duration.zero),
       );
 
-      // Note that the refetch runs in the instance's scope rather than the request's, so the request that started it may end before it does.
-      const refresh = fetched.pipe(Effect.ignore, Effect.forkIn(scope, { startImmediately: true }));
+      // Note that the refetch outlives the request that started it: handed past the answer where the runtime keeps such work (`AfterResponse`, over the platform's `waitUntil`), so a frozen instance never holds it half done, and otherwise run in the instance's own scope.
+      const refresh = Effect.gen(function* () {
+        const work = Effect.ignore(fetched);
+        const after = yield* Effect.serviceOption(AfterResponse);
+
+        if (Option.isSome(after)) return yield* after.value.keep(work);
+        yield* Effect.forkIn(work, scope, { startImmediately: true });
+      });
 
       const read = Effect.gen(function* () {
         const standing = yield* Ref.get(held);

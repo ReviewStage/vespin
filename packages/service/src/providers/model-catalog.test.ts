@@ -9,6 +9,7 @@ import {
 } from "@repo/wire/testing";
 import { Duration, Effect, Layer, Result } from "effect";
 import { TestClock } from "effect/testing";
+import { keptAfterResponse } from "../http/after-response.js";
 import { ModelCatalog, modelCatalogLayer, validateModelChoice } from "./model-catalog.js";
 
 /**
@@ -225,6 +226,35 @@ it.effect(
       }).pipe(Effect.provide(layer));
 
       assert.deepEqual(after, before);
+      assert.equal(http.requests.length, 2);
+    }),
+);
+
+it.effect(
+  "a refetch past the hour is handed past the answer where the runtime keeps such work, and the catalog it reads is answered from then on",
+  () =>
+    Effect.gen(function* () {
+      let refetched = false;
+
+      const { http, layer } = gateway(() =>
+        jsonResponse(refetched ? { object: "list", data: [] } : CATALOG),
+      );
+
+      const kept = keptAfterResponse();
+
+      const [stale, fresh] = yield* Effect.gen(function* () {
+        yield* readCatalog;
+        refetched = true;
+        yield* TestClock.adjust(Duration.hours(2));
+        const answered = yield* readCatalog;
+        assert.equal(http.requests.length, 1);
+        yield* kept.run;
+
+        return [answered, yield* readCatalog] as const;
+      }).pipe(Effect.provide(Layer.merge(layer, kept.layer)));
+
+      assert.ok(stale.some((model) => model.id === "anthropic/claude-opus-5.5"));
+      assert.deepEqual(fresh, []);
       assert.equal(http.requests.length, 2);
     }),
 );
