@@ -655,9 +655,10 @@ function AppWindow(): React.JSX.Element {
   );
 
   // What the window shows is handed off to the member's iPhone, as the phone's own screen for it would be (`handoff.ts`).
-  // Note that the task list is read as it stands at the draw, as the links at hand are.
+  // Note that the task list is walked as it stands at the draw, and only where a task is handed off, never copied whole,
+  // because the window draws on every press and a copy of every task the list holds took milliseconds of each.
   useHandoff(() => (accountGated ? [] : copyLink.linksAt(false).map(({ link }) => link)), {
-    tasks: taskListCollections.tasks.toArray,
+    tasks: { [Symbol.iterator]: () => taskListCollections.tasks.values() },
     workspaces: tasks.workspaces,
   });
 
