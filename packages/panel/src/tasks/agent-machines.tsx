@@ -300,7 +300,7 @@ export function useReachableMachines(agentId: string): ReachableMachines | undef
           {
             id: ALL_MACHINES_ROW,
             label: MACHINE_LIST_WORDS.all(ordered.length),
-            icon: <GLYPH.MORE aria-hidden="true" />,
+            icon: <GLYPH.HOST aria-hidden="true" />,
             end: (
               <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
                 {MACHINE_LIST_WORDS.more(folded)}

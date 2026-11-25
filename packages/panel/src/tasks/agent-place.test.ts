@@ -371,9 +371,11 @@ test("past three machines the rest fold into an All row whose submenu lists ever
   const rows = optionsOf("Where this agent works");
   act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[4]?.click());
   const all = optionsOf("It can also run commands on");
+
   const checked = document.querySelector(
     '[role="listbox"][aria-label="It can also run commands on"] [aria-selected="true"]',
   )?.textContent;
+
   act(() =>
     [
       ...document.querySelectorAll<HTMLElement>(
