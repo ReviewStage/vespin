@@ -10,7 +10,12 @@ import {
 import { CHIP_LOOK, CHIP_WIDTH, Chip, ChipName } from "../chip/chip.js";
 import { Fact, Facts } from "../facts/facts.js";
 import { PopoverPanel } from "../popover-panel/popover-panel.js";
-import { type FootRow, type MenuRow, SearchableMenu } from "../searchable-menu/searchable-menu.js";
+import {
+  type FootRow,
+  type MenuLastLine,
+  type MenuRow,
+  SearchableMenu,
+} from "../searchable-menu/searchable-menu.js";
 
 /**
  * chip-popover.tsx -- a toolbar chip whose press hangs a popover of what it names: a title, its facts as label-value rows, and where it offers one, a menu section to pick from.
@@ -55,7 +60,7 @@ export interface ChipPopoverFact {
 
 /** The menu section under the facts: its heading, its rows, the one chosen, what a pick does, and the rows pinned under them. */
 export interface ChipPopoverMenu {
-  /** The heading over the rows; none where they stand under no heading. */
+  /** The heading over the rows; none where each row stands under its own (`MenuRow.section`), or under none. */
   readonly heading?: string | undefined;
   readonly rows: readonly MenuRow[];
   /** The id of the row chosen now, drawn checked; none where no row is chosen. */
@@ -74,6 +79,8 @@ export interface ChipPopoverMenu {
   readonly foot?: readonly FootRow[] | undefined;
   /** How wide the menu stands; regular where none is named, wide where a pinned row's words and detail need the room. */
   readonly width?: PopoverWidth | undefined;
+  /** One muted line under the rows, pressed by nothing: what a pick of the rows does. */
+  readonly lastLine?: MenuLastLine | undefined;
 }
 
 /**
@@ -223,7 +230,7 @@ export function ChipPopover({
           }
           rows={menu.rows.map((row) => ({
             ...row,
-            section: menu.heading,
+            section: menu.heading ?? row.section,
             submenu: row.submenu === undefined ? undefined : closingOnPick(row.submenu, close),
           }))}
           value={menu.value}
@@ -231,6 +238,7 @@ export function ChipPopover({
           placeholder={menu.placeholder}
           noMatch={menu.noMatch}
           foot={menu.foot}
+          lastLine={menu.lastLine}
           align={POPOVER_ALIGN.START}
           width={menu.width ?? POPOVER_WIDTH.REGULAR}
           replayUnmasked

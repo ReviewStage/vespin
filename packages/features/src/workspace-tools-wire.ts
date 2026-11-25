@@ -12,6 +12,7 @@
  */
 
 import { Schema as EffectSchema } from "effect";
+import { DEVICE_PLATFORM } from "./device-agent-wire.js";
 
 /** Why the service would refuse the agent's `run_on_mac` now. */
 export const RUN_ON_MAC_OFF = {
@@ -49,11 +50,12 @@ const runOnMacStandingSchema = EffectSchema.Union([runOnMacOnSchema, runOnMacOff
 
 export type RunOnMacStanding = typeof runOnMacStandingSchema.Type;
 
-/** A machine the agent's default may be set to: its id and name, whose it is, and whether it listened for commands lately. */
+/** A machine the agent's default may be set to: its id and name, whose it is, its platform, none from a service older than it, and whether it listened for commands lately. */
 const defaultMachineSchema = EffectSchema.Struct({
   id: EffectSchema.String,
   name: EffectSchema.String,
   owner: runOnMacOwnerSchema,
+  platform: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(DEVICE_PLATFORM))),
   online: EffectSchema.Boolean,
 });
 

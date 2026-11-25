@@ -54,6 +54,7 @@ import {
   REVIEW_DECISION,
   REVIEW_STATE,
 } from "@repo/features/agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { CHAPTER_KIND, CHAPTER_RISK, LINE_REF_SIDE } from "@repo/features/pull-request-chapters";
@@ -1482,23 +1483,32 @@ const RUN_ON_MAC_HELD = {
       machine: { id: "device-ada-mini", name: "Ada's Mac mini" },
     },
     machines: [
-      { id: "device-ada-mini", name: "Ada's Mac mini", owner: MACHINE_OWNERS.ADA, online: true },
+      {
+        id: "device-ada-mini",
+        name: "Ada's Mac mini",
+        owner: MACHINE_OWNERS.ADA,
+        platform: DEVICE_PLATFORM.DARWIN,
+        online: true,
+      },
       {
         id: "device-ada-laptop",
         name: "Ada's MacBook Pro",
         owner: MACHINE_OWNERS.ADA,
+        platform: DEVICE_PLATFORM.DARWIN,
         online: false,
       },
       {
         id: "device-manuel-laptop",
         name: "Manuel's MacBook Pro",
         owner: MACHINE_OWNERS.MANUEL,
+        platform: DEVICE_PLATFORM.DARWIN,
         online: true,
       },
       {
         id: "device-manuel-studio",
         name: "Manuel's Mac Studio",
         owner: MACHINE_OWNERS.MANUEL,
+        platform: DEVICE_PLATFORM.DARWIN,
         online: false,
       },
     ],
