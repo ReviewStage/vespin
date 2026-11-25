@@ -1,0 +1,15 @@
+pinned to b3fdfaf8da
+== bundle PJjplus base b3fdfaf8da3
+  built b3fdfaf8da3 base app Vmain13.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+created iPhone 17 Pro 2FC4D5E9-CF42-419E-8059-FA9A346D807D (iOS 27.2)
+iphone17-light-new-task: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+iphone17-light-navigation: fails 2 shots 3   Assert that "Weekly digest email" is visible... FAILED
+iphone17-light-skeleton: fails 0 shots 7 
+!! no tab-bar shot from navigation
+deleted iPhone 17 Pro 2FC4D5E9-CF42-419E-8059-FA9A346D807D
+ipad27-light-navigation: fails 0 shots 8 
+ipad27-light-new-task: fails 1 shots 9 Assert that "Inbox" is visible... FAILED
