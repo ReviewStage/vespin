@@ -24,17 +24,20 @@ appId: dev.vespin.ios
 - assertVisible: "Share…"
 - waitForAnimationToEnd
 - takeScreenshot: keep-picture-menu
-# Note that a menu is put away by a swipe down on the dimmed page beside it,
-# as the system puts one away, never a tap: while a menu stands iOS hides the
-# page under it from the accessibility tree, so no named control can be
-# tapped, and a bare point can land on a link chip once the menu is gone,
-# which opens the link's sheet instead. The swipe starts at the window's
-# trailing edge, past where the menu stands.
+# Note that a menu is put away by a swipe down at a point, the one place this
+# flow acts on a position, because iOS takes everything under an open context
+# menu out of the accessibility tree, so no named control exists to tap; a
+# tap at a point could land on a link chip once the menu is gone, which opens
+# its sheet instead. The swipe starts at the window's trailing edge, past
+# where the menu stands, and the flow then asserts the menu gone and the page
+# as it stood, the item the menu opened on still there, so a swipe that ever
+# lands on something fails here.
 - swipe:
     start: "94%, 45%"
     end: "94%, 60%"
 - waitForAnimationToEnd
 - assertNotVisible: "Save to Photos"
+- assertVisible: "The invite page"
 # The message's own menu, opened on its words. Note that they are scrolled to
 # the window's middle first, since the picture's menu closing left them under
 # the bar, where the long press landed on it instead.
@@ -47,11 +50,13 @@ appId: dev.vespin.ios
 - assertVisible: "Copy message"
 - waitForAnimationToEnd
 - takeScreenshot: keep-message-menu
+# The message's menu is put away the same way, then asserted gone with the message still there.
 - swipe:
     start: "94%, 45%"
     end: "94%, 60%"
 - waitForAnimationToEnd
 - assertNotVisible: "Copy message"
+- assertVisible: ".*walked the invite flow.*"
 # The picture opens full screen in the app's viewer, whose share sheet copies
 # and saves it as the system's own wording names those acts.
 - tapOn: "The invite page"
