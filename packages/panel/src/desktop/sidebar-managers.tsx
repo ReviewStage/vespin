@@ -62,6 +62,7 @@ import { type ManagerSortControl, useManagerSort } from "../tasks/manager-sort.j
 import {
   type PinnedManager,
   pinnedManagersOf,
+  sameForManagers,
   useManagerAgents,
   useWorkspaceManagers,
 } from "../tasks/workspace-managers.js";
@@ -179,7 +180,7 @@ export function SidebarManagerRow({
 }): React.JSX.Element {
   const more = !useCoarsePointer();
   // Note that the row acts through the window's agents control as it stands, which moves as a task opens, so it reads it itself rather than the sidebar handing it on (`sidebar-open.tsx`).
-  const agents = useManagerAgents(useSidebarOpen((open) => open.tasks.agents));
+  const agents = useManagerAgents(useSidebarOpen((open) => open.tasks.agents, sameForManagers));
 
   return (
     <ManagerRow
