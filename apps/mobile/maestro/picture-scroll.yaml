@@ -2,7 +2,7 @@
 #
 # Note that a finger dragging a list stays over the content it started on,
 # so a scroll begun on a picture also ends on it; the picture's press must be
-# cancelled by the scroll, as every system control's is, rather than opening
+# canceled by the scroll, as every system control's is, rather than opening
 # it as the finger lifts.
 appId: dev.vespin.ios
 ---
