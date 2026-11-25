@@ -22,6 +22,12 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Left before it ships.*"
     timeout: 60000
+# Note that the chat draws before the composer's field does, each render held
+# by the rig, so the field is waited for before it is pressed.
+- extendedWaitUntil:
+    visible:
+      id: "composer-field"
+    timeout: 60000
 - tapOn:
     id: "composer-field"
 # The first words land and are drawn, so Send stands.
