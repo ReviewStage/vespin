@@ -7,7 +7,7 @@
  * sections and an agent's queue over IPC, and a pending save reaches React
  * in a microtask. Drawn from that order alone, the rows would stand back
  * where they were as the drop lets go, the copy landing on the old place,
- * and glide to their new places once the order arrived. So a list whose
+ * and jump to their new places once the order arrived. So a list whose
  * rows move draws through this: it keeps the order its last move asked for,
  * each row by its key, and draws it at once, in the draw the drop asks for
  * (`flushSync`), as a mutation's optimistic update does in React Query's
@@ -16,9 +16,9 @@
  * The order the list is handed settles it. One standing the moved rows as
  * the last move asked lets it go. So does one that is neither that nor the
  * order before any move it still waits on, a refusal put back or someone
- * else's move, which is then drawn as handed and the rows glide to it
- * (`ListMotion`). An order no write ever reaches, one nothing asked or one
- * lost, is let go after `HOLD_LIMIT_MS`. A row added to the list or taken
+ * else's move, which is then drawn as handed. An order no write ever
+ * reaches, one nothing asked or one lost, is let go after `HOLD_LIMIT_MS`.
+ * A row added to the list or taken
  * out of it while the order is kept is drawn where the order handed stands
  * it, the kept rows filling their places among the others in the order
  * kept, and an item handed anew under a kept key, a row renamed or newly
@@ -93,8 +93,8 @@ function keptKeys(listed: readonly string[], kept: KeptOrder): readonly string[]
  * last move asked for until the order handed says so. `keyOf` names an
  * item by what the list keys its row by, and is a function of the module's
  * rather than one made in the draw, so what is drawn is the same array from
- * one draw to the next while the order is, as a list reading it to keep
- * leaving rows (`useLeaving`) needs it to be.
+ * one draw to the next while the order is, and a list memoizing what it
+ * draws from it draws again only as the order changes.
  */
 export function useDroppedOrder<Item>(
   listed: readonly Item[],

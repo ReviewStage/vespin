@@ -1174,6 +1174,11 @@ function SidebarSection({
   );
 }
 
+/** A section's key, its id. */
+function sectionKeyOf(drawn: DrawnSection): string {
+  return drawn.section.id;
+}
+
 /**
  * The account's sections in the listed workspace, between Pinned and Tasks,
  * in the order dragged: a section's header is its handle, so a press on one
