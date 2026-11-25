@@ -32,12 +32,13 @@ import {
   TerminalSocket,
 } from "@repo/host/effect";
 import { armedWatchLayer, mirrorPlatform, nodeSqliteDriverLayer } from "@repo/host/node";
-import { ConfigProvider, Layer } from "effect";
+import { ConfigProvider, Effect, Layer } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { net } from "electron";
 import { computerUseHelperLayer } from "../native/computer-use";
 import { thisMacHostLayer } from "../native/this-mac-host";
 import type { DesktopConfig } from "./desktop-config";
+import { matchMirrorsInUtilityProcess } from "./mirror-matching";
 import { mainSentryTracer } from "./telemetry-service";
 
 interface HostSeamDependencies {
@@ -81,7 +82,15 @@ function hostSeamLayersFor(dependencies: HostSeamDependencies) {
     Layer.succeed(LoopbackListener, listenOnLoopbackOverNet),
     // Cloud agents' mirrors stand beside the local agents' clones under the member's own home, `~/.vespin`.
     // Each mirror's attempts are traced on main's Sentry.
-    Layer.succeed(MirrorPlatform, { ...mirrorPlatform(os.homedir()), tracer: mainSentryTracer }),
+    // Each mirror's match runs in a process of main's own (`mirror-matching.ts`).
+    Layer.effect(
+      MirrorPlatform,
+      Effect.map(matchMirrorsInUtilityProcess(config.resourceDirectory), (match) => ({
+        ...mirrorPlatform(os.homedir()),
+        tracer: mainSentryTracer,
+        match,
+      })),
+    ),
     thisMacHostLayer({
       stateRoot: config.stateRoot,
       appVersion: config.appVersion,
