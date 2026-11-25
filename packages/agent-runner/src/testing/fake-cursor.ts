@@ -37,6 +37,8 @@ export interface FakeRun {
   readonly checkpointBytes?: number;
   /** Why the SDK refuses to start the run, as it throws for a summary of an agent with no conversation yet. */
   readonly refused?: string;
+  /** Whether the SDK never answers the call that starts the run, as a summary Cursor never starts. */
+  readonly stalled?: boolean;
 }
 
 /** What the fake SDK was handed, in the order it was handed it. */
@@ -188,6 +190,8 @@ export function fakeCursor(
       if (going) throw new Error("Cursor cannot summarize while the agent runs.");
       record.summaries.push(played);
       const refused = runs[played]?.refused;
+
+      if (runs[played]?.stalled === true) return new Promise<never>(() => {});
 
       if (refused !== undefined) {
         played += 1;
