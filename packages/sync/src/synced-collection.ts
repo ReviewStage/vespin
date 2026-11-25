@@ -1,15 +1,35 @@
 /**
  * synced-collection.ts -- a TanStack DB collection only sync writes: taken whole by key, one sync transaction writing each row that moved and nothing for the rest, and each row read out as the very object until it moves.
  *
- * Note that it never truncates, because TanStack's truncate deletes every
- * row and inserts it again, moved or not. Every collection here lives for as
- * long as the scope that made it, never by TanStack's own timer: `gcTime` 0
- * turns that timer off and the scope's close cleans the collection up, so a
- * test's clock stays its own.
+ * Note that a collection held in memory never truncates, because TanStack's
+ * truncate deletes every row and inserts it again, moved or not. Every
+ * collection here lives for as long as the scope that made it, never by
+ * TanStack's own timer: `gcTime` 0 turns that timer off and the scope's
+ * close cleans the collection up, so a test's clock stays its own.
+ *
+ * A collection may be kept on disk (`KeepCollection`): its config handed to
+ * the store, which wraps it in TanStack DB's own persistence, so every sync
+ * transaction is written to the database as it commits and a live query
+ * loads from there the rows it asks for. Such a collection holds in memory
+ * only the rows taken or loaded since it was made, so a delete is written by
+ * key whether or not its row was taken here; it may be replaced whole
+ * (`replace`), a truncate and every row inserted in one transaction, which
+ * the persistence takes as the authoritative set and over which a live
+ * query hears only the rows that moved; and it keeps marks of its own
+ * (`mark`), each written in the transaction that moves it, as a read's
+ * cursor is. It closes only once every transaction it wrote is on disk, so
+ * the database it is kept in closes after the last of them.
  */
 
-import { type Collection, createCollection, type SyncConfig, type UtilsRecord } from "@tanstack/db";
-import { Effect, Equal, type Scope } from "effect";
+import {
+  type Collection,
+  type CollectionConfig,
+  createCollection,
+  type SyncConfig,
+  type UtilsRecord,
+  whenSyncAccepted,
+} from "@tanstack/db";
+import { Deferred, Effect, Equal, type Scope } from "effect";
 
 /** TanStack's own garbage collection turned off, so a collection, or a live query, lives as long as the scope that made it. */
 export const KEPT_BY_SCOPE = 0;
@@ -21,6 +41,25 @@ export type RowCollection<Row extends object, Key extends string> = Collection<
   UtilsRecord,
   never
 >;
+
+/** A collection's config as `syncedCollection` makes it, which a store wraps to keep its rows on disk. */
+export type RowCollectionConfig<Row extends object, Key extends string> = CollectionConfig<
+  Row,
+  Key,
+  never,
+  UtilsRecord
+>;
+
+/** How a store keeps a collection on disk: its config wrapped in the store's persistence, for as long as the collection stands. */
+export type KeepCollection = <Row extends object, Key extends string>(
+  config: RowCollectionConfig<Row, Key>,
+) => RowCollectionConfig<Row, Key>;
+
+/** A mark a kept collection holds beside its rows, by its name, written in the transaction that moves rows with it. */
+export interface CollectionMark {
+  readonly name: string;
+  readonly value: unknown;
+}
 
 /** One change to a row: a new row, a row replaced whole, or a row gone by its key. */
 type RowChange<Row extends object, Key extends string> =
@@ -100,68 +139,123 @@ export function scopedCollection<Made extends { cleanup(): Promise<void> }>(
 /** A collection only sync writes, and the door its rows come in by. */
 export interface SyncedCollection<Row extends object, Key extends string> {
   readonly collection: RowCollection<Row, Key>;
-  /** The rows the collection holds now, by key, as they were taken. */
+  /** Whether its rows are kept on disk, so it holds in memory only those taken or loaded since it was made. */
+  readonly kept: boolean;
+  /** The rows taken since the collection was made, by key, as they were taken. */
   readonly held: () => ReadonlyMap<Key, Row>;
   /**
    * Takes the rows `next` holds as the synced ones, whole: one sync
-   * transaction writing each that moved, or none where nothing did, answering
-   * the keys it wrote.
+   * transaction writing each that moved, and `mark` where one is given, or
+   * none where nothing did, answering the keys it wrote.
    */
-  readonly take: (next: ReadonlyMap<Key, Row>) => readonly Key[];
+  readonly take: (next: ReadonlyMap<Key, Row>, mark?: CollectionMark) => readonly Key[];
   /**
    * Takes `upserted` and lets `deleted`, none of them, go, leaving every other row as it
-   * is: one sync transaction writing each that moved, as `take` does, in
-   * work as large as the change rather than the collection.
+   * is: one sync transaction writing each that moved, and `mark` where one
+   * is given, as `take` does, in work as large as the change rather than the
+   * collection. A kept collection deletes each of `deleted` whether or not
+   * it was taken here, since its row may stand on disk alone.
    */
-  readonly patch: (upserted: ReadonlyMap<Key, Row>, deleted: readonly Key[]) => readonly Key[];
+  readonly patch: (
+    upserted: ReadonlyMap<Key, Row>,
+    deleted: readonly Key[],
+    mark?: CollectionMark,
+  ) => readonly Key[];
+  /**
+   * Replaces a kept collection's rows with `rows`, whole: one sync
+   * transaction truncating it, inserting each of them, and writing `mark`
+   * where one is given, so every row kept on disk that `rows` leaves out is
+   * gone; answering the keys of `rows` and of those taken before that it
+   * leaves out. A collection held in memory alone takes `rows` as `take`
+   * does, since there a truncate would draw every row again.
+   */
+  readonly replace: (rows: ReadonlyMap<Key, Row>, mark?: CollectionMark) => readonly Key[];
+  /** The mark `name` names as the collection last wrote it, kept on disk where the collection is; none where it wrote none. */
+  readonly mark: (name: string) => CollectionMark | undefined;
 }
 
-/** A collection of rows keyed by `getKey`, ready and empty until rows are first taken, for as long as the scope stands. */
+/**
+ * A collection of rows keyed by `getKey`, ready and empty until rows are
+ * first taken, for as long as the scope stands; kept on disk where `keep`
+ * is given, once the persistence hands it its sync.
+ */
 export function syncedCollection<Row extends object, Key extends string>(
   getKey: (row: Row) => Key,
+  keep?: KeepCollection,
 ): Effect.Effect<SyncedCollection<Row, Key>, never, Scope.Scope> {
   return Effect.gen(function* () {
     let writer: SyncWriter<Row, Key> | undefined;
     // Note that `held` is the collection's own, written in place by `patch`, so `take` holds a copy of the map it is handed.
     let held = new Map<Key, Row>();
+    const handedSync = yield* Deferred.make<void>();
+    /** Settles once every transaction a kept collection wrote is on disk. */
+    let durable: Promise<unknown> = Promise.resolve();
 
-    const collection = yield* scopedCollection(() =>
-      createCollection<Row, Key>({
-        getKey,
-        gcTime: KEPT_BY_SCOPE,
-        startSync: true,
-        sync: {
-          rowUpdateMode: "full",
-          sync: (handed) => {
-            writer = handed;
-            handed.begin();
-            handed.commit();
-            handed.markReady();
+    const config: RowCollectionConfig<Row, Key> = {
+      getKey,
+      gcTime: KEPT_BY_SCOPE,
+      startSync: true,
+      sync: {
+        rowUpdateMode: "full",
+        sync: (handed) => {
+          writer = handed;
+          handed.begin();
+          handed.commit();
+          handed.markReady();
+          Deferred.doneUnsafe(handedSync, Effect.void);
 
-            return () => {
-              writer = undefined;
-            };
-          },
+          return () => {
+            writer = undefined;
+          };
         },
-      }),
+      },
+    };
+
+    // Note that a kept collection is cleaned up only once its writes are on disk, because its database closes right after.
+    const collection = yield* Effect.acquireRelease(
+      Effect.sync(() => createCollection<Row, Key>(keep === undefined ? config : keep(config))),
+      (made) =>
+        Effect.promise(async () => {
+          await durable;
+          await made.cleanup();
+        }),
     );
 
-    /** Writes `changes` in one sync transaction, answering their keys; none where the collection is not synced yet or nothing moved. */
-    const written = (changes: readonly RowChange<Row, Key>[]): readonly Key[] | undefined => {
-      if (writer === undefined || changes.length === 0) return undefined;
+    // Note that a kept collection's persistence hands it its sync only once its database answered, so no row is taken before it can be written.
+    yield* Deferred.await(handedSync);
+
+    /** Writes `changes` in one sync transaction, after a truncate where `truncated`, with `mark`, answering their keys; none where the collection is not synced or nothing moves. */
+    const written = (
+      changes: readonly RowChange<Row, Key>[],
+      mark?: CollectionMark,
+      truncated = false,
+    ): readonly Key[] | undefined => {
+      if (writer === undefined || (changes.length === 0 && mark === undefined && !truncated)) {
+        return undefined;
+      }
+
       writer.begin();
 
+      if (truncated) writer.truncate();
+
       for (const change of changes) writer.write(change);
-      // Note that the receipt is never awaited, since a commit held behind a standing transaction lands only once that transaction settles.
-      writer.commit();
+
+      if (mark !== undefined) writer.metadata?.collection.set(mark.name, mark.value);
+      // Note that the receipt is never awaited here, since a commit held behind a standing transaction lands only once that transaction settles; a kept collection waits for it to be on disk only as it closes.
+      const receipt = writer.commit();
+
+      if (keep !== undefined && receipt !== true) {
+        const accepted = whenSyncAccepted(receipt);
+        durable = Promise.allSettled([durable, accepted]);
+      }
 
       return changes.map((change) =>
         change.type === "delete" ? change.key : getKey(change.value),
       );
     };
 
-    const take = (next: ReadonlyMap<Key, Row>): readonly Key[] => {
-      const keys = written(rowChanges(held, next));
+    const take = (next: ReadonlyMap<Key, Row>, mark?: CollectionMark): readonly Key[] => {
+      const keys = written(rowChanges(held, next), mark);
 
       if (keys === undefined) return [];
       held = new Map(next);
@@ -169,9 +263,26 @@ export function syncedCollection<Row extends object, Key extends string>(
       return keys;
     };
 
-    const patch = (upserted: ReadonlyMap<Key, Row>, deleted: readonly Key[]): readonly Key[] => {
+    const replace = (rows: ReadonlyMap<Key, Row>, mark?: CollectionMark): readonly Key[] => {
+      if (keep === undefined) return take(rows, mark);
+
+      const inserted = [...rows.values()].map((row) => ({ type: "insert" as const, value: row }));
+      const keys = written(inserted, mark, true);
+
+      if (keys === undefined) return [];
+      const left = [...held.keys()].filter((key) => !rows.has(key));
+      held = new Map(rows);
+
+      return [...keys, ...left];
+    };
+
+    const patch = (
+      upserted: ReadonlyMap<Key, Row>,
+      deleted: readonly Key[],
+      mark?: CollectionMark,
+    ): readonly Key[] => {
       const changes: RowChange<Row, Key>[] = deleted.flatMap((key) =>
-        held.has(key) ? [{ type: "delete" as const, key }] : [],
+        keep !== undefined || held.has(key) ? [{ type: "delete" as const, key }] : [],
       );
 
       for (const [key, row] of upserted) {
@@ -181,7 +292,7 @@ export function syncedCollection<Row extends object, Key extends string>(
         else if (!Equal.equals(was, row)) changes.push({ type: "update", value: row });
       }
 
-      const keys = written(changes);
+      const keys = written(changes, mark);
 
       if (keys === undefined) return [];
 
@@ -193,6 +304,18 @@ export function syncedCollection<Row extends object, Key extends string>(
       return keys;
     };
 
-    return { collection, held: () => held, take, patch };
+    return {
+      collection,
+      kept: keep !== undefined,
+      held: () => held,
+      take,
+      patch,
+      replace,
+      mark: (name) => {
+        const value = writer?.metadata?.collection.get(name);
+
+        return value === undefined ? undefined : { name, value };
+      },
+    };
   });
 }

@@ -423,6 +423,8 @@ export type AppInboxItems = {
  */
 export interface AppInboxRead extends AppHostRead<AppInboxItems> {
   keptHolders?: readonly TaskSummary[];
+  /** That the items stand in the pool's Inbox kind kept on disk, which a screen reads through live queries, so the rows told here are none (`inbox-rows.ts`). */
+  stored?: true;
 }
 
 /** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */

@@ -70,6 +70,7 @@ import {
   selectTaskListStatus,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { INBOX_ATTENTION, INBOX_REACH, INBOX_WHOLE, type InboxReach } from "@repo/host/inbox-rows";
 import { BUZZ, heldValue, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
@@ -135,18 +136,20 @@ type UseChosenInboxResult = {
  * them, the workspace chosen and how many the account has, which the Inbox
  * widget names (`inbox-widget/`).
  */
-export function useChosenInbox(): UseChosenInboxResult {
+export function useChosenInbox(reach: InboxReach = INBOX_ATTENTION): UseChosenInboxResult {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
 
-  const groups = useInboxGroupsIn(chosen?.id);
+  const groups = useInboxGroupsIn(chosen?.id, reach);
 
   return { groups: useSendsDrawn(groups), chosen, workspaces: workspaces.length };
 }
 
-/** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`). */
-function useInboxGroups(): readonly InboxGroup<InboxAnyHolder>[] {
-  return useChosenInbox().groups;
+/** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`), as far as `reach` reads. */
+function useInboxGroups(
+  reach: InboxReach = INBOX_ATTENTION,
+): readonly InboxGroup<InboxAnyHolder>[] {
+  return useChosenInbox(reach).groups;
 }
 
 /** The scope kept, or Open, the panel's own first scope, where none was ever chosen. */
@@ -193,7 +196,8 @@ export function useInboxListing(view: {
   readonly search: string;
   readonly chosen?: string | undefined;
 }): InboxListing {
-  const groups = useInboxGroups();
+  // Note that only All lists a settled thread the reader read, so only All reads every item kept.
+  const groups = useInboxGroups(view.show === INBOX_SHOW.ALL ? INBOX_WHOLE : INBOX_ATTENTION);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
   const { data: feed = INBOX_FEED.READING } = useQuery({
@@ -335,7 +339,14 @@ type UseInboxThreadResult = {
 export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   const acts = useHostActs();
 
-  const read = useInboxGroupsIn(undefined);
+  // Note that the thread is read whatever it is, beside what Open lists, so one long settled opens without reading every item kept.
+  const reach = useMemo(
+    (): InboxReach =>
+      id === undefined ? INBOX_ATTENTION : { kind: INBOX_REACH.ATTENTION, thread: id },
+    [id],
+  );
+
+  const read = useInboxGroupsIn(undefined, reach);
 
   const groups = useSendsDrawn(read);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
