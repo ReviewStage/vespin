@@ -81,6 +81,21 @@ interface NativePillFieldProps {
   readonly onListKey?:
     | ((event: NativeSyntheticEvent<{ readonly key: string }>) => void)
     | undefined;
+  /** What the `@` word the caret stands in offers, as the tree the field's native list draws (`OfferTree`, as JSON); none while nothing is offered. */
+  readonly offer?: string | undefined;
+  /** What a bare `@` offers, as the same kind of tree, which the field stands the moment an `@` is typed, before the words' own tree lands. */
+  readonly offerBare?: string | undefined;
+  /** A press in the native list: a row, by its group's place and its id, or the way back, with the words its tree answered. */
+  readonly onOffer?:
+    | ((
+        event: NativeSyntheticEvent<{
+          readonly kind: string;
+          readonly query: string;
+          readonly group?: number;
+          readonly id?: string;
+        }>,
+      ) => void)
+    | undefined;
 }
 
 /** The name the native module registers under, which its Swift names too. */

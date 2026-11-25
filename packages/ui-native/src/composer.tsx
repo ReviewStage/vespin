@@ -61,6 +61,7 @@ import {
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
+import type { FieldOffer } from "./offer-tree.js";
 import { PillField, type PillFieldHandle } from "./pill-field.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import {
@@ -191,6 +192,8 @@ export interface ComposerPills {
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
   /** The list offered over the field, whose rows a hardware keyboard's keys move through, which the composer hands its field itself (`useSuggestionKeysHost`). */
   readonly listKeys?: ListKeysField | undefined;
+  /** What an `@` offers, drawn by the field's own native list, opened on the keystroke with no round trip (`FieldOffer`); none where the composer offers it otherwise. */
+  readonly offer?: FieldOffer | undefined;
   /** The file each held picture's pill draws its thumbnail from, by the picture's name (`PillField`'s `thumbnails`). */
   readonly thumbnails?: ReadonlyMap<string, string> | undefined;
   /** Opens a held picture full screen, by its name, as a press on its pill asks. */
@@ -654,6 +657,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
     onAtWord: onPillAtWord,
     onFocusChange: onPillFocus,
     listKeys: pillListKeys,
+    offer: pillOffer,
   } = pills ?? {};
 
   // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
@@ -743,6 +747,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
             onAtWord={onPillAtWord}
             onFocusChange={onPillFocus}
             listKeys={pillListKeys}
+            offer={pillOffer}
             autoFocus={props.autoFocus === true}
             testID={testIds?.field ?? "composer-field"}
           />

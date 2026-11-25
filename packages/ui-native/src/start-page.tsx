@@ -45,9 +45,6 @@ import {
 import {
   type AttachedPicture,
   AttachedPictures,
-  type MentionCrumb,
-  type MentionSuggestionGroup,
-  MentionSuggestions,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
@@ -308,15 +305,6 @@ type StartPageProps = {
         readonly onPick: (name: string) => void;
       }
     | undefined;
-  /** What an `@` being typed offers, as the agent page's composer offers it; none while no `@` word ends the words. */
-  readonly mentions?:
-    | {
-        readonly groups: readonly MentionSuggestionGroup[];
-        readonly empty: string | undefined;
-        readonly crumb?: MentionCrumb | undefined;
-        readonly onPick: (group: string, id: string) => void;
-      }
-    | undefined;
   readonly pictures: readonly AttachedPicture[];
   readonly onDetach: (id: string) => void;
   /** Called with the file addresses of pictures dropped on the page, on an iPad; it takes no drop where none is given. */
@@ -394,7 +382,7 @@ function StartHead({ title, head }: Pick<StartPageProps, "title" | "head">) {
  * page. The page's own bar holds its close.
  */
 export function StartPage(props: StartPageProps) {
-  const { words, skills, mentions, pictures, onDetach, notes } = props;
+  const { words, skills, pictures, onDetach, notes } = props;
   const { add, chips, trailing, ready, onStart, onTalk } = props;
   // Note that a field of pills stands each picture attached in its words, so no row over the field repeats them.
   const shown = props.pills === undefined ? pictures : [];
@@ -424,18 +412,11 @@ export function StartPage(props: StartPageProps) {
           call={onTalk === undefined ? undefined : { kind: COMPOSER_CALL.TALK, onTalk }}
           head={head}
           offer={
-            skills !== undefined ? (
+            skills === undefined ? undefined : (
               <SkillSuggestions
                 skills={skills.skills}
                 empty={skills.empty}
                 onPick={skills.onPick}
-              />
-            ) : mentions === undefined ? undefined : (
-              <MentionSuggestions
-                groups={mentions.groups}
-                empty={mentions.empty}
-                crumb={mentions.crumb}
-                onPick={mentions.onPick}
               />
             )
           }

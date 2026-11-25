@@ -86,7 +86,6 @@ import {
   type Glyph,
   glyphSymbol,
   ListSection,
-  MentionSuggestions,
   MenuRow,
   type MenuRowAct,
   managerChatItems,
@@ -494,20 +493,13 @@ function AgentComposerBar({
     call,
     head,
     above: dock ?? undefined,
-    // Note that what a `/` or an `@` offers stands in the system's popover over the composer, so the row of capsules and the transcript never move as the list comes, goes or filters.
+    // Note that what a `/` offers stands in the system's popover over the composer, so the row of capsules and the transcript never move as the list comes, goes or filters; what an `@` offers, the field's own native list draws (`pills`).
     offer:
-      composer.skills !== undefined ? (
+      composer.skills === undefined ? undefined : (
         <SkillSuggestions
           skills={composer.skills.skills}
           empty={composer.skills.empty}
           onPick={composer.skills.pick}
-        />
-      ) : composer.mentions === undefined ? undefined : (
-        <MentionSuggestions
-          groups={composer.mentions.groups}
-          empty={composer.mentions.empty}
-          crumb={composer.mentions.crumb}
-          onPick={composer.mentions.pick}
         />
       ),
     saving: composer.saving,

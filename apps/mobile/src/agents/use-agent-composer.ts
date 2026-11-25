@@ -101,7 +101,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { type HeldPicture, useAttachedPictures } from "../use-attached-pictures.js";
-import { type MentionsOffered, useMentionOffer } from "../use-mention-offer.js";
+import { useComposerMentions } from "../use-mention-offer.js";
+import { useMentionPills } from "../use-mention-pills.js";
 import { usePillField } from "../use-pill-field.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
@@ -243,9 +244,7 @@ export interface AgentComposer {
   readonly note: string | undefined;
   /** The skills a `/` being typed offers; none while no `/` word ends the words. */
   readonly skills: SkillsOffered | undefined;
-  /** The agents, tasks and people an `@` being typed offers; none while no `@` word ends the words, or while a `/` offers its skills. */
-  readonly mentions: MentionsOffered | undefined;
-  /** The field's pills: its door, which a pick of the `@` offer puts the mention's pill through, and the `@` word its caret stands in. */
+  /** The field's pills: its door, which a pick of the `@` offer puts the mention's pill through, the `@` word its caret stands in, and what the `@` offers, which its native list draws. */
   readonly pills: ComposerPills;
   /** Lays one of the member's sent lines' words in the field to send again in its place, the field's own kept aside, and has it take the keyboard. */
   readonly editMessage: (line: MessageEdit) => void;
@@ -406,10 +405,13 @@ export function useAgentComposer(
   // The field, which draws each mention and each file attached as its pill.
   const pillField = usePillField(words, setWords, pictures);
 
-  const mentions = useMentionOffer(
+  const mentions = useComposerMentions(
     { workspaceId: agent?.workspaceId, taskId, agentId },
     pillField.mentions,
   );
+
+  // Note that what an `@` offers is drawn by the field's own native list, which stands it on the keystroke, and none while a `/` offers its skills.
+  const pills = useMentionPills(pillField.pills, mentions, skills === undefined);
 
   // Whether the screen still stands, since a refusal may land after it was left.
   const mounted = useRef(true);
@@ -996,8 +998,7 @@ export function useAgentComposer(
           },
     note,
     skills,
-    mentions: skills === undefined ? mentions : undefined,
-    pills: pillField.pills,
+    pills,
     editMessage,
     reply,
     cancelMessageEdit: rewriting === undefined ? undefined : () => giveBackRewritten(rewriting),

@@ -15,7 +15,6 @@ import {
   Composer,
   GLYPH,
   GlassDock,
-  MentionSuggestions,
   managerThreadItems,
   NO_TOGGLES,
   openCuts,
@@ -83,23 +82,13 @@ function ThreadComposer({
   const said = useNewestNote([composer.note, dictated.note, note]);
 
   const head =
-    composer.skills === undefined &&
-    composer.mentions === undefined &&
-    said === undefined ? undefined : (
+    composer.skills === undefined && said === undefined ? undefined : (
       <>
         {composer.skills === undefined ? null : (
           <SkillSuggestions
             skills={composer.skills.skills}
             empty={composer.skills.empty}
             onPick={composer.skills.pick}
-          />
-        )}
-        {composer.mentions === undefined ? null : (
-          <MentionSuggestions
-            groups={composer.mentions.groups}
-            empty={composer.mentions.empty}
-            crumb={composer.mentions.crumb}
-            onPick={composer.mentions.pick}
           />
         )}
         {said === undefined ? null : <AskNote words={said} />}

@@ -13,6 +13,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceText } from "@repo/features/time-format";
 import { CALL_KIND, madeCallLine } from "@repo/features/turn-rows";
 import { identityLetter } from "@repo/features/workspace-tile";
+import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { managerFaceAsset } from "./manager-face-look.js";
@@ -261,7 +262,7 @@ type PreviewGlyph = { readonly asset?: string | undefined; readonly system?: str
  * the working mark's grid; an agent's tile; a person's face, their photo or
  * their letter on their hue; or a hairline.
  */
-type PreviewNode =
+export type PreviewNode =
   | {
       readonly kind: typeof PREVIEW_NODE.COLUMN | typeof PREVIEW_NODE.ROW;
       readonly spacing: number;
@@ -676,4 +677,42 @@ export function previewTree(preview: RowPreview, look: PreviewLook): PreviewTree
     ground: look.colors.GROUND,
     root: column(SPACE.ROW, nodes),
   };
+}
+
+/**
+ * The mark a suggestion's row leads with, as the native list draws it: the
+ * entity's own mark, as the chip a pick writes leads with it (a person's
+ * face, an agent's harness tile, a Manager's face, a status ring or an
+ * ask's glyph in its tone), else its kind's glyph in the muted ink, each at
+ * the scaled glyph size, as `SuggestionMark` draws it.
+ */
+export function suggestionMark(
+  glyph: Glyph,
+  mark: ChipMark | undefined,
+  look: PreviewLook,
+): PreviewNode {
+  const size = MARK_SIZE.GLYPH * look.scale;
+
+  switch (mark?.kind) {
+    case CHIP_MARK.FACE:
+      return face(mark.name, mark.picture, size, look);
+    case CHIP_MARK.HARNESS:
+      return agentTile(mark.harness, size, look);
+    case CHIP_MARK.MANAGER:
+      return agentTile(undefined, size, look, mark.face);
+    case CHIP_MARK.GLYPH:
+      return {
+        kind: PREVIEW_NODE.GLYPH,
+        ...previewGlyph(mark.glyph),
+        ink: look.tone(mark.tone),
+        size,
+      };
+    default:
+      return {
+        kind: PREVIEW_NODE.GLYPH,
+        ...previewGlyph(glyph),
+        ink: look.colors.TEXT_MUTED,
+        size,
+      };
+  }
 }

@@ -273,6 +273,14 @@ export {
   type ModelOption,
 } from "./model-choice-sheet.js";
 
+export {
+  type FieldOffer,
+  type OfferPress,
+  type OfferSource,
+  offerPressed,
+  useOfferTrees,
+} from "./offer-tree.js";
+
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
 export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
