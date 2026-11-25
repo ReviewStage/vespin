@@ -1536,18 +1536,28 @@ export function rowPicks(
 
 /**
  * The inbox cards' drafts of a plan, or of the agents with none where it is
- * null. Note that the list answered is the very one it was until one of its
- * drafts changes, so the inbox reading it draws again only then, never on a
- * word typed in another box.
+ * null, without their words, as the pane around their boxes reads them
+ * (`useDraftBeside`). Note that the list answered is the very one it was
+ * until a draft comes, goes, or changes beside its words, so the inbox
+ * reading it draws again only then, never on a word typed: each draft's
+ * words are those it held as the list last changed, and a box reads its own
+ * where it stands (`useKeptDraft`).
  */
-export function useInboxDrafts(taskId: string | null): readonly KeptDraft<InboxPlace>[] {
+export function useInboxDraftsBeside(taskId: string | null): readonly KeptDraft<InboxPlace>[] {
   const last = useRef<readonly KeptDraft<InboxPlace>[]>([]);
 
   return useSelector(draftsStore, (drafts) => {
     const found = drafts.filter(isInbox).filter((kept) => kept.place.taskId === taskId);
 
     const same =
-      found.length === last.current.length && found.every((kept, at) => kept === last.current[at]);
+      found.length === last.current.length &&
+      found.every((kept, at) => {
+        const was = last.current[at];
+
+        return (
+          was !== undefined && Equal.equals(kept.place, was.place) && sameBesideWords(kept, was)
+        );
+      });
 
     if (!same) last.current = found;
 
