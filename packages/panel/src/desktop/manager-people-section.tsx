@@ -15,7 +15,6 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   type MenuRow as PickedRow,
   SETTINGS_SKELETON_CONTROL,
-  SettingsRowActSlot,
   type SettingsRowSkeletonLayout,
   SettingsRowsSkeleton,
   SettingsRowValue,
@@ -48,7 +47,8 @@ import { appStateQuery, selectAccount } from "../use-app-state.js";
  * face, their name, You on the reader's own, Owner on the Manager's owner,
  * and a line saying whether the Manager may use their machines. A row's ⋯
  * holds Remove, or Unfollow on the reader's own; the owner's holds nothing,
- * since they always follow it with their machines on. Add person, at the
+ * since they always follow it with their machines on, so their Owner ends at
+ * the row's edge as any row without a ⋯ does. Add person, at the
  * head, lists the workspace's members who do not follow yet, the reader as
  * You among them, as every people menu lists them (`memberRows`). Under the
  * list stands the reader's own switch, Let agents here use my machines,
@@ -208,8 +208,6 @@ function FollowerRow({
         control: follower.owner ? (
           <SettingsRowValue>{managerFollowerRole(follower)}</SettingsRowValue>
         ) : null,
-        // Note that the owner's row keeps the ⋯'s room, so its Owner lines up with the rows beside it.
-        end: follower.owner ? <SettingsRowActSlot /> : null,
       }}
     />
   );
