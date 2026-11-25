@@ -74,6 +74,7 @@ import {
   HOST_LIVE,
   IDLE_TASKS_VIEW,
   type ListedTasksView,
+  listedApart,
   NO_TASK_LIST,
   TASK_CALL_FAILURE,
   TASKS_READ,
@@ -174,7 +175,6 @@ import {
   keptOfTask,
   PageVersionKey,
 } from "./kept-content.js";
-import { drawnAs } from "./list-moves.js";
 import { type HeldAnswers, heldSlice, rowWriteOn } from "./live-collection.js";
 import {
   confirmWrite,
@@ -922,17 +922,29 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    */
   let screenAsks = 0;
 
+  /**
+   * Tells the view, where it says anything new, sharing every part that did
+   * not move with the one told before, so a view that says nothing new is
+   * that one. Note that only the document's part is walked for that
+   * (`keepIdentity`), and the task list's lists are told as they were drawn,
+   * because each is already a drawing whose unchanged rows are the very
+   * objects drawn before (`task-list-tasks.ts`), logged with the rows that
+   * moved (`list-moves.ts`): walking them again found nothing `===` did not,
+   * at a cost of the whole account on every draw, and of opening every
+   * summary against its neighbor where a row came or moved mid-list.
+   */
   function publish(): void {
-    const drawn = view;
-    // Note that the view keeps the identity of what it shares with the one
-    // last told, so a view that says nothing new is that one, and what is
-    // told shares every part that did not move with what was told before.
-    view = keepIdentity(published, view);
+    const told = listedApart(published).tasks;
+    const { tasks: standing, lists } = listedApart(view);
+    const kept = keepIdentity(told, standing);
 
-    // Note that a list laid anew over the one told is the drawing it was laid from, so its delivery is told what moved in it rather than walking it (`list-moves.ts`).
-    for (const part of TASK_LIST_PARTS) drawnAs(view[part], drawn[part]);
+    if (kept === told && TASK_LIST_PARTS.every((part) => view[part] === published[part])) {
+      view = published;
 
-    if (view === published) return;
+      return;
+    }
+
+    view = { ...kept, ...lists };
     published = view;
     kernel.emit(GATEWAY_EVENT.TASKS_CHANGED, carried(view));
   }
