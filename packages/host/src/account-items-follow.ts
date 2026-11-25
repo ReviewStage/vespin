@@ -553,8 +553,16 @@ export function followAccountItems(
       yield* followTakingRows(
         {
           poll: (_after, _cursor, sync, page) => dependencies.seal(userId, sync, page),
-          // Note that an item a page carries unchanged since the read's `since` comes as its stamp alone, which keeps it held.
-          keysOf: (rows) => [...rows.stamps, ...rows.items].map((row) => row.id),
+          pages: {
+            // Note that an item a page carries unchanged since the read's `since` comes as its stamp alone, which keeps it held.
+            keysOf: (rows) => [...rows.stamps, ...rows.items].map((row) => row.id),
+            join: (held, page) => ({
+              stamps: [...held.stamps, ...page.stamps],
+              items: [...held.items, ...page.items],
+              messages: [...held.messages, ...page.messages],
+              files: [...held.files, ...page.files],
+            }),
+          },
           onTxWait: (handed) => {
             wait = handed;
           },

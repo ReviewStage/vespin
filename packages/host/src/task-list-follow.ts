@@ -86,7 +86,14 @@ function followRows(
   return followTakingRows<"tasks" | "agents", TaskListLiveRows, TaskListLiveAnswer>(
     {
       poll: (_after, _cursor, sync, page) => dependencies.live(sync, page),
-      keysOf: (rows) => [...rows.tasks, ...rows.agents].map((row) => row.id),
+      pages: {
+        keysOf: (rows) => [...rows.tasks, ...rows.agents].map((row) => row.id),
+        join: (held, page) => ({
+          ...page,
+          tasks: [...held.tasks, ...page.tasks],
+          agents: [...held.agents, ...page.agents],
+        }),
+      },
       behind,
       ...(onTxWait === undefined ? undefined : { onTxWait }),
     },
