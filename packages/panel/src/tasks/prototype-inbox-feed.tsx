@@ -885,7 +885,7 @@ function ThreadCard({
       padding={CARD_PADDING.FLUSH}
       data-prototype-feed-card={thread.id}
     >
-      <div className="flex min-w-0 items-center gap-icon-gap px-card-head-inline pt-card-head-block">
+      <div className="relative z-2 flex min-w-0 items-center gap-icon-gap px-card-head-inline pt-card-head-block">
         <UnreadMark unread={unread} />
         <HolderGlyph place={thread.place} />
         <span className="flex min-w-0 flex-1 items-baseline gap-icon-gap">
@@ -895,7 +895,7 @@ function ThreadCard({
         <RemindButton onAt={doors.onRemind} />
         {unread ? <MarkReadButton onPress={doors.onRead} /> : null}
       </div>
-      <div className="flex min-w-0 flex-col gap-tight-gap px-card-head-inline pb-card-head-block">
+      <div className="flex min-w-0 flex-col gap-tight-gap px-card-head-inline pt-ui-8 pb-card-head-block">
         <ThreadBody
           key={`${thread.id}-${shownFrom}`}
           standing={standing}
