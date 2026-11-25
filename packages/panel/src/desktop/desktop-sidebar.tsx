@@ -1953,12 +1953,13 @@ interface FloatingSidebar extends HoverPane {
   readonly inSight: boolean;
 }
 
-/** Where a sidebar opened from away takes the keyboard: the row or glyph it marks, else Search, the first of its places, else, on a phone, which draws no places, the first of its rows. */
+/** Where a sidebar opened from away takes the keyboard: the row or glyph it marks, else Search, the first of its places, else, on a phone, which draws no places, the first of its rows, or the first of its bar's controls where its list holds no row to press. */
 function sidebarFocus(sidebar: HTMLElement): HTMLElement | null {
   return (
     sidebar.querySelector<HTMLElement>('[aria-current="page"]') ??
     sidebar.querySelector<HTMLElement>(".sidebar-places > button") ??
-    sidebar.querySelector<HTMLElement>(".sidebar-section-body button")
+    sidebar.querySelector<HTMLElement>(".sidebar-section-body button") ??
+    sidebar.querySelector<HTMLElement>("button")
   );
 }
 
