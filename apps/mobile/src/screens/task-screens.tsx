@@ -1830,8 +1830,14 @@ function assigneeChoices(
   ];
 }
 
-/** The task's head: its name, its chips, each opening its menu, who follows it, and who created it and when. */
-function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
+/** The task's head: its name, its chips, each opening its menu, who follows it, and who created it and when; telling `onUnderBar` once it has scrolled under the bar. */
+function OverviewHead({
+  overview,
+  onUnderBar,
+}: {
+  readonly overview: TaskOverview;
+  readonly onUnderBar?: ((under: boolean) => void) | undefined;
+}) {
   const now = useMinute();
   const { task } = overview;
   const pictureOf = useMemberPictures();
@@ -1846,6 +1852,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   return (
     <TaskHead
       name={task.name}
+      onUnderBar={onUnderBar}
       status={task.status}
       priority={task.priority}
       assignee={
@@ -3263,9 +3270,12 @@ function OverviewPage({
   asking,
   entered,
   chrome,
+  onHeadUnderBar,
 }: {
   /** What the page holds of its description edited in place, its section editing it where a press on its words or Edit starts; none edits it in the sheet. */
   readonly chrome?: InlineChrome | undefined;
+  /** Told whether the task's head has scrolled under the bar, so a pushed page's bar names the task then; none where the bar keeps its path. */
+  readonly onHeadUnderBar?: ((under: boolean) => void) | undefined;
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
   /** Archive and Permanently delete on its agents' rows, each asked first by the row pressed (`useAgentRowAsk`). */
@@ -3320,7 +3330,7 @@ function OverviewPage({
   return (
     <RowList look={LIST_LOOK.DETAIL} onSelect={open} onRefresh={onRefresh}>
       <ListSection>
-        <OverviewHead overview={overview} />
+        <OverviewHead overview={overview} onUnderBar={onHeadUnderBar} />
       </ListSection>
       <OverviewRelations overview={overview} />
       <OverviewAgents overview={overview} asking={asking} />
@@ -3671,6 +3681,8 @@ export function TaskScreen() {
 
   // What the page holds of its description edited in place, its section editing it, so its Done stands in the bar and what an `@` offers docks over the keyboard.
   const chrome = useInlineChrome();
+  // Note that the bar names the task's path while its heading stands in sight, and the task itself once the heading scrolls under the bar, as the web's bar takes the task's name.
+  const [headUnder, setHeadUnder] = useState(false);
 
   // Note that the menu's Edit description edits it in place too, the caret at its start, but for a description too long to, which it opens in the sheet.
   const inPlace =
@@ -3712,8 +3724,12 @@ export function TaskScreen() {
           title:
             overview === undefined
               ? ""
-              : taskPath(overview.task, overview.workspace).join(PATH_PART),
-          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+              : headUnder
+                ? overview.task.name
+                : taskPath(overview.task, overview.workspace).join(PATH_PART),
+          headerTitleStyle: headUnder
+            ? { ...BAR_TITLE.SCREEN, color: colors.TEXT }
+            : { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
       {/* Note that while the description is edited in place, Done stands in the bar in ⋯'s place, as Notes and Notion stand it. */}
@@ -3741,6 +3757,7 @@ export function TaskScreen() {
               asking={asking}
               entered={stood}
               chrome={chrome}
+              onHeadUnderBar={setHeadUnder}
             />
           ) : read && !found.seeking ? (
             <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />

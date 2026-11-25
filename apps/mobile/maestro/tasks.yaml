@@ -292,6 +292,16 @@ env:
       ELEMENT: "Goal"
       BESIDE: ${FLOATING_TABS}
 - takeScreenshot: task-description
+# Once the task's heading has scrolled under a pushed page's bar, the bar
+# names the task rather than its path, as the web's bar takes the task's
+# name. Note that an iPad's detail column keeps its path.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - assertVisible:
+          id: "Teammate invitations"
+      - takeScreenshot: task-bar-named
 # A page in its Pages opens whole on the app's own page screen, its ⋯
 # offering Open in browser, and back leads to the Overview. A tap off the
 # menu closes it.
@@ -311,7 +321,7 @@ env:
           file: subflows/scroll-to.yaml
           env:
             ELEMENT: "Invite funnel"
-            BELOW: ".*/relay › AL-42"
+            BELOW: ".*/relay › AL-42|Teammate invitations"
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}

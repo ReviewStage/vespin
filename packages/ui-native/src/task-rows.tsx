@@ -26,6 +26,7 @@ import {
   listRowInsets,
   listRowSeparator,
   monospacedDigit,
+  onGeometryChange,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
@@ -49,7 +50,7 @@ import {
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard } from "@repo/features/time-format";
-import type { ReactElement, ReactNode } from "react";
+import { type ReactElement, type ReactNode, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import type { RowQuestion } from "./asks.js";
@@ -187,17 +188,47 @@ type TaskHeadProps = {
   readonly following?: PageFollowing | undefined;
   /** What a press on each of its chips offers, where the reader may change that field. */
   readonly menus?: StandingMenus | undefined;
+  /** Told whether the head has scrolled wholly under the bar, each time that turns, so the bar may name the task once its heading is out of sight; none where nothing listens. */
+  readonly onUnderBar?: ((under: boolean) => void) | undefined;
 };
+
+/**
+ * Tells `onUnderBar` whether the head stands wholly above where it first
+ * stood, at the list's top under the bar, each time that turns. Note that
+ * the first frame SwiftUI reports is taken as that place, since the page
+ * opens at its top, and a pull down only moves the head below it.
+ */
+function useUnderBar(onUnderBar: ((under: boolean) => void) | undefined) {
+  // Note that where the head first stood and whether it is under the bar are kept across frames in one holder of the hook's own, since only a turn is told.
+  const [seen] = useState<{ rest: number | undefined; under: boolean }>(() => ({
+    rest: undefined,
+    under: false,
+  }));
+
+  if (onUnderBar === undefined) return [];
+
+  return [
+    onGeometryChange(({ y, height }) => {
+      seen.rest ??= y;
+      const now = y + height <= seen.rest;
+
+      if (now === seen.under) return;
+      seen.under = now;
+      onUnderBar(now);
+    }),
+  ];
+}
 
 /**
  * A task's head as the first row of its page: its name as the page's
  * heading, its status, priority and assignee as small chips, each opening
  * the menu of its field's values where it carries one, who follows
  * it as a chip that opens them, and who created it. Its path stands in the
- * bar above.
+ * bar above until it scrolls under the bar (`onUnderBar`).
  */
 export function TaskHead(props: TaskHeadProps) {
   const { name, status, priority, assignee, createdBy, following, menus } = props;
+  const watched = useUnderBar(props.onUnderBar);
 
   return (
     <VStack
@@ -207,6 +238,7 @@ export function TaskHead(props: TaskHeadProps) {
         listRowSeparator("hidden"),
         listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        ...watched,
       ]}
     >
       <PageHeader
