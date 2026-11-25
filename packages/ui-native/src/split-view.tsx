@@ -7,7 +7,6 @@ import {
   Image,
   Menu,
   NavigationSplitView,
-  NavigationStack,
   Section,
   Button as SwiftUIButton,
   Text,
@@ -673,10 +672,9 @@ export function ListColumn({
   const colors = useColors();
 
   return (
+    // Probe (not for merge as is): no SwiftUI navigation stack of its own, so its title and toolbar may reach the split column's own UIKit bar, one row as Mail's list stands, if the hosting controller hands its navigation item up.
     <Host style={{ flex: 1 }} modifiers={[tint(colors.TEXT)]}>
-      <NavigationStack>
-        <Column view={view} bar={bar} sidebar system />
-      </NavigationStack>
+      <Column view={view} bar={bar} sidebar system />
     </Host>
   );
 }
