@@ -64,6 +64,7 @@ import {
   ComposerFoot,
   GLYPH,
   MentionSuggestions,
+  OpenAsk,
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
@@ -378,7 +379,8 @@ const GOT_IT_SEND = { label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK } as co
  * thread's agent, which turns the next send into a new thread's first
  * message, its line asking to start one. Its head, inside the same glass
  * over the field, holds the open ask's controls (`AskControls`), as the
- * panel's box holds them as its body, stepping aside while an `@` offers its
+ * panel's box holds them as its body, with the panel's × at their top end,
+ * which resolves the thread without an answer (`OpenAsk`), stepping aside while an `@` offers its
  * list so the list stands alone over the field, and under them what the
  * last send, the picker, or a bound said, right over the words it is about.
  * The head scrolls in place past a share of the window (`BarHead`), so a
@@ -457,7 +459,12 @@ export function ThreadComposer({
   const head =
     !asks && mentions === undefined && said === undefined ? undefined : (
       <>
-        {asks ? <AskControls item={item} answer={answer} doors={doors} /> : null}
+        {asks ? (
+          // Note that the open ask wears the panel's × at its top end, which resolves the thread without an answer, through the same close as the ⋯'s Resolve.
+          <OpenAsk resolve={{ label: RESOLVE, onPress: answer.resolve }}>
+            <AskControls item={item} answer={answer} doors={doors} />
+          </OpenAsk>
+        ) : null}
         {mentions === undefined ? null : (
           <MentionSuggestions
             groups={mentions.groups}

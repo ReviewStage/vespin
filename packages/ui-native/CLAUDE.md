@@ -445,7 +445,9 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
 - **An ask's rows** stand in the composer's head over its field, on its
   glass with no card of their own, as the panel's box holds them, each
   pick or press attaching its answer to the reply and taking it off pressed
-  again, the box's Send sending it, as the panel's controls clear (`ChoiceList`, a
+  again, the box's Send sending it, as the panel's controls clear, and an
+  × at their top end, muted, which resolves the thread without an answer,
+  as the panel's question wears it (`OpenAsk`) (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
   checks one, a "Recommended" tag and a detail line; `AskActs`, an ask's
   presses at the system's regular size, outlined in the ink, or their

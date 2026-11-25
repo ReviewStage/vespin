@@ -41,16 +41,19 @@ import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { FIELD_WORDS, SELECTION_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode, useRef } from "react";
-import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
+import { useAccessibilitySize, useAnnounced, useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What a flow finds an ask's note by. */
 const ASK_NOTE_ID = "ask-note";
+
+/** What a flow finds an open ask's × by. */
+const RESOLVE_ASK_ID = "resolve-ask";
 
 /** A row's inner margins, as a decide option's: none at its sides, since the composer's head already stands its rows in as far as the field's words, so the two line up. */
 export const ASK_ROW_PADDING = { horizontal: 0, vertical: SPACE.ROW + 1 } as const;
@@ -145,6 +148,59 @@ function AskRows({
         </Fragment>
       ))}
     </VStack>
+  );
+}
+
+/** The press that turns an open ask down without an answer: its words, heard by VoiceOver, and what it does. */
+export type AskResolve = {
+  readonly label: string;
+  readonly onPress: () => void;
+};
+
+/**
+ * An open ask's controls with its ×, at their top end, which resolves the
+ * thread without an answer, as the panel's question wears it
+ * (`inbox-pane.tsx`'s `QuestionResolve`), so Send only ever sends an
+ * answer: the × in the muted ink on a press of Apple's least target, heard
+ * by its words (Resolve), taking no room from the options' own lines.
+ */
+export function OpenAsk({
+  resolve,
+  children,
+}: {
+  readonly resolve: AskResolve;
+  readonly children: ReactNode;
+}) {
+  const colors = useColors();
+  const mark = useScaledSize(MARK_SIZE.GLYPH);
+
+  return (
+    <HStack alignment="top" spacing={SPACE.TIGHT}>
+      <VStack
+        alignment="leading"
+        modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}
+      >
+        {children}
+      </VStack>
+      <SwiftUIButton
+        onPress={resolve.onPress}
+        modifiers={[
+          buttonStyle("plain"),
+          accessibilityLabel(resolve.label),
+          accessibilityIdentifier(RESOLVE_ASK_ID),
+        ]}
+      >
+        <Image
+          {...glyphImage(GLYPH.RESOLVE_ASK)}
+          size={mark}
+          color={colors.TEXT_MUTED}
+          modifiers={[
+            frame({ width: PRESS_SIZE, height: PRESS_SIZE }),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          ]}
+        />
+      </SwiftUIButton>
+    </HStack>
   );
 }
 

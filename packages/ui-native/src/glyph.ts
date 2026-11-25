@@ -198,6 +198,8 @@ export const GLYPH = {
   ATTACH: lucide(LUCIDE_SYMBOL.PAPERCLIP),
   OPTIONS: lucide(LUCIDE_SYMBOL.SLIDERS_HORIZONTAL),
   REMOVE: lucide(LUCIDE_SYMBOL.X),
+  /** An open ask turned down without an answer, the panel's × at its question's top end. */
+  RESOLVE_ASK: lucide(LUCIDE_SYMBOL.X),
   DELETE: lucide(LUCIDE_SYMBOL.TRASH),
   RENAME: lucide(LUCIDE_SYMBOL.PENCIL),
   // Note that the panel's smile, Lucide's FaceSlightlySmiling, is among every glyph the catalog holds rather than the table the app names, so it is minted from that list.
