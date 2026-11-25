@@ -76,6 +76,9 @@ catalogs:
     '@sentry/profiling-node':
       specifier: 11.7.0
       version: 11.7.0
+    '@tailwindcss/node':
+      specifier: 4.3.5
+      version: 4.3.5
     '@tailwindcss/vite':
       specifier: 4.3.5
       version: 4.3.5
@@ -1047,9 +1050,6 @@ importers:
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(redis@6.2.1)
-      '@repo/brand':
-        specifier: workspace:*
-        version: link:../brand
       '@repo/features':
         specifier: workspace:*
         version: link:../features
@@ -1840,6 +1840,12 @@ importers:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(vitest@5.1.1)
+      '@fontsource-variable/geist':
+        specifier: 'catalog:'
+        version: 5.3.0
+      '@tailwindcss/node':
+        specifier: 'catalog:'
+        version: 4.3.5
       '@types/hast':
         specifier: 'catalog:'
         version: 3.0.5
@@ -1858,6 +1864,9 @@ importers:
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@2.4.0)
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.3.5
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

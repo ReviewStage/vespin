@@ -122,7 +122,8 @@
     },
     "packages/ui": {
       "entry": ["scripts/*.ts"],
-      "project": ["src/**", "scripts/**"]
+      "project": ["src/**", "scripts/**"],
+      "ignoreDependencies": ["tailwindcss"]
     },
     "packages/settings": {
       "entry": ["scripts/*.ts"],

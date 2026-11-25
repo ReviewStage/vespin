@@ -45,6 +45,7 @@ catalog:
   "@sentry/esbuild-plugin": 5.4.0
   "@sentry/node": 11.7.0
   "@sentry/profiling-node": 11.7.0
+  "@tailwindcss/node": 4.3.5
   "@tailwindcss/vite": 4.3.5
   "@tanstack/db": 1.0.0-rc.1.5
   "@tanstack/react-db": 1.0.0-rc.1.5
