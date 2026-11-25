@@ -18,9 +18,6 @@ import {
   SettingsSection,
   type UsageMeterRow,
 } from "@repo/ui";
-import codexOneX from "../../../../packages/panel/marks/codex-16.png";
-import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
-import codexThreeX from "../../../../packages/panel/marks/codex-48.png";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -55,12 +52,7 @@ const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
 
 /** Codex's mark, which each of its plans' rows and its card's header lead with. */
-const CODEX = (
-  <HarnessMark
-    provider={MODEL_PROVIDER.OPENAI}
-    codexArt={{ oneX: codexOneX, twoX: codexTwoX, threeX: codexThreeX }}
-  />
-);
+const CODEX = <HarnessMark provider={MODEL_PROVIDER.OPENAI} />;
 
 const PLANS: readonly Plan[] = [
   {

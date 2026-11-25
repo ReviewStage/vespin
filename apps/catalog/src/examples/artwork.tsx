@@ -16,9 +16,6 @@ import {
   ProductMark,
   ProviderMark,
 } from "@repo/ui";
-import codexOneX from "../../../../packages/panel/marks/codex-16.png";
-import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
-import codexThreeX from "../../../../packages/panel/marks/codex-48.png";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -28,9 +25,6 @@ import { CatalogSection } from "../section";
  * mark, and what fires an automation, each drawn from the package itself
  * rather than from a copy.
  */
-
-/** Codex's picture as the desktop serves it, from the panel's own files. */
-const CODEX_ART = { oneX: codexOneX, twoX: codexTwoX, threeX: codexThreeX };
 
 /** One of each thing that fires an automation or a run, as its row's glyph draws it. Synthetic. */
 const FIRINGS = [
@@ -105,7 +99,7 @@ function Artwork(): React.JSX.Element {
           {Object.values(MODEL_PROVIDER).map((provider) => (
             <li key={provider} className="catalog-tile">
               <span className="catalog-glyph">
-                <HarnessMark provider={provider} codexArt={CODEX_ART} />
+                <HarnessMark provider={provider} />
               </span>
               <span className="catalog-tile-name">{harnessNameOf(provider)}</span>
             </li>
