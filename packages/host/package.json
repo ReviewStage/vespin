@@ -26,6 +26,7 @@
     "./host-operator": "./src/host-operator.js",
     "./appearance": "./src/appearance.js",
     "./build-commit": "./src/build-commit.js",
+    "./main-stall": "./src/main-stall.js",
     "./sentry-environment": "./src/sentry-environment.js",
     "./sentry-line": "./src/sentry-line.js",
     "./service-layer": "./src/service-layer.js",
