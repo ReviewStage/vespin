@@ -11,9 +11,17 @@
  * workspaces the local copy kept by answering their read not found, so a
  * launch draws its kept list as a phone that was away does. A read the
  * seed answered nothing for is not found, as the stub answers every other.
+ *
+ * A launch from an empty store (`busy-account.sh --empty`) reads the task
+ * list whole as well. To a build that reads pages, the Inbox and the task
+ * list whole come a page at a time (`PAGED`); a page, and the task list
+ * whole in one answer, wait a round trip and the time their bytes take at
+ * the rate the Inbox whole was seen to arrive at (`BUSY_RATE`), so the two
+ * ways are timed on one network.
  */
 
 import { HOSTED_SERVICE_PATH } from "@repo/features";
+import { HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { LIVE_POLL, LIVE_POLL_URL } from "@repo/features/live-wire";
 import type { WireRecord, WireValue } from "@repo/wire";
 import { File, Paths } from "expo-file-system";
@@ -32,6 +40,15 @@ const BUSY_WAIT = {
   WAITS_FIRST: 400,
   WAITS_AGAIN: 30_000,
 } as const;
+
+/** The first hosted API version whose builds read a whole answer in pages, as the service's (`packages/service/src/live/live-pages.ts`). */
+const PAGED = { API_VERSION: 10 } as const;
+
+/** The network an answer the service was not seen to answer crosses: a round trip, and the bytes a millisecond the Inbox whole arrived at (4.8 MB in 3 s). */
+const BUSY_RATE = { ROUND_TRIP: 250, BYTES_A_MS: 1600 } as const;
+
+/** A page of a whole answer as the seed numbers it: digits alone, so no page reaches past its folder. */
+const PAGE_NUMBER = /^\d{1,4}$/;
 
 /** The seed's answers, beside the local copy under the host's state root. */
 const ANSWERS = `${hostStateRootIn(Paths.document.uri)}/busy-account`;
@@ -97,6 +114,28 @@ async function answered(name: string, askedAt: number, ms: number): Promise<Resp
     : new Response(text, { status: 200, headers: { "content-type": "application/json" } });
 }
 
+/** The seed's file `name` as the answer, no sooner than its bytes cross `BUSY_RATE`'s network after `askedAt`; not found where it wrote none. */
+async function answeredAtRate(name: string, askedAt: number): Promise<Response> {
+  const text = await answerFile(name)?.text();
+
+  if (text === undefined) return new Response(null, { status: 404 });
+  await wait(
+    BUSY_RATE.ROUND_TRIP + text.length / BUSY_RATE.BYTES_A_MS - (performance.now() - askedAt),
+  );
+
+  return new Response(text, { status: 200, headers: { "content-type": "application/json" } });
+}
+
+/** Whether this build reads a whole answer in pages: it reads them from the version it is built at. */
+const READS_PAGES = HOSTED_API_VERSION >= PAGED.API_VERSION;
+
+/** The page `page` of the whole answer the seed wrote under `folder`, or its first where none is named; not found for one of no number. */
+function pageAnswer(folder: string, page: string | null, askedAt: number): Promise<Response> {
+  return page === null || PAGE_NUMBER.test(page)
+    ? answeredAtRate(`${folder}/${page ?? "0"}.json`, askedAt)
+    : Promise.resolve(new Response(null, { status: 404 }));
+}
+
 /** One part of an answer past the sync id `past`, its rows as the wire writes them. */
 function movedPart(name: string, rows: readonly unknown[], past: number) {
   const sync = { past: String(past), next: String(past + 1) };
@@ -112,16 +151,22 @@ function movedPart(name: string, rows: readonly unknown[], past: number) {
   };
 }
 
-/** The task list past `past`: the kept list's delta past its kept id, and after that one of the newest agents said something, a second after the ask. */
-async function tasksAnswer(sync: string | null, askedAt: number): Promise<Response> {
-  const past = Number(sync);
+/** The task list past `past`: the kept list's delta past its kept id, whole where it asks past no id of the seed's, as a launch from an empty store does, in pages to a build that reads them, and after that one of the newest agents said something, a second after the ask. */
+async function tasksAnswer(url: URL, askedAt: number): Promise<Response> {
+  const past = Number(url.searchParams.get(LIVE_POLL.SYNC));
+  const page = url.searchParams.get(LIVE_POLL.PAGE);
+
+  if (page !== null && READS_PAGES) return pageAnswer("tasks-pages", page, askedAt);
 
   if (past === BUSY_SYNC.TASKS_KEPT)
     return answered("tasks-delta.json", askedAt, BUSY_WAIT.TASKS_DELTA);
 
-  // Note that a read asked whole is one a launch with the list kept never asks, so it answers not found, as the rest of the service does.
-  if (!Number.isInteger(past) || past < BUSY_SYNC.TASKS_KEPT)
-    return new Response(null, { status: 404 });
+  if (!Number.isInteger(past) || past < BUSY_SYNC.TASKS_KEPT) {
+    return READS_PAGES
+      ? pageAnswer("tasks-pages", null, askedAt)
+      : answeredAtRate("tasks-whole.json", askedAt);
+  }
+
   await wait(BUSY_WAIT.AGENT_EVERY);
   // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build, and each row in it was decoded by the build's own schemas as it was written.
   const agents = (await answerOnce("moving-agents.json")) as readonly WireRecord[];
@@ -146,13 +191,16 @@ async function tasksAnswer(sync: string | null, askedAt: number): Promise<Respon
   });
 }
 
-/** The Inbox past `past`: whole where it asks past no id of the seed's, and after that one thread took a new message, five seconds after the ask. */
-async function inboxAnswer(sync: string | null, askedAt: number): Promise<Response> {
-  const past = Number(sync);
+/** The Inbox past `past`: whole where it asks past no id of the seed's, in pages to a build that reads them, and after that one thread took a new message, five seconds after the ask. */
+async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
+  const past = Number(url.searchParams.get(LIVE_POLL.SYNC));
+  const page = url.searchParams.get(LIVE_POLL.PAGE);
+  const whole = page !== null || !Number.isInteger(past) || past < BUSY_SYNC.INBOX;
 
-  if (!Number.isInteger(past) || past < BUSY_SYNC.INBOX) {
-    return answered("inbox-whole.json", askedAt, BUSY_WAIT.INBOX_WHOLE);
-  }
+  // Note that a build reads pages from the version it is built at, so the stub of a build that reads none answers it in one.
+  if (whole && READS_PAGES) return pageAnswer("inbox-pages", page, askedAt);
+
+  if (whole) return answered("inbox-whole.json", askedAt, BUSY_WAIT.INBOX_WHOLE);
 
   await wait(BUSY_WAIT.INBOX_EVERY);
   // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build, and each row in it was decoded by the build's own schemas as it was written.
@@ -218,15 +266,14 @@ function taskRowsAnswer(id: string | null, askedAt: number): Promise<Response> {
  */
 export function busyAccountAnswer(url: URL): Promise<Response> | undefined {
   const askedAt = performance.now();
-  const sync = url.searchParams.get(LIVE_POLL.SYNC);
 
   switch (url.pathname) {
     case HOSTED_SERVICE_PATH.LIVE_WORKSPACES:
       return Promise.resolve(new Response(null, { status: 404 }));
     case HOSTED_SERVICE_PATH.LIVE_INBOX_ITEMS:
-      return inboxAnswer(sync, askedAt);
+      return inboxAnswer(url, askedAt);
     case HOSTED_SERVICE_PATH.LIVE_TASKS:
-      return tasksAnswer(sync, askedAt);
+      return tasksAnswer(url, askedAt);
     case HOSTED_SERVICE_PATH.LIVE_INBOX:
       return whatWaitsAnswer(askedAt);
     case HOSTED_SERVICE_PATH.LIVE_TASK_ROWS:
