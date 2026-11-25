@@ -2269,6 +2269,8 @@ test("a section moved twice before the first move is handed back stands where th
   };
 
   await moveDown("Launch");
+  // Note that the first move is drawn before the second is pressed, as a window draws it before the next key, since the test's client hands its writes to React on a timer of its own.
+  await vi.waitFor(() => assert.deepEqual(sectionTitles(sidebar), ["Someday", "Launch", "Stars"]));
   await moveDown("Someday");
 
   const written = asked.writes.reduce(

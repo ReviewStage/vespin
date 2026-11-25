@@ -195,9 +195,6 @@ export function drawAhead(
   ahead.patches = [...ahead.patches, patch];
   const now = appStateIn(client);
 
-  // Note that a document another wrote since, as a test's tree writes one, is taken as main's, so a patch settling later lays the rest over it.
-  if (now !== undefined && now !== ahead.written) ahead.handed = now;
-
   if (now !== undefined) ahead.written = client.setQueryData(appStateQuery.queryKey, patch(now));
 
   // Note that a settled patch is taken off main's document only where nothing but this layer wrote the document since, as a test's tree does, the document compared being the one the client keeps, which shares what did not move with the one before (`shareAppState`).
