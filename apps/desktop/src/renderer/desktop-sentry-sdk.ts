@@ -32,6 +32,7 @@ import {
   getActiveSpan,
   getClient,
   getCurrentScope,
+  getGlobalScope,
   getTraceData,
   init,
   logger,
@@ -39,6 +40,7 @@ import {
   startInactiveSpan,
   startNewTrace,
   startSpan,
+  uiProfiler,
   withStreamedSpan,
 } from "@sentry/electron/renderer";
 import { Predicate } from "effect";
@@ -95,6 +97,19 @@ const SLOW_INTERACTIONS: PerformanceObserverInit & { readonly durationThreshold:
   durationThreshold: 40,
   buffered: true,
 };
+
+/** How long a window goes without input before its profiler stops, in milliseconds. */
+const PROFILE_IDLE_MS = 10_000;
+
+/** The input that says a window is in use. */
+const IN_USE_EVENTS = ["pointerdown", "keydown", "wheel"] as const;
+
+/**
+ * The thread a window's profile samples, as Sentry's browser profiler names
+ * it on every span it starts under it, so Sentry finds the span's stacks in
+ * the profile.
+ */
+const PROFILED_THREAD = { "thread.id": "0", "thread.name": "main" } as const;
 
 /** What a span reads of the long frames it overlapped, from its start and end in the epoch's milliseconds. */
 interface LongFrames {
@@ -187,13 +202,74 @@ function observeLongFrames(): LongFrames {
   };
 }
 
+/** The profiler this window profiles under, once it has run; none where the window is not profiled. */
+function profilerIdNow(): string | undefined {
+  const profile = getGlobalScope().getScopeData().contexts.profile;
+  const id = profile?.profiler_id;
+
+  return Predicate.isString(id) ? id : undefined;
+}
+
+/**
+ * Profiles the window from now, and from each input on, until it has gone
+ * `PROFILE_IDLE_MS` with none, so a click or a key, and all it sets off, is
+ * profiled and a window left open is not; answers the profiler's id once it
+ * has run. Note that its listener runs before any of the panel's, in the
+ * window's capture, so an interaction's own handlers are profiled, and that
+ * it only notes the time, one timer standing at most however fast input
+ * comes. A window Sentry does not profile starts nothing.
+ */
+function profileWhileInUse(): () => string | undefined {
+  let lastInput = 0;
+  let profiling = false;
+  let profilerId: string | undefined;
+
+  const stopOnceIdle = () => {
+    const idleFor = performance.now() - lastInput;
+
+    if (idleFor < PROFILE_IDLE_MS) {
+      setTimeout(stopOnceIdle, PROFILE_IDLE_MS - idleFor);
+
+      return;
+    }
+
+    profiling = false;
+    uiProfiler.stopProfiler();
+  };
+
+  const inUse = () => {
+    lastInput = performance.now();
+
+    if (profiling) return;
+
+    profiling = true;
+    uiProfiler.startProfiler();
+    profilerId ??= profilerIdNow();
+    setTimeout(stopOnceIdle, PROFILE_IDLE_MS);
+  };
+
+  for (const type of IN_USE_EVENTS) {
+    window.addEventListener(type, inUse, { capture: true, passive: true });
+  }
+
+  inUse();
+
+  return () => profilerId;
+}
+
 /**
  * Sums onto each interaction's span (INP) as it ends the long frames it
- * overlapped, before the SDK sends it. Note that browser tracing records a
- * long frame only under the span active as it is reported, which after the
- * page load is none, so an interaction carried none of its own.
+ * overlapped, and names the profile it ran under, before the SDK sends it.
+ * Note that browser tracing records a long frame only under the span active
+ * as it is reported, which after the page load is none, so an interaction
+ * carried none of its own; and that the span is made only once the window
+ * hides, when its profiler has most often stopped, so the profiler that ran
+ * as the interaction did is named here rather than read off the scope.
  */
-function followInteractionsWithLongFrames(longFrames: LongFrames): void {
+function followInteractionsWithLongFrames(
+  longFrames: LongFrames,
+  profilerId: () => string | undefined,
+): void {
   getClient()?.on("spanEnd", (span) => {
     const { attributes, start_timestamp, end_timestamp } = spanToJSON(span);
     const op = attributes[SENTRY_OP_ATTRIBUTE];
@@ -203,6 +279,12 @@ function followInteractionsWithLongFrames(longFrames: LongFrames): void {
     if (end_timestamp === undefined) return;
 
     span.setAttributes(longFrames.ofInteraction(start_timestamp * 1000, end_timestamp * 1000));
+
+    const profiler = profilerId();
+
+    if (profiler !== undefined) {
+      span.setAttributes({ "sentry.profiler_id": profiler, ...PROFILED_THREAD });
+    }
   });
 }
 
@@ -239,11 +321,13 @@ function followInteractionsWithLongFrames(longFrames: LongFrames): void {
  * longest split between script and render, and the script that ran longest,
  * by its invoker, function name, and bundle path.
  *
- * The window profiles while a kept trace's root span is open
- * (`SENTRY_PROFILING`): a page load, a send pressed, and whatever else
- * `sentryTracesSampler` keeps, as main serves every document with the
- * profiling policy. A profile is the panel's own stack frames, function names
- * and bundle paths, and none of a person's words.
+ * The window profiles while it is in use (`profileWhileInUse`,
+ * `SENTRY_PROFILING`): from its start and from each click, key, or scroll,
+ * until it has gone ten seconds without one, so every span it times then,
+ * and every interaction's, names the profile its stacks are in. Main's SDK
+ * serves every document with the profiling policy the browser's profiler
+ * needs (`enableRendererProfiling`). A profile is the panel's own stack
+ * frames, function names and bundle paths, and none of a person's words.
  */
 export function initDesktopSentry(): DesktopSentry {
   init({
@@ -264,7 +348,7 @@ export function initDesktopSentry(): DesktopSentry {
   });
 
   const longFrames = observeLongFrames();
-  followInteractionsWithLongFrames(longFrames);
+  followInteractionsWithLongFrames(longFrames, profileWhileInUse());
 
   return {
     reportBlankWindow: (error, why) => {

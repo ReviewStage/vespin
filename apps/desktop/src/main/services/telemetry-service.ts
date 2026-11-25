@@ -67,11 +67,11 @@ let usageData: boolean | undefined;
  * Main reports on behalf of every renderer, so what leaves goes through the
  * same token filters as the preload's and the renderers' own.
  *
- * Every window profiles while a kept trace's root span is open
- * (`SENTRY_PROFILING`), so a send and a page load carry the stack frames that
- * ran under them: main serves every document with
- * `Document-Policy: js-profiling`, which the browser's profiler needs
- * (`renderer/desktop-sentry-sdk.ts`). Main itself is not profiled, because
+ * Every window profiles while it is in use (`SENTRY_PROFILING`,
+ * `renderer/desktop-sentry-sdk.ts`), so the spans it times and its
+ * interactions carry the stack frames that ran under them: the SDK serves
+ * every document with `Document-Policy: js-profiling`, which the browser's
+ * profiler needs (`enableRendererProfiling`). Main itself is not profiled, because
  * Sentry ships its Node profiler's addon for Node's ABIs and not Electron's.
  *
  * Nothing leaves while the device does not share usage data: main's offline
