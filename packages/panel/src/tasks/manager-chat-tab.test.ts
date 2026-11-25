@@ -120,18 +120,21 @@ function ChatBesideThread({
   agent,
   control,
   opened,
+  alone,
 }: {
   agent: AgentSummary;
   control: ReturnType<typeof agentsControl>;
   /** The thread the panel already shows as the page opens, as a tab left open there does. */
   opened: string | undefined;
+  /** Whether the thread stands with no chat beside it, as beside the Manager's Overview. */
+  alone: boolean;
 }): ReactNode {
   const [open, setOpen] = useState<string | undefined>(opened);
 
   return createElement(
     ThreadDoorsProvider,
     { value: { open, onOpen: setOpen } },
-    createElement(ManagerChatTab, { agent, control, shown: true }),
+    alone ? null : createElement(ManagerChatTab, { agent, control, shown: true }),
     open === undefined
       ? null
       : createElement(
@@ -150,6 +153,10 @@ async function drawChat(
     readonly sending?: readonly ManagerChatSending[];
     readonly transcript?: readonly AgentTranscriptMessage[];
     readonly opened?: string;
+    /** Where the page older than `rows` stands, where the chat's start is not read. */
+    readonly before?: number;
+    /** Whether the thread opened stands with no chat beside it. */
+    readonly alone?: boolean;
   } = {},
 ) {
   const manager = held.manager ?? MANAGER;
@@ -161,6 +168,8 @@ async function drawChat(
   const threads: (string | null)[] = [];
   // Each message's key, and whether it went as a retry under it.
   const keys: (readonly [string, boolean])[] = [];
+  // Each older page asked for, by the `seq` it stands before.
+  const older: number[] = [];
 
   fakeActs({
     act: (request) => {
@@ -171,6 +180,8 @@ async function drawChat(
         carried.push((request.payload.attachments ?? []).map((file) => file.name));
       }
 
+      if (request.kind === ACT_KIND.AGENTS_MANAGER_CHAT_OLDER) older.push(request.payload.before);
+
       return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." });
     },
   });
@@ -180,7 +191,13 @@ async function drawChat(
     {
       tasks: IDLE_TASKS_VIEW,
       [LIVE_READ.MANAGER_CHAT]: {
-        [manager.id]: { rows: { messages: rows.toReversed(), sending: held.sending ?? [] } },
+        [manager.id]: {
+          rows: {
+            messages: rows.toReversed(),
+            sending: held.sending ?? [],
+            ...(held.before === undefined ? undefined : { before: held.before }),
+          },
+        },
       },
     },
   );
@@ -218,6 +235,7 @@ async function drawChat(
             agent: manager,
             control,
             opened: held.opened,
+            alone: held.alone === true,
           }),
         }),
       ),
@@ -228,7 +246,7 @@ async function drawChat(
   });
   await settleQueries();
 
-  return { container, sent, carried, answered, threads, keys };
+  return { container, sent, carried, answered, threads, keys, older };
 }
 
 test("each message is a row under its sender's name where their run opens, a thread's replies stand under its message as a count that opens the thread beside the chat, and the thread's box replies in it", async () => {
@@ -448,6 +466,27 @@ test.each([
     ]);
   },
 );
+
+test("a thread whose message is older than the pages read asks for the page it may stand in, and one that did not answer says so with Retry, which asks again", async () => {
+  // Note that the thread stands beside the Manager's Overview, so no chat beside it reads older pages of its own.
+  const { container, older } = await drawChat([row("later", 7, "Shipped.")], {
+    opened: "first",
+    before: 7,
+    alone: true,
+  });
+
+  const thread =
+    container.querySelector("[data-thread-tab]") ?? assert.fail("the thread's tab stands");
+
+  const retry =
+    [...thread.querySelectorAll("button")].find((button) => button.textContent === "Retry") ??
+    assert.fail("the page that did not answer offers Retry");
+
+  act(() => retry.click());
+  await settleQueries();
+
+  assert.deepEqual(older, [7, 7]);
+});
 
 test("Reply on a message in a thread quotes it into the thread's box, and the chat's own box holds nothing of it", async () => {
   const { container } = await drawChat(

@@ -1246,7 +1246,11 @@ export function ManagerThreadTab({
   const chatBox = useManagerChatBox({ agent, control, shown, onOpenTarget, cards, thread: root });
   const { read, chat, composer, box, pictures, marks, view, drawLine, doors } = chatBox;
   const { mutate: retryChat } = useMutation(managerChatRetryMutation());
-  const { mutate: readOlder } = useMutation(actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_OLDER));
+
+  const { mutate: readOlder, isError: olderFailed } = useMutation(
+    actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_OLDER),
+  );
+
   const tab = useRef<HTMLElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const rowsHandle = useRef<VirtualRowsHandle>(null);
@@ -1262,6 +1266,9 @@ export function ManagerThreadTab({
   useEffect(() => {
     if (lacksRoot && before !== undefined) readOlder({ agentId: agent.id, before });
   }, [lacksRoot, before, readOlder, agent.id]);
+
+  /** Asks the page the root may stand in again, where the last ask did not answer. */
+  const onOlder = before === undefined ? undefined : () => readOlder({ agentId: agent.id, before });
 
   const rows = useMemo(
     () =>
@@ -1302,7 +1309,12 @@ export function ManagerThreadTab({
       onRetry={() => retryChat({ agentId: agent.id })}
       centered
     />
-  ) : chat === undefined || (rootLine === undefined && chat.before !== undefined) ? (
+  ) : lacksRoot && olderFailed && onOlder !== undefined ? (
+    // Note that an older page that did not answer says so with Retry, since nothing else would ask it again.
+    <Conversation list={list}>
+      <OlderReadFailed onRetry={onOlder} />
+    </Conversation>
+  ) : chat === undefined || lacksRoot ? (
     <TranscriptSkeleton />
   ) : rootLine === undefined ? (
     // A root gone from the chat, as a rewind drops one, takes its thread with it.
