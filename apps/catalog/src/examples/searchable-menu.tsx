@@ -30,9 +30,6 @@ import {
 } from "@repo/ui";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useEffect, useId, useRef, useState } from "react";
-import codexOneX from "../../../../packages/panel/marks/codex-16.png";
-import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
-import codexThreeX from "../../../../packages/panel/marks/codex-48.png";
 import { CATALOG_FAILURE } from "../catalog-failure";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -390,12 +387,9 @@ function Embedded(): React.JSX.Element {
   );
 }
 
-/** The Codex mark's files, as the desktop's build copies them beside the panel. */
-const CODEX_ART = { oneX: codexOneX, twoX: codexTwoX, threeX: codexThreeX };
-
 /** The mark of the harness each synthetic model runs in. */
 const CLAUDE = <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />;
-const CODEX = <HarnessMark provider={MODEL_PROVIDER.OPENAI} codexArt={CODEX_ART} />;
+const CODEX = <HarnessMark provider={MODEL_PROVIDER.OPENAI} />;
 
 /** What a model nothing of the reader's pays for says at its row's end. */
 const CONNECT_CLAUDE = "Connect Claude";
