@@ -175,6 +175,8 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   deleteFails: boolean;
   /** Whether a read of one task outside the list, or of its relations, goes unanswered, as a service that did not answer leaves it. */
   taskRowsFail: boolean;
+  /** What a read of the task outside the list each id names waits on before it answers, so a test can see what is drawn while it is out; none waits where its id has none. */
+  taskRowsAnswered: Map<string, Effect.Effect<void>>;
   /** What a delete's answer waits on, so a test can see what is drawn while it is out. */
   deleteAnswered: Effect.Effect<void>;
   /** Whether a relation's change is refused, as a service that did not answer refuses it. */
@@ -675,6 +677,7 @@ export function fakeService(tasks: Task[]): FakeService {
     liveSince: undefined,
     deleteFails: false,
     taskRowsFail: false,
+    taskRowsAnswered: new Map(),
     deleteAnswered: Effect.void,
     relationFails: false,
     relationAnswered: Effect.void,
@@ -1315,7 +1318,10 @@ export function fakeService(tasks: Task[]): FakeService {
             agents: [],
           });
 
-          return Effect.succeed(rows.first());
+          return Effect.as(
+            service.taskRowsAnswered.get(params.id ?? "") ?? Effect.void,
+            rows.first(),
+          );
         }
 
         // A task's relations, its sub-tasks, its parent, and its blocks among the fake's tasks, none with agents.
