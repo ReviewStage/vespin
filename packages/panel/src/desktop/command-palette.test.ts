@@ -84,6 +84,7 @@ import { openTaskMenu } from "../testing/task-menu.js";
 import {
   agentsControl,
   listedAgent,
+  newTaskControl,
   taskAgentsOf,
   tasksControl,
 } from "../testing/tasks-control.js";
@@ -174,6 +175,8 @@ function openPalette(
   at = "/app",
   /** Where the Inbox item its address names stands, as the door that chose it held it. */
   held?: InboxChoice,
+  /** The stage's room, a phone's drawing the palette as Search's page. */
+  room: ShellRoom = SHELL_ROOM.WIDE,
 ): Sent {
   const sent: Sent = { tabs: [], views: [] };
   const host = document.createElement("div");
@@ -205,7 +208,8 @@ function openPalette(
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_TREE]: (payload) => readFiles("taskId" in payload ? payload.taskId : ""),
   });
-  act(() => root.render(withQueryClient(listed === undefined ? palette : listed.provide(palette))));
+  const roomed = createElement(ShellRoomContext.Provider, { value: room }, palette);
+  act(() => root.render(withQueryClient(listed === undefined ? roomed : listed.provide(roomed))));
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
   });
@@ -772,6 +776,53 @@ test("the field asks to search Vespin under All, and the kind under its filter",
   assert.equal(field().placeholder, "Search inbox");
   chooseFilter("Commands");
   assert.equal(field().placeholder, "Search commands");
+});
+
+/** A window offering Automations and Settings, the places a phone's Search page goes to. */
+function OffersGoTo(): null {
+  useAppCommand(APP_COMMAND.AUTOMATIONS, () => undefined);
+  useAppCommand(APP_COMMAND.SETTINGS, () => undefined);
+
+  return null;
+}
+
+test("on a phone the palette is Search's page: Go to before anything is typed, a kind cut to its best few ends its heading in Show all, which chooses it, and the last row starts a task on the words", async () => {
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() => root.render(withQueryClient(createElement(OffersGoTo))));
+  const started: string[] = [];
+
+  const tasks = tasksControl({
+    newTask: newTaskControl({ onOpen: () => started.push("New task") }),
+  });
+
+  openPalette(
+    tasks,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    SHELL_ROOM.NARROW,
+  );
+  assert.deepEqual(rows(), ["Automations", "Settings"]);
+
+  type("e");
+
+  const showAll = document.querySelector<HTMLButtonElement>(
+    'button[aria-label="Show all settings"]',
+  );
+
+  assert.ok(showAll, "Settings found more than its best few");
+  assert.equal(rows().at(-1), "Start a task: “e”");
+
+  act(() => showAll.click());
+  assert.equal(chosenFilter(), "Settings");
+
+  press("Start a task: “e”");
+  await settle();
+  assert.deepEqual(started, ["New task"]);
 });
 
 /** The window behind the palette, running the menu bar's commands, its Back and Forward recorded. */

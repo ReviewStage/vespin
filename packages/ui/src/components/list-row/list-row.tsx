@@ -660,6 +660,7 @@ export function ListRow({
   titleReplayMasked = false,
   description,
   descriptionReplayMasked = false,
+  foot,
   lead,
   leadAt = LIST_ROW_LEAD.DESCRIPTION,
   attachments,
@@ -712,6 +713,8 @@ export function ListRow({
   description?: ReactNode;
   /** Whether the description holds a person's words, kept masked on the same terms as the title. */
   descriptionReplayMasked?: boolean | undefined;
+  /** A line of its own under the description, in its ink, such as how an automation's newest run went; none for a row of two lines. */
+  foot?: ReactNode;
   /** What the row belongs to, drawn as a chip of its glyph and its name before the description, on its line. */
   lead?: ListRowLead | undefined;
   /** Where the lead stands: a chip before the description, on its line, or a line of its own over the title. */
@@ -1023,6 +1026,9 @@ export function ListRow({
               : null}
             <ReplayWords masked={descriptionReplayMasked}>{description}</ReplayWords>
           </span>
+        ) : null}
+        {said(foot) ? (
+          <span className="ui-list-row-description ui-list-row-foot">{foot}</span>
         ) : null}
         {metaPlace === LIST_ROW_META.LAST ? end : null}
       </span>

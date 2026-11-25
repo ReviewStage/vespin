@@ -18,6 +18,7 @@ import { closesCard } from "../dialog/close-chord.js";
 import { useHeldFocus } from "../dialog/held-focus.js";
 import { NoteLine } from "../note-line/note-line.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
+import { TEXT_BUTTON_LINES, TEXT_BUTTON_TONE, TextButton } from "../text-button/text-button.js";
 import { Tooltip } from "../tooltip/hint.js";
 
 /**
@@ -40,6 +41,13 @@ import { Tooltip } from "../tooltip/hint.js";
  * on every side, clear of a phone's notch and status bar, and stands near
  * the top, so the keyboard leaves its rows the room under it. Under a
  * finger its foot, whose keys are none to press, is not drawn.
+ *
+ * Drawn as a page (`COMMAND_PRESENTATION.PAGE`), as a phone's Search tab
+ * is, it fills the screen on the page's own ground with no scrim, under a
+ * head of its owner's (the page's title), its field in a well under the
+ * head, and its foot drawn under a finger too, where its owner stands the
+ * screen's way between places; a group may end its heading in a press of
+ * its own (`act`), such as Show all.
  *
  * Each row is a menu's row (`ComboboxOptionItem`), its lead, its glyph,
  * its name and detail fading where they are cut, its hint (a chord) and its
@@ -69,6 +77,21 @@ export const COMMAND_FILTER = {
 
 type CommandFilter = (typeof COMMAND_FILTER)[keyof typeof COMMAND_FILTER];
 
+/** How the list stands: a card over the dimmed window, as ⌘K, or a page filling the screen, as a phone's Search tab. */
+export const COMMAND_PRESENTATION = {
+  DIALOG: "dialog",
+  PAGE: "page",
+} as const;
+
+type CommandPresentation = (typeof COMMAND_PRESENTATION)[keyof typeof COMMAND_PRESENTATION];
+
+/** A press at the end of a group's heading: its words, what a reader hears where they say less, and the press. */
+export interface CommandGroupAct {
+  readonly label: string;
+  readonly heard?: string | undefined;
+  readonly onPress: () => void;
+}
+
 /** One command: a menu row, the words typing finds it by, and what choosing it does. */
 export interface CommandItem extends ComboboxOption {
   /** What typing is matched against: the row's name and any words it is known by. */
@@ -90,6 +113,8 @@ export interface CommandGroup {
   readonly items: readonly CommandItem[];
   /** Said after the group's rows: that more are being read, or why they could not be. */
   readonly note?: ReactNode;
+  /** A press at the heading's end, such as Show all or Clear; none for a heading that does nothing. */
+  readonly act?: CommandGroupAct | undefined;
 }
 
 /** The dimmed window: the card stands a fifth of the way down it rather than in its middle; in a narrow room, a margin in from its edges and below a phone's notch and status bar. Its one column is the window's width and no more, since an auto track would grow to the widest row and push the card past the screen. */
@@ -117,6 +142,27 @@ const BAND = "min-w-0 flex-none border-b border-border px-ui-12 py-ui-8";
 /** The foot the caller fills, such as the keys' hints, in a caption's words; not drawn under a finger, which has no keys to press. */
 const FOOT =
   "flex min-w-0 flex-none items-center gap-ui-16 border-t border-border px-ui-16 py-ui-8 text-caption text-muted-foreground [@media(hover:none)_and_(pointer:coarse)]:hidden";
+
+/** A page's room: the whole screen, below a phone's notch and status bar, on the page's own ground rather than a scrim. */
+const PAGE_ROOM =
+  "grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-stretch bg-ground p-0 pt-[env(safe-area-inset-top,0px)] animate-none";
+
+/** A page's card: the room's whole width and height, flat on the ground, with no corner or shadow of a card. */
+const PAGE_CARD =
+  "h-full w-full max-h-none gap-0 overflow-clip rounded-none border-0 bg-ground p-0 shadow-none animate-none focus:outline-none";
+
+/** A page's search row: the field in a well under the head, as a phone's search field stands, drawn as a list's search well is (`search-field.tsx`). */
+const PAGE_SEARCH =
+  "mx-ui-12 mb-ui-8 box-border flex h-control flex-none items-center gap-icon-gap rounded-control border border-border bg-muted pr-ui-2 pl-search-lead text-muted-foreground [&_svg]:size-control-icon [&_svg]:flex-none";
+
+/** A page's band: under the field, its rows' inset, with no rule, since the field's well already sets it apart. */
+const PAGE_BAND = "min-w-0 flex-none px-ui-12 pb-ui-8";
+
+/** A page's foot: drawn under a finger too, as it is the screen's way between places, edge to edge. */
+const PAGE_FOOT = "min-w-0 flex-none";
+
+/** A heading that ends in a press: the words, then the press at the row's end. */
+const HEADING_WITH_ACT = "flex items-center justify-between gap-ui-8 pr-row-inset";
 
 /** A group's note after its rows: a quiet caption at the rows' inset. */
 const NOTE = "px-row-inset pt-ui-4 pb-ui-8 text-caption text-muted-foreground";
@@ -201,6 +247,44 @@ const CommandRow = memo(function CommandRow({
   );
 });
 
+/** A group's heading, ending in its press where it has one. */
+function GroupHeading({
+  label,
+  act,
+  replayUnmasked,
+}: {
+  label: string;
+  act: CommandGroupAct | undefined;
+  replayUnmasked: boolean;
+}): React.JSX.Element {
+  const words = (
+    <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.GROUP} className={HEADING}>
+      <ReplayWords unmasked={replayUnmasked}>{label}</ReplayWords>
+    </Text>
+  );
+
+  if (act === undefined) return words;
+
+  return (
+    <span className={HEADING_WITH_ACT}>
+      {words}
+      <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.GROUP}>
+        <ReplayWords unmasked={replayUnmasked}>
+          <TextButton
+            tone={TEXT_BUTTON_TONE.ACCENT}
+            lines={TEXT_BUTTON_LINES.WHOLE}
+            aria-label={act.heard}
+            keepFocus
+            onClick={act.onPress}
+          >
+            {act.label}
+          </TextButton>
+        </ReplayWords>
+      </Text>
+    </span>
+  );
+}
+
 /**
  * Brings a phone's keyboard up for the field a press is about to open the
  * palette on. iOS raises its keyboard only for a focus taken within a
@@ -246,6 +330,10 @@ export interface CommandDialogProps {
   band?: ReactNode;
   /** Drawn along the card's foot, such as the keys' hints. */
   foot?: ReactNode;
+  /** Whether it stands as a card over the dimmed window or as a page filling the screen; a card where none is said. */
+  presentation?: CommandPresentation | undefined;
+  /** Drawn over the field on a page, such as its title; a card draws none. */
+  head?: ReactNode;
   /** The field, for an owner that moves the caret or focus back to it. */
   inputRef?: Ref<HTMLInputElement> | undefined;
   /** The owner's own keys, heard before cmdk's, which a key the owner prevents never reaches. */
@@ -288,11 +376,14 @@ export function CommandDialog({
   loading,
   band,
   foot,
+  presentation = COMMAND_PRESENTATION.DIALOG,
+  head,
   inputRef,
   onKeyDown,
   keepMounted = false,
   replayUnmasked = false,
 }: CommandDialogProps): React.JSX.Element {
+  const page = presentation === COMMAND_PRESENTATION.PAGE;
   const field = useRef<HTMLInputElement | null>(null);
   // Note that the card stands a render after the dialog opens, because Base UI's portal makes its node first, so the field takes focus once it does.
   const [drawn, setDrawn] = useState(false);
@@ -343,7 +434,7 @@ export function CommandDialog({
       <DialogContent
         ref={(node: HTMLDivElement | null) => setDrawn(node !== null)}
         keepMounted={keepMounted}
-        className={CARD}
+        className={page ? PAGE_CARD : CARD}
         aria-label={label}
         initialFocus={field}
         // Note that focus goes back to what opened the palette as it starts to close, not once its fade ends.
@@ -357,7 +448,7 @@ export function CommandDialog({
           onOpenChange(false);
         }}
         viewport={{
-          className: ROOM,
+          className: page ? PAGE_ROOM : ROOM,
           // Note that a press goes no further than the dialog, because the surface that opened it is its parent in React's tree and may take presses of its own.
           onClick: (event) => event.stopPropagation(),
         }}
@@ -376,7 +467,8 @@ export function CommandDialog({
             onKeyDown?.(event);
           }}
         >
-          <div className={SEARCH}>
+          {page && head !== undefined ? <div className="flex-none">{head}</div> : null}
+          <div className={page ? PAGE_SEARCH : SEARCH}>
             <SearchIcon />
             <Command.Input
               ref={(node) => {
@@ -395,7 +487,7 @@ export function CommandDialog({
               onValueChange={changeQuery}
             />
           </div>
-          {band === undefined ? null : <div className={BAND}>{band}</div>}
+          {band === undefined ? null : <div className={page ? PAGE_BAND : BAND}>{band}</div>}
           <Command.List asChild label={label}>
             <ComboboxListBox height={COMBOBOX_LIST_HEIGHT.FILL}>
               {loading !== undefined && rows === 0 ? (
@@ -412,9 +504,11 @@ export function CommandDialog({
                   key={group.id}
                   heading={
                     group.label === undefined ? undefined : (
-                      <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.GROUP} className={HEADING}>
-                        <ReplayWords unmasked={replayUnmasked}>{group.label}</ReplayWords>
-                      </Text>
+                      <GroupHeading
+                        label={group.label}
+                        act={group.act}
+                        replayUnmasked={replayUnmasked}
+                      />
                     )
                   }
                 >
@@ -426,7 +520,7 @@ export function CommandDialog({
               ))}
             </ComboboxListBox>
           </Command.List>
-          {foot === undefined ? null : <div className={FOOT}>{foot}</div>}
+          {foot === undefined ? null : <div className={page ? PAGE_FOOT : FOOT}>{foot}</div>}
         </Command>
       </DialogContent>
     </ShadcnDialog>

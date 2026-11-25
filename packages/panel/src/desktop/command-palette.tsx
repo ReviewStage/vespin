@@ -61,10 +61,12 @@
  * each row's words instead.
  */
 
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
 import { READING_AUTOMATIONS } from "@repo/features/automation-words";
 import { fileName } from "@repo/features/code-ref-words";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import {
   holderName,
   type InboxAnyHolder,
@@ -74,6 +76,15 @@ import {
 import { formatCount } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { SHOW_ALL } from "@repo/features/search-found-model";
+import {
+  GO_TO,
+  GO_TO_TITLE,
+  GO_TO_WORDS,
+  type GoTo,
+  startTaskLabel,
+} from "@repo/features/search-go-to-model";
+import { RECENT_WORDS, recentRows } from "@repo/features/search-recent-model";
 import {
   hitRangesIn,
   SEARCH_TIER,
@@ -161,11 +172,13 @@ import {
 } from "@repo/ui/actor-model";
 import {
   COMMAND_FILTER,
+  COMMAND_PRESENTATION,
   CommandDialog,
   type CommandDialogProps,
   type CommandGroup,
   type CommandItem,
 } from "@repo/ui/command";
+import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import { changesTab, fileTab, inTaskOrder, tabKey } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -204,6 +217,8 @@ import {
   type PanelCommand,
   panelCommandOf,
 } from "../command-items.js";
+import { DRAFT_PLACE, useDraftWriter } from "../composer-drafts.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { useInboxOn } from "../inbox-on.js";
 import { type InboxView, useInboxView } from "../inbox-route.js";
@@ -224,6 +239,7 @@ import {
   settingsSearchEntries,
 } from "../settings-search.js";
 import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
+import { usePhoneRoom } from "../stage-room.js";
 import {
   NAMED_ORDER,
   type TaskListRows,
@@ -269,11 +285,15 @@ import { useTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
+import { useWorkspaceManagers } from "../tasks/workspace-managers.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
 import { actingCommand } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
 import { inboxEntries } from "./main-tabs.js";
+import { MobileBar } from "./mobile-bar.js";
+import { PhoneHead } from "./phone-head.js";
+import { useSearchRecent } from "./search-recent.js";
 import {
   ADD_SECTION,
   changesOffers,
@@ -336,6 +356,34 @@ const KIND_ROWS = {
   ALL: 5,
   FILTERED: 50,
 } as const;
+
+/** What a phone's Search page is called, at its head. */
+const SEARCH_TITLE = "Search";
+
+/** The command each place Go to lists runs, the one its "Go to" row under Commands runs. */
+const GO_TO_COMMAND = {
+  [GO_TO.MERGE_QUEUE]: APP_COMMAND.MERGE_QUEUE,
+  [GO_TO.AUTOMATIONS]: APP_COMMAND.AUTOMATIONS,
+  [GO_TO.SETTINGS]: APP_COMMAND.SETTINGS,
+} as const satisfies Record<GoTo, AppCommand>;
+
+/** The glyph each place Go to lists leads with, the one its sidebar row or its page leads with. */
+const GO_TO_GLYPH = {
+  [GO_TO.MERGE_QUEUE]: <GLYPH.QUEUED />,
+  [GO_TO.AUTOMATIONS]: <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />,
+  [GO_TO.SETTINGS]: <EntityGlyph kind={ENTITY_KIND.SETTINGS} />,
+} as const satisfies Record<GoTo, React.JSX.Element>;
+
+/** The groups only a phone's Search page lists, each by its own key. */
+const PAGE_GROUP = {
+  RECENT: "recent",
+  MANAGERS: "managers",
+  GO_TO: "go-to",
+  START: "start",
+} as const;
+
+/** What a Manager with no title yet is called. */
+const MANAGER_WORD = "Manager";
 
 /** The first row's id: rows are known by their place in the list, from one. */
 const FIRST_ROW = "1";
@@ -552,6 +600,8 @@ type RowWords = Pick<PaletteRow, "label" | "terms" | "taskKey" | "keywords" | "l
  * marks and card are most of its cost, and a filter lists fifty at most.
  */
 interface UndrawnRow {
+  /** What it stands for, a task's id or an Inbox item's, by which Recent finds it. */
+  readonly id: string;
   readonly subject: SearchSubject;
   readonly draw: () => PaletteRow;
 }
@@ -590,9 +640,13 @@ function rowScore(row: PaletteRow, query: string): number {
   return subjectScore(rowSubject(row), query);
 }
 
-/** A row ranked by its `words` and drawn with the rest of it, by `draw`, only once it is listed. */
-function undrawnRow(words: RowWords, draw: () => Omit<PaletteRow, keyof RowWords>): UndrawnRow {
-  return { subject: rowSubject(words), draw: () => ({ ...draw(), ...words }) };
+/** The row of the thing `id`, ranked by its `words` and drawn with the rest of it, by `draw`, only once it is listed. */
+function undrawnRow(
+  id: string,
+  words: RowWords,
+  draw: () => Omit<PaletteRow, keyof RowWords>,
+): UndrawnRow {
+  return { id, subject: rowSubject(words), draw: () => ({ ...draw(), ...words }) };
 }
 
 /**
@@ -969,7 +1023,7 @@ function taskRows(
       taskKey: numbered,
     };
 
-    return undrawnRow(words, () => {
+    return undrawnRow(task.id, words, () => {
       const worn = assigneeFace(task, readerOf(task));
       const detail = taskDetail(task, repositories);
 
@@ -1330,7 +1384,7 @@ function inboxRow(
 ): UndrawnRow {
   const { holder, item } = listed;
 
-  return undrawnRow(words, () => {
+  return undrawnRow(item.id, words, () => {
     const name = holderName(holder);
     const snippet = snippetOf(words.keywords ?? [], [item.title, words.label, name], seams.tokens);
 
@@ -1478,6 +1532,63 @@ function actionRows(
       },
     ];
   });
+}
+
+/**
+ * The places a phone's Search page goes to before anything is typed, as
+ * the iOS app's Go to lists them: the Merge queue, Automations, and
+ * Settings, each the window reaches now, by its page's name, running the
+ * command its "Go to" row under Commands runs.
+ */
+function goToRows(
+  run: (command: AppCommand) => void,
+  experiments: ExperimentChoices,
+): readonly PaletteRow[] {
+  return Object.values(GO_TO).flatMap((place) =>
+    actionRows([GO_TO_COMMAND[place]], run, experiments).map((row) => ({
+      ...row,
+      icon: GO_TO_GLYPH[place],
+      label: GO_TO_TITLE[place],
+      terms: [GO_TO_TITLE[place]],
+      // Note that a phone has no keys to press, so a place's row draws none.
+      command: undefined,
+    })),
+  );
+}
+
+/** The workspace's Managers, as a phone's Search page lists them before anything is typed, each opening its page. */
+function managerRows(
+  managers: readonly ListedAgent[] | undefined,
+  open: (agentId: string) => void,
+): readonly PaletteRow[] {
+  return (managers ?? []).map((agent) => {
+    const label = agent.title ?? MANAGER_WORD;
+
+    return {
+      icon: <GLYPH.MANAGER />,
+      label,
+      terms: [label],
+      replayMasked: true,
+      onChoose: () => open(agent.id),
+    };
+  });
+}
+
+/** The row that starts a task on what was typed, New task opening with it as the prompt, last on a phone's page; none while nothing is typed. */
+function startTaskRows(query: string, start: (prompt: string) => void): readonly PaletteRow[] {
+  const label = startTaskLabel(query);
+
+  if (label === undefined) return [];
+
+  return [
+    {
+      icon: <PlusIcon />,
+      label,
+      terms: [label],
+      replayMasked: true,
+      onChoose: () => start(query.trim()),
+    },
+  ];
 }
 
 /** The Inbox as the palette reads it: whether it stands, and the item chosen in it. */
@@ -1981,6 +2092,7 @@ const PaletteDialog = memo(function PaletteDialog({
   filter,
   groups,
   query,
+  page,
   ...dialog
 }: {
   /** How many times ⌘K has opened the palette, each time choosing the first row again. */
@@ -1988,6 +2100,8 @@ const PaletteDialog = memo(function PaletteDialog({
   filter: PaletteFilter;
   groups: readonly CommandGroup[];
   query: string;
+  /** On a phone, the page's head and the places bar along its foot, which it is drawn as rather than a card; none for the card. */
+  page: { readonly head: ReactNode; readonly foot: ReactNode } | undefined;
 } & Pick<
   CommandDialogProps,
   | "open"
@@ -2026,7 +2140,9 @@ const PaletteDialog = memo(function PaletteDialog({
       query={query}
       selected={selected}
       onSelectedChange={setSelected}
-      foot={<PaletteFooter typed={query !== ""} runs={runs} />}
+      presentation={page === undefined ? COMMAND_PRESENTATION.DIALOG : COMMAND_PRESENTATION.PAGE}
+      head={page?.head}
+      foot={page === undefined ? <PaletteFooter typed={query !== ""} runs={runs} /> : page.foot}
     />
   );
 });
@@ -2059,6 +2175,8 @@ export function CommandPalette({
   };
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  // Note that a phone draws the palette as its Search tab's page, as the iOS app does, rather than a card over the place it stood on.
+  const phone = usePhoneRoom();
   const experiments = useExperimentsIn(tasks.workspace?.id);
   const billing = useBillingShown(tasks.workspace);
   const inboxWaiting = useInboxWaitingTasks();
@@ -2136,6 +2254,13 @@ export function CommandPalette({
   const inboxDoor = useInboxDoor(tasks);
   const inboxStanding = useInboxView(tasks);
   const rows = useTaskListRows(tasks.typedNames);
+
+  const recent = useSearchRecent({
+    workspaceId: tasks.workspace?.id,
+    taskId: tasks.activeTaskId,
+    itemId: inboxStanding.chosen?.itemId,
+  });
+
   const { placeLeave } = tasks;
 
   // A task, and an agent's tab, are always opened on the Tasks tab, as a
@@ -2235,6 +2360,8 @@ export function CommandPalette({
   );
 
   const tokens = searchTokens(sought);
+  // Note that a phone's page lists what was opened last, the Managers, and Go to before anything is typed, as the iOS app's Search tab does, rather than each kind's first few.
+  const pageEmpty = phone && filter === PALETTE_FILTER.ALL && tokens.length === 0;
   // The listed workspace's members, read once for it, name a task's assignee by face.
   const membersRead = useQuery(workspaceMembersQuery(tasks.workspace?.id));
   const { mutate: retryMembers } = useMutation(workspaceMembersRetryMutation());
@@ -2289,7 +2416,8 @@ export function CommandPalette({
   const pins = usePinWrites(tasks.typedNamesNow);
   const standing = useStandingWrites(tasks.typedNamesNow);
   useOpenThingKeys(tasks, rows, pins, inboxStanding, reads);
-  const limit = filter === PALETTE_FILTER.ALL ? KIND_ROWS.ALL : KIND_ROWS.FILTERED;
+  // Note that a phone's page ranks a filter's worth under All too, so a kind cut to its best few knows to offer Show all.
+  const limit = filter === PALETTE_FILTER.ALL && !phone ? KIND_ROWS.ALL : KIND_ROWS.FILTERED;
   // The task's terminals and Browser tabs are offered as the panel's "+" offers them, through its own doors.
   const openTerminal = useOpenTerminal(tasks.sidePanel, noFocusMove);
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, tasks.sidePanel, noFocusMove);
@@ -2357,7 +2485,7 @@ export function CommandPalette({
 
   // Note that the Inbox is read the first time it is searched, on the Files filter's terms.
   const inboxAsked =
-    open && tasks.signedIn && (filter === PALETTE_FILTER.INBOX || tokens.length > 0);
+    open && tasks.signedIn && (filter === PALETTE_FILTER.INBOX || tokens.length > 0 || pageEmpty);
 
   const inboxSearch = useInboxSearch(tasks, inboxAsked);
 
@@ -2374,6 +2502,28 @@ export function CommandPalette({
 
   const automations = useAutomations(automationsAsked ? tasks.workspace?.id : undefined);
   const now = useMinute();
+
+  // Note that a phone's page lists the workspace's Managers before anything is typed, while its Managers experiment is on.
+  const managersListed =
+    useWorkspaceExperiment(tasks.workspace?.id, EXPERIMENT.MANAGERS) && tasks.signedIn;
+
+  const { managers } = useWorkspaceManagers(
+    tasks.workspace?.id,
+    managersListed && open && pageEmpty,
+    tasks.agentsCarried,
+  );
+
+  const drafts = useDraftWriter();
+
+  // Note that a task started on what was typed opens New task with the words as its prompt, written to its draft first.
+  const startTask = (prompt: string) =>
+    choose(() => {
+      drafts.update(
+        { kind: DRAFT_PLACE.NEW_TASK, workspaceId: tasks.newTask.workspaceId ?? null },
+        (was) => ({ ...was, text: prompt }),
+      );
+      tasks.newTask.onOpen();
+    });
 
   // Note that the repository is read the first time its files are searched
   // rather than as the palette opens, because most of its uses never ask
@@ -2568,11 +2718,75 @@ export function CommandPalette({
       <ReplayUnmask>{TRUNCATED_LINE}</ReplayUnmask>
     ) : undefined;
 
+  // What a phone's page lists before anything is typed: what was opened last, newest first, with Clear; the Managers; and Go to.
+  const pageGroups = () => {
+    const tasksById = new Map(undrawnOf[PALETTE_FILTER.TASKS]().map((row) => [row.id, row]));
+    const inboxById = new Map(undrawnOf[PALETTE_FILTER.INBOX]().map((row) => [row.id, row]));
+
+    const recentShown = recentRows<UndrawnRow, UndrawnRow, UndrawnRow>(
+      recent.kept,
+      tasks.workspace?.id,
+      {
+        task: (id) => tasksById.get(id),
+        thread: (id) => inboxById.get(id),
+        agent: () => undefined,
+      },
+    ).map((each) => each.row.draw());
+
+    return [
+      {
+        id: PAGE_GROUP.RECENT,
+        label: RECENT_WORDS.TITLE,
+        rows: recentShown,
+        act: {
+          label: RECENT_WORDS.CLEAR,
+          heard: RECENT_WORDS.CLEAR_HEARD,
+          onPress: recent.onClear,
+        },
+      },
+      {
+        id: PAGE_GROUP.MANAGERS,
+        label: GO_TO_WORDS.MANAGERS,
+        rows: managerRows(managers, (agentId) => onTasks(() => tasks.agentView.onOpen(agentId))),
+      },
+      { id: PAGE_GROUP.GO_TO, label: GO_TO_WORDS.TITLE, rows: goToRows(runCommand, experiments) },
+    ];
+  };
+
+  // Each kind's rows: under All on a phone its best few, its heading ending in Show all, which chooses its filter, where it found more.
+  const kindSection = (section: PaletteSection) => {
+    const cut = phone && filter === PALETTE_FILTER.ALL && section.rows.length > KIND_ROWS.ALL;
+    const label = FILTER_LABEL[section.kind];
+
+    return {
+      id: section.kind,
+      label,
+      rows: cut ? section.rows.slice(0, KIND_ROWS.ALL) : section.rows,
+      note: noteOf(section),
+      act: cut
+        ? {
+            label: SHOW_ALL,
+            heard: `${SHOW_ALL} ${label.toLowerCase()}`,
+            onPress: () => setFilter(section.kind),
+          }
+        : undefined,
+    };
+  };
+
   // Every kind's rows ranked for the words sought, each group's items placed after the last.
   const rank = (): readonly CommandGroup[] => {
-    const sections = kinds
-      .map((kind) => ({ kind, rows: rowsFor(kind), notice: noticeFor(kind) }))
-      .filter((section) => section.rows.length > 0 || section.notice !== undefined);
+    const sections = pageEmpty
+      ? pageGroups()
+      : [
+          ...kinds
+            .map((kind) => ({ kind, rows: rowsFor(kind), notice: noticeFor(kind) }))
+            .filter((section) => section.rows.length > 0 || section.notice !== undefined)
+            .map(kindSection),
+          // Note that a phone's page ends in the row that starts a task on what was typed, as the iOS app's does.
+          ...(phone
+            ? [{ id: PAGE_GROUP.START, label: undefined, rows: startTaskRows(sought, startTask) }]
+            : []),
+        ];
 
     let place = 0;
 
@@ -2583,14 +2797,9 @@ export function CommandPalette({
         return paletteItem(row, String(place), sought, tokens);
       });
 
-    return [
-      ...sections.map((section) => ({
-        id: section.kind,
-        label: FILTER_LABEL[section.kind],
-        items: items(section.rows),
-        note: noteOf(section),
-      })),
-    ];
+    return sections
+      .map(({ rows, ...section }) => ({ ...section, items: items(rows) }))
+      .filter((group) => group.items.length > 0 || ("note" in group && group.note !== undefined));
   };
 
   // The render a key paints the field in draws the ranking already standing, and only the
@@ -2606,6 +2815,22 @@ export function CommandPalette({
     <>
       <PaletteDialog
         open={open}
+        page={
+          phone
+            ? {
+                head: (
+                  <PhoneHead
+                    place="search"
+                    start={null}
+                    title={SEARCH_TITLE}
+                    titleReplayUnmasked
+                    end={null}
+                  />
+                ),
+                foot: <MobileBar tasks={tasks} leave={() => setOpen(false)} searching />,
+              }
+            : undefined
+        }
         opening={openings}
         onOpenChange={setOpen}
         placeholder={filterPlaceholder(filter)}
