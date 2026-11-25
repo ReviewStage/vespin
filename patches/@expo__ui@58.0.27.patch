@@ -332,10 +332,10 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..7a10640139dc3340f48e6d75c83a80cb
                let url = URL(string: url),
                let data = try? Data(contentsOf: url),
 diff --git a/ios/ListView.swift b/ios/ListView.swift
-index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..6deb490e1bfb0ec626fa760cdffdee49483121bb 100644
+index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..03bd0b5a9d42be5ad944571c9a1d820a2cc550b1 100644
 --- a/ios/ListView.swift
 +++ b/ios/ListView.swift
-@@ -5,13 +5,17 @@ import SwiftUI
+@@ -5,13 +5,19 @@ import SwiftUI
  
  final class ListProps: UIBaseViewProps {
    @Field var selection: [Either<String, Double>]?
@@ -350,10 +350,12 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..6deb490e1bfb0ec626fa760cdffdee49
    @State private var selection = Set<AnyHashable>()
    @State private var crossAxisSize: CGFloat = 0
 +  @State private var editMode: EditMode = .inactive
++  // The edit mode a modifier stands the list in from outside, as Select mode does for a list no drag can start it in.
++  @Environment(\.editMode) private var outerEditMode
  
    var body: some View {
      list
-@@ -21,7 +25,32 @@ struct ListView: ExpoSwiftUI.View {
+@@ -21,7 +27,32 @@ struct ListView: ExpoSwiftUI.View {
  
    @ViewBuilder
    private var list: some View {
@@ -387,13 +389,24 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..6deb490e1bfb0ec626fa760cdffdee49
        List(selection: $selection) {
          Children()
        }
-@@ -53,7 +82,25 @@ struct ListView: ExpoSwiftUI.View {
+@@ -53,7 +84,36 @@ struct ListView: ExpoSwiftUI.View {
        }
        return nil
      }
 -    props.onSelectionChange(["selection": selectionArray])
 +    // Note that the edit mode rides with the selection, since a two-finger drag ticks a row and switches edit mode on in one change, and its two events may reach JavaScript in either order.
 +    props.onSelectionChange(["selection": selectionArray, "editing": editMode == .active])
++
++    // Note that outside edit mode the list holds the selection JavaScript hands it and no other, so a tap's pick goes back to it once JavaScript has been told, as a controlled field's words do: a list that keeps no selection, as a compact window's rows that push their screen, never answers with an equal one, so the row tapped stood selected here and a second tap on it, back from its screen, changed nothing and opened nothing. It goes back on the next turn of the main queue, so a two-finger drag's edit mode, which lands beside its first tick, keeps the rows it ticked.
++    DispatchQueue.main.async {
++      if choosing { return }
++      self.selection = Self.getHashableSetFromEither(props.selection)
++    }
++  }
++
++  // Whether the list stands in edit mode, where a tap ticks a row and the system keeps the ticks until JavaScript answers.
++  private var choosing: Bool {
++    props.editing != nil ? editMode == .active : outerEditMode?.wrappedValue == .active
 +  }
 +
 +  // Note that the selection rides with the edit mode, since a drag that switches it on has already ticked the rows it crossed. Only the full edit mode counts, never the transient one SwiftUI may stand a list in while a row's swipe actions show, so a swipe never starts Select mode.

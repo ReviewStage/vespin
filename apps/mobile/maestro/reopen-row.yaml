@@ -1,0 +1,61 @@
+# reopen-row.yaml -- a row opened, gone back from, and tapped again opens again: an Inbox thread and a task, each twice, in a compact window, whose lists keep no selection.
+#
+# Note that the second tap is the one under test, because a compact list's
+# native selection kept the row first tapped, so a second tap on it, back
+# from its screen, changed nothing and opened nothing (`ListView.swift` in
+# `patches/@expo__ui@58.0.27.patch`). A regular window keeps the open row
+# selected beside its detail, where a second tap has nothing to open, so the
+# flow runs on a compact window alone, chosen by the device.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      # Launched on the host's Inbox fixture, as `inbox.yaml` is, so the list
+      # holds the fixture's threads and no server is reached.
+      - launchApp:
+          clearState: true
+          arguments:
+            fixture: inbox
+      - extendedWaitUntil:
+          visible: "Recorded the invite flow"
+          timeout: 30000
+      - waitForAnimationToEnd
+      # The thread opens, Back returns to the list, and the same row opens it again.
+      - repeat:
+          times: 2
+          commands:
+            - tapOn: "Recorded the invite flow"
+            - assertVisible: ".*walked the invite flow.*"
+            - waitForAnimationToEnd
+            - tapOn:
+                id: "BackButton"
+            - extendedWaitUntil:
+                notVisible: ".*walked the invite flow.*"
+                timeout: 5000
+            - waitForAnimationToEnd
+      - takeScreenshot: reopen-row-inbox
+      # A task does the same from the Tasks list.
+      - runFlow:
+          file: subflows/tab.yaml
+          env:
+            TAB: Tasks
+      - repeat:
+          times: 2
+          commands:
+            - runFlow:
+                file: subflows/open-row.yaml
+                env:
+                  ROW: "Weekly digest email"
+            - assertVisible: "Created by .*"
+            - waitForAnimationToEnd
+            - tapOn:
+                id: "BackButton"
+            - extendedWaitUntil:
+                notVisible: "Created by .*"
+                timeout: 5000
+            - waitForAnimationToEnd
+      - takeScreenshot: reopen-row-tasks
