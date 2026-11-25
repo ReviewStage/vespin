@@ -530,11 +530,13 @@ deleted when you sign out. Earlier versions of the app kept them encrypted in
 its own files under a key in the Keychain; once the tokens moved into the
 Keychain itself, the app deletes that key.
 
-When you close New task in the Vespin iOS app and choose Save draft, the
-app keeps that draft's words on your iPhone or iPad, one draft for each
-workspace, in the app's own settings, until you start that task or discard
-the draft, and deletes them when you sign out. It never keeps the draft's
-pictures, and it sends none of it to us until you start the task.
+While you write a New task in the Vespin iOS app, the app keeps its words
+on your iPhone or iPad, one draft for each workspace, in the app's own
+settings, so closing New task leaves them for the next time you open it.
+It keeps them until you start that task or empty its words, and deletes
+them when you sign out. The draft's pictures are held only in the app's
+memory, so they're gone once the app quits. It sends none of it to us
+until you start the task.
 
 Transcripts and pictures you open are held in memory only.
 

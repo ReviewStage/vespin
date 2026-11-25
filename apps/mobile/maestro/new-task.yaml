@@ -1,4 +1,4 @@
-# new-task.yaml -- New task from the Inbox bar's compose: Home's composer as a page of its own, the task described, its repository picked from its capsule under the composer's field, and the task started with its agent, the agent's page opened; then a task related to another picked from the composer's +; then a draft whose swipe down and ✕ ask Discard draft or Save draft, saved for the next New task and then discarded; then the composer's + Photos opening the system's photo picker, closed unpicked.
+# new-task.yaml -- New task from the Inbox bar's compose: Home's composer as a page of its own, the task described, its repository picked from its capsule under the composer's field, and the task started with its agent, the agent's page opened; then a task related to another picked from the composer's +; then a draft kept as the swipe down and the ✕ close the sheet with no question, standing in the next New task until its words are emptied; then the composer's + Photos opening the system's photo picker, closed unpicked.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -64,12 +64,11 @@ env:
 - waitForAnimationToEnd
 - assertVisible: "Blocked by · Teammate invitations"
 - takeScreenshot: new-task-relation
-# A sheet with words typed keeps them, as Mail's compose does: the swipe
-# down is held and asks Discard draft or Save draft from the system's sheet,
-# whose Cancel keeps the page; the ✕ (Cancel) opens the same two as its
-# menu; and a draft saved stands in the next New task's field, until it is
-# discarded. Note that the app is launched again for it, so the Inbox and
-# its bar's compose stand.
+# A sheet with words typed keeps them as the panel's New task does: the
+# swipe down and the ✕ (Cancel) each close it at once, with no question, and
+# the words stand in the next New task's field until they are emptied. Note
+# that the app is launched again for it, so the Inbox and its bar's compose
+# stand.
 - launchApp:
     arguments:
       fixture: inbox
@@ -83,36 +82,25 @@ env:
     start: "50%, 12%"
     end: "50%, 85%"
     duration: 600
-- assertVisible: "Save draft"
-- waitForAnimationToEnd
-- takeScreenshot: new-task-swipe-ask
-# Note that the ask's own Cancel is found under its Save draft, because the
-# ✕ is heard as Cancel too, and on an iPad a bare Cancel found the ✕ under
-# the alert, which left the ask standing.
-- tapOn:
-    text: "Cancel"
-    below: "Save draft"
-- extendedWaitUntil:
-    notVisible: "Save draft"
-    timeout: 5000
-- assertVisible: "Show who sent each pending invite."
-- tapOn: "Cancel"
-- assertVisible: "Discard draft"
-- assertVisible: "Save draft"
-- waitForAnimationToEnd
-- takeScreenshot: new-task-discard
-- tapOn: "Save draft"
 - extendedWaitUntil:
     notVisible: "Show who sent each pending invite."
     timeout: 5000
 - tapOn: "New task"
 - assertVisible: "Show who sent each pending invite."
 - waitForAnimationToEnd
-- takeScreenshot: new-task-draft-saved
+- takeScreenshot: new-task-draft-kept
 - tapOn: "Cancel"
-- tapOn: "Discard draft"
 - extendedWaitUntil:
     notVisible: "Show who sent each pending invite."
+    timeout: 5000
+- tapOn: "New task"
+- assertVisible: "Show who sent each pending invite."
+# Note that the field takes the keyboard as the sheet opens, its caret after the words kept, so they are erased with no tap, which would set the caret inside them.
+- eraseText: 60
+- assertVisible: "Describe the task"
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Describe the task"
     timeout: 5000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
