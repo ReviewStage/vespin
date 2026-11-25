@@ -20,7 +20,10 @@
  * as in a task's column, and a phone's ⋯ offers Find in its place. A
  * Manager's page stands a row of tabs under its head, as a Slack channel's
  * does: Overview, what the Manager is doing (`manager-overview.tsx`);
- * and Messages, its chat. While Messages shows, the page marks itself a chat (`data-chat`), so
+ * Messages, its chat; and Inbox, the threads it posted as a task's agent's
+ * card shows its own (`agent-threads.tsx`), named with how many stand open.
+ * There the line over its box, and Overview's rows, open a thread in the
+ * Inbox tab rather than in the window's Inbox. While Messages shows, the page marks itself a chat (`data-chat`), so
  * both sides' bubbles stand at one width, and take the column in a phone's
  * room, as desktop.css says. The agent is read from the task list where
  * it carries it, and else once by its id.
@@ -39,6 +42,7 @@ import {
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
+import { agentHolder, type InboxHolderAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
@@ -51,6 +55,7 @@ import {
   CHOICE_BAR_LOOK,
   ChoiceBar,
   type ChoiceItem,
+  type CountPart,
   ERROR_STATE_PLACEMENT,
   ErrorState,
   FILL_ELEMENT,
@@ -66,7 +71,7 @@ import {
   useMenu,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { agentTab, pageTab, type StripTab } from "@repo/ui/tab-strip-model";
+import { agentTab, pageTab, type StripTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -90,10 +95,11 @@ import { useListedPullRequest } from "../tasks/use-agent-pull-request.js";
 import { type AgentsControl, placeAgents } from "../tasks/use-agents.js";
 import { OpenAddressesHere, openPullRequestsHere } from "../tasks/use-open-link.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
-import { useHeldTaskInbox } from "../tasks/use-task-inbox.js";
+import { type TaskInboxControl, useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
+import { AgentThreads as AgentThreadsView } from "./agent-threads.js";
 import { AgentPane } from "./main-tabs.js";
 import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
@@ -135,15 +141,21 @@ const AGENT_THING = "Agent";
 const MANAGER_VIEW = {
   OVERVIEW: "overview",
   MESSAGES: "messages",
+  INBOX: "inbox",
 } as const;
 
 type ManagerView = (typeof MANAGER_VIEW)[keyof typeof MANAGER_VIEW];
 
-/** A Manager's page's tabs, in their row's order. */
-const MANAGER_VIEWS: readonly ChoiceItem<ManagerView>[] = [
-  { value: MANAGER_VIEW.OVERVIEW, label: "Overview" },
-  { value: MANAGER_VIEW.MESSAGES, label: "Messages" },
-];
+/** A Manager's page's tabs, in their row's order, its Inbox counting the threads that stand open, none at nothing, as the sidebar's counts leave theirs out. */
+function managerViews(open: number): readonly ChoiceItem<ManagerView>[] {
+  const count: readonly CountPart[] | undefined = open === 0 ? undefined : [{ text: String(open) }];
+
+  return [
+    { value: MANAGER_VIEW.OVERVIEW, label: "Overview" },
+    { value: MANAGER_VIEW.MESSAGES, label: "Messages" },
+    { value: MANAGER_VIEW.INBOX, label: TAB_WORDS.INBOX, count },
+  ];
+}
 
 /** What a Manager's page's tab row is called to a reader. */
 const MANAGER_VIEWS_LABEL = "Manager views";
@@ -221,18 +233,26 @@ function useOwnAgents(
   }, [control, agent, pullRequest, skills, keywords]);
 }
 
+/** The read an agent on no task's threads stand on, and those threads as the line over its box draws them; none while it posted none. */
+interface OwnAgentThreads {
+  readonly inbox: TaskInboxControl;
+  readonly threads: AgentThreads | undefined;
+}
+
 /**
  * The threads an agent on no task posted, as the line over its box draws
  * them (`ThreadsDock`): read from the account's feed through the held read
  * an Inbox thread on no task answers on (`useHeldTaskInbox`'s `agentId`),
- * each opening in the window's Inbox; none while it posted none.
+ * with its cards' drafts, each opening where `onOpen` takes it, else in
+ * the window's Inbox.
  */
 function useOwnAgentThreads(
   tasks: TasksControl,
   agents: AgentsControl,
   agentId: string,
-): AgentThreads | undefined {
-  const control = useHeldTaskInbox({
+  onOpenHere: ((item: InboxItem) => void) | undefined,
+): OwnAgentThreads {
+  const control = useTaskInbox({
     taskId: undefined,
     agentId,
     shown: tasks.shown,
@@ -244,12 +264,12 @@ function useOwnAgentThreads(
   const inbox = useInboxDoor(tasks);
 
   const onOpen = useSteadyDoor((item: InboxItem) =>
-    inbox.openItem({ itemId: item.id, opened: true }),
+    onOpenHere === undefined ? inbox.openItem({ itemId: item.id, opened: true }) : onOpenHere(item),
   );
 
   const { open, settled, waiting } = control.board;
 
-  return useMemo(() => {
+  const threads = useMemo(() => {
     const posted = [...open, ...settled]
       .filter((item) => item.agentId === agentId)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
@@ -262,6 +282,8 @@ function useOwnAgentThreads(
       onOpen,
     };
   }, [open, settled, waiting, agentId, onOpen]);
+
+  return { inbox: control, threads };
 }
 
 /**
@@ -395,6 +417,25 @@ function OwnAgentHead({
   );
 }
 
+/** The agent as the holder of its threads, as the window's Inbox names an agent on no task (`use-taskless-inbox-groups.ts`). */
+function useOwnAgentHolder(agent: ListedAgent, agents: AgentsControl) {
+  const name = agentName(agent, agents.models);
+  const { id, model, workspaceId, repository, face } = agent;
+
+  return useMemo(() => {
+    const named: InboxHolderAgent = {
+      id,
+      name,
+      model,
+      workspaceId,
+      repository,
+      ...(face === undefined ? undefined : { face }),
+    };
+
+    return agentHolder(named);
+  }, [id, name, model, workspaceId, repository, face]);
+}
+
 /**
  * An agent on no task as its own page draws it: its head, and under it its
  * conversation and box, the pane its tab on a task draws, a row naming a
@@ -450,7 +491,27 @@ function OwnAgentPage({
   );
 
   const agents = useOwnAgents(tasks, agent, place);
-  const threads = useOwnAgentThreads(tasks, agents, agent.id);
+
+  // Note that a phone's head has no row for views, so a phone's page keeps the chat alone, as it did before them.
+  const manager = agent.kind === AGENT_KIND.MANAGER && away === undefined;
+  // Note that a Manager's page opens on its chat, what it is doing a tab away.
+  const [view, setView] = useState<ManagerView>(MANAGER_VIEW.MESSAGES);
+  // The thread the Inbox tab shows beside its list; none while the list stands alone.
+  const [chosenThread, setChosenThread] = useState<string | undefined>(undefined);
+
+  const openInInboxTab = (item: InboxItem) => {
+    setChosenThread(item.id);
+    setView(MANAGER_VIEW.INBOX);
+  };
+
+  const { inbox, threads } = useOwnAgentThreads(
+    tasks,
+    agents,
+    agent.id,
+    manager ? openInInboxTab : undefined,
+  );
+
+  const holder = useOwnAgentHolder(agent, agents);
   const views = useTabViews();
   const label = agentName(agent, agents.models);
   const cards = taskCards({ agents, held: views.held, chosen: () => false, pages: undefined });
@@ -489,11 +550,8 @@ function OwnAgentPage({
     [workspaceId, repository, agents.agentIds, agents.heldIds, openPullRequest, openPageBeside],
   );
 
-  // Note that a phone's head has no row for views, so a phone's page keeps the chat alone, as it did before them.
-  const manager = agent.kind === AGENT_KIND.MANAGER && away === undefined;
-  // Note that a Manager's page opens on its chat, what it is doing a tab away.
-  const [view, setView] = useState<ManagerView>(MANAGER_VIEW.MESSAGES);
   const ids = useId();
+  const openThreads = inbox.board.open.filter((item) => item.agentId === agent.id).length;
   const panels = (value: ManagerView) => ({ tab: `${ids}tab-${value}`, panel: `${ids}panel` });
   const chat = manager && view === MANAGER_VIEW.MESSAGES;
 
@@ -526,7 +584,7 @@ function OwnAgentPage({
                 middle={
                   <ChoiceBar
                     label={MANAGER_VIEWS_LABEL}
-                    items={MANAGER_VIEWS}
+                    items={managerViews(openThreads)}
                     value={view}
                     look={CHOICE_BAR_LOOK.FILL}
                     panels={panels}
@@ -538,6 +596,22 @@ function OwnAgentPage({
             {manager && view === MANAGER_VIEW.OVERVIEW ? (
               <Fill id={panels(view).panel} role="tabpanel" aria-labelledby={panels(view).tab}>
                 <ManagerOverview tasks={tasks} manager={agent} threads={threads} staged={staged} />
+              </Fill>
+            ) : manager && view === MANAGER_VIEW.INBOX ? (
+              <Fill id={panels(view).panel} role="tabpanel" aria-labelledby={panels(view).tab}>
+                <AgentThreadsView
+                  agentId={agent.id}
+                  holder={holder}
+                  tasks={tasks}
+                  agentsOf={agents}
+                  inbox={inbox}
+                  chosen={chosenThread}
+                  shown={tasks.shown && !sidePanel.fullScreen}
+                  active={tasks.shown && !sideFocused}
+                  onChoose={setChosenThread}
+                  onBack={() => setView(MANAGER_VIEW.MESSAGES)}
+                  tabbed
+                />
               </Fill>
             ) : (
               // Note that the scope stands as the column's own box, as its fill did, and is the panel of the tab shown on a Manager's page.
