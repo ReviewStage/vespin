@@ -2186,6 +2186,7 @@ const MANAGER_CHAT: AppManagerChat = {
   messages: [
     {
       id: "a3c9e1f4",
+      clientKey: "fixture-manager-chat-a3c9e1f4",
       seq: 3,
       authorKind: MANAGER_CHAT_AUTHOR.AGENT,
       authorUserId: null,
@@ -2201,6 +2202,7 @@ const MANAGER_CHAT: AppManagerChat = {
     },
     {
       id: "7b2d40e8",
+      clientKey: "fixture-manager-chat-7b2d40e8",
       seq: 2,
       authorKind: MANAGER_CHAT_AUTHOR.AGENT,
       authorUserId: null,
@@ -2216,6 +2218,7 @@ const MANAGER_CHAT: AppManagerChat = {
     },
     {
       id: "e0f5a612",
+      clientKey: "fixture-manager-chat-e0f5a612",
       seq: 1,
       authorKind: MANAGER_CHAT_AUTHOR.PERSON,
       authorUserId: ADA.userId,

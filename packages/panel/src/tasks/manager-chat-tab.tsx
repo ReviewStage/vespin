@@ -45,6 +45,8 @@ import { keptPictureSchema } from "@repo/features/conversation-picture-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import {
+  CHAT_RUN_ALONE,
+  type ChatRunPlace,
   chatWorkWords,
   type ManagerChatLine,
   managerChatView,
@@ -450,12 +452,14 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   );
 }
 
-/** One of the reader's messages on its way to the chat, or refused: their row under their name, its files over its words, standing as it will once sent, or with its mark where it did not go. */
+/** One of the reader's messages on its way to the chat, or refused: their row in the run it will stand in once sent, under their name where it opens one, its files over its words, or with its mark where it did not go. */
 function SendingLine({
   line,
+  place,
   readerId,
 }: {
   line: SentLine;
+  place: ChatRunPlace;
   readerId: string | undefined;
 }): ReactNode {
   const refused = line.state !== SENT_LINE_STATE.PENDING;
@@ -475,6 +479,7 @@ function SendingLine({
             avatar={<ActorMark actor={reader} size={ACTOR_SIZE.CARD} />}
             name={name}
             at={refused ? sentTime(line.sentAt) : undefined}
+            continues={!place.opens}
             under={refused ? <UndeliveredMark messageId={line.id} /> : undefined}
           >
             {body.files}
@@ -575,7 +580,12 @@ type ChatRow =
   | { readonly kind: typeof CHAT_ROW.GREETING; readonly key: string; readonly words: string }
   | { readonly kind: typeof CHAT_ROW.MESSAGE; readonly key: string; readonly line: ManagerChatLine }
   | { readonly kind: typeof CHAT_ROW.RULE; readonly key: string; readonly count: number }
-  | { readonly kind: typeof CHAT_ROW.SENDING; readonly key: string; readonly line: SentLine };
+  | {
+      readonly kind: typeof CHAT_ROW.SENDING;
+      readonly key: string;
+      readonly line: SentLine;
+      readonly place: ChatRunPlace;
+    };
 
 /** The key the greeting's row stands under, which no message's id is. */
 const GREETING_KEY = "greeting";
@@ -586,18 +596,36 @@ const RULE_KEY = "rule";
 /** The height a row of the chat is taken to have before it is drawn and measured, in pixels: a short message's, with the step before it. */
 const CHAT_ROW_ESTIMATE_PX = 88;
 
+/** A message's row, under the key it was written under, which its line on its way stood under, so the row lands in that line's place. */
+function messageRowOf(line: ManagerChatLine): ChatRow {
+  return { kind: CHAT_ROW.MESSAGE, key: line.message.clientKey, line };
+}
+
+/** The reader's messages on their way as rows, each under the key it went under, in the run the view placed it in (`ManagerChatView.sending`). */
+function sendingRowsOf(
+  sent: readonly SentLine[],
+  places: ReadonlyMap<string, ChatRunPlace>,
+): readonly ChatRow[] {
+  return sent.map((line) => ({
+    kind: CHAT_ROW.SENDING,
+    key: line.clientKey,
+    line,
+    place: places.get(line.clientKey) ?? CHAT_RUN_ALONE,
+  }));
+}
+
 /** The chat's log as rows: the greeting where the chat's start is read, its messages oldest first, and the reader's on their way after them. */
 function chatRowsOf(
   greeting: string | undefined,
   lines: readonly ManagerChatLine[],
-  sent: readonly SentLine[],
+  sent: readonly ChatRow[],
 ): readonly ChatRow[] {
   return [
     ...(greeting === undefined
       ? []
       : [{ kind: CHAT_ROW.GREETING, key: GREETING_KEY, words: greeting } as const]),
-    ...lines.map((line): ChatRow => ({ kind: CHAT_ROW.MESSAGE, key: line.message.id, line })),
-    ...sent.map((line): ChatRow => ({ kind: CHAT_ROW.SENDING, key: line.id, line })),
+    ...lines.map(messageRowOf),
+    ...sent,
   ];
 }
 
@@ -605,13 +633,13 @@ function chatRowsOf(
 function threadRowsOf(
   root: ManagerChatLine,
   replies: readonly ManagerChatLine[],
-  sent: readonly SentLine[],
+  sent: readonly ChatRow[],
 ): readonly ChatRow[] {
   return [
-    { kind: CHAT_ROW.MESSAGE, key: root.message.id, line: root },
+    messageRowOf(root),
     { kind: CHAT_ROW.RULE, key: RULE_KEY, count: replies.length },
-    ...replies.map((line): ChatRow => ({ kind: CHAT_ROW.MESSAGE, key: line.message.id, line })),
-    ...sent.map((line): ChatRow => ({ kind: CHAT_ROW.SENDING, key: line.id, line })),
+    ...replies.map(messageRowOf),
+    ...sent,
   ];
 }
 
@@ -626,7 +654,11 @@ function useChatRowClass(rows: readonly ChatRow[]): (index: number) => string {
       if (index === 0) return LOG_ROW_CLASS;
       const row = rows[index];
 
-      return row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens
+      const continues =
+        (row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens) ||
+        (row?.kind === CHAT_ROW.SENDING && !row.place.opens);
+
+      return continues
         ? `${LOG_ROW_CLASS} agent-log-row-run`
         : `${LOG_ROW_CLASS} agent-log-row-next`;
     },
@@ -834,9 +866,14 @@ function useManagerChatBox({
   const name = agentName(agent, control.models);
   const manager = useMemo(() => ({ name, face: agent.face }), [name, agent.face]);
 
+  // Note that the reader's messages on their way are placed with the rows, so each stands in the run its row will land in.
   const view = useMemo(
-    () => managerChatView(chat?.messages ?? [], transcript.messages, { running }),
-    [chat?.messages, transcript.messages, running],
+    () =>
+      managerChatView(chat?.messages ?? [], transcript.messages, {
+        running,
+        sending: chat?.sending ?? NONE_SENDING,
+      }),
+    [chat?.messages, chat?.sending, transcript.messages, running],
   );
 
   const delegation = useMemo(
@@ -1045,9 +1082,9 @@ export function ManagerChatTab({
       chatRowsOf(
         before === undefined ? managerGreeting(agent.title) : undefined,
         view.top,
-        composer.sent,
+        sendingRowsOf(composer.sent, view.sending),
       ),
-    [before, agent.title, view.top, composer.sent],
+    [before, agent.title, view.top, composer.sent, view.sending],
   );
 
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
@@ -1118,7 +1155,9 @@ export function ManagerChatTab({
     if (row.kind === CHAT_ROW.GREETING)
       return <ManagerGreeting manager={manager} words={row.words} />;
 
-    if (row.kind === CHAT_ROW.SENDING) return <SendingLine line={row.line} readerId={control.me} />;
+    if (row.kind === CHAT_ROW.SENDING) {
+      return <SendingLine line={row.line} place={row.place} readerId={control.me} />;
+    }
 
     if (row.kind === CHAT_ROW.RULE) return <ThreadRule count={row.count} />;
 
@@ -1292,11 +1331,11 @@ export function ManagerThreadTab({
         ? NO_ROWS
         : threadRowsOf(
             // Note that the root stands alone in the tab, under its sender's name.
-            { ...rootLine, place: { opens: true, closes: true } },
+            { ...rootLine, place: CHAT_RUN_ALONE },
             view.threads.get(root) ?? NO_LINES,
-            composer.sent,
+            sendingRowsOf(composer.sent, view.sending),
           ),
-    [rootLine, view.threads, root, composer.sent],
+    [rootLine, view.threads, root, composer.sent, view.sending],
   );
 
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
@@ -1308,7 +1347,9 @@ export function ManagerThreadTab({
 
   /** One row of the thread, as its kind draws it. */
   const drawRow = (row: ChatRow): ReactNode => {
-    if (row.kind === CHAT_ROW.SENDING) return <SendingLine line={row.line} readerId={control.me} />;
+    if (row.kind === CHAT_ROW.SENDING) {
+      return <SendingLine line={row.line} place={row.place} readerId={control.me} />;
+    }
 
     if (row.kind === CHAT_ROW.RULE) return <ThreadRule count={row.count} />;
 

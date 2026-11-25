@@ -1990,11 +1990,12 @@ it.effect(
     }),
 );
 
-/** A Manager's chat's message as its row is delivered, by its `seq`: the Manager's words, sent at the instant its `seq` names. */
+/** A Manager's chat's message as its row is delivered, by its `seq`: the Manager's words, written under a key of its own and sent at the instant its `seq` names. */
 function chatRow(seq: number) {
   return {
     id: `m${seq}`,
     seq,
+    clientKey: `key-${seq}`,
     authorKind: "agent",
     authorUserId: null,
     authorName: "Manager",
@@ -2073,7 +2074,7 @@ it.effect(
 );
 
 it.effect(
-  "a message sent to a Manager's chat stands drawn on it from its send, under the id answered, until its row lands, and one refused stands marked until it is let go",
+  "a message sent to a Manager's chat stands drawn on it from its send until a row written under its key lands, the row landing before the send answers included, and one refused stands marked until it is let go",
   () =>
     Effect.gen(function* () {
       const { acts, live, managerChats, answerChat } = yield* subject();
@@ -2083,16 +2084,26 @@ it.effect(
       live.managerChat.set({ messages: chatRows(3, 1) });
       yield* acts.AGENTS_MANAGER_CHAT_FOLLOW.hold({ agentId: AGENT_ID });
       yield* settled;
-      const told = managerChats().length;
+      const answered = yield* Deferred.make<void>();
+      answerChat({ agent: AGENT, messageId: "a1b2c3d4" }, Deferred.await(answered));
 
-      yield* acts.AGENTS_CHAT_SEND({ agentId: AGENT_ID, text: "Ship it.", clientKey: "send-1" });
-      assert.deepEqual(managerChats().slice(told).map(sendingOf), [
-        [sent],
-        [{ ...sent, messageId: "a1b2c3d4" }],
-      ]);
+      const sending = yield* Effect.forkChild(
+        acts.AGENTS_CHAT_SEND({ agentId: AGENT_ID, text: "Ship it.", clientKey: "send-1" }),
+      );
 
-      live.managerChat.set({ messages: [{ ...chatRow(4), id: "a1b2c3d4" }, ...chatRows(3, 1)] });
+      yield* settled;
+      assert.deepEqual(sendingOf(managerChats().at(-1)), [sent]);
+
+      // The chat's read brings the message's row while its send has not answered.
+      const landed = { ...chatRow(4), id: "a1b2c3d4", clientKey: "send-1" };
+      live.managerChat.set({ messages: [landed, ...chatRows(3, 1)] });
       yield* nextPoll;
+      assert.deepEqual(managerChats().at(-1)?.[AGENT_ID]?.rows, {
+        messages: [landed, ...chatRows(3, 1)],
+      });
+
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(sending);
       assert.equal(sendingOf(managerChats().at(-1)), undefined);
 
       const refused = { failure: AGENT_CALL_FAILURE.UNANSWERED };

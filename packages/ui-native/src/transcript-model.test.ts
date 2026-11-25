@@ -846,6 +846,7 @@ describe("managerChatItems", () => {
   ): ManagerChatLiveMessage => ({
     id,
     seq,
+    clientKey: `key-${id}`,
     authorUserId: null,
     authorName: "Pat",
     attachments: [],
@@ -910,6 +911,7 @@ describe("managerChatItems", () => {
         messages: lines,
         top: lines,
         threads: new Map(),
+        sending: new Map(),
         work: new Map(),
         live: [],
       },
@@ -978,6 +980,7 @@ describe("managerChatItems", () => {
           messages: [{ message: said, place: run(true, true), work: "turn" }],
           top: [{ message: said, place: run(true, true), work: "turn" }],
           threads: new Map(),
+          sending: new Map(),
           work: new Map([["turn", agentParts(turn)]]),
           live: [],
         },

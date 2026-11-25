@@ -82,6 +82,7 @@ function row(
   return {
     id,
     seq,
+    clientKey: `key-${id}`,
     authorKind: person === undefined ? MANAGER_CHAT_AUTHOR.AGENT : MANAGER_CHAT_AUTHOR.PERSON,
     authorUserId: person?.userId ?? null,
     authorName: person?.name ?? "Iris",
@@ -249,6 +250,20 @@ async function drawChat(
   return { container, sent, carried, answered, threads, keys, older };
 }
 
+/** Each row a scope draws, the greeting aside: its sender's name where its run opens, and its words. */
+function rowsIn(scope: Element) {
+  return [...scope.querySelectorAll(".ui-channel-message")].flatMap((drawn) =>
+    drawn.closest("[data-manager-greeting]") === null
+      ? [
+          [
+            drawn.querySelector(".ui-channel-message-head > span")?.textContent?.trim() ?? null,
+            drawn.querySelector(".ui-channel-message-words")?.textContent ?? "",
+          ],
+        ]
+      : [],
+  );
+}
+
 test("each message is a row under its sender's name where their run opens, a thread's replies stand under its message as a count that opens the thread beside the chat, and the thread's box replies in it", async () => {
   const { container, sent, threads } = await drawChat([
     row("dean", 1, "Ship the invite flow.", DEAN),
@@ -258,19 +273,6 @@ test("each message is a row under its sender's name where their run opens, a thr
     { ...row("asked", 5, "Which repo?", CHARLES), threadRoot: "first" },
     { ...row("answered", 6, "The web app's."), threadRoot: "first" },
   ]);
-
-  /** Each row a scope draws: its sender's name where its run opens, and its words. */
-  const rowsIn = (scope: Element) =>
-    [...scope.querySelectorAll(".ui-channel-message")].flatMap((drawn) =>
-      drawn.closest("[data-manager-greeting]") === null
-        ? [
-            [
-              drawn.querySelector(".ui-channel-message-head > span")?.textContent?.trim() ?? null,
-              drawn.querySelector(".ui-channel-message-words")?.textContent ?? "",
-            ],
-          ]
-        : [],
-    );
 
   assert.deepEqual(rowsIn(container), [
     [DEAN.name, "Ship the invite flow."],
@@ -342,6 +344,34 @@ test("a person's picture stands as its chip where their words name it, not as a 
     ),
     ["This picture Picture 1 reads wrong.\nTake it?"],
   );
+});
+
+test("a message on its way stands in its sender's run as its row will, under the message before it", async () => {
+  const { container } = await drawChat(
+    [
+      row("ask", 1, "Ship the invite flow.", DEAN),
+      row("told", 2, "On it."),
+      row("seven", 3, "Seven days.", DEAN),
+    ],
+    {
+      sending: [
+        {
+          clientKey: "9e2f4a6c-1d3b-4e5f-8a7c-0b2d4f6e8a1c",
+          text: "Not five.",
+          sentAt: 4_000,
+          sentBy: DEAN.userId,
+        },
+      ],
+    },
+  );
+
+  // Note that the working line the send opens stands under it, which is no message.
+  assert.deepEqual(rowsIn(container).slice(0, 4), [
+    [DEAN.name, "Ship the invite flow."],
+    ["Iris", "On it."],
+    [DEAN.name, "Seven days."],
+    [null, "Not five."],
+  ]);
 });
 
 test("a thread's reply the service refused stands marked in its thread, and Retry sends it again there under its own key, with its files", async () => {
