@@ -57,6 +57,11 @@ import { InboxList, InboxListNote, InboxPaneEmpty } from "../tasks/inbox-list.js
 import { useInboxPager } from "../tasks/inbox-pager.js";
 import { type InboxNewThread, InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
 import type { OpenFileLines } from "../tasks/mention-chip.js";
+import {
+  landInPrototypeThread,
+  PROTO_MANAGER,
+  prototypeThreadOfItem,
+} from "../tasks/prototype-chat-ask.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import {
@@ -267,6 +272,16 @@ export const DesktopInbox = memo(function DesktopInbox({
 
   // A row's press opens its item, the keyboard following it, one on no task as one on a task.
   const open = (listed: InboxListed<InboxAnyHolder>) => {
+    // PROTOTYPE: a Manager's ask lives in its chat, so its row lands in the chat's thread.
+    const root = prototypeThreadOfItem(listed.item.id);
+
+    if (root !== undefined) {
+      landInPrototypeThread(root);
+      tasks.agentView.onOpen(PROTO_MANAGER);
+
+      return;
+    }
+
     timeOpen(listed.item.id);
     choose(listed);
     columns.onOpen(listed.item.id);

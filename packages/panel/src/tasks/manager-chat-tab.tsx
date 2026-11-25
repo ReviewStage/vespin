@@ -134,6 +134,13 @@ import {
   useThreadDoors,
 } from "./manager-chat-threads.js";
 import { useMoveToCloud } from "./move-agent.js";
+import {
+  PROTO_ASK_STANDING,
+  PrototypeAnsweredHead,
+  PrototypeChatAsk,
+  prototypeAskStanding,
+  usePrototypeChat,
+} from "./prototype-chat-ask.js";
 import { ReplyDoorProvider, ReplyToSelection, useBoxReplyDoor } from "./reply-to-selection.js";
 import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { SentMessage } from "./skill-chip.js";
@@ -168,6 +175,10 @@ interface ChatDoors {
   readonly lines: ReadonlyMap<string, AgentTranscriptMessage>;
   /** The chat's threads, which its rows open; none in a thread's own tab, whose rows open no thread, nor where nothing beside the chat shows a thread. */
   readonly thread?: ChatThreadDoors | undefined;
+  /** PROTOTYPE: how an ask's option pictures are read. */
+  readonly readInboxImage: AgentsControl["readInboxImage"];
+  /** PROTOTYPE: lands in the chat on an ask's thread, from the Inbox tab's filter of the chat; none in the chat itself. */
+  readonly land?: ((root: string) => void) | undefined;
 }
 
 /** The chat's threads as its rows read them: each root's replies by the root's id, the thread its page's side panel shows, and the press that opens one there. */
@@ -361,6 +372,12 @@ function ManagerMessage({
                 {files.length === 0 ? null : <KeptFileChips files={files} />}
               </div>
             )}
+            <PrototypeChatAsk
+              messageId={message.id}
+              readerId={doors.readerId}
+              readInboxImage={doors.readInboxImage}
+              onLand={doors.land === undefined ? undefined : () => doors.land?.(message.id)}
+            />
             {thread.summary}
           </>
         }
@@ -442,6 +459,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
             }
             under={thread.summary}
           >
+            <PrototypeAnsweredHead messageId={message.id} />
             {body.files}
             {body.words}
           </ChannelMessage>
@@ -579,7 +597,12 @@ const CHAT_ROW = {
 type ChatRow =
   | { readonly kind: typeof CHAT_ROW.GREETING; readonly key: string; readonly words: string }
   | { readonly kind: typeof CHAT_ROW.MESSAGE; readonly key: string; readonly line: ManagerChatLine }
-  | { readonly kind: typeof CHAT_ROW.RULE; readonly key: string; readonly count: number }
+  | {
+      readonly kind: typeof CHAT_ROW.RULE;
+      readonly key: string;
+      readonly count: number;
+      readonly label?: string;
+    }
   | {
       readonly kind: typeof CHAT_ROW.SENDING;
       readonly key: string;
@@ -627,6 +650,36 @@ function chatRowsOf(
     ...lines.map(messageRowOf),
     ...sent,
   ];
+}
+
+/**
+ * PROTOTYPE: the chat filtered to the messages that ask, as the Manager's
+ * Inbox tab draws it: settled first, then those waiting on someone else,
+ * and those waiting on the reader last, where the log opens, each group
+ * under a rule naming it and each message alone, under its sender's name.
+ */
+function askRowsOf(
+  lines: readonly ManagerChatLine[],
+  readerId: string | undefined,
+): readonly ChatRow[] {
+  const groups = [
+    { standing: PROTO_ASK_STANDING.SETTLED, label: "Settled" },
+    { standing: PROTO_ASK_STANDING.OTHERS, label: "Waiting on others" },
+    { standing: PROTO_ASK_STANDING.READER, label: "Waiting on you" },
+  ] as const;
+
+  return groups.flatMap(({ standing, label }) => {
+    const asking = lines.filter(
+      (line) => prototypeAskStanding(line.message.id, readerId) === standing,
+    );
+
+    if (asking.length === 0) return [];
+
+    return [
+      { kind: CHAT_ROW.RULE, key: `rule-${standing}`, count: asking.length, label } as const,
+      ...asking.map((line) => messageRowOf({ ...line, place: CHAT_RUN_ALONE })),
+    ];
+  });
 }
 
 /** A thread's log as rows: the message it stands on, the rule counting its replies, its replies oldest first, and the reader's on their way after them. */
@@ -888,8 +941,14 @@ function useManagerChatBox({
 
   // Note that these doors open no thread; the chat's own rows add theirs.
   const doors: ChatDoors = useMemo(
-    () => ({ manager, readerId: control.me, delegation, lines }),
-    [manager, control.me, delegation, lines],
+    () => ({
+      manager,
+      readerId: control.me,
+      delegation,
+      lines,
+      readInboxImage: control.readInboxImage,
+    }),
+    [manager, control.me, delegation, lines, control.readInboxImage],
   );
 
   /** The rows of one turn's work, by the transcript line that opened it, folded over the Manager's first message of the turn. */
@@ -983,7 +1042,15 @@ export function ManagerChatTab({
   onOpenTarget,
   cards,
   threads,
-}: ManagerChatTabDoors): ReactNode {
+  asksOnly = false,
+  onLand,
+}: ManagerChatTabDoors & {
+  /** PROTOTYPE: the chat filtered to its asks, as the Manager's Inbox tab draws it, with no box. */
+  asksOnly?: boolean;
+  /** PROTOTYPE: lands in the chat on an ask's thread. */
+  onLand?: (root: string) => void;
+}): ReactNode {
+  const protoVersion = usePrototypeChat();
   const chatBox = useManagerChatBox({
     agent,
     control,
@@ -1056,12 +1123,13 @@ export function ManagerChatTab({
   const doors = useMemo(
     () =>
       opener === undefined
-        ? chatBox.doors
+        ? { ...chatBox.doors, land: onLand }
         : {
             ...chatBox.doors,
+            land: onLand,
             thread: { replies: view.threads, open: opener.open, onOpen: opener.onOpen },
           },
-    [chatBox.doors, view.threads, opener],
+    [chatBox.doors, view.threads, opener, onLand],
   );
 
   const ended =
@@ -1079,15 +1147,43 @@ export function ManagerChatTab({
 
   const rows = useMemo(
     () =>
-      chatRowsOf(
-        before === undefined ? managerGreeting(agent.title) : undefined,
-        view.top,
-        sendingRowsOf(composer.sent, view.sending.channel),
-      ),
-    [before, agent.title, view.top, composer.sent, view.sending],
+      // Note that the version is read so an answer regroups the asks.
+      asksOnly && protoVersion >= 0
+        ? askRowsOf(view.top, control.me)
+        : chatRowsOf(
+            before === undefined ? managerGreeting(agent.title) : undefined,
+            view.top,
+            sendingRowsOf(composer.sent, view.sending.channel),
+          ),
+    [
+      asksOnly,
+      protoVersion,
+      control.me,
+      before,
+      agent.title,
+      view.top,
+      composer.sent,
+      view.sending,
+    ],
   );
 
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
+
+  // PROTOTYPE: the thread opened beside the chat brings the message it stands on into view, as landing in it from an Inbox does.
+  const openThreadRoot = opener?.open;
+  useEffect(() => {
+    if (openThreadRoot === undefined) return;
+    const row = rows.find(
+      (each) => each.kind === CHAT_ROW.MESSAGE && each.line.message.id === openThreadRoot,
+    );
+    const timer = setTimeout(() => {
+      if (row !== undefined) rowsHandle.current?.bringIn(row.key);
+    }, 150);
+
+    return () => clearTimeout(timer);
+    // Note that only the thread opening moves the view, never a row landing.
+  }, [openThreadRoot]);
+
   const ownLast = ownLastOf(rows, control.me);
   const finding = useFindOpen();
   const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
@@ -1159,7 +1255,7 @@ export function ManagerChatTab({
       return <SendingLine line={row.line} place={row.place} readerId={control.me} />;
     }
 
-    if (row.kind === CHAT_ROW.RULE) return <ThreadRule count={row.count} />;
+    if (row.kind === CHAT_ROW.RULE) return <ThreadRule count={row.count} label={row.label} />;
 
     return drawLine(row.line, doors);
   };
@@ -1216,15 +1312,17 @@ export function ManagerChatTab({
           <RewindProvider value={rewind}>
             <ReplyDoorProvider value={chatBox.replies ? chatBox.replyThroughBox : undefined}>
               {log}
-              <AgentTabFoot>
-                <ThreadsDock threads={threads} />
-                {chatBox.dock({
-                  box,
-                  approvalsWaiting: approvals.waiting,
-                  transcript,
-                  queue: { controls: true, working: standing.working, editing: queueEditing },
-                })}
-              </AgentTabFoot>
+              {asksOnly ? null : (
+                <AgentTabFoot>
+                  <ThreadsDock threads={threads} />
+                  {chatBox.dock({
+                    box,
+                    approvalsWaiting: approvals.waiting,
+                    transcript,
+                    queue: { controls: true, working: standing.working, editing: queueEditing },
+                  })}
+                </AgentTabFoot>
+              )}
             </ReplyDoorProvider>
           </RewindProvider>
         </UndeliveredLines>

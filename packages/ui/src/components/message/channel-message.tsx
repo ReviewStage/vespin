@@ -135,12 +135,19 @@ export function ThreadReplies({
 }
 
 /** The rule under a thread's message, in its tab, that counts the replies after it; none before anyone answered. */
-export function ThreadRule({ count }: { count: number }): React.JSX.Element | null {
+export function ThreadRule({
+  count,
+  label,
+}: {
+  count: number;
+  /** PROTOTYPE: words of its own in the count's place, as a section of a filtered chat is headed. */
+  label?: string | undefined;
+}): React.JSX.Element | null {
   if (count === 0) return null;
 
   return (
     <div className="ui-thread-rule flex items-center gap-ui-8 px-ui-8 py-ui-6 text-caption text-muted-foreground">
-      <span className="flex-none">{repliesWords(count)}</span>
+      <span className="flex-none">{label ?? repliesWords(count)}</span>
       <span className="h-px flex-1 bg-border" />
     </div>
   );

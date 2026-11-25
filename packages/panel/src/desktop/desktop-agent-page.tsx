@@ -42,7 +42,6 @@ import {
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
-import { agentHolder, type InboxHolderAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
@@ -83,7 +82,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Predicate } from "effect";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
 import { FindScope } from "../find-in-tab.js";
@@ -95,9 +94,15 @@ import { useTaskListCollections, useTaskListRow } from "../task-list-collections
 import { agentName } from "../tasks/agent-model.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
-import { ManagerThreadTab } from "../tasks/manager-chat-tab.js";
+import { ManagerChatTab, ManagerThreadTab } from "../tasks/manager-chat-tab.js";
 import { ThreadDoorsProvider } from "../tasks/manager-chat-threads.js";
 import type { OpenFileLines } from "../tasks/mention-chip.js";
+import {
+  onPrototypeThreadAsked,
+  prototypeThreadOfItem,
+  takePrototypeThread,
+  usePrototypeChat,
+} from "../tasks/prototype-chat-ask.js";
 import { ManagerGlyph } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
@@ -110,7 +115,6 @@ import { type TaskInboxControl, useTaskInbox } from "../tasks/use-task-inbox.js"
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
-import { AgentThreads as AgentThreadsView } from "./agent-threads.js";
 import { AgentPane } from "./main-tabs.js";
 import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
@@ -428,25 +432,6 @@ function OwnAgentHead({
   );
 }
 
-/** The agent as the holder of its threads, as the window's Inbox names an agent on no task (`use-taskless-inbox-groups.ts`). */
-function useOwnAgentHolder(agent: ListedAgent, agents: AgentsControl) {
-  const name = agentName(agent, agents.models);
-  const { id, model, workspaceId, repository, face } = agent;
-
-  return useMemo(() => {
-    const named: InboxHolderAgent = {
-      id,
-      name,
-      model,
-      workspaceId,
-      repository,
-      ...(face === undefined ? undefined : { face }),
-    };
-
-    return agentHolder(named);
-  }, [id, name, model, workspaceId, repository, face]);
-}
-
 /**
  * An agent on no task as its own page draws it: its head, and under it its
  * conversation and box, the pane its tab on a task draws, a row naming a
@@ -504,13 +489,25 @@ function OwnAgentPage({
   const agents = useOwnAgents(tasks, agent, place);
 
   // Note that a phone's head has no row for views, so a phone's page keeps the chat alone, as it did before them.
-  const manager = agent.kind === AGENT_KIND.MANAGER && away === undefined;
+  // PROTOTYPE: a phone's page stands the views too, so the Inbox tab is a tap away there.
+  const manager = agent.kind === AGENT_KIND.MANAGER;
   // Note that a Manager's page opens on its chat, what it is doing a tab away.
   const [view, setView] = useState<ManagerView>(MANAGER_VIEW.MESSAGES);
   // The thread the Inbox tab shows beside its list; none while the list stands alone.
-  const [chosenThread, setChosenThread] = useState<string | undefined>(undefined);
+  const [, setChosenThread] = useState<string | undefined>(undefined);
+
+  // PROTOTYPE: an ask lives in the chat, so opening it from the Inbox tab or the dock lands in its chat thread.
+  const landInThread = useRef<(root: string) => void>(() => undefined);
 
   const openInInboxTab = (item: InboxItem) => {
+    const root = prototypeThreadOfItem(item.id);
+
+    if (root !== undefined) {
+      landInThread.current(root);
+
+      return;
+    }
+
     setChosenThread(item.id);
     setView(MANAGER_VIEW.INBOX);
   };
@@ -522,7 +519,6 @@ function OwnAgentPage({
     manager ? openInInboxTab : undefined,
   );
 
-  const holder = useOwnAgentHolder(agent, agents);
   const views = useTabViews();
   const label = agentName(agent, agents.models);
   const cards = taskCards({ agents, held: views.held, chosen: () => false, pages: undefined });
@@ -562,7 +558,11 @@ function OwnAgentPage({
   );
 
   const ids = useId();
-  const openThreads = inbox.board.open.filter((item) => item.agentId === agent.id).length;
+  usePrototypeChat();
+  // PROTOTYPE: the tab counts the asks that wait on the reader, as the Inbox's own count does.
+  const openThreads = inbox.board.open.filter(
+    (item) => item.agentId === agent.id && (item.waitsOn?.userId ?? tasks.me) === tasks.me,
+  ).length;
   const panels = (value: ManagerView) => ({ tab: `${ids}tab-${value}`, panel: `${ids}panel` });
   const chat = manager && view === MANAGER_VIEW.MESSAGES;
 
@@ -583,6 +583,23 @@ function OwnAgentPage({
       : undefined;
 
   const openThread = useSteadyDoor((root: string) => openPanelTab(threadTab(root, agent.id)));
+
+  landInThread.current = (root: string) => {
+    setView(MANAGER_VIEW.MESSAGES);
+    openThread(root);
+  };
+
+  // PROTOTYPE: a row of the window's Inbox asked this page to open its thread, as it opened or while it stands.
+  useEffect(() => {
+    const land = () => {
+      const root = takePrototypeThread();
+
+      if (root !== undefined) landInThread.current(root);
+    };
+    land();
+
+    return onPrototypeThreadAsked(land);
+  }, []);
 
   const threadDoors = useMemo(
     () => ({ open: shownThread, onOpen: openThread }),
@@ -620,7 +637,7 @@ function OwnAgentPage({
             as={FILL_ELEMENT.SECTION}
             className="agent-page"
             aria-label={label}
-            data-chat={chat ? "" : undefined}
+            data-chat={chat || (manager && view === MANAGER_VIEW.INBOX) ? "" : undefined}
             hidden={sidePanel.fullScreen}
           >
             <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
@@ -644,21 +661,30 @@ function OwnAgentPage({
                 <ManagerOverview tasks={tasks} manager={agent} threads={threads} staged={staged} />
               </Fill>
             ) : manager && view === MANAGER_VIEW.INBOX ? (
-              <Fill id={panels(view).panel} role="tabpanel" aria-labelledby={panels(view).tab}>
-                <AgentThreadsView
-                  agentId={agent.id}
-                  holder={holder}
-                  tasks={tasks}
-                  agentsOf={agents}
-                  inbox={inbox}
-                  chosen={chosenThread}
-                  shown={tasks.shown && !sidePanel.fullScreen}
-                  active={tasks.shown && !sideFocused}
-                  onChoose={setChosenThread}
-                  onBack={() => setView(MANAGER_VIEW.MESSAGES)}
-                  tabbed
-                />
-              </Fill>
+              // PROTOTYPE: the Inbox tab is the chat filtered to its asks, each thread opening beside it.
+              <FindScope
+                className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+                active={tasks.shown && !sideFocused}
+                subject={findSubject}
+                id={panels(view).panel}
+                role="tabpanel"
+                aria-labelledby={panels(view).tab}
+              >
+                <ThreadDoorsProvider value={threadDoors}>
+                  {summary === undefined ? null : (
+                    <ManagerChatTab
+                      agent={summary}
+                      control={agents}
+                      shown={tasks.shown && !sidePanel.fullScreen}
+                      onOpenTarget={openTarget}
+                      cards={cards.agent(agent.id)}
+                      threads={undefined}
+                      asksOnly
+                      onLand={(root) => landInThread.current(root)}
+                    />
+                  )}
+                </ThreadDoorsProvider>
+              </FindScope>
             ) : (
               // Note that the scope stands as the column's own box, as its fill did, and is the panel of the tab shown on a Manager's page.
               <FindScope

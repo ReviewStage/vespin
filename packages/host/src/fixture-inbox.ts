@@ -128,7 +128,7 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
-import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
@@ -818,28 +818,6 @@ const INBOXES: ReadonlyMap<string, readonly InboxItem[]> = new Map([
   [TASK.DIGEST, DIGEST_ITEMS],
   [TASK.ROUNDING, ROUNDING_ITEMS],
 ]);
-
-/**
- * Each agent on no task's inbox, by the agent's id: the release Manager's one
- * question, which the Inbox lists under the Manager rather than a task, as
- * the account's feed carries it (`AppInboxItems`' `agents`).
- */
-const AGENT_INBOXES = {
-  [AGENT.MANAGER]: [
-    item(60, AGENT.MANAGER, "cut-the-release", "Cut the release?", [
-      agentSaid(
-        600,
-        30 * MINUTE,
-        "Invites and the digest are merged and CI is green on main. Should I cut 0.25.0 now, or wait for the rounding fix?",
-        {
-          type: INBOX_ASK.DECIDE,
-          options: [{ label: "Cut it now" }, { label: "Wait for rounding" }],
-          ...OPEN,
-        },
-      ),
-    ]),
-  ],
-} satisfies Readonly<Record<string, readonly InboxItem[]>>;
 
 /** How many threads the large Inbox adds beside the staged ones, about as many as a busy real account holds (639 on the one that was timed). */
 const LARGE_THREADS = 600;
@@ -2329,6 +2307,361 @@ const MANAGER_CHAT: AppManagerChat = {
   ],
 };
 
+/* ----- PROTOTYPE: one thread kind for Managers (throwaway, never merged) ----- */
+
+/**
+ * PROTOTYPE. The release Manager's asks, each standing on a message of its
+ * chat rather than in an Inbox thread of its own: the message is the ask's
+ * root, its thread the ask's conversation, and the Inbox lists the same ask
+ * as an item whose id is the root's, so opening it lands in the chat's
+ * thread. Answering, from anywhere, writes the member's reply into the
+ * thread and, a beat later, the Manager's acknowledgment.
+ */
+export interface PrototypeChatAsk {
+  /** The Inbox item the ask is listed as, and the chat message it stands on, by one id. */
+  readonly id: string;
+  readonly title: string;
+  readonly text: string;
+  readonly askedAt: number;
+  readonly waitsOn: { readonly userId: string; readonly name: string };
+  /** The ask as the Inbox reads it, its message's id the one an answer names. */
+  readonly message: InboxMessage;
+  /** What the Manager says once it is answered; `{answer}` stands for the answer's words. */
+  readonly ack: string;
+}
+
+/** An ask's answer, as the prototype keeps it. */
+export interface PrototypeChatAnswer {
+  readonly answers: NonNullable<InboxMessage["answers"]>;
+  readonly words: string;
+  readonly at: number;
+  /** The member's reply in the thread that carried it. */
+  readonly replyId: string;
+}
+
+/** The prototype's ids, numbered past every other fixture id. */
+function protoId(n: number): string {
+  return fixtureId(0x7000 + n);
+}
+
+/** The prototype's asks, oldest first: one settled, three waiting on the account, and one waiting on Grace. */
+const PROTO_ASKS: readonly PrototypeChatAsk[] = [
+  {
+    id: protoId(1),
+    title: "Merge #128 now?",
+    text: "#128 has Grace's approval and green checks. Merge it now, or hold it for the audit log line?",
+    askedAt: MANAGER_STARTED + 10 * MINUTE,
+    waitsOn: ADA,
+    message: {
+      ...agentSaid(0x7101, LANDED - (MANAGER_STARTED + 10 * MINUTE), "", {
+        type: INBOX_ASK.DECIDE,
+        options: [{ label: "Merge now" }, { label: "Hold for the audit log" }],
+        recommended: "Merge now",
+        ...OPEN,
+      }),
+    },
+    ack: "Merged #128. The audit log line follows in its own PR.",
+  },
+  {
+    id: protoId(2),
+    title: "Which invite email ships?",
+    text: "Two takes on the invite email. Both pass the email client matrix; I'd ship the card.",
+    askedAt: MANAGER_STARTED + 20 * MINUTE,
+    waitsOn: ADA,
+    message: {
+      ...agentSaid(0x7102, LANDED - (MANAGER_STARTED + 20 * MINUTE), "", {
+        type: INBOX_ASK.DECIDE,
+        options: [
+          {
+            label: "The card",
+            detail: "Logo, one line, and a big Accept button.",
+            media: [turnEndMedia(TURN_END.CARD, "In Gmail")],
+          },
+          {
+            label: "The letter",
+            detail: "Plain words from the inviter, the link inline.",
+            media: [
+              turnEndMedia(TURN_END.DOCK, "In Apple Mail"),
+              turnEndMedia(TURN_END.RECORDING, "Opening it on a phone", true),
+            ],
+          },
+        ],
+        recommended: "The card",
+        ...OPEN,
+      }),
+      files: [
+        { attachmentId: TURN_END.CARD, name: "In Gmail", mediaType: AGENT_ATTACHMENT_TYPE.PNG },
+        {
+          attachmentId: TURN_END.DOCK,
+          name: "In Apple Mail",
+          mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+        },
+        {
+          attachmentId: TURN_END.RECORDING,
+          name: "Opening it on a phone",
+          mediaType: CONVERSATION_MEDIA_TYPE.WEBM,
+        },
+      ],
+    },
+    ack: "Going with {answer}. I've told the invitations agent, and it's swapping the template now.",
+  },
+  {
+    id: protoId(3),
+    title: "Set up production for invites",
+    text: "Three things I can't do from here before invites go out. Tick each as you go.",
+    askedAt: MANAGER_STARTED + 40 * MINUTE,
+    waitsOn: ADA,
+    message: agentSaid(0x7103, LANDED - (MANAGER_STARTED + 40 * MINUTE), "", {
+      type: INBOX_ASK.DO,
+      steps: [
+        "Add `RESEND_API_KEY` to production on Vercel",
+        "Verify the `invites.vespin.dev` sending domain in Resend",
+        "Turn on the `invites` flag for the beta cohort",
+      ],
+      ...OPEN,
+    }),
+    ack: "Thanks. I'll send a test invite from production and post how it looks.",
+  },
+  {
+    id: protoId(4),
+    title: "Release notes for 0.25.0",
+    text: "I'm drafting the 0.25.0 notes. A few things only you can say:",
+    askedAt: MANAGER_STARTED + 60 * MINUTE,
+    waitsOn: ADA,
+    message: agentSaid(0x7104, LANDED - (MANAGER_STARTED + 60 * MINUTE), "", {
+      type: INBOX_ASK.ANSWER,
+      fields: [
+        { type: INBOX_FIELD.TEXT, label: "Headline", required: true },
+        {
+          type: INBOX_FIELD.SELECT,
+          label: "Who it's for",
+          options: ["Everyone", "The beta cohort"],
+          recommended: "Everyone",
+        },
+        { type: INBOX_FIELD.BOOLEAN, label: "Mention the weekly digest" },
+      ],
+      ...OPEN,
+    }),
+    ack: "Drafted. The notes lead with your headline; I'll post them here before the tag.",
+  },
+  {
+    id: protoId(5),
+    title: "When does the digest go out?",
+    text: "Grace, the weekly digest needs a send time before it ships with 0.25.0.",
+    askedAt: MANAGER_STARTED + 75 * MINUTE,
+    waitsOn: GRACE,
+    message: agentSaid(0x7105, LANDED - (MANAGER_STARTED + 75 * MINUTE), "", {
+      type: INBOX_ASK.DECIDE,
+      options: [{ label: "8am in each reader's zone" }, { label: "9am Eastern for everyone" }],
+      ...OPEN,
+    }),
+    ack: "Going with {answer}.",
+  },
+];
+
+/** The answers given, by ask; the first ask stands answered from the start. */
+const protoAnswers = new Map<string, PrototypeChatAnswer>([
+  [
+    protoId(1),
+    {
+      answers: { ask: fixtureId(0x7101), reply: INBOX_REPLY.CHOSE, choices: ["Merge now"] },
+      words: "Merge now",
+      at: MANAGER_STARTED + 12 * MINUTE,
+      replyId: protoId(0x101),
+    },
+  ],
+]);
+
+/** The messages answering wrote into the chat, newest last. */
+const protoWritten: ManagerChatLiveMessage[] = [];
+
+const protoListeners = new Set<() => void>();
+let protoVersion = 0;
+
+/** A message of the Manager's or the account's in the prototype's chat. */
+function protoChatMessage(
+  id: string,
+  seq: number,
+  by: "agent" | "ada",
+  text: string,
+  at: number,
+  threadRoot: string | null,
+): ManagerChatLiveMessage {
+  return {
+    id,
+    clientKey: `prototype-${id}`,
+    seq,
+    authorKind: by === "agent" ? MANAGER_CHAT_AUTHOR.AGENT : MANAGER_CHAT_AUTHOR.PERSON,
+    authorUserId: by === "agent" ? null : ADA.userId,
+    authorName: by === "agent" ? "Release manager" : ADA.name,
+    text,
+    attachments: [],
+    threadRoot,
+    broadcast: false,
+    turnId: null,
+    lineId: null,
+    createdAt: at,
+    editedAt: null,
+  };
+}
+
+/** The settled ask's thread as staged: the account's answer and the Manager's acknowledgment. */
+const PROTO_STAGED_REPLIES: readonly ManagerChatLiveMessage[] = [
+  protoChatMessage(
+    protoId(0x101),
+    101,
+    "ada",
+    "Merge now",
+    MANAGER_STARTED + 12 * MINUTE,
+    protoId(1),
+  ),
+  protoChatMessage(
+    protoId(0x102),
+    102,
+    "agent",
+    "Merged #128. The audit log line follows in its own PR.",
+    MANAGER_STARTED + 13 * MINUTE,
+    protoId(1),
+  ),
+];
+
+/** Every ask the prototype stages. */
+export function prototypeChatAsks(): readonly PrototypeChatAsk[] {
+  return PROTO_ASKS;
+}
+
+/** The ask standing on the chat message, or listed as the Inbox item, of `id`. */
+export function prototypeChatAsk(id: string): PrototypeChatAsk | undefined {
+  return PROTO_ASKS.find((each) => each.id === id);
+}
+
+/** The ask's answer, where it is answered. */
+export function prototypeChatAnswer(id: string): PrototypeChatAnswer | undefined {
+  return protoAnswers.get(id);
+}
+
+/** The ask a reply of the thread answered, where it is one. */
+export function prototypeAnsweredBy(replyId: string): PrototypeChatAsk | undefined {
+  const entry = [...protoAnswers].find(([, answer]) => answer.replyId === replyId);
+
+  return entry === undefined ? undefined : prototypeChatAsk(entry[0]);
+}
+
+/** The Manager whose chat the prototype's asks stand in. */
+export const PROTOTYPE_MANAGER_ID = AGENT.MANAGER;
+
+/** Hears every change of the prototype's asks. */
+export function onPrototypeChatMoved(listener: () => void): () => void {
+  protoListeners.add(listener);
+
+  return () => protoListeners.delete(listener);
+}
+
+/** A number that moves with each change, for a reader to follow. */
+export function prototypeChatVersion(): number {
+  return protoVersion;
+}
+
+function protoMoved(): void {
+  protoVersion += 1;
+
+  for (const listener of protoListeners) listener();
+}
+
+/** Answers the ask: the account's reply in its thread at once, and the Manager's acknowledgment a beat later. */
+export function answerPrototypeChatAsk(
+  id: string,
+  answers: NonNullable<InboxMessage["answers"]>,
+  words: string,
+): void {
+  const ask = prototypeChatAsk(id);
+
+  if (ask === undefined || protoAnswers.has(id)) return;
+  const now = Date.now();
+  const seq = 200 + protoWritten.length;
+  const reply = protoChatMessage(`prototype-reply-${id}`, seq, "ada", words, now, id);
+  protoWritten.push(reply);
+  protoAnswers.set(id, { answers, words, at: now, replyId: reply.id });
+  protoMoved();
+
+  setTimeout(() => {
+    protoWritten.push(
+      protoChatMessage(
+        `prototype-ack-${id}`,
+        200 + protoWritten.length,
+        "agent",
+        ask.ack.replace("{answer}", words),
+        Date.now(),
+        id,
+      ),
+    );
+    protoMoved();
+  }, 1200);
+}
+
+/** The ask as the Inbox lists it: an item of the Manager's, open until it is answered, its thread the ask and the answer. */
+function protoItem(ask: PrototypeChatAsk): InboxItem {
+  const answer = protoAnswers.get(ask.id);
+  const message: InboxMessage = {
+    ...ask.message,
+    text: ask.text,
+    ...(ask.message.ask === undefined
+      ? undefined
+      : {
+          ask: {
+            ...ask.message.ask,
+            status: answer === undefined ? INBOX_ASK_STATUS.OPEN : INBOX_ASK_STATUS.ANSWERED,
+          },
+        }),
+  };
+
+  const thread: InboxMessage[] = [message];
+
+  if (answer !== undefined) {
+    thread.push({
+      id: fixtureId(0x7200 + PROTO_ASKS.indexOf(ask)),
+      author: INBOX_MESSAGE_AUTHOR.MEMBER,
+      member: ADA,
+      text: "",
+      answers: answer.answers,
+      createdAt: answer.at,
+    });
+  }
+
+  return {
+    ...item(0, AGENT.MANAGER, `chat-ask-${PROTO_ASKS.indexOf(ask)}`, ask.title, thread),
+    id: ask.id,
+    waitsOn: ask.waitsOn,
+    addressed: true,
+    needsReply: answer === undefined,
+    status: answer === undefined ? INBOX_STATUS.OPEN : INBOX_STATUS.ANSWERED,
+    ...(answer === undefined ? undefined : { answeredBy: ADA, settledAt: answer.at }),
+    unread: answer === undefined && ask.waitsOn.userId === ADA.userId,
+  };
+}
+
+/** The Manager's Inbox as the prototype lists it: its chat's asks. */
+function prototypeAgentInboxes(): Readonly<Record<string, readonly InboxItem[]>> {
+  return { [AGENT.MANAGER]: PROTO_ASKS.map(protoItem) };
+}
+
+/** The prototype's items as the Inbox lists them, for a reader that lists them itself. */
+export function prototypeChatItem(id: string): InboxItem | undefined {
+  const ask = prototypeChatAsk(id);
+
+  return ask === undefined ? undefined : protoItem(ask);
+}
+
+/** The Manager's chat with the asks' messages, their staged replies, and what answering wrote laid in, newest first. */
+function prototypeManagerChat(): AppManagerChat {
+  const roots = PROTO_ASKS.map((ask, at) =>
+    protoChatMessage(ask.id, 10 + at, "agent", ask.text, ask.askedAt, null),
+  );
+  const laid = [...MANAGER_CHAT.messages, ...roots, ...PROTO_STAGED_REPLIES, ...protoWritten];
+
+  return { messages: laid.toSorted((a, b) => b.seq - a.seq) };
+}
+
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
 function withQueued(transcript: AppTranscript): AppTranscript {
   const queued = [
@@ -2622,7 +2955,8 @@ const INTEGRATIONS: IntegrationStatusesAnswer = {
     {
       provider: INTEGRATION_PROVIDER.SENTRY,
       connection: "sentry",
-      status: INTEGRATION_STATUS.EXPIRED,
+      // PROTOTYPE: connected, so no sign-in toast stands over the prototype's shots.
+      status: INTEGRATION_STATUS.CONNECTED,
     },
   ],
 };
@@ -2838,7 +3172,7 @@ export function inboxAppState(
     ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.TASK]: fed, agents: AGENT_INBOXES },
+      rows: { [INBOX_SCOPE_KIND.TASK]: fed, agents: prototypeAgentInboxes() },
     },
     [LIVE_READ.HELD_TASK]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
@@ -2848,7 +3182,7 @@ export function inboxAppState(
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MANAGER_CHAT]: {
       ...state[LIVE_READ.MANAGER_CHAT],
-      [AGENT.MANAGER]: { rows: MANAGER_CHAT },
+      [AGENT.MANAGER]: { rows: prototypeManagerChat() },
     },
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
@@ -3742,7 +4076,9 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
   [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
-    if (itemId === TURN_END.ITEM) return turnEndFile(attachmentId, playable);
+    // PROTOTYPE: a chat ask's option pictures are the turn-end thread's.
+    if (itemId === TURN_END.ITEM || prototypeChatAsk(itemId) !== undefined)
+      return turnEndFile(attachmentId, playable);
 
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
