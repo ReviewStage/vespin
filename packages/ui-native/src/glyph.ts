@@ -238,6 +238,14 @@ export const GLYPH = {
   MOVE_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   ADD_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_PLUS),
   REMOVE_FROM_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
+  /** A section's Change icon and Add icon, the panel's Lucide SmilePlus, which the catalog's Lucide names FaceSlightlySmilingPlus, among every glyph it holds. */
+  CHANGE_ICON: catalogLucide("FaceSlightlySmilingPlus"),
+  /** A section's icon's Color, the colors its glyph may wear, Lucide's Palette, among every glyph the catalog holds. */
+  ICON_COLOR: catalogLucide("Palette"),
+  /** A repository's Keep at top, the panel's arrow to the top rather than a pin so it never reads as Pinned, among every glyph the catalog holds. */
+  KEEP_AT_TOP: catalogLucide("ArrowUpToLine"),
+  /** A repository's Stop keeping at top, the panel's arrow down from the top, among every glyph the catalog holds. */
+  STOP_KEEPING_AT_TOP: catalogLucide("ArrowDownFromLine"),
   NEW_THREAD: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE_PLUS),
   NEW_FILE: lucide(LUCIDE_SYMBOL.FILE_PLUS),
   NEW_ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_PLUS),

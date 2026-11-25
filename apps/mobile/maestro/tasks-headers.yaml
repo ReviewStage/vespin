@@ -1,0 +1,116 @@
+# tasks-headers.yaml -- the Tasks list's group headers as the desktop's sidebar heads them: a repository's + opening New task with the repository chosen, its long press holding Keep at top beside Open on GitHub, a section's long press holding Change icon with the picker's suggested glyphs, Color, Emoji, and Remove icon, and a row's Move to holding New section, which asks for the section's name.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, as `tasks.yaml` is, so the tree holds
+# the fixture's sections, Experiments wearing a rocket and Ideas an emoji,
+# and its tasks in two repositories, relay and ledger. Nothing is picked
+# from a menu, since the fixture stages no section or repository pin write.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- assertVisible: "Pinned"
+# A repository's header ends in its +, New task in it, as the desktop's
+# sidebar header's does, which opens New task with the repository chosen
+# rather than the newest one the account's tasks were about.
+- runFlow:
+    file: subflows/to-row.yaml
+    env:
+      ROW: "New task in ledger"
+- takeScreenshot: tasks-headers-repository-add
+- tapOn: "New task in ledger"
+- assertVisible: "Describe the task"
+- assertVisible: "ada/ledger"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-repository-new-task
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Describe the task"
+    timeout: 5000
+# A long press on the repository's header holds Keep at top beside Open on
+# GitHub, as the desktop's right-click on it does.
+- runFlow:
+    file: subflows/to-row.yaml
+    env:
+      ROW: "New task in ledger"
+- longPressOn:
+    text: "ledger"
+    childOf: "ledger, [0-9]+"
+- assertVisible: "Keep at top"
+- assertVisible: "Open on GitHub"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-repository-menu
+# A section's long press holds Change icon after Rename, as the desktop's
+# does: the picker's suggested glyphs in the color the section's glyph
+# wears, the rocket it wears checked, then Color, Emoji, and Remove icon.
+# Note that the app is launched again rather than the menu tapped away,
+# because a tall menu stands over any point a tap off it could take.
+- launchApp:
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- scrollUntilVisible:
+    element: "Experiments"
+    direction: UP
+- waitForAnimationToEnd
+- longPressOn: "Experiments"
+- assertVisible: "Rename"
+- assertVisible: "Change icon"
+- assertVisible: "Delete section"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-section-menu
+- tapOn: "Change icon"
+- assertVisible: "Rocket"
+- assertVisible: "Folder"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-section-icons
+- scrollUntilVisible:
+    element: "Remove icon"
+    direction: DOWN
+- assertVisible: "Emoji"
+- tapOn: "Color"
+- assertVisible: "Black"
+- assertVisible: "Teal"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-section-colors
+# A row's Move to, in More, holds New section after the sections, as the
+# desktop's Move to section does, which asks for the name in the system's
+# alert, saying the task moves into it; Cancel makes nothing.
+- launchApp:
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Launch checklist
+      ITEM: More
+- tapOn: "More"
+- tapOn: "Move to"
+- assertVisible: "New section"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-move-to
+- tapOn: "New section"
+- assertVisible: ".*Launch checklist.* moves into it"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-new-section
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: ".* moves into it"
+    timeout: 5000
+- assertVisible: "Launch checklist"

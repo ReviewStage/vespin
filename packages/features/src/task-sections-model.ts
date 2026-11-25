@@ -21,14 +21,49 @@ import {
 import { taskFinished } from "./task-list-model.js";
 import {
   type AgentSectionEntry,
+  TASK_SECTION_ICON_COLOR,
   TASK_SECTION_WRITE,
   type TaskSection,
   type TaskSectionEntry,
+  type TaskSectionIconColor,
   type TaskSections,
   type TaskSectionWrite,
 } from "./task-section-wire.js";
 import { applySectionWrite, entryFor } from "./task-section-writes.js";
 import type { TaskSummary } from "./task-wire.js";
+
+/** What makes a section, as the Tasks head and Move to section offer it. */
+export const NEW_SECTION = "New section";
+
+/** What a section's icon act is called: Change icon where it wears one, Add icon where it wears none. */
+export const SECTION_ICON_ACT = { CHANGE: "Change icon", ADD: "Add icon" } as const;
+
+/** What takes a section's icon away, leaving it none. */
+export const REMOVE_SECTION_ICON = "Remove icon";
+
+/** Each color a section's glyph may wear, as the icon picker names it. */
+export const SECTION_ICON_COLOR_WORDS = {
+  [TASK_SECTION_ICON_COLOR.RED]: "Red",
+  [TASK_SECTION_ICON_COLOR.ORANGE]: "Orange",
+  [TASK_SECTION_ICON_COLOR.YELLOW]: "Yellow",
+  [TASK_SECTION_ICON_COLOR.GREEN]: "Green",
+  [TASK_SECTION_ICON_COLOR.TEAL]: "Teal",
+  [TASK_SECTION_ICON_COLOR.BLUE]: "Blue",
+  [TASK_SECTION_ICON_COLOR.PURPLE]: "Purple",
+  [TASK_SECTION_ICON_COLOR.PINK]: "Pink",
+} as const satisfies Record<TaskSectionIconColor, string>;
+
+/** What a glyph wearing no color, the text's own ink, is called: white over a dark ground, black over a light one. */
+export function textInkWords(dark: boolean): string {
+  return dark ? "White" : "Black";
+}
+
+/** What a glyph is called where it is named, its words in sentence case: `flask-conical` as "Flask conical". */
+export function sectionGlyphWords(glyph: string): string {
+  const words = glyph.split("-").join(" ");
+
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 /** What the notice says once a section was deleted, its Undo beside it. */
 export const SECTION_DELETED = "Section deleted";

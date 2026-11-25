@@ -1,4 +1,4 @@
-// index.tsx -- New task, Home's composer as a sheet, or Create with an agent where the route's `purpose` names an automation, which a bar's compose opens, a task's New sub-task opens as a sub-task of the task the route's `parent` names, a section's + opens to file the task in the section `section` names, and a draft the share sheet kept opens prefilled, its pictures attached (`share-sheet.ts`).
+// index.tsx -- New task, Home's composer as a sheet, or Create with an agent where the route's `purpose` names an automation, which a bar's compose opens, a task's New sub-task opens as a sub-task of the task the route's `parent` names, a section's + opens to file the task in the section `section` names, a repository header's + opens in the repository `repository` names, and a draft the share sheet kept opens prefilled, its pictures attached (`share-sheet.ts`).
 
 import { SHARE_DRAFT_PICTURE_FILES } from "@repo/features/ios-share-wire";
 import { useLocalSearchParams } from "expo-router";
@@ -47,6 +47,7 @@ export default function StartTaskRoute() {
     <NewTaskScreen
       parent={parent === "" ? undefined : parent}
       section={section === "" ? undefined : section}
+      repository={prompt === undefined && repository !== "" ? repository : undefined}
       forAutomation={purpose === START_PURPOSE.AUTOMATION}
       draft={
         prompt === undefined
