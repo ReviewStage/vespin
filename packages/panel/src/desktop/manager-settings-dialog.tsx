@@ -28,8 +28,11 @@
  *
  * Memory lists the Manager's own memories, those it alone recalls, with
  * workspace Settings › Memory's own section at the Manager's scope
- * (`MemorySection`), so a memory added there is kept for it alone, in the
- * workspace the Manager's task list row names, whichever surface opened it.
+ * (`MemorySection`), so a memory added there is kept for it alone.
+ *
+ * Every section reads the Manager's workspace as the dialog reads it once,
+ * off the Manager's task list row, whichever surface opened it, since only
+ * the Manager's own page knows it beside the agent; none reads it on its own.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
@@ -134,12 +137,19 @@ const WORDS = {
   STARTS_ON_YOURS: " Agents it starts for you run on yours.",
 } as const;
 
-/** What a Manager's Settings reads of it. */
+/** What a Manager's Settings is handed of it by the surface that opens it. */
 export type ManagerSettingsSubject = AgentSummary & {
-  /** The workspace it is in; none where the surface does not know it. */
-  readonly workspaceId?: string | undefined;
   /** Its checkout, the first repository it works in; none where the surface does not know it. */
   readonly repository?: string | null | undefined;
+};
+
+/**
+ * The Manager as every section reads it: what the surface handed, and the
+ * workspace it stands in, read once by the dialog off its task list row;
+ * none until that row arrives.
+ */
+type SettingsManager = ManagerSettingsSubject & {
+  readonly workspaceId: string | undefined;
 };
 
 /** What a Manager's Settings saves through: the control its agent is listed in, as its box reads it. */
@@ -176,7 +186,7 @@ function IdentityRow({
   agent,
   agents,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   agents: Pick<AgentsControl, "rename" | "onFace">;
 }): React.JSX.Element {
   const name = agent.title ?? "";
@@ -233,7 +243,7 @@ function PayerLine({
   agent,
   me,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   me: string | undefined;
 }): React.JSX.Element {
   const owner = teammateStarter(agent.startedBy, me);
@@ -261,7 +271,7 @@ function ModelRow({
   me,
   box,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   me: string | undefined;
   box: AgentBox;
 }): React.JSX.Element {
@@ -300,7 +310,7 @@ function GeneralSection({
   acts,
   onClose,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   agents: ManagerSettingsDoors;
   acts: ManagerSettingsActs;
   onClose: () => void;
@@ -377,7 +387,7 @@ function AutomationsSection({
   agent,
   onClose,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   onClose: () => void;
 }): React.JSX.Element {
   const automations = useAutomations(agent.workspaceId);
@@ -447,18 +457,12 @@ function AutomationsSection({
 }
 
 /** Memory: the Manager's own memories, in the workspace it stands in, as workspace Settings › Memory lists the workspace's. */
-function MemoryOfManager({
-  agent,
-  workspaceId,
-}: {
-  agent: ManagerSettingsSubject;
-  /** The workspace the Manager stands in, as its task list row names it; none until that row arrives, while Memory stands on its skeleton. */
-  workspaceId: string | undefined;
-}): React.JSX.Element {
+function MemoryOfManager({ agent }: { agent: SettingsManager }): React.JSX.Element {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
   const readerId = signedInAccountId(account);
-  const workspace = workspaces?.find((each) => each.id === workspaceId);
+  // Note that Memory stands on its skeleton until the Manager's task list row names its workspace.
+  const workspace = workspaces?.find((each) => each.id === agent.workspaceId);
 
   return (
     <MemorySection
@@ -483,13 +487,15 @@ export function useManagerSettingsDialog(
   const [chosen, setSection] = useState<Section>(SECTION.GENERAL);
   const close = () => setOpen(false);
 
-  // Note that the Manager's workspace is read off its task list row, whichever surface opened the dialog, and Memory stands only where that workspace has Memory on, as workspace Settings lists it.
+  // Note that the Manager's workspace is read once, off its task list row, whichever surface opened the dialog, and handed to every section, so none reads it on its own.
   const workspaceId = useTaskListRowAs(
     useTaskListCollections().agents,
     agent.id,
     (row) => row?.workspaceId,
   );
 
+  const manager: SettingsManager = { ...agent, workspaceId };
+  // Memory stands only where the workspace has Memory on, as workspace Settings lists it.
   const memoryOn = useWorkspaceExperiment(workspaceId, EXPERIMENT.MEMORY);
   const sections = memoryOn ? SECTIONS : SECTIONS.filter((each) => each.id !== SECTION.MEMORY);
   const section = chosen === SECTION.MEMORY && !memoryOn ? SECTION.GENERAL : chosen;
@@ -505,17 +511,15 @@ export function useManagerSettingsDialog(
       onDismiss={close}
     >
       {section === SECTION.GENERAL ? (
-        <GeneralSection agent={agent} agents={agents} acts={acts} onClose={close} />
+        <GeneralSection agent={manager} agents={agents} acts={acts} onClose={close} />
       ) : null}
       {section === SECTION.PEOPLE ? (
-        <ManagerPeopleSection agentId={agent.id} workspaceId={agent.workspaceId} />
+        <ManagerPeopleSection agentId={agent.id} workspaceId={workspaceId} />
       ) : null}
       {section === SECTION.AUTOMATIONS ? (
-        <AutomationsSection agent={agent} onClose={close} />
+        <AutomationsSection agent={manager} onClose={close} />
       ) : null}
-      {section === SECTION.MEMORY ? (
-        <MemoryOfManager agent={agent} workspaceId={workspaceId} />
-      ) : null}
+      {section === SECTION.MEMORY ? <MemoryOfManager agent={manager} /> : null}
     </SettingsDialog>
   );
 
