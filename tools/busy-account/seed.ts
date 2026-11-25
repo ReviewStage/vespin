@@ -5,7 +5,9 @@
  * (STAG-3917): 3,240 plans, 4,831 agents, 639 Inbox threads (~4.8 MB read
  * whole), 220 of them on open tasks and the other 419 each on an old settled
  * task outside the live list's thirty days, which "what waits" names and the
- * phone reads one by one. Scale 3 triples each. Rows are written through the
+ * phone reads one by one. Scale 3 triples the plans, agents and threads but
+ * keeps the 220 open tasks, so every thread it adds sits on an old task: 1,697
+ * read one by one, the 3× the diagnosis measured. Rows are written through the
  * host's own writer, so the copy's schema is the build's, and every answer
  * is checked against the build's own read schemas before it is written.
  *
@@ -71,7 +73,7 @@ const { values: ARGS } = parseArgs({
 /** How many times the measured account's size the seed is. */
 const MULTIPLE = Number(ARGS.scale);
 
-/** The threads on open tasks, the newest; every one past them sits on an old settled task of its own, outside the live list. */
+/** The open tasks, the newest, and the threads on them, one each, at every scale; every thread past them sits on an old settled task of its own, outside the live list. */
 const OPEN_HOLDERS = 220;
 
 /** The account's size: at 1, the developer's first whole read's (639 threads at about 4.8 MB) beside a list of Dean's size. */
@@ -138,7 +140,7 @@ function planAt(index: number): PlanRow {
   const created = NOW - index * 3 * HOUR;
   const owner = at(PEOPLE, index);
   const assignee = at(PEOPLE, index + 1);
-  const open = index < 220;
+  const open = index < OPEN_HOLDERS;
 
   return {
     id: uuid(1, index),
@@ -198,7 +200,7 @@ function agentAt(index: number): AgentRow {
   const plan = index % SCALE.PLANS;
   const created = NOW - plan * 3 * HOUR + (index >= SCALE.PLANS ? 20 * MINUTE : 0);
   const starter = at(PEOPLE, index);
-  const archived = plan >= 220;
+  const archived = plan >= OPEN_HOLDERS;
   const running = index < 12;
 
   const prs =
@@ -212,7 +214,8 @@ function agentAt(index: number): AgentRow {
   // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
   return {
     id: uuid(2, index),
-    taskId: index % 40 === 39 ? null : uuid(1, plan),
+    // Note that an agent holding a thread keeps its task, since the thread is that task's.
+    taskId: index % 40 === 39 && index >= OPEN_HOLDERS ? null : uuid(1, plan),
     workspaceId: plan % 9 === 0 ? WORKSPACE_OWN : WORKSPACE_TEAM,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
@@ -301,7 +304,7 @@ function said(
 /** The `n`th Inbox item, on the `n`th open plan's first agent, `n` × 40 minutes back. */
 function inboxAt(n: number): SeededThread {
   const old = n >= OPEN_HOLDERS;
-  const plan = old ? SCALE.PLANS + (n - OPEN_HOLDERS) : n % 220;
+  const plan = old ? SCALE.PLANS + (n - OPEN_HOLDERS) : n;
   const ago = (n + 1) * 40 * MINUTE;
 
   const thread = [
@@ -543,12 +546,18 @@ function oldPlanAt(k: number): PlanRow {
   } as PlanRow;
 }
 
-/** The `k`th old task's one agent, archived with it. */
+/** The `k`th old task's one agent, archived with it, in its task's workspace. */
 function oldAgentAt(k: number): AgentRow {
   const agent = agentAt(SCALE.AGENTS + k);
+  const plan = oldPlanAt(k);
 
   // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
-  return { ...agent, id: uuid(2, SCALE.AGENTS + k), taskId: uuid(1, SCALE.PLANS + k) } as AgentRow;
+  return {
+    ...agent,
+    id: uuid(2, SCALE.AGENTS + k),
+    taskId: plan.id,
+    workspaceId: plan.workspaceId,
+  } as AgentRow;
 }
 
 /** "What waits" whole: every task holding a thread, as the account's read of it answers, so each the list does not hold is read alone. */

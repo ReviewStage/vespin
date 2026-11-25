@@ -50,8 +50,9 @@ fi
 udid=$1
 output=$2
 mkdir -p "$output"
-# Note that an earlier run's count is let go first, so a run that writes none never leaves an older one standing as its own.
-rm -f "$output/launch-load.json" "$output/app-ready.json"
+# Note that an earlier run's count and trace are let go first, so a run that writes none never leaves an older one standing as its own, and xctrace, which refuses to record over a trace, records afresh.
+rm -f "$output/launch-load.json" "$output/app-ready.json" "$output/xctrace.log"
+rm -rf "$output/launch.trace"
 seed=$(mktemp -d)
 trap 'rm -rf "$seed"' EXIT
 
