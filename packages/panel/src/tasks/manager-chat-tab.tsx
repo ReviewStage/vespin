@@ -215,7 +215,7 @@ function ChatFace({ face }: { face: ManagerFaceValue | undefined }): ReactNode {
 function useWorkToggle(): ChatWorkToggle {
   const [shown, setShown] = useState(false);
 
-  return { shown, onToggle: () => setShown((was) => !was) };
+  return { shown, onToggle: () => setShown((was) => !was), onShow: () => setShown(true) };
 }
 
 /** A kept picture as the transcript names one, where a file of a message is one kept with its size; none for any other file. */
@@ -303,9 +303,8 @@ function ManagerMessage({
   const finding = useFindOpen();
   const workDrawn = work !== null && (toggle.shown || finding);
 
-  const workRest = useUntilFound<HTMLDivElement>(workDrawn && !toggle.shown, () => {
-    if (!toggle.shown) toggle.onToggle();
-  });
+  // Note that a find opens the work rather than toggling it, because a match in a cut code card inside tells both that card and this rest, and two toggles would cancel.
+  const workRest = useUntilFound<HTMLDivElement>(workDrawn && !toggle.shown, toggle.onShow);
 
   // Note that the Manager's pictures kept with their size stand as the set it showed, as the transcript draws a shown set.
   const shown = shownOf(message);

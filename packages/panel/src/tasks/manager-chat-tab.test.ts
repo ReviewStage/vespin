@@ -547,7 +547,7 @@ test("an ended turn's work is offered as Show work beside the Manager's first me
   assert.equal(first.querySelector('[data-call-id="list-1"]'), null, "the menu folds it away");
 });
 
-test("⌘F finds words in an ended turn's work while it stands closed, and opens it under the message", async () => {
+test("⌘F finds words in an ended turn's work while it stands closed, deep in a call's long output, and opens it under the message as Show work does", async () => {
   // jsdom paints no highlights; the find's are kept as a browser keeps them.
   vi.stubGlobal("CSS", { highlights: new Map(), escape: (words: string) => words });
   vi.stubGlobal("Highlight", Set);
@@ -566,7 +566,16 @@ test("⌘F finds words in an ended turn's work while it stands closed, and opens
           role: MESSAGE_ROLE.ASSISTANT,
           parts: [
             { type: "step-start" },
-            { type: "text", text: "Reading the lantern task before I answer." },
+            {
+              type: "tool-run_command",
+              toolCallId: "run-1",
+              state: "output-available",
+              input: { command: "cat invites.log" },
+              // Note that the match stands past the 40 lines a code card shows before its cut, which a find opens too.
+              output: Array.from({ length: 60 }, (_, at) =>
+                at === 50 ? "the lantern invite" : `invite ${at}`,
+              ).join("\n"),
+            },
           ],
           startedAt: 1_000,
           finishedAt: 79_000,
@@ -603,6 +612,13 @@ test("⌘F finds words in an ended turn's work while it stands closed, and opens
     assert.fail("the turn's work is drawn");
 
   assert.equal(work.hasAttribute("hidden"), false, "and shown, the match in it");
+
+  const told = container.querySelector('[data-message-id="told"]') ?? assert.fail("the message");
+  pointerCross(document.body, told);
+  assert.ok(
+    told.querySelector('button[aria-label="Hide work"]'),
+    "its press now folds the work away, as once Show work opened it",
+  );
 });
 
 test.each([

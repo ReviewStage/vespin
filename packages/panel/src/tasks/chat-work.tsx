@@ -17,10 +17,11 @@ import { ListTreeIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";
 import { MessageAction } from "../ai-elements/message.js";
 
-/** Whether a message's work stands open under it, and the press that opens or folds it. */
+/** Whether a message's work stands open under it, the press that opens or folds it, and what opens it however often it is asked, as a find landing in it does. */
 export interface ChatWorkToggle {
   readonly shown: boolean;
   readonly onToggle: () => void;
+  readonly onShow: () => void;
 }
 
 /** The press beside a message or the working line that opens the work under it, or folds it away. */
