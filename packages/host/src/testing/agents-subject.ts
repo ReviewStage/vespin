@@ -665,6 +665,10 @@ function fakeService() {
 
         return { agent: { ...AGENT, face: request.face } };
       }),
+    followers: () => Effect.succeed(UNANSWERED_CALL),
+    follow: () => Effect.succeed(UNANSWERED_CALL),
+    setFollowerMachines: () => Effect.succeed(UNANSWERED_CALL),
+    changeFollower: () => Effect.succeed(UNANSWERED_CALL),
     answerApproval: (agentId, approvalId, request) =>
       Effect.map(changeGate, () => {
         asked.push(`answerApproval:${agentId}:${approvalId}:${request.answer}`);

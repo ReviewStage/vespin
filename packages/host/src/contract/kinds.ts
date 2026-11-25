@@ -300,6 +300,16 @@ export const AGENT_ACT_KIND = {
   AGENTS_PERMISSION_MODE: "agents.permissionMode",
   /** A Manager's face changed, which every place it is drawn then draws (`manager-face.ts`). */
   AGENTS_FACE: "agents.face",
+  /** A Manager's followers read of the service as its Settings › People shows them, held nowhere here; answers them, its owner first, or why there is no answer. */
+  AGENTS_FOLLOWERS: "agents.followers",
+  /** The account follows a Manager on the service, its machines off, or stops, which its owner may not; answers its followers as they then stand, or why they are unchanged. */
+  AGENTS_FOLLOW: "agents.follow",
+  AGENTS_UNFOLLOW: "agents.unfollow",
+  /** The account's own switch on a Manager it follows, whether it may use the account's machines, set on the service; answers as a follow does. */
+  AGENTS_SET_FOLLOWER_MACHINES: "agents.setFollowerMachines",
+  /** Another member of the Manager's workspace added as a follower on the service, their machines off, or taken away, which its owner may not be; answers as a follow does. */
+  AGENTS_ADD_FOLLOWER: "agents.addFollower",
+  AGENTS_REMOVE_FOLLOWER: "agents.removeFollower",
   /** One tool call an agent holds answered: allowed, allowed for the agent, or denied with words (`agent-approval-wire.ts`). */
   AGENTS_ANSWER_APPROVAL: "agents.answerApproval",
   AGENTS_QUEUE: "agents.queue",
@@ -1194,6 +1204,12 @@ export const PORT_ACT_USE = {
   AGENTS_SERVERS: ACT_USE.WRITE,
   AGENTS_PERMISSION_MODE: ACT_USE.WRITE,
   AGENTS_FACE: ACT_USE.WRITE,
+  AGENTS_FOLLOWERS: ACT_USE.FETCH,
+  AGENTS_FOLLOW: ACT_USE.WRITE,
+  AGENTS_UNFOLLOW: ACT_USE.WRITE,
+  AGENTS_SET_FOLLOWER_MACHINES: ACT_USE.WRITE,
+  AGENTS_ADD_FOLLOWER: ACT_USE.WRITE,
+  AGENTS_REMOVE_FOLLOWER: ACT_USE.WRITE,
   AGENTS_ANSWER_APPROVAL: ACT_USE.WRITE,
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,

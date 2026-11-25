@@ -2,8 +2,10 @@
  * manager-settings-dialog.tsx -- a Manager's Settings: the sectioned settings dialog its Settings button and its menu's Settings… open, its General section changing the Manager as it stands, each row saving itself.
  *
  * The dialog is `@repo/ui`'s `SettingsDialog`, named by the Manager and
- * listing its sections down its start: General, and Automations, the
- * automations that send it work (`AutomationsSection`). General
+ * listing its sections down its start: General; People
+ * (`manager-people-section.tsx`), who follows it and may lend it their
+ * machines; and Automations, the automations that send it work
+ * (`AutomationsSection`). General
  * reads as the rest of Settings does, each row saving itself, so the card has
  * no Save. It opens as workspace Settings opens on its workspace: one row
  * leading with the Manager's face, picked from the face itself
@@ -69,11 +71,13 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import type { MenuAction } from "./action-menu.js";
 import { AutomationRows } from "./automations-page.js";
+import { ManagerPeopleSection } from "./manager-people-section.js";
 import { useAutomations } from "./use-automations.js";
 
 /** The sections a Manager's Settings list. */
 const SECTION = {
   GENERAL: "general",
+  PEOPLE: "people",
   AUTOMATIONS: "automations",
 } as const;
 
@@ -81,6 +85,7 @@ type Section = (typeof SECTION)[keyof typeof SECTION];
 
 const SECTIONS: readonly SettingsDialogSection<Section>[] = [
   { id: SECTION.GENERAL, title: "General", icon: <GLYPH.SETTINGS /> },
+  { id: SECTION.PEOPLE, title: "People", icon: <EntityGlyph kind={ENTITY_KIND.PERSON} /> },
   {
     id: SECTION.AUTOMATIONS,
     title: "Automations",
@@ -405,6 +410,9 @@ export function useManagerSettingsDialog(
     >
       {section === SECTION.GENERAL ? (
         <GeneralSection agent={agent} agents={agents} acts={acts} onClose={close} />
+      ) : null}
+      {section === SECTION.PEOPLE ? (
+        <ManagerPeopleSection agentId={agent.id} workspaceId={agent.workspaceId} />
       ) : null}
       {section === SECTION.AUTOMATIONS ? (
         <AutomationsSection agent={agent} onClose={close} />
