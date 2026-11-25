@@ -595,7 +595,11 @@ export class HostedAgentClient {
   ): Effect.Effect<MemoriesAnswerView, never, HttpClient.HttpClient> {
     // The workspace and the memory ride in the query, since a DELETE carries no body.
     return hostedCall(this.#hosted.account.forgetMemory, {
-      query: { [MEMORY_QUERY.WORKSPACE_ID]: params.workspaceId, [MEMORY_QUERY.ID]: params.id },
+      query: {
+        [MEMORY_QUERY.WORKSPACE_ID]: params.workspaceId,
+        [MEMORY_QUERY.ID]: params.id,
+        ...(params.managerId !== undefined && { [MEMORY_QUERY.MANAGER_ID]: params.managerId }),
+      },
     });
   }
 
