@@ -3,10 +3,11 @@
 import assert from "node:assert/strict";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { act } from "react";
+import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { ShellRoomContext } from "../stage-room.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
@@ -14,7 +15,7 @@ import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { tasksControl } from "../testing/tasks-control.js";
 
 /**
- * sidebar-drawer-narrow.test.ts -- the column gives its tasks the room: the pages' rows scroll away with them beside the work, and a phone's Tasks page draws none, its bar and Search holding them; and an empty Pinned stands nowhere, under a finger or a mouse, whatever the room.
+ * sidebar-drawer-narrow.test.ts -- the column gives its tasks the room: the pages' rows scroll away with them beside the work, and a phone's Tasks page draws none, its bar and Search holding them; and an empty Pinned stands nowhere, under a finger or a mouse, whatever the room. On a phone each open group counts its rows, View options stands in the bar, and a row's menu is grouped as the iOS app's long press groups it.
  */
 
 const WORKSPACE: Workspace = {
@@ -75,7 +76,16 @@ async function mountIn(room: ShellRoom): Promise<HTMLElement> {
     workspace: WORKSPACE,
   });
 
-  act(() => root.render(withQueryClient(drawnSidebar({ ...sidebarProps(tasks), room }))));
+  // Note that the room is handed as the shell hands it, to the column and, through the stage's context, to what draws below it.
+  act(() =>
+    root.render(
+      createElement(
+        ShellRoomContext,
+        { value: room },
+        withQueryClient(drawnSidebar({ ...sidebarProps(tasks), room })),
+      ),
+    ),
+  );
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
@@ -131,4 +141,45 @@ test("beside the work the pages' rows scroll with the tasks too, and an empty Pi
   assert.deepEqual(scrolled(sidebar), { home: true, tasks: true });
   assert.equal(pinnedStands(sidebar), false, "no Pinned");
   assert.doesNotMatch(sidebar.textContent ?? "", /Pinned/u);
+});
+
+test("on a phone the Tasks head counts its tasks while open, View options stands in the bar, and a row's menu leads with Rename and ends with Pin, More, and Permanently delete", async () => {
+  document.documentElement.setAttribute("data-ui-room", "narrow");
+  pointer(true);
+
+  try {
+    const sidebar = await mountIn(SHELL_ROOM.NARROW);
+
+    const head =
+      [...sidebar.querySelectorAll("button")].find(
+        (each) =>
+          each.getAttribute("aria-expanded") === "true" && each.textContent?.startsWith("My tasks"),
+      ) ?? assert.fail("the Tasks head");
+
+    assert.match(head.textContent ?? "", /2/u);
+    assert.ok(
+      sidebar.querySelector('.ui-toolbar [aria-label="View options"]'),
+      "View options in the bar",
+    );
+
+    const row =
+      [...sidebar.querySelectorAll("li")].find((each) =>
+        each.textContent?.includes("Invite expiry"),
+      ) ?? assert.fail("the row");
+
+    act(() => {
+      row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+
+    const items = [...document.querySelectorAll('[role="menu"] [role^="menuitem"]')].map(
+      (each) => each.textContent,
+    );
+
+    assert.deepEqual(
+      [items[0], ...items.slice(-3)],
+      ["Rename", "Pin", "More", "Permanently delete"],
+    );
+  } finally {
+    document.documentElement.removeAttribute("data-ui-room");
+  }
 });

@@ -3513,7 +3513,7 @@ function PanelPhoneHead({
                     .groups(opener)
                     .map((group) =>
                       group.map((item) =>
-                        "items" in item || "panel" in item
+                        "items" in item || "panel" in item || "groups" in item
                           ? item
                           : { ...item, detail: item.detail ?? shown.label, replayMasked: true },
                       ),
