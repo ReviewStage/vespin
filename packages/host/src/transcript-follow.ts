@@ -59,11 +59,13 @@ import {
  * newest page, read beside the live read rather than after it, so the
  * window draws the end of the transcript after one request. The older pages
  * are the window's to ask for, each laid before the messages held
- * (`withOlderPage`). Once the statements the pages are read from
- * (`live/reads/agent-transcript.ts` on the service) are followed, the follow reads past
- * the newest page's cursor, which
- * misses nothing written meanwhile, then the next page at once while the
- * last came back full. A page with fewer than a page's most is caught up.
+ * (`withOlderPage`). The page past the window's cursor is read at once,
+ * beside the live read rather than after it, so a window held or newly read
+ * is caught up a round trip sooner. Once the statements the pages are read
+ * from (`live/reads/agent-transcript.ts` on the service) are followed, the
+ * follow reads past the cursor again, which misses nothing written
+ * meanwhile, then the next page at once while the last came back full. A
+ * page with fewer than a page's most is caught up.
  * From then on the newest messages are the statements' own rows (`window`,
  * `windowParts`), which the follow draws (`windowMessagesOf`) and tells as
  * they change, with no page read again. The live read answers those rows
@@ -613,12 +615,15 @@ function forgetCursor(held: HeldTranscript): Effect.Effect<void> {
  * windows hold of it (`held`) as it is read: where they hold a window to
  * read on from, it stands drawn and nothing is read before the page past
  * its cursor, and otherwise the newest page is read beside the
- * transcript's live read; then the page past that one's cursor once the
- * live read stands, the next at once while the last came back full, and
+ * transcript's live read; then the page past that one's cursor at once,
+ * still beside the live read, and again once the live read's first rows
+ * land, the next at once while the last came back full, and
  * otherwise once the turns, titles, workers, queue, or launch move, or the
  * clock reaches the edge the service named; meanwhile each message the
  * window's rows draw anew is told at once, beside what the last page said
- * of the agent, as caught up. A held cursor the service refuses is let go
+ * of the agent, as caught up. A follow waits on nothing else before its live
+ * read stands, so a live read refused or never answered still ends it as
+ * below. A held cursor the service refuses is let go
  * for the newest page, as a follow holding nothing opens with. One the
  * account does not reach is told not found, which ends the follow and
  * drops what was held of it, as does a live read the service stopped
@@ -701,24 +706,30 @@ export function followTranscript<Key>(
       // Note that a window held stands drawn before the service is asked anything, so the window draws it with no round trip; one holding nothing reads the newest page beside the live read, not after it, its cursor what makes following on from it safe.
       const recalled = yield* reopened(held);
       const opening = Option.isSome(recalled) ? undefined : yield* Effect.forkScoped(readNewest);
-      const sealed = yield* Effect.result(RcMap.get(follows, key));
+      const sealing = yield* Effect.forkScoped(Effect.result(RcMap.get(follows, key)));
 
-      if (Result.isFailure(sealed) || sealed.success.kind === LIVE_STATE.REFUSED) {
+      /** The live read's state once its first read stands; none where it was refused or never answered, which is told here and ends the follow. */
+      const standing = Effect.gen(function* () {
+        const sealed = yield* Fiber.join(sealing);
+
+        if (Result.isSuccess(sealed) && sealed.success.kind === LIVE_STATE.LIVE) {
+          return Option.some(sealed.success.state);
+        }
+
         if (opening !== undefined) yield* Fiber.interrupt(opening);
 
         if (Result.isFailure(sealed)) {
           yield* RcMap.invalidate(follows, key);
+          yield* tell(unansweredPage(sealFacts(sealed.failure)));
 
-          return yield* tell(unansweredPage(sealFacts(sealed.failure)));
+          return Option.none();
         }
 
         // Note that not found drops what was held of the transcript, so a follow after it reads anew.
-        if (toldNotFound) return;
+        if (!toldNotFound) yield* tell({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
 
-        return yield* tell({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
-      }
-
-      const { state } = sealed.success;
+        return Option.none();
+      });
 
       const opened =
         opening === undefined
@@ -727,7 +738,12 @@ export function followTranscript<Key>(
               "failure" in newest ? Option.none() : Option.some(newest),
             );
 
-      if (Option.isNone(opened)) return;
+      if (Option.isNone(opened)) {
+        yield* standing;
+
+        return;
+      }
+
       /** What the window was told, as one newest page: its cursor is where the next read follows on from. */
       let window = opened.value;
       // Whether the next read is the first past a held cursor, which falls back to the newest page where it is refused.
@@ -813,11 +829,21 @@ export function followTranscript<Key>(
           window = { ...window, messages: applyMessagesPage(window.messages, fresh), cursor };
         });
 
-      // Note that the newest page may have been read before the live read stood, so the page past it is read once its first rows land.
-      let wake: Effect.Effect<unknown> = SubscriptionRef.changes(state).pipe(
-        Stream.filter(movedFrom({ kind: LIVE_STATE.WAITING })),
-        Stream.runHead,
-      );
+      /** The live read's state, once its first read stands; none before. */
+      let live: SubscriptionRef.SubscriptionRef<TranscriptState> | undefined;
+
+      /** The live read's state, waited for where it does not stand yet, which a follow does before it waits on anything else; none where the live read was refused or never answered, which ends the follow. */
+      const liveRead = Effect.gen(function* () {
+        if (live !== undefined) return Option.some(live);
+        const stood = yield* standing;
+
+        if (Option.isSome(stood)) live = stood.value;
+
+        return stood;
+      });
+
+      // Note that the page past the window's cursor is read at once, beside the live read's first read rather than after it, so a window held or newly read is caught up a round trip sooner; once the live read stands, the page past the cursor is read again as its first rows land, which misses nothing written meanwhile.
+      let wake: Effect.Effect<unknown> = Effect.void;
 
       /** The last page told, whose word on the agent the rows drawn beside the next read are told with; none before the first. */
       let last: AgentTranscriptPage | undefined;
@@ -832,7 +858,13 @@ export function followTranscript<Key>(
 
       while (true) {
         yield* wake;
-        const was = yield* SubscriptionRef.get(state);
+
+        const following = live;
+
+        const was: TranscriptState =
+          following === undefined
+            ? { kind: LIVE_STATE.WAITING }
+            : yield* SubscriptionRef.get(following);
 
         if (was.kind === LIVE_STATE.BROKEN) {
           yield* RcMap.invalidate(follows, key);
@@ -846,9 +878,9 @@ export function followTranscript<Key>(
         const lastTold = last;
 
         const besideRead =
-          lastTold === undefined
+          lastTold === undefined || following === undefined
             ? Effect.void
-            : SubscriptionRef.changes(state).pipe(
+            : SubscriptionRef.changes(following).pipe(
                 Stream.runForEach((now) => tellDrawn(lastTold, now)),
               );
 
@@ -863,7 +895,9 @@ export function followTranscript<Key>(
 
           if ("failure" in newest) {
             if (newest.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
+
             // Note that a service that answers neither read is down rather than refusing the cursor, so the follow stays and tries both again, as any page it did not answer is read again.
+            if (Option.isNone(yield* liveRead)) return;
             wake = readAgain();
             continue;
           }
@@ -883,6 +917,8 @@ export function followTranscript<Key>(
 
           if ("failure" in newest) {
             if (newest.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
+
+            if (Option.isNone(yield* liveRead)) return;
             wake = readAgain();
             continue;
           }
@@ -908,6 +944,8 @@ export function followTranscript<Key>(
 
         if ("failure" in answer) {
           if (answer.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
+
+          if (Option.isNone(yield* liveRead)) return;
           wake = readAgain();
           continue;
         }
@@ -921,7 +959,19 @@ export function followTranscript<Key>(
           continue;
         }
 
-        const moved = SubscriptionRef.changes(state).pipe(
+        // Note that a page read before the live read stood is read again once its first rows land, since what was written between the two is in neither.
+        if (following === undefined) {
+          const stood = yield* liveRead;
+
+          if (Option.isNone(stood)) return;
+          wake = SubscriptionRef.changes(stood.value).pipe(
+            Stream.filter(movedFrom({ kind: LIVE_STATE.WAITING })),
+            Stream.runHead,
+          );
+          continue;
+        }
+
+        const moved = SubscriptionRef.changes(following).pipe(
           Stream.takeUntil(movedFrom(was)),
           Stream.runForEach((now) => tellDrawn(page, now)),
         );
