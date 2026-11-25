@@ -2425,10 +2425,9 @@ by the same rules, never by who merged it, which is most often the merge
 queue's bot. The trigger's settings choose
 among them (`senders`, `moments`, `drafts`, `forks`, `prereleases` in
 `@repo/features/automation-wire`): people's events alone, every moment, and
-no draft, fork, or prerelease where it names none. An automation cannot fire itself
-whatever its settings say: a push by Vespin's agents, to a branch or to a pull
-request, fires nothing, and neither does a failed check on an agent's branch (`agent/`, or `luke/` before it),
-where an agent works and already watches its checks.
+no draft, fork, or prerelease where it names none. A failed check on an agent's
+branch (`agent/`, or `luke/` before it) fires nothing whatever the settings say,
+since that is where an agent works and already watches its checks.
 The agent is handed the event by number, address, and branch, its title
 fenced as the event's own text to read as data, its angle brackets spelled
 as entities so it cannot close the fence, and reads the rest with `gh`. The App must subscribe to the Issues, Push, and Release events beside the pull

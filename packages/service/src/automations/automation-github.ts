@@ -53,12 +53,9 @@ import { AutomationCadence, type AutomationCadenceUnavailable } from "./automati
  * who merged it, which is often the merge queue's bot; an issue an agent opened as its developer has no
  * branch to tell it by, and reads as people's; the trigger's own settings say which of those fire
  * it (`triggerMatches`), people's events alone and no draft or fork where
- * it names none. Two things fire nothing whatever a trigger says, so an
- * automation cannot fire itself in a loop: a push by our agents, to a
- * branch or to a pull request, since an agent answering its run with a
- * push would start that run again, and a failed check on an agent's branch,
- * which is where a coding agent works and where it already watches its own
- * checks.
+ * it names none. A failed check on an agent's branch fires nothing
+ * whatever a trigger says, since that is where a coding agent works and
+ * where it already watches its own checks.
  */
 
 /** The deliveries read, by GitHub's own event and action names. */
@@ -199,8 +196,7 @@ const ReleaseSchema = Schema.Struct({
  * applied, or every label of what was opened), the branch a branch filter
  * is read against, the repository's default branch a trigger kept to it
  * is read against, who sent it (none for a check, which names no sender),
- * the moment of a pull request's update, whether it is a push, whether
- * a pull request is a draft or a fork's, and a release's tag and whether it
+ * the moment of a pull request's update, whether a pull request is a draft or a fork's, and a release's tag and whether it
  * is a prerelease.
  */
 interface GitHubEventRead {
@@ -212,7 +208,6 @@ interface GitHubEventRead {
   readonly defaultBranch: string | undefined;
   readonly sender: GitHubSender | undefined;
   readonly moment: PullRequestMoment | undefined;
-  readonly pushed: boolean;
   readonly draft: boolean;
   readonly fork: boolean;
   readonly tag: string | undefined;
@@ -318,7 +313,6 @@ function pullRequestEvents(
     branch: pull.base.ref,
     defaultBranch: repository.default_branch,
     sender: pullRequestSender(read, agentLogin, fork),
-    pushed: moment === PULL_REQUEST_MOMENT.PUSHED,
     draft: pull.draft === true,
     fork,
     tag: undefined,
@@ -375,7 +369,6 @@ function githubEventOf(
   // Of an issue, a check, or a push, only who sent it is read beside the event itself.
   const plain = {
     moment: undefined,
-    pushed: false,
     draft: false,
     fork: false,
     tag: undefined,
@@ -466,7 +459,6 @@ function githubEventOf(
 
       return {
         ...plain,
-        pushed: true,
         sender: senderOf(sender, agentLogin),
         event: GITHUB_TRIGGER_EVENT.PUSH,
         repository: repository.full_name,
@@ -525,9 +517,7 @@ function githubEventOf(
  * fires on (every one where it names none), a draft or a fork's pull
  * request or a prerelease only where it asks for them, and its label,
  * branch, and tag filters where it names any, the repository's default
- * branch among them. Note that a push by our agents fires nothing
- * whatever the trigger says, because an agent answering its own run with
- * a push would start that run again.
+ * branch among them.
  */
 function triggerMatches(trigger: AutomationTrigger, read: GitHubEventRead): boolean {
   if (trigger.kind !== AUTOMATION_TRIGGER.GITHUB || trigger.event !== read.event) return false;
@@ -539,7 +529,6 @@ function triggerMatches(trigger: AutomationTrigger, read: GitHubEventRead): bool
     return false;
   }
 
-  if (read.sender === GITHUB_SENDER.APP_AGENTS && read.pushed) return false;
   const moments = trigger.moments ?? PULL_REQUEST_DEFAULT_MOMENTS;
 
   if (read.moment !== undefined && !moments.includes(read.moment)) return false;
