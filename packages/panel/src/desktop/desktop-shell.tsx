@@ -1338,10 +1338,14 @@ function phoneAway(room: ShellRoom, away: TaskHeadBack): TaskHeadBack | undefine
   return room === SHELL_ROOM.NARROW ? away : undefined;
 }
 
+/** What a task's page is drawn from: the Tasks tab, and the looks at the task it shows, always of one moment. */
+type PageDrawn = { readonly tasks: TasksControl; readonly looks: ReturnType<typeof useTaskLooks> };
+
 /**
- * The Tasks tab a task's page is drawn from. While another task opens, it is
- * the tab the page was last drawn with, until the new task's page, drawn in
- * the background, is ready to show. Note that only the page waits: the
+ * What a task's page is drawn from. While another task opens, it is the tab
+ * and the looks the page was last drawn with, together, so a press on the
+ * page left never reaches the next task's looks, until the new task's page,
+ * drawn in the background, is ready to show. Note that only the page waits: the
  * sidebar's row, the address, and every key read the tab itself, which moved
  * at once, so a press paints its row chosen in the next frame and Back and
  * the keys act on the task chosen while its page is still being drawn; the
@@ -1349,10 +1353,11 @@ function phoneAway(room: ShellRoom, away: TaskHeadBack): TaskHeadBack | undefine
  * same task, a message streaming into its transcript among them, is drawn
  * at once, as it always was.
  */
-function usePageTasks(tasks: TasksControl): TasksControl {
-  const drawn = useDeferredValue(tasks);
+function usePageDrawn(tasks: TasksControl, looks: PageDrawn["looks"]): PageDrawn {
+  const now = useMemo((): PageDrawn => ({ tasks, looks }), [tasks, looks]);
+  const drawn = useDeferredValue(now);
 
-  return drawn.activeTaskId === tasks.activeTaskId ? tasks : drawn;
+  return drawn.tasks.activeTaskId === tasks.activeTaskId ? now : drawn;
 }
 
 /**
@@ -1378,12 +1383,17 @@ function usePageLeft(pageTaskId: string | undefined, taskId: string | undefined)
  */
 export function StatePlace(): React.JSX.Element {
   const { tasks, room, looks, away } = useShellPlaces();
-  const pageTasks = usePageTasks(tasks);
-  const pageLeft = usePageLeft(pageTasks.activeTaskId, tasks.activeTaskId);
+  const page = usePageDrawn(tasks, looks);
+  const pageLeft = usePageLeft(page.tasks.activeTaskId, tasks.activeTaskId);
 
   return (
     <OffersLeft value={pageLeft}>
-      <DesktopTasks tasks={pageTasks} looks={looks} room={room} away={phoneAway(room, away)} />
+      <DesktopTasks
+        tasks={page.tasks}
+        looks={page.looks}
+        room={room}
+        away={phoneAway(room, away)}
+      />
     </OffersLeft>
   );
 }
