@@ -11,7 +11,7 @@ import { afterEach, beforeEach, test } from "vitest";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { RevertMessageAction, RewindProvider } from "./rewind-action.js";
-import { useAgentComposer, useHeldWords } from "./use-agent-composer.js";
+import { type HeldComposer, useAgentComposer } from "./use-agent-composer.js";
 
 // Each test's host starts with no message on its way.
 beforeEach(resetOutbox);
@@ -122,7 +122,7 @@ async function settle(): Promise<void> {
   });
 }
 
-type Held = { composer: ReturnType<typeof useHeldWords> | undefined };
+type Held = { composer: HeldComposer | undefined };
 
 /** The agent's box over the transcript, every call it makes written down in order, a rewind answered by `rewound` and a send by `sent`. */
 async function box(rewound: AgentAgentAnswer, sent: AgentAgentAnswer = REWOUND) {
@@ -130,34 +130,32 @@ async function box(rewound: AgentAgentAnswer, sent: AgentAgentAnswer = REWOUND) 
   const held: Held = { composer: undefined };
 
   function Box(): ReactNode {
-    held.composer = useHeldWords(
-      useAgentComposer({
-        sending: useOutbox("agent-1"),
-        unsend: unsendOutbox,
-        agentId: "agent-1",
-        taskId: "plan-1",
-        messages: TRANSCRIPT,
-        // The host takes the agent back first where the line goes in another's place, and sends nothing where that did not go.
-        send: outboxed((_agentId, { text, rewinds }) => {
-          if (rewinds !== undefined) {
-            calls.push(`rewind:${rewinds.messageId}`);
+    held.composer = useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
+      agentId: "agent-1",
+      taskId: "plan-1",
+      messages: TRANSCRIPT,
+      // The host takes the agent back first where the line goes in another's place, and sends nothing where that did not go.
+      send: outboxed((_agentId, { text, rewinds }) => {
+        if (rewinds !== undefined) {
+          calls.push(`rewind:${rewinds.messageId}`);
 
-            if ("failure" in rewound) return Promise.resolve(rewound);
-          }
+          if ("failure" in rewound) return Promise.resolve(rewound);
+        }
 
-          calls.push(`send:${text}`);
+        calls.push(`send:${text}`);
 
-          return Promise.resolve(
-            rewinds !== undefined && "failure" in sent ? { ...sent, rewound: true as const } : sent,
-          );
-        }),
-        rewind: (_agentId, messageId) => {
-          calls.push(`rewind:${messageId}`);
-
-          return Promise.resolve(rewound);
-        },
+        return Promise.resolve(
+          rewinds !== undefined && "failure" in sent ? { ...sent, rewound: true as const } : sent,
+        );
       }),
-    );
+      rewind: (_agentId, messageId) => {
+        calls.push(`rewind:${messageId}`);
+
+        return Promise.resolve(rewound);
+      },
+    });
 
     return null;
   }
@@ -206,7 +204,7 @@ test("an edit's send takes the agent back to just before the line, then sends th
   assert.ok(pressedAt !== undefined && Date.now() - pressedAt < 5_000, "it counts from the press");
   assert.deepEqual(calls, ["rewind:second-line", "send:second line, again"]);
   assert.equal(composer().editing, undefined);
-  assert.equal(composer().held.text, "Also update the tests.");
+  assert.equal(composer().heldNow().text, "Also update the tests.");
 });
 
 test("a rewind that did not go sends nothing, and keeps the edit's line marked as not sent, its Retry rewinding again", async () => {
@@ -221,7 +219,7 @@ test("a rewind that did not go sends nothing, and keeps the edit's line marked a
 
   assert.deepEqual(calls, ["rewind:second-line", "rewind:second-line"]);
   assert.equal(line?.text, "second line, again");
-  assert.equal(composer().held.text, "");
+  assert.equal(composer().heldNow().text, "");
   assert.equal(composer().cut, undefined);
   assert.equal(composer().rewindOut, false);
 });
@@ -245,7 +243,7 @@ test("an edit whose rewind went and whose words did not keeps them on its line, 
     ["second line, again"],
     "the Retry that did not go either keeps the words on the line",
   );
-  assert.equal(composer().held.text, "");
+  assert.equal(composer().heldNow().text, "");
 });
 
 test("an edit let go sends nothing and leaves the box as it was", async () => {
@@ -257,7 +255,7 @@ test("an edit let go sends nothing and leaves the box as it was", async () => {
   await act(async () => composer().edit("second-line"));
   await act(async () => composer().dropEdit());
 
-  assert.equal(composer().held.text, "Also update the tests.");
+  assert.equal(composer().heldNow().text, "Also update the tests.");
   assert.equal(composer().editing, undefined);
   assert.deepEqual(calls, []);
 });

@@ -30,7 +30,7 @@ import {
   type DraftPlace,
   EMPTY_DRAFT,
   useDraftBeside,
-  useKeptDraft,
+  useDraftWords,
 } from "../composer-drafts.js";
 import { keepPictureRead, pictureNow } from "../picture-query.js";
 import { useToast } from "../toast.js";
@@ -40,6 +40,7 @@ import {
   SENT_LINE_STATE,
   type SentLine,
 } from "./agent-model.js";
+import type { BoxWords } from "./box-words.js";
 import { type BoxHeld, type HeldUpdate, heldUpdateOver, putBackRefused } from "./refused-send.js";
 
 /**
@@ -111,10 +112,22 @@ export type MessageUnsender = (agentId: string, lineId: string) => void;
 /** Why a message did not go, with the answer that said so, which the shown failure reports in its place. */
 export type ComposerNote = Failure & { readonly cause?: unknown };
 
+/** The words and files a composer holds, as `AgentComposerControl.held` hands them. */
+export interface ComposerHeld {
+  readonly words: BoxWords;
+  readonly attachments: readonly AgentAttachment[];
+}
+
 /** Everything the composer draws and presses. */
 export interface AgentComposerControl {
-  /** The words in the box and the files that go with them, in the order attached, as the box's draft keeps them. */
-  held: BoxHeld;
+  /**
+   * The words in the box and the files that go with them, in the order
+   * attached, as the box's draft keeps them: the words as their source where
+   * the owner keeps them in the drafts, so a word typed draws only what reads
+   * them (`./box-words.ts`), or as the string an owner keeping them itself
+   * draws the box with.
+   */
+  held: ComposerHeld;
   /**
    * Moves the box's words and files on together from what its draft holds as
    * the change lands (`refused-send.ts`). Every change the box makes goes
@@ -139,6 +152,9 @@ export interface AgentComposerControl {
 }
 
 const NOTHING_ASKING: ReadonlySet<string> = new Set();
+
+/** No files, as a closed box holds. */
+const NO_FILES: readonly AgentAttachment[] = [];
 
 interface Held {
   agentId: string;
@@ -262,15 +278,14 @@ const NOT_DELIVERED_TOAST = "Message not delivered";
 const OPEN_WORD = "Open";
 
 /**
- * The composer as an agent's tab holds it: what it draws but the words, the
- * words and files Continue carries, and the presses a refused line offers.
- * Note that the tab never reads the words as it draws, because they change
- * on every key: the box reads them where it stands (`useHeldWords`), and a
- * press reads them as it is pressed (`heldNow`, `unsent`).
+ * The composer as an agent's tab holds it: what it draws, its words as their
+ * source, the words and files Continue carries, and the presses a refused
+ * line offers. Note that the tab never reads the words as it draws, because
+ * they change on every key: the box reads what it draws of them where it
+ * stands (`./box-words.ts`), and a press reads them as it is pressed
+ * (`heldNow`, `unsent`).
  */
-export interface HeldComposer extends Omit<AgentComposerControl, "held"> {
-  /** Where the box's draft is kept, which the box reads its words at. */
-  readonly place: DraftPlace;
+export interface HeldComposer extends AgentComposerControl {
   /** The words and files the box holds as they stand at the moment of asking. */
   readonly heldNow: () => BoxHeld;
   /** The words and files Continue carries as they stand at the moment of asking: the box's, after every line refused where the box closed. */
@@ -757,9 +772,11 @@ export function useAgentComposer(input: {
   const going = sent.filter((line) => line.state === SENT_LINE_STATE.PENDING);
   const remediedNote = remedied === undefined ? undefined : noteOf(remedied);
 
+  // Note that a closed box draws none of its words, because Continue carries them with every line refused (`unsent`).
+  const words = useDraftWords(place, closed === undefined);
+
   return {
-    place,
-    // Note that a closed box draws none of its words, because Continue carries them with every line refused (`unsent`).
+    held: { words, attachments: closed === undefined ? kept.draft.attachments : NO_FILES },
     heldNow: () => (closed === undefined ? kept.now() : EMPTY_DRAFT),
     updateHeld,
     sending: suggesting,
@@ -816,18 +833,4 @@ export function useAgentComposer(input: {
     cut: held.cut,
     going: new Set(going.map((line) => line.id)),
   };
-}
-
-/**
- * The agent's box as it draws: the tab's composer with the words and files
- * the box holds, read here, where the box stands (`AgentComposerDock`), so a
- * word typed draws the box again and never the tab around it. A closed box
- * draws none of its words, as `heldNow` reads none.
- */
-export function useHeldWords(
-  composer: HeldComposer,
-): HeldComposer & Pick<AgentComposerControl, "held"> {
-  const draft = useKeptDraft(composer.place);
-
-  return { ...composer, held: composer.closed === undefined ? draft : EMPTY_DRAFT };
 }

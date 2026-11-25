@@ -12,8 +12,9 @@ import { type DraftSuggestion, draftSuggestionSchema } from "@repo/features/sugg
 import { createRest, type Rest } from "@repo/ui";
 import { createStore, type ReadonlyStore, Store, useSelector } from "@tanstack/react-store";
 import { Duration, Equal, Option, Schema, SchemaTransformation } from "effect";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { readKept, readKeptText, writeKept, writeKeptText } from "./kept-storage.js";
+import type { BoxWords } from "./tasks/box-words.js";
 
 /**
  * composer-drafts.ts -- what the developer typed in a box and has not sent, kept per destination on this Mac, so switching away and back finds it where it was left.
@@ -1326,6 +1327,30 @@ export function useKeptDraft(place: DraftPlace | undefined): Draft {
   return useSelector(draftsStore, (drafts) =>
     place === undefined ? EMPTY_DRAFT : draftIn(drafts, place),
   );
+}
+
+/**
+ * The words kept for `place`, as the box writing them reads them
+ * (`./tasks/box-words.ts`): the same source across draws, reading the place
+ * handed last, and none of its words where `shown` is false, as a closed
+ * box draws none. Note that whoever hands it reads no words as it draws, so
+ * a word typed draws only the parts of the box that read it.
+ */
+export function useDraftWords(place: DraftPlace, shown = true): BoxWords {
+  const latest = useRef({ place, shown });
+  latest.current = { place, shown };
+
+  const [words] = useState<BoxWords>(() => {
+    const get = () => {
+      const now = latest.current;
+
+      return now.shown ? draftIn(draftsStore.state, now.place).text : "";
+    };
+
+    return { get, subscribe: (listener) => draftsStore.subscribe(() => listener(get())) };
+  });
+
+  return words;
 }
 
 /** Whether a draft is a plan's draft agent's. */
