@@ -969,7 +969,7 @@ export function DesktopShell({
 
   // New task asks over whatever stands, the tasks or a version history.
   const newTaskDialog = useMemo(() => <NewTaskDialog newTask={tasks.newTask} />, [tasks.newTask]);
-  // A phone's places lead their heads with the reader's face, their workspaces and account behind it (`phone-account.tsx`).
+  // A phone's places lead their heads with the workspace's tile, the workspaces and the account behind it (`phone-account.tsx`).
   const { onSignOut } = settings;
 
   const phoneAccount = useMemo(

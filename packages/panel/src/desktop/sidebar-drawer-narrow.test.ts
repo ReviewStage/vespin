@@ -14,7 +14,7 @@ import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { tasksControl } from "../testing/tasks-control.js";
 
 /**
- * sidebar-drawer-narrow.test.ts -- the column gives its tasks the room: the pages' rows scroll away with them, in a phone's drawer and beside the work alike; and an empty Pinned stands nowhere, under a finger or a mouse, whatever the room.
+ * sidebar-drawer-narrow.test.ts -- the column gives its tasks the room: the pages' rows scroll away with them beside the work, and a phone's Tasks page draws none, its bar and Search holding them; and an empty Pinned stands nowhere, under a finger or a mouse, whatever the room.
  */
 
 const WORKSPACE: Workspace = {
@@ -88,7 +88,7 @@ function scrolled(sidebar: HTMLElement) {
   const scroller =
     sidebar.querySelector(".sidebar-section .ui-scroll-area") ?? assert.fail("the scroller");
 
-  // Note that the Automations row is read, because a phone's bar holds the rows above it (`mobile-bar.tsx`).
+  // Note that the Automations row is read, the last of the rows a wide column draws.
   const home =
     [...sidebar.querySelectorAll("button")].find((each) =>
       each.textContent?.startsWith("Automations"),
@@ -104,11 +104,18 @@ function pinnedStands(sidebar: HTMLElement): boolean {
   return sidebar.querySelector('nav[aria-label="Pinned"]') !== null;
 }
 
-test("in a phone's drawer under a finger the pages' rows scroll with the tasks, and an empty Pinned stands nowhere", async () => {
+test("on a phone under a finger the Tasks page draws no pages' rows over its tasks, its bar holding Automations and Search the Merge queue, and an empty Pinned stands nowhere", async () => {
   pointer(true);
   const sidebar = await mountIn(SHELL_ROOM.NARROW);
 
-  assert.deepEqual(scrolled(sidebar), { home: true, tasks: true });
+  assert.equal(
+    [...sidebar.querySelectorAll("button")].find((each) =>
+      each.textContent?.startsWith("Automations"),
+    ),
+    undefined,
+    "no Automations row",
+  );
+  assert.ok(sidebar.querySelector('nav[aria-label="My tasks"]'), "the Tasks list stands");
   assert.equal(pinnedStands(sidebar), false);
 });
 

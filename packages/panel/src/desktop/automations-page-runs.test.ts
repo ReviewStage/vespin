@@ -1322,7 +1322,7 @@ test("Sentry chosen before the read says the deployment holds no Sentry integrat
   assert.match(page.textContent ?? "", /Vespin cannot receive Sentry events here/u);
 });
 
-test("on a phone the list is headed by New automation and one ⋯ holding Create with an agent, its title centered between them", async () => {
+test("on a phone the list is headed by its title and one ⋯ holding New automation and Create with an agent, the start corner left to the workspace's tile", async () => {
   const page = mountNarrow({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
   const head = page.querySelector<HTMLElement>(".automations-head");
@@ -1331,10 +1331,11 @@ test("on a phone the list is headed by New automation and one ⋯ holding Create
     [...head.querySelectorAll("button")].map(
       (each) => each.textContent?.trim() || each.getAttribute("aria-label"),
     ),
-    ["New automation", "Automation list actions"],
+    ["Automation list actions"],
   );
   assert.equal(head.querySelector("h1")?.textContent, "Automations");
   act(() => button("Automation list actions").click());
+  assert.ok(menuItem("New automation"), "the ⋯ holds New automation");
   assert.ok(menuItem("Create with an agent"), "the ⋯ holds Create with an agent");
 });
 

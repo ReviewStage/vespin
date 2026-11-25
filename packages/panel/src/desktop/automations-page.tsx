@@ -62,7 +62,6 @@ import {
   ErrorState,
   GAP,
   type GroupFold,
-  IconButton,
   Inline,
   ListRow,
   NOT_FOUND_THING,
@@ -654,10 +653,13 @@ function useRowDeletion(
 function AutomationsHead({
   tasks,
   room,
+  phoneStart,
   ordering,
 }: {
   tasks: TasksControl;
   room: ShellRoom;
+  /** What leads a phone's head, the workspace's tile, as it leads every place's (`phone-account.tsx`). */
+  phoneStart: React.ReactNode;
   /** How the List tab orders its automations, which View options offers; none on the Runs tab. */
   ordering?: AutomationsOrdering | undefined;
 }): React.JSX.Element {
@@ -677,20 +679,11 @@ function AutomationsHead({
     );
 
   return narrow ? (
-    // A phone heads the list as it heads every place (`phone-head.tsx`): New automation, the title centered, and a ⋯.
+    // A phone heads the list as it heads every place (`phone-head.tsx`): the workspace's tile, the title centered, and a ⋯ holding New automation first.
     <>
       <PhoneHead
         place="automations"
-        start={
-          <Tooltip label={NEW_AUTOMATION}>
-            <IconButton
-              icon={<PlusIcon />}
-              label={NEW_AUTOMATION}
-              disabled={workspace === undefined}
-              onClick={openNew}
-            />
-          </Tooltip>
-        }
+        start={phoneStart}
         title={AUTOMATIONS}
         titleReplayUnmasked
         end={
@@ -700,6 +693,12 @@ function AutomationsHead({
             replayUnmasked
             groups={(opener) => [
               [
+                {
+                  label: NEW_AUTOMATION,
+                  icon: <PlusIcon />,
+                  disabled: workspace === undefined,
+                  onSelect: openNew,
+                },
                 {
                   label: CREATE_WITH_AGENT,
                   icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
@@ -949,10 +948,12 @@ function ListPage({
   tasks,
   automations,
   room,
+  phoneStart,
 }: {
   tasks: TasksControl;
   automations: ReturnType<typeof useAutomations>;
   room: ShellRoom;
+  phoneStart: React.ReactNode;
 }): React.JSX.Element {
   const door = useAutomationsDoor(tasks);
   const workspace = tasks.workspace;
@@ -968,7 +969,14 @@ function ListPage({
       <CollectionPage
         frame={PAGE_FRAME.TOOLBAR}
         label="Automations"
-        toolbar={<AutomationsHead tasks={tasks} room={room} ordering={{ order, onOrder }} />}
+        toolbar={
+          <AutomationsHead
+            tasks={tasks}
+            room={room}
+            phoneStart={phoneStart}
+            ordering={{ order, onOrder }}
+          />
+        }
         filters={<AutomationsTabs tasks={tasks} />}
         intro={<PageIntro intro={INTRO.AUTOMATIONS} />}
         state={listState(workspacesUnread, read)}
@@ -1082,10 +1090,12 @@ function RunsPage({
   tasks,
   automations,
   room,
+  phoneStart,
 }: {
   tasks: TasksControl;
   automations: ReturnType<typeof useAutomations>;
   room: ShellRoom;
+  phoneStart: React.ReactNode;
 }): React.JSX.Element {
   const collections = useTaskListCollections();
   const door = useAutomationsDoor(tasks);
@@ -1111,7 +1121,7 @@ function RunsPage({
       <CollectionPage
         frame={PAGE_FRAME.TOOLBAR}
         label={AUTOMATIONS}
-        toolbar={<AutomationsHead tasks={tasks} room={room} />}
+        toolbar={<AutomationsHead tasks={tasks} room={room} phoneStart={phoneStart} />}
         filters={
           <AutomationsTabs tasks={tasks}>
             <ChoiceBar<RunsShown>
@@ -1259,16 +1269,19 @@ function ReadingPage({
 export function AutomationsPage({
   tasks,
   room,
+  phoneStart = null,
 }: {
   tasks: TasksControl;
   /** The room the panel's stage gives, narrow where an automation's runs are a screen of their own. */
   room: ShellRoom;
+  /** What leads a phone's head on the list and its Runs tab, the workspace's tile (`phone-account.tsx`); nothing where none is given. */
+  phoneStart?: React.ReactNode;
 }): React.JSX.Element {
   // Every Copy link on these pages is written under the listed workspace, whose automations they are, and their makers named by its members.
   return (
     <LinkWorkspaceProvider value={tasks.workspace?.slug ?? tasks.workspace?.id}>
       <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
-        <AutomationsPages tasks={tasks} room={room} />
+        <AutomationsPages tasks={tasks} room={room} phoneStart={phoneStart} />
       </MemberDirectory>
     </LinkWorkspaceProvider>
   );
@@ -1334,9 +1347,11 @@ function WorkspaceEditor({
 function AutomationsPages({
   tasks,
   room,
+  phoneStart,
 }: {
   tasks: TasksControl;
   room: ShellRoom;
+  phoneStart: React.ReactNode;
 }): React.JSX.Element {
   const collections = useTaskListCollections();
   const door = useAutomationsDoor(tasks);
@@ -1363,11 +1378,11 @@ function AutomationsPages({
   const { place } = standing;
 
   if (place.kind === AUTOMATIONS_PAGE.LIST) {
-    return <ListPage tasks={tasks} automations={automations} room={room} />;
+    return <ListPage tasks={tasks} automations={automations} room={room} phoneStart={phoneStart} />;
   }
 
   if (place.kind === AUTOMATIONS_PAGE.RUNS) {
-    return <RunsPage tasks={tasks} automations={automations} room={room} />;
+    return <RunsPage tasks={tasks} automations={automations} room={room} phoneStart={phoneStart} />;
   }
 
   const { read, reload } = automations;

@@ -1947,11 +1947,12 @@ interface FloatingSidebar extends HoverPane {
   readonly inSight: boolean;
 }
 
-/** Where a sidebar opened from away takes the keyboard: the row or glyph it marks, else Search, the first of its places. */
+/** Where a sidebar opened from away takes the keyboard: the row or glyph it marks, else Search, the first of its places, else, on a phone, which draws no places, the first of its rows. */
 function sidebarFocus(sidebar: HTMLElement): HTMLElement | null {
   return (
     sidebar.querySelector<HTMLElement>('[aria-current="page"]') ??
-    sidebar.querySelector<HTMLElement>(".sidebar-places > button")
+    sidebar.querySelector<HTMLElement>(".sidebar-places > button") ??
+    sidebar.querySelector<HTMLElement>(".sidebar-section-body button")
   );
 }
 
@@ -2342,9 +2343,10 @@ function useFirstUsableSpan(tasks: SidebarTasksControl): void {
  * was opened from a pin, for as long as the task stays open.
  *
  * On a phone the column is the Tasks page (`mobile-bar.tsx`). The bar
- * already holds New task, Search, the Inbox, and Tasks, and the phone opens
- * on the Inbox rather than Home, so the column leaves those rows to the bar.
- * Its workspaces and account sit behind the reader's face
+ * already holds New task, Search, the Inbox, Tasks, and Automations, and the
+ * phone opens on the Inbox rather than Home, so the column leaves those rows
+ * to the bar, and the Merge queue to Search's Go to, drawing no page rows.
+ * Its workspaces and account sit behind the workspace's tile
  * (`phone-account.tsx`), as on every phone place.
  *
  * Its right edge resizes it, and a drag well past its least width folds it
@@ -3018,39 +3020,33 @@ function SidebarColumn({
     onSignOut,
   });
 
-  // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the rest (`mobile-bar.tsx`).
-  const places = (
+  // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the places and Search's Go to the rest (`mobile-bar.tsx`), so none stands.
+  const places = phone ? null : (
     <>
       <SidebarPlaces>
-        {phone ? null : (
-          <>
-            <HeldSearchRow onOpen={placeDoors.onSearch} />
-            <HeldHomeRow
-              current={atHome}
-              disabled={!tasks.signedIn}
-              onOpen={placeDoors.onHome}
-              onOpenInTab={placeDoors.onHomeInTab}
-            />
-            {inboxOn ? (
-              <HeldInboxRow
-                count={inboxCount}
-                current={inInbox}
-                disabled={!tasks.signedIn}
-                onOpen={placeDoors.onInbox}
-                onOpenInTab={placeDoors.onInboxInTab}
-              />
-            ) : null}
-          </>
-        )}
-        {phone ? null : (
-          <HeldTasksRow
-            current={inBoard}
+        <HeldSearchRow onOpen={placeDoors.onSearch} />
+        <HeldHomeRow
+          current={atHome}
+          disabled={!tasks.signedIn}
+          onOpen={placeDoors.onHome}
+          onOpenInTab={placeDoors.onHomeInTab}
+        />
+        {inboxOn ? (
+          <HeldInboxRow
+            count={inboxCount}
+            current={inInbox}
             disabled={!tasks.signedIn}
-            onOpen={placeDoors.onBoard}
-            onOpenInTab={placeDoors.onBoardInTab}
-            onPreload={placeDoors.onBoardPreload}
+            onOpen={placeDoors.onInbox}
+            onOpenInTab={placeDoors.onInboxInTab}
           />
-        )}
+        ) : null}
+        <HeldTasksRow
+          current={inBoard}
+          disabled={!tasks.signedIn}
+          onOpen={placeDoors.onBoard}
+          onOpenInTab={placeDoors.onBoardInTab}
+          onPreload={placeDoors.onBoardPreload}
+        />
         <HeldAutomationsRow
           current={inAutomations}
           failed={automationFailed}
@@ -3091,7 +3087,7 @@ function SidebarColumn({
       <SidebarDoors tasks={tasks} keep={keepDoors} />
       {/* The workspace heads the sidebar once one is read, as everything under it is that
           workspace's; the app's own head stands until then. A phone heads it as it heads
-          every place, the reader's face opening their workspaces and account (`phone-account.tsx`). */}
+          every place, the workspace's tile opening its workspaces and account (`phone-account.tsx`). */}
       {phone ? (
         <PhoneHead
           place="sidebar"
