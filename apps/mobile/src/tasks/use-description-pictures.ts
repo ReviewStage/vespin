@@ -11,6 +11,13 @@
  * says so in its place. A PDF a description keeps as it keeps a picture is
  * written under the app's caches and drawn as its file's chip, as the
  * panel's description draws it.
+ *
+ * A picture or a video the task's read names by its media type
+ * (`fileTypes`), its own description's, is drawn from the service's address
+ * instead, by expo-image or expo-video, with the header its read carries,
+ * each reading its own source where it is drawn under the page's
+ * `PicturesProvider` (`usePictures`); a clip, a PDF, and a picture copied in
+ * from another task's description are read through the host as before.
  */
 
 import { base64Bytes } from "@repo/features/agent-wire";
@@ -21,11 +28,12 @@ import { descriptionAttachmentOf } from "@repo/features/description-attachment-l
 import { DESCRIPTION_FILE_TYPE } from "@repo/features/description-attachment-wire";
 import { drawnPictureAddresses } from "@repo/features/drawn-pictures";
 import { isLinkHome } from "@repo/features/link-home";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
-import type { MarkdownFile, MarkdownVideo } from "@repo/ui-native";
+import type { MarkdownFile, MarkdownVideo, PictureRef } from "@repo/ui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   cachedFile,
@@ -38,6 +46,7 @@ import {
 import { useHostActs } from "../host/host-provider.js";
 import { openInSafari } from "../open-link.js";
 import { usePictureShownCount } from "../picture-shown.js";
+import { usePictures } from "../use-pictures.js";
 
 /** The prefix a description's video or sound clip is written under in the app's caches. */
 const DESCRIPTION_MEDIA_PREFIX = "description";
@@ -85,10 +94,16 @@ const KEPT_READ = {
 /** The pictures read, by the description that owns each, then by its id. */
 type PicturesRead = ReadonlyMap<string, ReadonlyMap<string, PictureRead>>;
 
+/** The description's own files the task's read names, by the task they are kept on and each one's media type by its id. */
+export interface DescriptionFiles {
+  readonly taskId: string;
+  readonly types: Readonly<Record<string, string>> | undefined;
+}
+
 /** How the description's words draw its pictures, handed to `Markdown` as they are. */
 export interface DescriptionPictures {
-  /** The address a picture is drawn from: its bytes once read, none while on its way, and `null` where it cannot be drawn; any address off vespin.dev as it is written. */
-  readonly pictureSource: (written: string) => string | null | undefined;
+  /** What a picture is drawn from: one kept by its id, which it reads where it is drawn, its bytes once read, none while on its way, and `null` where it cannot be drawn; any address off vespin.dev as it is written. */
+  readonly pictureSource: (written: string) => PictureRef | null | undefined;
   /** The video or sound clip a description's picture is, once read; none for a picture or any other address. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
   /** The file a description's picture is, such as a PDF, once read; none for a picture or any other address. */
@@ -147,6 +162,21 @@ async function readOf(id: string, contentType: string, base64: string): Promise<
   return { kind: PICTURE_READ.PICTURE, source: written ?? `data:${contentType};base64,${base64}` };
 }
 
+/** How a file the task's read names is drawn from the service's address: as a picture, as a video, or not at all, read through the host. */
+function addressedKind(
+  files: DescriptionFiles | undefined,
+  ref: { readonly taskId: string; readonly attachmentId: string } | undefined,
+): typeof PICTURE_READ.PICTURE | typeof PICTURE_READ.VIDEO | undefined {
+  const type =
+    ref === undefined || ref.taskId !== files?.taskId ? undefined : files.types?.[ref.attachmentId];
+
+  if (type === undefined) return undefined;
+
+  if (PICTURE_TYPES.has(type)) return PICTURE_READ.PICTURE;
+
+  return VIDEO_TYPES.has(type) ? PICTURE_READ.VIDEO : undefined;
+}
+
 /**
  * The description's pictures as `body` draws them, each read once through
  * the host while the page stands, as its own description's or, where a
@@ -157,7 +187,10 @@ async function readOf(id: string, contentType: string, base64: string): Promise<
  * to the words asks for it again, as an Inbox thread's files are
  * (`useThreadMedia`).
  */
-export function useDescriptionPictures(body: string | undefined): DescriptionPictures {
+export function useDescriptionPictures(
+  body: string | undefined,
+  files?: DescriptionFiles,
+): DescriptionPictures {
   const acts = useHostActs();
   const shown = usePictureShownCount(PRODUCT_PICTURE_KIND.DESCRIPTION);
   const [read, setRead] = useState<PicturesRead>(NOTHING_READ);
@@ -179,7 +212,8 @@ export function useDescriptionPictures(body: string | undefined): DescriptionPic
     for (const address of drawnPictureAddresses(body)) {
       const ref = namedPicture(address)?.ref;
 
-      if (ref === undefined) continue;
+      // Note that a picture or a video the task's read names is drawn from its address where it stands, never read here.
+      if (ref === undefined || addressedKind(files, ref) !== undefined) continue;
       const { taskId: owner, attachmentId: id } = ref;
       const ofOwner = asked.current.get(owner) ?? new Set<string>();
 
@@ -223,13 +257,35 @@ export function useDescriptionPictures(body: string | undefined): DescriptionPic
           console.error("A description's picture was not read.", cause);
         });
     }
-  }, [acts, body, shown]);
+  }, [acts, body, files, shown]);
+
+  // Note that only the pictures are read ahead, through the loader, since a video's player reads its own.
+  const pictureIds = useMemo(
+    () =>
+      body === undefined
+        ? []
+        : drawnPictureAddresses(body).flatMap((address) => {
+            const ref = namedPicture(address)?.ref;
+
+            return ref !== undefined && addressedKind(files, ref) === PICTURE_READ.PICTURE
+              ? [ref.attachmentId]
+              : [];
+          }),
+    [body, files],
+  );
+
+  const pictures = usePictures(PICTURE_OWNER.TASK, files?.taskId ?? "", pictureIds);
 
   return useMemo(() => {
     const readAt = (written: string) => {
       const named = namedPicture(written);
 
       if (named === undefined) return undefined;
+      const kind = addressedKind(files, named.ref);
+
+      if (named.ref !== undefined && kind !== undefined) {
+        return { picture: { kind, ref: pictures.refOf(named.ref.attachmentId) } as const };
+      }
 
       return {
         picture:
@@ -248,6 +304,9 @@ export function useDescriptionPictures(body: string | undefined): DescriptionPic
 
         if (at.picture === undefined) return undefined;
 
+        if ("ref" in at.picture)
+          return at.picture.kind === PICTURE_READ.PICTURE ? at.picture.ref : null;
+
         return at.picture.kind === PICTURE_READ.PICTURE ? at.picture.source : null;
       },
       videoAt: (written) => {
@@ -260,7 +319,7 @@ export function useDescriptionPictures(body: string | undefined): DescriptionPic
         // A video the system's player cannot read, such as a WebM, opens on vespin.dev in Safari, which plays it.
         return picture?.kind === PICTURE_READ.VIDEO
           ? {
-              source: picture.source,
+              source: "ref" in picture ? picture.ref : picture.source,
               label: PLAYED_LABEL.VIDEO,
               onOpenElsewhere: () => openInSafari(written),
             }
@@ -269,10 +328,10 @@ export function useDescriptionPictures(body: string | undefined): DescriptionPic
       fileAt: (written) => {
         const picture = readAt(written)?.picture;
 
-        return picture?.kind === PICTURE_READ.FILE
+        return picture !== undefined && !("ref" in picture) && picture.kind === PICTURE_READ.FILE
           ? { source: picture.source, mediaType: DESCRIPTION_FILE_TYPE.PDF, size: picture.size }
           : undefined;
       },
     };
-  }, [read]);
+  }, [files, pictures, read]);
 }

@@ -6,7 +6,11 @@ import {
   type AgentStatus,
   type ListedAgent,
 } from "@repo/features/agent-wire";
-import { PRODUCT_STANDING_FIELD, PRODUCT_SURFACE } from "@repo/features/analytics";
+import {
+  PRODUCT_PICTURE_KIND,
+  PRODUCT_STANDING_FIELD,
+  PRODUCT_SURFACE,
+} from "@repo/features/analytics";
 import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
@@ -35,6 +39,7 @@ import {
   taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import {
   agentLastMovedAt,
@@ -274,6 +279,7 @@ import {
   useTasksWorkspace,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
+import { PicturesProvider } from "../use-pictures.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
   useComposeAction,
@@ -2893,7 +2899,13 @@ function OverviewDescription({
   const shown = whole ? body : descriptionHead(body);
 
   const onBlocks = threadsOnBlocks(threads, blocks);
-  const { pictureSource, videoAt, fileAt } = useDescriptionPictures(shown);
+
+  const files = useMemo(
+    () => ({ taskId: task.id, types: overview.document?.fileTypes }),
+    [task.id, overview.document?.fileTypes],
+  );
+
+  const { pictureSource, videoAt, fileAt } = useDescriptionPictures(shown, files);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
 
   // Note that a chip's pull request is read through the task's own workspace, as the panel's is, whichever one the phone works in.
@@ -2910,8 +2922,19 @@ function OverviewDescription({
       params: { id: threadId, task: task.id },
     });
 
+  // Note that each picture of the description reads its own source where it is drawn, under its task, so one landing draws that picture alone.
+  const withPictures = (section: ReactNode) => (
+    <PicturesProvider
+      owner={PICTURE_OWNER.TASK}
+      ownerId={task.id}
+      kind={PRODUCT_PICTURE_KIND.DESCRIPTION}
+    >
+      {section}
+    </PicturesProvider>
+  );
+
   if (blocks.length === 0) {
-    return (
+    return withPictures(
       <ListSection title={WORDS.DESCRIPTION} act={edit}>
         <WordsRow
           words={shown}
@@ -2923,11 +2946,11 @@ function OverviewDescription({
           linkStanding={linkStanding}
           onPressAt={onPressBlock === undefined ? undefined : (x, y) => onPressBlock(0, x, y)}
         />
-      </ListSection>
+      </ListSection>,
     );
   }
 
-  return (
+  return withPictures(
     <ListSection title={WORDS.DESCRIPTION} act={edit}>
       {/* Note that the blocks are recycled as the page scrolls, as the Inbox's rows are, so a long description mounts only the blocks near the screen, each its own host of words, rather than every one as the page opens. */}
       <RowForEach data={blocks} keyOf={(block) => `${block.from}`}>
@@ -2981,7 +3004,7 @@ function OverviewDescription({
           );
         }}
       </RowForEach>
-    </ListSection>
+    </ListSection>,
   );
 }
 
