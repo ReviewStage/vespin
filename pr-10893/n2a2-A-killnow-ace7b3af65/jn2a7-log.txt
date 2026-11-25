@@ -1,0 +1,17 @@
+pinned to ace7b3af65
+== bundle PJjn2a7 base ace7b3af65
+  built ace7b3af65 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2reqlog.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2A-write-1x seed: rc 0
+n2A-write-1x fn2mark: 21 steps,  marked [Thread 218: decide how a partial cent rounds in the billing rounding] settled [Thread 197: decide how a partial cent rounds in the push tokens]
+  n2A search: s1 [Thread 218] 11 steps ; s2 [Thread 197 on All] 4 steps Assert that "${SETTLED}" is visible... FAILED
+  n2A db after rows: at 1795638407465 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_djldq2r_1i collection_metadata persisted_index_registry cache_generation collection_registry t_djldq2r_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:104a29b1-8558-4847-bb30-58202a11dd69|c_djldq2r_1i|t_djldq2r_1i|1|1795638098;
+  n2A written.json: status present, polled until 98224 ms after the relaunch: {"5eed0004-0000-4000-8000-0000003d09d9":{"carried":true,"unread":true},"5eed0004-0000-4000-8000-0000003d09c4":{"carried":true,"unread":false,"status":"closed","settledAt":1795638371170,"updatedAt":1795638371170,"revision":9}}
+  n2A times: second_launch_T=1795638315936 terminate_T=1795638377466 mark_end_T=1795638377629 relaunch_T=1795638377666 s1_end_T=1795638398814 s2_end_T=1795638463323 written_status_T=1795638475890 tries=0 
+  n2A tap/kill times: 
+  n2A db at the end: at 1795638476295 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_djldq2r_1i collection_metadata persisted_index_registry cache_generation collection_registry t_djldq2r_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:104a29b1-8558-4847-bb30-58202a11dd69|c_djldq2r_1i|t_djldq2r_1i|1|1795638098;
+  n2A requests (inbox and writes): 158 lines; PUT /api/account/time-zone passed to the plain stub at 1795638109438 (-268228 ms vs relaunch) took 0;POST /api/events passed to the plain stub at 1795638168949 (-208717 ms vs relaunch) took 0;POST /api/events passed to the plain stub at 1795638289032 (-88634 ms vs relaunch) took 0;PUT /api/account/time-zone passed to the plain stub at 1795638324266 (-53400 ms vs relaunch) took 0;DELETE /api/inbox/5eed0004-0000-4000-8000-0000003d09d9/read 200 at 1795638340114 (-37552 ms vs relaunch) took 1;POST /api/inbox/5eed0004-0000-4000-8000-0000003d09c4/close 200 at 1795638371168 (-6498 ms vs relaunch) took 4;PUT /api/account/time-zone passed to the plain stub at 1795638381622 (+3956 ms vs relaunch) took
