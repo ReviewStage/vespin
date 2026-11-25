@@ -9,6 +9,7 @@ import { Check } from "../../icons/icons.js";
 import { pulsePress } from "../../press-pulse.js";
 import { ignoredByReplay, REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import { STATUS_TONE, type StatusTone } from "../../status-tone.js";
+import { CARD_CORNER, CARD_PADDING, Card } from "../card/card.js";
 import {
   ROVING_ORIENTATION,
   ROVING_STOP,
@@ -54,7 +55,11 @@ import {
  * row above it, ringed by nothing, and what it holds under its head starting
  * where its mark does, past the radio, so a list of credentials reads as the
  * settings rows around it. An option's `state` says under its label how it
- * stands, a credential's Connected, and steps nothing back.
+ * stands, a credential's Connected, and steps nothing back. A `grouped`
+ * list stands its marked rows in one bordered card, each ruled from the row
+ * above it and filled by nothing at rest, so a phone's ask reads as one
+ * card of options, as a settings card's rows do; the leading radio or
+ * checkbox still says one pick or several.
  *
  * A settled list is the record of a choice made: the same rows as a list a
  * reader cannot press, the picked ones in the checked look with a check and
@@ -94,13 +99,14 @@ export const CHOICE_SELECT = {
 
 export type ChoiceSelect = (typeof CHOICE_SELECT)[keyof typeof CHOICE_SELECT];
 
-/** How an open list's rows are drawn: rows of words alone, rows led by the radio or checkbox each behaves as, pills that wrap, a check in the picked one, cards holding controls of their own, or the same as a settings card's rows. */
+/** How an open list's rows are drawn: rows of words alone, rows led by the radio or checkbox each behaves as, pills that wrap, a check in the picked one, cards holding controls of their own, the same as a settings card's rows, or marked rows standing in one bordered card. */
 export const CHOICE_LOOK = {
   PLAIN: "plain",
   MARKED: "marked",
   PILL: "pill",
   CARD: "card",
   ROWS: "rows",
+  GROUPED: "grouped",
 } as const;
 
 export type ChoiceLook = (typeof CHOICE_LOOK)[keyof typeof CHOICE_LOOK];
@@ -129,6 +135,7 @@ const LIST_LOOK = {
   pill: "flex flex-row flex-wrap gap-1.5",
   card: "flex gap-2",
   rows: "flex",
+  grouped: "flex",
 } as const satisfies Record<ChoiceLook, string>;
 
 /**
@@ -148,7 +155,9 @@ const ROW =
  * stands as a rounded box instead of swelling into an ellipse, while a short
  * one is the same capsule as ever. A card's row is its head's radio and
  * words, the card wearing the box, and fills the head beside its aside, so
- * the badge stands at the head's right as a row's does.
+ * the badge stands at the head's right as a row's does. A grouped row is
+ * square, the card around it rounding the corners, and ruled from the row
+ * above it as a settings card's rows are (`choice-list.css`).
  */
 const ROW_LOOK = {
   plain: "",
@@ -156,6 +165,7 @@ const ROW_LOOK = {
   pill: "gap-icon-gap min-h-control py-1 px-3 rounded-[calc(var(--ui-control-height)/2)] text-caption leading-body",
   card: "p-0 flex-auto",
   rows: "p-0 flex-auto",
+  grouped: "rounded-none",
 } as const satisfies Record<ChoiceLook, string>;
 
 /** A row standing beside the others shares the width, each as tall as the tallest. */
@@ -442,7 +452,7 @@ function RowInside({
       {look === CHOICE_LOOK.PILL ? (
         <PickedCheck className={cn("flex-none m-0", checked ? "block" : "hidden")} />
       ) : null}
-      {look === CHOICE_LOOK.MARKED || held(look) ? (
+      {marked(look) || held(look) ? (
         <ChoiceControl radio={radio} checked={checked} tone={option.tone} inCard={held(look)} />
       ) : null}
       {option.mark === undefined ? null : (
@@ -456,6 +466,11 @@ function RowInside({
       <ChoiceWords option={option} look={look} number={number} />
     </>
   );
+}
+
+/** Whether a look leads each row with the radio or checkbox it behaves as, held in no box of its own. */
+function marked(look: ChoiceLook): boolean {
+  return look === CHOICE_LOOK.MARKED || look === CHOICE_LOOK.GROUPED;
 }
 
 /** Whether a look holds each option in a box of its own, with an aside and controls under its head: a card's, or a settings row's. */
@@ -679,21 +694,7 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
     "data-read-only": readOnly || undefined,
   };
 
-  if (!one) {
-    return (
-      <CheckboxGroup
-        {...group}
-        {...roving}
-        render={<fieldset />}
-        value={[...value]}
-        onKeyDown={onKeyDown}
-      >
-        {rows}
-      </CheckboxGroup>
-    );
-  }
-
-  return (
+  const list = one ? (
     <RadioGroup
       {...group}
       value={value[0] ?? null}
@@ -708,6 +709,25 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
     >
       {rows}
     </RadioGroup>
+  ) : (
+    <CheckboxGroup
+      {...group}
+      {...roving}
+      render={<fieldset />}
+      value={[...value]}
+      onKeyDown={onKeyDown}
+    >
+      {rows}
+    </CheckboxGroup>
+  );
+
+  // Note that a grouped list's card is the one every card wears, flush so it clips its square rows at its corners.
+  return look === CHOICE_LOOK.GROUPED ? (
+    <Card corner={CARD_CORNER.CONTROL} padding={CARD_PADDING.FLUSH} className="ui-choice-group">
+      {list}
+    </Card>
+  ) : (
+    list
   );
 }
 

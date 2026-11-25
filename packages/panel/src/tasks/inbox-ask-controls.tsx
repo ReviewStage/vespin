@@ -53,6 +53,8 @@ import {
   LAYOUT_ELEMENT,
   QuietWords,
   ReadableControls,
+  ROWS_CARD_ELEMENT,
+  RowsCard,
   Stack,
   TEXT_ELEMENT,
   TEXT_FIELD_TYPE,
@@ -66,6 +68,7 @@ import { CheckIcon, Undo2Icon } from "@repo/ui/icons";
 import { Fragment } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
 import { MarkdownMessage } from "../markdown-message.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { type FormTextDoors, type FormTextProps, InboxFormText } from "./inbox-form-text.js";
 import { OptionCardMedia } from "./inbox-option-media.js";
 import { ANSWER_STATUS_TONE } from "./inbox-stamp.js";
@@ -179,6 +182,7 @@ function ChoiceOptions({
   disabled,
   numbered = false,
   readOnly = false,
+  grouped,
   onDraft,
 }: {
   choice: Pick<InboxChoice, "options" | "multiple" | "recommended" | "recommendations">;
@@ -186,6 +190,8 @@ function ChoiceOptions({
   disabled: boolean;
   numbered?: boolean;
   readOnly?: boolean;
+  /** Whether its rows stand in one bordered card, as on a phone. */
+  grouped: boolean;
   onDraft: (draft: InboxDraft) => void;
 }): React.JSX.Element {
   const cards = optionsCarryMedia(choice);
@@ -205,7 +211,7 @@ function ChoiceOptions({
         options={options}
         value={cards ? cardValues(draft) : draft.choices}
         select={choice.multiple === true ? CHOICE_SELECT.MANY : CHOICE_SELECT.ONE}
-        look={cards ? CHOICE_LOOK.CARD : CHOICE_LOOK.MARKED}
+        look={cards ? CHOICE_LOOK.CARD : grouped ? CHOICE_LOOK.GROUPED : CHOICE_LOOK.MARKED}
         numbered={numbered && !readOnly && !cards}
         clearable
         disabled={disabled}
@@ -432,6 +438,7 @@ function FormFields({
   draft,
   disabled,
   readOnly = false,
+  grouped,
   text,
   onDraft,
 }: {
@@ -439,24 +446,24 @@ function FormFields({
   draft: InboxDraft;
   disabled: boolean;
   readOnly?: boolean;
+  /** Whether each field stands as a row of one bordered card, as on a phone. */
+  grouped: boolean;
   text?: FormText | undefined;
   onDraft: (draft: InboxDraft) => void;
 }): React.JSX.Element {
-  return (
-    <Stack gap={GAP.FIELD}>
-      {form.fields.map((field) => (
-        <InboxFormField
-          key={field.label}
-          field={field}
-          draft={draft}
-          disabled={disabled}
-          readOnly={readOnly}
-          text={text}
-          onDraft={onDraft}
-        />
-      ))}
-    </Stack>
-  );
+  const fields = form.fields.map((field) => (
+    <InboxFormField
+      key={field.label}
+      field={field}
+      draft={draft}
+      disabled={disabled}
+      readOnly={readOnly}
+      text={text}
+      onDraft={onDraft}
+    />
+  ));
+
+  return grouped ? <RowsCard rows={fields} /> : <Stack gap={GAP.FIELD}>{fields}</Stack>;
 }
 
 /** Answers no change, for the controls of an answer already given. */
@@ -681,6 +688,35 @@ function StepBox({
   );
 }
 
+/** The words a to-do's steps are named by, for a reader that does not see the question over them. */
+const STEPS_LABEL = "Steps";
+
+/** A to-do's steps, one under another, or each a row of one bordered card where `grouped`, as on a phone. */
+function StepList({
+  grouped,
+  steps,
+}: {
+  grouped: boolean;
+  steps: readonly React.ReactNode[];
+}): React.JSX.Element {
+  // Note that each step is keyed by its place, since steps have no key of their own and are never reordered.
+  const marked = steps.map((step, at) => (
+    <div key={at} data-inbox-step="">
+      {step}
+    </div>
+  ));
+
+  return grouped ? (
+    <RowsCard as={ROWS_CARD_ELEMENT.LIST} label={STEPS_LABEL} rows={marked} />
+  ) : (
+    <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.CONTROL} aria-label={STEPS_LABEL}>
+      {marked.map((step, at) => (
+        <li key={at}>{step}</li>
+      ))}
+    </Stack>
+  );
+}
+
 /** An ask's controls, whose words select and copy, and a Reply quotes as the words around them. */
 function AskWords({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -724,6 +760,7 @@ function OpenControls({
   doors: AskDoors;
 }): React.JSX.Element | null {
   const { draft, disabled, onDraft } = doors;
+  const grouped = usePhoneRoom();
 
   switch (ask.type) {
     case INBOX_ASK.DECIDE:
@@ -752,6 +789,7 @@ function OpenControls({
             draft={draft}
             disabled={disabled}
             numbered
+            grouped={grouped}
             onDraft={onDraft}
           />
         </div>
@@ -764,20 +802,19 @@ function OpenControls({
       return (
         <>
           {steps.length === 0 ? null : (
-            <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.CONTROL} aria-label="Steps">
-              {steps.map((step, at) => (
-                // Steps have no key of their own, and are never reordered.
-                <li key={at} data-inbox-step="">
-                  <StepBox
-                    step={step}
-                    at={at}
-                    checked={ticked.has(at)}
-                    disabled={disabled}
-                    onChange={() => onDraft(withStep(ask, draft, at))}
-                  />
-                </li>
+            <StepList
+              grouped={grouped}
+              steps={steps.map((step, at) => (
+                <StepBox
+                  key={at}
+                  step={step}
+                  at={at}
+                  checked={ticked.has(at)}
+                  disabled={disabled}
+                  onChange={() => onDraft(withStep(ask, draft, at))}
+                />
               ))}
-            </Stack>
+            />
           )}
           {/* Note that the two presses are the to-do's options, which Enter's way to what is missing finds. */}
           <div className={INBOX_ASK_PRESSES} {...{ [OPTIONS_ATTRIBUTE]: "" }}>
@@ -809,6 +846,7 @@ function OpenControls({
             form={{ fields: ask.fields }}
             draft={draft}
             disabled={disabled}
+            grouped={grouped}
             text={(props) => <InboxFormText {...props} doors={doors.text} />}
             onDraft={onDraft}
           />
@@ -869,6 +907,8 @@ function LeftControls({
   title: string | undefined;
   draft: InboxDraft;
 }): React.JSX.Element | null {
+  const grouped = usePhoneRoom();
+
   switch (ask.type) {
     case INBOX_ASK.DECIDE:
       return decideButtons(ask) ? (
@@ -884,7 +924,14 @@ function LeftControls({
           ))}
         </div>
       ) : (
-        <ChoiceOptions choice={ask} draft={draft} disabled={false} readOnly onDraft={heldStill} />
+        <ChoiceOptions
+          choice={ask}
+          draft={draft}
+          disabled={false}
+          readOnly
+          grouped={grouped}
+          onDraft={heldStill}
+        />
       );
     case INBOX_ASK.DO: {
       const steps = stepsOf(ask, title);
@@ -893,20 +940,19 @@ function LeftControls({
       return (
         <>
           {steps.length === 0 ? null : (
-            <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.CONTROL} aria-label="Steps">
-              {steps.map((step, at) => (
-                // Steps have no key of their own, and are never reordered.
-                <li key={at} data-inbox-step="">
-                  <StepBox
-                    step={step}
-                    at={at}
-                    checked={ticked.has(at)}
-                    readOnly
-                    onChange={heldStill}
-                  />
-                </li>
+            <StepList
+              grouped={grouped}
+              steps={steps.map((step, at) => (
+                <StepBox
+                  key={at}
+                  step={step}
+                  at={at}
+                  checked={ticked.has(at)}
+                  readOnly
+                  onChange={heldStill}
+                />
               ))}
-            </Stack>
+            />
           )}
           <div className={INBOX_ASK_PRESSES}>
             <AskPress
@@ -932,6 +978,7 @@ function LeftControls({
           draft={draft}
           disabled={false}
           readOnly
+          grouped={grouped}
           onDraft={heldStill}
         />
       );
@@ -949,21 +996,30 @@ export function hasControls(ask: InboxAsk): boolean {
  * message says what it asks: an Enter on an option or in a field sends the
  * card, a form of several fields too. Its × at the top end, where the item
  * can be closed, resolves it without answering, asked first
- * (`inbox-close.tsx`); its Enter presses the × rather than sending.
+ * (`inbox-close.tsx`); its Enter presses the × rather than sending. Standing
+ * `apart` from the box, as a phone's thread stands them over its docked
+ * box, they keep no inset of their own, since their rows' card is their frame.
  */
 export function DraftQuestion({
   pane,
+  apart = false,
   close,
   children,
 }: {
   pane: React.RefObject<HTMLElement | null>;
+  /** Whether they stand apart from the box, in the thread over it. */
+  apart?: boolean | undefined;
   /** The Resolve that settles the item without answering; none where it cannot be resolved. */
   close?: React.ReactNode;
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
     <div
-      className="inbox-draft-ask flex min-w-0 items-start gap-tight-gap px-list-inset pt-list-inset pb-tight-gap"
+      className={
+        apart
+          ? "inbox-draft-ask flex min-w-0 items-start gap-tight-gap"
+          : "inbox-draft-ask flex min-w-0 items-start gap-tight-gap px-list-inset pt-list-inset pb-tight-gap"
+      }
       data-inbox-draft-ask=""
     >
       {/* biome-ignore lint/a11y/noStaticElementInteractions: the keys it hears come from the options and fields inside it, whose Enter sends the card. */}

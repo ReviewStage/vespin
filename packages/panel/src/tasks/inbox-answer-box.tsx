@@ -1,5 +1,10 @@
 import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
-import { INBOX_BOX_WORDS, type InboxMissing, missingWords } from "@repo/features/inbox-ask-words";
+import {
+  INBOX_BOX_WORDS,
+  INBOX_MISSING,
+  type InboxMissing,
+  missingWords,
+} from "@repo/features/inbox-ask-words";
 import { type InboxDraft, inboxMissing, inboxThreadSend } from "@repo/features/inbox-draft";
 import { acknowledgedOnOpen, awaitsNod } from "@repo/features/inbox-list-model";
 import { INBOX_BOUNDS, type InboxItem, type InboxMessage } from "@repo/features/inbox-wire";
@@ -8,6 +13,7 @@ import { Checkbox, type ComposerNote, STATUS_TONE } from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { Equal } from "effect";
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDraftWords } from "../composer-drafts.js";
 import { useConnected } from "../connection.js";
 import { failureShown } from "../failure-report.js";
@@ -107,6 +113,13 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * open question, the question's controls step aside, since nothing picked
  * there goes with the thread, and come back as they were once it is
  * unticked or the thread is started.
+ *
+ * On a phone the box is docked at the screen's foot under the thread, as an
+ * agent's page docks its own, and the open question's controls stand apart
+ * from it, as their own card in the thread's last row (`questionAt`), drawn
+ * there by the box through a portal, so the box still holds what they pick,
+ * steps them aside for a new thread, and takes the keyboard to what they
+ * lack. The field asks to "Add a note" all the same while they stand.
  */
 
 /** Whether the box holds neither words nor files. */
@@ -212,6 +225,8 @@ interface AnswerBoxProps {
   onUnarchiveAgent: () => Promise<ActionResult>;
   /** The new thread the checkbox under the card starts instead of a reply; none where the page offers none. */
   newThread?: AnswerNewThread | undefined;
+  /** Where the open question's controls stand apart from the box, a phone's thread over the box docked at its foot: the element they are drawn into, null until it is laid out; none where they are the card's body. */
+  questionAt?: HTMLElement | null | undefined;
 }
 
 /** A new thread's first message, as the box hands it: its words and files, and the key the start goes under. */
@@ -245,6 +260,7 @@ function AnswerCard({
   onQuoted,
   onUnarchiveAgent,
   newThread,
+  questionAt,
 }: Omit<AnswerBoxProps, "agents"> & { agentBox: AgentBox }): React.JSX.Element {
   const connected = useConnected();
   const toast = useToast();
@@ -257,6 +273,7 @@ function AnswerCard({
   const [starting, setStarting] = useState(false);
   const starts = newThread !== undefined && asNew;
   const asks = controls !== undefined && !starts;
+  const apart = questionAt !== undefined;
   // Note that only a nod and a thread start hold the box; a reply leaves it at once and the next may follow.
   const sending = control.sending.has(item.id) || starting;
   const acknowledgeHeld = useInboxAcknowledger();
@@ -274,9 +291,10 @@ function AnswerCard({
   if (wanting && missing === undefined) setWanting(false);
   const box = useRef<HTMLDivElement>(null);
 
+  // Note that an option or a field standing apart is found where it stands, and the note's line in the box.
   const refuse = (lacks: InboxMissing) => {
     setWanting(true);
-    focusMissing(box.current, lacks);
+    focusMissing(apart && lacks.kind !== INBOX_MISSING.WORDS ? questionAt : box.current, lacks);
   };
 
   const placeholder = starts
@@ -410,7 +428,7 @@ function AnswerCard({
         maxLength={INBOX_BOUNDS.MAX_MESSAGE_CHARS}
         takesFocus={false}
         answer={{
-          question: asks ? controls : undefined,
+          question: asks && !apart ? controls : undefined,
           under:
             newThread === undefined ? undefined : (
               <NewThreadChoice
@@ -433,6 +451,7 @@ function AnswerCard({
         }}
       />
       {quotes ? <ReplyToSelection scope={replyScope} onReply={layQuote} /> : null}
+      {asks && apart && questionAt !== null ? createPortal(controls, questionAt) : null}
     </div>
   );
 }

@@ -126,6 +126,7 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { failureShown } from "../failure-report.js";
 import { type Directory, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useShortcutTarget } from "../shortcut-target.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
@@ -1665,6 +1666,10 @@ export function InboxPane({
   const headingAway = useHeadingAway(board, heading, item.id);
   // A phone heads the item with its own row, the item standing alone in the list's place.
   const phoneHead = phone !== undefined && onBack !== undefined;
+  // Note that a phone docks the box at the screen's foot, under the thread, as an agent's page does, its open ask's card standing in the thread over it.
+  const docked = usePhoneRoom();
+  // Where a docked box's ask stands: the element in the thread's last row it is drawn into, once laid out.
+  const [askAt, setAskAt] = useState<HTMLElement | null>(null);
   // An open ask waits on its task's assignee, else whoever started its agent, as the list says, though any member may answer it.
   const waitingOn = readersItem(item, readerId) ? undefined : inboxWaitsOn(item);
   // Note that the agent and the pictures are handed to the thread's messages as the same objects while they say the same, so a message is drawn again only where it moved (`ThreadMessage`).
@@ -1703,8 +1708,18 @@ export function InboxPane({
     [thread, events, pending, undelivered],
   );
 
-  // The draft reply stands after the thread's rows as its last, under a key of its own that no row takes.
-  const rowKeys = useMemo(() => [...rows.map((row) => row.key), DRAFT_ROW_KEY], [rows]);
+  // The open ask's controls stand in the draft reply, over its note.
+  const asking = openAskOf(thread);
+  const openAsk = asking !== undefined && knownAsk(asking.ask) ? asking.ask : undefined;
+  // Note that an ask of words alone has no controls, so the box stands plain and its words answer it.
+  const wordsAlone = openAsk?.type === INBOX_ASK.ANSWER && openAsk.fields === undefined;
+  // The draft reply stands after the thread's rows as its last, under a key of its own that no row takes; docked, only while an ask's card stands in it.
+  const drafted = !docked || (openAsk !== undefined && !wordsAlone);
+
+  const rowKeys = useMemo(
+    () => [...rows.map((row) => row.key), ...(drafted ? [DRAFT_ROW_KEY] : [])],
+    [rows, drafted],
+  );
 
   // The reader's own newest reply, on its way or landed, which takes the thread to its end as it lands, as TanStack's example does on a send.
   const ownLast = rows.findLast(
@@ -1731,17 +1746,18 @@ export function InboxPane({
   const workspaceId = holderWorkspaceId(holder);
   // Note that the ask's controls write its picks alone, never the words, which the box reads and writes where it stands.
   const onDraft = (next: InboxDraft) => control.onPicks(item, next);
-  // The open ask's controls stand in the draft reply, over its note.
-  const asking = openAskOf(thread);
-  const openAsk = asking !== undefined && knownAsk(asking.ask) ? asking.ask : undefined;
-  // Note that an ask of words alone has no controls, so the box stands plain and its words answer it.
-  const wordsAlone = openAsk?.type === INBOX_ASK.ANSWER && openAsk.fields === undefined;
 
+  // Note that a phone's card offers no ×, since its head's ⋯ holds Resolve.
   const question =
     openAsk === undefined || wordsAlone ? undefined : (
       <DraftQuestion
         pane={pane}
-        close={<QuestionResolve key={item.id} item={item} resolver={doors.onClose} />}
+        apart={docked}
+        close={
+          docked ? undefined : (
+            <QuestionResolve key={item.id} item={item} resolver={doors.onClose} />
+          )
+        }
       >
         <AskControls
           ask={openAsk}
@@ -1768,29 +1784,35 @@ export function InboxPane({
     };
   };
 
-  const draftReply = (place: VirtualRowPlace) => (
+  const answerBox = (
     <AnswerMentions value={mentions}>
-      <DraftReply readerId={readerId} place={place}>
-        <InboxAnswerBox
-          item={item}
-          readerId={readerId}
-          control={control}
-          agent={by.subject.agent}
-          agents={agents}
-          thread={thread}
-          controls={question}
-          skills={agents.readSkills}
-          keywords={answerKeywords(holder, item)}
-          replyScope={board}
-          onQuoteDoor={onQuoteDoor}
-          onQuoted={onQuoted}
-          onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
-          newThread={
-            newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
-          }
-        />
-      </DraftReply>
+      <InboxAnswerBox
+        item={item}
+        readerId={readerId}
+        control={control}
+        agent={by.subject.agent}
+        agents={agents}
+        thread={thread}
+        controls={question}
+        skills={agents.readSkills}
+        keywords={answerKeywords(holder, item)}
+        replyScope={board}
+        onQuoteDoor={onQuoteDoor}
+        onQuoted={onQuoted}
+        onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
+        newThread={
+          newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
+        }
+        questionAt={docked ? askAt : undefined}
+      />
     </AnswerMentions>
+  );
+
+  // Note that a docked box's last row holds only its ask's card, drawn there by the box (`questionAt`).
+  const draftReply = (place: VirtualRowPlace) => (
+    <DraftReply readerId={readerId} place={place}>
+      {docked ? <div ref={setAskAt} className="inbox-draft-ask-at min-w-0" /> : answerBox}
+    </DraftReply>
   );
 
   const itemActions = (
@@ -1982,6 +2004,7 @@ export function InboxPane({
           </ConversationContent>
           <ConversationScrollButton />
         </Conversation>
+        {docked ? <div className="inbox-answer-dock flex-none">{answerBox}</div> : null}
       </Fill>
     </section>
   );

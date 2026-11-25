@@ -25,6 +25,7 @@ import { beforeAll, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 
 import { descriptionEditor } from "../description-editor/index.js";
+import { SHELL_ROOM } from "../shell-room.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -64,6 +65,7 @@ import {
   item,
   itemPane,
   keyOn,
+  layOut,
   listed,
   menuItem,
   menuWords,
@@ -380,6 +382,33 @@ test("Enter on a focused option sends the reply carrying the pick and never pres
   );
   // The answer stands at once, as sent: the pick Enter was on, never pressed off.
   assert.deepEqual(answeredPicks(page), ["Retry once"], "Enter left the pick standing");
+});
+
+test("on a phone the open ask's options stand in the thread and the box is docked under it: a Send with nothing picked takes the keyboard to the first option there, and a pick there goes with the docked box's Send", async () => {
+  const { page } = mount({ chosen: ON_THRESHOLD, room: SHELL_ROOM.NARROW });
+  await settle();
+  layOut(page, 390);
+  const sent = heldMessages(repliedOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000092"));
+  const pane = itemPane(page);
+  const box = pane.querySelector("form.inbox-answer") ?? assert.fail("the box stands");
+  const first = openOptions(pane)[0] ?? assert.fail("no option");
+  assert.equal(box.contains(first), false, "the options stand apart from the box");
+  assert.equal(box.closest(".inbox-board"), null, "the box stands outside the thread");
+  assert.ok(first.closest(".inbox-board"), "the options stand in the thread");
+
+  act(() => answerSend(pane).click());
+  await settle();
+  assert.deepEqual(sent, [], "a reply holding nothing goes nowhere");
+  assert.equal(document.activeElement, first, "the keyboard lands on the first option");
+  assert.equal(footWords(pane), "Pick an option.");
+
+  act(() => (openOptions(pane)[1] ?? assert.fail("no second option")).click());
+  await act(async () => answerSend(pane).click());
+  await settle();
+  assert.deepEqual(
+    sent.map(({ answers }) => answers),
+    [{ ask: askIdOf(THRESHOLD.id), reply: INBOX_REPLY.CHOSE, choices: ["Retry once"] }],
+  );
 });
 
 test("a waiting choice of several is a checkbox list whose box counts nothing on its foot: the arrows move along it picking nothing, a number key toggles its option, and Enter on a picked option sends every pick and lets none go", async () => {
