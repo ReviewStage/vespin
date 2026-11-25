@@ -8,6 +8,7 @@
     ".": "./src/index.js",
     "./account-initials": "./src/account-initials.js",
     "./after-paint": "./src/after-paint.js",
+    "./list-row-presses": "./src/components/list-row/list-row-presses.js",
     "./reported-failure": "./src/reported-failure.js",
     "./appearance": "./src/tokens/appearance.js",
     "./actor-model": "./src/actor-model.js",
