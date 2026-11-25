@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; ⌘F finds in its conversation; its box offers Talk; a Manager's Settings stands as a button beside its ⋯, which no longer lists it; a page its words link opens in the panel beside it; and a Manager's Inbox tab lists its threads as the window's Inbox's view chooses. Synthetic throughout.
+ * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; ⌘F finds in its conversation; its box offers Talk; a Manager's Settings stands as a button beside its ⋯, which no longer lists it; a page its words link opens in the panel beside it; a Manager's Inbox tab lists its threads as the window's Inbox's view chooses; and a Manager's page on a phone stands on its chat with its threads. Synthetic throughout.
  */
 
 import assert from "node:assert/strict";
@@ -21,8 +21,10 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
+import { LIVE_READ } from "@repo/features/live-wire";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
-import type { TasksSkillsParams } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, type TasksSkillsParams } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -416,6 +418,66 @@ test("a Manager's Inbox tab counts its open threads, and the dock over its box o
     [...container.querySelectorAll("h2")].some((heading) => heading.textContent === OLDER.title),
     "the oldest waiting thread is shown",
   );
+});
+
+test("a Manager's page on a phone stands on its chat, a message's thread summed under it, with no row of views, where its transcript stood", async () => {
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const manager: ListedAgent = { ...MANAGER, kind: AGENT_KIND.MANAGER };
+
+  const said = (
+    id: string,
+    seq: number,
+    text: string,
+    threadRoot: string | null,
+  ): ManagerChatLiveMessage => ({
+    id,
+    seq,
+    clientKey: `key-${id}`,
+    authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+    authorUserId: null,
+    authorName: "Release manager",
+    text,
+    attachments: [],
+    threadRoot,
+    broadcast: false,
+    turnId: null,
+    lineId: null,
+    createdAt: seq * 1_000,
+    editedAt: null,
+  });
+
+  // The chat holds one message with one reply in its thread, newest first, as the service pages it.
+  handState(
+    {},
+    {
+      tasks: IDLE_TASKS_VIEW,
+      [LIVE_READ.MANAGER_CHAT]: {
+        [manager.id]: {
+          rows: {
+            messages: [
+              said("reply", 2, "The web app's.", "first"),
+              said("first", 1, "On it.", null),
+            ],
+            sending: [],
+          },
+        },
+      },
+    },
+  );
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+
+  const container = await mountAgentPage(history, tasks, () =>
+    createElement(AgentRoutePage, { tasks, away: { label: "Home", onPress: () => {} } }),
+  );
+
+  const page = container.querySelector(".agent-page") ?? assert.fail("the Manager's page stands");
+  assert.match(page.textContent ?? "", /On it\./u, "the chat's message stands");
+  assert.match(page.textContent ?? "", /1 reply/u, "its thread's reply is summed under it");
+  assert.equal(page.querySelector("[role='tablist']"), null, "no row of views stands");
 });
 
 test("a Manager's Inbox tab lists its threads as the window's Inbox's view chooses, offering that view's menu", async () => {

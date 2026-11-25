@@ -23,7 +23,9 @@
  * Messages, its chat; and Inbox, the threads it posted as a task's agent's
  * card shows its own (`agent-threads.tsx`), named with how many stand open.
  * There the line over its box, and Overview's rows, open a thread in the
- * Inbox tab rather than in the window's Inbox. While Messages shows, the page marks itself a chat (`data-chat`), so
+ * Inbox tab rather than in the window's Inbox. A phone's head has no row
+ * for views, so a phone's Manager stands on its chat alone, each thread
+ * pushed over it as the panel's Thread tab, whose Back returns to the chat. While Messages shows, the page marks itself a chat (`data-chat`), so
  * both sides' bubbles stand at one width, and take the column in a phone's
  * room, as desktop.css says. The agent is read from the task list where
  * it carries it, and else once by its id.
@@ -503,10 +505,13 @@ function OwnAgentPage({
 
   const agents = useOwnAgents(tasks, agent, place);
 
-  // Note that a phone's head has no row for views, so a phone's page keeps the chat alone, as it did before them.
-  const manager = agent.kind === AGENT_KIND.MANAGER && away === undefined;
+  const manager = agent.kind === AGENT_KIND.MANAGER;
+  // Note that a phone's head has no row for views, so a phone's Manager stands on its chat alone, its threads pushed over it as the panel's Thread tab.
+  const tabbed = manager && away === undefined;
   // Note that a Manager's page opens on its chat, what it is doing a tab away.
-  const [view, setView] = useState<ManagerView>(MANAGER_VIEW.MESSAGES);
+  const [chosenView, setView] = useState<ManagerView>(MANAGER_VIEW.MESSAGES);
+  // Note that a page narrowed to a phone's room while another view stood goes back to the chat, which no row leads away from there.
+  const view = tabbed ? chosenView : MANAGER_VIEW.MESSAGES;
   // The thread the Inbox tab shows beside its list; none while the list stands alone.
   const [chosenThread, setChosenThread] = useState<string | undefined>(undefined);
 
@@ -519,7 +524,7 @@ function OwnAgentPage({
     tasks,
     agents,
     agent.id,
-    manager ? openInInboxTab : undefined,
+    tabbed ? openInInboxTab : undefined,
   );
 
   const holder = useOwnAgentHolder(agent, agents);
@@ -625,7 +630,7 @@ function OwnAgentPage({
           >
             <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
             {/* Note that the views stand on a tab's bar at the card's top, as a pull request's do, so their words start under the head's. */}
-            {manager ? (
+            {tabbed ? (
               <PaneBar
                 middle={
                   <ChoiceBar
@@ -665,9 +670,9 @@ function OwnAgentPage({
                 className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
                 active={tasks.shown && !sideFocused}
                 subject={findSubject}
-                id={manager ? panels(view).panel : undefined}
-                role={manager ? "tabpanel" : undefined}
-                aria-labelledby={manager ? panels(view).tab : undefined}
+                id={tabbed ? panels(view).panel : undefined}
+                role={tabbed ? "tabpanel" : undefined}
+                aria-labelledby={tabbed ? panels(view).tab : undefined}
               >
                 <ThreadDoorsProvider value={manager ? threadDoors : undefined}>
                   <AgentPane
