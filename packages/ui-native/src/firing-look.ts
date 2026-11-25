@@ -10,14 +10,10 @@ export interface FiringLook {
   readonly mark?: IntegrationMarkAsset | undefined;
 }
 
-/**
- * Each glyph mark's glyph. Note that a webhook stands on the link's glyph
- * until the app's asset catalog holds the panel's webhook glyph, which a
- * native build adds.
- */
+/** Each glyph mark's glyph, the panel's own: a schedule's clock, a webhook's hook, and Run now's play. */
 const FIRING_GLYPH = {
   [FIRING_MARK.SCHEDULE]: GLYPH.TIME,
-  [FIRING_MARK.WEBHOOK]: GLYPH.LINK,
+  [FIRING_MARK.WEBHOOK]: GLYPH.WEBHOOK,
   [FIRING_MARK.MANUAL]: GLYPH.RUN,
 } as const;
 
