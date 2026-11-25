@@ -1,11 +1,35 @@
-pinned to 429bef4a7b
-== bundle PJjn5ab base 429bef4a7b
-  built 429bef4a7b base app Vnatc1.app ()
+pinned to a709aacc5d
+== bundle PJjn5ab base a709aacc5d
+  built a709aacc5d base app Vmain14.app ()
   install 0
-  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
-    apps/mobile/app.config.ts(486,1): error TS1185: Merge conflict marker encountered.
-    apps/mobile/app.config.ts(518,1): error TS1185: Merge conflict marker encountered.
-    apps/mobile/app.config.ts(519,1): error TS1185: Merge conflict marker encountered.
-  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
-  export 1 (simulator-bundle.sh)
-  signed 1
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== bundle PJjn5abB base ed118008ac
+  built ed118008ac base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+created iPhone 17 Pro 06AD0DB5-D999-496D-A500-FCD991AF2938; A tree /Users/deanstratakos/vespin-ipad-agent/jj3PJjn5ab, B tree /Users/deanstratakos/vespin-ipad-agent/jj3PJjn5abB
+reset A 1x run 1: rc 0, launch-load ok, trace 3136 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset B 1x run 1: rc 0, launch-load ok, trace 3136 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset A 3x run 1: rc 0, launch-load ok, trace 6208 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset B 3x run 1: rc 0, launch-load ok, trace 7232 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+catchup A 1x run 1: rc 0, launch-load ok, trace 4160 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+catchup B 1x run 1: rc 0, launch-load ok, trace 3136 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+catchup A 3x run 1: rc 0, launch-load ok, trace 6208 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+catchup B 3x run 1: rc 0, launch-load ok, trace 5184 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset A 1x run 2: rc 0, launch-load ok, trace 4160 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset B 1x run 2: rc 0, launch-load ok, trace 3136 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset A 3x run 2: rc 0, launch-load ok, trace 6208 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset B 3x run 2: rc 0, launch-load ok, trace 7232 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+catchup A 1x run 2: rc 0, launch-load ok, trace 4160 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+catchup B 1x run 2: rc 0, launch-load ok, trace 4160 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+catchup A 3x run 2: rc 0, launch-load ok, trace 6208 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+catchup B 3x run 2: rc 0, launch-load ok, trace 5184 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset A 1x run 3: rc 0, launch-load ok, trace 4160 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset B 1x run 3: rc 0, launch-load ok, trace 3136 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset A 3x run 3: rc 0, launch-load ok, trace 6208 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+reset B 3x run 3: rc 0, launch-load ok, trace 6208 KB; launch:load {"long_tasks":0,"long_task_ms":0,"cold_reads":0,"cold_read_ms":0,"load_window":"whole","app_build":"1"}
+kept /Users/deanstratakos/vespin-ipad-agent/keep-n5ab (919M)
