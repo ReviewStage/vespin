@@ -107,7 +107,12 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
-import { agentsNow, useTaskAgentName, useTaskPullRequestsOf } from "../tasks/use-agents.js";
+import {
+  agentsNow,
+  useTaskAgentName,
+  useTaskAgentSubtitle,
+  useTaskPullRequestsOf,
+} from "../tasks/use-agents.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -950,6 +955,8 @@ function DescriptionDocument({
   const tabAgent = tab === undefined ? undefined : agentOfTab(tab);
   // The column's agent's name, read of its row alone, so only a rename draws the page again.
   const tabAgentName = useTaskAgentName(agents, tabAgent);
+  // Where the column's agent stands and its model, which a phone's bar says under its name.
+  const tabAgentSubtitle = useTaskAgentSubtitle(agents, phone ? tabAgent : undefined);
 
   // The column's agent whose card shows its threads in its transcript's place, which main is told is not on screen.
   const threadsAgent =
@@ -1563,6 +1570,7 @@ function DescriptionDocument({
               ? columnLabel
               : undefined
       }
+      subtitle={pane === TASK_PANE.AGENT && !rename.editing ? tabAgentSubtitle : undefined}
       pickUp={{ name: descriptionHeading.name, shown: descriptionHeading.away }}
       rename={{
         editing: rename.editing,

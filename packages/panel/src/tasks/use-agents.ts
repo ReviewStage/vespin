@@ -19,8 +19,10 @@ import {
 } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
+import { agentStateWords } from "@repo/features/glyph-state";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { choiceRequest } from "@repo/features/model-effort";
+import { modelLabel } from "@repo/features/model-label";
 import type {
   CatalogModel,
   MacOffer,
@@ -420,6 +422,45 @@ export function useTaskAgentName(
   const held = rows.held?.find((agent) => agent.id === agentId);
 
   return listed ?? (held === undefined ? undefined : agentName(held, models));
+}
+
+/** What stands between an agent's state and its model in the line under its name. */
+const SUBTITLE_SEPARATOR = " · ";
+
+/** Where an agent stands and the model it runs on, as a line under its name says them ("Working · Opus 5.5"). */
+function agentSubtitle(
+  agent: Pick<AgentSummary, "status" | "model">,
+  models: readonly CatalogModel[] | undefined,
+): string | undefined {
+  const words = [agentStateWords(agent.status), modelLabel(agent.model, models)]
+    .filter((each) => each !== undefined && each !== "")
+    .join(SUBTITLE_SEPARATOR);
+
+  return words === "" ? undefined : words;
+}
+
+/**
+ * The line under one of the open task's agents' names on a phone's bar:
+ * where it stands and the model it runs on, as the iOS app's bar says them,
+ * read of its row by its id alone, so only a change of either draws its
+ * reader again; none for an agent the task does not list, or none given.
+ */
+export function useTaskAgentSubtitle(
+  control: TaskAgentsControl,
+  agentId: string | undefined,
+): string | undefined {
+  const collections = useTaskListCollections();
+  const { rows, models } = control;
+
+  const listed = useTaskListRowAs(collections.agents, agentId, (row) =>
+    row === undefined || !rows.followed || row.taskId !== rows.taskId
+      ? undefined
+      : agentSubtitle(row, models),
+  );
+
+  const held = rows.held?.find((agent) => agent.id === agentId);
+
+  return listed ?? (held === undefined ? undefined : agentSubtitle(held, models));
 }
 
 /**

@@ -72,7 +72,9 @@
  * bar heading a room inside a card (an agent's threads), and a phone's.
  *
  * A phone's bar (`TOOLBAR_LOOK.PHONE`) lays the same slots as one control a
- * corner, its title centered between them, and its tag under the title, so the title stays centered; it is
+ * corner, its title centered between them, and its tag and its detail under
+ * the title, so the title stays centered, the detail as its subtitle in the
+ * caption's type; it is
  * named by the place it heads (`place`). A corner is one control wide, so
  * every labeled control in it draws its glyph alone, named still, centered
  * where every corner's is. A task's bar leads with its tab strip
@@ -147,6 +149,9 @@ const TAG = "ui-toolbar-tag flex-none";
 
 /** Quiet words after the title, in the body's type, on one line cut short, fading, before the title is. */
 const DETAIL = "ui-toolbar-detail min-w-0 flex-[0_1000_auto] text-body text-muted-foreground";
+
+/** A phone's detail, its subtitle under the title: in the caption's type, so the two fit the row's height. */
+const PHONE_DETAIL = "ui-toolbar-detail min-w-0 text-caption text-muted-foreground";
 
 /** The title, in a bar title's type; its room reaches 6px left of the words, so its own hover fill and field ring, which start there, are not clipped. */
 const TITLE =
@@ -548,7 +553,11 @@ export function Toolbar({
             </ReplayMask>
           ) : null}
         </TitleMenu>
-        {said(detail) ? <OneLine className={DETAIL}>{detail}</OneLine> : null}
+        {said(detail) ? (
+          <OneLine className={look === TOOLBAR_LOOK.PHONE ? PHONE_DETAIL : DETAIL}>
+            {detail}
+          </OneLine>
+        ) : null}
         {said(tag) ? <span className={TAG}>{tag}</span> : null}
       </div>
       {said(actions) ? <div className={ACTIONS}>{actions}</div> : null}

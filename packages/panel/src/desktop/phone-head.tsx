@@ -105,6 +105,8 @@ export interface PhoneHeadSlots {
   pickUp?: ToolbarPickUp | undefined;
   /** What names the page's state, after the title on its baseline (an experiment's mark). */
   tag?: React.ReactNode;
+  /** Quiet words under the title, its subtitle, as an agent's bar says where it stands and the model it runs on (`Toolbar`'s `detail`). */
+  subtitle?: string | undefined;
   /** The end corner's one control, the ⋯. */
   end: React.ReactNode;
 }
@@ -118,6 +120,7 @@ export function phoneBar({
   titleReplayUnmasked,
   pickUp,
   tag,
+  subtitle,
   end,
 }: PhoneHeadSlots): ToolbarProps {
   return {
@@ -131,6 +134,7 @@ export function phoneBar({
     titleReplayUnmasked,
     pickUp,
     tag,
+    detail: subtitle,
     actions: end,
   };
 }

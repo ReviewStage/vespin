@@ -102,6 +102,7 @@ interface TaskHeadRename {
 export function TaskHead({
   back,
   title,
+  subtitle,
   pickUp,
   rename,
   actions,
@@ -109,6 +110,8 @@ export function TaskHead({
   back: TaskHeadBack;
   /** What is on screen: the agent's or the tab's name; none on Overview, whose description names the task in its own heading, which the row then picks up once it scrolls away (`pickUp`). */
   title: string | undefined;
+  /** Quiet words under the title: on an agent's screen, where it stands and the model it runs on. */
+  subtitle?: string | undefined;
   /** The description's heading as the row picks it up where it draws no title. */
   pickUp?: ToolbarPickUp | undefined;
   /** The task's name as a field in the title's place while it is renamed, `title` then being the task's name. */
@@ -153,6 +156,7 @@ export function TaskHead({
           </Text>
         )
       }
+      subtitle={subtitle}
       end={actions}
     />
   );

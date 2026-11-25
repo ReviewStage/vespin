@@ -137,9 +137,13 @@
 
   /* A phone's tag stands under its title, both centered, as a phone's
      header says what a page covers under its name, so the name stays the
-     row's center rather than moving aside for the tag beside it. */
-  .ui-toolbar[data-look="phone"] > .ui-toolbar-heading:has(> .ui-toolbar-tag) {
+     row's center rather than moving aside for the tag beside it; so does
+     its detail, its subtitle, as a conversation's header says where it
+     stands under its name. */
+  .ui-toolbar[data-look="phone"]
+  > .ui-toolbar-heading:has(> :is(.ui-toolbar-tag, .ui-toolbar-detail)) {
     flex-direction: column;
+    align-items: center;
     gap: 0;
   }
 
@@ -150,7 +154,13 @@
      mask, whose box is its children's. */
   .ui-toolbar[data-look="phone"]
     > .ui-toolbar-heading
-    > :is(.ui-toolbar-title, .ui-toolbar-title-menu, .ui-toolbar-pick-up, .ui-toolbar-tag),
+    > :is(
+      .ui-toolbar-title,
+      .ui-toolbar-title-menu,
+      .ui-toolbar-pick-up,
+      .ui-toolbar-tag,
+      .ui-toolbar-detail
+    ),
   .ui-toolbar[data-look="phone"]
     > .ui-toolbar-heading
     > [data-replay-mask]
