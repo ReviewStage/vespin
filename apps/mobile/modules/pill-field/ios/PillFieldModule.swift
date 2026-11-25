@@ -6,8 +6,10 @@
 // hears. Nothing here reads Markdown. The view holds a pill as one
 // attachment character, so it selects and deletes as one unit, and writes
 // the words back by putting each pill's Markdown in its place. It tells
-// JavaScript the Markdown, and the caret's line around it, each pill read as
-// the object character, so an `@` word is found as the panel's box finds it
+// JavaScript its runs, words as typed and pills by their Markdown, from which
+// JavaScript writes the Markdown, a marker typed as words escaped so it names
+// no file; and the caret's line around it, each pill read as the object
+// character, so an `@` word is found as the panel's box finds it
 // (`@repo/features/at-word`); a pick replaces that word with a pill.
 //
 // The view is handed runs on every change JavaScript makes, its own echoed
@@ -272,6 +274,14 @@ enum Run: Equatable {
     switch self {
     case .words(let text): return text
     case .pill(let pill): return pill.markdown
+    }
+  }
+
+  /// The run as JavaScript reads it: words as typed, a pill by its Markdown.
+  var told: [String: Any] {
+    switch self {
+    case .words(let text): return ["text": text]
+    case .pill(let pill): return ["pill": ["markdown": pill.markdown]]
     }
   }
 }
@@ -872,7 +882,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     tell()
   }
 
-  /// Tells JavaScript the Markdown, and the caret's line before and after it with each pill as the object character.
+  /// Tells JavaScript the runs, so it writes the Markdown with a marker typed as words escaped, and the caret's line before and after it with each pill as the object character.
   private func tell() {
     let string = textView.textStorage.string as NSString
     let selected = textView.selectedRange
@@ -885,7 +895,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     let lineEnd = nextBreak.location == NSNotFound ? string.length : nextBreak.location
 
     onWords([
-      "markdown": markdown(of: heldRuns()),
+      "runs": heldRuns().map(\.told),
       "before": string.substring(with: NSRange(location: lineStart, length: caret - lineStart)),
       "after": string.substring(with: NSRange(location: selectionEnd, length: lineEnd - selectionEnd)),
       "caret": caret,
