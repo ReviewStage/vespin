@@ -115,7 +115,7 @@ const CATALOG: JsonValue = {
 };
 
 /** The catalog layer over a gateway answering as scripted, with the requests it saw. */
-function gateway(answers: (request: RecordedRequest) => Response) {
+function gateway(answers: (request: RecordedRequest) => Response | Promise<Response>) {
   const http = recordingHttpClient(answers);
   const layer = modelCatalogLayer.pipe(Layer.provide(http.layer));
 
@@ -201,4 +201,30 @@ it.effect("a refetch that fails past the hour answers the catalog read before it
     );
     assert.ok(after.some((model) => model.id === "anthropic/claude-opus-5.5"));
   }),
+);
+
+it.effect(
+  "a read past the hour answers the catalog held at once, while the refetch it started is still under way",
+  () =>
+    Effect.gen(function* () {
+      let answered = false;
+
+      // Note that the refetch never answers, so a read that waited on it would never return.
+      const { http, layer } = gateway(() => {
+        if (answered) return new Promise<Response>(() => undefined);
+        answered = true;
+
+        return jsonResponse(CATALOG);
+      });
+
+      const [before, after] = yield* Effect.gen(function* () {
+        const first = yield* readCatalog;
+        yield* TestClock.adjust(Duration.hours(2));
+
+        return [first, yield* readCatalog] as const;
+      }).pipe(Effect.provide(layer));
+
+      assert.deepEqual(after, before);
+      assert.equal(http.requests.length, 2);
+    }),
 );
