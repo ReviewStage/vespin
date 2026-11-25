@@ -1,0 +1,11 @@
+pinned to 682bd44d8d
+== bundle PJjbusy base 682bd44d8d
+  built 682bd44d8d base app Vnatc1.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    apps/mobile/app.config.ts(486,1): error TS1185: Merge conflict marker encountered.
+    apps/mobile/app.config.ts(518,1): error TS1185: Merge conflict marker encountered.
+    apps/mobile/app.config.ts(519,1): error TS1185: Merge conflict marker encountered.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 1 (simulator-bundle.sh)
+  signed 1
