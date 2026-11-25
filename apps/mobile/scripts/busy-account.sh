@@ -11,8 +11,8 @@
 #      and the answers the stub serves under `-busyAccount true`;
 #   2. signs the stub's account in once from a clean install
 #      (maestro/rig/busy-account-sign-in.yaml), and stops the app;
-#   3. lays the seed over the signed-in account's folder under the app's
-#      Documents/host/, as a phone that was away keeps it;
+#   3. lays the seed's database over the signed-in account's own under the
+#      app's Documents/host/, as a phone that was away keeps it;
 #   4. launches the app cold with `-authServer stub -busyAccount true`, and
 #      with --trace records Instruments' Time Profiler on every thread for
 #      the window, attached to the app's process;
@@ -63,11 +63,16 @@ maestro --udid "$udid" test "$APP_DIRECTORY/maestro/rig/busy-account-sign-in.yam
 }
 xcrun simctl terminate "$udid" "$BUNDLE_ID" 2>/dev/null || true
 
-# Note that the seed is laid over the folders the signed-in launch made, so the next launch reads the account's tokens as it kept them and the seeded rows beside them.
+# Note that only the account's database is laid over the one the signed-in launch made, its write-ahead files removed first, so the next launch reads the account's tokens and anything else it kept as it kept them, and the seeded rows in their place.
 host="$(xcrun simctl get_app_container "$udid" "$BUNDLE_ID" data)/Documents/host"
-rm -rf "$host/accounts/$ACCOUNT" "$host/busy-account"
-mkdir -p "$host/accounts"
-cp -R "$seed/accounts/$ACCOUNT" "$host/accounts/$ACCOUNT"
+database="$host/accounts/$ACCOUNT/local.sqlite"
+[[ -f "$database" ]] || {
+    echo "error: the signed-in launch kept no $database to lay the seed over" >&2
+    exit 1
+}
+rm -f "$database-wal" "$database-shm"
+cp "$seed/accounts/$ACCOUNT/local.sqlite" "$database"
+rm -rf "$host/busy-account"
 cp -R "$seed/busy-account" "$host/busy-account"
 
 echo "launching cold as the busy account for ${seconds}s"
