@@ -59,6 +59,7 @@ import { ChannelMessage, EmptyState, GlyphSlot, ThreadRule, TIME_LOOK, Time } fr
 import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
+import { useUntilFound } from "@repo/ui/use-until-found";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
@@ -298,6 +299,14 @@ function ManagerMessage({
   const workToggle = work === null ? undefined : toggle;
   const menu = useChatMessageMenu(message.text, thread.onOpen, workToggle);
   const workAction = workToggle === undefined ? null : <WorkMessageAction toggle={workToggle} />;
+  // Note that while a find stands open the closed work is drawn hidden until found, so ⌘F reaches it and a match there opens it, as a closed fold's body is.
+  const finding = useFindOpen();
+  const workDrawn = work !== null && (toggle.shown || finding);
+
+  const workRest = useUntilFound<HTMLDivElement>(workDrawn && !toggle.shown, () => {
+    if (!toggle.shown) toggle.onToggle();
+  });
+
   // Note that the Manager's pictures kept with their size stand as the set it showed, as the transcript draws a shown set.
   const shown = shownOf(message);
   const files = fileChipsOf(message, shown);
@@ -343,7 +352,11 @@ function ManagerMessage({
               </div>
             )}
             {/* Note that the turn's work opens under its first message, in the order it was done, as the working line opens the turn's under way. */}
-            {workToggle?.shown === true ? <div data-turn-work="">{work}</div> : null}
+            {workDrawn ? (
+              <div ref={workRest} data-turn-work="">
+                {work}
+              </div>
+            ) : null}
             {thread.summary}
           </>
         }

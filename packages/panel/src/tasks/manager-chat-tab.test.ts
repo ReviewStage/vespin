@@ -15,11 +15,14 @@ import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
+import { runAppCommand } from "../app-commands.js";
+import { FindScope } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
 import { FAKE_ANSWER, fakeActs } from "../testing/app-bridge.js";
 import { handMembers, handState } from "../testing/app-state.js";
@@ -41,8 +44,8 @@ import { ThreadDoorsProvider } from "./manager-chat-threads.js";
 /**
  * manager-chat-tab.test.ts -- a Manager's page as its own chat, drawn from
  * the chat's rows: the reader's messages at the right and everyone else's at
- * the left, each sender named over their run; an ended turn's work folded
- * over the Manager's first message of the turn; Reply beside any message,
+ * the left, each sender named over their run; an ended turn's work a press
+ * away from the Manager's first message of the turn, and found by ⌘F; Reply beside any message,
  * the Manager's or a person's, quoting it whole into the box, which sends it
  * to the chat; a call the Manager holds for an answer standing at the chat's
  * foot with its answers; Retry sending a refused message again with its
@@ -111,6 +114,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   window.localStorage.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 /**
@@ -158,6 +162,8 @@ async function drawChat(
     readonly before?: number;
     /** Whether the thread opened stands with no chat beside it. */
     readonly alone?: boolean;
+    /** Whether a find may open over the chat, as the page's scope lets ⌘F open one. */
+    readonly findable?: boolean;
   } = {},
 ) {
   const manager = held.manager ?? MANAGER;
@@ -232,12 +238,16 @@ async function drawChat(
         createElement(MemberDirectory, {
           workspace: { id: "workspace-acme", memberCount: 2 },
           readerId: DEAN.userId,
-          children: createElement(ChatBesideThread, {
-            agent: manager,
-            control,
-            opened: held.opened,
-            alone: held.alone === true,
-          }),
+          children: createElement(
+            FindScope,
+            { active: held.findable === true, subject: { agent: manager.id } },
+            createElement(ChatBesideThread, {
+              agent: manager,
+              control,
+              opened: held.opened,
+              alone: held.alone === true,
+            }),
+          ),
         }),
       ),
     ),
@@ -535,6 +545,64 @@ test("an ended turn's work is offered as Show work beside the Manager's first me
   await settleQueries();
 
   assert.equal(first.querySelector('[data-call-id="list-1"]'), null, "the menu folds it away");
+});
+
+test("⌘F finds words in an ended turn's work while it stands closed, and opens it under the message", async () => {
+  // jsdom paints no highlights; the find's are kept as a browser keeps them.
+  vi.stubGlobal("CSS", { highlights: new Map(), escape: (words: string) => words });
+  vi.stubGlobal("Highlight", Set);
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+
+  const { container } = await drawChat(
+    [
+      row("ask", 1, "What first?", DEAN),
+      { ...row("told", 2, "The invite flow."), turnId: "turn-1" },
+    ],
+    {
+      findable: true,
+      transcript: [
+        {
+          id: "turn-1",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            { type: "step-start" },
+            { type: "text", text: "Reading the lantern task before I answer." },
+          ],
+          startedAt: 1_000,
+          finishedAt: 79_000,
+        },
+      ],
+    },
+  );
+
+  act(() => {
+    runAppCommand(APP_COMMAND.FIND);
+  });
+
+  const field =
+    document.querySelector<HTMLInputElement>('.find-bar input[aria-label="Find"]') ??
+    assert.fail("the find bar stands open");
+
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+      field,
+      "lantern",
+    );
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settleQueries();
+
+  assert.equal(
+    document.querySelector('[role="search"][aria-label="Find"] .ui-search-field-tally')
+      ?.textContent,
+    "1 of 1",
+  );
+
+  const work =
+    container.querySelector('[data-message-id="told"] [data-turn-work]') ??
+    assert.fail("the turn's work is drawn");
+
+  assert.equal(work.hasAttribute("hidden"), false, "and shown, the match in it");
 });
 
 test.each([
