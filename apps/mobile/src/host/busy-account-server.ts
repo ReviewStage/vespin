@@ -18,12 +18,24 @@
  * whole in one answer, wait a round trip and the time their bytes take at
  * the rate the Inbox whole was seen to arrive at (`BUSY_RATE`), so the two
  * ways are timed on one network.
+ *
+ * It takes the two Inbox writes a person makes most, a thread marked read
+ * or unread and a thread settled by a nod or a close, as the service does:
+ * at once, without a transaction, so the client takes what it answered in
+ * place of its read's. Each is kept in a file beside the answers
+ * (`written.json`), since the stub runs in the app and a relaunch would
+ * otherwise forget it, and laid over every row the Inbox is answered with
+ * from then on: the next answer past a sync id carries each thread written
+ * since it last carried it, and every later move of the thread keeps it.
  */
 
 import { HOSTED_SERVICE_PATH } from "@repo/features";
 import { HOSTED_API_VERSION } from "@repo/features/client-identity";
+import { INBOX_ITEMS_READ, inboxOfLiveRows } from "@repo/features/inbox-live";
+import { INBOX_STATUS, inboxItemSchema } from "@repo/features/inbox-wire";
 import { LIVE_POLL, LIVE_POLL_URL } from "@repo/features/live-wire";
-import type { WireRecord, WireValue } from "@repo/wire";
+import { HTTP_METHOD, type WireRecord, type WireValue } from "@repo/wire";
+import { Schema } from "effect";
 import { File, Paths } from "expo-file-system";
 import { hostStateRootIn } from "./expo-file-system.js";
 
@@ -136,6 +148,146 @@ function pageAnswer(folder: string, page: string | null, askedAt: number): Promi
     : Promise.resolve(new Response(null, { status: 404 }));
 }
 
+/** A thread as a member wrote it this launch or an earlier one: read or not, settled how and when, and whether an answer past a sync id carried it since. */
+interface Written {
+  readonly unread?: boolean;
+  readonly status?: string;
+  readonly settledAt?: number;
+  readonly revision?: number;
+  readonly updatedAt?: number;
+  readonly carried: boolean;
+}
+
+/** Every thread written, by its id, as `written.json` keeps it. */
+let written: Map<string, Written> | undefined;
+
+/** The file the writes are kept in, beside the answers. */
+const WRITTEN_FILE = `file://${ANSWERS}/written.json`;
+
+/** The threads written, read from their file the first time they are asked for this launch. */
+function writtenNow(): Map<string, Written> {
+  if (written !== undefined) return written;
+  const file = new File(WRITTEN_FILE);
+  // SAFETY: the file is this module's own, written by `keepWritten` as this shape.
+  const kept = file.exists ? (JSON.parse(file.textSync()) as Record<string, Written>) : {};
+  written = new Map(Object.entries(kept));
+
+  return written;
+}
+
+/** `writes` kept for the next launch. */
+function keepWritten(writes: Map<string, Written>): void {
+  new File(WRITTEN_FILE).writeSync(JSON.stringify(Object.fromEntries(writes)));
+}
+
+/** `row`, a stamp's or an item's, with what a member wrote on its thread laid over it. */
+function overWritten(row: WireRecord): WireRecord {
+  const write = writtenNow().get(String(row.id));
+
+  if (write === undefined) return row;
+
+  return {
+    ...row,
+    ...(write.unread === undefined ? undefined : { unread: write.unread }),
+    ...(write.status === undefined ? undefined : { status: write.status }),
+    ...(write.revision === undefined ? undefined : { revision: write.revision }),
+    ...(write.updatedAt === undefined ? undefined : { updatedAt: write.updatedAt }),
+    ...(write.settledAt === undefined || !("settledAt" in row)
+      ? undefined
+      : { settledAt: write.settledAt }),
+  };
+}
+
+/** The whole Inbox answer's rows of each part, as the seed wrote them, parsed once for the launch. */
+async function wholeRows(): Promise<Readonly<Record<string, readonly WireRecord[]>>> {
+  // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build.
+  const body = (await answerOnce("inbox-whole.json")) as {
+    readonly queries: Readonly<Record<string, { readonly rows: string }>>;
+  };
+
+  return Object.fromEntries(
+    // SAFETY: the seed writes each part's rows as the wire does, a JSON array of rows.
+    Object.entries(body.queries).map(([part, query]) => [
+      part,
+      JSON.parse(query.rows) as WireRecord[],
+    ]),
+  );
+}
+
+/** The rows of every part the whole answer holds for the thread `id`, each with what was written on it laid over it. */
+async function threadRows(id: string): Promise<Readonly<Record<string, readonly WireRecord[]>>> {
+  const rows = await wholeRows();
+  const messages = (rows.messages ?? []).filter((message) => message.itemId === id);
+  const messageIds = new Set(messages.map((message) => message.id));
+
+  return {
+    stamps: (rows.stamps ?? []).filter((stamp) => stamp.id === id).map(overWritten),
+    items: (rows.items ?? []).filter((item) => item.id === id).map(overWritten),
+    messages,
+    files: (rows.files ?? []).filter((file) => messageIds.has(file.messageId)),
+  };
+}
+
+/** The thread `id` as a nod or a close answers it, the wire's item, settled as written. */
+async function settledItem(id: string): Promise<WireValue | undefined> {
+  const rows = await threadRows(id);
+  const [item] = inboxOfLiveRows(Schema.decodeUnknownSync(INBOX_ITEMS_READ.rows)(rows));
+
+  return item === undefined ? undefined : Schema.encodeSync(inboxItemSchema)(item);
+}
+
+/** An Inbox write's path: a thread's id, and its read mark or its close where it names one. */
+const INBOX_WRITE_PATH = /^\/api\/inbox\/([0-9a-f-]{36})(\/read|\/close)?$/;
+
+/**
+ * An Inbox write a member made, taken at once and kept: a read mark set or
+ * cleared, or a nod or a close settling the thread; none for any other
+ * request.
+ */
+function inboxWrite(request: Request, url: URL): Promise<Response> | undefined {
+  const matched = INBOX_WRITE_PATH.exec(url.pathname);
+  const id = matched?.[1];
+
+  if (id === undefined) return undefined;
+  const writes = writtenNow();
+  const was = writes.get(id) ?? { carried: true };
+  const rest = matched?.[2];
+
+  if (
+    rest === "/read" &&
+    (request.method === HTTP_METHOD.PUT || request.method === HTTP_METHOD.DELETE)
+  ) {
+    const unread = request.method === HTTP_METHOD.DELETE;
+    writes.set(id, { ...was, unread, carried: false });
+    keepWritten(writes);
+
+    return Promise.resolve(json({ id, unread }));
+  }
+
+  if (request.method !== HTTP_METHOD.POST || rest === "/read") return undefined;
+
+  return threadRows(id).then(async ({ items }) => {
+    const row = items?.[0];
+
+    if (row === undefined) return new Response(null, { status: 404 });
+    const at = Date.now();
+
+    writes.set(id, {
+      ...was,
+      unread: false,
+      status: rest === "/close" ? INBOX_STATUS.CLOSED : INBOX_STATUS.ANSWERED,
+      settledAt: at,
+      updatedAt: at,
+      revision: Number(row.revision) + 1,
+      carried: false,
+    });
+    keepWritten(writes);
+    const item = await settledItem(id);
+
+    return item === undefined ? new Response(null, { status: 404 }) : json({ item, taken: true });
+  });
+}
+
 /** One part of an answer past the sync id `past`, its rows as the wire writes them. */
 function movedPart(name: string, rows: readonly unknown[], past: number) {
   const sync = { past: String(past), next: String(past + 1) };
@@ -210,6 +362,18 @@ async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
 
   if (move === undefined) return new Response(null, { status: 404 });
   const at = Date.now();
+  // Note that each thread written since the last answer past a sync id rides on this one, so the client's kept rows carry the write on the service's word.
+  const writes = writtenNow();
+  const fresh = [...writes].flatMap(([threadId, write]) => (write.carried ? [] : [threadId]));
+  const carriedRows = await Promise.all(fresh.map((threadId) => threadRows(threadId)));
+
+  for (const threadId of fresh) {
+    const write = writes.get(threadId);
+
+    if (write !== undefined) writes.set(threadId, { ...write, carried: true });
+  }
+
+  if (fresh.length > 0) keepWritten(writes);
   // Note that each move's message takes an id of its own, the seed's with its last group the move's number, so a thread taking a second move takes a second message.
   const id = `${String(move.message.id).slice(0, 24)}${(0x100000 + n).toString(16).padStart(12, "0")}`;
 
@@ -219,8 +383,9 @@ async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
       stamps: movedPart(
         "stamps",
         [
+          ...carriedRows.flatMap((rows) => rows.stamps ?? []),
           {
-            ...move.stamp,
+            ...overWritten(move.stamp),
             updatedAt: at,
             // Note that a thread takes one message a move, and the moves come round to it again once a pass through them is done, so its count is its seed's, this move's, and one for each pass before.
             messages: Number(move.stamp.messages) + 1 + Math.floor(n / moves.length),
@@ -228,9 +393,27 @@ async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
         ],
         past,
       ),
-      items: movedPart("items", [{ ...move.item, updatedAt: at }], past),
-      messages: movedPart("messages", [{ ...move.message, id, createdAt: at }], past),
-      files: movedPart("files", [], past),
+      items: movedPart(
+        "items",
+        [
+          ...carriedRows.flatMap((rows) => rows.items ?? []),
+          { ...overWritten(move.item), updatedAt: at },
+        ],
+        past,
+      ),
+      messages: movedPart(
+        "messages",
+        [
+          ...carriedRows.flatMap((rows) => rows.messages ?? []),
+          { ...move.message, id, createdAt: at },
+        ],
+        past,
+      ),
+      files: movedPart(
+        "files",
+        carriedRows.flatMap((rows) => rows.files ?? []),
+        past,
+      ),
     },
   });
 }
@@ -264,7 +447,8 @@ function taskRowsAnswer(id: string | null, askedAt: number): Promise<Response> {
  * it does for any account: its sign-in, and every read the seed has no
  * answer for.
  */
-export function busyAccountAnswer(url: URL): Promise<Response> | undefined {
+export function busyAccountAnswer(request: Request): Promise<Response> | undefined {
+  const url = new URL(request.url);
   const askedAt = performance.now();
 
   switch (url.pathname) {
@@ -279,6 +463,6 @@ export function busyAccountAnswer(url: URL): Promise<Response> | undefined {
     case HOSTED_SERVICE_PATH.LIVE_TASK_ROWS:
       return taskRowsAnswer(url.searchParams.get("id"), askedAt);
     default:
-      return undefined;
+      return inboxWrite(request, url);
   }
 }
