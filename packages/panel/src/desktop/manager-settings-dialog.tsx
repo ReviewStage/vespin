@@ -12,10 +12,10 @@
  * (`ManagerFaceWell`, saved through `AgentsControl.onFace`), and its name,
  * renamed by pressing it (`RenamableName`), as a workspace's name and a
  * machine's are, through the agent's own rename. Under it every row is what
- * a coding agent shows of the same thing: its repositories, every one it
- * works in, its checkout first, each named whole beside its owner's picture
- * as the sidebar names one (`RepositoryName`), since an agent's repositories
- * are fixed once it starts, whatever its kind; and,
+ * a coding agent shows of the same thing: its repositories, on the chip
+ * New Manager picks them with (`RepositoriesChip`), its checkout named and
+ * the rest counted after it, held, since an agent's repositories are fixed
+ * once it starts, whatever its kind, its hint naming every one; and,
  * read off its own message box (`useAgentBox`), so they cannot drift from
  * it, where it runs, the box's place chip, moving it where a coder's moves,
  * and its model, the box's model chip with its permission mode and the
@@ -50,25 +50,20 @@ import { MEMORY_SCOPE } from "@repo/features/memory-settings-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { EXPERIMENT } from "@repo/settings";
 import {
-  ALIGN,
   BUTTON_VARIANT,
   Button,
   CHIP_LOOK,
   CHIP_WIDTH,
   EmptyState,
   ErrorState,
-  GAP,
   RenamableName,
-  RepositoryName,
   SETTINGS_ROW_LEAD,
   SETTINGS_SECTION_FRAME,
   SettingsDialog,
   type SettingsDialogSection,
   SettingsRow,
-  SettingsRowValue,
   SettingsSection,
   Spinner,
-  Stack,
 } from "@repo/ui";
 import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
@@ -80,7 +75,6 @@ import { useAutomationsOpen } from "../automations-route.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { refusedShown, unreadShown } from "../failure-report.js";
 import { renameWrite } from "../rename-write.js";
-import { useRepositoryPictures } from "../repository-pictures.js";
 import { replayMaskedError } from "../settings/marks.js";
 import { MemorySection } from "../settings/memory-page.js";
 import { usePhoneRoom } from "../stage-room.js";
@@ -89,6 +83,8 @@ import { RENAME_FAILED, teammateStarter } from "../tasks/agent-model.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
+import { CHIP_PLACE, RepositoriesChip } from "../tasks/repository-chip.js";
+import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -125,6 +121,7 @@ const UNNAMED = "Manager settings";
 const WORDS = {
   NAME: "Manager name",
   REPOSITORIES: "Repositories",
+  REPOSITORIES_HELD: "Set when this Manager was made: ",
   MACHINE: "Machine",
   MODEL: "Model",
   ARCHIVE: "Archive",
@@ -316,33 +313,31 @@ function ModelRow({
   );
 }
 
-/** The Repositories row: every repository the Manager works in, one under another, its checkout first; none for a Manager with none. */
-function RepositoriesRow({
-  repositories,
-}: {
-  repositories: readonly string[];
-}): React.JSX.Element | null {
-  const pictures = useRepositoryPictures();
+/** Takes no pick, since the chip is held. */
+function heldPick(): void {}
+
+/**
+ * The Repositories row: the chip New Manager picks them with, its checkout
+ * named and the rest counted after it, held, its hint saying so and naming
+ * every one in order; none for a Manager with none.
+ */
+function RepositoriesRow({ agent }: { agent: SettingsManager }): React.JSX.Element | null {
+  const { repositories } = agent;
+  const chooser = useRepositoryChooser(agent.workspaceId);
 
   if (repositories.length === 0) return null;
 
   return (
     <SettingsRow label={WORDS.REPOSITORIES}>
       {() => (
-        <SettingsRowValue>
-          <ReplayMask>
-            <Stack gap={GAP.TIGHT} align={ALIGN.END}>
-              {repositories.map((repository) => (
-                <RepositoryName
-                  key={repository}
-                  repository={repository}
-                  label={repository}
-                  pictures={pictures}
-                />
-              ))}
-            </Stack>
-          </ReplayMask>
-        </SettingsRowValue>
+        <RepositoriesChip
+          place={CHIP_PLACE.FIELD}
+          width={CHIP_WIDTH.FIELD}
+          values={repositories}
+          chooser={chooser}
+          onToggle={heldPick}
+          held={`${WORDS.REPOSITORIES_HELD}${repositories.join(", ")}`}
+        />
       )}
     </SettingsRow>
   );
@@ -368,7 +363,7 @@ function GeneralSection({
     <>
       <SettingsSection>
         <IdentityRow agent={agent} agents={agents} />
-        <RepositoriesRow repositories={agent.repositories} />
+        <RepositoriesRow agent={agent} />
         <SettingsRow label={WORDS.MACHINE}>{() => box.place(false)}</SettingsRow>
         <ModelRow agent={agent} me={agents.me} box={box} />
       </SettingsSection>
