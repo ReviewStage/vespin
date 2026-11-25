@@ -1,11 +1,13 @@
+import { chatWorkWords } from "@repo/features/manager-chat-view";
 import { replyOf } from "@repo/features/reply-quote";
 import type { ContextMenuProps } from "@repo/ui";
 import { CopyIcon, useMenu } from "@repo/ui";
-import { MessageSquareReplyIcon, ReplyIcon } from "@repo/ui/icons";
+import { ListTreeIcon, MessageSquareReplyIcon, ReplyIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";
 import { MessageAction } from "../ai-elements/message.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
+import type { ChatWorkToggle } from "./chat-work.js";
 import { THREAD_WORDS } from "./manager-chat-threads.js";
 import { useReplyDoor } from "./reply-to-selection.js";
 
@@ -65,17 +67,19 @@ interface ChatMessageMenu {
  * A chat message's right-click menu, a phone's long press: Reply in thread
  * first where the message opens a thread (`onThread`), as the actions beside
  * it lead with it, then Reply and Copy of its Markdown `words`, where it has
- * any.
+ * any, and last, apart, Show work or Hide work where the message opens a
+ * turn that did work (`work`), as the fold over it once did.
  */
 export function useChatMessageMenu(
   words: string,
   onThread: (() => void) | undefined,
+  work: ChatWorkToggle | undefined,
 ): ChatMessageMenu {
   const quote = useQuoteMessage(words);
   const copy = useCopyToast();
   const menu = useMenu(true);
   const worded = words !== "";
-  const offered = worded || onThread !== undefined;
+  const offered = worded || onThread !== undefined || work !== undefined;
 
   const items = [
     ...(onThread === undefined
@@ -101,6 +105,17 @@ export function useChatMessageMenu(
       : []),
   ];
 
+  const workItems =
+    work === undefined
+      ? []
+      : [
+          {
+            label: chatWorkWords(work.shown),
+            icon: <ListTreeIcon aria-hidden="true" />,
+            onSelect: work.onToggle,
+          },
+        ];
+
   return {
     contextMenu: offered ? menu.contextMenu() : undefined,
     menu:
@@ -108,7 +123,7 @@ export function useChatMessageMenu(
         <ActionMenu
           label={REPLY_WORDS.MENU}
           menu={menu.drawn}
-          groups={[items]}
+          groups={workItems.length === 0 ? [items] : [items, workItems]}
           replayUnmasked
           onClose={menu.close}
         />
