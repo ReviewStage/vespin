@@ -139,6 +139,77 @@ function heard(): AppStateBridgeReads | undefined {
   }
 }
 
+/**
+ * Writes drawn over a window's document before main's carries them.
+ *
+ * Why: main draws a pin's or a section's new place the moment it is asked,
+ * but over IPC, so the window hears it a few frames later, and a list a drop
+ * just reordered stood back in its old order meanwhile. So a write that moves
+ * rows patches the document the window draws from at once, as React Query's
+ * optimistic updates do, and since main's every delivery is written over the
+ * document whole (`followAppStateOver`), one written before main took the ask
+ * would undo the patch: each patch is laid again over every document main
+ * delivers until its ask settles, by when main's own document carries it, or
+ * has put it back. Nothing compares a patch with what main delivers.
+ */
+type AppStatePatch = (state: AppStateSnapshot) => AppStateSnapshot;
+
+/** A window's document as main last delivered it, the patches drawn over it, and the document last written so. */
+interface DrawnAhead {
+  handed: AppStateSnapshot | undefined;
+  patches: readonly AppStatePatch[];
+  written: AppStateSnapshot | undefined;
+}
+
+/** Each window's document and patches, by the Query client the window holds. */
+const drawnAhead = new WeakMap<QueryClient, DrawnAhead>();
+
+/** The patches drawn over `client`'s document, kept for it. */
+function aheadOf(client: QueryClient): DrawnAhead {
+  const held = drawnAhead.get(client);
+
+  if (held !== undefined) return held;
+  const made: DrawnAhead = { handed: undefined, patches: [], written: undefined };
+  drawnAhead.set(client, made);
+
+  return made;
+}
+
+/** Writes `state`, as main delivered it, into `client`, every patch still out laid over it. */
+function writeHanded(client: QueryClient, state: AppStateSnapshot): void {
+  const ahead = aheadOf(client);
+  ahead.handed = state;
+  ahead.written = ahead.patches.reduce((drawn, patch) => patch(drawn), state);
+  client.setQueryData(appStateQuery.queryKey, ahead.written);
+}
+
+/** Draws `patch` over `client`'s document at once, and over every document main delivers, until `settled` settles. */
+export function drawAhead(
+  client: QueryClient,
+  patch: AppStatePatch,
+  settled: Promise<unknown>,
+): void {
+  const ahead = aheadOf(client);
+  ahead.patches = [...ahead.patches, patch];
+  const now = appStateIn(client);
+
+  if (now !== undefined) {
+    ahead.written = patch(now);
+    client.setQueryData(appStateQuery.queryKey, ahead.written);
+  }
+
+  // Note that a settled patch is taken off main's document only where nothing but this layer wrote the document since, as a test's tree does.
+  const done = () => {
+    ahead.patches = ahead.patches.filter((each) => each !== patch);
+
+    if (ahead.handed !== undefined && appStateIn(client) === ahead.written) {
+      writeHanded(client, ahead.handed);
+    }
+  };
+
+  settled.then(done, done);
+}
+
 /** A window's following of `app:state` into its Query client: its first whole read written, the task list's collections it feeds beside it, and how it stops. */
 export interface AppStateFollowing {
   /** Settles once the first whole read is written into the client, and fails where the bridge refused it. */
@@ -200,7 +271,7 @@ export function followAppState(client: QueryClient): AppStateFollowing {
 
   // Note that a fixture run's list is staged into the collections with its document, since the account's lists the host answers are passed over there.
   const shown = (state: AppStateSnapshot): void => {
-    client.setQueryData(appStateQuery.queryKey, state);
+    writeHanded(client, state);
 
     const staged = loadedTasksFixture()?.fixtureTasksView(state.run);
 

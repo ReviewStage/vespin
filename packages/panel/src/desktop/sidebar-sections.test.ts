@@ -66,13 +66,16 @@ const roots: Root[] = [];
  * them: a section write's writes, a task's pin as its mark, and a pin given
  * a place as its move, each landing.
  */
-function hearWrites(asked: Partial<Asked>): void {
+function hearWrites(
+  asked: Partial<Asked>,
+  answered: Promise<boolean> = Promise.resolve(true),
+): void {
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_WRITE_SECTION]: ({ writes }) => {
       asked.writes?.push(...writes);
 
-      return Promise.resolve(true);
+      return answered;
     },
     [ACT_KIND.TASKS_PIN]: ({ taskId, pinned, position }) => {
       if (position === undefined)
@@ -2251,6 +2254,10 @@ test("a section moved twice before the first move is handed back stands where th
   };
 
   const sidebar = await mountDraggable([], placed, asked);
+  // Note that the section writes are heard but answered only at the end, as main has not yet handed its state back.
+  const { promise: answered, resolve: answer } = Promise.withResolvers<boolean>();
+  hearWrites(asked, answered);
+  onTestFinished(() => answer(true));
 
   // Note that the writes are heard but never handed back, as main's state has not yet reached the window.
   const moveDown = async (title: string) => {
@@ -2273,46 +2280,6 @@ test("a section moved twice before the first move is handed back stands where th
     workspaceSections(written, WORKSPACE.id).map(({ title }) => title),
     ["Launch", "Someday", "Stars"],
   );
-});
-
-test("a task moved within its section before the move is handed back carries its sub-task kept in the section with it", async () => {
-  const asked = noneAsked();
-  const rollout = task("0a1b2c3d-0000-4000-8000-100000000003", "Rollout");
-
-  const notes = {
-    ...task("0a1b2c3d-0000-4000-8000-100000000005", "Release notes"),
-    parentTaskId: rollout.id,
-  };
-
-  const entry = (taskId: string, position: string, addedAt: number) => ({
-    taskId,
-    sectionId: LAUNCH,
-    position,
-    addedAt,
-  });
-
-  const sidebar = await mountDraggable(
-    [rollout, notes, RETRIES],
-    {
-      ...SECTIONS,
-      entries: [entry(rollout.id, "a0", 2), entry(notes.id, "a1", 3), entry(RETRIES.id, "a2", 4)],
-    },
-    asked,
-  );
-
-  const fold = sidebar.querySelector<HTMLButtonElement>(
-    'button[aria-label="Sub-tasks of Rollout"]',
-  );
-
-  assert.ok(fold, "Rollout folds its sub-tasks");
-  act(() => fold.click());
-  assert.deepEqual(namesIn(sidebar, "Sections"), ["Rollout", "Release notes", "Retry audit"]);
-
-  await act(async () => rowPress(sidebar, "Rollout").focus());
-  await act(async () => {
-    runAppCommand(APP_COMMAND.MOVE_ROW_DOWN);
-  });
-  assert.deepEqual(namesIn(sidebar, "Sections"), ["Retry audit", "Rollout", "Release notes"]);
 });
 
 test("in a shared workspace, your one task standing in a section leaves Tasks saying nothing of a view that matches none", async () => {

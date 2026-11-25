@@ -110,8 +110,8 @@ export interface AgentQueueControl {
   readonly paused: AgentQueue["paused"];
   /** One change, drawn by the host at once, sent after every write of the agent's asked before it, and answered as the service answered it. */
   readonly change: (change: AgentQueueChange) => Promise<AgentQueueAnswerView>;
-  /** The messages stood in `order`, by id, as a drag drops one among them as they are drawn. */
-  readonly reorder: (order: readonly string[]) => void;
+  /** The message at `from` put at `to`, as a drag drops it. */
+  readonly move: (from: number, to: number) => void;
   /** One message deleted, answered as a confirm reads it. */
   readonly remove: (message: QueuedMessage) => Promise<ActionResult>;
 }
@@ -181,8 +181,13 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
       });
   };
 
-  const reorder = (order: readonly string[]) => {
-    void change({ change: QUEUE_CHANGE.REORDER, order: [...order] });
+  const move = (from: number, to: number) => {
+    const ids = messages.map((message) => message.id);
+    const [taken] = ids.splice(from, 1);
+
+    if (taken === undefined) return;
+    ids.splice(to, 0, taken);
+    void change({ change: QUEUE_CHANGE.REORDER, order: ids });
   };
 
   // Note that the host draws the deletion on the press, so the dialog closes at once; one refused is taken back and said in a toast.
@@ -192,7 +197,7 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
     return Promise.resolve<ActionResult>({ status: ACTION_RESULT_STATUS.ACCEPTED });
   };
 
-  return { messages, listed, paused: queue?.paused, change, reorder, remove };
+  return { messages, listed, paused: queue?.paused, change, move, remove };
 }
 
 /** A queued message's files whole, read through the agent's pictures by the ids the queue names them under; none where any did not read. */

@@ -27,7 +27,6 @@ import { GLYPH } from "@repo/ui/icons";
 import type { ActionResult } from "@repo/wire";
 import { useState } from "react";
 import { ActorRef } from "../actor-ref.js";
-import { useDroppedOrder } from "../desktop/dropped-order.js";
 import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure } from "../failure-report.js";
 import { type Directory, useMemberDirectory } from "../member-directory.js";
@@ -59,11 +58,6 @@ import { SentWords } from "./skill-chip.js";
  * over its rows, after a Stop in the quiet tone and after a refusal in the
  * danger one, with Resume. Nothing is drawn while none is queued.
  */
-
-/** A queued message's key, its id. */
-function queuedKey(message: QueuedMessage): string {
-  return message.id;
-}
 
 /** A queued message's files as a line's chips: each by its name, read by the id the queue names it under where it names one. */
 function queuedFileChips(message: QueuedMessage) {
@@ -116,11 +110,11 @@ const DELETE_QUESTION: DialogQuestion = {
 
 /** The dock: the paused header where the queue stands paused, then a row per queued message. */
 export function AgentQueueDock({
-  messages: listed,
+  messages,
   controls,
   paused,
   editing,
-  onReorder,
+  onMove,
   onSteer,
   onEdit,
   onCancelEdit,
@@ -135,8 +129,7 @@ export function AgentQueueDock({
   editing: string | undefined;
   /** Gives up the edit of the message on its row, this box's own or one another window left standing. */
   onCancelEdit: (message: QueuedMessage) => void;
-  /** Stands the queue in `order`, by id, the order its rows are drawn in once a drag dropped one among them. */
-  onReorder: (order: readonly string[]) => void;
+  onMove: (from: number, to: number) => void;
   /** Steers a queued message into the turn under way or as the next; none while the agent's first launch boots, which takes no line until its machine is up. */
   onSteer: ((message: QueuedMessage) => void) | undefined;
   /** Opens a queued message in the box to be written again; none while the box holds what its words must not join, such as a suggestion's draft. */
@@ -145,21 +138,7 @@ export function AgentQueueDock({
   onDelete: (message: QueuedMessage) => Promise<ActionResult>;
   onResume: () => void;
 }): React.JSX.Element | null {
-  // Note that a drag's order is drawn in the drop's own draw, since the host's queue reaches the panel a moment after it (`dropped-order.ts`).
-  const { drawn: messages, move: standMoved } = useDroppedOrder(listed, queuedKey);
-
-  // Note that the order sent is the one drawn, so a drag landing before the queue a move asked for arrives moves the row it was pressed on.
-  const move = (from: number, to: number) => {
-    const order = messages.map(queuedKey);
-    const [taken] = order.splice(from, 1);
-
-    if (taken === undefined || from === to) return;
-    order.splice(to, 0, taken);
-    onReorder(order);
-    standMoved(from, to);
-  };
-
-  const drag = useRowDrag(move, { handle: "[data-queue-handle]" });
+  const drag = useRowDrag(onMove, { handle: "[data-queue-handle]" });
   const directory = useMemberDirectory();
   const [doomed, setDoomed] = useState<QueuedMessage>();
   // The question goes with its message, which a hand-off may send while it is asked.

@@ -3788,7 +3788,7 @@ function AgentTabView({
             controls={controlsQueue}
             paused={queue.paused}
             editing={queueEditing.editing}
-            onReorder={queue.reorder}
+            onMove={queue.move}
             onSteer={
               booting
                 ? undefined

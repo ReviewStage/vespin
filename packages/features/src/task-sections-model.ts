@@ -143,28 +143,6 @@ export function sectionTaskIds(state: TaskSections, sectionId: string): string[]
   return sectionOrder(state, sectionId).map((entry) => entry.taskId);
 }
 
-/**
- * The positions `writes` give, each by the id of what it places: a
- * section's moved, or a task's or an agent's placed in a section. A write
- * that gives no position, or another kind of write, gives none.
- */
-export function writtenPositions(writes: readonly TaskSectionWrite[]): ReadonlyMap<string, string> {
-  return new Map(
-    writes.flatMap((write) => {
-      switch (write.kind) {
-        case TASK_SECTION_WRITE.MOVE:
-          return [[write.id, write.position] as const];
-        case TASK_SECTION_WRITE.PLACE:
-          return write.position === undefined ? [] : [[write.taskId, write.position] as const];
-        case TASK_SECTION_WRITE.PLACE_AGENT:
-          return write.position === undefined ? [] : [[write.agentId, write.position] as const];
-        default:
-          return [];
-      }
-    }),
-  );
-}
-
 /** The writes that stand the section at `from` among `sections`, as drawn, at `to`. */
 export function sectionMoveWrites(
   sections: readonly TaskSection[],

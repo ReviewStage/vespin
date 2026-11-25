@@ -18,7 +18,6 @@ import {
   sectionOrder,
   sectionTaskIds,
   workspaceSections,
-  writtenPositions,
 } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
@@ -131,7 +130,6 @@ import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { keptKey, useKept } from "../use-kept.js";
-import { type DroppedOrder, useDroppedOrder } from "./dropped-order.js";
 import { useFittedColumns } from "./fitted-columns.js";
 import { groupNewTaskWords, NewTaskInButton, quickAddInto } from "./new-task-button.js";
 import { useTasksWaiting } from "./places-waiting.js";
@@ -518,31 +516,16 @@ function leaveSection(tasks: ListTasks, taskId: string): TaskSectionWrite[] {
     : [];
 }
 
-/**
- * A section's entries for the tasks its group draws, in the order it draws
- * them, which is the section's own but while a move it asked for is kept
- * (`useDroppedOrder`), so a place counted among the rows is counted among
- * the entries.
- */
+/** A section's entries for the tasks its group draws, in its own order. */
 function drawnEntries(tasks: ListTasks, group: TasksGroup, sectionId: string) {
-  const entries = new Map(
-    sectionOrder(tasks.taskSections, sectionId).map((entry) => [entry.taskId, entry]),
-  );
+  const drawn = new Set(group.tasks.map((task) => task.id));
 
-  return group.tasks.flatMap((task) => entries.get(task.id) ?? []);
+  return sectionOrder(tasks.taskSections, sectionId).filter((entry) => drawn.has(entry.taskId));
 }
 
 /** What a group's drag does, each row heard by its task's id: its rows moved within it, where it keeps an order, and a row let go over another group's zone. */
 interface ListDrops {
-  /**
-   * A group's move, its rows placed by `withWritten` (`useDroppedOrder`),
-   * answering the positions it wrote by each task's id; none where the
-   * group keeps no order of its own.
-   */
-  readonly move: (
-    group: TasksGroup,
-    withWritten: DroppedOrder<TaskSummary>["withWritten"],
-  ) => ((taskId: string, to: number) => ReadonlyMap<string, string>) | undefined;
+  readonly move: (group: TasksGroup) => ((taskId: string, to: number) => void) | undefined;
   readonly dropOut: (group: TasksGroup, taskId: string, zone: string, at: number) => void;
 }
 
@@ -566,33 +549,25 @@ function listDrops(
 ): ListDrops {
   const pins = groups.find((group) => group.head.kind === TASKS_GROUP.PINNED)?.tasks ?? [];
 
-  const move: ListDrops["move"] = (group, withWritten) => {
+  const move = (group: TasksGroup) => {
     const { head } = group;
 
     if (head.kind === TASKS_GROUP.PINNED) {
-      return (taskId, to) => {
+      return (taskId: string, to: number) => {
         const from = group.tasks.findIndex((each) => each.id === taskId);
 
-        if (from < 0) return new Map();
-        const placed = (task: TaskSummary) => withWritten(task.id, pinPlaceOf(task));
-        const positions = pinPositionsForMove(group.tasks, from, to, placed);
-        tasks.onMovePins(pinMoves(positions));
-
-        return new Map([...positions].map(([task, position]) => [task.id, position]));
+        if (from < 0) return;
+        tasks.onMovePins(pinMoves(pinPositionsForMove(group.tasks, from, to, pinPlaceOf)));
       };
     }
 
     if (head.kind === TASKS_GROUP.SECTION) {
-      return (taskId, to) => {
-        const entries = drawnEntries(tasks, group, head.sectionId).map((entry) =>
-          withWritten(entry.taskId, entry),
-        );
+      return (taskId: string, to: number) => {
+        const entries = drawnEntries(tasks, group, head.sectionId);
+        const entry = entries.find((each) => each.taskId === taskId);
 
-        if (!entries.some((each) => each.taskId === taskId)) return new Map();
-        const writes = placeWrites(entries, taskId, head.sectionId, to, Date.now());
-        tasks.onWriteSections(writes);
-
-        return writtenPositions(writes);
+        if (entry === undefined) return;
+        tasks.onWriteSections(placeWrites(entries, entry.taskId, head.sectionId, to, Date.now()));
       };
     }
 
@@ -816,7 +791,7 @@ interface ListRunsPlace {
  * within it, where it keeps an order, and out of it.
  */
 function TasksListGroup({
-  group: listed,
+  group,
   head,
   folded,
   onToggle,
@@ -850,33 +825,12 @@ function TasksListGroup({
   /** What each group's run measured, by the group's key, held across the page's visits. */
   measured: Map<string, VirtualRowMeasurements> | undefined;
 }): React.JSX.Element {
-  const runKey = groupKey(listed.head);
-  // Note that the rows stand in the order a move asked for from the move's own draw, since main's state reaches the panel a moment after it (`dropped-order.ts`).
-
-  const {
-    drawn: standing,
-    move: standMoved,
-    withWritten,
-  } = useDroppedOrder(listed.tasks, taskIdOf);
-
-  const group = standing === listed.tasks ? listed : { ...listed, tasks: standing };
+  const runKey = groupKey(group.head);
   const keys = useMemo(() => group.tasks.map(taskIdOf), [group.tasks]);
   const run = useRef<VirtualRowsHandle>(null);
   const { holdRun } = place;
   useLayoutEffect(() => holdRun(run), [holdRun]);
-  const moving = folded ? undefined : drops.move(group, withWritten);
-
-  const move =
-    moving === undefined
-      ? undefined
-      : (taskId: string, to: number) => {
-          const written = moving(taskId, to);
-          standMoved(
-            group.tasks.findIndex((task) => task.id === taskId),
-            to,
-            written,
-          );
-        };
+  const move = folded ? undefined : drops.move(group);
 
   const drag = useTaskDrag(move, {
     handle: ROW_HANDLE,
