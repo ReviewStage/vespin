@@ -406,6 +406,7 @@ export function followAccountItems(
       const toldNow = Effect.suspend(() => {
         if (held === undefined) return Effect.void;
         answered = true;
+        (globalThis as { __probeMark?: (n: string, d?: unknown) => void }).__probeMark?.("inbox:told", { kept: drawnFromStore });
 
         return tell({
           rows: told,
