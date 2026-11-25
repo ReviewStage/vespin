@@ -1,0 +1,21 @@
+pinned to 2b8d19eeb2
+== bundle PJjn2b2 base 2b8d19eeb2
+  built 2b8d19eeb2 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2B-inbox: fails 1 shots 9 Tap on "Remind me"... FAILED
+n2B-keep: fails 0 shots 3 
+n2B-navigation: fails 0 shots 3 
+n2B-new-task: fails 1 shots 11 Assert that "Describe the task" is visible... FAILED
+  n2B-busy-1x JS holds: JS thread: 14904 running samples in the first 180 s (from its first sample); holds over 50 ms: 71, total 8608 ms, longest 1346 ms
+n2B-busy-1x: rc 0, trace ok, load {"long_tasks":30,"long_task_ms":5000,"cold_reads":300,"cold_read_ms":1000,"load_window":"whole","app_build":"1"}, ready {"launch_ms":1762.7589995861053,"local_ms":477.63174962997437,"started_ms":1032.27141559124,"inbox_ms":1519.2140406370163,"active_ms":320.87383258342743,"first_rows":"kept"}
+  n2B-second-1x JS holds: JS thread: 15711 running samples in the first 180 s (from its first sample); holds over 50 ms: 78, total 9872 ms, longest 1323 ms
+  n2B-second-1x JS holds, first 30 s: JS thread: 7016 running samples in the first 30 s (from its first sample); holds over 50 ms: 19, total 4031 ms, longest 1323 ms
+n2B-second-1x: pid 50908, trace ok, load {"long_tasks":30,"long_task_ms":5000,"cold_reads":300,"cold_read_ms":1000,"load_window":"whole","app_build":"1"}, ready {"launch_ms":1750.3902492523193,"local_ms":572.5806661844254,"started_ms":1147.0536242723465,"inbox_ms":1608.8315411806107,"active_ms":396.85929119586945,"first_rows":"kept"}
+  n2B-busy-3x JS holds: JS thread: 39802 running samples in the first 180 s (from its first sample); holds over 50 ms: 73, total 26795 ms, longest 5443 ms
+n2B-busy-3x: rc 0, trace ok, load {"long_tasks":100,"long_task_ms":10000,"cold_reads":300,"cold_read_ms":10000,"load_window":"whole","app_build":"1"}, ready {"launch_ms":4011.368248820305,"local_ms":450.8671658039093,"started_ms":2395.8496658802032,"inbox_ms":3844.5322078466415,"active_ms":320.08695781230927,"first_rows":"kept"}
+  n2B-second-3x JS holds: JS thread: 40454 running samples in the first 180 s (from its first sample); holds over 50 ms: 81, total 27555 ms, longest 5368 ms
+  n2B-second-3x JS holds, first 30 s: JS thread: 9232 running samples in the first 30 s (from its first sample); holds over 50 ms: 24, total 5455 ms, longest 905 ms
+n2B-second-3x: pid 53200, trace ok, load {"long_tasks":30,"long_task_ms":10000,"cold_reads":300,"cold_read_ms":10000,"load_window":"whole","app_build":"1"}, ready {"launch_ms":3502.030832529068,"local_ms":506.38254058361053,"started_ms":2044.4424575567245,"inbox_ms":3356.5799576044083,"active_ms":330.8758325576782,"first_rows":"kept"}
