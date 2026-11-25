@@ -82,6 +82,7 @@
     "./models/recorded-session": "./src/models/recorded-session.js",
     "./models/repository-pin-store": "./src/models/repository-pin-store.js",
     "./models/agent-boot-store": "./src/models/agent-boot-store.js",
+    "./models/agent-carry-ons": "./src/models/agent-carry-ons.js",
     "./models/reply-buttons": "./src/models/reply-buttons.js",
     "./models/agent-queue-store": "./src/models/agent-queue-store.js",
     "./models/runner-line-store": "./src/models/runner-line-store.js",
