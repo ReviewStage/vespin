@@ -1,4 +1,4 @@
-# workspace.yaml -- the workspace switcher: the chosen workspace named in the Inbox's bar as its one leading button, its list open with every workspace, New workspace, Workspace settings and Admin, then the account opening Settings, another chosen and the Inbox and Tasks following it, and New workspace's sheet.
+# workspace.yaml -- the workspace switcher: the chosen workspace named in the Inbox's bar as its one leading button, its list open with every workspace, New workspace, Workspace settings and Admin, then the account opening Settings under the address signed in, another chosen and the Inbox and Tasks following it, and New workspace's sheet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -33,6 +33,9 @@ appId: dev.vespin.ios
 # The fixture's account is an admin, so Admin stands after Workspace
 # settings, as the panel's switcher offers it.
 - assertVisible: "Admin"
+# The account's row stands under the address signed in, as the panel's
+# account menu names who is signed in.
+- assertVisible: "(?i)ada@example\\.com"
 - waitForAnimationToEnd
 - takeScreenshot: workspace-menu
 # Relay holds no threads, so the Inbox empties once it is chosen, and Tasks

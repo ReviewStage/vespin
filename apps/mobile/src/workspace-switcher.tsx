@@ -1,11 +1,12 @@
 // workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the system's menu of every workspace, New workspace, Workspace settings, and for an admin Admin, then the account opening Settings.
 
+import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectAdminAccess, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectAccount, selectAdminAccess, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   adminAction,
   MARK_SIZE,
@@ -104,6 +105,12 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
 
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const admin = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
+  // Note that the address signed in heads the account's row, as the panel's account menu names who is signed in.
+  const { data: signedInAccount } = useQuery({ ...appStateQuery, select: selectAccount });
+
+  const address =
+    signedInAccount?.status === ACCOUNT_STATUS.SIGNED_IN ? signedInAccount.email : undefined;
+
   const { chosen, choose } = useChosenWorkspace(workspaces);
   const signedIn = account !== undefined;
   const accountName = account?.name;
@@ -141,6 +148,7 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
       account: signedIn
         ? {
             name: accountName ?? "",
+            address,
             picture: accountPicture,
             menuPhoto: accountMenuPhoto,
             onPress: () => openSettings(),
@@ -171,5 +179,6 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     pictures,
     accountMenuPhoto,
     admin,
+    address,
   ]);
 }
