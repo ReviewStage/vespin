@@ -23,6 +23,7 @@ import {
   font,
   foregroundStyle,
   frame,
+  labelStyle,
   labelsHidden,
   lineLimit,
   type ModifierConfig,
@@ -235,6 +236,40 @@ export function MenuChip(props: MenuChipProps) {
         <BarMenuButton key={submenu.label} menu={submenu} />
       ))}
     </Menu>
+  );
+}
+
+/**
+ * An act in a composer's row as its glyph alone, heard by its words, as the
+ * panel's box stands a tool beside where its agent runs, such as a cloud
+ * agent's Ports: the same plain capsule on the composer's glass as a
+ * `MenuChip` there, in the ink, opening what it names on a press.
+ */
+export function ToolChip({
+  label,
+  symbol,
+  onPress,
+  testId,
+}: {
+  readonly label: string;
+  readonly symbol: Glyph;
+  readonly onPress: () => void;
+  /** The name a flow finds the capsule by. */
+  readonly testId?: string | undefined;
+}) {
+  const colors = useColors();
+
+  return (
+    <SwiftUIButton
+      {...actContent(label, symbol, TYPE_ROLE.ROW_TITLE)}
+      onPress={onPress}
+      modifiers={[
+        ...chipStyle(MENU_CHIP_LOOK.COMPOSER),
+        labelStyle("iconOnly"),
+        tint(colors.TEXT),
+        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+      ]}
+    />
   );
 }
 

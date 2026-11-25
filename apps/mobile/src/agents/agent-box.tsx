@@ -7,12 +7,15 @@
  * where the agent works and, where it is offered `run_on_mac`, where its
  * commands go; the model chip at the row's end, whose choices hold the
  * model, its effort, Fast, and the permission mode, popping over the chip in
- * a regular window and rising as a sheet in a compact one; and the + menu's
- * MCP servers. Note that a chip a later change gives an agent's composer
+ * a regular window and rising as a sheet in a compact one; a cloud agent's
+ * Ports beside the Machine chip, its plug alone, opening the sheet of its
+ * listening ports, as the panel's plug stands beside where its agent runs
+ * (`agent-forward.tsx`); and the + menu's MCP servers. Note that a chip a later change gives an agent's composer
  * belongs here rather than at one screen's call, because each screen reading
  * the agent for itself is how the thread's composer fell behind the agent's.
  */
 
+import { AGENT_PORTS_WORDS } from "@repo/features/agent-ports-model";
 import { modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { MCP_SERVER_LABEL } from "@repo/features/words";
@@ -29,13 +32,16 @@ import {
   type ModelChoices,
   PERMISSION_MODE_GLYPH,
   runsOnGlyph,
+  ToolChip,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
+import { useRouter } from "expo-router";
 import { type ReactNode, useState } from "react";
 import { type AgentMode, useAgentMode } from "./use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "./use-agent-model.js";
 import { useAgentPlaceGlyph } from "./use-agent-place.js";
+import { useAgentHasPorts } from "./use-agent-ports.js";
 import { type AgentServers, useAgentServers } from "./use-agent-servers.js";
 import { type AgentCommandsPlace, useAgentCommandsPlace } from "./use-agent-tools.js";
 
@@ -44,6 +50,9 @@ const MODEL_CHIP_ID = "agent-model-chip";
 
 /** The name a flow finds the composer's Machine chip by. */
 const MACHINE_CHIP_ID = "agent-machine-chip";
+
+/** The name a flow finds the Ports capsule by. */
+const PORTS_CHIP_ID = "agent-ports-chip";
 
 /** What the Machine chip's menu heads where commands go, as the panel's place chip names its Default machine row. */
 const COMMANDS_WORDS = { LABEL: "Commands run on" } as const;
@@ -193,7 +202,7 @@ function serverMenus(servers: AgentServers, listed: boolean): readonly BarMenu[]
 
 /** What a composer writing to a started agent takes from that agent, handed to `Composer` and its + menu as it is. */
 export interface AgentBox {
-  /** What leads the row under the field after the +: the Machine chip; none before the agent is read. */
+  /** What leads the row under the field after the +: the Machine chip, and a cloud agent's Ports; none before the agent is read. */
   readonly tools: ReactNode;
   /** What stands at the row's end before Send: the model chip, its choices popping over it in a regular window. */
   readonly trailing: ReactNode;
@@ -223,6 +232,8 @@ export function useAgentBox(
   const pick = useAgentModelPick(id);
   const servers = useAgentServers(id);
   const commands = useAgentCommandsPlace(id);
+  const hasPorts = useAgentHasPorts(id);
+  const router = useRouter();
   const [shown, setShown] = useState(false);
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const openModels = agent === undefined ? undefined : () => setShown(true);
@@ -232,7 +243,20 @@ export function useAgentBox(
   const choices = agentModelChoices(pick, mode);
 
   return {
-    tools: agent === undefined ? undefined : <AgentMachineChip agent={agent} commands={commands} />,
+    tools:
+      agent === undefined ? undefined : (
+        <>
+          <AgentMachineChip agent={agent} commands={commands} />
+          {hasPorts ? (
+            <ToolChip
+              label={AGENT_PORTS_WORDS.PORTS}
+              symbol={GLYPH.PLUG}
+              onPress={() => router.push({ pathname: "/agent-ports", params: { agent: id } })}
+              testId={PORTS_CHIP_ID}
+            />
+          ) : null}
+        </>
+      ),
     trailing: pops ? (
       <ModelChoicePopover
         chip={chip}

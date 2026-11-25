@@ -164,7 +164,7 @@ import {
 } from "../agents/use-agent-composer.js";
 import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
-import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
+import { useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useChatFaces, useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
@@ -692,8 +692,7 @@ function agentSubtitle(
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
  * a ⋯ menu, as the panel's agent menu offers it: Copy link and Open in
- * browser, Rename, typed in the system's alert, Pin or Unpin, a
- * cloud agent's Ports, which opens the sheet of its listening ports, and
+ * browser, Rename, typed in the system's alert, Pin or Unpin, and
  * Run ›, its repository's run actions where its workspace offers them, each
  * run in its sandbox or stopped while it runs, as the panel's narrow ⋯
  * offers them, Archive, asked first, which goes back once the agent is
@@ -1135,8 +1134,6 @@ const AgentConversation = memo(function AgentConversation({
 
   const runActions = useAgentRun(id);
   useWarmAgent(id);
-  const hasPorts = useAgentHasPorts(id);
-  const openPorts = () => router.push({ pathname: "/agent-ports", params: { agent: id } });
 
   const askRename = () =>
     askForName({
@@ -1459,22 +1456,16 @@ const AgentConversation = memo(function AgentConversation({
                   ],
           },
           {
-            items: openable
-              ? [
-                  ...(address === undefined
-                    ? []
-                    : [
-                        {
-                          label: VERB.OPEN_IN_BROWSER,
-                          symbol: GLYPH.OPEN_EXTERNALLY,
-                          onPress: () => openInSafari(address),
-                        },
-                      ]),
-                  ...(agent !== undefined && hasPorts
-                    ? [{ label: AGENT_PORTS_WORDS.PORTS, symbol: GLYPH.PLUG, onPress: openPorts }]
-                    : []),
-                ]
-              : [],
+            items:
+              address === undefined
+                ? []
+                : [
+                    {
+                      label: VERB.OPEN_IN_BROWSER,
+                      symbol: GLYPH.OPEN_EXTERNALLY,
+                      onPress: () => openInSafari(address),
+                    },
+                  ],
           },
           {
             items:

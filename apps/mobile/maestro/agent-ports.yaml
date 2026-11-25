@@ -1,4 +1,4 @@
-# agent-ports.yaml -- a cloud agent's Ports sheet, opened from its page's ⋯ menu: its sandbox's listening ports, what serves one beside it, and a port's press offering Share while none is shared.
+# agent-ports.yaml -- a cloud agent's Ports sheet, opened from the plug in its composer's row beside where it runs, as the panel's box stands it: its sandbox's listening ports, what serves one beside it, and a port's press offering Share while none is shared.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -16,8 +16,10 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Add a way to resend an invite that expired."
     timeout: 30000
-- tapOn: "More"
-- tapOn: "Ports"
+- waitForAnimationToEnd
+- takeScreenshot: agent-ports-chip
+- tapOn:
+    id: "agent-ports-chip"
 - assertVisible: ":3000"
 - assertVisible: ":5173"
 - assertVisible: "vite"
