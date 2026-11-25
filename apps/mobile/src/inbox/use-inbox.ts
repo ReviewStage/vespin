@@ -56,6 +56,7 @@ import {
 import type { InboxHeldFile } from "@repo/features/inbox-writes";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { formatBytes } from "@repo/features/number-format";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -79,7 +80,7 @@ import {
   threadLookedFor,
   threadStanding,
 } from "@repo/host/inbox-thread-standing";
-import { BUZZ, heldValue, useHeldValue } from "@repo/ui-native";
+import { BUZZ, heldValue, type PictureRef, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
@@ -100,6 +101,7 @@ import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/hos
 import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { usePictureShownCount } from "../picture-shown.js";
+import { usePictures } from "../use-pictures.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsIn, useInboxGroupsRead } from "./inbox-groups.js";
 import { useInboxRunFolds } from "./inbox-runs.js";
@@ -940,8 +942,15 @@ interface ThreadMediaRead {
 
 /** A thread's files as read, and what reads one that failed again. */
 export interface ThreadFiles extends ThreadMediaRead {
+  /** What a file is drawn from, by its attachment: a picture or a recording the service keeps by its id, which it reads where it is drawn under the thread's `PicturesProvider`, or any other file's address once read, `null` once its read failed, and none while it is on its way. */
+  readonly sourceOf: (attachmentId: string) => PictureRef | null | undefined;
   /** Reads a file whose read failed again, by its attachment, standing it on its way meanwhile. */
   readonly retry: (attachmentId: string) => void;
+}
+
+/** Whether a thread's file is drawn or played from the service's address, as a picture or a recording is, rather than read through the host. */
+function addressed(each: InboxMessageMedia): boolean {
+  return each.kind === INBOX_MEDIA.PICTURE || each.kind === INBOX_MEDIA.VIDEO;
 }
 
 /** What a file of the thread is read into, by its kind: its address under the app's caches, or a picture's `data:` address where no file can be named for its type. */
@@ -1071,6 +1080,9 @@ export function useThreadMedia(
       // Note that a file of a reply still on its way is drawn from the reply's own bytes, since the service names its files only once a read carries the reply.
       const held = pending?.(itemId, each.attachmentId);
 
+      // Note that a picture or a recording the service keeps is drawn from its address where it stands, never read here.
+      if (held === undefined && addressed(each)) continue;
+
       if (held !== undefined) {
         void sourceOf(each, held)
           .then((source) => {
@@ -1172,5 +1184,38 @@ export function useThreadMedia(
     [itemId, media, pending, read],
   );
 
-  return { ...drawn, retry };
+  // Note that the pictures and recordings the service keeps are read ahead by their ids, which nothing here listens to, so one landing draws that file alone.
+  const addressedIds = useMemo(
+    () =>
+      itemId === undefined
+        ? []
+        : media.flatMap((each) =>
+            addressed(each) && pending?.(itemId, each.attachmentId) === undefined
+              ? [each.attachmentId]
+              : [],
+          ),
+    [itemId, media, pending],
+  );
+
+  const pictures = usePictures(PICTURE_OWNER.INBOX, itemId ?? "", addressedIds);
+  const refs = useMemo(() => new Set(addressedIds), [addressedIds]);
+
+  const sourceAt = useCallback(
+    (attachmentId: string): PictureRef | null | undefined => {
+      if (drawn.sources.has(attachmentId)) return drawn.sources.get(attachmentId);
+
+      return refs.has(attachmentId) ? pictures.refOf(attachmentId) : undefined;
+    },
+    [drawn, pictures, refs],
+  );
+
+  const retryAny = useCallback(
+    (attachmentId: string) => {
+      if (refs.has(attachmentId)) pictures.retry(attachmentId);
+      else retry(attachmentId);
+    },
+    [pictures, refs, retry],
+  );
+
+  return { ...drawn, sourceOf: sourceAt, retry: retryAny };
 }

@@ -1,11 +1,13 @@
 // choice-media.tsx -- what one option of a decide ask carries, under its row on the choice card: every picture, recording, sound clip, page, and address as an equal tile with its caption, in React Native views SwiftUI hosts.
 
+import { Predicate } from "effect";
 import { SymbolView } from "expo-symbols";
 import { StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { Picture } from "./markdown.js";
+import type { PictureRef } from "./picture-source.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
@@ -28,8 +30,8 @@ export type ChoiceMedia = {
   readonly kind: ChoiceMediaKind;
   /** Its caption, a page's title, or an address's words, under its tile. */
   readonly title: string;
-  /** The file a picture, a recording, or a sound clip is drawn from; none while its bytes are on their way, and `null` where they could not be read. */
-  readonly source?: string | null | undefined;
+  /** What a picture, a recording, or a sound clip is drawn from: a file, or a picture or a recording kept by its id that it reads where it is drawn (`PictureByIdProvider`); none while its bytes are on their way, and `null` where they could not be read. */
+  readonly source?: PictureRef | null | undefined;
   /** Reads a picture, a recording, or a sound clip whose bytes could not be read again. */
   readonly onRetry?: (() => void) | undefined;
   /** Opens a page or an address, or a recording the system's player cannot read. */
@@ -118,7 +120,11 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
           onRetry={piece.onRetry}
         />
       ) : piece.kind === CHOICE_MEDIA.AUDIO ? (
-        <AudioClip source={piece.source} label={piece.title} onRetry={piece.onRetry} />
+        <AudioClip
+          source={piece.source == null || Predicate.isString(piece.source) ? piece.source : null}
+          label={piece.title}
+          onRetry={piece.onRetry}
+        />
       ) : (
         <SymbolTile piece={piece} />
       )}
