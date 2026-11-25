@@ -9,13 +9,14 @@ import {
   typedPillRuns,
   typedRunsMarkdown,
 } from "@repo/features/pill-words";
-import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { type CaretAtWord, caretAtWord, drawnPill, sameAtWord, toldWord } from "./caret-at-word.js";
 import { useChipMarkOf } from "./chip-mark.js";
 import {
   NativePillField,
   type NativePillFieldDoors,
+  type NativeRun,
   type NativeToldRun,
   type NativeValue,
   type NativeWords,
@@ -40,6 +41,9 @@ function toldMarkdown(runs: readonly NativeToldRun[]): string {
   );
 }
 
+/** What the field tells once a send has taken its words: nothing left, the caret at its start. */
+const EMPTIED = { runs: [], before: "", after: "", caret: 0, selected: false } as const;
+
 /** The thumbnail a held picture's pill wears, by its name; none for a mention or any other file. */
 function thumbnailOf(pill: Pill, thumbnails: ReadonlyMap<string, string>): string | undefined {
   return pill.kind === PILL_KIND.FILE ? thumbnails.get(pill.name) : undefined;
@@ -50,7 +54,8 @@ function thumbnailOf(pill: Pill, thumbnails: ReadonlyMap<string, string>): strin
  * caret stands in, or at the caret where it stands in none; writes plain
  * words in that word's place, such as `@people:` as a kind is picked to
  * narrow it; puts pills at the caret, such as files' markers as they are
- * attached; and takes or lets go of the keyboard. Note that the field finds
+ * attached; takes its words out for a send, and lays back words a send did
+ * not take; and takes or lets go of the keyboard. Note that the field finds
  * the word again by its words where it moved since it was told, so a pick
  * made while words are still being typed lands rather than being dropped.
  */
@@ -58,6 +63,10 @@ export interface PillFieldHandle {
   readonly pick: (pill: Pill) => void;
   readonly rewrite: (words: string) => void;
   readonly place: (pills: readonly Pill[]) => void;
+  /** The words the field holds as the Markdown the wire carries, taken out of it in one step where every key lands, so a send carries what the field shows however far behind JavaScript's copy is, and a second send finds it empty. */
+  readonly take: () => Promise<string>;
+  /** Lays words a send did not take back in the field, ahead of anything typed since. */
+  readonly putBack: (markdown: string) => void;
   readonly focus: () => void;
   readonly blur: () => void;
 }
@@ -123,6 +132,8 @@ export function PillField({
   const focusedFirst = useRef(false);
   // How many changes the field has told, which the words handed it say were heard, so it never sets back words typed since.
   const [seen, setSeen] = useState(0);
+  // The newest change heard, so a telling that reaches JavaScript after a newer one, such as a key's after the take that emptied the field, is let go.
+  const newest = useRef(0);
   // What the field last told: its Markdown, and its `@` word.
   const told = useRef({ markdown: value });
   const atWord = useRef<CaretAtWord | undefined>(undefined);
@@ -130,23 +141,27 @@ export function PillField({
   // Note that a pill leads with a Manager's face where the app holds one, so the words are handed again as the marks move, as they are on each key.
   const markOf = useChipMarkOf();
 
-  const handed = useMemo((): NativeValue => {
-    const reading = { repository, now: Date.now(), zone: readerZone() };
+  // The words as the view takes them, each mention and each held file's marker its pill.
+  const runsOf = useCallback(
+    (markdown: string): NativeRun[] => {
+      const reading = { repository, now: Date.now(), zone: readerZone() };
 
-    const drawn = (pill: Pill) => ({
-      pill: {
-        markdown: pill.markdown,
-        ...pillLook(pill, reading, markOf),
-        thumbnail: thumbnailOf(pill, thumbnails),
-      },
-    });
+      const drawn = (pill: Pill) => ({
+        pill: {
+          markdown: pill.markdown,
+          ...pillLook(pill, reading, markOf),
+          thumbnail: thumbnailOf(pill, thumbnails),
+        },
+      });
 
-    const runs = typedPillRuns(value, files).map((run) =>
-      run.kind === PILL_RUN.WORDS ? { text: run.text } : drawn(run.pill),
-    );
+      return typedPillRuns(markdown, files).map((run) =>
+        run.kind === PILL_RUN.WORDS ? { text: run.text } : drawn(run.pill),
+      );
+    },
+    [files, thumbnails, repository, markOf],
+  );
 
-    return { runs, seen };
-  }, [value, files, thumbnails, repository, seen, markOf]);
+  const handed = useMemo((): NativeValue => ({ runs: runsOf(value), seen }), [runsOf, value, seen]);
 
   const look = {
     text: colors.TEXT,
@@ -155,6 +170,23 @@ export function PillField({
     pillFill: colors.FILL_STRONG,
     pillWords: colors.TEXT,
     pillGlyph: colors.TEXT_MUTED,
+  };
+
+  // What the field told, heard once and in order: its words to the holder, how many changes it has seen, and the `@` word the caret stands in.
+  const heard = (words: NativeWords) => {
+    if (words.changes < newest.current) return;
+    newest.current = words.changes;
+    const markdown = toldMarkdown(words.runs);
+    const changed = markdown !== told.current.markdown;
+    told.current = { markdown };
+    setSeen(words.changes);
+
+    if (changed) onChange(markdown);
+    const word = caretAtWord(words);
+
+    if (sameAtWord(word, atWord.current)) return;
+    atWord.current = word;
+    onAtWord?.(word);
   };
 
   useImperativeHandle(
@@ -177,10 +209,23 @@ export function PillField({
           undefined,
         );
       },
+      // Note that the emptying is heard here, with the words taken, rather than waiting on the field's own telling, so the holder's copy is emptied in the same turn its send reads the words.
+      take: async () => {
+        const taken = await native.current?.take();
+
+        if (taken === undefined) return "";
+        heard({ ...EMPTIED, changes: taken.changes });
+
+        return taken.markdown;
+      },
+      putBack: (markdown) => {
+        if (markdown === "") return;
+        void native.current?.putBack(runsOf(markdown));
+      },
       focus: () => void native.current?.focus(),
       blur: () => void native.current?.blur(),
     }),
-    [repository, thumbnails, markOf],
+    [repository, thumbnails, markOf, runsOf, heard],
   );
 
   // Note that a pressed pill is named by the marker its Markdown spells, which only a held file's pill wears.
@@ -190,19 +235,7 @@ export function PillField({
     if (marker !== undefined) onPicturePress?.(marker.name);
   };
 
-  const onWords = ({ nativeEvent: words }: NativeSyntheticEvent<NativeWords>) => {
-    const markdown = toldMarkdown(words.runs);
-    const changed = markdown !== told.current.markdown;
-    told.current = { markdown };
-    setSeen(words.changes);
-
-    if (changed) onChange(markdown);
-    const word = caretAtWord(words);
-
-    if (sameAtWord(word, atWord.current)) return;
-    atWord.current = word;
-    onAtWord?.(word);
-  };
+  const onWords = ({ nativeEvent: words }: NativeSyntheticEvent<NativeWords>) => heard(words);
 
   return (
     <NativePillField

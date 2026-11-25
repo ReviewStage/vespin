@@ -89,9 +89,11 @@ export {
   type ComposerMenu,
   type ComposerPills,
   type ComposerSaving,
+  type ComposerSend,
   type ComposerSendAs,
   DICTATION_PHASE,
   type DictationPhase,
+  wordsHandedBack,
 } from "./composer.js";
 
 export {

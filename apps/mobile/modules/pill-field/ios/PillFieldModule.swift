@@ -74,6 +74,14 @@ public final class PillFieldModule: Module {
         view.rewriteWord(text, over: word.map(Word.init))
       }
 
+      AsyncFunction("take") { (view: PillFieldView) -> [String: Any] in
+        view.takeWords()
+      }
+
+      AsyncFunction("putBack") { (view: PillFieldView, runs: [RunRecord]) in
+        view.putBack(StyledRuns(runs).runs)
+      }
+
       AsyncFunction("focus") { (view: PillFieldView) in
         view.focus()
       }
@@ -719,6 +727,49 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     quiet = false
     textView.selectedRange = NSRange(location: range.location + (text as NSString).length, length: 0)
     textView.typingAttributes = baseAttributes()
+    changed()
+  }
+
+  /**
+   * Takes the words out of the field for a send, in one step on the main
+   * thread, where every key lands: answers their Markdown as the field holds
+   * it, and the count of changes the emptying stands at, so JavaScript hears
+   * the emptying in order with what was typed. Note that a second send finds
+   * the field empty, so one press, or two that reach JavaScript together,
+   * sends the words once, and a handing made before the take, which has not
+   * heard it, is refused rather than laying the words back.
+   */
+  func takeWords() -> [String: Any] {
+    // Note that words being composed, as dictation or a keyboard of marks holds them, are committed first, so they go with the rest.
+    if textView.markedTextRange != nil {
+      quiet = true
+      textView.unmarkText()
+      quiet = false
+    }
+
+    let markdown = markdown(of: heldRuns())
+
+    if !markdown.isEmpty {
+      redraw([], force: false)
+      changed()
+    }
+
+    return ["markdown": markdown, "changes": changes]
+  }
+
+  /// Lays words a send did not take back in the field, ahead of anything typed since, with the caret after everything.
+  func putBack(_ runs: [Run]) {
+    guard editable, !runs.isEmpty else { return }
+
+    if textView.markedTextRange != nil {
+      quiet = true
+      textView.unmarkText()
+      quiet = false
+    }
+
+    let held = heldRuns()
+    redraw(held.isEmpty ? runs : runs + [.words("\n")] + held, force: false)
+    textView.selectedRange = NSRange(location: textView.textStorage.length, length: 0)
     changed()
   }
 
