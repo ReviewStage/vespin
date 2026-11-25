@@ -1685,7 +1685,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     return followTaskList({
       ...(from === undefined ? undefined : { from }),
       dropped: (part, count) => countDropped(TASK_LIST_ROW_KIND[part], count),
-      live: (sync) =>
+      live: (sync, page) =>
         userId === undefined
           ? Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true })
           : Effect.map(
@@ -1693,7 +1693,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
               served(
                 client.liveRead(
                   TASK_LIST_READ,
-                  { userId, ...(sync === undefined ? undefined : { sync }) },
+                  {
+                    userId,
+                    ...(sync === undefined ? undefined : { sync }),
+                    ...(page === undefined ? undefined : { page }),
+                  },
                   {},
                 ),
               ),

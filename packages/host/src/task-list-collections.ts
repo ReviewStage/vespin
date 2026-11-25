@@ -689,9 +689,17 @@ export function taskListCollections(
     return {
       answer: (answeredRows, standing, liveSince, kept) =>
         Effect.suspend(() => {
-          // Note that one past a sync id joins what it names onto the rows held, less those it lets go, and a whole one holds its rows alone.
+          // Note that one past a sync id joins what it names onto the rows held, less those it lets go, and a whole one holds its rows alone; the last page of a whole answer in pages lets go every row held that no page carried.
           const past = standing?.past !== undefined;
-          const gone = new Set(past ? standing.gone : []);
+          const carried = standing?.carried;
+
+          const gone = new Set([
+            ...(past ? standing.gone : []),
+            ...(carried === undefined
+              ? []
+              : [...planKeys, ...agentKeys].filter((id) => !carried.has(id))),
+          ]);
+
           const answeredPlans = new Map(answeredRows.tasks.map((row) => [row.id, row]));
           const answeredAgents = new Map(answeredRows.agents.map((row) => [row.id, row]));
           const planOf = (id: string) => answeredPlans.get(id) ?? plans.row(id);
