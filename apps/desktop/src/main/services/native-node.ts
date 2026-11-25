@@ -46,9 +46,11 @@ export interface NativeNode extends DesktopService {
   /**
    * Reads the microphone every second until the app comes to the front
    * again, as System Settings opens over it, so a grant the developer makes
-   * there reaches the windows while they are still behind it.
+   * there is seen while they are still behind it; one that turns it on
+   * calls `onGranted` and ends the read. A window covered that long is told
+   * no document, so the come-forward is main's to do here.
    */
-  watchMicrophoneUntilActive: () => void;
+  watchMicrophoneUntilActive: (onGranted: () => void) => void;
   microphoneRouteWatcher: () => MicrophoneRouteWatch | undefined;
 }
 
@@ -126,9 +128,21 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
 
       return refreshMicrophoneStatus();
     },
-    watchMicrophoneUntilActive: () => {
-      if (config.platform !== "darwin" || microphoneAwayRead !== undefined) return;
-      microphoneAwayRead = setInterval(rereadMicrophone, MICROPHONE_AWAY_READ_MS);
+    watchMicrophoneUntilActive: (onGranted) => {
+      if (config.platform !== "darwin") return;
+      stopMicrophoneAwayRead();
+      microphoneAwayRead = setInterval(() => {
+        const was = state.snapshot().audio.microphoneStatus;
+        rereadMicrophone();
+
+        const granted =
+          was !== MICROPHONE_STATUS.GRANTED &&
+          state.snapshot().audio.microphoneStatus === MICROPHONE_STATUS.GRANTED;
+
+        if (!granted) return;
+        stopMicrophoneAwayRead();
+        onGranted();
+      }, MICROPHONE_AWAY_READ_MS);
     },
     microphoneRouteWatcher: () => microphoneRouteWatcher,
     start: async () => {

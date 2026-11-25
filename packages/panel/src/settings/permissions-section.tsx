@@ -8,7 +8,6 @@ import {
 } from "@repo/settings/settings-controls";
 import { MicrophoneIcon, NotificationsIcon, SettingsSection } from "@repo/ui";
 import { ComputerUsePermissionRows } from "./computer-use-section.js";
-import { useForwardOnGrant } from "./forward-on-grant.js";
 import { PERMISSION_STANDING, PermissionRow, type PermissionStanding } from "./permission-row.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
@@ -20,9 +19,7 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  * Recording and Accessibility, which let agents see and use apps. Each says
  * what the app needs it for, and at its end whether macOS allows it, with
  * Allow… or Open System Settings. A permission whose standing the app
- * cannot read is left out, but for the microphone, which says so. A
- * microphone or computer-use grant made in System Settings from one of those
- * presses brings the app back to the front (`useForwardOnGrant`).
+ * cannot read is left out, but for the microphone, which says so.
  */
 
 /** Where the microphone stands, as its row reads macOS's answer. */
@@ -51,7 +48,6 @@ export function PermissionsSection({
   computerUse: boolean;
 }): React.JSX.Element {
   const standing = microphone === undefined ? undefined : microphoneStanding(microphone.status);
-  const microphoneForward = useForwardOnGrant([standing === PERMISSION_STANDING.ALLOWED]);
 
   return (
     <SettingsSection
@@ -78,8 +74,8 @@ export function PermissionsSection({
           anchor={SETTINGS_SEARCH_ROW.MICROPHONE}
           standing={standing}
           purpose="To hear you when you dictate."
-          onAllow={microphoneForward.sent(microphone.onRequest)}
-          onOpenSettings={microphoneForward.sent(microphone.onOpenSettings)}
+          onAllow={microphone.onRequest}
+          onOpenSettings={microphone.onOpenSettings}
         />
       )}
       {computerUse ? <ComputerUsePermissionRows /> : null}

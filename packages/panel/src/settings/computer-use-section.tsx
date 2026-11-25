@@ -7,7 +7,7 @@ import { actFailureWords, askAct } from "../act.js";
 import { pressMutation } from "../act-mutations.js";
 import { refusalShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import { useForwardOnGrant } from "./forward-on-grant.js";
+import { useForwardOnGrant, useGrantFlow } from "./forward-on-grant.js";
 import { PERMISSION_STANDING, PermissionRow } from "./permission-row.js";
 import type { SettingRefusal } from "./row-write.js";
 
@@ -70,7 +70,10 @@ const COMPUTER_USE_GRANTS = [
  */
 export function ComputerUsePermissionRows(): React.JSX.Element | null {
   const queries = useQueryClient();
-  const status = useQuery(computerUseStatusQuery);
+  const flow = useGrantFlow();
+
+  // Note that an open grant flow reads on while System Settings covers the window, which macOS reads as hidden, so the grant is seen as it lands.
+  const status = useQuery({ ...computerUseStatusQuery, refetchIntervalInBackground: flow.open });
 
   const asking = useMutation({
     mutationFn: () => askAct(ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS, {}),
@@ -99,13 +102,15 @@ export function ComputerUsePermissionRows(): React.JSX.Element | null {
   const permissions = status.data?.permissions;
 
   // Note that both grants are one flow, because Allow… on either row opens the pane of the first one missing.
-  const forward = useForwardOnGrant(
+  useForwardOnGrant(
+    flow,
     COMPUTER_USE_GRANTS.map((grant) => permissions?.[grant.key] ?? true),
   );
 
   // Note that a status that cannot be read lists no grant, as a permission whose standing cannot be read is left out.
   if (permissions === undefined) return null;
   const firstMissing = COMPUTER_USE_GRANTS.find((grant) => !permissions[grant.key]);
+  const missing = firstMissing !== undefined;
 
   return (
     <>
@@ -121,12 +126,14 @@ export function ComputerUsePermissionRows(): React.JSX.Element | null {
               ? refusalShown(askRefused, FAILURE_SURFACE.COMPUTER_USE_PERMISSIONS)
               : undefined
           }
-          onOpenSettings={forward.sent(openSettings[grant.key])}
-          onAllow={forward.sent(() =>
-            asking.mutateAsync().then(
-              () => undefined,
-              () => undefined,
-            ),
+          onOpenSettings={flow.sent(openSettings[grant.key], missing)}
+          onAllow={flow.sent(
+            () =>
+              asking.mutateAsync().then(
+                () => undefined,
+                () => undefined,
+              ),
+            missing,
           )}
         />
       ))}
