@@ -60,6 +60,8 @@ const SWITCHER_ID = "workspace-switcher";
 export type SwitcherAccount = {
   /** The account's name, or its address where it has none. */
   readonly name: string;
+  /** Who is signed in, as their row's section heads it, such as "Ada Lovelace · ada@example.com", as the panel's account menu names them; none where it is not read. */
+  readonly signedInAs?: string | undefined;
   /** The account's sign-in picture, which the landscape iPad's sidebar draws; its letters where it has none. */
   readonly picture?: string | undefined;
   /** That picture as a file on this device, which its row in the menu leads with; the gear while it has none. */
@@ -67,7 +69,7 @@ export type SwitcherAccount = {
   readonly onPress: () => void;
 };
 
-/** What the account's row is named: where it goes, ahead of whose it is, so it never reads as a third workspace; one line, with no address under it. */
+/** What the account's row is named: where it goes, ahead of whose it is, so it never reads as a third workspace; one line, its address heading its section. */
 const SETTINGS = "Settings";
 
 /** An act under the list's workspaces, such as New workspace. */
@@ -167,9 +169,10 @@ function SwitcherFace({
  * every workspace by its photo or tile, its name and who shares it, the
  * chosen one checked; then the acts, New workspace and Workspace settings,
  * in the panel's words and order; and last, where a
- * caller hands one, the row into Settings, led by the account's photo, with
- * no line under it, so every row stands on one line at the default text
- * size. A menu runs a
+ * caller hands one, the row into Settings, led by the account's photo, in
+ * a section who is signed in heads, their name and address on one line, as the panel's account menu names
+ * who is signed in over its items, so every row stands on one line at the
+ * default text size. A menu runs a
  * row's act once it has closed, so a screen it opens is never presented
  * over it as it leaves.
  */
@@ -221,7 +224,7 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
         </Section>
       )}
       {account === undefined ? null : (
-        <Section>
+        <Section {...(account.signedInAs === undefined ? {} : { title: account.signedInAs })}>
           <SwiftUIButton
             {...menuActContent(SETTINGS, GLYPH.SETTINGS, undefined, undefined, account.menuPhoto)}
             onPress={account.onPress}

@@ -1,11 +1,12 @@
 // workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the system's menu of every workspace, New workspace, Workspace settings, and for an admin Admin, then the account opening Settings.
 
+import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectAdminAccess, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectAccount, selectAdminAccess, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   adminAction,
   MARK_SIZE,
@@ -22,6 +23,9 @@ import { appStateQuery } from "./host/app-state-query.js";
 import { type MenuPictures, menuAddress, useMenuPictures } from "./menu-photos.js";
 import { openInSafari } from "./open-link.js";
 import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
+
+/** What parts the account's name from its address in the line that heads its row. */
+const SIGNED_IN_PART = " · ";
 
 /** No workspaces read yet, one list for every render. */
 const NO_WORKSPACES: readonly Workspace[] = [];
@@ -104,6 +108,16 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
 
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const admin = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
+  // Note that who is signed in heads the account's row, their name and address on one line, as the panel's account menu names them.
+  const { data: signedInAccount } = useQuery({ ...appStateQuery, select: selectAccount });
+
+  const signedInAs =
+    signedInAccount?.status !== ACCOUNT_STATUS.SIGNED_IN
+      ? undefined
+      : signedInAccount.name === undefined
+        ? signedInAccount.email
+        : `${signedInAccount.name}${SIGNED_IN_PART}${signedInAccount.email}`;
+
   const { chosen, choose } = useChosenWorkspace(workspaces);
   const signedIn = account !== undefined;
   const accountName = account?.name;
@@ -141,6 +155,7 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
       account: signedIn
         ? {
             name: accountName ?? "",
+            signedInAs,
             picture: accountPicture,
             menuPhoto: accountMenuPhoto,
             onPress: () => openSettings(),
@@ -171,5 +186,6 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     pictures,
     accountMenuPhoto,
     admin,
+    signedInAs,
   ]);
 }
