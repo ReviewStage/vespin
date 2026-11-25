@@ -72,11 +72,17 @@ appId: dev.vespin.ios
 - assertVisible: "Copy"
 - waitForAnimationToEnd
 - takeScreenshot: keep-viewer-share
-# The share sheet is put away as the system puts a sheet away, by a swipe down.
+# The share sheet is put away as the system puts a sheet away, by a swipe down
+# on the sheet itself. Note that the swipe starts on the sheet's own header,
+# the file's name, since iOS 26 floats the sheet over the viewer with nothing
+# dimmed above it, and a swipe begun just above it drags the viewer closed
+# instead; the viewer is then asserted still open.
 - swipe:
-    start: "50%, 55%"
+    start: "50%, 63%"
     end: "50%, 98%"
 - waitForAnimationToEnd
 - assertNotVisible: "Save Image"
+- assertVisible:
+    id: "picture-viewer-close"
 - tapOn:
     id: "picture-viewer-close"
