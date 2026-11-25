@@ -300,6 +300,12 @@ a description's, or a comment's), its size rounded to a step (under 100 KB,
 picture it was or what it showed. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.
 
+The Mac app and the web app also count each file Vespin refuses to attach
+because it is too large: what kind of file it was (an image, a PDF, a text
+file, a video, a sound clip, or another kind) and its size rounded to a step
+(under 3 MB, 7 MB, 25 MB, 100 MB, or 250 MB, or larger), never its name, its
+type, or where you added it.
+
 While you are signed in, the Mac app and the web app record how you use
 Vespin's window, such as the screens you visit and where you click, never your
 screen or other apps. Text you type and other content that may be sensitive is

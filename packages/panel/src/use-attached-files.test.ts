@@ -755,6 +755,30 @@ test("pictures past the bytes a message carries together leave the last out of t
   }
 });
 
+test("a file refused as too large is counted once, by its kind and its size on a rung, and nothing else", async () => {
+  const counted: unknown[] = [];
+
+  fakeAppPlatform({
+    ...QUIET_PANEL,
+    recordSurfaceEvent: (name, properties) => counted.push([name, properties]),
+  });
+
+  // Note that the size is stated rather than held, so no test file is that large.
+  const of = (name: string, type: string, size: number) =>
+    Object.defineProperty(new File(["x"], name, { type }), "size", { value: size });
+
+  const container = await mounted("agent");
+  await drop(container, [
+    of("secret-plan.pdf", AGENT_ATTACHMENT_TYPE.PDF, 30_000_000),
+    of("secret-log.txt", AGENT_ATTACHMENT_TYPE.TEXT, 300_000_000),
+  ]);
+
+  assert.deepEqual(counted, [
+    ["attachment:too_large", { kind: "pdf", size_bucket: "25_to_100mb" }],
+    ["attachment:too_large", { kind: "text", size_bucket: "over_250mb" }],
+  ]);
+});
+
 test("a note of files left out goes once the box's message is queued, as it goes once one is sent", async () => {
   const size = Math.floor(AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES / 2.5);
   const container = document.createElement("div");
