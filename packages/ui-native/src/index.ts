@@ -89,7 +89,6 @@ export {
   type ComposerMenu,
   type ComposerPills,
   type ComposerSaving,
-  type ComposerSend,
   type ComposerSendAs,
   DICTATION_PHASE,
   type DictationPhase,
@@ -107,6 +106,8 @@ export {
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
+
+export type { ComposerSend } from "./composer-press.js";
 
 export {
   ConversationEntryRow,

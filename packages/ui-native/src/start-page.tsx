@@ -41,7 +41,6 @@ import {
   type ComposerDictation,
   type ComposerMenu,
   type ComposerPills,
-  type ComposerSend,
 } from "./composer.js";
 import {
   type AttachedPicture,
@@ -52,6 +51,7 @@ import {
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
+import type { ComposerSend } from "./composer-press.js";
 import { GlassDock } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, PickOption } from "./glyph-label.js";

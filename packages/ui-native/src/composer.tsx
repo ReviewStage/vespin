@@ -44,6 +44,7 @@ import {
 import { useAccessibilitySize, useScaledSize, useTextScale } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import type { CaretAtWord } from "./caret-at-word.js";
+import { type ComposerSend, pressSend } from "./composer-press.js";
 import {
   BAR_EDGE,
   BAR_GLASS,
@@ -165,17 +166,6 @@ export type ComposerMenu = {
   readonly submenus?: readonly BarMenu[] | undefined;
   readonly switches?: BarMenu["choices"] | undefined;
 };
-
-/**
- * What a press that sends does with the words it took out of the field: it
- * sends exactly these, never a copy of the field it holds itself, and
- * answers whether it took them, as a send that goes, or one it holds to
- * send once a question is answered, does. Words it did not take, as a send
- * refused before it went, go back in the field ahead of anything typed
- * since; words a send that went hands back later, refused, are its own to
- * lay back.
- */
-export type ComposerSend = (words: string) => boolean;
 
 /** Words a send took and later handed back, refused, laid in ahead of anything typed since, on a line of their own, as the field lays back words a send did not take. */
 export function wordsHandedBack(words: string, typed: string): string {
@@ -681,28 +671,11 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
   const rowed = stacked(props);
 
-  /**
-   * A press that sends the field's words: it takes them out of the field
-   * itself, never from the copy this render holds, which lags the field by
-   * every key typed while JavaScript was busy, and hands them to `act`;
-   * words `act` did not take go back in the field. Note that the field
-   * empties as it answers, so a second press that reaches JavaScript with
-   * the first, before any render, takes nothing; and a press made on Send
-   * drawn over words that finds the field empty does nothing, since what it
-   * pressed for already went, where its holder would read an empty field as
-   * an empty one pressed for its own sake, as Got it or a Save that gives an
-   * edit up. A press drawn over an empty field still acts on it.
-   */
+  // Note that a press sends what the field holds, once (`pressSend`), read against the words this render drew Send over.
   const takeFor = (act: ComposerSend) => {
     const field = door.current;
-    const pressedOverWords = words.trim() !== "";
 
-    if (field === null) return;
-    void field.take().then((taken) => {
-      if (taken.words === "" && pressedOverWords) return;
-
-      if (!act(taken.words)) taken.giveBack();
-    });
+    if (field !== null) void pressSend(field, words, act);
   };
 
   const send = onSend === undefined ? undefined : () => takeFor(onSend);

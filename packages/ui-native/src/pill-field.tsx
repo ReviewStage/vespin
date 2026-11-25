@@ -13,6 +13,7 @@ import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState }
 import type { NativeSyntheticEvent } from "react-native";
 import { type CaretAtWord, caretAtWord, drawnPill, sameAtWord, toldWord } from "./caret-at-word.js";
 import { useChipMarkOf } from "./chip-mark.js";
+import type { TakenWords } from "./composer-press.js";
 import {
   NativePillField,
   type NativePillFieldDoors,
@@ -59,19 +60,6 @@ function thumbnailOf(pill: Pill, thumbnails: ReadonlyMap<string, string>): strin
  * the word again by its words where it moved since it was told, so a pick
  * made while words are still being typed lands rather than being dropped.
  */
-/**
- * Words a send took out of the field, its holder already told the field
- * stands empty: the Markdown, and `giveBack`, which lays them back where the
- * send did not take them, ahead of anything typed since. Note that the
- * holder is told the words are back in the same turn it was told the field
- * emptied, so no render ever stands between with a held file's marker gone,
- * which would let go of its file.
- */
-export interface TakenWords {
-  readonly words: string;
-  readonly giveBack: () => void;
-}
-
 export interface PillFieldHandle {
   readonly pick: (pill: Pill) => void;
   readonly rewrite: (words: string) => void;
