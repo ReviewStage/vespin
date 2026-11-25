@@ -3282,6 +3282,19 @@ test("a person's page is theirs in the workspace it opened in: another listed in
   assert.equal(views?.person.userId, "user-maya");
 });
 
+test("an agent's page on no task, as a Manager's, gives way to the home page of another workspace chosen in its place", async () => {
+  const tab = mount({ shown: true, tasks: TWO_WORKSPACES }, OPENS);
+
+  act(() => tab.control().agentView.onOpen("manager-1"));
+  const opened = tab.control().agentView.agentId;
+  act(() => tab.control().onChooseWorkspace(ACME.id));
+  await settle();
+
+  assert.equal(opened, "manager-1");
+  assert.equal(tab.control().workspace?.id, ACME.id);
+  assert.equal(tab.control().agentView.agentId, undefined);
+});
+
 test("a person's page opened in another workspace lists it without reopening its last plan, so no refused reopen takes the page with it", async () => {
   const tab = mount(
     {

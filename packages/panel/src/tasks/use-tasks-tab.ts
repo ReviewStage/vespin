@@ -1661,8 +1661,21 @@ export function useTasksTab(input: {
   // The task last open in each workspace, which a switch to it opens again.
   const lastOpenIn = useRef(new Map<string, string>());
 
+  // The agent whose page stands in the task's place, as the list carries it, which a Manager on no task is drawn on alone.
+  const pageAgent = useTaskListRow(listCollections.agents, agentView?.agentId);
+
+  // The workspace of what stands in the task's place: the open task's, else that of the agent whose page stands, by the
+  // agent's own where the list carries it, else by its address. Note that an agent on no task, as a Manager, is no task
+  // a switch would leave, so its page is counted here, or another workspace listed leaves it standing.
   const openWorkspaceId =
-    openTaskId === undefined ? undefined : listedRows.task(openTaskId)?.workspaceId;
+    openTaskId === undefined
+      ? agentView === undefined
+        ? undefined
+        : (pageAgent?.workspaceId ??
+          (agentView.workspace === undefined
+            ? undefined
+            : workspaceOfSlug(viewed.workspaces, agentView.workspace)?.id))
+      : listedRows.task(openTaskId)?.workspaceId;
 
   // Whether `workspaceId` lists the task last open there, which a switch to it opens again.
   const reopensIn = (workspaceId: string, last: string | undefined): boolean =>
