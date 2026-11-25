@@ -227,52 +227,103 @@ export function longFrameHistory(): LongFrameHistory {
   };
 }
 
+/** One event of an interaction the browser timed, on the page's clock in milliseconds, and the epoch's time that clock started at as it was reported. */
+export interface InteractionEvent {
+  readonly interactionId: number;
+  readonly startTime: number;
+  readonly duration: number;
+  readonly origin: number;
+}
+
 /** What a window's slow interactions overlapped, summed as each happened, for the span that names one to find. */
 export interface InteractionLongFrames {
-  /** Sums what the kept frames overlap of an interaction now, keeping it while it is among the slowest. */
-  readonly note: (startTime: number, duration: number) => void;
-  /** What was summed for the interaction that started at `startTime`, on the page's clock in milliseconds. */
-  readonly of: (startTime: number) => LongFrameAttributes | undefined;
+  /** Sums what the kept frames overlap of an interaction's event now, keeping the interaction while it is among the slowest. */
+  readonly note: (event: InteractionEvent) => void;
+  /** What was summed for the interaction one of whose events started nearest `startedAt`, in the epoch's milliseconds; none where none stands near it. */
+  readonly of: (startedAt: number) => LongFrameAttributes | undefined;
+}
+
+/** One kept interaction: each of its events' starts in the epoch's milliseconds, its slowest event's length, when its events ran from and to on the page's clock, and its sum. */
+interface KeptInteraction {
+  readonly starts: number[];
+  duration: number;
+  from: number;
+  to: number;
+  attributes: LongFrameAttributes;
 }
 
 /**
- * The slow interactions' sums, read from `history`, keyed by their start to
- * the millisecond. Note that one interaction is several events, a pointer's
- * down, up, and click, each with a start of its own, so each is kept, and
- * the one the span names is found among them.
+ * How far an interaction's span may start from the start kept for it, in
+ * milliseconds. Note that Sentry dates a span by its own clock, which it
+ * corrects only once it drifts a second from the wall's, while a start is
+ * kept by the wall's clock as it was reported, so the two may differ by up
+ * to that second, and across a sleep, which stops the page's clock but not
+ * the wall's, by no more.
+ */
+const CLOCK_TOLERANCE_MS = 1_000;
+
+/** The kept interaction to drop once more than `INTERACTIONS_KEPT` stand: the fastest, and of the fastest the latest, as Web Vitals keeps the earliest of a tie. */
+function fastestOf(kept: ReadonlyMap<number, KeptInteraction>): number | undefined {
+  let fastest: [number, KeptInteraction] | undefined;
+
+  for (const entry of kept) {
+    if (fastest === undefined || entry[1].duration <= fastest[1].duration) fastest = entry;
+  }
+
+  return fastest?.[0];
+}
+
+/**
+ * The slow interactions' sums, read from `history`, by interaction. Note
+ * that one interaction is several events, a pointer's down, up, and click,
+ * each with a start of its own and any of which a span may name, so each
+ * event's start is kept, dated by the wall's clock as it was reported, and
+ * the sum is taken from the first to start to the last to end.
  */
 export function interactionLongFrames(history: LongFrameHistory): InteractionLongFrames {
-  const kept = new Map<
-    number,
-    { readonly duration: number; readonly attributes: LongFrameAttributes }
-  >();
+  const kept = new Map<number, KeptInteraction>();
 
   return {
-    note: (startTime, duration) => {
-      const key = Math.round(startTime);
-      const held = kept.get(key);
+    note: ({ interactionId, startTime, duration, origin }) => {
+      const held = kept.get(interactionId) ?? {
+        starts: [],
+        duration: 0,
+        from: startTime,
+        to: startTime,
+        attributes: {},
+      };
 
-      if (held !== undefined && held.duration >= duration) return;
-
-      kept.set(key, {
-        duration,
-        attributes: history.attributesFor(startTime, startTime + duration),
-      });
+      held.starts.push(startTime + origin);
+      held.duration = Math.max(held.duration, duration);
+      held.from = Math.min(held.from, startTime);
+      held.to = Math.max(held.to, startTime + duration);
+      held.attributes = history.attributesFor(held.from, held.to);
+      kept.set(interactionId, held);
 
       if (kept.size <= INTERACTIONS_KEPT) return;
 
-      const [fastest] = [...kept].reduce((low, entry) =>
-        entry[1].duration < low[1].duration ? entry : low,
-      );
+      const fastest = fastestOf(kept);
 
-      kept.delete(fastest);
+      if (fastest !== undefined) kept.delete(fastest);
     },
-    of: (startTime) => {
-      const key = Math.round(startTime);
+    of: (startedAt) => {
+      let nearest:
+        | { readonly distance: number; readonly attributes: LongFrameAttributes }
+        | undefined;
 
-      return (
-        kept.get(key)?.attributes ?? kept.get(key - 1)?.attributes ?? kept.get(key + 1)?.attributes
-      );
+      for (const interaction of kept.values()) {
+        for (const start of interaction.starts) {
+          const distance = Math.abs(start - startedAt);
+
+          if (distance > CLOCK_TOLERANCE_MS) continue;
+
+          if (nearest === undefined || distance < nearest.distance) {
+            nearest = { distance, attributes: interaction.attributes };
+          }
+        }
+      }
+
+      return nearest?.attributes;
     },
   };
 }

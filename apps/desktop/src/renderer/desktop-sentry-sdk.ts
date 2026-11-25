@@ -112,10 +112,21 @@ function isLongFrame(entry: PerformanceEntry): entry is PerformanceEntry & LongF
 }
 
 /** Whether a performance entry is an event a person did, as one an `event` observer hears may be. */
-function isInteraction(entry: PerformanceEntry): boolean {
+function isInteraction(entry: PerformanceEntry): entry is PerformanceEventTiming {
   return (
     "interactionId" in entry && Predicate.isNumber(entry.interactionId) && entry.interactionId > 0
   );
+}
+
+/**
+ * The epoch's time the page's clock reads 0 at, by the wall's clock now.
+ * Note that this is read now rather than taken from `performance.timeOrigin`,
+ * because the page's clock stops while the Mac sleeps and the wall's does
+ * not, so after a sleep the origin the page started with is off by the
+ * sleep's length.
+ */
+function wallOrigin(): number {
+  return Date.now() - performance.now();
 }
 
 /**
@@ -142,13 +153,17 @@ function observeLongFrames(): LongFrames {
   const caughtUp = () => history.add(frames.takeRecords().filter(isLongFrame));
 
   const events = new PerformanceObserver((list) => {
+    const origin = wallOrigin();
     const slow = list.getEntries().filter(isInteraction);
 
     if (slow.length === 0) return;
+
     setTimeout(() => {
       caughtUp();
 
-      for (const entry of slow) interactions.note(entry.startTime, entry.duration);
+      for (const { interactionId, startTime, duration } of slow) {
+        interactions.note({ interactionId, startTime, duration, origin });
+      }
     }, FRAME_REPORTED_MS);
   });
 
@@ -158,16 +173,14 @@ function observeLongFrames(): LongFrames {
   const of = (startedAt: number, endedAt: number) => {
     caughtUp();
 
-    return history.attributesFor(
-      startedAt - performance.timeOrigin,
-      endedAt - performance.timeOrigin,
-    );
+    const origin = wallOrigin();
+
+    return history.attributesFor(startedAt - origin, endedAt - origin);
   };
 
   return {
     of,
-    ofInteraction: (startedAt, endedAt) =>
-      interactions.of(startedAt - performance.timeOrigin) ?? of(startedAt, endedAt),
+    ofInteraction: (startedAt, endedAt) => interactions.of(startedAt) ?? of(startedAt, endedAt),
     afterReported: (then) => {
       setTimeout(then, FRAME_REPORTED_MS);
     },

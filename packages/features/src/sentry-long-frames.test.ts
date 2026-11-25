@@ -105,11 +105,14 @@ test("a script's invoker and file carry no address's query", () => {
   assert.doesNotMatch(String(attributes["long_frames.script.url"]), /s3cr3t/);
 });
 
-test("a slow interaction keeps what it overlapped after its frames leave what is kept", () => {
+/** When the page's clock started, in the epoch's milliseconds, as the wall's clock dates it. */
+const ORIGIN = 1_795_000_000_000;
+
+test("a slow interaction keeps what it overlapped after its frames leave what is kept, found by the wall's time it started", () => {
   const history = longFrameHistory();
   const interactions = interactionLongFrames(history);
   history.add([frame({ startTime: 500, duration: 300, blockingDuration: 250 })]);
-  interactions.note(510.4, 280);
+  interactions.note({ interactionId: 7, startTime: 510.4, duration: 280, origin: ORIGIN });
 
   // A long session's frames since, far more than a window keeps.
   history.add(
@@ -117,6 +120,21 @@ test("a slow interaction keeps what it overlapped after its frames leave what is
   );
 
   assert.equal(history.attributesFor(510, 790)["long_frames.count"], undefined);
-  assert.equal(interactions.of(510.9)?.["long_frames.blocking_ms"], 250);
-  assert.equal(interactions.of(600), undefined);
+  // Sentry's clock may stand a few milliseconds off the wall's.
+  assert.equal(interactions.of(ORIGIN + 510.4 + 12)?.["long_frames.blocking_ms"], 250);
+  assert.equal(interactions.of(ORIGIN + 510.4 + 5_000), undefined);
+});
+
+test("of interactions as slow as each other, the earliest is kept, as Web Vitals keeps it as the INP", () => {
+  const history = longFrameHistory();
+  const interactions = interactionLongFrames(history);
+  history.add([frame({ startTime: 0, duration: 120, blockingDuration: 70 })]);
+
+  // Event Timing rounds to 8 ms, so 51 clicks of 104 ms tie.
+  for (let interactionId = 1; interactionId <= 51; interactionId += 1) {
+    const startTime = (interactionId - 1) * 1_000;
+    interactions.note({ interactionId, startTime, duration: 104, origin: ORIGIN });
+  }
+
+  assert.equal(interactions.of(ORIGIN)?.["long_frames.blocking_ms"], 70);
 });
