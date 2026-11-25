@@ -228,6 +228,7 @@ const attached = (
 
 const TRACE = new TextEncoder().encode("TypeError: invite is undefined\n");
 const SHOT = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+
 // A PNG whose header states it 3 pixels wide and 2 high.
 const SIZED_SHOT = Uint8Array.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 3,

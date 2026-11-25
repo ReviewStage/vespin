@@ -785,7 +785,7 @@ const MessageFileWriteSchema = Schema.Struct({
  * a picture whose header states none. Note that only a write fills it, so a
  * file written before stands with none.
  */
-function pictureSizeOf(bytes: Uint8Array): { width: number | null; height: number | null } {
+function pictureSizeOf(bytes: Uint8Array) {
   const type = sniffImageType(bytes);
   const size = type === undefined ? undefined : imageDimensions(bytes, type);
 
