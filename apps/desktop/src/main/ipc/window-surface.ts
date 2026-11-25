@@ -41,6 +41,8 @@ const MICROPHONE_STATUS_COUNTED_AS = {
 interface WindowSurfaceDependencies {
   panels: Pick<PanelManager, "displayIdFor" | "focusIfExpanded">;
   requestMicrophone: () => Promise<MicrophoneStatus>;
+  /** Reads the microphone every second until the app comes to the front again. */
+  watchMicrophoneUntilActive: () => void;
   microphoneRoute: () => MicrophoneRoute | undefined;
   microphoneRouteWatcher: () => MicrophoneRouteWatch | undefined;
   recordProductEvent: RecordProductEvent;
@@ -126,14 +128,15 @@ export function windowSurfaceProcedures(
 
       return dependencies.microphoneRoute();
     }),
-    // Privacy & Security's Microphone pane, where a refused microphone is let back in.
+    // Privacy & Security's Microphone pane, where a refused microphone is let back in, read while it stands open so the grant reaches the row that sent the developer there.
     [WINDOW_SURFACE_ACT_KIND.MICROPHONE_OPEN_SETTINGS]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.MICROPHONE_OPEN_SETTINGS
-    ].handler(() =>
-      dependencies.openExternal(
+    ].handler(async () => {
+      await dependencies.openExternal(
         "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
-      ),
-    ),
+      );
+      dependencies.watchMicrophoneUntilActive();
+    }),
     // The pane that lists every app's notifications, ours among them.
     [WINDOW_SURFACE_ACT_KIND.NOTIFICATIONS_OPEN_SETTINGS]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.NOTIFICATIONS_OPEN_SETTINGS

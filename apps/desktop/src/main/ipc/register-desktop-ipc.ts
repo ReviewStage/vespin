@@ -162,6 +162,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     ...windowSurfaceProcedures({
       panels,
       requestMicrophone: () => native.requestMicrophone(),
+      watchMicrophoneUntilActive: () => native.watchMicrophoneUntilActive(),
       microphoneRoute: () => state.snapshot().audio.microphoneRoute,
       microphoneRouteWatcher: () => native.microphoneRouteWatcher(),
       recordProductEvent,
