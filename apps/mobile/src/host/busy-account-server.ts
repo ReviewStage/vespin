@@ -41,13 +41,8 @@ const BUSY_WAIT = {
   WAITS_AGAIN: 30_000,
 } as const;
 
-/**
- * The first hosted API version whose builds read a whole answer in pages,
- * and the query they name the next page under: the service's own
- * (`packages/service/src/live/live-pages.ts`, `LIVE_POLL.PAGE`), which this
- * branch's base predates.
- */
-const PAGED = { API_VERSION: 10, QUERY: "page" } as const;
+/** The first hosted API version whose builds read a whole answer in pages, as the service's (`packages/service/src/live/live-pages.ts`). */
+const PAGED = { API_VERSION: 10 } as const;
 
 /** The network an answer the service was not seen to answer crosses: a round trip, and the bytes a millisecond the Inbox whole arrived at (4.8 MB in 3 s). */
 const BUSY_RATE = { ROUND_TRIP: 250, BYTES_A_MS: 1600 } as const;
@@ -159,7 +154,7 @@ function movedPart(name: string, rows: readonly unknown[], past: number) {
 /** The task list past `past`: the kept list's delta past its kept id, whole where it asks past no id of the seed's, as a launch from an empty store does, in pages to a build that reads them, and after that one of the newest agents said something, a second after the ask. */
 async function tasksAnswer(url: URL, askedAt: number): Promise<Response> {
   const past = Number(url.searchParams.get(LIVE_POLL.SYNC));
-  const page = url.searchParams.get(PAGED.QUERY);
+  const page = url.searchParams.get(LIVE_POLL.PAGE);
 
   if (page !== null && READS_PAGES) return pageAnswer("tasks-pages", page, askedAt);
 
@@ -199,7 +194,7 @@ async function tasksAnswer(url: URL, askedAt: number): Promise<Response> {
 /** The Inbox past `past`: whole where it asks past no id of the seed's, in pages to a build that reads them, and after that one thread took a new message, five seconds after the ask. */
 async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
   const past = Number(url.searchParams.get(LIVE_POLL.SYNC));
-  const page = url.searchParams.get(PAGED.QUERY);
+  const page = url.searchParams.get(LIVE_POLL.PAGE);
   const whole = page !== null || !Number.isInteger(past) || past < BUSY_SYNC.INBOX;
 
   // Note that a build reads pages from the version it is built at, so the stub of a build that reads none answers it in one.
