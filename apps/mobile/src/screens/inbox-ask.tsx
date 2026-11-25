@@ -1,19 +1,35 @@
 // inbox-ask.tsx -- the box under a thread, its open ask's controls standing inside it over the field, and the thread's ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
-import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
+  ASK_PRESS,
+  askHeadWords,
+  INBOX_BOX_WORDS,
+  RESOLVE,
+  unnamedStep,
+} from "@repo/features/inbox-ask-words";
+import {
+  doDecision,
   fieldValueOf,
   picksNone,
   shownTicks,
+  stepParts,
+  withDoPress,
   withNoneOfThese,
   withPicks,
   withStep,
   withValue,
 } from "@repo/features/inbox-draft";
-import { INBOX_READ_MARK, isUnread, knownAsk, RECOMMENDED } from "@repo/features/inbox-list-model";
+import {
+  decideButtons,
+  INBOX_READ_MARK,
+  isUnread,
+  knownAsk,
+  RECOMMENDED,
+} from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
+  INBOX_BOUNDS,
   INBOX_FIELD,
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
@@ -34,7 +50,9 @@ import {
   type AnswerField,
   type AnswerFieldKind,
   AnswerFields,
+  AskActs,
   AskNote,
+  type AskStep,
   type BarAction,
   type BarFootItem,
   type BarMenu,
@@ -164,6 +182,13 @@ function cardChoice(option: InboxOption, doors: OptionMediaDoors): Choice {
   return { label: option.label, detail: option.detail, media };
 }
 
+/** A do ask's step as the list draws it: its words, named by its place where it is a fence alone, and its fences' code under it, as the panel's box splits it (`stepParts`). */
+function stepOf(step: string, at: number): AskStep {
+  const { say, fences } = stepParts(step);
+
+  return { words: say === "" ? unnamedStep(at) : say, code: fences.map((fence) => fence.code) };
+}
+
 /** The files an open ask's options carry, by attachment and kind, which the thread reads beside its messages' own. */
 export function openAskFiles(item: InboxItem) {
   const ask = openAsk(item);
@@ -194,11 +219,17 @@ function controlsStand(item: InboxItem): boolean {
 
 /**
  * The open ask's controls, standing inside the box over its field, as the
- * panel's box holds them as its body (`inbox-answer-box.tsx`): a decide's
- * options to pick, the recommended tagged; a do's steps to tick, with Mark
- * done and Couldn't do it, each sending at once with the note typed; an
- * answer's fields to fill. A notice asking nothing has none: its Got it is
- * the box's empty Send, as the panel's is. None where nothing is asked.
+ * panel's box holds them as its body (`inbox-answer-box.tsx`,
+ * `inbox-ask-controls.tsx`), each attaching its answer to the reply rather
+ * than sending it, and each press or pick taking it off again pressed
+ * again, the box's Send sending it with the note: a decide's options to
+ * pick, the recommended tagged, or its two presses where it is a yes or no
+ * in other words (`decideButtons`), the first going ahead and the second
+ * holding back; a do's steps to tick, each with its code under it, then Mark
+ * done, which ticks every one, and Couldn't do it; an answer's fields to
+ * fill, a text field stopping at the panel's most. A notice asking nothing
+ * has none: its Got it is the box's empty Send, as the panel's is. None
+ * where nothing is asked.
  */
 function AskControls({
   item,
@@ -209,10 +240,30 @@ function AskControls({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, send } = answer;
+  const { draft, onDraft } = answer;
   const ask = openAsk(item);
 
   if (ask === undefined) return null;
+
+  if (ask.type === INBOX_ASK.DECIDE && decideButtons(ask)) {
+    const recommended = recommendedLabels(ask);
+
+    return (
+      <AskActs
+        acts={ask.options.map((option, at) => {
+          const picked = draft.choices.includes(option.label);
+
+          return {
+            label: option.label,
+            symbol: at === 0 ? GLYPH.CHECK : GLYPH.UNDO,
+            pressed: picked,
+            recommended: recommended.includes(option.label),
+            onPress: () => onDraft(withPicks(draft, picked ? [] : [option.label])),
+          };
+        })}
+      />
+    );
+  }
 
   if (ask.type === INBOX_ASK.DECIDE) {
     const cards = optionsCarryMedia(ask);
@@ -240,23 +291,29 @@ function AskControls({
   }
 
   if (ask.type === INBOX_ASK.DO) {
-    // A press sends at once, with the steps ticked and the note typed, as the panel's press and Send do together.
+    // Note that a press attaches its decision to the reply and takes it off pressed again, the box's Send sending it with the note, as the panel's presses do.
     const press = (reply: typeof INBOX_REPLY.DONE | typeof INBOX_REPLY.NOT_DONE) =>
-      send({ ...draft, press: reply });
+      onDraft(withDoPress(ask, draft, reply));
 
-    const ticked = shownTicks(ask, draft);
+    const decision = doDecision(ask, draft);
 
     return (
       <StepList
-        steps={ask.steps.length === 0 ? [item.title] : ask.steps}
-        ticked={ticked}
+        steps={ask.steps.length === 0 ? [{ words: item.title, code: [] }] : ask.steps.map(stepOf)}
+        ticked={shownTicks(ask, draft)}
         onToggle={(at) => onDraft(withStep(ask, draft, at))}
         acts={[
-          { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
+          {
+            label: ASK_PRESS.DONE,
+            symbol: GLYPH.CHECK,
+            pressed: decision === INBOX_REPLY.DONE,
+            onPress: () => press(INBOX_REPLY.DONE),
+          },
           {
             label: ASK_PRESS.NOT_DONE,
             symbol: GLYPH.UNDO,
             quiet: true,
+            pressed: decision === INBOX_REPLY.NOT_DONE,
             onPress: () => press(INBOX_REPLY.NOT_DONE),
           },
         ]}
@@ -277,6 +334,7 @@ function AskControls({
       value: Predicate.isBoolean(value) ? value : value === undefined ? "" : String(value),
       options: field.options,
       recommended: field.recommended,
+      maxLength: INBOX_BOUNDS.MAX_FIELD_VALUE_CHARS,
     };
   });
 

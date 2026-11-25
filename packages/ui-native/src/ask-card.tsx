@@ -21,18 +21,23 @@ import {
   accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
   keyboardType,
   labelsHidden,
+  lineLimit,
   padding,
   pickerStyle,
+  strokeBorder,
   tag,
   textFieldStyle,
+  textSelection,
   tint,
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
+import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { FIELD_WORDS, SELECTION_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode, useRef } from "react";
@@ -41,7 +46,7 @@ import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What a flow finds an ask's note by. */
@@ -87,16 +92,31 @@ export type AnswerField = {
   readonly value: string | boolean;
   readonly options?: readonly string[] | undefined;
   readonly recommended?: string | undefined;
+  /** The most characters a text field takes, as the panel's field stops at; none where it takes any. */
+  readonly maxLength?: number | undefined;
 };
 
-/** One act under the card, such as Mark done: its words and its glyph. */
+/** One of an ask's presses, such as Mark done or a yes or no's Approve: its words and its glyph. */
 export type AskAct = {
   readonly label: string;
   readonly symbol: Glyph;
-  /** Whether it is the lesser of the card's acts, such as Couldn't do it beside Mark done, which stands quiet, as the panel's does. */
+  /** Whether it is the lesser of the presses, such as Couldn't do it beside Mark done, which stands quiet, as the panel's does. */
   readonly quiet?: boolean | undefined;
+  /** Whether it stands pressed, its answer attached to the reply until it is pressed again, as the panel's press toggles. */
+  readonly pressed?: boolean | undefined;
+  /** Whether the agent recommends it, which its tag says after it. */
+  readonly recommended?: boolean | undefined;
   readonly onPress: () => void;
 };
+
+/** One step of a do ask: its words, and the code its fences hold, each read under the step, outside its press. */
+export type AskStep = {
+  readonly words: string;
+  readonly code: readonly string[];
+};
+
+/** How thick the recommended tag's edge is drawn. */
+const TAG_EDGE = 1;
 
 /**
  * An ask's rows, a hairline between each from where their words start,
@@ -136,24 +156,72 @@ export function AskNote({ words }: { readonly words: string }) {
   return <ProblemLine text={words} id={ASK_NOTE_ID} />;
 }
 
+/** The small bordered tag after what the agent recommends, muted, as the panel's stands, so copper is left for what is picked; its one word on one line at every size, never broken inside the tag. */
+export function RecommendedTag() {
+  const colors = useColors();
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
+        foregroundStyle(colors.TEXT_MUTED),
+        // Note that the tag keeps its own width, since at the largest sizes the row's column offered it less and SwiftUI broke its word as "Recommend-ed".
+        lineLimit(1),
+        fixedSize(),
+        padding({ horizontal: 5, vertical: 1 }),
+        strokeBorder({
+          content: colors.CHIP_EDGE,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+          shape: "roundedRectangle",
+          cornerRadius: RADIUS.TAG,
+          style: { lineWidth: TAG_EDGE },
+        }),
+      ]}
+    >
+      {RECOMMENDED}
+    </Text>
+  );
+}
+
 /**
- * The card's acts in a row under it, at the system's regular size so each
- * stands a 44 pt target: the main act, such as Mark done, filled in the
- * accent as a screen's one act is, and a quiet one beside it, such as
- * Couldn't do it, its words alone in the ink, as the panel's quiet button.
+ * An ask's presses in a row, at the system's regular size so each stands a
+ * 44 pt target, each a toggle as the panel's are: outlined in the ink, or
+ * its words alone where it is the quiet one, such as Couldn't do it, and
+ * filled in the accent once pressed, its answer attached to the reply until
+ * it is pressed again, VoiceOver hearing it selected. One the agent
+ * recommends wears the tag after it, as the panel's press wears its badge.
  */
 export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
   const stacked = useAccessibilitySize();
 
-  const buttons = acts.map((act) => (
-    <Button
-      key={act.label}
-      label={act.label}
-      symbol={act.symbol}
-      look={act.quiet === true ? BUTTON_LOOK.PLAIN : BUTTON_LOOK.PROMINENT}
-      onPress={act.onPress}
-    />
-  ));
+  const buttons = acts.map((act) => {
+    const look =
+      act.pressed === true
+        ? BUTTON_LOOK.PROMINENT
+        : act.quiet === true
+          ? BUTTON_LOOK.PLAIN
+          : BUTTON_LOOK.BORDERED;
+
+    const button = (
+      <Button
+        key={act.label}
+        label={act.label}
+        symbol={act.symbol}
+        look={look}
+        selected={act.pressed === true}
+        onPress={act.onPress}
+      />
+    );
+
+    return act.recommended === true ? (
+      <HStack key={act.label} spacing={SPACE.TIGHT * 2}>
+        {button}
+        <RecommendedTag />
+      </HStack>
+    ) : (
+      button
+    );
+  });
 
   // Note that past the accessibility sizes the acts stand one under the other, as a row's end does, because two regular buttons side by side run past an iPhone's width there.
   return stacked ? (
@@ -162,6 +230,25 @@ export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
     </VStack>
   ) : (
     <HStack spacing={SPACE.TIGHT * 2}>{buttons}</HStack>
+  );
+}
+
+/** A step's code, read whole in the monospaced face under its words and past its check, its lines selectable to copy, as the panel's code card holds a step's fence. */
+function StepCode({ code }: { readonly code: string }) {
+  const colors = useColors();
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE, design: "monospaced" }),
+        foregroundStyle(colors.TEXT_BODY),
+        textSelection(true),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        padding({ leading: CARD_WORDS_INSET.MARKED, bottom: ASK_ROW_PADDING.vertical }),
+      ]}
+    >
+      {code}
+    </Text>
   );
 }
 
@@ -212,14 +299,14 @@ function StepRow({
   );
 }
 
-/** A do ask's steps as checkbox rows, by their place from the first at 0, with its acts under them. */
+/** A do ask's steps as checkbox rows, by their place from the first at 0, each with its code under it, and its presses under them. */
 export function StepList({
   steps,
   ticked,
   onToggle,
   acts,
 }: {
-  readonly steps: readonly string[];
+  readonly steps: readonly AskStep[];
   readonly ticked: readonly number[];
   /** Called with a step's place once its toggle is pressed. */
   readonly onToggle: (index: number) => void;
@@ -230,12 +317,18 @@ export function StepList({
       {steps.length === 0 ? null : (
         <AskRows inset={CARD_WORDS_INSET.MARKED}>
           {steps.map((step, index) => (
-            <StepRow
-              key={step}
-              step={step}
-              ticked={ticked.includes(index)}
-              onPress={() => onToggle(index)}
-            />
+            // Note that a step's code stands under its row, outside the press, so selecting a line never ticks the step, as the panel's code card stands outside its checkbox.
+            <VStack key={index} alignment="leading" spacing={0}>
+              <StepRow
+                step={step.words}
+                ticked={ticked.includes(index)}
+                onPress={() => onToggle(index)}
+              />
+              {step.code.map((code, at) => (
+                // A step's fences have no key of their own, and are never reordered.
+                <StepCode key={at} code={code} />
+              ))}
+            </VStack>
           ))}
         </AskRows>
       )}
@@ -296,6 +389,21 @@ function TypedFieldRow({
   const text = useNativeState(Predicate.isString(field.value) ? field.value : "");
   const fieldRef = useRef<TextFieldRef>(null);
 
+  // Note that words past the field's most are cut back in the field itself, as the panel's field stops taking them, rather than held until the service refuses the answer.
+  const change = (typed: string) => {
+    const most = field.maxLength;
+
+    if (most === undefined || typed.length <= most) {
+      onChange(typed);
+
+      return;
+    }
+
+    const kept = typed.slice(0, most);
+    text.value = kept;
+    onChange(kept);
+  };
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ASK_ROW_PADDING)]}>
       <FieldWords
@@ -308,7 +416,7 @@ function TypedFieldRow({
         ref={fieldRef}
         text={text}
         placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
-        onTextChange={onChange}
+        onTextChange={change}
         onFocusChange={(focused) => onFocused(fieldRef.current, focused)}
         modifiers={[
           textFieldStyle("plain"),

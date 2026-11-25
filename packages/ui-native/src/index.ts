@@ -14,6 +14,7 @@ export {
   type AskAct,
   AskActs,
   AskNote,
+  type AskStep,
   StepList,
 } from "./ask-card.js";
 

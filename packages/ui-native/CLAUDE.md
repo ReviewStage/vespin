@@ -443,14 +443,22 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   at the page's foot, centered, as Leave does, or behind a menu, as a
   photo's Delete stands under Change photo.
 - **An ask's rows** stand in the composer's head over its field, on its
-  glass with no card of their own, as the panel's box holds them (`ChoiceList`, a
+  glass with no card of their own, as the panel's box holds them, each
+  pick or press attaching its answer to the reply and taking it off pressed
+  again, the box's Send sending it, as the panel's controls clear (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
-  checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
-  with Mark done and Couldn't do it under it, at the system's regular size,
-  Mark done filled as the card's one act and Couldn't do it its words
-  alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
+  checks one, a "Recommended" tag and a detail line; `AskActs`, an ask's
+  presses at the system's regular size, outlined in the ink, or their
+  words alone where quiet, filled in copper once pressed, VoiceOver hearing
+  them selected, one recommended wearing the tag after it, stacked past the
+  accessibility sizes: a yes or no's two, as the panel draws a decide of
+  two short options, and a do's Mark done and Couldn't do it; `StepList`, a
+  round check per step, as Reminders draws one, its fences' code under it
+  in the monospaced face, selectable, with its `AskActs` under the steps;
+  `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
-  rows and prompting "Required" or "Optional" while empty, a number field's
+  rows and prompting "Required" or "Optional" while empty, a text field
+  stopping at the panel's most (`maxLength`), a number field's
   pad standing one Done over it for the rows, a select's menu picker
   under its label, reading "None" until a pick, a
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn as rows because

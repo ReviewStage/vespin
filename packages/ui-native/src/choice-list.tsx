@@ -6,22 +6,19 @@ import {
   accessibilityAddTraits,
   accessibilityLabel,
   buttonStyle,
-  fixedSize,
   font,
   foregroundStyle,
   frame,
-  lineLimit,
   padding,
-  strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { Fragment } from "react";
 import { useAccessibilitySize } from "./accessibility.js";
-import { ASK_ROW_PADDING, CARD_WORDS_INSET, CardDivider } from "./ask-card.js";
+import { ASK_ROW_PADDING, CARD_WORDS_INSET, CardDivider, RecommendedTag } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { PickedCheck } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
-import { RADIUS, SPACE } from "./tokens/space.js";
+import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 export type Choice = {
@@ -56,42 +53,15 @@ type ChoiceListProps = {
   readonly none?: NoneChoice | undefined;
 };
 
-/** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked; its one word on one line at every size, never broken inside the tag. */
-function RecommendedTag() {
-  const colors = useColors();
-
-  return (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
-        foregroundStyle(colors.TEXT_MUTED),
-        // Note that the tag keeps its own width, since at the largest sizes the row's column offered it less and SwiftUI broke its word as "Recommend-ed".
-        lineLimit(1),
-        fixedSize(),
-        padding({ horizontal: 5, vertical: 1 }),
-        strokeBorder({
-          content: colors.CHIP_EDGE,
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "roundedRectangle",
-          cornerRadius: RADIUS.TAG,
-          style: { lineWidth: 1 },
-        }),
-      ]}
-    >
-      {RECOMMENDED}
-    </Text>
-  );
-}
-
-/** What pressing `label` leaves picked: it alone for one choice, or it toggled among several. */
+/** What pressing `label` leaves picked: it toggled, alone for one choice or among several, so a pick pressed again lets go, as the panel's options clear. */
 function nextPicked(
   picked: readonly string[],
   label: string,
   multiple: boolean,
 ): readonly string[] {
-  if (!multiple) return [label];
+  if (picked.includes(label)) return picked.filter((each) => each !== label);
 
-  return picked.includes(label) ? picked.filter((each) => each !== label) : [...picked, label];
+  return multiple ? [...picked, label] : [label];
 }
 
 /** One option's row: its label in the row title's style with the tag beside it, or under it at an accessibility size, its detail in the row line's style, muted, and the copper check at its end once picked. */
@@ -181,7 +151,8 @@ function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] })
  * each, pressed to pick it, the recommended one tagged, with a hairline
  * between the rows. Each pick is checked at its row's end in copper, as
  * `PickRows` and iOS's own Settings check a choice, with no mark leading an
- * unpicked row, whether one or several may be picked.
+ * unpicked row, whether one or several may be picked, and a pick pressed
+ * again lets go, as the panel's options clear.
  */
 export function ChoiceList(props: ChoiceListProps) {
   const { choices, recommended = [], picked, multiple = false, onChange, title, none } = props;
