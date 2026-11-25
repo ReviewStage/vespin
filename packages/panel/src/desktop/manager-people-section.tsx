@@ -111,8 +111,10 @@ function useManagerFollowers(agentId: string) {
   const asked = (sent: () => Promise<AgentFollowersAnswerView>): Promise<boolean> =>
     sent()
       .catch(followerUnreached)
-      .then((answer: FollowerAnswer) => {
+      .then(async (answer: FollowerAnswer) => {
         if (!("failure" in answer)) {
+          // Note that a read still under way is canceled first, so its older followers cannot land over the write's.
+          await queries.cancelQueries({ queryKey: key, exact: true });
           queries.setQueryData(key, answer);
 
           return true;
