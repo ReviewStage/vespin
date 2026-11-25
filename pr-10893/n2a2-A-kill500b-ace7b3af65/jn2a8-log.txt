@@ -1,0 +1,18 @@
+pinned to ace7b3af65
+== bundle PJjn2a8 base ace7b3af65
+  built ace7b3af65 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2reqlog.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2A-write-1x seed: rc 0
+  n2A timed kill: tap done 1795641914844, outbox polled until 1795641915332 (+488 ms, 5 reads, first non-empty: ), kill 1795641915382 (+538 ms); outbox before the kill: outbox file: host/accounts/stub-account/local.sqlite;CREATE TABLE outbox (;  seq INTEGER PRIMARY KEY AUTOINCREMENT,;  name TEXT NOT NULL,;  idempotency_key TEXT NOT NULL UNIQUE,;  input TEXT NOT NULL;);;+169 ms rows 0: ;;+255 ms rows 0: ;;+310 ms rows 0: ;;+360 ms rows 0: ;;+425 ms rows 0: ;;
+n2A-write-1x fn2mark: 17 steps,  marked [Thread 218: decide how a partial cent rounds in the billing rounding] settled [Thread 197: decide how a partial cent rounds in the push tokens]
+  n2A search: s1 [Thread 218] 11 steps ; s2 [Thread 197 on All] 14 steps 
+  n2A db after rows: at 1795641954404 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_domq5ka_1i collection_metadata persisted_index_registry cache_generation collection_registry t_domq5ka_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:c213bf1b-319e-440f-a504-e50592744476|c_domq5ka_1i|t_domq5ka_1i|1|1795641644;
+  n2A written.json: status present, polled until 79254 ms after the relaunch: {"5eed0004-0000-4000-8000-0000003d09d9":{"carried":true,"unread":true},"5eed0004-0000-4000-8000-0000003d09c4":{"carried":true,"unread":false,"status":"closed","settledAt":1795641913345,"updatedAt":1795641913345,"revision":9}}
+  n2A times: second_launch_T=1795641857671 resolve_tap_done_T=1795641914844 outbox_poll_end_T=1795641915332 kill_T=1795641915382 kill_after_tap_ms=538 terminate_T=1795641917755 mark_end_T=1795641917898 relaunch_T=1795641917930 s1_end_T=1795641943735 s2_end_T=1795641987857 written_status_T=1795641997184 tries=0 
+  n2A tap/kill times: 
+  n2A db at the end: at 1795641997554 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_domq5ka_1i collection_metadata persisted_index_registry cache_generation collection_registry t_domq5ka_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:c213bf1b-319e-440f-a504-e50592744476|c_domq5ka_1i|t_domq5ka_1i|1|1795641644;
+  n2A requests (inbox and writes): 3 lines; 
