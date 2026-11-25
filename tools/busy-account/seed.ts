@@ -13,7 +13,8 @@
  * - `accounts/<account>/local.sqlite`: the local copy, the task list kept at
  *   a sync id and the Inbox to the host's 1 MB cut, as a phone keeps them.
  * - `busy-account/`: the stub's answers. `inbox-whole.json`, the Inbox read
- *   whole; `tasks-delta.json`, the task list past its kept id;
+ *   whole; `inbox-pages/<n>.json`, the same read in pages, as a build that
+ *   reads pages is answered it; `tasks-delta.json`, the task list past its kept id;
  *   `what-waits.json`, every task holding a thread; `task-rows/<id>.json`,
  *   each old task read alone; `moving-agents.json` and `inbox-moves.json`,
  *   the rows the stub moves one a second and one every five.
@@ -418,10 +419,56 @@ function checkRows<Encoded>(
   }
 }
 
+/**
+ * How many threads a page of the Inbox's whole answer carries, as the
+ * service pages it (`packages/service/src/live/reads/inbox-items.ts`'s
+ * `ITEMS_A_PAGE`).
+ */
+const INBOX_THREADS_A_PAGE = 25;
+
 /** The Inbox items read answered whole, as the service answers a reader that kept only part of it. */
 function inboxWholeBody(inbox: readonly SeededThread[]): string {
-  const sync = { next: String(BUSY_SYNC.INBOX) };
+  return inboxBody(inbox, { next: String(BUSY_SYNC.INBOX) });
+}
 
+/**
+ * The Inbox's whole answer in pages, as the service answers a build that
+ * reads pages: `INBOX_THREADS_A_PAGE` threads a page, the latest changed
+ * first, each page naming the next by its number and every page the same
+ * sync id, and the last carrying the snapshot that shows every write below
+ * it. Note that the page and the snapshot are written onto the encoded
+ * body, so a build from before the wire names them still writes them.
+ */
+function inboxPageBodies(inbox: readonly SeededThread[]): readonly string[] {
+  const newestFirst = inbox.toSorted(
+    (one, other) =>
+      other.item.updatedAt - one.item.updatedAt || (other.item.id < one.item.id ? -1 : 1),
+  );
+
+  const count = Math.ceil(newestFirst.length / INBOX_THREADS_A_PAGE);
+  const next = String(BUSY_SYNC.INBOX);
+
+  return Array.from({ length: count }, (_, n) => {
+    const threads = newestFirst.slice(n * INBOX_THREADS_A_PAGE, (n + 1) * INBOX_THREADS_A_PAGE);
+
+    // SAFETY: the body is the one `inboxBody` encoded through the build's own answer schema, whose parts each carry `sync`.
+    const body = JSON.parse(inboxBody(threads, { next })) as {
+      queries: Record<string, { sync: Record<string, string>; snapshot?: string }>;
+    };
+
+    const last = n === count - 1;
+
+    for (const part of Object.values(body.queries)) {
+      if (last) part.snapshot = `${next}:${next}:`;
+      else part.sync.page = String(n + 1);
+    }
+
+    return JSON.stringify(body);
+  });
+}
+
+/** The Inbox items read answering `inbox`'s threads at `sync`, checked as the app reads it. */
+function inboxBody(inbox: readonly SeededThread[], sync: { readonly next: string }): string {
   const stamps = inbox.map(({ item, taskId }) => ({
     id: item.id,
     taskId,
@@ -823,6 +870,12 @@ const seed = Effect.gen(function* () {
   mkdirSync(`${answers}/task-rows`, { recursive: true });
   const inboxBody = inboxWholeBody(inbox);
   writeFileSync(`${answers}/inbox-whole.json`, inboxBody);
+  mkdirSync(`${answers}/inbox-pages`, { recursive: true });
+
+  for (const [n, page] of inboxPageBodies(inbox).entries()) {
+    writeFileSync(`${answers}/inbox-pages/${n}.json`, page);
+  }
+
   writeFileSync(`${answers}/tasks-delta.json`, tasksDeltaBody(agents));
   writeFileSync(`${answers}/what-waits.json`, whatWaitsBody(inbox));
   writeFileSync(`${answers}/moving-agents.json`, movingAgentsBody(agents));

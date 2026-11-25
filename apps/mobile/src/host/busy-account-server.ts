@@ -5,7 +5,8 @@
  * (`tools/busy-account/seed.ts`), which the rig copies under the host's
  * state root beside the local copy they match
  * (`apps/mobile/scripts/busy-account.sh`), at the waits the service was
- * seen to answer with: the Inbox whole about 3 s after the ask, a small
+ * seen to answer with: the Inbox whole about 3 s after the ask, or, to a
+ * build that reads pages, each page of it a quarter second after its ask, a small
  * delta a few hundred milliseconds, and a held poll with nothing new about
  * 25 s, which the moving account's own moves cut short. It keeps the
  * workspaces the local copy kept by answering their read not found, so a
@@ -14,6 +15,7 @@
  */
 
 import { HOSTED_SERVICE_PATH } from "@repo/features";
+import { HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { LIVE_POLL, LIVE_POLL_URL } from "@repo/features/live-wire";
 import type { WireRecord, WireValue } from "@repo/wire";
 import { File, Paths } from "expo-file-system";
@@ -25,6 +27,7 @@ const BUSY_SYNC = { TASKS_KEPT: 1000, INBOX: 2000 } as const;
 /** How long each read waits before it answers, in milliseconds. */
 const BUSY_WAIT = {
   INBOX_WHOLE: 3000,
+  INBOX_PAGE: 250,
   TASKS_DELTA: 300,
   AGENT_EVERY: 1000,
   INBOX_EVERY: 5000,
@@ -32,6 +35,17 @@ const BUSY_WAIT = {
   WAITS_FIRST: 400,
   WAITS_AGAIN: 30_000,
 } as const;
+
+/**
+ * The first hosted API version whose builds read a whole answer in pages,
+ * and the query they name the next page under: the service's own
+ * (`packages/service/src/live/live-pages.ts`, `LIVE_POLL.PAGE`), which this
+ * branch's base predates.
+ */
+const PAGED = { API_VERSION: 10, QUERY: "page" } as const;
+
+/** A page of the Inbox's whole answer as the seed numbers it: digits alone, so no page reaches past its folder. */
+const PAGE_NUMBER = /^\d{1,4}$/;
 
 /** The seed's answers, beside the local copy under the host's state root. */
 const ANSWERS = `${hostStateRootIn(Paths.document.uri)}/busy-account`;
@@ -146,13 +160,20 @@ async function tasksAnswer(sync: string | null, askedAt: number): Promise<Respon
   });
 }
 
-/** The Inbox past `past`: whole where it asks past no id of the seed's, and after that one thread took a new message, five seconds after the ask. */
-async function inboxAnswer(sync: string | null, askedAt: number): Promise<Response> {
-  const past = Number(sync);
+/** The Inbox past `past`: whole where it asks past no id of the seed's, in pages to a build that reads them, and after that one thread took a new message, five seconds after the ask. */
+async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
+  const past = Number(url.searchParams.get(LIVE_POLL.SYNC));
+  const page = url.searchParams.get(PAGED.QUERY);
+  const whole = page !== null || !Number.isInteger(past) || past < BUSY_SYNC.INBOX;
 
-  if (!Number.isInteger(past) || past < BUSY_SYNC.INBOX) {
-    return answered("inbox-whole.json", askedAt, BUSY_WAIT.INBOX_WHOLE);
+  // Note that a build reads pages from the version it is built at, so the stub of a build that reads none answers it in one.
+  if (whole && HOSTED_API_VERSION >= PAGED.API_VERSION) {
+    return page === null || PAGE_NUMBER.test(page)
+      ? answered(`inbox-pages/${page ?? "0"}.json`, askedAt, BUSY_WAIT.INBOX_PAGE)
+      : new Response(null, { status: 404 });
   }
+
+  if (whole) return answered("inbox-whole.json", askedAt, BUSY_WAIT.INBOX_WHOLE);
 
   await wait(BUSY_WAIT.INBOX_EVERY);
   // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build, and each row in it was decoded by the build's own schemas as it was written.
@@ -224,7 +245,7 @@ export function busyAccountAnswer(url: URL): Promise<Response> | undefined {
     case HOSTED_SERVICE_PATH.LIVE_WORKSPACES:
       return Promise.resolve(new Response(null, { status: 404 }));
     case HOSTED_SERVICE_PATH.LIVE_INBOX_ITEMS:
-      return inboxAnswer(sync, askedAt);
+      return inboxAnswer(url, askedAt);
     case HOSTED_SERVICE_PATH.LIVE_TASKS:
       return tasksAnswer(sync, askedAt);
     case HOSTED_SERVICE_PATH.LIVE_INBOX:
