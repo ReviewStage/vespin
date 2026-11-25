@@ -8,6 +8,7 @@ import {
   useCallback,
   useId,
   useRef,
+  useState,
 } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { FoldChevronIcon } from "../../icons/lucide-glyphs.js";
@@ -757,6 +758,8 @@ export function TaskRow({
   const own = useRef<HTMLButtonElement | null>(null);
   const press = pressRef ?? own;
   const nameId = useId();
+  // Note that the row says its fold's chevron holds the keyboard, because its stylesheet cannot find that through `:has()` without checking the row again at every change under it.
+  const [foldHeld, setFoldHeld] = useState(false);
   // Note that the row a hint hangs its card beside is the item, which a run measures through its place too.
   const item = useRef<HTMLLIElement | null>(null);
   const { ref: placeRef, ...placed } = place ?? {};
@@ -796,6 +799,8 @@ export function TaskRow({
         aria-label={fold.label}
         aria-expanded={fold.open}
         onClick={() => fold.onOpenChange(!fold.open)}
+        onFocus={(event) => setFoldHeld(event.currentTarget.matches(":focus-visible"))}
+        onBlur={() => setFoldHeld(false)}
       >
         {/* Note that the chevron turns on the one turn every fold makes (`disclosure.css`). */}
         <span className="ui-disclosure-turn" data-open={fold.open}>
@@ -858,6 +863,7 @@ export function TaskRow({
       data-depth={depth === 0 ? undefined : depth}
       style={rowStyle(depth, place)}
       {...nestedItem(depth, nest)}
+      data-fold-held={foldHeld ? "true" : undefined}
       data-settled={settled ? "true" : undefined}
       data-unread={unread ? "true" : undefined}
       data-current={current ? "true" : undefined}

@@ -1829,7 +1829,7 @@ body,
 
 /* The card holding the keyboard, or whose menu is open, stands over its
    neighbors, so its ring and its menu are drawn over the next card. */
-.tasks-board-card:has(:focus-visible),
+.tasks-board-card:is(:where(:root[data-keyboard="true"]) :focus-within),
 .tasks-board-card[data-menu-open="true"],
 .tasks-board-card:has([aria-expanded="true"]) {
   z-index: 2;

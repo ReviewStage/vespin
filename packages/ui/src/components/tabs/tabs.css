@@ -176,7 +176,7 @@
 
   /* The tab holding the keyboard stands over its neighbors, so the chosen
      tab's fill beside it leaves its ring whole. */
-  .ui-tab:has(:focus-visible) {
+  .ui-tab:is(:where(:root[data-keyboard="true"]) :focus-within) {
     z-index: 1;
   }
 
