@@ -465,6 +465,13 @@ function inboxPageBodies(inbox: readonly SeededThread[]): readonly string[] {
       else part.sync.page = String(n + 1);
     }
 
+    // SAFETY: the body is the read's own encoded answer, parsed back, with only its page or its snapshot written onto each part, which the answer schema reads.
+    checkRows(`the Inbox's page ${n}`, INBOX_ITEMS_READ, body as never, {
+      stamps: threads.length,
+      items: threads.length,
+      messages: threads.reduce((sum, { item }) => sum + (item.thread ?? []).length, 0),
+    });
+
     return JSON.stringify(body);
   });
 }
@@ -734,23 +741,8 @@ function tasksBody(plans: readonly PlanRow[], agents: readonly AgentRow[]): stri
   };
 
   // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
-  const body = Schema.encodeSync(TASK_LIST_READ.answer)(answer as never) as object;
-
-  // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
-  const back = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(body) as {
-    queries: Record<string, { rows: readonly unknown[] }>;
-  };
-
-  // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
-  const rows = Schema.decodeUnknownSync(TASK_LIST_READ.rows)(
-    Object.fromEntries(Object.entries(back.queries).map(([part, query]) => [part, query.rows])),
-  ) as { tasks: readonly unknown[]; agents: readonly unknown[] };
-
-  if (rows.tasks.length !== plans.length || rows.agents.length !== agents.length) {
-    throw new Error(
-      `busy account: the task list answer lost rows: ${rows.tasks.length}/${plans.length} tasks, ${rows.agents.length}/${agents.length} agents`,
-    );
-  }
+  const body = Schema.encodeSync(TASK_LIST_READ.answer)(answer as never);
+  checkRows("the task list", TASK_LIST_READ, body, { tasks: plans.length, agents: agents.length });
 
   return JSON.stringify(body);
 }
@@ -793,6 +785,12 @@ function tasksPageBodies(
       if (last) part.snapshot = `${next}:${next}:`;
       else part.sync.page = String(n + 1);
     }
+
+    // SAFETY: the body is the read's own encoded answer, parsed back, with only its page or its snapshot written onto each part, which the answer schema reads.
+    checkRows(`the task list's page ${n}`, TASK_LIST_READ, body as never, {
+      tasks: page.length,
+      agents: ofPage.length,
+    });
 
     return JSON.stringify(body);
   });
