@@ -70,28 +70,6 @@
     }
   }
 
-  /* A grouped list's rows stand on the card's ground, filled only once
-     hovered, and each but the first is ruled from the row above it. The
-     leading control alone says which is picked, so no ring is drawn inside
-     the card's own edge. Note that the rule is the row's inset shadow, and
-     is matched past the hidden inputs Base UI draws beside the rows. */
-  .ui-choice-list[data-look="grouped"] > .ui-choice,
-  .ui-choice-list[data-look="grouped"] > .ui-choice[aria-checked="true"] {
-    --ui-choice-fill: transparent;
-    box-shadow: none;
-  }
-
-  .ui-choice-list[data-look="grouped"] > .ui-choice ~ .ui-choice {
-    box-shadow: inset 0 1px 0 var(--ui-color-border);
-  }
-
-  @media (hover: hover) {
-    .ui-choice-list[data-look="grouped"]
-      > button.ui-choice:hover:not(:disabled, [aria-disabled="true"]) {
-      --ui-choice-fill: var(--ui-color-fill-hover);
-    }
-  }
-
   /* A rows list's options are a settings card's rows, each ruled from the one above. */
   .ui-choice-list[data-look="rows"] > .ui-choice-card + .ui-choice-card {
     border-top: 1px solid var(--ui-color-border);

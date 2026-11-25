@@ -346,8 +346,6 @@ export * from "./components/row-mark/row-mark.js";
 
 export * from "./components/row-menu/row-menu.js";
 
-export * from "./components/rows-card/rows-card.js";
-
 export * from "./components/saved-tick/saved-tick.js";
 
 export * from "./components/scroll-area/scroll-area.js";

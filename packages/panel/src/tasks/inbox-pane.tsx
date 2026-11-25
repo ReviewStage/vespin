@@ -1666,10 +1666,8 @@ export function InboxPane({
   const headingAway = useHeadingAway(board, heading, item.id);
   // A phone heads the item with its own row, the item standing alone in the list's place.
   const phoneHead = phone !== undefined && onBack !== undefined;
-  // Note that a phone docks the box at the screen's foot, under the thread, as an agent's page does, its open ask's card standing in the thread over it.
+  // Note that a phone docks the box at the screen's foot, under the thread, as an agent's page does, its open ask's controls standing in it as ever.
   const docked = usePhoneRoom();
-  // Where a docked box's ask stands: the element in the thread's last row it is drawn into, once laid out.
-  const [askAt, setAskAt] = useState<HTMLElement | null>(null);
   // An open ask waits on its task's assignee, else whoever started its agent, as the list says, though any member may answer it.
   const waitingOn = readersItem(item, readerId) ? undefined : inboxWaitsOn(item);
   // Note that the agent and the pictures are handed to the thread's messages as the same objects while they say the same, so a message is drawn again only where it moved (`ThreadMessage`).
@@ -1708,17 +1706,10 @@ export function InboxPane({
     [thread, events, pending, undelivered],
   );
 
-  // The open ask's controls stand in the draft reply, over its note.
-  const asking = openAskOf(thread);
-  const openAsk = asking !== undefined && knownAsk(asking.ask) ? asking.ask : undefined;
-  // Note that an ask of words alone has no controls, so the box stands plain and its words answer it.
-  const wordsAlone = openAsk?.type === INBOX_ASK.ANSWER && openAsk.fields === undefined;
-  // The draft reply stands after the thread's rows as its last, under a key of its own that no row takes; docked, only while an ask's card stands in it.
-  const drafted = !docked || (openAsk !== undefined && !wordsAlone);
-
+  // The draft reply stands after the thread's rows as its last, under a key of its own that no row takes; docked, it stands under the thread instead.
   const rowKeys = useMemo(
-    () => [...rows.map((row) => row.key), ...(drafted ? [DRAFT_ROW_KEY] : [])],
-    [rows, drafted],
+    () => [...rows.map((row) => row.key), ...(docked ? [] : [DRAFT_ROW_KEY])],
+    [rows, docked],
   );
 
   // The reader's own newest reply, on its way or landed, which takes the thread to its end as it lands, as TanStack's example does on a send.
@@ -1746,18 +1737,17 @@ export function InboxPane({
   const workspaceId = holderWorkspaceId(holder);
   // Note that the ask's controls write its picks alone, never the words, which the box reads and writes where it stands.
   const onDraft = (next: InboxDraft) => control.onPicks(item, next);
+  // The open ask's controls stand in the draft reply, over its note.
+  const asking = openAskOf(thread);
+  const openAsk = asking !== undefined && knownAsk(asking.ask) ? asking.ask : undefined;
+  // Note that an ask of words alone has no controls, so the box stands plain and its words answer it.
+  const wordsAlone = openAsk?.type === INBOX_ASK.ANSWER && openAsk.fields === undefined;
 
-  // Note that a phone's card offers no ×, since its head's ⋯ holds Resolve.
   const question =
     openAsk === undefined || wordsAlone ? undefined : (
       <DraftQuestion
         pane={pane}
-        apart={docked}
-        close={
-          docked ? undefined : (
-            <QuestionResolve key={item.id} item={item} resolver={doors.onClose} />
-          )
-        }
+        close={<QuestionResolve key={item.id} item={item} resolver={doors.onClose} />}
       >
         <AskControls
           ask={openAsk}
@@ -1803,15 +1793,13 @@ export function InboxPane({
         newThread={
           newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
         }
-        questionAt={docked ? askAt : undefined}
       />
     </AnswerMentions>
   );
 
-  // Note that a docked box's last row holds only its ask's card, drawn there by the box (`questionAt`).
   const draftReply = (place: VirtualRowPlace) => (
     <DraftReply readerId={readerId} place={place}>
-      {docked ? <div ref={setAskAt} className="inbox-draft-ask-at min-w-0" /> : answerBox}
+      {answerBox}
     </DraftReply>
   );
 
@@ -1907,7 +1895,7 @@ export function InboxPane({
         />
       )}
       <Fill className="desktop-inbox">
-        {/* Note that the item's words stand around the thread and the docked box alike, so an ask's pictures drawn through the box read and open as the thread's do. */}
+        {/* Note that the item's words stand around the thread and the docked box alike, so an ask's pictures in the box read and open as the thread's do. */}
         <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
           <Conversation list={board}>
             <ConversationContent

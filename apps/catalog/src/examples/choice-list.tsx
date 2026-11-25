@@ -26,7 +26,6 @@ import {
   PageThumb,
   PROVIDER_MARK_SIZE,
   ProviderMark,
-  RowsCard,
   SettingsSection,
   STATUS_TONE,
   Stack,
@@ -42,7 +41,7 @@ import { CatalogSection } from "../section";
 /**
  * choice-list.tsx -- a pick-one list with a recommended option and an
  * unavailable one, a pick-several list, both marked with their radios or
- * checkboxes and numbered, a yes and a no across, toned, pills, cards holding controls of their own, settings rows holding the same, marked rows grouped in one card beside a card of rows of checkboxes, as a phone's ask stands them, rows with a mark before their words, an
+ * checkboxes and numbered, a yes and a no across, toned, pills, cards holding controls of their own, settings rows holding the same, rows with a mark before their words, an
  * unavailable list, a settled record of what was picked, a marked list
  * stepped back beside a step and its presses, as an ask taken back, a list
  * and its presses on a tint laid over the column's ground, as a post that
@@ -366,21 +365,6 @@ function ChoiceLists(): React.JSX.Element {
             look={CHOICE_LOOK.ROWS}
           />
         </SettingsSection>
-      </CatalogSection>
-      <CatalogSection id="choice-list-grouped" title="Grouped in one card, as a phone's ask">
-        <Held legend="Retries" options={RETRIES} start={["three"]} look={CHOICE_LOOK.GROUPED} />
-        <RowsCard
-          rows={CHANNELS.map((channel) => (
-            <Checkbox
-              key={channel.value}
-              checked={channel.value === "email"}
-              readOnly
-              onChange={() => undefined}
-            >
-              {channel.label}
-            </Checkbox>
-          ))}
-        />
       </CatalogSection>
       <CatalogSection id="choice-list-mark" title="With a mark">
         <Held legend="Workspace" options={WORKSPACES} start={["northwind"]} />
