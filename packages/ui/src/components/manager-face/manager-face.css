@@ -65,22 +65,7 @@
     pointer-events: none;
   }
 
-  /* C · Mixed: a halo in the face's own color breathes round it. */
-  .ui-manager-face[data-direction="mixed"][data-working]::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 9999px;
-    background: var(--ui-manager-face-fill);
-    animation: ui-manager-face-halo 1.6s ease-out infinite;
-    animation-play-state: var(--ui-loop-motion);
-    pointer-events: none;
-  }
-
-  .ui-manager-face[data-direction="mixed"][data-working] .ui-manager-face-body {
-    animation: ui-manager-face-bob 0.8s ease-in-out infinite alternate;
-    animation-play-state: var(--ui-loop-motion);
-  }
+  /* C · Mixed (round 2): no motion on the face itself; the typing bubble says it works. */
 
   @keyframes ui-manager-face-hop {
     0%,

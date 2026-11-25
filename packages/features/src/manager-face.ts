@@ -55,6 +55,10 @@ export const MANAGER_FACE_COLOR = {
   SAND: "sand",
   COCOA: "cocoa",
   CLOUD: "cloud",
+  // PROTOTYPE (round 2): the section icons' hues the Mixed picker offers beside yellow, green, teal, blue, purple, and pink.
+  RED: "red",
+  ORANGE: "orange",
+  GRAY: "gray",
 } as const;
 
 export type ManagerFaceColor = (typeof MANAGER_FACE_COLOR)[keyof typeof MANAGER_FACE_COLOR];
@@ -89,6 +93,9 @@ export const MANAGER_FACE_COLOR_NAME = {
   [MANAGER_FACE_COLOR.SAND]: "Sand",
   [MANAGER_FACE_COLOR.COCOA]: "Cocoa",
   [MANAGER_FACE_COLOR.CLOUD]: "Cloud",
+  [MANAGER_FACE_COLOR.RED]: "Red",
+  [MANAGER_FACE_COLOR.ORANGE]: "Orange",
+  [MANAGER_FACE_COLOR.GRAY]: "Gray",
 } as const satisfies Record<ManagerFaceColor, string>;
 
 /** A Manager's face: its character and the color it is drawn in. */

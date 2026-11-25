@@ -23,6 +23,7 @@ import {
   useFaceDirection,
 } from "./manager-face.js";
 import { keepPickedFace, usePickedFace } from "./prototype-face-direction.js";
+import { MixedFacePicker } from "./prototype-mixed-picker.js";
 
 /**
  * manager-face-picker.tsx -- where a Manager's face is picked: the app's one icon picker (`IconPicker`), as a section's icon is picked, listing every face, one group to each character in each of the colors.
@@ -293,6 +294,15 @@ export function ManagerFacePicker({
   ) : (
     characterGroups
   );
+
+  // PROTOTYPE (round 2): the Mixed direction picks through the section icon picker's parts.
+  if (direction === FACE_DIRECTION.MIXED) {
+    return (
+      <ReplayUnmask>
+        <MixedFacePicker face={face} search={search} onChange={onChange} />
+      </ReplayUnmask>
+    );
+  }
 
   return (
     <ReplayUnmask>

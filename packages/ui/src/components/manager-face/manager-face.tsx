@@ -94,7 +94,35 @@ export const FACE_FILL = {
   [MANAGER_FACE_COLOR.SAND]: "light-dark(#e6c798, #f0d6ae)",
   [MANAGER_FACE_COLOR.COCOA]: "light-dark(#c39a7a, #d4ae91)",
   [MANAGER_FACE_COLOR.CLOUD]: "light-dark(#c9ced6, #d6dae0)",
+  [MANAGER_FACE_COLOR.RED]: "light-dark(#ff8a80, #ffa49c)",
+  [MANAGER_FACE_COLOR.ORANGE]: "light-dark(#ffb347, #ffc46e)",
+  [MANAGER_FACE_COLOR.GRAY]: "light-dark(#c9ced6, #d6dae0)",
 } as const satisfies Record<ManagerFaceColor, string>;
+
+/**
+ * PROTOTYPE (round 2): the colors the Mixed picker offers, the very hues and
+ * order a sidebar section's glyph may wear (`TASK_SECTION_ICON_COLOR`), then
+ * gray, each drawn from the file-icon palette sections draw from, softened
+ * toward white so a character's near-black features still read on it.
+ */
+export const MIXED_COLORS: readonly ManagerFaceColor[] = [
+  MANAGER_FACE_COLOR.RED,
+  MANAGER_FACE_COLOR.ORANGE,
+  MANAGER_FACE_COLOR.YELLOW,
+  MANAGER_FACE_COLOR.GREEN,
+  MANAGER_FACE_COLOR.TEAL,
+  MANAGER_FACE_COLOR.BLUE,
+  MANAGER_FACE_COLOR.PURPLE,
+  MANAGER_FACE_COLOR.PINK,
+  MANAGER_FACE_COLOR.GRAY,
+];
+
+/** PROTOTYPE (round 2): a Mixed color's fill, its section hue softened. */
+function mixedFill(color: ManagerFaceColor): string | undefined {
+  return MIXED_COLORS.includes(color)
+    ? `color-mix(in oklab, var(--file-icon-${color}) 58%, white)`
+    : undefined;
+}
 
 /** PROTOTYPE: the colors in the order a picker offers them, round the wheel and then the quiet ones. */
 export const FACE_COLORS: readonly ManagerFaceColor[] = Object.keys(
@@ -194,11 +222,14 @@ export function ManagerFace({
   const picked = usePickedFace(stored) ?? stored;
   const face = raw ? stored : picked;
   const { direction, working: everyWorking } = useFaceDirection();
-  const atWork = working || everyWorking;
+  const atWork = working || (everyWorking && !raw);
   const lively = direction === FACE_DIRECTION.LIVELY;
   const { mood, onHover } = useLivelyMood(lively, atWork);
   const { Drawing, viewBox } = CHARACTER[face.character];
-  const fill = FACE_FILL[face.color] ?? FACE_FILL[MANAGER_FACE_COLOR.YELLOW];
+  const fill =
+    (direction === FACE_DIRECTION.MIXED ? mixedFill(face.color) : undefined) ??
+    FACE_FILL[face.color] ??
+    FACE_FILL[MANAGER_FACE_COLOR.YELLOW];
   const emoji =
     direction === FACE_DIRECTION.EMOJI
       ? (face.emoji ?? CHARACTER_EMOJI[face.character])
@@ -242,7 +273,9 @@ export function ManagerFace({
           <WorkingMark />
         </span>
       ) : null}
-      {atWork && lively && size !== MANAGER_FACE_SIZE.WORDS ? (
+      {atWork &&
+      (lively || direction === FACE_DIRECTION.MIXED) &&
+      size !== MANAGER_FACE_SIZE.WORDS ? (
         <span className="ui-manager-face-typing" data-size={size}>
           <span />
           <span />

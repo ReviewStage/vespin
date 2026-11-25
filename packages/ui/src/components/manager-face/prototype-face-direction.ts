@@ -25,7 +25,7 @@ export type FaceDirection = (typeof FACE_DIRECTION)[keyof typeof FACE_DIRECTION]
 export const FACE_DIRECTION_NAME = {
   [FACE_DIRECTION.PALETTE]: "A · Palette",
   [FACE_DIRECTION.EMOJI]: "B · Emoji",
-  [FACE_DIRECTION.MIXED]: "C · Mixed",
+  [FACE_DIRECTION.MIXED]: "C · Mixed (round 2)",
   [FACE_DIRECTION.LIVELY]: "D · Lively",
 } as const satisfies Record<FaceDirection, string>;
 
@@ -54,7 +54,7 @@ function initialState(): FaceState {
   }
 
   return {
-    direction: isDirection(named) ? named : isDirection(kept) ? kept : FACE_DIRECTION.PALETTE,
+    direction: isDirection(named) ? named : isDirection(kept) ? kept : FACE_DIRECTION.MIXED,
     working: search.get("working") === "1",
   };
 }
