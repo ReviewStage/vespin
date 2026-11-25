@@ -316,6 +316,10 @@ await Promise.all([
     format: "cjs",
     target: "node22",
     external: ["electron"],
+    // Note that main is minified as the renderer is, because V8 parses the
+    // whole bundle before main can answer anything, and a smaller one parses
+    // sooner; its frames read back through the maps the upload stamps.
+    minify: true,
     define: {
       PACKAGED_SENTRY_DSN: JSON.stringify(process.env.SENTRY_DSN ?? ""),
       PACKAGED_SENTRY_RELEASE: JSON.stringify(sentryRelease),
