@@ -438,7 +438,16 @@ export function useAgentActions(
   // renamed then; an archived agent's tab on its task is renamed as a live one's is.
   const manager = agent.kind === AGENT_KIND.MANAGER;
   const renamable = agents.onUnarchive === undefined;
-  const settings = useManagerSettingsDialog(agent, agents, shown);
+  const settings = useManagerSettingsDialog(
+    agent,
+    agents,
+    {
+      archive: agent.archivedAt === undefined ? archive.action : unarchive,
+      archiving: archive.reading,
+      deletion: deletion.action,
+    },
+    shown,
+  );
   const toast = useToast();
   const { onOpenTerminal, onOpenLocal } = terminals;
 
