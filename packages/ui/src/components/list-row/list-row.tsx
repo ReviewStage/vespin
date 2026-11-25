@@ -1175,6 +1175,13 @@ export function ListRow({
         data-ink={ink}
         data-menu-open={menuOpen || rowMenu.open ? "true" : undefined}
         data-depth={depth === 0 ? undefined : depth}
+        // What the row draws beside its words, which its stylesheet reads rather than its children (`list-row.css`).
+        data-opens={press === undefined ? undefined : "true"}
+        data-acts={said(actions) ? "true" : undefined}
+        data-more={moreDrawn ? "true" : undefined}
+        data-fold={fold === undefined ? undefined : "true"}
+        data-end={end === null ? undefined : "true"}
+        data-attachments={said(attachments) ? "true" : undefined}
         onKeyDown={rowMenu.onKeyDown}
         {...withContextMenu(rowMenu.doors, {})}
         // Note that the row stands where its run places it (`VirtualRows`), its depth's own property beside that.
