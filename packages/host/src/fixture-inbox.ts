@@ -2216,9 +2216,11 @@ const MANAGER_THREAD_ROOT = "7b2d40e8";
 /**
  * The release Manager's chat as its rows stand, newest first as the host
  * holds them: the account's ask, then the two messages its turn sent the
- * account, a minute apart, so they stand in one run under the ask; and in
+ * account, a minute apart, so they stand in one run under the ask; in
  * the thread of the first of them, the account's question and the
- * Manager's answer, which the chat sums as "2 replies" under it.
+ * Manager's answer, which the chat sums as "2 replies" under it. First
+ * of all stands a picture the account sent with no words with its ask,
+ * whose own long press opens its thread.
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
@@ -2299,6 +2301,28 @@ const MANAGER_CHAT: AppManagerChat = {
       broadcast: false,
       turnId: MANAGER_TURN,
       lineId: "fixture-manager-ask",
+      createdAt: MANAGER_STARTED,
+      editedAt: null,
+    },
+    {
+      id: "9a41c6d2",
+      clientKey: "fixture-manager-chat-9a41c6d2",
+      seq: 0,
+      authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+      authorUserId: ADA.userId,
+      authorName: ADA.name,
+      text: "",
+      attachments: [
+        {
+          name: "invite-preview.png",
+          mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+          url: `data:image/png;base64,${FIXTURE_PICTURE_PNG}`,
+        },
+      ],
+      threadRoot: null,
+      broadcast: false,
+      turnId: null,
+      lineId: null,
       createdAt: MANAGER_STARTED,
       editedAt: null,
     },

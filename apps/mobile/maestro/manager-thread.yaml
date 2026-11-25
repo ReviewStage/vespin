@@ -1,4 +1,4 @@
-# manager-thread.yaml -- a Manager's chat as a team channel with threads: every message headed by its sender's face and name, the Manager's message the account answered in its thread summing its replies under it ("2 replies"), the thread opened from that summary on its own page (the message it hangs on, a rule counting the replies, the replies), a reply sent there landing in the thread, and Reply in thread from a message's long press opening the thread of a message no one answered yet.
+# manager-thread.yaml -- a Manager's chat as a team channel with threads: every message headed by its sender's face and name, the Manager's message the account answered in its thread summing its replies under it ("2 replies"), the thread opened from that summary on its own page (the message it hangs on, a rule counting the replies, the replies), a reply sent there landing in the thread, and Reply in thread from a message's long press, and from the long press of the picture a message of a picture alone sent, opening the thread of a message no one answered yet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -74,3 +74,20 @@ env:
 - assertVisible: "Left before it ships.*"
 - assertNotVisible: "2 replies"
 - takeScreenshot: manager-thread-empty
+# A message of a picture alone, the account's first, sent with its ask,
+# leads its picture's long press with Reply in thread, as Messages leads a
+# photo's with Reply, which opens its thread.
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "3 replies"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "invite-preview.png"
+    direction: UP
+- longPressOn: "invite-preview.png"
+- tapOn: "Reply in thread"
+- extendedWaitUntil:
+    visible: "Thread"
+    timeout: 10000
+- assertVisible: "invite-preview.png"
+- takeScreenshot: manager-thread-picture

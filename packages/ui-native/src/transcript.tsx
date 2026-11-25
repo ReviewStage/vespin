@@ -44,6 +44,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import {
   CopyWordsMenu,
   type HeldAct,
+  HeldLeadProvider,
   HeldMenu,
   MessageMenu,
   MessageWords,
@@ -313,31 +314,33 @@ function ChannelSaid({
 
   const message = (
     <ChannelMessage sender={sender} faces={faces} opens={!item.joinsAbove} stamp={item.stamp}>
-      {/* Note that a message's pictures name who sent it and when in their viewer's bar. */}
-      <PictureOriginProvider origin={{ by: sender.name, at: item.at }}>
-        <PictureSet
-          atEnd={false}
-          pictures={(item.pictures ?? []).map((picture) => ({
-            key: picture.key,
-            source: picture.url ?? saidSource(drawing, picture.pictureId),
-            alt: picture.name,
-            onRetry:
-              picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
-          }))}
-        />
-      </PictureOriginProvider>
-      {(item.files ?? []).map((file) => (
-        <FileChip
-          key={file.key}
-          atEnd={false}
-          held={file.base64 !== undefined}
-          name={file.name}
-          mediaType={file.mediaType}
-          source={sentFileSource(drawing, item.place.row, file)}
-          size={file.size}
-          onRetry={sentFileRetry(drawing, item.place.row, file)}
-        />
-      ))}
+      {/* Note that a message's pictures name who sent it and when in their viewer's bar, and each of them and its files leads its long press with Reply in thread, as Messages leads a photo's with Reply, so a message of files alone opens its thread too. */}
+      <HeldLeadProvider acts={threadAct}>
+        <PictureOriginProvider origin={{ by: sender.name, at: item.at }}>
+          <PictureSet
+            atEnd={false}
+            pictures={(item.pictures ?? []).map((picture) => ({
+              key: picture.key,
+              source: picture.url ?? saidSource(drawing, picture.pictureId),
+              alt: picture.name,
+              onRetry:
+                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+            }))}
+          />
+        </PictureOriginProvider>
+        {(item.files ?? []).map((file) => (
+          <FileChip
+            key={file.key}
+            atEnd={false}
+            held={file.base64 !== undefined}
+            name={file.name}
+            mediaType={file.mediaType}
+            source={sentFileSource(drawing, item.place.row, file)}
+            size={file.size}
+            onRetry={sentFileRetry(drawing, item.place.row, file)}
+          />
+        ))}
+      </HeldLeadProvider>
       {/* Note that a message of files alone, or of what the Manager showed alone, draws no words under them. */}
       {wordless ? null : (
         <MessageMenu

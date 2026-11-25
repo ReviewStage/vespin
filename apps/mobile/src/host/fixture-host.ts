@@ -301,6 +301,9 @@ const NO_KEPT_SENDS: ReadonlyMap<string, readonly SendingMessage[]> = new Map();
 /** The messages and thread replies the run sent a Manager's chat, by the Manager, oldest first, each as the row the chat lands it as. */
 const KEPT_CHAT = new WeakMap<object, ReadonlyMap<string, readonly ManagerChatLiveMessage[]>>();
 
+/** Where the sequence of the messages the run sends a Manager's chat starts, past every row the fixture stages, so each lands newest, as the chat orders its rows. */
+const SENT_CHAT_SEQ = 1_000_000;
+
 /** No message sent a Manager's chat. */
 const NO_KEPT_CHAT: ReadonlyMap<string, readonly ManagerChatLiveMessage[]> = new Map();
 
@@ -325,7 +328,7 @@ function keepChatSend(
   const row: ManagerChatLiveMessage = {
     id: sent.clientKey,
     clientKey: sent.clientKey,
-    seq: Number.MAX_SAFE_INTEGER - rows.length,
+    seq: SENT_CHAT_SEQ + rows.length,
     authorKind: MANAGER_CHAT_AUTHOR.PERSON,
     authorUserId: signedInAccountId(account) ?? null,
     authorName: account.status === ACCOUNT_STATUS.SIGNED_IN ? (account.name ?? "") : "",
