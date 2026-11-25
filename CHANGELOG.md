@@ -74,6 +74,84 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.41.0 — 2026-11-24
+
+### One switch for your usage data
+
+Settings › Account's Share usage data now also turns off session replay and
+crash reports on that Mac or browser, and setup says what Vespin sends, with
+the switch right there. Feature counts and crash reports no longer carry your
+name or email.
+
+[#10806](https://github.com/ReviewStage/vespin/pull/10806),
+[#10811](https://github.com/ReviewStage/vespin/pull/10811),
+[#10808](https://github.com/ReviewStage/vespin/pull/10808),
+[#10810](https://github.com/ReviewStage/vespin/pull/10810),
+[#10809](https://github.com/ReviewStage/vespin/pull/10809)
+
+### Improvements
+
+- Opening a task and switching between tasks is faster
+  ([#10337](https://github.com/ReviewStage/vespin/pull/10337),
+  [#10349](https://github.com/ReviewStage/vespin/pull/10349),
+  [#10344](https://github.com/ReviewStage/vespin/pull/10344),
+  [#10317](https://github.com/ReviewStage/vespin/pull/10317),
+  [#10275](https://github.com/ReviewStage/vespin/pull/10275),
+  [#10264](https://github.com/ReviewStage/vespin/pull/10264))
+- Toasts name the task, agent, or pull request they're about as a chip
+  ([#10597](https://github.com/ReviewStage/vespin/pull/10597))
+- Order Automations by name, last run, or next run from View options
+  ([#10591](https://github.com/ReviewStage/vespin/pull/10591))
+- One-time automations that already ran fold under Finished
+  ([#10493](https://github.com/ReviewStage/vespin/pull/10493))
+- Owners and admins can take over an automation whose creator left
+  ([#10248](https://github.com/ReviewStage/vespin/pull/10248),
+  [#10242](https://github.com/ReviewStage/vespin/pull/10242),
+  [#10266](https://github.com/ReviewStage/vespin/pull/10266))
+- A teammate's agent's box says whose agent you're writing to
+  ([#10249](https://github.com/ReviewStage/vespin/pull/10249))
+- Copy message keeps its pictures when you paste it into a message box
+  ([#10762](https://github.com/ReviewStage/vespin/pull/10762))
+- Repository admins blocked by a required review get Merge on GitHub
+  ([#10671](https://github.com/ReviewStage/vespin/pull/10671))
+
+### Fixes
+
+- Fixed a removed member's agents running on and threads waiting on them
+  ([#10243](https://github.com/ReviewStage/vespin/pull/10243),
+  [#10241](https://github.com/ReviewStage/vespin/pull/10241),
+  [#10245](https://github.com/ReviewStage/vespin/pull/10245))
+- Fixed messages sent while an agent's turn was cut off getting lost
+  ([#10761](https://github.com/ReviewStage/vespin/pull/10761),
+  [#10764](https://github.com/ReviewStage/vespin/pull/10764),
+  [#10775](https://github.com/ReviewStage/vespin/pull/10775))
+- Fixed agents moving off a Claude Code or Codex plan that still had room
+  ([#10825](https://github.com/ReviewStage/vespin/pull/10825),
+  [#10826](https://github.com/ReviewStage/vespin/pull/10826))
+- Fixed a starter card wiping what you'd typed in New task
+  ([#10534](https://github.com/ReviewStage/vespin/pull/10534))
+- Fixed a Mac agent asking for a key its Mac's own sign-in covers
+  ([#10270](https://github.com/ReviewStage/vespin/pull/10270))
+- Fixed a reloaded task page on the web stuck on "Reading the task"
+  ([#10526](https://github.com/ReviewStage/vespin/pull/10526))
+- Fixed the window flickering at setup when models couldn't load
+  ([#10517](https://github.com/ReviewStage/vespin/pull/10517))
+- Fixed quick ⌃⌥↑ and ⌃⌥↓ presses moving fewer rows than pressed
+  ([#10306](https://github.com/ReviewStage/vespin/pull/10306))
+- Fixed diagrams not opening full screen with a mouse
+  ([#10497](https://github.com/ReviewStage/vespin/pull/10497))
+- Fixed a draft pull request saying "Ready to merge"
+  ([#10301](https://github.com/ReviewStage/vespin/pull/10301))
+- Fixed "[Picture 1]" typed as words turning into a picture
+  ([#10765](https://github.com/ReviewStage/vespin/pull/10765))
+- Fixed pictures stuttering as they open on large displays
+  ([#10536](https://github.com/ReviewStage/vespin/pull/10536))
+- Fixed transcript and settings rows sitting off their neighbors' line
+  ([#10760](https://github.com/ReviewStage/vespin/pull/10760),
+  [#10758](https://github.com/ReviewStage/vespin/pull/10758),
+  [#10646](https://github.com/ReviewStage/vespin/pull/10646),
+  [#10615](https://github.com/ReviewStage/vespin/pull/10615))
+
 ## 0.40.0 — 2026-11-20
 
 ### Vespin in Slack
