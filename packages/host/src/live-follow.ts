@@ -61,7 +61,11 @@ import {
  * items are, is asked past the id its last answer named, and answered only
  * what moved since, with the ids of rows that stand no longer for the
  * reader, or whole where it is too far behind (`SyncStanding`); an id that
- * stalls is answered around (`SYNC_STALL`).
+ * stalls is answered around (`SYNC_STALL`). A whole answer may come in
+ * pages, each naming the next (`LIVE_POLL.PAGE`), which is asked at once,
+ * and a failed one again; a read whose rows the caller takes hands each page
+ * on as rows joined onto those held and the last as the one that lets go
+ * every row no page carried (`followTakingRows`).
  */
 
 /**
@@ -111,10 +115,25 @@ const LIVE_POLL_FLOOR = Duration.millis(500);
 /** The least time after an answer a write woke before the next poll: the 100 ms the service gathers a burst of writes into one answer for. */
 const LIVE_POLL_WOKEN_FLOOR = Duration.millis(100);
 
-/** The wait before each poll after the first, by whether the answer before it was one a write woke. */
+/** What the answer before a poll says of when to ask it: after the floor, after a write's coalesce window, or at once, for the next page of a whole answer. */
+const POLL_AFTER = {
+  FLOOR: "floor",
+  WOKEN: "woken",
+  AT_ONCE: "at-once",
+} as const;
+
+type PollAfter = (typeof POLL_AFTER)[keyof typeof POLL_AFTER];
+
+/** The wait before each poll after the first, by what the answer before it says (`POLL_AFTER`). */
 const POLL_SPACING = Schedule.spaced(LIVE_POLL_FLOOR).pipe(
-  Schedule.modifyDelay(({ input, duration }) =>
-    Effect.succeed(input === true ? LIVE_POLL_WOKEN_FLOOR : duration),
+  Schedule.modifyDelay(({ input, duration }: { input: PollAfter; duration: Duration.Duration }) =>
+    Effect.succeed(
+      input === POLL_AFTER.AT_ONCE
+        ? Duration.zero
+        : input === POLL_AFTER.WOKEN
+          ? LIVE_POLL_WOKEN_FLOOR
+          : duration,
+    ),
   ),
 );
 
@@ -205,11 +224,22 @@ export type TxWait = (txid: string, timeout: Duration.Duration) => Effect.Effect
  * Where an answer of a read followed by sync id stands: the id its rows
  * were read past, none where they are whole; the id to read past next; and
  * the ids of the rows that stand no longer for the reader, every part's.
+ *
+ * A page of a whole answer is taken as rows joined onto those held, as a
+ * delta's are, past `""`, letting none go; one before the last names no id
+ * to read past (`""`), since the reader holds every row at the answer's
+ * only once the last is joined on, and the last names it, with every row's
+ * key the pages carried (`carried`), and the reader lets go each row it
+ * holds that is not among them (`followTakingRows`). Every page says it is
+ * one (`paged`), for a reader that keeps its rows where it cannot list them
+ * and lets go those an older whole answer stamped instead.
  */
 export interface SyncStanding {
   readonly past: string | undefined;
   readonly next: string;
   readonly gone: readonly string[];
+  readonly paged?: true;
+  readonly carried?: ReadonlySet<string>;
 }
 
 /** Where an answer stands by sync id; none for an answer of a read not followed by one, or asked whole without one. */
@@ -226,6 +256,12 @@ export function syncStandingOf<Part extends string>(
     next: answered.next,
     gone: [...new Set(parts.flatMap((query) => query.gone ?? []))],
   };
+}
+
+/** The page of a whole answer an answer names to ask for next; none for its last page, and for any other answer. */
+function pageOf<Part extends string>(read: SealedRead<Part>): string | undefined {
+  return Object.values<SealedLiveQueryWire>(read.queries).find((query) => query.sync?.page)?.sync
+    ?.page;
 }
 
 /** The sync id an answer was read at, as the host compares one, from the decimal it spells; none where it spells none. */
@@ -245,7 +281,8 @@ export interface LiveFollowDependencies<Part extends string> {
    * service until the rows move past `after` (`liveDigestOf`), its cursor
    * parts past `cursor`, the one its last answer named, where it has any,
    * and, for a read followed by sync id, past `sync`, the id its last answer
-   * named, or whole where none is given, as after a stall; a failure where
+   * named, or whole where none is given, as after a stall, or the page of a
+   * whole answer the last answer named (`page`); a failure where
    * the service answered none, asked again a second later, or `gone` where
    * the read names nothing the account reaches any more, which stops the
    * follow.
@@ -254,6 +291,7 @@ export interface LiveFollowDependencies<Part extends string> {
     after: string | undefined,
     cursor?: string,
     sync?: string,
+    page?: string,
   ) => Effect.Effect<SealedRead<Part> | LiveFailure>;
   /**
    * Hears the read's wait for a write's transaction once an answer carried
@@ -528,7 +566,7 @@ function liveAnswers<Part extends string>(
         }),
       );
 
-      /** Hands the answer's rows on, then its snapshots and its txids, answering whether a write woke it. */
+      /** Hands the answer's rows on, then its snapshots and its txids, answering when to ask again: at once for a page of a whole answer, sooner where a write woke it. */
       const answered = (read: SealedRead<Part>) =>
         Effect.gen(function* () {
           const rows = rowsOf(parts, read);
@@ -546,7 +584,9 @@ function liveAnswers<Part extends string>(
             dependencies.onTxWait?.(confirmations.wait);
           }
 
-          return txids.length > 0;
+          if (pageOf(read) !== undefined) return POLL_AFTER.AT_ONCE;
+
+          return txids.length > 0 ? POLL_AFTER.WOKEN : POLL_AFTER.FLOOR;
         });
 
       const standing = (queries: SealedRead<Part>["queries"]) =>
@@ -560,7 +600,9 @@ function liveAnswers<Part extends string>(
       let cursor = cursorOf(first);
       /** The sync id the last answer named, past which the next poll reads; kept through a failed poll, and a whole answer that names none. */
       let sync = syncStandingOf(first)?.next;
-      /** When the sync id last moved, or a stall was last asked around, by the host's clock. */
+      /** The page of a whole answer the last answer named, asked for next; kept through a failed poll, which asks for it again. */
+      let page = pageOf(first);
+      /** When the sync id last moved, a page was answered, or a stall was last asked around, by the host's clock. */
       let syncMovedAt = yield* Clock.currentTimeMillis;
       /** How many polls have failed in a row since the last answer. */
       let failures = 0;
@@ -568,10 +610,15 @@ function liveAnswers<Part extends string>(
 
       const pollOnce = Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
-        const stalled = sync !== undefined && now - syncMovedAt > Duration.toMillis(SYNC_STALL);
+
+        // Note that a whole answer read a page at a time stands at one id until its last page, which no stall asks around, since that would ask its first page again.
+        const stalled =
+          page === undefined &&
+          sync !== undefined &&
+          now - syncMovedAt > Duration.toMillis(SYNC_STALL);
 
         if (stalled) syncMovedAt = now;
-        const read = yield* dependencies.poll(seen, cursor, stalled ? undefined : sync);
+        const read = yield* dependencies.poll(seen, cursor, stalled ? undefined : sync, page);
 
         if ("failure" in read) {
           if (ended(read)) {
@@ -595,8 +642,10 @@ function liveAnswers<Part extends string>(
         seen = standing(read.queries) ?? seen;
         cursor = cursorOf(read) ?? cursor;
         const next = syncStandingOf(read)?.next;
+        const paged = page !== undefined;
+        page = pageOf(read);
 
-        if (next !== undefined && next !== sync) {
+        if (next !== undefined && (next !== sync || paged)) {
           sync = next;
           syncMovedAt = yield* Clock.currentTimeMillis;
         }
@@ -681,7 +730,10 @@ export function followTakingRows<
       after: string | undefined,
       cursor?: string,
       sync?: string,
+      page?: string,
     ) => Effect.Effect<Read | LiveFailure>;
+    /** The key of every row an answer carries, of a read whose whole answer may come in pages, so its last page lets go each row held that no page carried. */
+    readonly keysOf?: (rows: Rows) => Iterable<string>;
   },
   first: Read,
   schema: Schema.Decoder<Rows>,
@@ -689,6 +741,24 @@ export function followTakingRows<
 ): Effect.Effect<void, LiveBroken> {
   const decode = Schema.decodeUnknownOption(schema);
   const parts = Object.keys(first.queries).filter((part): part is Part => part in first.queries);
+  /** The keys of the rows the pages of a whole answer carried so far; none between whole answers in pages. */
+  let paging: Set<string> | undefined;
+
+  /** Where an answer stands for its taker: as it says, or, for a page of a whole answer, joined on, the last with every row's key the pages carried (`SyncStanding`). */
+  const standingOf = (read: Read, rows: Rows): SyncStanding | undefined => {
+    const said = syncStandingOf(read);
+    const page = pageOf(read);
+
+    if (said === undefined || (page === undefined && paging === undefined)) return said;
+    const carried = paging ?? new Set<string>();
+
+    for (const key of dependencies.keysOf?.(rows) ?? []) carried.add(key);
+    paging = page === undefined ? undefined : carried;
+
+    return page === undefined
+      ? { past: "", next: said.next, gone: [], paged: true, carried }
+      : { past: "", next: "", gone: [], paged: true };
+  };
 
   /** Takes the answer's rows where it carries them, answering whether they decoded. */
   const taken = (read: Read) => {
@@ -698,15 +768,15 @@ export function followTakingRows<
 
     return Option.match(decode(carried), {
       onNone: () => Effect.succeed(false),
-      onSome: (rows) => Effect.as(take(rows, syncStandingOf(read), read), true),
+      onSome: (rows) => Effect.as(take(rows, standingOf(read, rows), read), true),
     });
   };
 
   return Effect.gen(function* () {
     if (!(yield* taken(first))) return yield* new LiveBroken({ reason: "a row did not decode" });
 
-    const poll: LiveFollowDependencies<Part>["poll"] = (after, cursor, sync) =>
-      Effect.flatMap(dependencies.poll(after, cursor, sync), (read) =>
+    const poll: LiveFollowDependencies<Part>["poll"] = (after, cursor, sync, page) =>
+      Effect.flatMap(dependencies.poll(after, cursor, sync, page), (read) =>
         "failure" in read
           ? Effect.succeed(read)
           : Effect.map(taken(read), (decoded) =>

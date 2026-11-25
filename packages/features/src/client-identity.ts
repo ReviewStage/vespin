@@ -35,8 +35,11 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
  * (`storedToolName`) once the floor reaches 8. An iOS build from 9 on opens a
  * thread's push that names no task, a Manager's, on the thread in its Inbox,
  * so a service may push one to a phone that registered at 9 or later alone.
+ * A build from 10 on reads a delta read's whole answer in pages
+ * (`LIVE_POLL.PAGE`), so a service may answer one so to it alone until the
+ * floor passes 9.
  */
-export const HOSTED_API_VERSION = 9;
+export const HOSTED_API_VERSION = 10;
 
 /** The headers a client names itself in: which app and version, as `platform/version`, and the hosted API version it was built against. */
 export const CLIENT_HEADER = {

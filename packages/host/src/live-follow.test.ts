@@ -491,3 +491,81 @@ it.effect(
       yield* Fiber.interrupt(following);
     }),
 );
+
+/** A page of a whole answer as the service answers it: `left`'s rows by their ids, the id every page names, and the page after it where one is named. */
+function pageRead(ids: readonly string[], page?: string): SealedRead<Part> {
+  const sync = { next: "50", ...(page === undefined ? undefined : { page }) };
+
+  return {
+    url: LIVE_POLL_URL,
+    queries: {
+      left: { ...sealed("left"), rows: ids.map((id) => ({ id })), sync },
+      right: { ...sealed("right"), rows: [], sync },
+    },
+  };
+}
+
+const PageRows = Schema.Struct({
+  left: Schema.Array(Schema.Struct({ id: Schema.String })),
+  right: Schema.Array(Schema.Unknown),
+});
+
+it.effect(
+  "a whole answer in pages is asked a page after another at once, again where one fails however long it takes, each taken as rows joined on, the last with every key the pages carried and the id to read past next",
+  () =>
+    Effect.gen(function* () {
+      const asked: (readonly [string | undefined, string | undefined])[] = [];
+      const taken: unknown[] = [];
+
+      const poll = (_after: string | undefined, _cursor?: string, sync?: string, page?: string) =>
+        Effect.gen(function* () {
+          asked.push([sync, page]);
+
+          if (page === "p2") return pageRead(["b"], "p3");
+
+          // Note that the last page fails until the clock passes a stall's thirty seconds, so a stall that asked around it would ask whole.
+          if (page === "p3") {
+            return (yield* Clock.currentTimeMillis) < 40_000
+              ? { failure: "unavailable" }
+              : pageRead(["c"]);
+          }
+
+          return pageRead([]);
+        });
+
+      const following = yield* Effect.forkChild(
+        followTakingRows<Part, typeof PageRows.Type>(
+          { poll, keysOf: (rows) => rows.left.map((row) => row.id) },
+          pageRead(["a"], "p2"),
+          PageRows,
+          (_rows, standing) => Effect.sync(() => void taken.push(standing)),
+        ),
+      );
+
+      yield* settled;
+      assert.deepEqual(asked.slice(0, 2), [
+        ["50", "p2"],
+        ["50", "p3"],
+      ]);
+
+      for (let second = 0; second < 45; second += 1) {
+        yield* TestClock.adjust(Duration.seconds(1));
+        yield* settled;
+      }
+
+      const lastPage = asked.findLastIndex(([, page]) => page === "p3");
+      assert.ok(
+        asked.slice(1, lastPage + 1).every(([sync, page]) => sync === "50" && page === "p3"),
+        "every ask until the last page answers asks for it",
+      );
+      assert.deepEqual(asked[lastPage + 1], ["50", undefined]);
+
+      assert.deepEqual(taken.slice(0, 4), [
+        { past: "", next: "", gone: [], paged: true },
+        { past: "", next: "", gone: [], paged: true },
+        { past: "", next: "50", gone: [], paged: true, carried: new Set(["a", "b", "c"]) },
+        { past: undefined, next: "50", gone: [] },
+      ]);
+      yield* Fiber.interrupt(following);
+    }),
+);
