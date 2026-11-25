@@ -61,6 +61,7 @@ import {
   pageTab,
   STRIP_TAB_KIND,
   subagentTab,
+  threadTab,
 } from "@repo/ui/tab-strip-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { createMemoryHistory } from "@tanstack/react-router";
@@ -3282,17 +3283,33 @@ test("a person's page is theirs in the workspace it opened in: another listed in
   assert.equal(views?.person.userId, "user-maya");
 });
 
-test("an agent's page on no task, as a Manager's, gives way to the home page of another workspace chosen in its place", async () => {
-  const tab = mount({ shown: true, tasks: TWO_WORKSPACES }, OPENS);
+test("a Manager's page, its thread open beside it, gives way to the home page of another workspace chosen, whatever was last open there", async () => {
+  const three = [PERSONAL, ACME, PLATFORM];
 
+  const tab = mount(
+    { shown: true, tasks: { ...TWO_WORKSPACES, workspaces: three, activeTaskId: "alerts" } },
+    OPENS,
+  );
+
+  tab.stand({ tasks: { ...TWO_WORKSPACES, workspaces: three, activeTaskId: "notes" } });
   act(() => tab.control().agentView.onOpen("manager-1"));
-  const opened = tab.control().agentView.agentId;
+  await settle();
+  act(() => tab.control().sidePanel.onOpen(threadTab("thread-1", "manager-1")));
+  const opened = { agent: tab.control().agentView.agentId, beside: tab.control().sidePanel.tab };
+  const opensBefore = opensAsked(tab.payloads).length;
   act(() => tab.control().onChooseWorkspace(ACME.id));
   await settle();
 
-  assert.equal(opened, "manager-1");
+  assert.deepEqual(opened, { agent: "manager-1", beside: threadTab("thread-1", "manager-1") });
   assert.equal(tab.control().workspace?.id, ACME.id);
   assert.equal(tab.control().agentView.agentId, undefined);
+  assert.deepEqual(
+    opensAsked(tab.payloads).slice(opensBefore),
+    [],
+    "the task last open there stays shut",
+  );
+  assert.equal(tab.at(), "/acme");
+  assert.notDeepEqual(tab.control().sidePanel.tab, threadTab("thread-1", "manager-1"));
 });
 
 test("a person's page opened in another workspace lists it without reopening its last plan, so no refused reopen takes the page with it", async () => {
