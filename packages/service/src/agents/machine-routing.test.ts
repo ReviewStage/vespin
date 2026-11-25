@@ -9,7 +9,10 @@
  * on, and a local agent's own machine always counts for it but takes none
  * of its terminal commands. A shell command never goes to a machine set to
  * Never. Where none of the owner's machines listens but a Mac from before
- * machines claimed does, the call goes to the account.
+ * machines claimed does, the call goes to the account. A Manager, an agent
+ * on no task, reaches its own followers' machines as a task's agent reaches
+ * the task's, and with no pick sends a call to the default machine of the
+ * member who asked for its turn, where they let it.
  *
  * Synthetic accounts, workspaces, and machines throughout.
  */
@@ -18,21 +21,27 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { followAgent, setAgentFollowerMachines } from "@repo/database/models/agent-follower-store";
+import { createAgent } from "@repo/database/models/agent-store";
 import { changeMachine, registerDevice } from "@repo/database/models/device-store";
 import { markMachineListening } from "@repo/database/models/machine-command-store";
 import { followTask, setFollowerMachines } from "@repo/database/models/task-follower-store";
 import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
+import { agentFollower } from "@repo/database/schemas/agent-follower";
 import { user } from "@repo/database/schemas/auth";
 import { device } from "@repo/database/schemas/device";
 import { task } from "@repo/database/schemas/task";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   DEVICE_LAYOUT,
   getTestDB,
   joinWorkspace,
+  openRunningTurn,
   openTaskAgent,
   openWorkspace,
 } from "@repo/database/testing";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   MACHINE_COMMAND_KIND,
@@ -42,7 +51,7 @@ import {
   type MachineCommandMode,
 } from "@repo/features/machine-command-wire";
 import { eq } from "drizzle-orm";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { defaultMachinesOf, MACHINE_ROUTE, type MachineRoute, routeOf } from "./machine-routing.js";
 
 const NO_MACHINE = "Not run: no machine can take it.";
@@ -74,6 +83,27 @@ const openPeople = Effect.gen(function* () {
 
   return { owner, teammate, workspace, taskId, agentId, target };
 });
+
+/** A Manager the owner started in the workspace, on no task; its id and the conversation its calls are made in. */
+const openManager = (owner: string, workspace: string) =>
+  Effect.gen(function* () {
+    const started = yield* createAgent(owner, {
+      taskId: null,
+      workspaceId: workspace,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: null,
+      descriptionSnapshot: null,
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      kind: AGENT_KIND.MANAGER,
+    });
+
+    const { id, conversationId } = Option.getOrThrow(started).agent;
+
+    return { managerId: id, target: { userId: owner, conversationId } };
+  });
 
 /** How many machines joined so far, so each joins after the last and the first is the default until another is picked. */
 let joined = 0;
@@ -188,7 +218,7 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         assert.deepEqual(yield* route(target, {}), {
           kind: MACHINE_ROUTE.REFUSED,
           reason:
-            "Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. Carry on with what you can do without it. It could go to Laptop (Ana), once a member makes one this agent's machine from its composer or this call's card.",
+            "Not run: this agent's default machine was removed, or its owner no longer lets this task's or Manager's agents use it. Carry on with what you can do without it. It could go to Laptop (Ana), once a member makes one this agent's machine from its composer or this call's card.",
           why: MACHINE_UNREACHED.DEFAULT_GONE,
           others: [toLaptop.machine],
         });
@@ -216,8 +246,80 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         assert.match(shell.kind === MACHINE_ROUTE.REFUSED ? shell.reason : "", /set to Never/u);
         assert.match(
           switchedOff.kind === MACHINE_ROUTE.REFUSED ? switchedOff.reason : "",
-          /^Not run: Ben doesn't let this task's agents use their machines\./u,
+          /^Not run: Ben doesn't let this task's or Manager's agents use their machines\./u,
         );
+      }),
+  );
+
+  it.effect(
+    "a Manager's call reaches a follower's machine while their switch is on, and never a machine of a member who does not follow it or of someone outside its workspace",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, workspace } = yield* openPeople;
+        const { managerId, target } = yield* openManager(owner, workspace);
+        const outsider = `user-${randomUUID()}`;
+        yield* Database.use((db) =>
+          db.insert(user).values({ id: outsider, name: "Eve", email: `${outsider}@app.test` }),
+        );
+        yield* openWorkspace(outsider);
+        const bens = yield* openMachine(teammate, "Studio", true);
+        const eves = yield* openMachine(outsider, "Mini", true);
+        // Note that a row naming someone outside the workspace is written beneath the store, which never adds one, so only the read's own gate keeps it out.
+        yield* Database.use((db) =>
+          db.insert(agentFollower).values({ agentId: managerId, userId: outsider, machines: true }),
+        );
+
+        yield* setAgent(managerId, { targetDeviceId: bens });
+        const notFollowing = yield* route(target, {});
+        yield* followAgent(teammate, { agentId: managerId, followerId: teammate, machines: false });
+        const switchedOff = yield* route(target, {});
+        yield* setAgentFollowerMachines(teammate, managerId, true);
+        const following = yield* route(target, {});
+        yield* setAgent(managerId, { targetDeviceId: eves });
+        const outside = yield* route(target, {});
+
+        const why = (route: MachineRoute) =>
+          route.kind === MACHINE_ROUTE.REFUSED ? route.why : undefined;
+
+        assert.equal(why(notFollowing), MACHINE_UNREACHED.DEFAULT_GONE);
+        assert.equal(why(switchedOff), MACHINE_UNREACHED.NOT_LET);
+        assert.deepEqual(following, {
+          kind: MACHINE_ROUTE.MACHINE,
+          machine: { id: bens, name: "Studio", owner: { userId: teammate, name: "Ben" } },
+        });
+        assert.equal(why(outside), MACHINE_UNREACHED.DEFAULT_GONE);
+        assert.deepEqual(
+          (yield* defaultMachinesOf(target)).map(({ id }) => id),
+          [bens],
+          "the composer's list offers the follower's machine alone",
+        );
+      }),
+  );
+
+  it.effect(
+    "a Manager's call with no pick goes to the default machine of the member whose line opened the turn, and to the owner's for a turn an automation opened or an asker whose switch is off",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, workspace } = yield* openPeople;
+        const { managerId, target } = yield* openManager(owner, workspace);
+        const anas = yield* openMachine(owner, "Laptop", true);
+        const bens = yield* openMachine(teammate, "Studio", true);
+        yield* followAgent(teammate, { agentId: managerId, followerId: teammate, machines: true });
+
+        const machineOf = (route: MachineRoute) =>
+          route.kind === MACHINE_ROUTE.MACHINE ? route.machine.id : undefined;
+
+        yield* openRunningTurn(target, [{ member: teammate }]);
+        const benAsks = yield* route(target, {});
+        yield* openRunningTurn(target, [{ automation: "Nightly triage" }]);
+        const automationAsks = yield* route(target, {});
+        yield* openRunningTurn(target, [{ member: teammate }]);
+        yield* setAgentFollowerMachines(teammate, managerId, false);
+        const switchedOff = yield* route(target, {});
+
+        assert.equal(machineOf(benAsks), bens);
+        assert.equal(machineOf(automationAsks), anas);
+        assert.equal(machineOf(switchedOff), anas);
       }),
   );
 

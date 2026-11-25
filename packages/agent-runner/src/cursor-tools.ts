@@ -8,9 +8,12 @@
  * the launch opens, its tools handed the SDK under the name Claude Code
  * knows them by, `mcp__<server>__<tool>`, which is also the name the
  * service keeps a call under, and each call is posted to the server as
- * `tools/call` and its answer handed back. Our own server is listed before
- * the first message is sent; an integration's in the background, its tools
- * joining from the next message on, so a slow provider holds up no turn.
+ * `tools/call` and its answer handed back. A server the launch waits on
+ * (`MCP_STARTUP.REQUIRED`, ours) is listed before the first message is sent;
+ * one connected in the background (an integration's) is listed beside it,
+ * its tools joining from the next message on, so a slow provider holds up no
+ * turn. Each is listed within its own startup bound, as the other harnesses
+ * wait on a server to start.
  * Note that a server's own instructions, which name the account an
  * integration is, lead each of its tools' descriptions, since a custom tool
  * has no server to carry them.
@@ -40,13 +43,13 @@ import {
 } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import type { McpServer } from "./mcp-servers.js";
+import { MCP_STARTUP, type McpServer } from "./mcp-servers.js";
 
 /** The protocol version the runner speaks to our servers, one they speak (`workspace-mcp/app.ts`'s `WORKSPACE_MCP_PROTOCOL_VERSIONS`). */
 const PROTOCOL_VERSION = "2025-06-18";
 
-/** How long listing a server's tools may take before the launch goes on without them. */
-const LIST_TIMEOUT = Duration.seconds(20);
+/** How long listing the tools of a server that names no startup bound may take before the launch goes on without them, in seconds. */
+const LIST_TIMEOUT_SECONDS = 20;
 
 /** The most pages of tools one server is read for. */
 const LIST_PAGES = 20;
@@ -201,7 +204,7 @@ interface PendingCall {
   readonly answer: (result: SDKCustomToolResult) => void;
 }
 
-/** One server's tools, every page of them, and its instructions; none where it could not be listed within `LIST_TIMEOUT`. */
+/** One server's tools, every page of them, and its instructions; fails where they could not be read. */
 const listServer = Effect.fn("agent-runner/cursor/listServer")(function* (
   server: McpServer,
   bearer: Redacted.Redacted,
@@ -234,7 +237,7 @@ const listServer = Effect.fn("agent-runner/cursor/listServer")(function* (
 /** The launch's custom tools, as they stand: those of every server listed so far. */
 export interface CursorTools {
   readonly current: () => Record<string, SDKCustomTool>;
-  /** Settles once our own server is listed, or could not be, so the first message is sent with its tools. */
+  /** Settles once every server the launch waits on is listed, or could not be, so the first message is sent with their tools. */
   readonly ready: Effect.Effect<void>;
 }
 
@@ -280,7 +283,7 @@ export const openCursorTools = Effect.fn("agent-runner/cursor/openCursorTools")(
 
   const listing = servers.map((server) =>
     listServer(server, bearer).pipe(
-      Effect.timeout(LIST_TIMEOUT),
+      Effect.timeout(Duration.seconds(server.startupTimeoutSeconds ?? LIST_TIMEOUT_SECONDS)),
       Effect.tap(({ tools, instructions }) =>
         Effect.sync(() => {
           for (const tool of tools) {
@@ -295,10 +298,11 @@ export const openCursorTools = Effect.fn("agent-runner/cursor/openCursorTools")(
     ),
   );
 
-  const [ours] = yield* Effect.forEach(listing, (list) => Effect.forkScoped(list));
+  const fibers = yield* Effect.forEach(listing, (list) => Effect.forkScoped(list));
+  const required = fibers.filter((_, at) => servers[at]?.startup === MCP_STARTUP.REQUIRED);
 
   return {
     current: () => ({ ...listed }),
-    ready: ours === undefined ? Effect.void : Effect.asVoid(Fiber.await(ours)),
+    ready: Effect.asVoid(Fiber.awaitAll(required)),
   } satisfies CursorTools;
 });

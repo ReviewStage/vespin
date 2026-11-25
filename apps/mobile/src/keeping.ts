@@ -22,6 +22,7 @@
  */
 
 import type { DraftCopy } from "@repo/features/draft-text";
+import { sniffImageType } from "@repo/features/image-signature";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   BUZZ,
@@ -33,12 +34,14 @@ import {
   type Keeping,
   type Kept,
   NOTICE_KIND,
+  pictureExtension,
   useFailureNotices,
   type ViewedPicture,
 } from "@repo/ui-native";
 import { setImageAsync, setStringAsync } from "expo-clipboard";
 import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
-import { Directory, File, Paths } from "expo-file-system";
+import { Directory, File, FileMode, Paths } from "expo-file-system";
+import { Image } from "expo-image";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { useMemo } from "react";
 import { Share } from "react-native";
@@ -83,6 +86,12 @@ const WEB_ADDRESS = /^https?:\/\//iu;
 
 /** The scheme of a file the app already wrote, which Quick Look reads as it is. */
 const FILE_ADDRESS = "file://";
+
+/** The folder prefix a picture the image loader keeps stands under once named for what it is, as Photos and the share sheet read it. */
+const LOADER_PREFIX = "loaded";
+
+/** How many of a picture's first bytes say what kind of picture it is. */
+const SIGNATURE_BYTES = 16;
 
 /** Photos refused the app's add-only access. */
 class PhotosRefused extends Error {}
@@ -218,9 +227,13 @@ async function opened(kept: Kept): Promise<void> {
  * the same of UIKit and shares it where refused too.
  */
 async function viewed(pictures: readonly ViewedPicture[], index: number): Promise<void> {
+  const files = await Promise.all(
+    pictures.map((picture) => loaderPicture(picture.source, picture.title)),
+  );
+
   const shown = await pictureViewerModule.show(
-    pictures.map((picture) => ({
-      uri: picture.source,
+    pictures.map((picture, at) => ({
+      uri: files[at] ?? picture.source,
       ...picture.place,
       title: picture.title,
       subtitle: picture.subtitle ?? null,
@@ -231,8 +244,53 @@ async function viewed(pictures: readonly ViewedPicture[], index: number): Promis
   const pressed = pictures[index];
 
   if (!shown && pressed !== undefined) {
-    await opened({ kind: KEPT_KIND.PICTURE, source: pressed.source, name: pressed.title });
+    await opened({
+      kind: KEPT_KIND.PICTURE,
+      source: files[index] ?? pressed.source,
+      name: pressed.title,
+    });
   }
+}
+
+/**
+ * The file a picture drawn from a web address is read from: the one the
+ * image loader keeps for it, as every picture of the service's is drawn
+ * (`use-agent-pictures.tsx`), copied once under a name of what it shows and
+ * its kind's extension, since the loader's own file is named by a digest
+ * with none, which Photos and the share sheet read no kind from; the address
+ * as it is where the loader keeps none, as for any other address.
+ */
+async function loaderPicture(source: string, name: string): Promise<string> {
+  if (!WEB_ADDRESS.test(source)) return source;
+  const path = await Image.getCachePathAsync(source);
+
+  if (path === null) return source;
+  const cached = new File(`${FILE_ADDRESS}${path}`);
+  const handle = cached.open(FileMode.ReadOnly);
+  const head = await handle.readBytes(SIGNATURE_BYTES).finally(() => handle.close());
+  const type = sniffImageType(head);
+  const extension = type === undefined ? undefined : pictureExtension(type);
+
+  if (extension === undefined) return cached.uri;
+  const digest = await digestStringAsync(CryptoDigestAlgorithm.SHA256, source);
+  const folder = new Directory(Paths.cache, `${LOADER_PREFIX}-${digest}`);
+  folder.create({ intermediates: true, idempotent: true });
+
+  const named = new File(
+    folder,
+    `${name.trim().slice(0, NAME_MAX).trim() || PICTURE_NAME}.${extension}`,
+  );
+
+  if (!named.exists) cached.copy(named);
+
+  return named.uri;
+}
+
+/** What is held, a picture drawn from a web address read as the file the image loader keeps for it. */
+async function loaderKept(kept: Kept): Promise<Kept> {
+  if (kept.kind !== KEPT_KIND.PICTURE) return kept;
+
+  return { ...kept, source: await loaderPicture(kept.source, kept.name) };
 }
 
 /** Each act's work. */
@@ -271,10 +329,10 @@ export function useKeeping(): Keeping {
     };
 
     return {
-      open: (kept) => run(() => opened(kept), OPEN_FAILED, false),
+      open: (kept) => run(() => loaderKept(kept).then(opened), OPEN_FAILED, false),
       view: (pictures, index) => run(() => viewed(pictures, index), OPEN_FAILED, false),
       keep: (kept, act) =>
-        run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
+        run(() => loaderKept(kept).then(KEEP_WORK[act]), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>
         run(() => setStringAsync(words).then(() => undefined), KEEP_FAILED[KEEP_ACT.COPY], true),
       shareWords: (words) =>

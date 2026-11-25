@@ -229,20 +229,28 @@ it("a halt outlives every host read until the host's own event stands it down", 
   // restart a recording that was stood down.
   app.update(bootstrapPatch(app.snapshot(), BOOT));
   assert.equal(app.snapshot().sessionReplay.halted, true);
-  assert.equal(sessionReplayBootstrap(app.snapshot()).permitted, false);
+  assert.equal(sessionReplayBootstrap(app.snapshot(), true).permitted, false);
 });
 
 it("recording is what the host permitted less what an account's end stood down", () => {
   const app = store();
   app.update({ sessionReplay: { permitted: true, accountId: "person", halted: false } });
-  assert.deepEqual(sessionReplayBootstrap(app.snapshot()), {
+  assert.deepEqual(sessionReplayBootstrap(app.snapshot(), true), {
     permitted: true,
     appVersion: "1.2.3",
     packaged: true,
     accountId: "person",
   });
   app.update({ sessionReplay: { ...app.snapshot().sessionReplay, halted: true } });
-  assert.equal(sessionReplayBootstrap(app.snapshot()).permitted, false);
+  assert.equal(sessionReplayBootstrap(app.snapshot(), true).permitted, false);
+});
+
+it("a device that does not share usage data never records, nor one whose settings are not read yet", () => {
+  const app = store();
+  app.update({ sessionReplay: { permitted: true, accountId: "person", halted: false } });
+
+  assert.equal(sessionReplayBootstrap(app.snapshot(), false).permitted, false);
+  assert.equal(sessionReplayBootstrap(app.snapshot(), undefined).permitted, false);
 });
 
 it("an unpackaged run never records, whatever the host permitted", () => {
@@ -252,7 +260,7 @@ it("an unpackaged run never records, whatever the host permitted", () => {
   );
 
   app.update({ sessionReplay: { permitted: true, accountId: "person", halted: false } });
-  assert.equal(sessionReplayBootstrap(app.snapshot()).permitted, false);
+  assert.equal(sessionReplayBootstrap(app.snapshot(), true).permitted, false);
 });
 
 it.effect(

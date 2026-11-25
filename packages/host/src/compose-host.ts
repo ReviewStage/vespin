@@ -741,6 +741,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           openSocket: yield* TerminalSocket,
           platform: yield* MirrorPlatform,
           agentListed,
+          listDrawn: () => tasks.agentsListed() !== undefined,
           listings: tasks.pullRequestListings,
           recordProductEvent: settings.recordProductEvent,
         })

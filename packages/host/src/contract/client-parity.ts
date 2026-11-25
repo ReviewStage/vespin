@@ -80,7 +80,6 @@ const WEB = {
   MENU_BAR: byDesign("A browser has no menu bar to dim"),
   MICROPHONE: byDesign("The browser asks for the microphone and picks its route itself"),
   NOTIFICATIONS: byDesign("The browser's own prompt asks for notifications"),
-  TAB_SWITCHER: byDesign("⌃Tab's card previews are the desktop app's"),
   UNSAVED_WORK: byDesign("The tab's own leave prompt holds unsaved work (page-leave.ts)"),
   UPDATER: byDesign("A tab loads the latest deploy itself"),
 } as const;
@@ -194,6 +193,11 @@ const PICTURE_BYTES = byDesign(
   "The desktop and the web draw a picture from its bytes (AGENTS_PICTURE); only the phone downloads one straight into a file",
 );
 
+/** A window apart from the host's process never holds the account's header; it draws a picture from the bytes the host reads (AGENTS_PICTURE). */
+const PICTURE_HEADER = byDesign(
+  "The desktop's and the web's windows draw a picture from the bytes the host reads; only the phone's loader reads one under the account's header",
+);
+
 /** The panel draws a page in a frame of the service's, so it never reads the page's HTML itself. */
 const PANEL_PAGE_FRAME = byDesign("The panel frames a page through the service (pageFrameUrl)");
 
@@ -220,6 +224,11 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.ACCOUNT_SIGN_OUT]: EVERYWHERE,
   [PORT_ACT_KIND.ACCOUNT_DELETE]: EVERYWHERE,
   [PORT_ACT_KIND.ACCOUNT_SUPPORT_ACCESS]: EVERYWHERE,
+  [PORT_ACT_KIND.ACCOUNT_PICTURE_SOURCE]: {
+    desktop: PICTURE_HEADER,
+    web: PICTURE_HEADER,
+    ios: YES,
+  },
 
   [PORT_ACT_KIND.PROVIDER_KEYS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.PROVIDER_KEYS_RETRY]: EVERYWHERE,
@@ -527,7 +536,6 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WINDOW_COPY_IMAGE]: panel(IOS.COPY_PICTURE),
   [PORT_ACT_KIND.WINDOW_COPY_RICH]: panel(IOS.COPY_RICH),
   [PORT_ACT_KIND.WINDOW_SAVE_FILE]: panel(IOS.SAVE_FILE),
-  [PORT_ACT_KIND.WINDOW_CAPTURE]: desktopOnly(WEB.TAB_SWITCHER, IOS.ONE_SCREEN),
   [PORT_ACT_KIND.WINDOW_UNSAVED_WORK]: desktopOnly(
     WEB.UNSAVED_WORK,
     notYet("iOS v1 has no editor to hold unsaved work"),

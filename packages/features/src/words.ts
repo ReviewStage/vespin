@@ -24,6 +24,7 @@ export const TERM = {
   TASK: { one: "task", many: "tasks" },
   PAGE: { one: "page", many: "pages" },
   AGENT: { one: "agent", many: "agents" },
+  MANAGER: { one: "manager", many: "managers" },
   WORKER: { one: "worker", many: "workers" },
   INBOX_ITEM: { one: "item", many: "items" },
   MEMBER: { one: "member", many: "members" },

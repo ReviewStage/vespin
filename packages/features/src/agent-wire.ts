@@ -1004,7 +1004,7 @@ export type AgentMessageRequest = typeof agentMessageRequestSchema.Type;
 /**
  * A person's message to a Manager's chat, as its composer sends it: a
  * message's words, files, key, and retry, and the chat message it replies
- * in, which nothing sends yet. The service mints the message's id and
+ * in, which a thread's box sends. The service mints the message's id and
  * writes it beside the line the Manager reads it as
  * (`manager_chat_message`), so the chat holds it before the send answers.
  */

@@ -24,6 +24,8 @@ import { FileTypeIcon } from "./file-type-icon.js";
 export interface WordFiles {
   readonly names: ReadonlySet<string>;
   readonly chip: (name: string) => ReactNode;
+  /** The file a marker of the name names, which a copy of the message carries. */
+  readonly file: (name: string) => FileChip | undefined;
 }
 
 /** The files of the sent message drawn under it, which its words draw in place (`SentWords`); none outside a message, or for one whose words name none. */
@@ -158,19 +160,17 @@ export function useWordFiles(
 ): ShownWordFiles {
   const placed = filesInWords(files, words);
   const viewer = useWordFileViewer(placed.filter((file) => file.url !== ""));
+  const file = (name: string) => files.find((each) => namedBy(each, name));
 
   const chip = (name: string) => (
-    <WordFileChip
-      name={name}
-      file={files.find((file) => namedBy(file, name))}
-      onOpen={viewer.open}
-      uploading={uploading}
-    />
+    <WordFileChip name={name} file={file(name)} onOpen={viewer.open} uploading={uploading} />
   );
 
   return {
     named:
-      placed.length === 0 ? undefined : { names: new Set(placed.map((file) => file.name)), chip },
+      placed.length === 0
+        ? undefined
+        : { names: new Set(placed.map((each) => each.name)), chip, file },
     beside: files.filter((file) => !placed.includes(file)),
     chip,
     viewer: viewer.viewer,

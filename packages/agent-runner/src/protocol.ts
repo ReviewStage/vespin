@@ -27,7 +27,7 @@ import type {
   SDKMessage,
   SessionCronSummary,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { SDKMessage as CursorSdkMessage } from "@cursor/sdk";
+import type { SDKMessage as CursorSdkMessage, ModelCallCompletedUpdate } from "@cursor/sdk";
 import type { WireValue } from "@repo/wire";
 import type { GoalNotice } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
@@ -711,6 +711,9 @@ const CursorPermissionModeSchema = Schema.Literals([
   PERMISSION_MODE.AUTO,
 ]);
 
+/** What the id of a Cursor agent we mint begins with, as the SDK's own local ids do. */
+export const CURSOR_AGENT_PREFIX = "agent-";
+
 /**
  * The first stdin line of a Cursor launch, which runs Cursor's agent in the
  * runner's own process through `@cursor/sdk` (`cursor.ts`). `sdk` is the
@@ -719,9 +722,6 @@ const CursorPermissionModeSchema = Schema.Literals([
  * Cursor's id for the agent, which the service mints: the launch resumes it
  * where the store holds it and makes it under that id otherwise.
  */
-/** What the id of a Cursor agent we mint begins with, as the SDK's own local ids do. */
-export const CURSOR_AGENT_PREFIX = "agent-";
-
 export const CursorConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CURSOR),
   cwd: Schema.String,
@@ -1272,8 +1272,26 @@ export function codexErrorKind(
 /** One message Claude Code's Agent SDK put out, as it put it out. */
 export type ClaudeCodeMessage = SDKMessage;
 
-/** One message Cursor's SDK streamed of a run, as it streamed it (`@cursor/sdk`'s `SDKMessage`). */
-export type CursorMessage = CursorSdkMessage;
+/** The type of the message the runner posts for each model call of a Cursor run. */
+export const CURSOR_MODEL_CALL = "model_call";
+
+/**
+ * One model call of a Cursor run, with its usage as Cursor counted it: the
+ * whole prompt the call read, cache reads and writes included. The runner
+ * posts it from the send's `model-call-completed` update, since the SDK
+ * streams only the turn's total (`usage`), and shapes it as the SDK shapes
+ * its own messages, so a reader takes it beside them.
+ */
+export interface CursorModelCall {
+  readonly type: typeof CURSOR_MODEL_CALL;
+  /** Cursor's id for the agent, as the SDK's messages name it. */
+  readonly agent_id: string;
+  readonly model_call_id: string;
+  readonly usage: ModelCallCompletedUpdate["usage"];
+}
+
+/** One message Cursor's SDK streamed of a run, as it streamed it (`@cursor/sdk`'s `SDKMessage`), or one of the run's model calls, which the runner posts in its place among them. */
+export type CursorMessage = CursorSdkMessage | CursorModelCall;
 
 /** What the runner posts: the SDK's message, Codex's notification, or Cursor's message as it was emitted, or one of the runner's own. */
 export type RunnerMessage =

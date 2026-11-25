@@ -4,7 +4,7 @@
  * The survey is an API survey in PostHog, shown to no one: setup asks its
  * questions, the account keeps its answers (`@repo/settings`'s
  * `OnboardingSurvey`), and each set the service saves is recorded here under
- * the account's person, each answer in its own words and an Other in the
+ * a random id with no person profile, never the account's, each answer in its own words and an Other in the
  * person's words where they wrote some. Each question takes several
  * answers, so each is recorded as the list of them, as a multiple-choice
  * question in PostHog holds one. A PostHog destination posts each

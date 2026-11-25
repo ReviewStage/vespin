@@ -15,6 +15,7 @@ import {
 const BASE_URL = "https://app.test";
 const APP_VERSION = "0.2.0";
 const NOON = Date.parse("2026-08-19T12:00:00.000Z");
+const INSTALL_ID = "0b7c1f2e-4a5d-4e6f-8a9b-1c2d3e4f5a6b";
 
 /** What a test changes of the sender: its options, and the account its bearer is read from. */
 type SenderOverrides = Partial<Omit<ProductEventSenderOptions, "credential"> & AccountToken>;
@@ -40,6 +41,7 @@ function senderWith(
         appVersion: APP_VERSION,
         packaged: true,
         platform: PRODUCT_PLATFORM.DESKTOP,
+        installId: Effect.succeed(INSTALL_ID),
         sends: true,
         credential: accountBearer({ readAccessToken, refreshAccount, readAccountKey }),
         httpClient: layer,
@@ -295,7 +297,7 @@ it.effect(
 );
 
 it.effect(
-  "every batch says which version it came from, whether that build is packaged, and which app it is",
+  "every batch says which version it came from, whether that build is packaged, which app it is, and which install",
   () =>
     Effect.gen(function* () {
       const { sender, requests } = yield* sharingSender({ packaged: false });
@@ -303,11 +305,13 @@ it.effect(
       yield* sender.flush;
 
       assert.equal(requests.length, 1);
-      assert.deepEqual(JSON.parse(requests[0]?.body ?? "{}").build, {
+      const body = JSON.parse(requests[0]?.body ?? "{}");
+      assert.deepEqual(body.build, {
         app_version: APP_VERSION,
         packaged: false,
         platform: PRODUCT_PLATFORM.DESKTOP,
       });
+      assert.equal(body.installId, INSTALL_ID);
     }),
 );
 

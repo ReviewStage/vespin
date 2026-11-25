@@ -150,7 +150,9 @@ pass. The notification flow, whose push Maestro cannot
 send, runs apart: the script installs the app afresh, lets it notify through
 the applesimutils Maestro installs (Maestro's own `permissions` cannot grant
 notifications), runs `maestro/notification/background.yaml`, pushes
-`ask.apns` with `xcrun simctl push`, and runs `open.yaml`, its output under
+`ask.apns` with `xcrun simctl push`, and runs `open.yaml`; then does the
+same from a fresh install for `manager.apns`, a Manager's thread on no
+task, with `open-manager.yaml`, its output under
 `<light|dark>/notification/`.
 
 ## The host
@@ -421,8 +423,8 @@ A flow is written one way throughout:
   it is an iPad's, the unfolded iPhone Duo's, or a Split View pane, stands
   list and detail side by side in `NavigationSplitView`, and New task is
   the compose button leading the detail's bar, as Mail stands compose over
-  the message, rather than the tab bar's round +, which only a compact
-  window keeps (Search's own two columns hold it in Search's bar).
+  the message; a compact window ends each tab root's own bar with it, and
+  the tab bar holds no round + (the developer, Nov 24, 2026).
   The tab bar is `sidebarAdaptable`, so a regular window stands iPadOS's
   own tab sidebar beside each tab's list and detail, as Apple's tab
   guidance has it, and the Tasks list draws Pinned, Following, and the

@@ -22,6 +22,7 @@ import type {
 } from "../description-editor/contract.js";
 import { useEditedLinksHost } from "../link-menu.js";
 import { type KeystrokeSpanName, PANEL_SPAN, useKeystrokeSpans } from "../panel-spans.js";
+import { type BoxWords, useWordsOf } from "./box-words.js";
 import { useSelectionToolbar } from "./selection-toolbar.js";
 
 /**
@@ -142,7 +143,7 @@ export function ComposerField({
   module,
   editor,
   room,
-  draft,
+  words,
   setDraft,
   placeholder,
   label,
@@ -172,7 +173,8 @@ export function ComposerField({
   editor: RefObject<ComposerEditorHandle | undefined>;
   /** The field's own element, which the lists over it stand in. */
   room: RefObject<HTMLDivElement | null>;
-  draft: string;
+  /** The box's words, which the field alone reads whole, so a word typed draws the field and nothing around it. */
+  words: BoxWords;
   setDraft: (text: string) => void;
   placeholder: string;
   label: string;
@@ -207,6 +209,7 @@ export function ComposerField({
   children?: ReactNode;
 }): React.JSX.Element {
   const host = useRef<HTMLDivElement>(null);
+  const draft = useWordsOf(words, (text) => text);
   // A link in the draft opens, from its right-click, where the box stands.
   const editedLinks = useEditedLinksHost();
   const keystrokes = useKeystrokeSpans(keystrokeSpan);
@@ -334,6 +337,12 @@ export function ComposerField({
     };
   }, [module, editor, maxLength, label]);
 
+  // Note that the files are told before the draft, so words laid in with their files, as Edit or Retry lays them, find the files their markers name.
+  const fileNames = files?.names;
+  useLayoutEffect(() => {
+    if (fileNames !== undefined) editor.current?.setFiles(fileNames);
+  }, [fileNames, editor, module]);
+
   // A draft that moved from outside is told to the editor once; its own words handed back are not.
   useLayoutEffect(() => {
     const mounted = editor.current;
@@ -347,10 +356,6 @@ export function ComposerField({
   useLayoutEffect(() => editor.current?.setInput(input), [input, editor, module]);
   useLayoutEffect(() => editor.current?.setSkills(skills), [skills, editor, module]);
   useLayoutEffect(() => editor.current?.setCommands(commands), [commands, editor, module]);
-  const fileNames = files?.names;
-  useLayoutEffect(() => {
-    if (fileNames !== undefined) editor.current?.setFiles(fileNames);
-  }, [fileNames, editor, module]);
   useLayoutEffect(() => editor.current?.setAria(aria));
 
   return (

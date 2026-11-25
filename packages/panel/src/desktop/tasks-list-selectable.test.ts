@@ -94,7 +94,7 @@ async function mount() {
   const opened: string[] = [];
 
   function Page() {
-    const control = useTasksTab({
+    const { control } = useTasksTab({
       tasks: {
         ...IDLE_TASKS_VIEW,
         listStatus: TASKS_READ.READY,

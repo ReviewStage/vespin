@@ -37,7 +37,6 @@ import type { CatalogModel } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { readAlike } from "@repo/features/turn-rows";
 import { CHOOSE_AN_ITEM_WORDS, countWords, selectedWords, TERM } from "@repo/features/words";
 import { INTRO } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
@@ -58,26 +57,20 @@ import {
   IconButton,
   INSET,
   joinRefs,
-  LIST_LEAVING_SELECTOR,
-  LIST_MOTION_WAY,
   LIST_ROW_CURRENT,
   LIST_ROW_CURRENT_LOOK,
   LIST_ROW_INK,
   LIST_ROW_LEAD,
   LIST_ROW_META,
   List,
-  ListMotion,
   ListRow,
   MENU_ITEM_MARK,
-  motionKey,
-  motionRows,
   NAV_COUNT_SHOWN,
   NOTE_LINE_LOOK,
   NoteLine,
   PaneBar,
   RESIZE_EDGE_SIDE,
   ResizeEdge,
-  RevealArea,
   RowHint,
   RowHintOptions,
   reachedKey,
@@ -101,7 +94,6 @@ import {
   Toolbar,
   Tooltip,
   UnreadMark,
-  useLeaving,
   useMenu,
   useResizeEdge,
   useRovingKeys,
@@ -148,7 +140,8 @@ import {
 import { ActionMenu, type MenuAction, type MenuEntry, rowMenu } from "../desktop/action-menu.js";
 import {
   INBOX_LIST_WIDTH,
-  type InboxViewChoices,
+  type InboxOrderChoices,
+  type InboxScopeChoices,
   type InboxWhoseChoice,
   useInboxListWidth,
 } from "../desktop/folded-groups.js";
@@ -301,7 +294,7 @@ function needsYouListed(head: InboxListHead): boolean {
 }
 
 /** Addressed to's choice where it narrows the scope shown (`narrowedByWhose`), for the chip it calls for; none under Questions, or where the Inbox offers no view. */
-function narrowingWhose(view: InboxViewChoices | undefined): InboxWhoseChoice | undefined {
+function narrowingWhose(view: InboxScopeChoices | undefined): InboxWhoseChoice | undefined {
   return view !== undefined && narrowedByWhose(view.show) ? view : undefined;
 }
 
@@ -551,7 +544,6 @@ export const InboxItemRow = memo(function InboxItemRow({
     <RowHintOptions card={<InboxItemCard listed={listed} models={models} readerId={readerId} />}>
       <ListRow
         ref={ref}
-        motionKey={listed.item.id}
         ink={LIST_ROW_INK.SIDEBAR}
         currentLook={LIST_ROW_CURRENT_LOOK.TINT}
         leading={<UnreadMark unread={unread} />}
@@ -644,16 +636,19 @@ function whoseEntries(
  * The window's Inbox's head's button that drops the view's menu: first what
  * it shows, Questions, Open, All, or Reminders, the one shown checked; then, but
  * under Questions, Addressed to, a submenu of Anyone, Me, or a teammate by
- * face and name, its choice checked; then Pinned tasks first, a switch.
+ * face and name, its choice checked; then Pinned tasks first, a switch,
+ * where the list holds tasks to pin.
  */
 function ViewOptions({
   shown,
   choices,
+  order,
   readerId,
   asked,
 }: {
   shown: boolean;
-  choices: InboxViewChoices;
+  choices: InboxScopeChoices;
+  order: InboxOrderChoices | undefined;
   readerId: string | undefined;
   /** Where a phone's ⋯ stands for the button, the menu drawn under the ⋯ each time it asks (`phone-head.tsx`), and no button of its own; none elsewhere. */
   asked?: { readonly ask: MenuAsk | undefined } | undefined;
@@ -680,7 +675,7 @@ function ViewOptions({
           replayUnmasked
           label={VIEW_OPTIONS}
           menu={menu.drawn}
-          groups={[scope, ...windowEntries(choices, reader, readerId)]}
+          groups={[scope, ...windowEntries(choices, order, reader, readerId)]}
           onClose={menu.close}
         />
       )}
@@ -712,24 +707,30 @@ function markAllAction(readAll: InboxReadAll): MenuAction {
   };
 }
 
-/** The window's Inbox's own groups of its view's menu, after its scopes: Addressed to, where it narrows the scope shown (`narrowedByWhose`); then the switch that stands the pinned tasks' items first. */
+/** The view's menu's groups after its scopes: Addressed to, where it narrows the scope shown (`narrowedByWhose`); then, where the list holds tasks to pin, the switch that stands the pinned tasks' items first. */
 function windowEntries(
-  choices: InboxViewChoices,
+  choices: InboxScopeChoices,
+  order: InboxOrderChoices | undefined,
   reader: ReturnType<typeof useMemberDirectory>,
   readerId: string | undefined,
 ): MenuEntry[][] {
-  const order: MenuEntry[] = [
-    {
-      label: PINNED_FIRST,
-      icon: <PinIcon />,
-      checked: choices.pinnedFirst,
-      mark: MENU_ITEM_MARK.SWITCH,
-      stays: true,
-      onSelect: () => choices.onPinnedFirst(!choices.pinnedFirst),
-    },
-  ];
+  const pinned: MenuEntry[][] =
+    order === undefined
+      ? []
+      : [
+          [
+            {
+              label: PINNED_FIRST,
+              icon: <PinIcon />,
+              checked: order.pinnedFirst,
+              mark: MENU_ITEM_MARK.SWITCH,
+              stays: true,
+              onSelect: () => order.onPinnedFirst(!order.pinnedFirst),
+            },
+          ],
+        ];
 
-  if (!narrowedByWhose(choices.show)) return [order];
+  if (!narrowedByWhose(choices.show)) return pinned;
 
   return [
     [
@@ -739,7 +740,7 @@ function windowEntries(
         items: whoseEntries(choices.whose, choices.onWhose, reader, readerId),
       },
     ],
-    order,
+    ...pinned,
   ];
 }
 
@@ -752,7 +753,7 @@ const CLEAR_TASK = "Show every task's items";
 /** What the task's chip names while the task is not listed yet. */
 const UNNAMED_TASK = "Task";
 
-/** A chip over the list as last drawn, so it leaves looking as it did: its mark, its words, and its ×. */
+/** A chip over the list: its mark, its words, and its ×. */
 interface FilterChipEntry {
   readonly key: (typeof FILTER_CHIP_KEY)[keyof typeof FILTER_CHIP_KEY];
   readonly mark: React.ReactNode;
@@ -760,9 +761,6 @@ interface FilterChipEntry {
   readonly removeLabel: string;
   readonly onRemove: () => void;
 }
-
-/** What a press on the chip leaving does, out of reach as it is: nothing. */
-function stays(): void {}
 
 /** The chip Addressed to calls for, the teammate's face and name; none while it names the reader or anyone. */
 function whoseChipEntries(
@@ -805,71 +803,11 @@ function taskChipEntries(
 }
 
 /**
- * The chips themselves. Note that this is its own component under the line's
- * `ListMotion`, because `useLeaving` finds the motion through the context
- * the motion provides.
- */
-function FilterChipLine({
-  line,
-  whose,
-  task,
-  readerId,
-}: {
-  line: RefObject<HTMLDivElement | null>;
-  whose: InboxWhoseChoice | undefined;
-  task: InboxTaskHead | undefined;
-  readerId: string | undefined;
-}): React.JSX.Element {
-  const directory = useMemberDirectory();
-  const chosen = whose?.whose;
-  const onWhose = whose?.onWhose;
-  const taskName = task?.name;
-  const taskStatus = task?.status;
-  const onClearTask = task?.onClear;
-
-  // Note that the entries are made once for what they are made from, because `useLeaving` reads a new list as a change.
-  const listed = useMemo(
-    () => [
-      ...taskChipEntries(taskName, taskStatus, onClearTask),
-      ...(chosen === undefined || onWhose === undefined
-        ? []
-        : whoseChipEntries({ whose: chosen, onWhose }, directory, readerId)),
-    ],
-    [taskName, taskStatus, onClearTask, chosen, onWhose, directory, readerId],
-  );
-
-  const drawn = useLeaving(listed, (entry) => entry.key);
-
-  // Note that the box around the row stands hidden while no task and no teammate is chosen, so the row's padding takes no room, and the chip arriving arrives into a row that stands.
-  return (
-    <div ref={line} hidden={drawn.length === 0}>
-      <div
-        className="inbox-tasks-chips flex flex-wrap gap-tight-gap px-column-inset pt-row-inset"
-        {...motionRows()}
-      >
-        {drawn.map(({ key, value, leaving }) => (
-          <Chip
-            key={key}
-            motionKey={key}
-            look={CHIP_LOOK.FILTER}
-            removeLabel={value.removeLabel}
-            onRemove={leaving ? stays : value.onRemove}
-          >
-            {value.mark}
-            <ChipName>{value.words}</ChipName>
-          </Chip>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
  * The chips over the list: the task the Inbox is narrowed to, by its name,
  * and a × that lists every task's items again; and, while Addressed to
  * names a teammate, their face and name, and a × that lists the reader's
  * own again (`@repo/ui`'s removable filter chip, as the sidebar's Created
- * by stands over its tasks). Each scales in as it is chosen and out as its
+ * by stands over its tasks). Each stands as it is chosen and goes as its
  * × lifts it, as the Tasks page's filter chips do.
  */
 function FilterChips({
@@ -881,12 +819,34 @@ function FilterChips({
   task: InboxTaskHead | undefined;
   readerId: string | undefined;
 }): React.JSX.Element {
-  const line = useRef<HTMLDivElement | null>(null);
+  const directory = useMemberDirectory();
+  const chosen = whose?.whose;
+  const onWhose = whose?.onWhose;
 
+  const listed = [
+    ...taskChipEntries(task?.name, task?.status, task?.onClear),
+    ...(chosen === undefined || onWhose === undefined
+      ? []
+      : whoseChipEntries({ whose: chosen, onWhose }, directory, readerId)),
+  ];
+
+  // Note that the box around the row stands hidden while no task and no teammate is chosen, so the row's padding takes no room.
   return (
-    <ListMotion root={line} way={LIST_MOTION_WAY.SCALE}>
-      <FilterChipLine line={line} whose={whose} task={task} readerId={readerId} />
-    </ListMotion>
+    <div hidden={listed.length === 0}>
+      <div className="inbox-tasks-chips flex flex-wrap gap-tight-gap px-column-inset pt-row-inset">
+        {listed.map((entry) => (
+          <Chip
+            key={entry.key}
+            look={CHIP_LOOK.FILTER}
+            removeLabel={entry.removeLabel}
+            onRemove={entry.onRemove}
+          >
+            {entry.mark}
+            <ChipName>{entry.words}</ChipName>
+          </Chip>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -898,7 +858,7 @@ function FilterChips({
  * from Questions, where nothing else holds anything.
  */
 function emptyWayOn(
-  view: InboxViewChoices,
+  view: InboxScopeChoices,
   counts: InboxCounts,
   onList: () => void,
 ): EmptyStateAction | undefined {
@@ -934,7 +894,7 @@ function ShowEmpty({
   counts,
   onList,
 }: {
-  view: InboxViewChoices;
+  view: InboxScopeChoices;
   counts: InboxCounts;
   /** Asks the Inbox for its list, so the item chosen once the rows return does not stand in their place. */
   onList: () => void;
@@ -1108,6 +1068,7 @@ function ListHead({
           <ViewOptions
             shown={shown}
             choices={view}
+            order={head.order}
             readerId={readerId}
             asked={{ ask: asked.ask }}
           />
@@ -1126,7 +1087,7 @@ function ListHead({
       <>
         {head.readAll === undefined ? null : <MarkAllReadButton readAll={head.readAll} />}
         {view === undefined ? null : (
-          <ViewOptions shown={shown} choices={view} readerId={readerId} />
+          <ViewOptions shown={shown} choices={view} order={head.order} readerId={readerId} />
         )}
       </>
     );
@@ -1209,7 +1170,7 @@ function ListHead({
 
   return (
     <>
-      <Toolbar />
+      {head.bare === true ? null : <Toolbar />}
       <ReplayUnmask>
         <VisuallyHidden as={VISUALLY_HIDDEN_ELEMENT.H1}>{title}</VisuallyHidden>
       </ReplayUnmask>
@@ -1335,7 +1296,7 @@ export function InboxListNote({
   /** Opens New task, the way on from the Inbox's empty state where the list stands alone; none where nothing can start. */
   onNewTask?: (() => void) | undefined;
   /** The scope shown and whom the items are addressed to, where they leave out every item the Inbox holds, for its empty state to show another. */
-  filteredOut: InboxViewChoices | undefined;
+  filteredOut: InboxScopeChoices | undefined;
   /** How many items each scope lists, for the empty state to offer one that lists something. */
   counts: InboxCounts;
   /** Asks for the list, so the scope its empty state shows leaves it standing. */
@@ -1386,8 +1347,10 @@ export function InboxListNote({
 export interface InboxListHead {
   /** Whether the list is on screen, for its menu not to outlive it. */
   readonly shown: boolean;
-  /** The window's Inbox's view choices, and the presses that change them; none on a task's own, which lists every item it holds. */
-  readonly view: InboxViewChoices | undefined;
+  /** The view's choices of scope and whom the items are addressed to, on the window's Inbox and a Manager's Inbox tab, and the presses that change them; none on a task's own, which lists every item it holds. */
+  readonly view: InboxScopeChoices | undefined;
+  /** The window's Inbox's pinned tasks first and its folded runs; none where the list holds no task to pin, as a task's own or a Manager's. */
+  readonly order?: InboxOrderChoices | undefined;
   /** The list's search, under its head, on the window's Inbox and a task's own alike; none where the list offers none. */
   readonly search?: InboxSearchHead | undefined;
   /**
@@ -1408,6 +1371,13 @@ export interface InboxListHead {
    * its search under where the head stood.
    */
   readonly tab?: boolean | undefined;
+  /**
+   * Whether the list stands under a tab row that already names it, as a
+   * Manager's Inbox tab does (`agent-threads.tsx`): its name is heard
+   * rather than drawn, no bar stands over it, and its head row holds only
+   * the selection's controls while rows are chosen.
+   */
+  readonly bare?: boolean | undefined;
   /** Copy link, the open item's, which a task's own Inbox tab hands its ⋯ first (`useTabActions`); none while no item is open, since a link names no task's Inbox whole. */
   readonly link?: MenuAction | undefined;
   /** The task the window's Inbox is narrowed to, which a chip over the list names and clears; none where it lists every task's items. */
@@ -1455,9 +1425,8 @@ interface RowFocus {
  * Keeps the keyboard in the list when the row holding it is no longer
  * drawn, as Questions leaves out an item answered on another Mac while its
  * row is focused: the keyboard goes to View options, the control that
- * chooses what the list leaves out, as it does from a row leaving the list
- * while it fades; a row drawn anew where it still stands, as one moving under
- * Pinned is, keeps it. Note that a removed row fires no blur, so the row last
+ * chooses what the list leaves out; a row drawn anew where it still stands,
+ * as one moving under Pinned is, keeps it. Note that a removed row fires no blur, so the row last
  * focused is remembered and looked for after every render.
  */
 function useRowFocusKept(rows: InboxRowPresses): RowFocus {
@@ -1469,14 +1438,13 @@ function useRowFocusKept(rows: InboxRowPresses): RowFocus {
 
     if (list === null || row === undefined || list.hidden) return;
 
-    // Note that a row leaving, or one in a group leaving, is drawn on, out of reach, while it fades, so the keyboard still in it is in no row.
     const found = rows.find(row);
 
-    if (found !== undefined && found.closest(LIST_LEAVING_SELECTOR) === null) {
-      // Note that a row moving into or out of Pinned is drawn anew, which drops the keyboard to the page or leaves it in the row it moved from, now leaving, so it is handed back.
+    if (found !== undefined) {
+      // Note that a row moving into or out of Pinned is drawn anew, which drops the keyboard to the page, so it is handed back.
       const held = document.activeElement;
 
-      if (held === document.body || held?.closest(LIST_LEAVING_SELECTOR) !== null) found.focus();
+      if (held === document.body || held === null) found.focus();
 
       return;
     }
@@ -1484,12 +1452,7 @@ function useRowFocusKept(rows: InboxRowPresses): RowFocus {
     focusedRow.current = undefined;
     const active = document.activeElement;
 
-    if (
-      active !== null &&
-      active !== document.body &&
-      active.closest(LIST_LEAVING_SELECTOR) === null
-    )
-      return;
+    if (active !== null && active !== document.body) return;
     listHeadControl(list)?.focus();
   });
 
@@ -1502,29 +1465,6 @@ function useRowFocusKept(rows: InboxRowPresses): RowFocus {
       focusedRow.current = undefined;
     },
   };
-}
-
-/** How deep two runs of rows are read alike (`readAlike`): each row as the same holder and item. */
-const LAID_OUT_DEPTH = 1;
-
-/**
- * The rows as last drawn while a draw leaves them reading alike
- * (`readAlike`), each row read as the same listed item (`inboxListed`),
- * else as they are now. Note that this is what the list's motion is
- * handed, because it measures every row before and after a commit whose
- * `change` moved, and the list is handed a view built anew on every draw,
- * though it lists the same rows.
- */
-function useLaidOut(
-  items: readonly InboxListed<InboxAnyHolder>[],
-): readonly InboxListed<InboxAnyHolder>[] {
-  const held = useRef(items);
-  const steady = readAlike(held.current, items, LAID_OUT_DEPTH) ? held.current : items;
-  useLayoutEffect(() => {
-    held.current = steady;
-  });
-
-  return steady;
 }
 
 /** How tall a row is taken to be before it is drawn, in pixels: its three lines and its insets, wherever its rows are listed. */
@@ -1552,31 +1492,21 @@ interface RowsPlace {
 }
 
 /**
- * A run of rows, each drawn on after it is no longer listed until its exit
- * has played (`ListMotion`), drawing only the rows near the view
- * (`VirtualRows`), as a mail app's list does, so a long list draws as
- * quickly as a short one; every row while a find bar
- * stands open, and the row holding the keyboard wherever the list is
- * scrolled. Every row of a run leaving with its heading (`leaving`) is
- * drawn as leaving, out of the keyboard's rows.
+ * A run of rows, drawing only the rows near the view (`VirtualRows`), as a
+ * mail app's list does, so a long list draws as quickly as a short one;
+ * every row while a find bar stands open, and the row holding the keyboard
+ * wherever the list is scrolled.
  */
 function InboxRows({
   items,
   place,
-  leaving = false,
   row,
 }: {
   items: readonly InboxListed<InboxAnyHolder>[];
   place: RowsPlace;
-  leaving?: boolean;
-  row: (
-    listed: InboxListed<InboxAnyHolder>,
-    leaving: boolean,
-    at: VirtualRowPlace,
-  ) => React.ReactNode;
+  row: (listed: InboxListed<InboxAnyHolder>, at: VirtualRowPlace) => React.ReactNode;
 }): React.JSX.Element {
-  const drawn = useLeaving(items, (listed) => listed.item.id);
-  const keys = useMemo(() => drawn.map(({ key }) => key), [drawn]);
+  const keys = useMemo(() => items.map(({ item }) => item.id), [items]);
   const handle = useRef<VirtualRowsHandle>(null);
   const { holdRun } = place;
   useLayoutEffect(() => holdRun(handle), [holdRun]);
@@ -1591,15 +1521,14 @@ function InboxRows({
       overscan={place.finding ? keys.length : undefined}
       anchor={VIRTUAL_ROWS_ANCHOR.START}
       listItems
-      moves
       holdsFocus
       className="sidebar-tasks"
       handle={handle}
     >
       {(index, at) => {
-        const entry = drawn[index];
+        const listed = items[index];
 
-        return entry === undefined ? null : row(entry.value, entry.leaving || leaving, at);
+        return listed === undefined ? null : row(listed, at);
       }}
     </VirtualRows>
   );
@@ -1616,11 +1545,6 @@ function oneRun(view: InboxListView<InboxAnyHolder>): readonly InboxPinnedRun<In
   return [{ run: INBOX_RUN.REST, items: view.items, count: view.items.length, folded: false }];
 }
 
-/** A run's key, by which it leaves the list. */
-function runKeyOf({ run }: InboxPinnedRun<InboxAnyHolder>): string {
-  return run;
-}
-
 /**
  * The list's rows: in one run, or, where the pinned tasks' items stand
  * first and one is listed (`inboxPinnedRuns`), those under Pinned and the
@@ -1631,11 +1555,8 @@ function runKeyOf({ run }: InboxPinnedRun<InboxAnyHolder>): string {
  * and a folded run draws none of its rows.
  *
  * The one run is Everything else with its heading not drawn, so as Pinned
- * comes or goes its rows stay drawn where they stand and glide to where the
- * change stands them, rather than being drawn anew. A run no longer listed
- * is drawn on, its heading with it, until its exit has played
- * (`ListMotion`), holding only the rows listed nowhere else, so a row that
- * moved to the other run glides across rather than leaving a copy behind.
+ * comes or goes its rows stay drawn where they stand rather than being
+ * drawn anew.
  */
 function InboxRuns({
   view,
@@ -1645,44 +1566,31 @@ function InboxRuns({
 }: {
   view: InboxListView<InboxAnyHolder>;
   place: RowsPlace;
-  row: (
-    listed: InboxListed<InboxAnyHolder>,
-    leaving: boolean,
-    at: VirtualRowPlace,
-  ) => React.ReactNode;
+  row: (listed: InboxListed<InboxAnyHolder>, at: VirtualRowPlace) => React.ReactNode;
   /** Folds a run or opens it; none where the runs never fold. */
   onFold: ((run: InboxRun, folded: boolean) => void) | undefined;
 }): React.JSX.Element {
-  // Note that the runs are made once for the view they are made from, because `useLeaving` reads a new list as a change.
+  // Note that the runs are made once for the view they are made from, so a draw that moved nothing hands the rows the same runs.
   const headed = view.runs !== undefined;
   const runs = useMemo(() => inboxPinnedRuns(view) ?? oneRun(view), [view]);
-  const listed = useMemo(() => new Set(view.items.map(({ item }) => item.id)), [view]);
-  const drawn = useLeaving(runs, runKeyOf);
 
   return (
     <>
-      {drawn.map(({ key, value: { run, items, count, folded }, leaving }) => (
-        <div key={key} {...motionKey(key)}>
+      {runs.map(({ run, items, count, folded }) => (
+        <div key={run}>
           <GroupHeader
             look={GROUP_LOOK.SECTION}
             heading={GROUP_HEADING.NONE}
-            head={headed || leaving ? GROUP_HEAD.STICKS : GROUP_HEAD.NONE}
+            head={headed ? GROUP_HEAD.STICKS : GROUP_HEAD.NONE}
             label={RUN_WORDS[run]}
             count={{ ...groupCount(count, TERM.INBOX_ITEM), shown: NAV_COUNT_SHOWN.ALWAYS }}
             fold={
-              onFold === undefined || !headed || leaving
+              onFold === undefined || !headed
                 ? undefined
                 : { open: !folded, onOpenChange: (open) => onFold(run, !open) }
             }
           >
-            {folded ? null : (
-              <InboxRows
-                items={leaving ? items.filter(({ item }) => !listed.has(item.id)) : items}
-                place={place}
-                leaving={leaving}
-                row={row}
-              />
-            )}
+            {folded ? null : <InboxRows items={items} place={place} row={row} />}
           </GroupHeader>
         </div>
       ))}
@@ -1700,7 +1608,6 @@ export function InboxList({
   readerId,
   columns,
   rows,
-  reading = false,
   onChoose,
   onMark,
   onClose,
@@ -1717,8 +1624,6 @@ export function InboxList({
   head: InboxListHead;
   /** What stands under the rows: the list's empty line, placeholder rows while it is read, or a read that did not answer. */
   note: React.ReactNode;
-  /** Whether the list is still being read, as its reads land one after another while the window opens, so a row arriving fades in where it stands rather than sliding in as a new one does. */
-  reading?: boolean;
   columns: InboxColumnsShown;
   rows: InboxRowPresses;
   onChoose: (listed: InboxListed<InboxAnyHolder>) => void;
@@ -1739,7 +1644,8 @@ export function InboxList({
   const picks = drawn.filter(({ item }) => picked.has(item.id));
 
   if (picks.length !== picked.size) setPicked(new Set(picks.map(({ item }) => item.id)));
-  const unpick = () => setPicked(new Set());
+  // Note that a list choosing none keeps the set it holds, because a plain press on a row clears the choice, and a new empty set drew the whole Inbox again on every item opened.
+  const unpick = () => setPicked((was) => (was.size === 0 ? was : new Set()));
   const { width, onResize } = useInboxListWidth();
   const rowFocus = useRowFocusKept(rows);
   // Note that every row's draft is read here once, rather than by each row, so a word typed in the box beside the list draws no row.
@@ -1787,8 +1693,6 @@ export function InboxList({
     onResize,
   });
 
-  // Note that the motion replays a commit only where the rows stand otherwise, never one that drew them where they stood.
-  const laidOut = useLaidOut(drawn);
   // Note that the rows are handed doors that stand across draws, each calling the newest the list was handed,
   // because the page hands new ones on every draw and a row handed a new door draws again (`InboxItemRow`).
   const choose = useSteadyDoor(onChoose);
@@ -1845,8 +1749,7 @@ export function InboxList({
       : undefined,
   );
 
-  // Note that a row leaving the list is the list's motion's rather than one of the keyboard's rows (`ListMotion`).
-  const row = (listed: InboxListed<InboxAnyHolder>, leaving: boolean, at?: VirtualRowPlace) => (
+  const row = (listed: InboxListed<InboxAnyHolder>, at?: VirtualRowPlace) => (
     <InboxItemRow
       key={listed.item.id}
       place={at}
@@ -1863,8 +1766,8 @@ export function InboxList({
       readerId={readerId}
       muted={isDone(listed.item)}
       needsYouShown={needsYouListed(head)}
-      ref={leaving ? undefined : rows.hold(listed.item.id)}
-      selectKey={leaving ? undefined : listed.item.id}
+      ref={rows.hold(listed.item.id)}
+      selectKey={listed.item.id}
       onChoose={choose}
       {...acts.row}
       several={several !== undefined && picked.has(listed.item.id) ? several : undefined}
@@ -1875,13 +1778,12 @@ export function InboxList({
     <div
       {...roving}
       ref={rovingBody}
-      className="inbox-tasks-body min-h-list-held-least px-column-inset pt-row-inset pb-column-inset data-[empty=true]:flex data-[empty=true]:min-h-full data-[empty=true]:flex-col"
+      className="inbox-tasks-body px-column-inset pt-row-inset pb-column-inset data-[empty=true]:flex data-[empty=true]:min-h-full data-[empty=true]:flex-col"
       data-empty={String(listedItems(view).length === 0)}
-      {...motionRows()}
     >
       {/* Note that the Inbox's intro stands on the Inbox itself, not on a task's own Inbox tab. */}
       {head.tab === true ? null : <PageIntro intro={INTRO.INBOX} />}
-      <InboxRuns view={view} place={rowsPlace} row={row} onFold={head.view?.onFold} />
+      <InboxRuns view={view} place={rowsPlace} row={row} onFold={head.order?.onFold} />
       {note}
     </div>
   );
@@ -1923,20 +1825,16 @@ export function InboxList({
               }
         }
       />
-      <RevealArea root={bodyRef}>
-        <ListMotion root={bodyRef} change={laidOut} reading={reading}>
-          <SelectionRegion
-            id={regionId}
-            selection={{ selected: picked, onChange: setPicked }}
-            order={[drawn.map(({ item }) => item.id)]}
-            bringIn={rows.bringIn}
-          >
-            <ScrollArea ref={scroller} fade={SCROLL_FADE.START}>
-              {body}
-            </ScrollArea>
-          </SelectionRegion>
-        </ListMotion>
-      </RevealArea>
+      <SelectionRegion
+        id={regionId}
+        selection={{ selected: picked, onChange: setPicked }}
+        order={[drawn.map(({ item }) => item.id)]}
+        bringIn={rows.bringIn}
+      >
+        <ScrollArea ref={scroller} fade={SCROLL_FADE.START}>
+          {body}
+        </ScrollArea>
+      </SelectionRegion>
       {/* Note that a phone's bar stands at the list's foot rather than over its rows, so choosing a row moves none under the finger. */}
       {footed && picks.length > 0 ? (
         <Stack inset={INSET.COLUMN}>

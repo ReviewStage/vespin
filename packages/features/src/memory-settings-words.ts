@@ -70,11 +70,12 @@ export const MEMORY_UNRECALLED_WORDS = {
 /** What a caption says Recalls counts. */
 export const MEMORY_RECALLS_WORDS = `Recalls count the last ${MEMORY_RECALL_WINDOW_DAYS} days`;
 
-/** What a memory's row says of who saved it: "Saved 2h ago by" its keeper "from" the agent it came from. */
+/** What a memory's row says of who saved it: "Saved 2h ago by" its keeper "from" the agent it came from, or "via" the Manager that kept it for them. */
 export const MEMORY_SAVED_WORDS = {
   SAVED: "Saved",
   BY: "by",
   FROM: "from",
+  VIA: "via",
 } as const;
 
 /** How often agents were handed a memory in the recall window, as a line says it: "3 recalls". */

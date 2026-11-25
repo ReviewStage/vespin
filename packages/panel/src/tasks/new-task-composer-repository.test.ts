@@ -103,7 +103,6 @@ async function mount(
             ...control.newTask,
             workspaces: [ACME],
             workspaceId: scope.id,
-            ...(preset === undefined ? undefined : { preset: { repository: preset } }),
             repositoriesIn: () => ({ ...NO_REPOSITORIES, recent, scope: scope.id }),
             start: (_name: string, repository: string | null) => {
               starts.push(repository);
@@ -111,6 +110,7 @@ async function mount(
               return Promise.resolve(undefined);
             },
           },
+          preset: preset === undefined ? undefined : { repository: preset },
           workspaceId: scope.id,
           onLeave: () => undefined,
           listSide: MENTION_MENU_SIDE.ABOVE,

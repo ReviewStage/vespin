@@ -2,20 +2,17 @@
 
 import assert from "node:assert/strict";
 import type { AgentAttachment } from "@repo/features/agent-wire";
-import { leavingPlace } from "@repo/ui/testing/leaving-place";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, test, vi } from "vitest";
+import { afterEach, test } from "vitest";
 import { attachmentChipName } from "../testing/attachment-chip.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
 
 /**
  * attached-file-chips.test.ts -- the message box's way off takes a file off
- * on the press, so the box no longer holds it, while the row keeps its chip
- * drawn, out of reach, as it scales out, and takes it once that has played;
- * of two files alike, the one pressed is the one taken off; and a file the
- * box takes on scales in, the first into an empty box among them.
+ * on the press, so the box no longer holds it and its chip goes with it; and
+ * of two files alike, the one pressed is the one taken off.
  */
 
 declare global {
@@ -23,27 +20,6 @@ declare global {
 }
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
-/** The motion tokens the row reads, as the app's sheets set them. */
-const TOKENS = {
-  "--ui-duration-exit": "90ms",
-  "--ui-motion-exit": "ease",
-  "--ui-duration-quick": "140ms",
-  "--ui-duration-shape": "460ms",
-  "--ui-spring": "ease-out",
-  "--ui-row-stagger": "32ms",
-  "--ui-list-travel": "16px",
-} as const;
-
-/** A motion played: the element it played on, its keyframes, and a way to have it finish. */
-interface Played {
-  readonly element: Element;
-  readonly keyframes: Keyframe[];
-  readonly finish: () => void;
-}
-
-/** How wide a chip is drawn, side by side in its row. */
-const CHIP = 120;
 
 const SPEC: AgentAttachment = {
   name: "spec.pdf",
@@ -54,56 +30,11 @@ const SPEC: AgentAttachment = {
 const NOTES: AgentAttachment = { name: "notes.txt", mediaType: "text/plain", data: "aGk=" };
 
 let root: Root | undefined;
-let played: Played[] = [];
-
-type Motion = { onfinish: (() => void) | null; cancel: () => void };
-
-beforeEach(() => {
-  played = [];
-
-  for (const [name, value] of Object.entries(TOKENS)) {
-    document.documentElement.style.setProperty(name, value);
-  }
-
-  Object.defineProperty(Element.prototype, "animate", {
-    configurable: true,
-    value(this: Element, keyframes: Keyframe[]) {
-      const motion: Motion = {
-        onfinish: null,
-        cancel: () => undefined,
-      };
-
-      played.push({ element: this, keyframes, finish: () => motion.onfinish?.() });
-
-      return motion;
-    },
-  });
-  // Note that each chip stands after the chips before it still in the row's layout, a leaving one where list-motion.css lays it.
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    const row = this.parentElement;
-
-    if (!this.matches("li") || row === null) return new DOMRect(0, 0, 0, 0);
-
-    const laidOut = [...row.children].filter((each) => leavingPlace(each) === undefined);
-    const place = leavingPlace(this);
-
-    const left =
-      place !== undefined && place !== "gone" ? place.left : laidOut.indexOf(this) * CHIP;
-
-    return new DOMRect(left, 0, CHIP, 48);
-  });
-});
 
 afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
   document.body.replaceChildren();
-
-  for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
-  Reflect.deleteProperty(Element.prototype, "animate");
-  vi.restoreAllMocks();
 });
 
 /** A message box holding `start`, taking a file off by its place as the box does, and on with Add. */
@@ -147,25 +78,10 @@ function remove(chip: HTMLLIElement | undefined): void {
   act(() => (off ?? assert.fail("a way off")).click());
 }
 
-const finishAll = () =>
-  act(() => {
-    for (const motion of played.splice(0)) motion.finish();
-  });
-
-test("the way off takes the file off on the press, and its chip scales out out of reach before it goes", () => {
+test("the way off takes the file off on the press, its chip with it", () => {
   const held = draw([SPEC, NOTES]);
   remove(chips()[0]);
   assert.deepEqual(held.now, [NOTES], "the box no longer holds it");
-  const leaving = chips().find((chip) => chip.hasAttribute("data-leaving"));
-  assert.equal(leaving && attachmentChipName(leaving), "spec.pdf", "drawn through its exit");
-  assert.equal(leaving?.hasAttribute("inert"), true);
-
-  const scaled = played
-    .filter((motion) => motion.element === leaving)
-    .some((motion) => motion.keyframes.some((frame) => String(frame.transform).includes("scale")));
-
-  assert.ok(scaled, "it scales out");
-  finishAll();
   assert.deepEqual(chips().map(attachmentChipName), ["notes.txt"]);
 });
 
@@ -175,34 +91,7 @@ test("of two files alike, the one whose way off is pressed is the one taken off"
   remove(chips()[1]);
   assert.equal(held.now.length, 1);
   assert.equal(held.now[0], SPEC, "the first stays");
-  finishAll();
   assert.equal(chips().length, 1);
-});
-
-test("a file the box takes on scales in", () => {
-  draw([SPEC]);
-  act(() => document.querySelector<HTMLButtonElement>("button")?.click());
-  const arrived = chips().at(-1);
-  assert.equal(arrived && attachmentChipName(arrived), "notes.txt");
-
-  const scaled = played
-    .filter((motion) => motion.element === arrived)
-    .some((motion) => motion.keyframes.some((frame) => String(frame.transform).includes("scale")));
-
-  assert.ok(scaled, "it scales in");
-});
-
-test("the first file an empty box takes on scales in too", () => {
-  draw([]);
-  act(() => document.querySelector<HTMLButtonElement>("button")?.click());
-  const arrived = chips()[0];
-  assert.equal(arrived && attachmentChipName(arrived), "notes.txt");
-
-  const scaled = played
-    .filter((motion) => motion.element === arrived)
-    .some((motion) => motion.keyframes.some((frame) => String(frame.transform).includes("scale")));
-
-  assert.ok(scaled, "it scales in");
 });
 
 test("a text file whose bytes spell no base64 still draws its chip, by its name", () => {

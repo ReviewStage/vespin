@@ -127,7 +127,7 @@ import {
   withTurnServers,
 } from "./native-projection.js";
 import { isApprovalEvent, landApprovalEvent } from "./runner-approvals.js";
-import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
+import { redactKeepingPlanCodes, storableValue } from "./runner-moments.js";
 
 /**
  * runner-events-app.ts -- where a native harness's runner posts its events, which land in the agent's transcript.
@@ -217,12 +217,12 @@ type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
 
-/** A batch as the store can keep it: every NUL its events carry replaced (`withoutNul`). */
+/** A batch as the store can keep it: every NUL and half character its events carry replaced (`storableValue`). */
 function storable(batch: RunnerEventBatch): RunnerEventBatch {
   return {
     events: batch.events.map(({ sequence, message }) => ({
       sequence,
-      message: withoutNul(message),
+      message: storableValue(message),
     })),
   };
 }
@@ -268,7 +268,7 @@ interface Applying {
   readonly read: NativeReader;
   /** Who pays for the agent, as recorded as it started; none for an agent from before payers. */
   readonly payer: AgentPayer | undefined;
-  /** The subscription or API key its latest launch put it on, which the payer's word is written to; none for the account's first. */
+  /** The subscription or API key its latest launch put it on, which the payer's word is written to; none where no launch recorded one, whose word no row takes. */
   readonly subscriptionId: string | undefined;
   /** The description or prompt the agent was handed first, whose share of its context the ring estimates. */
   readonly brief: string;
@@ -675,8 +675,10 @@ function landWrite(
     case NATIVE_WRITE.PLAN_STATUS: {
       // Note that the row is the starter's credential that pays, the one the agent ran on: the plan's
       // subscription, or, for an agent its API key pays for, that key, which a refusal marks invalid and
-      // a limit, its provider's quota or credit refusing it, marks out of quota.
+      // a limit, its provider's quota or credit refusing it, marks out of quota. An agent no launch recorded
+      // the credential of, one from before launches recorded it, writes to none, since a guess may mark another plan limited.
       const ownKey = applying.payer === AGENT_PAYER.API_KEY;
+      const { subscriptionId } = applying;
 
       const row = ownKey
         ? apiKeyRowOf(applying.model)
@@ -684,7 +686,7 @@ function landWrite(
           ? undefined
           : PLAN_ROW[applying.payer];
 
-      if (row === undefined) return Effect.void;
+      if (row === undefined || subscriptionId === undefined) return Effect.void;
 
       return setPlanStatus(
         target.userId,
@@ -696,15 +698,16 @@ function landWrite(
         write.resetsAt === undefined ? undefined : new Date(write.resetsAt),
         new Date(write.turnOpenedAt ?? now),
         new Date(now),
-        applying.subscriptionId,
+        subscriptionId,
       );
     }
 
     case NATIVE_WRITE.PLAN_USAGE: {
-      // Note that usage is a plan's alone, which no API key's row takes.
+      // Note that usage is a plan's alone, which no API key's row takes, and only the plan the agent's launch recorded.
+      const { subscriptionId } = applying;
       const row = applying.payer === undefined ? undefined : PLAN_ROW[applying.payer];
 
-      if (row === undefined) return Effect.void;
+      if (row === undefined || subscriptionId === undefined) return Effect.void;
 
       return setPlanUsage(
         target.userId,
@@ -718,7 +721,7 @@ function landWrite(
         },
         new Date(now),
         new Date(write.turnOpenedAt ?? now),
-        applying.subscriptionId,
+        subscriptionId,
       );
     }
   }

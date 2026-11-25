@@ -24,7 +24,10 @@
  * that moved past the reader's sync id alone, with the ids of those that
  * stand no longer for it and the sync id to ask past next, held until
  * something of the reader's moves; or whole, with that sync id, to a reader
- * that names none, is too far behind, or whose admission to the rows moved.
+ * that names none, is too far behind, or whose admission to the rows moved,
+ * and to a build that reads pages, whole a few tasks at a time, each page
+ * naming the next (`LIVE_POLL.PAGE`, `live-pages.ts`), as the account's
+ * inbox items are answered too.
  * `GET /api/live/task-rows?id=` answers one task and every agent of it, by
  * the task or the agent `id` names, as the task list's statements narrowed
  * to it (`taskRowsRead`), for a window that opens one the list does not
@@ -58,6 +61,9 @@
  * `GET /api/live/manager-chat?id=` answers one page of a Manager's chat,
  * its newest messages or with `&before=` those older than a `seq`, as one
  * statement, woken by a write that names the agent (`managerChatRead`).
+ * `GET /api/live/agent-followers?id=` answers a Manager's followers, its
+ * owner and the rest with their machines switch, as two statements, woken
+ * by a write that names the agent (`agentFollowersRead`).
  * `GET /api/live/task-browser-tabs?id=` answers its Browser tabs as one
  * statement, the agent's pointer on each among them, woken by a write that
  * names the task, so a window draws the pointer moving within a moment of
@@ -237,10 +243,12 @@ import {
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { type LiveTopics, ownMovedKeys, syncMovedOf } from "../sync/live-query.js";
 import { NO_TOPICS } from "../sync/watch.js";
+import { pageParents, pageTokenOf, readsPages } from "./live-pages.js";
 import { type BoundLiveRead, type PartOf, WATCHED_LOOK } from "./live-read-binding.js";
 import { type LiveSealer, NO_ROWS_DIGEST, pollSealer } from "./poll-sealer.js";
 import { accountInboxRead } from "./reads/account-inbox.js";
 import { accountPreferencesRead } from "./reads/account-preferences.js";
+import { agentFollowersRead } from "./reads/agent-followers.js";
 import { agentOriginRead } from "./reads/agent-origin.js";
 import { agentTranscriptRead } from "./reads/agent-transcript.js";
 import {
@@ -733,7 +741,8 @@ const narrowedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends 
  * a reader that names no id, whose id is below the oldest the log kept or
  * past the settled one, that is more than `SYNC_LOG.MOST` rows behind, or
  * whose admission to the rows moved (a `whole` table's row naming its
- * account). Otherwise each part is its statement narrowed to what moved,
+ * account), in pages where it is `paged` and the read binds them
+ * (`pagedParts`). Otherwise each part is its statement narrowed to what moved,
  * with the reader's id it was read past and the id to read past next, the
  * ids of its own rows a write the reader's topics reach moved that the
  * narrowed read no longer finds (`gone`), and the txids of the writes its
@@ -746,6 +755,7 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   query: BoundLiveRead<Read>,
   params: LiveReadParams<Read>,
   sync: string,
+  paged: boolean,
 ) {
   const delta = query.delta;
 
@@ -826,6 +836,10 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
 
   const next = String(standing.settled);
 
+  if (standing.whole && paged && delta.page !== undefined) {
+    return yield* pagedParts(delta.page, params, standing.settled, undefined);
+  }
+
   if (standing.whole) {
     const statements = query.statements(params);
 
@@ -847,14 +861,77 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   };
 });
 
-/** A bound live read's parts in delta mode, under the read's span as `liveQueryParts` runs one. */
-function liveDeltaParts<Read extends AnyLiveRead>(
-  query: BoundLiveRead<Read>,
-  params: LiveReadParams<Read>,
-  sync: string,
-) {
-  return deltaParts(query, params, sync).pipe(Effect.withSpan(`web/live/${query.name}`));
+/** The snapshot, as Postgres spells one (`xmin:xmax:xip,…`), that shows every transaction below `at` and none at or past it. */
+function atSnapshot(at: number): string {
+  return `${at}:${at}:`;
 }
+
+/**
+ * One page of a delta read's whole answer (`./live-pages.ts`): the parents
+ * past `after`, or the first where it names none, and every part read
+ * through the read's statements narrowed to them, each part with the
+ * settled id `at` read before the first page and the page after it where
+ * more stand. Note that a page carries no snapshot it was read at,
+ * because a write that snapshot shows may have moved a row of a page read
+ * before it: the last page carries instead the one snapshot every write
+ * below `at` shows and none at or past it (`atSnapshot`), which is what the
+ * reader holds once it is joined on, so a write before the first page is
+ * confirmed then. Unavailable where its statements can't be built or read.
+ */
+const pagedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends AnyLiveRead>(
+  page: NonNullable<NonNullable<BoundLiveRead<Read>["delta"]>["page"]>,
+  params: LiveReadParams<Read>,
+  at: number,
+  after: readonly string[] | undefined,
+) {
+  const parents = yield* pageParents(page, params, at, after);
+  const statements = page.statements(params, { keys: parents.keys, first: after === undefined });
+
+  if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+
+  const sync = {
+    next: String(at),
+    ...Option.match(parents.next, { onNone: () => undefined, onSome: (word) => ({ page: word }) }),
+  };
+
+  const held = Option.isNone(parents.next) ? { snapshot: atSnapshot(at) } : undefined;
+
+  // SAFETY: every part is kept, each with where it stands beside it.
+  const queries = Object.fromEntries(
+    Object.entries<SealedLiveQueryWire>(read.queries).map(([part, sealed]) => {
+      const { snapshot: _snapshot, ...rows } = sealed;
+
+      return [part, { ...rows, sync, ...held }];
+    }),
+  ) as Record<PartOf<Read>, SealedLiveQueryWire>;
+
+  return { ...read, queries };
+});
+
+/**
+ * A bound live read's parts in delta mode, under the read's span as
+ * `liveQueryParts` runs one: the page a reader names (`page`), or past its
+ * sync id, a whole answer in pages to a build that reads them (`paged`).
+ */
+const liveDeltaParts = /* @__PURE__ */ Effect.fnUntraced(
+  function* <Read extends AnyLiveRead>(
+    query: BoundLiveRead<Read>,
+    params: LiveReadParams<Read>,
+    asked: { readonly sync: string | undefined; readonly page: string | undefined },
+    paged: boolean,
+  ) {
+    const page = query.delta?.page;
+
+    if (asked.page === undefined) return yield* deltaParts(query, params, asked.sync ?? "", paged);
+
+    if (page === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    const token = yield* pageTokenOf(asked.page);
+
+    return yield* pagedParts(page, params, token.at, token.after);
+  },
+  (effect, query) => Effect.withSpan(effect, `web/live/${query.name}`),
+);
 
 /**
  * The caller, where they are the account the read names; refused as signed
@@ -870,13 +947,16 @@ const sameUser = (input: { readonly [LIVE_USER_QUERY]?: string | undefined }, us
  * snapshot's sealed (`liveQueryParts`), held on the parts it names
  * (`heldOn`) and for a reader that keeps fewer (`olderParts`); a cursor
  * read's past the reader's cursor where it names one (`liveCursorParts`);
- * and a delta read's past the reader's sync id where it names one
- * (`liveDeltaParts`), each answered as a snapshot's otherwise.
+ * and a delta read's past the reader's sync id where it names one, or the
+ * page it names (`liveDeltaParts`), each answered as a snapshot's
+ * otherwise; a whole answer in pages to a build that reads them
+ * (`readsPages`, from the request's headers).
  */
 function boundParts<Read extends AnyLiveRead>(
   read: BoundLiveRead<Read>,
   bound: LiveReadParams<Read>,
   asked: Readonly<Record<string, string | undefined>>,
+  request: Request,
 ) {
   const { heldOn, olderParts } = read.declaration;
   // SAFETY: a declaration names its held and older parts among its own (`LiveReadDeclaration`).
@@ -884,8 +964,11 @@ function boundParts<Read extends AnyLiveRead>(
   // SAFETY: a declaration names its held and older parts among its own (`LiveReadDeclaration`).
   const older = olderParts as readonly PartOf<Read>[] | undefined;
   const sync = asked[LIVE_POLL.SYNC];
+  const page = asked[LIVE_POLL.PAGE];
 
-  if (read.delta !== undefined && sync !== undefined) return liveDeltaParts(read, bound, sync);
+  if (read.delta !== undefined && (sync !== undefined || page !== undefined)) {
+    return liveDeltaParts(read, bound, { sync, page }, readsPages(request));
+  }
 
   if (read.cursor !== undefined) {
     return liveCursorParts(read, bound, asked, read.look, read.woken, older);
@@ -939,7 +1022,7 @@ function answerBoundRead<Read extends AnyLiveRead>(read: BoundLiveRead<Read>) {
     const bound = { ...params, ...served } as LiveReadParams<Read>;
 
     if (read.admit !== undefined) yield* read.admit(bound, asked);
-    const sealed = yield* boundParts(read, bound, asked);
+    const sealed = yield* boundParts(read, bound, asked, context.request);
 
     if (read.answered !== undefined) yield* read.answered(sealed.queries);
 
@@ -989,6 +1072,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     taskHistory: signedIn.taskHistory.effect(answerBoundRead(taskHistoryRead)),
     taskComments: signedIn.taskComments.effect(answerBoundRead(taskCommentsRead)),
     managerChat: signedIn.managerChat.effect(answerBoundRead(managerChatRead)),
+    agentFollowers: signedIn.agentFollowers.effect(answerBoundRead(agentFollowersRead)),
     taskBrowserTabs: signedIn.taskBrowserTabs.effect(answerBoundRead(taskBrowserTabsRead)),
     agentBrowserTabs: signedIn.agentBrowserTabs.effect(answerBoundRead(agentBrowserTabsRead)),
     macCommands: signedIn.macCommands.effect(answerBoundRead(machineCommandsRead)),

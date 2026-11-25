@@ -4,20 +4,24 @@
  * The panel times a task opening and its agent's transcript drawing and
  * catching up, the window's own start to its first state drawn and to its
  * first task list read, the Inbox opening to its rows drawn and a row chosen to
- * its thread drawn, and a keystroke in a box timed to the paint that
- * followed it, and hands each one, once it ended, to the recorder its shell
- * installed: the desktop's panel window answers it with Sentry's renderer
- * SDK (`apps/desktop/src/renderer/desktop-sentry-sdk.ts`), which samples it
- * at the window's own trace rate. A window with no recorder, a test's or a
+ * its thread drawn, a keystroke in a box timed to the paint that
+ * followed it, and a list row pressed timed to the paint after it, and
+ * hands each one, once it ended, to the recorder its shell installed: the
+ * desktop's panel window answers it with Sentry's renderer SDK
+ * (`apps/desktop/src/renderer/desktop-sentry-sdk.ts`), which samples it at
+ * the window's own trace rate. A window with no recorder, a test's or a
  * shell that traces nothing, times nothing, which is why this is a door of
  * its own rather than a capability every shell must answer.
  *
  * Note that a span's attributes are numbers alone, and read only where the
  * recorder keeps the span, so an unsampled one costs nothing to measure and
  * no attribute can carry a message's words or a credential. A keystroke's
- * span says how long it waited and nothing of the key or the words.
+ * span says how long it waited and nothing of the key or the words, and a
+ * row press's says how long it waited and nothing of the row.
  */
 
+import { SENTRY_LOOP_STALL_ATTRIBUTE } from "@repo/features/sentry-tracing";
+import { listenRowPresses } from "@repo/ui/list-row-presses";
 import { useCallback, useRef } from "react";
 
 /** The spans the panel times, under the names Sentry lists them by. */
@@ -42,6 +46,8 @@ export const PANEL_SPAN = {
   INBOX_ITEM_OPEN: "inbox.item_open",
   /** A key pressed in an Inbox item's answer box to the paint after it. */
   KEYSTROKE_INBOX_ANSWER: "keystroke.inbox_answer",
+  /** A list row pressed, a task's, an agent's, or an Inbox thread's among them, to the paint after it. */
+  ROW_PRESS: "press.row",
 } as const;
 
 type PanelSpanName = (typeof PANEL_SPAN)[keyof typeof PANEL_SPAN];
@@ -66,6 +72,16 @@ export const PANEL_SPAN_ATTRIBUTE = {
   HELD_BYTES: "transcript.held_bytes",
   /** Whether the transcript already stood on app state as its tab held it, 1, or was read from the service first, 0. */
   CACHE_HIT: "transcript.cache_hit",
+  /** From the hold to the host asking the service for the page that ended the span: the ask's way to the host, and for a span that waited on it, the live read's first read. */
+  HOST_WAIT: "transcript.host_wait_ms",
+  /** How long the service took to answer that page, as the host timed it. */
+  REQUEST: "transcript.request_ms",
+  /** From the service's answer to the host laying the page. */
+  LAY: "transcript.lay_ms",
+  /** From the host laying the page to the window drawing it: the push to the window and its draw. */
+  WINDOW: "transcript.window_ms",
+  /** The longest the host's process stood still from its follow's start to the lay (`SENTRY_LOOP_STALL_ATTRIBUTE`); said only where its platform hears that, as the desktop's main does. */
+  HOST_STALL: SENTRY_LOOP_STALL_ATTRIBUTE,
   /** The size of the description the task opened on, in characters. */
   DESCRIPTION_CHARS: "task.description_chars",
   /** How many tasks, of every workspace, the sidebar's first list read answered. */
@@ -78,9 +94,15 @@ export const PANEL_SPAN_ATTRIBUTE = {
   INPUT_DELAY: "keystroke.input_delay_ms",
   /** How long a keystroke's handlers ran, in milliseconds. */
   PROCESSING: "keystroke.processing_ms",
+  /** How long a row's press waited before its handlers ran, in milliseconds: the window busy with something else. */
+  PRESS_INPUT_DELAY: "press.input_delay_ms",
+  /** How long a row's press's handlers ran, in milliseconds. */
+  PRESS_PROCESSING: "press.processing_ms",
+  /** From a row's press's handlers ending to the paint after it, in milliseconds: what they set off drawn, React's render of the page it opens among it. */
+  PRESS_PRESENTATION: "press.presentation_ms",
 } as const;
 
-type PanelSpanAttribute = (typeof PANEL_SPAN_ATTRIBUTE)[keyof typeof PANEL_SPAN_ATTRIBUTE];
+export type PanelSpanAttribute = (typeof PANEL_SPAN_ATTRIBUTE)[keyof typeof PANEL_SPAN_ATTRIBUTE];
 
 /** One timing, ended: when it started and ended, in the epoch's milliseconds, and what it measured, read only where it is kept. */
 export interface PanelSpan {
@@ -94,21 +116,28 @@ export interface PanelSpan {
 export type PanelSpanRecorder = (span: PanelSpan) => void;
 
 /**
- * The shortest wait the browser reports a keystroke for, the least Event
- * Timing allows: a key whose paint came within a frame is not reported, so
- * only the keystrokes a person could feel are timed.
+ * The shortest wait the browser reports an event for, the least Event
+ * Timing allows: a key or a press whose paint came within a frame is not
+ * reported, so only the waits a person could feel are timed.
  */
-const KEYSTROKE_REPORTED_MS = 16;
+const EVENT_REPORTED_MS = 16;
 
 /**
- * What the keystroke observer hears: every event the browser times past that
+ * What the event observers hear: every event the browser times past that
  * wait. Note that TypeScript's DOM types do not yet name Event Timing's
  * threshold, so the shape says it.
  */
-const KEYSTROKES_OBSERVED: PerformanceObserverInit & { readonly durationThreshold: number } = {
+const EVENTS_OBSERVED: PerformanceObserverInit & { readonly durationThreshold: number } = {
   type: "event",
-  durationThreshold: KEYSTROKE_REPORTED_MS,
+  durationThreshold: EVENT_REPORTED_MS,
 };
+
+/**
+ * How many row presses wait on their timing at most: a press painted within
+ * a frame is never reported, so the oldest waiting is let go as later ones
+ * come.
+ */
+const PRESSES_AWAITED = 8;
 
 let recorder: PanelSpanRecorder | undefined;
 
@@ -123,6 +152,9 @@ const timedBoxes = new Map<Element, KeystrokeSpanName>();
 
 /** What hears the browser's keystroke timings, from the first time a box is timed. */
 let keystrokeObserver: PerformanceObserver | undefined;
+
+/** When each row press not yet timed happened, as its event's time stamp, which its timing's start is. */
+const awaitedPresses: number[] = [];
 
 /** The span a keystroke on `target` is timed under: the timed box it was pressed in, if any. */
 function timedBoxOf(target: Node | null): KeystrokeSpanName | undefined {
@@ -164,8 +196,8 @@ function recordKeystrokes(list: PerformanceObserverEntryList): void {
   }
 }
 
-/** Whether this window's browser reports how long a keystroke waited. */
-function reportsKeystrokes(): boolean {
+/** Whether this window's browser reports how long an event waited. */
+function reportsEventTiming(): boolean {
   return (
     typeof PerformanceObserver !== "undefined" &&
     PerformanceObserver.supportedEntryTypes.includes("event")
@@ -180,12 +212,12 @@ function reportsKeystrokes(): boolean {
  * draws, and a timing reported between the two must not be lost with it.
  */
 function timeKeystrokes(box: Element, name: KeystrokeSpanName): () => void {
-  if (recorder === undefined || !reportsKeystrokes()) return () => undefined;
+  if (recorder === undefined || !reportsEventTiming()) return () => undefined;
   timedBoxes.set(box, name);
 
   if (keystrokeObserver === undefined) {
     keystrokeObserver = new PerformanceObserver(recordKeystrokes);
-    keystrokeObserver.observe(KEYSTROKES_OBSERVED);
+    keystrokeObserver.observe(EVENTS_OBSERVED);
   }
 
   return () => {
@@ -193,11 +225,69 @@ function timeKeystrokes(box: Element, name: KeystrokeSpanName): () => void {
   };
 }
 
+/** Notes a list row's press, by its time stamp, until the browser reports its timing. */
+function notePress(timeStamp: number): void {
+  awaitedPresses.push(timeStamp);
+
+  if (awaitedPresses.length > PRESSES_AWAITED) awaitedPresses.shift();
+}
+
+/**
+ * Records each row press noted from the moment it was pressed to the paint
+ * after it, split three ways: its wait before its handlers ran, their run,
+ * and from their end to the paint, which is what they set off drawn.
+ */
+function recordRowPresses(list: PerformanceObserverEntryList): void {
+  for (const entry of list.getEntriesByName("click")) {
+    if (!isEventTiming(entry)) continue;
+    const awaited = awaitedPresses.indexOf(entry.startTime);
+
+    if (awaited === -1) continue;
+    awaitedPresses.splice(awaited, 1);
+    const startedAt = performance.timeOrigin + entry.startTime;
+    const delay = entry.processingStart - entry.startTime;
+    const processing = entry.processingEnd - entry.processingStart;
+    // Note that a timing's duration is rounded to 8 ms while its handlers' end is not, so what is left past them is held at zero.
+    const presentation = Math.max(0, entry.startTime + entry.duration - entry.processingEnd);
+    recordPanelSpan({
+      name: PANEL_SPAN.ROW_PRESS,
+      startedAt,
+      endedAt: startedAt + entry.duration,
+      attributes: () => ({
+        [PANEL_SPAN_ATTRIBUTE.PRESS_INPUT_DELAY]: delay,
+        [PANEL_SPAN_ATTRIBUTE.PRESS_PROCESSING]: processing,
+        [PANEL_SPAN_ATTRIBUTE.PRESS_PRESENTATION]: presentation,
+      }),
+    });
+  }
+}
+
+/**
+ * Times every list row pressed in this window, answering what stops it: a
+ * press is noted as it happens (`@repo/ui`'s `listenRowPresses`), and
+ * recorded once the browser reports the paint after it. A browser that reports no event times nothing.
+ */
+function timeRowPresses(): () => void {
+  if (!reportsEventTiming() || typeof document === "undefined") return () => undefined;
+  const observer = new PerformanceObserver(recordRowPresses);
+  observer.observe(EVENTS_OBSERVED);
+  const stopListening = listenRowPresses(notePress);
+
+  return () => {
+    observer.disconnect();
+    stopListening();
+    awaitedPresses.length = 0;
+  };
+}
+
 /** Installs what this window records its spans through, and answers what takes it back. */
 export function installPanelSpanRecorder(installed: PanelSpanRecorder): () => void {
   recorder = installed;
+  const stopPresses = timeRowPresses();
 
   return () => {
+    stopPresses();
+
     if (recorder === installed) recorder = undefined;
   };
 }

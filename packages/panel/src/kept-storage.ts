@@ -45,6 +45,17 @@ export function writeKept<A>(key: string, schema: Schema.Codec<A, string>, value
   }
 }
 
+/** Keeps text as it is, already encoded, and says whether it was kept; a write that fails leaves what was kept before. */
+export function writeKeptText(key: string, text: string): boolean {
+  try {
+    window.localStorage.setItem(key, text);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Forgets a kept value, so the next read answers its default. */
 export function forgetKept(key: string): void {
   try {

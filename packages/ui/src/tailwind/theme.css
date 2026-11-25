@@ -107,7 +107,7 @@
   --spacing-touch: var(--ui-touch-target);
 
   /* The panel's Inbox (`@repo/panel`'s `tasks/inbox-*.tsx`): its two columns
-     and the one standing alone; the list's held height while a row leaves;
+     and the one standing alone;
      the thread's gutter, a list row's 20px, the line through its faces, and
      the earlier messages' line inset past it; a pick's check centered on its
      first line; a short field's measure and an answered field's least
@@ -115,7 +115,6 @@
      and the attention mark's glyph a size under a row's. */
   --grid-template-columns-inbox: auto minmax(0, 1fr);
   --grid-template-columns-single: minmax(0, 1fr);
-  --spacing-list-held-least: var(--ui-list-held-height, 0);
   --spacing-inbox-face-half: calc(var(--ui-space-20) / 2);
   --spacing-inbox-line: calc(var(--ui-space-20) / 2 - 1px);
   --spacing-inbox-earlier: calc(var(--ui-space-20) + var(--ui-list-inset));
@@ -413,6 +412,11 @@
   --container-dialog-wide: min(var(--ui-dialog-wide-width), 100%);
   --container-dialog-composer: min(var(--ui-dialog-composer-width), 100%);
   --container-dialog-composer-reach: calc(100% + 2 * var(--ui-space-12));
+  --container-dialog-sections: min(var(--ui-dialog-sections-width), 100%);
+  /* A settings dialog's height, held as it turns from section to section,
+     and its section list beside the section shown. */
+  --spacing-dialog-sections-height: var(--ui-dialog-sections-height);
+  --grid-template-columns-dialog-sections: var(--ui-dialog-sections-list-width) minmax(0, 1fr);
   --container-dialog-media-min: min(var(--ui-dialog-media-min-width), 100%);
   --container-dialog-media-max: min(var(--ui-dialog-media-max-width), 100%);
   /* off-scale: a command palette's card (`components/command/`), at its own
@@ -704,6 +708,9 @@
     var(--ui-space-4) +
     var(--ui-space-4)
   );
+  /* A channel's gutter, where a message's sender's picture stands beside its
+     name and words, a card head's disc wide (`ChannelMessage`). */
+  --spacing-channel-avatar: var(--spacing-avatar-card);
   --spacing-avatar-page: var(--ui-space-48); /* a page head's disc */
   --spacing-avatar-masthead: 56px; /* off-scale: a masthead's disc */
   --spacing-avatar-portrait: var(--ui-space-64); /* a portrait's disc */
@@ -747,11 +754,9 @@
   /* The panel window's own (`@repo/panel`'s desktop surfaces, which every
      client mounts): the profile's spacing roles its layout reads beside the
      ones above; the keyboard ring's reach a scroller stands past its column
-     by; the least height a column's list keeps while a row leaves near its
-     end (`ListMotion`); the sizes and inks of the sidebar's own parts, its
+     by; the sizes and inks of the sidebar's own parts, its
      workspace head, its section icons drawn from the file tree's palette
      (the panel's `base.css`), and the picker that chooses one. */
-  --spacing-list-held: max(100%, var(--ui-list-held-height, 0px));
   /* off-scale: centers a line of words on the inline tile's 14px */
   --spacing-workspace-ref-lift: max(0px, calc((14px - 1lh) / 2));
   --spacing-corner-dot: 5px; /* off-scale: the dot a press wears at its corner (`CornerDot`) */

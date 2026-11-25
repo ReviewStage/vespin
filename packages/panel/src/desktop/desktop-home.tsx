@@ -30,6 +30,7 @@ import { NOTICE_LOOK } from "../tasks/connect-agent-banner.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { MENTION_MENU_SIDE } from "../tasks/mention-picker.js";
 import { NewTaskComposer } from "../tasks/new-task-composer.js";
+import { useNewTaskShown } from "../tasks/use-new-task.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.js";
@@ -263,8 +264,8 @@ function HomeComposer({
   takesFocus: boolean;
 }): React.JSX.Element | null {
   const box = useRef<HTMLDivElement>(null);
-  useHomeNewTask(box, tasks.newTask.homeAsks);
-  const refusal = tasks.newTask.homeRefused;
+  const { homeAsks, homeRefused: refusal } = useNewTaskShown();
+  useHomeNewTask(box, homeAsks);
 
   if (!tasks.signedIn) return null;
 
@@ -277,10 +278,8 @@ function HomeComposer({
         <NewTaskComposer
           // Note that each refusal mounts the composer afresh, as the card opens on what it pressed only as it mounts.
           key={refusal?.opening}
-          newTask={{
-            ...tasks.newTask,
-            preset: refusal === undefined ? undefined : { refused: refusal.refused },
-          }}
+          newTask={tasks.newTask}
+          preset={refusal === undefined ? undefined : { refused: refusal.refused }}
           workspaceId={tasks.newTask.workspaceId}
           onLeave={letGoOfFocus}
           takesFocus={takesFocus}
@@ -336,7 +335,7 @@ export function DesktopHome({
             <Arrival reading={arriving} label={READING_TASKS}>
               {/* The Inbox's rows name who started each agent, and Recent's who is on each task, read against the listed workspace's members. */}
               <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
-                <PersonBody reading={false}>
+                <PersonBody>
                   {inboxOn ? <HomeInbox tasks={tasks} read={read} waiting={waiting} /> : null}
                   <HomeRecent tasks={tasks} room={room} staged={staged} />
                 </PersonBody>

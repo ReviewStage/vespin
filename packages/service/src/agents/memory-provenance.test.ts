@@ -11,8 +11,9 @@ import { user } from "@repo/database/schemas/auth";
 import { memory } from "@repo/database/schemas/memory";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openRunningTurn, openWorkspace } from "@repo/database/testing";
 import { AGENT_TOOL, CLAUDE_CODE_TOOL } from "@repo/features/agent-tools";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { Effect, Option } from "effect";
@@ -38,7 +39,8 @@ import { runAgentForget, runAgentRemember } from "./memory-tools.js";
  * included, whose first line its relay wrote with no sender, nor a
  * turn whose journal already holds a web read, the retired runtime's or Claude Code's; a
  * turn a member's own line opened, which read nothing of the web, keeps the
- * memory, as from the agent and that line; a turn that settled refuses nothing; and a forget is
+ * memory, as from the agent and that line, and a Manager's in the words of
+ * the member whose line opened it; a turn that settled refuses nothing; and a forget is
  * held to the same rule, done on the turn a member's own line opens, as their answer on the
  * Memory digest's thread does. Synthetic accounts,
  * workspaces, and words throughout.
@@ -230,6 +232,38 @@ it.layer(getTestDB())("a remember's provenance", (it) => {
           [[FACT, agent.id, line]],
         );
       }),
+  );
+
+  it.effect("a memory a Manager keeps on a turn Dean opened is Dean's, not its owner's", () =>
+    Effect.gen(function* () {
+      const { agent, workspaceId } = yield* openAgent();
+      const db = yield* Database;
+      const dean = `user-${randomUUID()}`;
+      yield* db.insert(user).values({ id: dean, name: "Dean", email: `${dean}@app.test` });
+      yield* joinWorkspace(workspaceId, dean);
+
+      const started = yield* createAgent(agent.userId, {
+        taskId: null,
+        workspaceId,
+        descriptionSnapshot: null,
+        prompt: null,
+        idempotencyKey: randomUUID(),
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+        repository: null,
+        runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        kind: AGENT_KIND.MANAGER,
+      });
+
+      const manager = Option.getOrThrow(started).agent;
+      yield* openRunningTurn(manager, [{ member: dean }]);
+
+      assert.equal((yield* remember(manager)).outcome, MEMORY_OUTCOME.KEPT);
+      assert.deepEqual(
+        (yield* listMemories(workspaceId)).map((kept) => [kept.text, kept.userId]),
+        [[FACT, dean]],
+      );
+    }),
   );
 
   it.effect("a turn that settled refuses nothing, whatever opened it", () =>

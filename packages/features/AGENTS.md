@@ -84,5 +84,7 @@ here:
 `productEventFromWire` never sees either of them, so a change here cannot make them
 safer and a change there cannot make them unsafe.
 
-`PRIVACY.md` is the whole of what a user is told, since neither has a
-switch. It moves when either stops being true, not when an event is added.
+`PRIVACY.md` is the whole of what a user is told; the device's "Share usage
+data" switch stops both along with the counts (`@repo/host/app-state`'s
+`sharesUsageData`). It moves when either stops being true, not when an event
+is added.

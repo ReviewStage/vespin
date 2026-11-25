@@ -112,7 +112,13 @@ builds a control of its own.
   on TextKit 2), its value the wire's Markdown read through
   `@repo/features/pill-words`. It grows from one line to `maxLines` and then
   scrolls, tells the `@` word the caret stands in (`onAtWord`), and puts a
-  picked pill in that word's place (`pick`).
+  picked pill in that word's place (`pick`). A held picture's pill wears its
+  thumbnail in its glyph's place (`thumbnails`, the file the app writes each
+  picture's bytes to, which the Swift draws through SDWebImage, expo-image's
+  own engine, decoded at the pill's size into expo-image's cache), as the
+  panel's box draws a picture's chip,
+  and a press on it opens the picture full screen (`onPicturePress`) where
+  any other pill's press places the caret.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, a picture its words name by its marker ("[Picture 1]")
@@ -462,8 +468,9 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   which pushed the page's path out of a compact bar.
 - **The tab bar** is `NativeTabs`: each tab labeled in every window, since a
   compact window's icons alone read as empty (the developer, Nov 23, 2026),
-  the round + alone an icon there through its `Label`'s own `hidden`, the
-  Inbox count in copper, and the round + for New task; a regular window's
+  the Inbox count in copper, and Search on the system's own round glass,
+  with no round + for New task, which each tab root's bar offers as its
+  compose instead; a regular window's
   bar is
   `sidebarAdaptable`, so iPadOS stands it as its own tab sidebar, as Apple's
   tab guidance has it. A compact window hides it while a

@@ -12,6 +12,8 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
+  # The image engine expo-image draws with, which a picture pill's thumbnail is drawn through so it shares expo-image's cache; held to the version expo-image asks for.
+  s.dependency 'SDWebImage', '~> 5.21.0'
 
   s.source_files = '*.swift'
   s.pod_target_xcconfig = {

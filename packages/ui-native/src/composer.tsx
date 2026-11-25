@@ -183,6 +183,10 @@ export interface ComposerPills {
   readonly files?: ReadonlySet<string> | undefined;
   /** Told as the field takes and lets go of the keyboard, so what an `@` offers can be read before one is typed. */
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
+  /** The file each held picture's pill draws its thumbnail from, by the picture's name (`PillField`'s `thumbnails`). */
+  readonly thumbnails?: ReadonlyMap<string, string> | undefined;
+  /** Opens a held picture full screen, by its name, as a press on its pill asks. */
+  readonly onPicturePress?: ((name: string) => void) | undefined;
 }
 
 type ComposerProps = {
@@ -635,6 +639,8 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   const {
     field: pillDoor,
     files: pillFiles,
+    thumbnails: pillThumbnails,
+    onPicturePress,
     onAtWord: onPillAtWord,
     onFocusChange: onPillFocus,
   } = pills ?? {};
@@ -719,6 +725,8 @@ function useComposerParts(props: ComposerProps): ComposerParts {
             value={words}
             onChange={type}
             files={pillFiles}
+            thumbnails={pillThumbnails}
+            onPicturePress={onPicturePress}
             placeholder={placeholder}
             maxLines={lines}
             onAtWord={onPillAtWord}

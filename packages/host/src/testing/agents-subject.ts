@@ -297,8 +297,14 @@ function fakeService() {
   // Each page read at once, in turn; the last stands once the others are read.
   let pagesNow: readonly (TranscriptNowAnswer | { readonly failure: "unanswered" })[] = [];
   let pageGate: Effect.Effect<void> = Effect.void;
+
   // The newest page, as the follow opens with it; none answers one with something on it.
-  let newestPage: AgentNewestAnswer | { readonly failure: "unanswered" } | undefined;
+  let newestPage:
+    | AgentNewestAnswer
+    | { readonly failure: "unanswered" }
+    | typeof OFFLINE
+    | undefined;
+
   // The transaction a pin answers it committed in, where it answers one.
   let startTxid: string | undefined;
   // Whether a Start goes unanswered, as one sent offline does.
@@ -320,6 +326,7 @@ function fakeService() {
   let messageSendGate: Effect.Effect<void> = Effect.void;
   // What a message sent to a Manager's chat answers; none answers it taken, under one id.
   let chatAnswer: AgentChatSendAnswerView | undefined;
+  let chatSendGate: Effect.Effect<void> = Effect.void;
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -588,7 +595,9 @@ function fakeService() {
             : `worker-newest:${agentId}:${callId}`) + (cut === true ? ":cut" : ""),
         );
 
-        // Note that the service answers an agent the account does not reach not found on every read alike.
+        // Note that a newest page the test says fails fails so, the network's failure among them; otherwise the service answers an agent the account does not reach not found on every read alike.
+        if (newestPage !== undefined && "failure" in newestPage) return newestPage;
+
         if (Predicate.isObjectKeyword(transcript)) return transcript;
 
         return newestPage ?? { ...SAID, cursor: "1:0" };
@@ -604,11 +613,14 @@ function fakeService() {
         return { messages: SAID.messages, before: "3" };
       }),
     chatSend: (agentId, request) =>
-      Effect.sync(() => {
-        asked.push(`chatSend:${agentId}:${request.clientKey}:${request.text}`);
+      Effect.andThen(
+        Effect.suspend(() => chatSendGate),
+        Effect.sync(() => {
+          asked.push(`chatSend:${agentId}:${request.clientKey}:${request.text}`);
 
-        return chatAnswer ?? { agent: AGENT, messageId: "a1b2c3d4" };
-      }),
+          return chatAnswer ?? { agent: AGENT, messageId: "a1b2c3d4" };
+        }),
+      ),
     message: (agentId, request) =>
       Effect.andThen(
         Effect.suspend(() => messageSendGate),
@@ -1041,7 +1053,7 @@ function fakeService() {
       pageGate = gate;
     },
     /** The newest page the service answers. */
-    pageNewest: (page: AgentNewestAnswer | { readonly failure: "unanswered" }) => {
+    pageNewest: (page: AgentNewestAnswer | { readonly failure: "unanswered" } | typeof OFFLINE) => {
       newestPage = page;
     },
     /** The transaction the service answers a sent message with. */
@@ -1066,9 +1078,10 @@ function fakeService() {
       messageAnswer = answer;
       messageSendGate = gate;
     },
-    /** What a message sent to a Manager's chat answers from now on. */
-    answerChat: (answer: AgentChatSendAnswerView) => {
+    /** What a message sent to a Manager's chat answers from now on, once `gate` lets it. */
+    answerChat: (answer: AgentChatSendAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       chatAnswer = answer;
+      chatSendGate = gate;
     },
     /** What a change of an agent's queue answers from now on, once `gate` lets it. */
     answerQueue: (answer: AgentQueueAnswerView, gate: Effect.Effect<void> = Effect.void) => {

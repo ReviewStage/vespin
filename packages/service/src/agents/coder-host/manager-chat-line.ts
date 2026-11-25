@@ -7,10 +7,9 @@
  * queue hands it on, a Start's prompt, a reply button's suggestion they
  * pressed, and the member MCP server's `message_agent`. The steer asks here
  * of every line it takes (`steerAgentWritten`), so no door decides it: the
- * line is the member's, and what carried it passes `isPersonChatMetadata`,
- * the one test the chat's derivation takes too. The writer writes the
- * message beside the line in the line's transaction (`writer.ts`'s
- * `chatMessageOfLine`). A delegation of a call's lines is none, since the
+ * line is the member's, and what carried it passes `isPersonChatMetadata`.
+ * The writer writes the message beside the line in the line's transaction
+ * (`writer.ts`'s `chatMessageOfLine`). A delegation of a call's lines is none, since the
  * chat holds those lines as they were recorded (`growManagerChatLine`).
  */
 

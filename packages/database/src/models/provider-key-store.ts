@@ -144,6 +144,12 @@ const ofKind = (key: typeof KindKeySchema.Type) =>
     eq(accountProviderKey.kind, key.kind),
   );
 
+/**
+ * One subscription or API key of the account's, by its id: the one a turn
+ * or a read of its usage ran on, whose word on the plan no other row takes.
+ */
+const PlanTargetSchema = Schema.Struct({ ...KindKeySchema.fields, subscriptionId: Schema.String });
+
 /** Where a statement finds the one row a target names, the first of its kind's order where it names no id. */
 const targetRow = (db: DatabaseClient, target: typeof TargetSchema.Type) =>
   and(
@@ -419,7 +425,7 @@ const PlanStatusSchema = Schema.Literals([
 /** A plan's status as a turn found it, on whatever credential the row holds now, as `setPlanStatus` bounds it. */
 const updatePlanStatus = SqlSchema.void({
   Request: Schema.Struct({
-    ...TargetSchema.fields,
+    ...PlanTargetSchema.fields,
     status: PlanStatusSchema,
     limitResetsAt: Schema.NullOr(Schema.Date),
     savedBy: Schema.Date,
@@ -456,7 +462,7 @@ const updatePlanStatus = SqlSchema.void({
  */
 const mergePlanUsage = SqlSchema.void({
   Request: Schema.Struct({
-    ...TargetSchema.fields,
+    ...PlanTargetSchema.fields,
     window: UsageWindowSchema,
     heardAt: Schema.Date,
     savedBy: Schema.Date,
@@ -899,8 +905,10 @@ export type PlanStatus = typeof PlanStatusSchema.Type;
 
 /**
  * Writes how the provider answered a coding agent's turn on the account's
- * plan of this kind, the subscription of this id or the first of its kind
- * where none is named, with when its reached limit resets where it said.
+ * subscription or API key of this id, with when its reached limit resets
+ * where it said. Note that the row is always named, never guessed as the
+ * first of its kind, since a word on one plan written to another marks it
+ * limited and moves the next launch off it.
  * `savedBy` is when the turn opened: a credential saved after it, as a
  * reconnect saves one, ran none of it and is not judged by it.
  * Note that a row the service cannot read keeps saying so, since only a new
@@ -919,13 +927,13 @@ export function setPlanStatus(
   limitResetsAt: Date | undefined,
   savedBy: Date,
   now: Date,
-  subscriptionId?: string,
+  subscriptionId: string,
 ): TaskStoreEffect<void> {
   return updatePlanStatus({
     userId,
     provider,
     kind,
-    ...(subscriptionId !== undefined && { subscriptionId }),
+    subscriptionId,
     status,
     limitResetsAt: status === PROVIDER_KEY_STATUS.LIMIT_REACHED ? (limitResetsAt ?? null) : null,
     savedBy,
@@ -935,8 +943,7 @@ export function setPlanStatus(
 
 /**
  * Writes one usage window a coding agent's turn heard its harness report on
- * the account's plan of this kind, the subscription of this id or the first
- * of its kind where none is named, in place of the window of its length and
+ * the account's subscription of this id, in place of the window of its length and
  * model the row held, the others kept. As with `setPlanStatus`, a credential saved
  * after the turn opened (`savedBy`) is not given it.
  */
@@ -947,13 +954,13 @@ export function setPlanUsage(
   window: StoredUsageWindow,
   heardAt: Date,
   savedBy: Date,
-  subscriptionId?: string,
+  subscriptionId: string,
 ): TaskStoreEffect<void> {
   return mergePlanUsage({
     userId,
     provider,
     kind,
-    ...(subscriptionId !== undefined && { subscriptionId }),
+    subscriptionId,
     window,
     heardAt,
     savedBy,

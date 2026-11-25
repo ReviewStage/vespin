@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
+import { listAgentFollowers } from "@repo/database/models/agent-follower-store";
 import {
   latestTurnsOfReached,
   pinAgent,
@@ -2140,6 +2141,37 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
       }),
   );
 
+  it.effect("a member who messages a teammate's Manager follows it with their machines on", () =>
+    Effect.gen(function* () {
+      const agentSessions = fakeAgentSessions();
+
+      const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
+        running: false,
+      });
+
+      yield* joinWorkspace(task.workspaceId, other);
+
+      yield* (yield* Database)
+        .update(agentTable)
+        .set({ kind: AGENT_KIND.MANAGER, taskId: null })
+        .where(eq(agentTable.id, agent.id));
+
+      const body = { text: "Check my Mac's checkout.", clientKey: randomUUID() };
+
+      const sent = yield* ask(
+        request(AGENT_CHAT_MESSAGES, other, { method: "POST", id: agent.id, body }),
+      );
+
+      assert.equal(sent.status, HOSTED_HTTP_STATUS.ACCEPTED, JSON.stringify(sent.body));
+      const followers = Option.getOrThrow(yield* listAgentFollowers(owner, agent.id));
+
+      assert.deepEqual(
+        Object.fromEntries(followers.map((follower) => [follower.userId, follower.machines])),
+        { [owner]: true, [other]: true },
+      );
+    }),
+  );
+
   it.effect(
     "a person's chat message to a Manager whose turn was lost is handed again under the same header, read from the chat, when Try again resends it",
     () =>
@@ -2313,6 +2345,70 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           { name: "notes.txt", mediaType: "text/plain", url: "data:text/plain;base64,aGVsbG8=" },
           { id: kept[0]?.id, mediaType: "image/png", name: "flow.png" },
         ]);
+      }),
+  );
+
+  it.effect(
+    "a file sent with a reply in one of a Manager's chat's threads lands on the reply's own row, in that thread",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, agent, ask } = yield* messagedAgent(agentSessions, { running: false });
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const root = readAnswer(
+          agentChatSendAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            request(AGENT_CHAT_MESSAGES, owner, {
+              method: "POST",
+              id: agent.id,
+              body: { text: "Ship the invites.", clientKey: randomUUID() },
+            }),
+          ),
+        );
+
+        readAnswer(
+          agentChatSendAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            request(AGENT_CHAT_MESSAGES, owner, {
+              method: "POST",
+              id: agent.id,
+              body: {
+                text: "Here's the list.",
+                clientKey: randomUUID(),
+                threadRoot: root.messageId,
+                // "hello" in base64.
+                attachments: [
+                  { name: "invites.txt", mediaType: AGENT_ATTACHMENT_TYPE.TEXT, data: "aGVsbG8=" },
+                ],
+              },
+            }),
+          ),
+        );
+
+        const page = yield* readManagerChatPage(owner, agent.id, { limit: 10 });
+        const reply = page.find((message) => message.text === "Here's the list.");
+
+        assert.deepEqual(
+          { threadRoot: reply?.threadRoot, attachments: reply?.attachments },
+          {
+            threadRoot: root.messageId,
+            attachments: [
+              {
+                name: "invites.txt",
+                mediaType: "text/plain",
+                url: "data:text/plain;base64,aGVsbG8=",
+              },
+            ],
+          },
+        );
       }),
   );
 

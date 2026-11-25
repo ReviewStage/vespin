@@ -57,8 +57,11 @@
      columns are named after the toolbar rather than as any child of a page
      that `:has()` one, because a `:has()` over a page whose subject is any
      child makes the browser restyle the whole window for every element
-     added under it. */
-  .ui-detail-page[data-frame="toolbar"] > .ui-toolbar ~ .ui-detail-page-body {
+     added under it. A page whose bar the window stands outside it, over
+     views it switches between, says so by its inset (`toolbar`) and stands
+     on the same edges. */
+  .ui-detail-page[data-frame="toolbar"] > .ui-toolbar ~ .ui-detail-page-body,
+  .ui-detail-page[data-inset="toolbar"] > .ui-detail-page-body {
     --ui-detail-page-side: calc(var(--ui-space-12) + var(--ui-row-inset));
   }
 

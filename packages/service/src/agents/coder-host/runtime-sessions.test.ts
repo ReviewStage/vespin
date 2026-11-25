@@ -325,6 +325,7 @@ function environment(): Layer.Layer<HostedEnvironment> {
     posthogApiHost: undefined,
     posthogProjectApiKey: undefined,
     posthogIngestHost: undefined,
+    posthogDistinctIdKey: undefined,
     cronSecret: undefined,
     githubWebhookSecret: undefined,
     providerKeyEncryptionKeys: Redacted.make(RING),

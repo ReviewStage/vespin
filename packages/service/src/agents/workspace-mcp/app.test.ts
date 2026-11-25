@@ -129,7 +129,7 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * Our MCP server, answered by its group the way a function answers it,
  * over a real dialect, and driven by the MCP SDK's own client, the one a
  * harness speaks: a runner's bearer admits its agent's conversation, the
- * server lists `list_threads` and runs it through the coder host's inbox door
+ * server lists `inbox_list_threads` and runs it through the coder host's inbox door
  * as the agent's starter, the door the tool catalog names for it, and a wrong bearer, a missing one, and a retired
  * one are each refused before anything is read. Synthetic accounts and
  * words throughout.
@@ -154,6 +154,7 @@ const NO_ENVIRONMENT: HostedEnvironmentValues = {
   posthogApiHost: undefined,
   posthogProjectApiKey: undefined,
   posthogIngestHost: undefined,
+  posthogDistinctIdKey: undefined,
   cronSecret: undefined,
   githubWebhookSecret: undefined,
   providerKeyEncryptionKeys: undefined,
@@ -301,6 +302,7 @@ const agentWithBearer = Effect.gen(function* () {
     taskId: task.id,
     agentId: agent.id,
     organizationId: agent.organizationId,
+    conversationId: agent.conversationId,
     bearer,
   };
 });
@@ -536,10 +538,10 @@ const AGENT_TOOLS = [
 
 /** The tools a native agent is served: every tool of our catalog that its harness has no equal of. */
 const SERVED_TOOLS = [
-  "post_thread",
-  "list_threads",
-  "read_thread",
-  "withdraw_ask",
+  "inbox_post",
+  "inbox_list_threads",
+  "inbox_read_thread",
+  "inbox_withdraw_ask",
   "open_pull_request",
   "edit_description",
   "look_at_picture",
@@ -586,11 +588,13 @@ const DOOR_OF: Readonly<
     DirectCall
   >
 > = {
-  post_thread: (admitted, input) =>
+  inbox_post: (admitted, input) =>
     runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox: NO_SANDBOX }),
-  list_threads: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.LIST, input }),
-  read_thread: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
-  withdraw_ask: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.WITHDRAW, input }),
+  inbox_list_threads: (admitted, input) =>
+    runAgentInbox(admitted, { tool: INBOX_TOOL.LIST, input }),
+  inbox_read_thread: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
+  inbox_withdraw_ask: (admitted, input) =>
+    runAgentInbox(admitted, { tool: INBOX_TOOL.WITHDRAW, input }),
   open_pull_request: (admitted, input) => runAgentOpenPullRequest(admitted, input),
   edit_description: (admitted, input) => runAgentEditDescription(admitted, input, 0, NO_SANDBOX),
   look_at_picture: (admitted, input) => runAgentLookAtPicture(admitted, input, true, NO_SANDBOX),
@@ -637,7 +641,7 @@ const initialize = (protocolVersion: string) => ({
 
 it.layer(SUITE)("Vespin's MCP server", (it) => {
   it.effect(
-    "an SDK client under the runner's bearer lists list_threads and lists its agent's threads through the inbox door",
+    "an SDK client under the runner's bearer lists inbox_list_threads and lists its agent's threads through the inbox door",
     () =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -880,7 +884,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         return agent;
       }),
-      withheld: ["post_thread", "list_threads", "withdraw_ask"],
+      withheld: ["inbox_post", "inbox_list_threads", "inbox_withdraw_ask"],
     },
     {
       why: "whose task's assignee turned the Inbox off, though its starter keeps one, the threads it posts",
@@ -891,7 +895,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         return agent;
       }),
-      withheld: ["post_thread", "list_threads", "withdraw_ask"],
+      withheld: ["inbox_post", "inbox_list_threads", "inbox_withdraw_ask"],
     },
     {
       why: "whose starter turned the Inbox off but whose task's assignee never chose, nothing more",
@@ -907,7 +911,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
     {
       why: "started by a Manager, the threads it posts and withdraws",
       agent: agentStartedBy(AGENT_KIND.MANAGER),
-      withheld: ["post_thread", "withdraw_ask"],
+      withheld: ["inbox_post", "inbox_withdraw_ask"],
     },
     {
       why: "started by an ordinary agent, nothing more",
@@ -962,7 +966,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       }),
   );
 
-  it.effect("tools/list offers a Manager send_to_user", () =>
+  it.effect("tools/list offers a Manager chat_send", () =>
     Effect.gen(function* () {
       const fetch = yield* standing;
       const agent = yield* agentWithBearer;
@@ -977,7 +981,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       const listed = yield* Effect.promise(() => client.listTools());
       yield* Effect.promise(() => client.close());
 
-      assert.ok(listed.tools.some((tool) => tool.name === "send_to_user"));
+      assert.ok(listed.tools.some((tool) => tool.name === "chat_send"));
     }),
   );
 
@@ -1002,7 +1006,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
-    "tools/list words a Manager's post_thread for a decision or a to-do alone, and a Manager with no Inbox is told of no thread by send_to_user",
+    "tools/list words a Manager's inbox_post for a decision or a to-do alone, and a Manager with no Inbox is told of no Inbox thread by chat_send",
     () =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -1023,13 +1027,14 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
             return listed.tools.find((tool) => tool.name === name)?.description ?? "";
           });
 
-        const posting = yield* described("post_thread");
+        const posting = yield* described("inbox_post");
         assert.ok(posting.includes("Use it only for a decision between options"), posting);
         assert.ok(!posting.includes("whenever you need something"), posting);
 
         yield* writeAccountPreferences(agent.userId, { inbox: false });
-        const sending = yield* described("send_to_user");
-        assert.ok(sending.length > 0 && !sending.includes("thread"), sending);
+        const sending = yield* described("chat_send");
+        // Note that a chat's own threads are told of all the same, never an Inbox thread.
+        assert.ok(sending.length > 0 && !sending.includes("Inbox thread"), sending);
       }),
   );
 
@@ -1108,7 +1113,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       );
 
       const unreadable = yield* Effect.promise(() =>
-        client.callTool({ name: "withdraw_ask", arguments: {} }),
+        client.callTool({ name: "inbox_withdraw_ask", arguments: {} }),
       );
 
       const noPicture = yield* Effect.promise(() =>

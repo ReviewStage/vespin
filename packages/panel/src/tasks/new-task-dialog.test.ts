@@ -56,7 +56,7 @@ import {
 } from "../testing/composer.js";
 import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
+import { NO_REPOSITORIES, tasksControl, withNewTaskShown } from "../testing/tasks-control.js";
 import { NewTaskDialog } from "./new-task-dialog.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import type { RepositoryChooser } from "./repository-chip.js";
@@ -179,8 +179,6 @@ async function mount(
       newTask: {
         ...control.newTask,
         workspaceId: listed,
-        open,
-        preset: reopened ?? preset,
         repositoriesIn: () => repositories,
         models,
         start: (
@@ -222,7 +220,7 @@ async function mount(
     return createElement(
       OpenSettingsProvider,
       { value: (link: SettingsLink) => links.push(link) },
-      dialog,
+      withNewTaskShown({ open, preset: reopened ?? preset }, dialog),
     );
   }
 
@@ -563,19 +561,21 @@ test("once a repository is chosen, an @ offers its files, read through the works
     act(() =>
       root.render(
         withQueryClient(
-          createElement(NewTaskDialog, {
-            newTask: {
-              ...control.newTask,
-              open: true,
-              workspaceId: "workspace-acme",
-              repositoriesIn: () => ({ ...NO_REPOSITORIES, recent }),
-              start: (...asked) => {
-                started.push(asked[3]?.handed);
+          withNewTaskShown(
+            { open: true },
+            createElement(NewTaskDialog, {
+              newTask: {
+                ...control.newTask,
+                workspaceId: "workspace-acme",
+                repositoriesIn: () => ({ ...NO_REPOSITORIES, recent }),
+                start: (...asked) => {
+                  started.push(asked[3]?.handed);
 
-                return Promise.resolve(undefined);
+                  return Promise.resolve(undefined);
+                },
               },
-            },
-          }),
+            }),
+          ),
         ),
       ),
     );
@@ -654,14 +654,16 @@ test("a skill chosen from the / list is its chip, which opens its SKILL.md in th
   act(() =>
     root.render(
       withQueryClient(
-        createElement(NewTaskDialog, {
-          newTask: {
-            ...control.newTask,
-            open: true,
-            workspaceId: "workspace-acme",
-            repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: ["acme/web"] }),
-          },
-        }),
+        withNewTaskShown(
+          { open: true },
+          createElement(NewTaskDialog, {
+            newTask: {
+              ...control.newTask,
+              workspaceId: "workspace-acme",
+              repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: ["acme/web"] }),
+            },
+          }),
+        ),
       ),
     ),
   );

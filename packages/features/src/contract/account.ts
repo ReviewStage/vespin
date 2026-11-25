@@ -28,7 +28,9 @@
  * correction of a memory gone as not found, words that look like a
  * credential, and one past the workspace's bound, and is refused under its
  * method by a service from before it, which served the path's read and
- * forget alone.
+ * forget alone. A memories read, forget, and keep that name a Manager
+ * (`managerId`) reach that Manager's own memories in the workspace's place,
+ * and a keep naming no Manager of the workspace is refused as not found.
  *
  * The outputs are the wire schemas flipped, so oRPC's output check encodes
  * the handler's value into the bytes the wire carries (`packages/service/src/orpc/base.ts`).
@@ -53,6 +55,7 @@ import {
   MEMORY_QUERY,
   memoriesAnswerSchema,
   memoryIdSchema,
+  memoryManagerIdSchema,
   memorySaveAnswerSchema,
   memorySaveRequestSchema,
   memorySearchAnswerSchema,
@@ -270,7 +273,12 @@ export const accountContract = {
   memories: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.ACCOUNT_MEMORIES }))
-    .input(EffectSchema.Struct({ [MEMORY_QUERY.WORKSPACE_ID]: workspaceIdSchema }))
+    .input(
+      EffectSchema.Struct({
+        [MEMORY_QUERY.WORKSPACE_ID]: workspaceIdSchema,
+        [MEMORY_QUERY.MANAGER_ID]: memoryManagerIdSchema,
+      }),
+    )
     .output(EffectSchema.flip(memoriesAnswerSchema)),
   forgetMemory: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
@@ -286,6 +294,7 @@ export const accountContract = {
         query: EffectSchema.Struct({
           [MEMORY_QUERY.WORKSPACE_ID]: workspaceIdSchema,
           [MEMORY_QUERY.ID]: memoryIdSchema,
+          [MEMORY_QUERY.MANAGER_ID]: memoryManagerIdSchema,
         }),
       }),
     )

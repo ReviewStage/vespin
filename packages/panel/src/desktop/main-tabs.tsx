@@ -55,6 +55,7 @@ import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { DraftAgentTab } from "../tasks/draft-agent-tab.js";
 import { useFailedAgents } from "../tasks/failed-lines.js";
 import { agentForkDoors, ForkProvider, type SuggestDoor } from "../tasks/fork-action.js";
+import { ManagerChatTab } from "../tasks/manager-chat-tab.js";
 import { RunActionsButton, runSubmenu, useRunActions } from "../tasks/run-actions-button.js";
 import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
@@ -990,6 +991,7 @@ export function MainTabContent({
   onContinue,
   onSuggest,
   threads,
+  chat = false,
 }: {
   tab: Exclude<MainTab, typeof MAIN_TAB.OVERVIEW>;
   agents: AgentsSource;
@@ -1013,6 +1015,8 @@ export function MainTabContent({
   onSuggest?: SuggestDoor | undefined;
   /** The threads the agent posted that wait on the developer, docked over its box; none where nothing waits. */
   threads?: AgentThreads | undefined;
+  /** Whether the agent's chat is drawn (`ManagerChatTab`) rather than its transcript, as a Manager's page's Messages tab asks; every other tab draws the transcript. */
+  chat?: boolean | undefined;
 }): React.JSX.Element {
   // Note that the tab's own agent's row is followed here, the others read as they stand, so a step of another agent's turn draws none of the tab.
   const agents = useTaskAgentsFor(
@@ -1064,20 +1068,32 @@ export function MainTabContent({
                 })
           }
         >
-          <AgentTab
-            agentId={agentId}
-            agent={agent}
-            control={agents}
-            shown={shown}
-            onOpenSubagent={(callId, task, status) =>
-              onOpenDelegation(agentId, callId, task, status)
-            }
-            onOpenPullRequest={onOpenPullRequest}
-            onOpenTarget={onOpenTarget}
-            cards={cards.agent(agentId)}
-            onHeld={views.onAgentHeld}
-            threads={threads}
-          />
+          {chat && agent !== undefined ? (
+            // Note that the caller asks for the chat, never the agent's kind, so a Manager's page's Agent tab draws its transcript as any agent's tab does.
+            <ManagerChatTab
+              agent={agent}
+              control={agents}
+              shown={shown}
+              onOpenTarget={onOpenTarget}
+              cards={cards.agent(agentId)}
+              threads={threads}
+            />
+          ) : (
+            <AgentTab
+              agentId={agentId}
+              agent={agent}
+              control={agents}
+              shown={shown}
+              onOpenSubagent={(callId, task, status) =>
+                onOpenDelegation(agentId, callId, task, status)
+              }
+              onOpenPullRequest={onOpenPullRequest}
+              onOpenTarget={onOpenTarget}
+              cards={cards.agent(agentId)}
+              onHeld={views.onAgentHeld}
+              threads={threads}
+            />
+          )}
         </ForkProvider>
       );
     }

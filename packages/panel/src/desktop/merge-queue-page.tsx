@@ -26,9 +26,7 @@
  *
  * The queues are read through the host as the page opens and again every
  * half minute while it stands, since GitHub tells the app nothing as a queue
- * moves; the rows follow each pull request by its address under one
- * `ListMotion`, so a front that merged leaves and the line glides up, each
- * repository's queue under it gliding with its head as one. A
+ * moves; a front that merged leaves at once and the line closes up. A
  * read that fails once it has answered keeps what it held, and one that
  * fails with nothing held says so with its Try again, never as an empty
  * queue.
@@ -59,7 +57,6 @@ import {
   EmptyState,
   ErrorState,
   GAP,
-  ListMotion,
   PAGE_FRAME,
   RepositoryPicture,
   Stack,
@@ -88,7 +85,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { queryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
-import { type CSSProperties, useMemo, useRef } from "react";
+import { type CSSProperties, useMemo } from "react";
 import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { failureShown } from "../failure-report.js";
@@ -228,7 +225,6 @@ function RepositoryQueue({
         cells={QUEUE_ROW_CELLS}
         more={false}
         edges={TASK_ROW_EDGES.UNCHOSEN}
-        moves
         fit={fit}
       >
         {queue.entries.map((entry) => {
@@ -292,7 +288,7 @@ function QueuesRead({
   return <Queues repositories={repositories} marked={marked} onOpen={onOpen} />;
 }
 
-/** Every repository's line, under one motion, so the line glides up as its front merges. */
+/** Every repository's line. */
 function Queues({
   repositories,
   marked,
@@ -302,7 +298,6 @@ function Queues({
   marked: string | undefined;
   onOpen: (url: string) => void;
 }): React.JSX.Element {
-  const root = useRef<HTMLElement>(null);
   const pictures = useRepositoryPictures();
 
   // Note that every repository's numbers stand as wide as the widest on the page, so the titles start on one edge from list to list.
@@ -317,21 +312,19 @@ function Queues({
   );
 
   return (
-    <ListMotion root={root} change={repositories}>
-      <Stack ref={root} gap={GAP.BLOCK} moves>
-        {repositories.map((queue) => (
-          <RepositoryQueue
-            key={queue.repository}
-            queue={queue}
-            label={repositoryLabel(queue.repository, repositories)}
-            pictures={pictures}
-            fit={fit}
-            marked={marked}
-            onOpen={onOpen}
-          />
-        ))}
-      </Stack>
-    </ListMotion>
+    <Stack gap={GAP.BLOCK}>
+      {repositories.map((queue) => (
+        <RepositoryQueue
+          key={queue.repository}
+          queue={queue}
+          label={repositoryLabel(queue.repository, repositories)}
+          pictures={pictures}
+          fit={fit}
+          marked={marked}
+          onOpen={onOpen}
+        />
+      ))}
+    </Stack>
   );
 }
 

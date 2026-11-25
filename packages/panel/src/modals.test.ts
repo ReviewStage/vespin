@@ -14,7 +14,7 @@ import { NewTaskDialog } from "./tasks/new-task-dialog.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
-import { NO_REPOSITORIES, tasksControl } from "./testing/tasks-control.js";
+import { NO_REPOSITORIES, tasksControl, withNewTaskShown } from "./testing/tasks-control.js";
 
 /**
  * Every modal over the window as the developer meets it: opened from a
@@ -83,14 +83,16 @@ function NewTaskOwner({ shown }: OwnerProps): ReactElement {
 
   return owned(
     () => setOpen(true),
-    createElement(NewTaskDialog, {
-      newTask: {
-        ...control.newTask,
-        open: open && shown,
-        repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: ["acme/web"] }),
-        onClose: () => setOpen(false),
-      },
-    }),
+    withNewTaskShown(
+      { open: open && shown },
+      createElement(NewTaskDialog, {
+        newTask: {
+          ...control.newTask,
+          repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: ["acme/web"] }),
+          onClose: () => setOpen(false),
+        },
+      }),
+    ),
   );
 }
 

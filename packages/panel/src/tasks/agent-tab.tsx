@@ -36,7 +36,6 @@ import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
-  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_SENDER,
   AGENT_STATUS,
@@ -61,17 +60,8 @@ import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
-import {
-  type ChatRunPlace,
-  type ManagerChatRuns,
-  type ManagerChatWork,
-  managerChatLines,
-  managerChatRuns,
-  managerChatWork,
-} from "@repo/features/manager-chat";
-import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
-import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MentionHolder } from "@repo/features/mention-holder";
+import { messageFileChips } from "@repo/features/message-files";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
 import { briefAgent, replayOpening } from "@repo/features/replay-card-model";
@@ -147,12 +137,10 @@ import {
   announce,
   CHAT_RUN,
   CHAT_SIDE,
-  ChatAside,
   ChatBubble,
   CodeCard,
   CompactedLine,
   ConnectionLostNotice,
-  chatRunOf,
   DisclosureChevron,
   DocumentIcon,
   GlyphSlot,
@@ -163,7 +151,6 @@ import {
   MESSAGE_LINE_INSET,
   MessageHead,
   MessageLine,
-  type MessageLineInset,
   MovedLine,
   NewSessionLine,
   OneLine,
@@ -179,7 +166,6 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
-import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
@@ -207,9 +193,7 @@ import {
   useState,
 } from "react";
 import {
-  ACTOR_SIZE,
   ActorLine,
-  ActorMark,
   ActorRef,
   AutomationCard,
   automationActor,
@@ -303,8 +287,6 @@ import {
   CALL_PICTURES_PLACE,
   CallPictures,
   ComputerAppsProvider,
-  MessageFileChips,
-  MessageFiles,
   ShownPictures,
   useAgentPictureDoor,
   useComputerIcon,
@@ -316,8 +298,6 @@ import { SendingAgent } from "./agent-ref.js";
 import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
-import { ReplyMessageAction, useChatMessageMenu } from "./chat-reply.js";
-import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { ComputerDock } from "./computer-dock.js";
 import { ComputerPermissionNote } from "./computer-permission-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
@@ -338,7 +318,6 @@ import {
 } from "./line-cards.js";
 import { useMachineAskHeld } from "./machine-ask-waiting.js";
 import { MachineRefusalCard } from "./machine-refusal-card.js";
-import { useManagerChatLooks } from "./manager-chat-looks.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, linkChip } from "./mention-chip.js";
 import {
   agentMessagePlace,
@@ -359,7 +338,7 @@ import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { type SentLine as RailSentLine, sentLineOf } from "./sent-lines.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
 import { ShownPage } from "./shown-page.js";
-import { SentWords, useSkill } from "./skill-chip.js";
+import { SentMessage, type SentMessageBody, useSkill } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
 import { useStartingAgent } from "./starting-agent.js";
@@ -615,68 +594,6 @@ export interface DelegationDoors {
  */
 const LiveDoors = createContext<Pick<DelegationDoors, "cards"> | undefined>(undefined);
 
-/** A Manager's chat in runs (`managerChatRuns`), where the transcript is one (`managerChatLines`), whose messages are drawn as bubbles in their runs; none for every other agent. */
-const ChatRuns = createContext<ManagerChatRuns | undefined>(undefined);
-
-/** The work a Manager's chat keeps a press away (`managerChatWork`); none for every other agent. */
-const ChatWork = createContext<ManagerChatWork | undefined>(undefined);
-
-/** A Manager as its chat draws it: its name over each run of its messages, and its face beside the run (`ChatBubble`'s `avatar`), none where a service older than faces answers. */
-interface ChatManagerLook {
-  readonly name: string;
-  readonly face: ManagerFaceValue | undefined;
-}
-
-/** The Manager whose chat a transcript is; none for every other agent. */
-const ChatManager = createContext<ChatManagerLook | undefined>(undefined);
-
-/** A Manager's chat's doors: the Manager whose chat it is, and the work it keeps a press away. */
-function ChatDoors({
-  manager,
-  work,
-  children,
-}: {
-  manager: ChatManagerLook | undefined;
-  /** The work the chat keeps a press away (`ChatWork`); none for every other agent. */
-  work: ManagerChatWork | undefined;
-  children: ReactNode;
-}): React.JSX.Element {
-  return (
-    <ChatManager value={manager}>
-      <ChatWork value={work}>{children}</ChatWork>
-    </ChatManager>
-  );
-}
-
-/** The face beside a Manager's bubbles, at a message's seat; none where it wears none. */
-function chatAvatar(face: ManagerFaceValue | undefined): React.JSX.Element | undefined {
-  return face === undefined ? undefined : (
-    <ManagerFace face={face} size={MANAGER_FACE_SIZE.MESSAGE} />
-  );
-}
-
-/** Where a run's head and the line under it start: past the face beside its bubbles, or at the bubble's inset where none stands. */
-function chatInset(face: ManagerFaceValue | undefined): MessageLineInset {
-  return face === undefined ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR;
-}
-
-/** A Manager's name over a run of its messages, as a group chat names a speaker over theirs. */
-function ManagerChatHead({ manager }: { manager: ChatManagerLook }): React.JSX.Element {
-  return (
-    <MessageHead
-      inset={chatInset(manager.face)}
-      sender={
-        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate>
-          {manager.name}
-        </Text>
-      }
-    />
-  );
-}
-
-/** Where a message that stands in no run read stands: a run of its own. */
-const LONE_RUN = { opens: true, closes: true } as const;
-
 /** The live doors where a transcript hands them, else what `doors` carries. */
 function useLiveDoors(
   doors: Pick<DelegationDoors, "cards"> | undefined,
@@ -798,7 +715,7 @@ function calledAgentActor(
 }
 
 /** One tool call: its row, and its input and answer under it once opened, a stop naming the worker it stopped by its job where `jobs` knows it, a call about an agent naming it by its chip where `cards` or its answer know it, and a command killed out of memory offering a larger sandbox (`OutOfMemoryOffer`); an answer its page carried cut drawn as `cut` says. */
-function ToolCallView({
+export function ToolCallView({
   part,
   jobs,
   cards,
@@ -1481,51 +1398,54 @@ function PlanCard({
   taskId?: string | undefined;
 }): ReactNode {
   const named = sender != null;
-  // Note that a card standing in a sent line's place draws its words as the line would, so a file's marker in them is the file's chip.
-  const words = files === undefined ? <TranscriptWords text={text} /> : <SentWords text={text} />;
   // The task's status as the list holds it, else as the window hands the open task live (`LiveDoors`), as its sender reads it.
   const listed = useTaskStatus(lead.description ? taskId : undefined);
   const handed = useContext(LiveDoors)?.cards?.task?.status;
   const status = lead.description ? (listed ?? handed) : undefined;
 
-  const card = (
-    <Message from={MESSAGE_ROLE.USER} className="agent-origin" data-message-id={messageId}>
-      {files === undefined ? null : <MessageFileChips message={files} />}
-      <Plan data-origin-description="" aria-label={lead.label}>
-        <PlanHeader>
-          <PlanIcon>
-            {status === undefined ? lead.icon : <TaskStatusMark status={status} />}
-          </PlanIcon>
-          <PlanTitle label={lead.label} previews={title === cardTitle(text)}>
-            {title}
-          </PlanTitle>
-        </PlanHeader>
-        <PlanContent>
-          {taskId === undefined ? (
-            words
-          ) : (
-            <DescriptionPictures taskId={taskId} text={text}>
-              {words}
-            </DescriptionPictures>
-          )}
-          {body === undefined ? null : <OriginBody body={body} />}
-        </PlanContent>
-      </Plan>
-      <MessageLine
-        sender={named ? sender : undefined}
-        at={sentAt}
-        wrap
-        actions={<CopyMessageAction words={text} messageId={messageId} />}
-      />
-    </Message>
-  );
+  // Note that a card standing in a sent line's place draws its files and words as the line would, so a file's marker in them is the file's chip.
+  const card = (line: SentMessageBody | undefined) => {
+    const words = line?.words ?? <TranscriptWords text={text} />;
+
+    return (
+      <Message from={MESSAGE_ROLE.USER} className="agent-origin" data-message-id={messageId}>
+        {line?.files}
+        <Plan data-origin-description="" aria-label={lead.label}>
+          <PlanHeader>
+            <PlanIcon>
+              {status === undefined ? lead.icon : <TaskStatusMark status={status} />}
+            </PlanIcon>
+            <PlanTitle label={lead.label} previews={title === cardTitle(text)}>
+              {title}
+            </PlanTitle>
+          </PlanHeader>
+          <PlanContent>
+            {taskId === undefined ? (
+              words
+            ) : (
+              <DescriptionPictures taskId={taskId} text={text}>
+                {words}
+              </DescriptionPictures>
+            )}
+            {body === undefined ? null : <OriginBody body={body} />}
+          </PlanContent>
+        </Plan>
+        <MessageLine
+          sender={named ? sender : undefined}
+          at={sentAt}
+          wrap
+          actions={<CopyMessageAction words={text} messageId={messageId} />}
+        />
+      </Message>
+    );
+  };
 
   return files === undefined ? (
-    card
+    card(undefined)
   ) : (
-    <MessageFiles message={files} words={text}>
+    <SentMessage files={messageFileChips(files)} words={text}>
       {card}
-    </MessageFiles>
+    </SentMessage>
   );
 }
 
@@ -2021,8 +1941,6 @@ export function AgentMessage({
 }): ReactNode {
   const words = messageWords(message);
   const forkOffered = useForkOffered();
-  const chatRuns = useContext(ChatRuns);
-  const chatWork = useContext(ChatWork);
   const sending = useLineSending(message.id);
   const marked = useLineMarked(message.id);
   const status = useLineStatus(message.id);
@@ -2063,8 +1981,8 @@ export function AgentMessage({
   // A line another agent sent is that agent's message, never the developer's bubble.
   if (agentMessageOf(message) !== undefined) return <AgentMessageRow message={message} />;
 
-  // A line the voice said on a call is the voice's, never the agent's words; in a Manager's chat it is one of the Manager's messages (`managerChatLines`), drawn as any.
-  if (isVoiceLine(message) && chatRuns === undefined) return <VoiceLineRow message={message} />;
+  // A line the voice said on a call is the voice's, never the agent's words.
+  if (isVoiceLine(message)) return <VoiceLineRow message={message} />;
 
   const named =
     sender === undefined ? null : senderFor === undefined ? (
@@ -2144,12 +2062,6 @@ export function AgentMessage({
       threadHead
     );
 
-    const sentWords = (
-      <SentToAgent id={message.id} arrived={message.arrivedIn !== undefined}>
-        <SentWords text={shown} />
-      </SentToAgent>
-    );
-
     // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
     const copy = (
       <CopyMessageAction
@@ -2160,55 +2072,42 @@ export function AgentMessage({
       />
     );
 
-    if (chatRuns !== undefined) {
-      return (
-        <ChatLine
-          message={message}
-          runs={chatRuns}
-          sender={sender}
-          subject={subject}
-          shown={shown}
-          words={sentWords}
-          copy={copy}
-          sending={sending}
-          marked={marked}
-          status={status}
-        />
-      );
-    }
-
     const mark = marked ? <UndeliveredMark messageId={message.id} /> : null;
 
     return (
-      <MessageFiles message={message} words={shown} sending={sending}>
-        <Message
-          from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
-          className={received ? RECEIVED_MESSAGE_CLASS : undefined}
-          data-message-id={message.id}
-          data-undelivered={marked ? "" : undefined}
-        >
-          {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
-          <MessageFileChips message={message} sending={sending} />
-          {shown !== "" ? (
-            <ChatBubble
-              side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
-              run={CHAT_RUN.ALONE}
-              beside={mark}
-            >
-              {sentWords}
-            </ChatBubble>
-          ) : mark === null ? null : (
-            // A line of files alone stands its mark on a row of its own, kept clear of the files' fade.
-            <MessageBeside mark={mark}>{null}</MessageBeside>
-          )}
-          <MessageLine
-            align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
-            status={status}
-            at={sentAt}
-            actions={copy}
-          />
-        </Message>
-      </MessageFiles>
+      <SentMessage files={messageFileChips(message)} words={shown} sending={sending}>
+        {(body) => (
+          <Message
+            from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
+            className={received ? RECEIVED_MESSAGE_CLASS : undefined}
+            data-message-id={message.id}
+            data-undelivered={marked ? "" : undefined}
+          >
+            {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
+            {body.files}
+            {shown !== "" ? (
+              <ChatBubble
+                side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
+                run={CHAT_RUN.ALONE}
+                beside={mark}
+              >
+                <SentToAgent id={message.id} arrived={message.arrivedIn !== undefined}>
+                  {body.words}
+                </SentToAgent>
+              </ChatBubble>
+            ) : mark === null ? null : (
+              // A line of files alone stands its mark on a row of its own, kept clear of the files' fade.
+              <MessageBeside mark={mark}>{null}</MessageBeside>
+            )}
+            <MessageLine
+              align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
+              status={status}
+              at={sentAt}
+              actions={copy}
+            />
+          </Message>
+        )}
+      </SentMessage>
     );
   }
 
@@ -2258,27 +2157,6 @@ export function AgentMessage({
   if (moving && stretches.every((stretch) => stretch.rows?.length === 0)) return null;
 
   return stretches.map((stretch, index) => {
-    if (stretch.line === undefined && chatRuns !== undefined) {
-      const work = chatWork?.work.get(message.id);
-
-      return (
-        <ChatSent
-          key={index === 0 ? message.id : (stretch.rows[0]?.key ?? message.id)}
-          message={message}
-          place={chatRuns.places.get(message.id) ?? LONE_RUN}
-          words={words}
-          moving={moving}
-          work={
-            work === undefined || work.length === 0 ? null : (
-              <ChatWorkRows parts={work} moving={false} delegation={doors} />
-            )
-          }
-        >
-          <TranscriptRows rows={stretch.rows}>{drawPart}</TranscriptRows>
-        </ChatSent>
-      );
-    }
-
     if (stretch.line !== undefined) {
       const line = stretch.line;
 
@@ -2316,223 +2194,8 @@ export function AgentMessage({
   });
 }
 
-/** A Manager's greeting, drawn as its first message though no one sent it and nothing stores it (`@repo/features/manager-greeting`). */
-function ManagerGreetingMessage({
-  words,
-  manager,
-}: {
-  readonly words: string;
-  readonly manager: ChatManagerLook | undefined;
-}): React.JSX.Element {
-  return (
-    <Message
-      from={MESSAGE_ROLE.ASSISTANT}
-      className={RECEIVED_MESSAGE_CLASS}
-      data-manager-greeting=""
-    >
-      {manager === undefined ? null : <ManagerChatHead manager={manager} />}
-      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE} avatar={chatAvatar(manager?.face)}>
-        <TranscriptWords text={words} />
-      </ChatBubble>
-    </Message>
-  );
-}
-
-/**
- * A person's line in a Manager's chat, as a group chat draws it: the
- * reader's own in a bubble at the column's right, and anyone else's at its
- * left, as the Manager's stand, under their name over their run and beside
- * their picture at the run's foot. Each bubble is shaped by where it stands
- * in its sender's run, its Copy and Edit, and its mark where it did not go,
- * beside it, and when it was sent stands under the run's last.
- */
-function ChatLine({
-  message,
-  runs,
-  sender,
-  subject,
-  shown,
-  words,
-  copy,
-  sending,
-  marked,
-  status,
-}: {
-  message: AgentTranscriptMessage;
-  runs: ManagerChatRuns;
-  /** Who sent it; none for the reader's own. */
-  sender: Actor | undefined;
-  /** What heads the line, such as the suggestion it was sent from; none where nothing does. */
-  subject: ReactNode;
-  /** Its words as drawn, empty for a line of files alone. */
-  shown: string;
-  words: ReactNode;
-  copy: ReactNode;
-  sending: boolean;
-  marked: boolean;
-  status: string | undefined;
-}): React.JSX.Element {
-  const place = runs.places.get(message.id) ?? LONE_RUN;
-  const received = sender !== undefined;
-
-  const head =
-    received && place.opens ? (
-      <MessageHead inset={MESSAGE_LINE_INSET.AVATAR} sender={<ActorRef actor={sender} nameOnly />}>
-        {subject}
-      </MessageHead>
-    ) : (
-      subject
-    );
-
-  const mark = marked ? <UndeliveredMark messageId={message.id} /> : null;
-
-  return (
-    <MessageFiles message={message} words={shown} sending={sending}>
-      <Message
-        from={received ? MESSAGE_ROLE.ASSISTANT : MESSAGE_ROLE.USER}
-        className={received ? RECEIVED_MESSAGE_CLASS : undefined}
-        data-message-id={message.id}
-        data-undelivered={marked ? "" : undefined}
-      >
-        {head}
-        <MessageFileChips message={message} sending={sending} />
-        {shown !== "" ? (
-          <ChatBubble
-            side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
-            run={chatRunOf(place.opens, place.closes)}
-            avatar={received ? <ActorMark actor={sender} size={ACTOR_SIZE.CARD} /> : undefined}
-            beside={
-              <>
-                {mark}
-                {copy}
-              </>
-            }
-          >
-            {words}
-          </ChatBubble>
-        ) : mark === null ? null : (
-          // A line of files alone stands its mark on a row of its own, kept clear of the files' fade.
-          <MessageBeside mark={mark}>{null}</MessageBeside>
-        )}
-        <MessageLine
-          align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
-          inset={received ? MESSAGE_LINE_INSET.AVATAR : MESSAGE_LINE_INSET.BUBBLE}
-          status={status}
-          at={place.closes ? message.sentAt : undefined}
-          actions={shown === "" ? copy : undefined}
-        />
-      </Message>
-    </MessageFiles>
-  );
-}
-
-/**
- * One of a Manager's chat messages (`managerChatLines`): its words in a
- * bubble at the column's left, under the Manager's name where it opens its
- * run, shaped by where it stands in its run, its
- * Copy beside it once it is whole, and when it was sent under the run's
- * last where its turn has ended. Note that it offers no link, rewind, or
- * fork, because a message after its turn's first stands under its call's
- * id, which names no message of the transcript.
- */
-function ChatSent({
-  message,
-  place,
-  words,
-  moving,
-  work,
-  children,
-}: {
-  message: AgentTranscriptMessage;
-  place: ChatRunPlace;
-  words: string;
-  moving: boolean;
-  /** The work the message came of, drawn under it once Show work opens it; none where it came of none. */
-  work: ReactNode | null;
-  children: ReactNode;
-}): React.JSX.Element {
-  const manager = useContext(ChatManager);
-  const face = manager?.face;
-  const quoted = moving ? "" : words;
-  const toggle = useWorkToggle();
-  const menu = useChatMessageMenu(quoted, work === null ? undefined : toggle);
-
-  return (
-    <Message
-      from={MESSAGE_ROLE.ASSISTANT}
-      className={RECEIVED_MESSAGE_CLASS}
-      data-message-id={message.id}
-    >
-      {place.opens && manager !== undefined ? <ManagerChatHead manager={manager} /> : null}
-      <ChatBubble
-        side={CHAT_SIDE.RECEIVED}
-        run={chatRunOf(place.opens, place.closes)}
-        avatar={chatAvatar(face)}
-        contextMenu={menu.contextMenu}
-        beside={
-          moving || words === "" ? null : (
-            <CopyMessageAction
-              words={words}
-              lead={
-                <>
-                  <ReplyMessageAction words={quoted} />
-                  {work === null ? null : <WorkMessageAction toggle={toggle} />}
-                </>
-              }
-            />
-          )
-        }
-      >
-        {children}
-      </ChatBubble>
-      {toggle.shown && work !== null ? <ChatAside inset={chatInset(face)}>{work}</ChatAside> : null}
-      {menu.menu}
-      <MessageLine
-        align={MESSAGE_LINE_ALIGN.START}
-        inset={chatInset(face)}
-        at={place.closes && !moving ? message.finishedAt : undefined}
-      />
-    </Message>
-  );
-}
-
-/** What a Manager's chat says while its turn runs: its working line in a bubble of the Manager's, as a chat app shows the other side typing. */
-function ChatWorking({
-  words,
-  face,
-  work = null,
-}: {
-  words: string;
-  face: ManagerFaceValue | undefined;
-  /** The turn under way's work since its last message, drawn under the line once Show work opens it; none where it has done none yet. */
-  work?: ReactNode | null;
-}): React.JSX.Element {
-  const toggle = useWorkToggle();
-
-  return (
-    <Message from={MESSAGE_ROLE.ASSISTANT} className={RECEIVED_MESSAGE_CLASS}>
-      <ChatBubble
-        side={CHAT_SIDE.RECEIVED}
-        run={CHAT_RUN.ALONE}
-        avatar={chatAvatar(face)}
-        beside={work === null ? null : <WorkingWorkAction toggle={toggle} />}
-      >
-        <WorkingLine startedAt={undefined} words={words} />
-      </ChatBubble>
-      {toggle.shown && work !== null ? <ChatAside inset={chatInset(face)}>{work}</ChatAside> : null}
-    </Message>
-  );
-}
-
-/** Whether a Manager's message's work stands open under it, closed until Show work opens it. */
-function useWorkToggle(): ChatWorkToggle {
-  const [shown, setShown] = useState(false);
-
-  return { shown, onToggle: () => setShown((was) => !was) };
-}
-
-/** A stretch of a Manager's work (`managerChatWork`) as the rows a turn's transcript draws, each part drawn as the turn's own is. */
-function ChatWorkRows({
+/** A stretch of a turn's work as the rows its transcript draws, each part drawn as the turn's own is, for a surface that draws a turn's work apart from its transcript. */
+export function TurnWorkRows({
   parts,
   moving,
   delegation,
@@ -2701,7 +2364,7 @@ function findRowOf(row: PlacedRow): FindRow {
 }
 
 /** The class every row of the log wears (tasks.css). */
-const LOG_ROW_CLASS = "agent-log-row";
+export const LOG_ROW_CLASS = "agent-log-row";
 
 /** One row of the log: a placed message, or one piece of a turn too long to draw at once (`turn-pieces.ts`). */
 interface LogEntry {
@@ -3048,10 +2711,6 @@ function AgentTranscriptView({
   onOlder,
   olderFailed = false,
   fromStart,
-  greeting,
-  manager,
-  chat = false,
-  chatWork,
   overComposer = false,
   overEnd,
   earlierOmitted = false,
@@ -3123,14 +2782,6 @@ function AgentTranscriptView({
   olderFailed?: boolean;
   /** Whether the messages begin at the transcript's start, a page landed with none older, so its first line is the opening the brief draws. */
   fromStart: boolean;
-  /** The greeting a Manager's conversation opens on, drawn above its first line; none for every other agent. */
-  greeting?: string | undefined;
-  /** The Manager whose chat this is, named over each run of its messages and its face beside it (`ChatManager`); none for every other agent. */
-  manager?: ChatManagerLook | undefined;
-  /** Whether the messages are a Manager's chat (`managerChatLines`), drawn as bubbles in their runs. */
-  chat?: boolean;
-  /** The work a Manager's chat keeps a press away (`managerChatWork`); none for every other agent. */
-  chatWork?: ManagerChatWork | undefined;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
   overComposer?: boolean;
   /** The room, in pixels, what floats over the log's end takes, as the apps' windows the agent is using do (`ComputerDock`). */
@@ -3250,27 +2901,17 @@ function AgentTranscriptView({
     [finding, entries],
   );
 
-  // A Manager's chat stands in runs of one sender's messages, each drawn close under the one before it.
-  const chatRuns = useMemo(
-    () => (chat ? managerChatRuns(messages, readerId) : undefined),
-    [chat, messages, readerId],
-  );
-
-  // A long turn's pieces after its first are set off from the piece before as the rows of one message are, or as the log's own lines are, and a chat message that goes on its sender's run by a run's step.
+  // A long turn's pieces after its first are set off from the piece before as the rows of one message are, or as the log's own lines are.
   const rowClassOf = useCallback(
     (index: number) => {
       if (index === 0) return LOG_ROW_CLASS;
       const entry = entries[index];
 
-      if (entry?.piece?.continues === true) return `${LOG_ROW_CLASS} agent-log-row-continued`;
-
-      const id = entry?.row.message.id;
-
-      return id !== undefined && chatRuns?.places.get(id)?.opens === false
-        ? `${LOG_ROW_CLASS} agent-log-row-run`
+      return entry?.piece?.continues === true
+        ? `${LOG_ROW_CLASS} agent-log-row-continued`
         : `${LOG_ROW_CLASS} agent-log-row-next`;
     },
-    [entries, chatRuns],
+    [entries],
   );
 
   useVirtualFind({
@@ -3391,17 +3032,7 @@ function AgentTranscriptView({
               ))}
             </div>
           )}
-          {!working || waitingNotice ? null : chat ? (
-            <ChatWorking
-              words={workingWords}
-              face={manager?.face}
-              work={
-                chatWork === undefined || chatWork.live.length === 0 ? null : (
-                  <ChatWorkRows parts={chatWork.live} moving delegation={delegation} />
-                )
-              }
-            />
-          ) : (
+          {!working || waitingNotice ? null : (
             <WorkingLine startedAt={startedAt} words={workingWords} />
           )}
           {limitNotice}
@@ -3445,125 +3076,111 @@ function AgentTranscriptView({
     return (
       <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
-          <ChatRuns value={chatRuns}>
-            <ChatDoors manager={manager} work={chatWork}>
-              <ConnectionNames needed={callsServer}>
-                <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
-                  {olderFailed && onOlder !== undefined ? (
-                    <OlderReadFailed onRetry={onOlder} />
-                  ) : null}
-                  {/* The description's card stands off the tab row by the gap between a column's groups; lines fade under the bar or banner above. */}
-                  <ConversationContent
-                    className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}
-                    streams
-                  >
-                    <ConversationRows
-                      keys={rowKeys}
-                      estimate={ROW_ESTIMATE_PX}
-                      gap={0}
-                      rowClassName={rowClassOf}
-                      handle={rowsHandle}
-                      ownLast={ownLast}
-                    >
-                      {(at) => {
-                        const entry = entries[at];
+          <ConnectionNames needed={callsServer}>
+            <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
+              {olderFailed && onOlder !== undefined ? <OlderReadFailed onRetry={onOlder} /> : null}
+              {/* The description's card stands off the tab row by the gap between a column's groups; lines fade under the bar or banner above. */}
+              <ConversationContent
+                className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}
+                streams
+              >
+                <ConversationRows
+                  keys={rowKeys}
+                  estimate={ROW_ESTIMATE_PX}
+                  gap={0}
+                  rowClassName={rowClassOf}
+                  handle={rowsHandle}
+                  ownLast={ownLast}
+                >
+                  {(at) => {
+                    const entry = entries[at];
 
-                        if (entry === undefined) return null;
-                        const { row, index, piece } = entry;
-                        const { message } = row;
-                        const tails = piece === undefined || piece.last;
-                        const heads = piece === undefined || piece.first;
+                    if (entry === undefined) return null;
+                    const { row, index, piece } = entry;
+                    const { message } = row;
+                    const tails = piece === undefined || piece.last;
+                    const heads = piece === undefined || piece.first;
 
-                        const sender =
-                          message === task
-                            ? briefSender
-                            : messageSender(message, readerId, members, former);
+                    const sender =
+                      message === task
+                        ? briefSender
+                        : messageSender(message, readerId, members, former);
 
-                        // Note that a brief drawn as a line is the source's history, so it stands inside the replay's card rather than as a line sent again over it; a brief drawn as a card of its own still opens the transcript.
-                        const opened = message === first ? opening : undefined;
-                        const folded = opened !== undefined && message !== description;
+                    // Note that a brief drawn as a line is the source's history, so it stands inside the replay's card rather than as a line sent again over it; a brief drawn as a card of its own still opens the transcript.
+                    const opened = message === first ? opening : undefined;
+                    const folded = opened !== undefined && message !== description;
 
-                        return (
+                    return (
+                      <>
+                        {heads ? (
+                          <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
+                        ) : null}
+                        {folded ? null : (
+                          <SteadyAgentMessage
+                            message={opened === undefined ? message : opened.brief}
+                            description={message === description}
+                            taskId={message === description ? taskId : undefined}
+                            lead={lead}
+                            moving={message.id === writing}
+                            delegation={delegation}
+                            todos={todos}
+                            briefTitle={briefTitle}
+                            origin={message === description ? drawnOrigin : undefined}
+                            sender={sender}
+                            senderFor={message === task ? briefFor : undefined}
+                            wakeupDelay={
+                              isWakeupLine(message)
+                                ? wakeupDelayOf(placed[index - 1]?.message)
+                                : undefined
+                            }
+                            arrived={arrivals.get(message.id) ?? NO_ARRIVED}
+                            delegated={delegated.has(message.id)}
+                            piece={piece}
+                          />
+                        )}
+                        {!tails ? null : opened !== undefined && replay !== undefined ? (
                           <>
-                            {at === 0 && fromStart && greeting !== undefined ? (
-                              <ManagerGreetingMessage words={greeting} manager={manager} />
-                            ) : null}
-                            {heads ? (
-                              <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
-                            ) : null}
-                            {folded ? null : (
+                            <ReplayCard
+                              replay={opened.replay}
+                              brief={folded ? { message: opened.brief, sender } : undefined}
+                              sentAt={message.sentAt}
+                              place={replay}
+                              taskId={taskId}
+                            />
+                            {opened.note === undefined ? null : (
                               <SteadyAgentMessage
-                                message={opened === undefined ? message : opened.brief}
-                                description={message === description}
-                                taskId={message === description ? taskId : undefined}
+                                message={opened.note}
+                                description={false}
                                 lead={lead}
-                                moving={message.id === writing}
+                                moving={false}
                                 delegation={delegation}
-                                todos={todos}
-                                briefTitle={briefTitle}
-                                origin={message === description ? drawnOrigin : undefined}
-                                sender={sender}
-                                senderFor={message === task ? briefFor : undefined}
-                                wakeupDelay={
-                                  isWakeupLine(message)
-                                    ? wakeupDelayOf(placed[index - 1]?.message)
-                                    : undefined
-                                }
-                                arrived={arrivals.get(message.id) ?? NO_ARRIVED}
-                                delegated={delegated.has(message.id)}
-                                piece={piece}
+                                sender={briefSender}
+                                senderFor={briefFor}
                               />
                             )}
-                            {!tails ? null : opened !== undefined && replay !== undefined ? (
-                              <>
-                                <ReplayCard
-                                  replay={opened.replay}
-                                  brief={folded ? { message: opened.brief, sender } : undefined}
-                                  sentAt={message.sentAt}
-                                  place={replay}
-                                  taskId={taskId}
-                                />
-                                {opened.note === undefined ? null : (
-                                  <SteadyAgentMessage
-                                    message={opened.note}
-                                    description={false}
-                                    lead={lead}
-                                    moving={false}
-                                    delegation={delegation}
-                                    sender={briefSender}
-                                    senderFor={briefFor}
-                                  />
-                                )}
-                              </>
-                            ) : null}
-                            {earlierOmitted && message === description ? (
-                              <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
-                            ) : null}
-                            {tails ? (
-                              <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
-                            ) : null}
-                            {at === entries.length - 1 ? (
-                              <>
-                                <CallStarts spans={calls.opening} callerOf={callerOf} />
-                                {trailing}
-                              </>
-                            ) : null}
                           </>
-                        );
-                      }}
-                    </ConversationRows>
-                  </ConversationContent>
-                  <AgentRail
-                    lines={railLines}
-                    list={log}
-                    rows={rowsHandle}
-                    bringIn={bringMessage}
-                  />
-                  <ConversationScrollButton />
-                </Conversation>
-              </ConnectionNames>
-            </ChatDoors>
-          </ChatRuns>
+                        ) : null}
+                        {earlierOmitted && message === description ? (
+                          <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
+                        ) : null}
+                        {tails ? (
+                          <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
+                        ) : null}
+                        {at === entries.length - 1 ? (
+                          <>
+                            <CallStarts spans={calls.opening} callerOf={callerOf} />
+                            {trailing}
+                          </>
+                        ) : null}
+                      </>
+                    );
+                  }}
+                </ConversationRows>
+              </ConversationContent>
+              <AgentRail lines={railLines} list={log} rows={rowsHandle} bringIn={bringMessage} />
+              <ConversationScrollButton />
+            </Conversation>
+          </ConnectionNames>
         </LiveDoors>
       </TranscriptAgentOn>
     );
@@ -3578,7 +3195,7 @@ function AgentTranscriptView({
   // The log's first page, and what stands around it, wait in the tab's own placeholder, which it opened on (`AgentTab`).
   if (holding || (reading && ended === undefined)) return <TranscriptSkeleton />;
 
-  // Note that a start under way says so at the log's top, where its first line lands, rather than centered in whatever room the docks leave, so it stands still as they come and go; a Manager's greeting stands there in place of the wait for a first line.
+  // Note that a start under way says so at the log's top, where its first line lands, rather than centered in whatever room the docks leave, so it stands still as they come and go.
   if (ended === undefined && boot === undefined) {
     const leadLine =
       brief === AGENT_BRIEF.BLANK && origin === undefined
@@ -3590,16 +3207,7 @@ function AgentTranscriptView({
 
     return (
       <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
-        {greeting === undefined ? null : (
-          <ManagerGreetingMessage words={greeting} manager={manager} />
-        )}
-        {starting ??
-          (greeting !== undefined && working ? (
-            // Note that a Manager's chat says only that it works, whatever its turn holds, even while nothing it sent stands yet.
-            <ChatWorking words={workingLineWords(phase, waitsUntil)} face={manager?.face} />
-          ) : greeting !== undefined && leadLine === BLANK_AGENT_LINE.WAITING ? null : (
-            <WorkingLine startedAt={undefined} words={leadLine} />
-          ))}
+        {starting ?? <WorkingLine startedAt={undefined} words={leadLine} />}
         {endTrail}
       </ConversationLead>
     );
@@ -3764,10 +3372,6 @@ function AgentTabView({
   );
 
   const conditions = useMemo(() => goalConditions(kept), [kept]);
-  // Note that a Manager's page is its chat, never its transcript: people's lines, its `send_to_user` words, and its `show_media` sets alone, its work shown only as the working line.
-  const chat = agent.kind === AGENT_KIND.MANAGER;
-  const drawnLines = useMemo(() => (chat ? managerChatLines(lines) : lines), [chat, lines]);
-  useManagerChatLooks(chat ? agent.id : undefined, agent.saidAt);
 
   // Note that only a line still on its way is the reader's newest, since a refused one never reached the agent.
   const pendingWords = useMemo(
@@ -3875,12 +3479,6 @@ function AgentTabView({
 
   // Whether the agent works and how its turn ended are read from its newest turn's record alone (`tabTurnOf`).
   const standing = tabTurnOf(agent, composer);
-
-  // Note that a Manager's work stays a press away from its chat, the turn under way's under its working line.
-  const chatWork = useMemo(
-    () => (chat ? managerChatWork(lines, standing.working) : undefined),
-    [chat, lines, standing.working],
-  );
 
   // Note that a first launch still booting says so in the empty transcript's own line (`AgentBootLine`), so no working line or end line stands under it.
   // Note that an agent just made, before its first turn and before its first page lands, is booting by its summary, counted from when it was made as its boot's first attempt is, so Starting… stands at once rather than after a placeholder.
@@ -4029,7 +3627,7 @@ function AgentTabView({
                           <ApprovalsProvider asks={approvals.asks}>
                             <GoalConditions value={conditions}>
                               <AgentTranscriptView
-                                messages={drawnLines}
+                                messages={lines}
                                 standingCalls={transcript.calls}
                                 brief={agent.brief}
                                 briefSender={briefSender}
@@ -4064,7 +3662,7 @@ function AgentTabView({
                                 turnId={standing.turnId ?? agent.turnId}
                                 // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
                                 startedAt={
-                                  !counts || chat
+                                  !counts
                                     ? undefined
                                     : composer.rewinding
                                       ? composer.rewoundAt
@@ -4103,10 +3701,6 @@ function AgentTabView({
                                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                                 olderFailed={transcript.olderFailed}
                                 fromStart={transcript.pages > 0 && !transcript.hasOlder}
-                                greeting={chat ? managerGreeting(agent.title) : undefined}
-                                manager={chat ? { name, face: agent.face } : undefined}
-                                chat={chat}
-                                chatWork={chatWork}
                                 overComposer
                                 overEnd={appsRoom}
                                 bringIn={bringIn}
@@ -4125,7 +3719,7 @@ function AgentTabView({
         </AgentPicturesProvider>
       </CallPlaceProvider>
       <AgentTabFoot>
-        {chat ? null : <TodosDock messages={lines} working={standing.working} />}
+        <TodosDock messages={lines} working={standing.working} />
         <PublishedDock
           published={published}
           agentId={agent.id}

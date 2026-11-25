@@ -16,6 +16,7 @@ import {
   getTestDB,
   joinWorkspace,
   leaveWorkspace,
+  openRunningTurn,
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
@@ -110,6 +111,7 @@ const agentOn = (userId: string, task: { readonly id: string; readonly workspace
       taskId: task.id,
       agentId: started.value.agent.id,
       organizationId: started.value.agent.organizationId,
+      conversationId: started.value.agent.conversationId,
     } satisfies ThreadPoster;
 
     return { ...agent, workspaceId: task.workspaceId };
@@ -139,6 +141,7 @@ const openTasklessAgent = Effect.gen(function* () {
     taskId: null,
     agentId: started.value.agent.id,
     organizationId: workspaceId,
+    conversationId: started.value.agent.conversationId,
   } satisfies ThreadPoster;
 });
 
@@ -410,6 +413,24 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         }
 
         assert.equal((yield* onlyItem(agent)).key, QUEUE.key);
+      }),
+  );
+
+  it.effect(
+    "a Manager's first post naming no to waits on the member who asked for its turn, not its owner",
+    () =>
+      Effect.gen(function* () {
+        const manager = yield* openTasklessAgent;
+        const askerId = yield* openUser;
+        yield* joinWorkspace(manager.organizationId, askerId);
+        const { userId, conversationId } = manager;
+        yield* openRunningTurn({ userId, conversationId }, [{ member: askerId }]);
+
+        const posted = yield* postToInbox(manager, input(QUEUE), noSandbox);
+        assert.equal(posted.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(posted));
+        const [item] = yield* agentInboxItems(manager);
+
+        assert.equal(item?.waitsOn?.userId, askerId);
       }),
   );
 
@@ -1068,7 +1089,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "withdraw_ask settles the open ask with why and leaves the thread; one already settled is taken, says how, and changes nothing; a key with no thread is refused",
+    "inbox_withdraw_ask settles the open ask with why and leaves the thread; one already settled is taken, says how, and changes nothing; a key with no thread is refused",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -1153,7 +1174,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "read_thread answers a thread's every message in order, each ask whole with where it stands and each answer by whom, a settled one as much as an open one",
+    "inbox_read_thread answers a thread's every message in order, each ask whole with where it stands and each answer by whom, a settled one as much as an open one",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -1433,7 +1454,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "list_threads with a status lists the latest threads standing there, however many settled otherwise since",
+    "inbox_list_threads with a status lists the latest threads standing there, however many settled otherwise since",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -1467,7 +1488,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "read_thread pages a long thread back from its latest messages, and names the open ask the first page leaves out",
+    "inbox_read_thread pages a long thread back from its latest messages, and names the open ask the first page leaves out",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;

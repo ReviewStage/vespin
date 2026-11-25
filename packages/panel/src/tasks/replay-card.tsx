@@ -9,6 +9,7 @@ import type {
 } from "@repo/features/agent-wire";
 import { AGENT_SENDER } from "@repo/features/agent-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { messageFileChips } from "@repo/features/message-files";
 import {
   briefOrigin,
   type CarriedTranscript,
@@ -69,8 +70,6 @@ import { lineSender, providerOf } from "./agent-model.js";
 import {
   AgentPicturesProvider,
   ComputerAppsProvider,
-  MessageFileChips,
-  MessageFiles,
   useAgentPictureDoor,
 } from "./agent-pictures.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
@@ -78,7 +77,7 @@ import { CopyMessageAction } from "./copy-message.js";
 import { ForkProvider } from "./fork-action.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, ORIGIN_CHIP } from "./mention-chip.js";
 import { RewindProvider } from "./rewind-action.js";
-import { SentWords } from "./skill-chip.js";
+import { SentMessage } from "./skill-chip.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { TranscriptTool, TranscriptWords } from "./transcript-blocks.js";
 import { useAgentTranscript } from "./use-agent-transcript.js";
@@ -364,26 +363,28 @@ function BriefStep({
   const received = sender !== undefined;
 
   return (
-    <MessageFiles message={message} words={words}>
-      <Message
-        from={received ? MESSAGE_ROLE.ASSISTANT : MESSAGE_ROLE.USER}
-        className={received ? RECEIVED_MESSAGE_CLASS : undefined}
-        data-replay-step={REPLAY_STEP_KIND.LINE}
-      >
-        {received ? <MessageHead sender={<ActorRef actor={sender} />} /> : null}
-        <MessageFileChips message={message} />
-        {words === "" ? null : (
-          <ChatBubble side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT} run={CHAT_RUN.ALONE}>
-            <SentWords text={words} />
-          </ChatBubble>
-        )}
-        <MessageLine
-          align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
-          at={at}
-          actions={<CopyMessageAction words={words} copyable={words !== ""} />}
-        />
-      </Message>
-    </MessageFiles>
+    <SentMessage files={messageFileChips(message)} words={words}>
+      {(body) => (
+        <Message
+          from={received ? MESSAGE_ROLE.ASSISTANT : MESSAGE_ROLE.USER}
+          className={received ? RECEIVED_MESSAGE_CLASS : undefined}
+          data-replay-step={REPLAY_STEP_KIND.LINE}
+        >
+          {received ? <MessageHead sender={<ActorRef actor={sender} />} /> : null}
+          {body.files}
+          {words === "" ? null : (
+            <ChatBubble side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT} run={CHAT_RUN.ALONE}>
+              {body.words}
+            </ChatBubble>
+          )}
+          <MessageLine
+            align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
+            at={at}
+            actions={<CopyMessageAction words={words} copyable={words !== ""} />}
+          />
+        </Message>
+      )}
+    </SentMessage>
   );
 }
 

@@ -39,6 +39,7 @@ import type {
   ComposerTrigger,
 } from "../description-editor/contract.js";
 import { SettingsPageLink } from "../open-settings.js";
+import { type BoxWords, useWordsOf } from "./box-words.js";
 import {
   type CommandReach,
   CommandRef,
@@ -271,7 +272,7 @@ function BoxChip({
 export function useSkillPicker({
   editor,
   room,
-  draft,
+  words,
   source,
   onOpen,
   commands,
@@ -281,8 +282,8 @@ export function useSkillPicker({
   editor: RefObject<ComposerEditorHandle | undefined>;
   /** The box's field, a press in which is the box's own rather than one away from the list. */
   room: RefObject<HTMLElement | null>;
-  /** The box's words, which say whether a skill is named already, so its chip wants the skills read. */
-  draft: string;
+  /** The box's words, which say whether a skill is named already, so its chip wants the skills read, and whether a `/` word leads them. */
+  words: BoxWords;
   /** Where the skills are read from; nothing where the box offers none. */
   source: SkillSource | undefined;
   /** Opens a chosen skill's `SKILL.md`; nothing where the box stands on no task's page. */
@@ -308,8 +309,15 @@ export function useSkillPicker({
   const skills = source !== undefined && read?.source === source ? read.read : undefined;
 
   // Note that the box's commands are offered for the message's first word alone, which is where they run.
-  const leads =
-    commands !== undefined && trigger !== undefined && draft.slice(0, trigger.start).trim() === "";
+  // Note that the words are read for what the list draws alone, so a word typed outside a `/` word draws nothing here.
+  const leadStart = commands !== undefined && trigger !== undefined ? trigger.start : undefined;
+
+  const leadsWords = useWordsOf(
+    words,
+    (text) => leadStart !== undefined && text.slice(0, leadStart).trim() === "",
+  );
+
+  const leads = leadsWords && commands !== undefined && trigger !== undefined;
 
   const leading = leads ? matchingCommands(trigger.query, commands.reach) : [];
   // Note that a box with no skills to offer opens the list only on a command the word finds.
@@ -362,7 +370,8 @@ export function useSkillPicker({
   );
 
   // Note that a message already naming a skill reads them too, so its chips are drawn.
-  const wantsSkills = source !== undefined && (asked > 0 || holdsSlashWord(draft));
+  const namesSkill = useWordsOf(words, holdsSlashWord);
+  const wantsSkills = source !== undefined && (asked > 0 || namesSkill);
 
   // The skills are read as a `/` word opens the list, and again each time
   // another `/` word opens it, the skills last read drawn meanwhile, so a

@@ -153,7 +153,7 @@ function Box({
       talksIn,
     }),
     // What Continue would carry, as the tab hands it on.
-    createElement("output", { "data-unsent": composer.unsent.words }),
+    createElement("output", { "data-unsent": composer.unsent().words }),
   );
 }
 

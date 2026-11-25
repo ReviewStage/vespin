@@ -276,7 +276,6 @@ export function DesktopSidebar({
               {group.tasks.map((task) => (
                 <ListRow
                   key={task.id}
-                  motionKey={task.id}
                   density={LIST_DENSITY.DENSE}
                   ink={LIST_ROW_INK.SIDEBAR}
                   leading={<TaskStatusMark status={task.status} />}

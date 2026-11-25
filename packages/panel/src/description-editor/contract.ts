@@ -634,7 +634,7 @@ export interface CopiedFile {
 }
 
 /** The words a copy wrote to the clipboard: its HTML, and its plain text. */
-interface CopiedWords {
+export interface CopiedWords {
   readonly html: string;
   readonly text: string;
 }
@@ -772,4 +772,6 @@ export type ComposerInput = (typeof COMPOSER_INPUT)[keyof typeof COMPOSER_INPUT]
 export interface DescriptionEditorModule {
   readonly mount: (host: HTMLElement, props: DescriptionEditorProps) => DescriptionEditorHandle;
   readonly mountComposer: (host: HTMLElement, props: ComposerEditorProps) => ComposerEditorHandle;
+  /** A sent message's words as a copy out of a message box writes them, each file its words name carrying its bytes (`files`, by name), so a paste into a box brings its chips back. */
+  readonly messageClipboard: (words: string, files: ReadonlyMap<string, CopiedFile>) => CopiedWords;
 }

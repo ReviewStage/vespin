@@ -1343,7 +1343,7 @@ function InboxStackList(held: InboxHeld) {
             {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
         )}
-        {/* Note that New task's compose ends the bar, as Messages' and Mail's stand, so it stands beside the tab bar's round + until that retires, and alone after. */}
+        {/* Note that New task's compose ends the bar, as Messages' and Mail's stand. */}
         {choosing !== undefined ? null : (
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}

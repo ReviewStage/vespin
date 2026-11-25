@@ -32,7 +32,9 @@ export const LIVE_POLL_URL = "vespin-poll:";
  * parts it follows by cursor, the cursor it holds them at (`CURSOR`), past
  * which those parts are answered rather than whole; and, for a read that
  * answers deltas, the sync id it holds every row at (`SYNC`), past which it
- * is answered what moved alone, held until something does.
+ * is answered what moved alone, held until something does; and, for a read
+ * answered whole in pages, the page it asks for next (`PAGE`), as the page
+ * before it named it.
  */
 export const LIVE_POLL = {
   QUERY: "poll",
@@ -40,6 +42,7 @@ export const LIVE_POLL = {
   AFTER: "after",
   CURSOR: "cursor",
   SYNC: "sync",
+  PAGE: "page",
 } as const;
 
 /**
@@ -151,10 +154,20 @@ const liveCursorAnswerSchema = EffectSchema.Struct({
  * past, absent where they are its rows whole, as for a reader too far
  * behind; and the id to read past next, below which every write has ended
  * and shows in the rows a reader holds once it joins these on.
+ *
+ * A whole answer to a build that reads pages comes in pages, each naming
+ * the page after it (`page`), which the reader asks for next
+ * (`LIVE_POLL.PAGE`) at once. A page's rows are joined onto those the
+ * reader holds, as a delta's are, and the page that names none closes the
+ * whole answer: the reader then drops every row it holds that no page of it
+ * carried. Every page names the same `next`, which the reader holds every
+ * row at only once that last page is joined on, so it keeps it, and
+ * confirms a write by it, only then.
  */
 const liveSyncAnswerSchema = EffectSchema.Struct({
   past: EffectSchema.optionalKey(EffectSchema.String),
   next: EffectSchema.String,
+  page: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 /** One sealed statement as the service answers it, which Realtime's client subscribes to and renews with. */

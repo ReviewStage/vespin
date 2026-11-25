@@ -70,7 +70,7 @@ import { SettingsBarButton, useOpenSettings } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
+import { useComposeAction } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRow, InboxItemRows } from "./inbox-screens.js";
 import {
@@ -654,16 +654,14 @@ function SearchStackScreen(words: SearchWords) {
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
-      {/* Note that an iPad's tab bar has no round +, so its Search offers New task in its bar, as its lists do. */}
-      {PLUS_TAB ? null : (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
-            accessibilityLabel={compose.label}
-            onPress={compose.onPress}
-          />
-        </Stack.Toolbar>
-      )}
+      {/* Note that New task's compose ends the bar, as every tab root's does. */}
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+          accessibilityLabel={compose.label}
+          onPress={compose.onPress}
+        />
+      </Stack.Toolbar>
       {query.trim() !== "" ? (
         <SearchStackFound {...words} leave={leave} />
       ) : shown ? (

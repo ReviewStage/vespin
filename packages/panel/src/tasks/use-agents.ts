@@ -306,6 +306,12 @@ const NO_ROWS: Pick<AgentsControl, ListedRows> = {
   pullRequests: new Map(),
 };
 
+/** The open task's agents control as `useAgents` holds it, with where the newest read of the models stands, which New task alone waits on and the window hands it apart (`NewTaskShown.modelsRead`). */
+export interface HeldTaskAgents {
+  readonly control: TaskAgentsControl;
+  readonly modelsRead: ModelsRead;
+}
+
 /**
  * A place's control over the window's acts, listing the rows the place
  * draws itself rather than the open task's: none where it hands none, as
@@ -788,8 +794,6 @@ export interface AgentsControl {
   models: readonly CatalogModel[] | undefined;
   /** Whether the models could not be read, or the newest ask of them ran past its bound, so the menu says so with Retry rather than reading for ever. */
   modelsFailed: boolean;
-  /** Where the newest ask of the models made here stands, at the generation it took, which New task waits on. */
-  modelsRead: ModelsRead;
   /** The member's devices a task's Runs on may name, as the models the host holds offered them: none listed where they offered none, and nothing before they are read. */
   macs: readonly MacOffer[] | undefined;
   /** Asks the host for the models again, as New task opening or the menu's Retry asks. */
@@ -1342,7 +1346,7 @@ export function useAgents(input: {
   keywords?: readonly string[];
   /** Mints one press's key. */
   mintKey?: () => string;
-}): TaskAgentsControl {
+}): HeldTaskAgents {
   const { taskId, repository } = input;
   // Note that the reads below stay on `act` until they move to queries; every write is a mutation.
   const queryClient = useQueryClient();
@@ -2557,7 +2561,7 @@ export function useAgents(input: {
   );
 
   // Handed back steady, so a part drawn from the agents holds while they do (`memo`).
-  return useSteadyDoors({
+  const control: TaskAgentsControl = useSteadyDoors({
     rows,
     rowNow: rowOf,
     pullRequestNow,
@@ -2583,7 +2587,6 @@ export function useAgents(input: {
     onRetryList,
     models: offered.data?.models,
     modelsFailed: offered.isError || modelsRead.state === MODELS_READ.FAILED,
-    modelsRead,
     macs: offered.data === undefined ? undefined : (offered.data.macs ?? []),
     readModels,
     onUnarchive: undefined,
@@ -2624,4 +2627,6 @@ export function useAgents(input: {
     startInboxThread,
     readInboxImage,
   });
+
+  return { control, modelsRead };
 }

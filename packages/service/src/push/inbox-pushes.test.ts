@@ -9,13 +9,15 @@ import { registerPushDevice, setPushDeviceNotify } from "@repo/database/models/p
 import { user } from "@repo/database/schemas/auth";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openRunningTurn, startTask } from "@repo/database/testing";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { inboxPushOf, inboxPushResponseOf, PUSH_KIND } from "@repo/features/inbox-push-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PUSH_ENVIRONMENT, PUSH_NOTIFY, type PushNotify } from "@repo/features/push-device-wire";
 import { RUN_STATUS } from "@repo/features/turn-run";
 import { TURN_ORIGIN, TURN_STATUS, unparsedWire } from "@repo/wire";
+import { eq } from "drizzle-orm";
 import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { postToInbox } from "../agents/coder-host/inbox.js";
@@ -39,7 +41,8 @@ import { pushSettledTurn, pushThreadSettled, releaseHeldPushes } from "./inbox-p
  * always and is held for those set to away, never to those set to never;
  * once they have been idle two minutes the sweep sends what still waits,
  * and nothing for an ask answered meanwhile, or an agent that went on past
- * its failed turn.
+ * its failed turn. A Manager's turn pushes the member who asked for it,
+ * not its owner.
  *
  * Synthetic accounts, tasks, and device tokens throughout.
  */
@@ -94,6 +97,7 @@ const openWorkspaceAgent = Effect.gen(function* () {
     taskId: task.id,
     agentId: agent.id,
     organizationId: agent.organizationId,
+    conversationId: agent.conversationId,
   };
 
   return {
@@ -308,6 +312,58 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
       assert.equal(push?.kind === PUSH_KIND.RUN_FAILED ? push.agentId : undefined, agent.id);
     }).pipe(Effect.provide(sender.layer));
   });
+
+  it.effect(
+    "a Manager's failed turn held at the asker's desk is sent to the member who asked, not its owner",
+    () => {
+      const sender = recordingApnsSender();
+
+      return Effect.gen(function* () {
+        const owner = yield* openUser;
+        const asker = yield* openUser;
+        const { workspaceId } = yield* startTask(owner, { name: "Workspace" });
+        yield* joinWorkspace(workspaceId, asker);
+
+        const started = yield* createAgent(owner, {
+          taskId: null,
+          workspaceId,
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          repository: null,
+          descriptionSnapshot: null,
+          prompt: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          kind: AGENT_KIND.MANAGER,
+        });
+
+        const { conversationId } = Option.getOrThrow(started).agent;
+        yield* phoneOf(owner);
+        const askersPhone = yield* phoneOf(asker);
+
+        const turnId = yield* openRunningTurn({ userId: owner, conversationId }, [
+          { member: asker },
+        ]);
+
+        const db = yield* Database;
+        yield* db.update(turns).set({ status: TURN_STATUS.FAILED }).where(eq(turns.id, turnId));
+        yield* stampPresence(asker);
+
+        yield* pushSettledTurn({
+          userId: owner,
+          conversationId,
+          turnId,
+          status: TURN_STATUS.FAILED,
+          failure: "timed_out",
+          ranMs: 1000,
+        });
+        assert.deepEqual(alertedTokens(sender), []);
+
+        assert.equal(yield* walkAway, 1);
+        assert.deepEqual(alertedTokens(sender), [askersPhone.token]);
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
 
   it.effect("a failed turn pushes the agent's starter once, and a stopped one nothing", () => {
     const sender = recordingApnsSender();

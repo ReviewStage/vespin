@@ -65,6 +65,7 @@ import {
   TOOL_PART_STATE,
   USAGE_LIMIT_PART,
 } from "@repo/wire/ui-messages";
+import { wellFormedSoFar } from "@repo/wire/well-formed";
 import {
   asSchema,
   type ReasoningUIPart,
@@ -2694,8 +2695,10 @@ function chatLineOf(context: WriterContext, line: VoiceLineWrite): Write<void> {
 
 const recordVoiceLine = /* @__PURE__ */ Effect.fn("web/recordVoiceLine")(function* (
   context: WriterContext,
-  line: VoiceLineWrite,
+  given: VoiceLineWrite,
 ): Effect.fn.Return<VoiceLineWritten, StoreFailure, DatabaseServices> {
+  // Note that a line's words may end on half a character its next record completes, which no jsonb keeps, so it waits for it.
+  const line = { ...given, text: wellFormedSoFar(given.text) };
   const clientId = sentLineId(line.key);
   const standing = yield* findCallLine({ conversationId: context.target.conversationId, clientId });
   const parts = [{ type: UI_PART_TYPE.TEXT, text: line.text, state: UI_PART_STATE.DONE }];

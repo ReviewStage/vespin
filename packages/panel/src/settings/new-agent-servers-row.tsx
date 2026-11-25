@@ -4,9 +4,9 @@
  * Every server is on for a new agent until the account switches it off
  * here, so a member who keeps a large integration connected need not hand
  * every agent its tools. The row is the one an automation picks its run's
- * servers with (`../tasks/servers-row.tsx`): those off named under its
- * label, those on as marks on a field chip that opens the agent box's own
- * popover. The account's choice is one stored value, the servers it switched
+ * servers with (`../tasks/servers-row.tsx`): a field chip saying how many
+ * are on, which opens the agent box's own popover, and the few that differ
+ * named under its label. The account's choice is one stored value, the servers it switched
  * off (`APP_SETTING_SCHEMA.newAgentServersOff`), which a new agent's box
  * opens with and the service starts an agent on where its Start names no
  * list; an agent's own switches change that agent alone. Each switch asks

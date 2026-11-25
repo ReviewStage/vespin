@@ -1,3 +1,4 @@
+import { switchedOffWords } from "@repo/features/agent-servers-model";
 import {
   type AutomationDraft,
   automationDraft,
@@ -121,9 +122,7 @@ import {
   PAGE_FRAME,
   POPOVER_ALIGN,
   Reveal,
-  RevealArea,
   RevealChoice,
-  revealArea,
   SETTINGS_SECTION_FRAME,
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
@@ -582,13 +581,14 @@ function switchedOffName(connection: string): string {
 
 /**
  * Which of the owner's connected MCP servers a run's new agent is handed:
- * a field chip like its neighbors', holding the marks of those left on and
- * opening the agent box's own servers popover, whose switches, search, and
- * way to Settings › Integrations are the ones a task's Start offers, with the
- * row's words naming those switched off. Every server is on until switched
- * off. Note that a run starts on its creator's connections, so only its
- * creator is shown them to switch; anyone else reads which the creator
- * switched off, and why they cannot switch them.
+ * a field chip like its neighbors', saying how many are on and opening the
+ * agent box's own servers popover, whose switches, search, and way to
+ * Settings › Integrations are the ones a task's Start offers, with the row's
+ * words naming the few that differ (`../tasks/servers-row.tsx`). Every
+ * server is on until switched off. Note that a run starts on its
+ * creator's connections, so only its creator is shown them to switch;
+ * anyone else reads which the creator switched off, and why they cannot
+ * switch them.
  */
 function ServersRow({
   mine,
@@ -621,15 +621,8 @@ function ServersRow({
       >
         {() => (
           <SettingsRowValue>
-            <ReplayUnmask>
-              {disabled.length === 0 ? (
-                "All"
-              ) : (
-                <>
-                  All but <ReplayMask>{andList(disabled.map(switchedOffName))}</ReplayMask>
-                </>
-              )}
-            </ReplayUnmask>
+            {/* Note that the words stay masked in a session replay, because they may name accounts, which a member labels. */}
+            {switchedOffWords(disabled.map(switchedOffName))}
           </SettingsRowValue>
         )}
       </SettingsRow>
@@ -1821,6 +1814,8 @@ function AgentRow({
   const known = useKnownNames();
   const place = useAgentRowPlace();
   const savedAgent = useListedAgent(savedAgentId);
+  // Note that an agent the page was opened for, as a Manager's Settings opens it, is read by its id too, since none of the newest may be it.
+  const draftedAgent = useListedAgent(draft.agentId);
   // Note that the catalog this row read names the models, since the window's own may not hold it yet.
   const drawn = { ...place, models: models ?? place.models };
   const detail = draft.agentId === null ? FIRST_RUN_DETAIL : AGENT_DETAIL;
@@ -1884,7 +1879,10 @@ function AgentRow({
     offered.find((agent) => agent.id === draft.agentId) ??
     searched?.find((agent) => agent.id === draft.agentId) ??
     (picked?.id === draft.agentId ? picked : undefined) ??
-    (keptAgent?.id === draft.agentId ? keptAgent : undefined);
+    (keptAgent?.id === draft.agentId ? keptAgent : undefined) ??
+    (draftedAgent === undefined
+      ? undefined
+      : mentionableAgent(draftedAgent, known.tasks, drawn.models));
 
   const chosenRow = chosen === undefined ? undefined : agentMenuRow(chosen, drawn);
 
@@ -2139,7 +2137,6 @@ function EditorForm({
       : AUTOMATION_TRIGGERS;
 
   // The form is the area its reveals move, so the groups under a trigger's rows glide as they unroll.
-  const form = useRef<HTMLDivElement>(null);
   const workspaceName = workspace?.name ?? "Workspace";
   const mine = automation === undefined || automation.mine === true;
 
@@ -2156,119 +2153,117 @@ function EditorForm({
   ] as const;
 
   return (
-    <RevealArea root={form}>
-      <AutomationForm ref={form} {...revealArea()}>
-        {offersOwner ? (
-          <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.SHARING}</ReplayUnmask>}>
-            <OwnerRow
-              owner={draft.owner}
-              owners={owners}
-              mine={mine}
-              maker={maker}
-              workspace={workspace}
-              onOwner={(owner) => onDraft({ owner })}
-            />
-            {automation === undefined ? null : <MakerRow maker={maker} at={automation.createdAt} />}
-          </SettingsSection>
-        ) : null}
-        <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.TRIGGER}</ReplayUnmask>}>
-          <SelectRow
-            width={CHIP_WIDTH.MIN_FIELD}
-            label="Type"
-            labelReplayUnmasked
-            value={draft.triggerKind}
-            options={triggers}
-            parse={triggerKindOf}
-            error={
-              draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE
-                ? undefined
-                : inputProblem(problems[DRAFT_FIELD.SCHEDULE])
-            }
-            onChange={(triggerKind) => onDraft({ triggerKind })}
-          />
-          <RevealChoice value={draft.triggerKind}>
-            {(kind) =>
-              kind === AUTOMATION_TRIGGER.SCHEDULE ? (
-                <ScheduleRows
-                  draft={draft}
-                  problem={problems[DRAFT_FIELD.SCHEDULE]}
-                  onSchedule={(schedule) => onDraft({ schedule })}
-                  onTimezone={(timezone) => onDraft({ timezone })}
-                  onUnreadable={onUnreadable}
-                />
-              ) : kind === AUTOMATION_TRIGGER.GITHUB ? (
-                <>
-                  <SelectRow
-                    width={CHIP_WIDTH.MIN_FIELD}
-                    label="Event"
-                    labelReplayUnmasked
-                    value={draft.githubEvent}
-                    options={GITHUB_EVENTS}
-                    parse={githubEventOf}
-                    onChange={(event) => onDraft(withGithubEvent(draft, event))}
-                  />
-                  <GitHubSettingsRows
-                    event={draft.githubEvent}
-                    settings={draft.githubSettings}
-                    onSettings={(githubSettings) => onDraft({ githubSettings })}
-                  />
-                </>
-              ) : kind === AUTOMATION_TRIGGER.INTEGRATION ? (
-                <SentryRows
-                  draft={draft}
-                  sentry={sentry}
-                  withheld={sentryWithheld(sentry, automation, draft)}
-                  problems={problems}
-                  onDraft={onDraft}
-                />
-              ) : (
-                <WebhookRows
-                  automation={automation}
-                  writes={writes}
-                  secret={shownSecret}
-                  onSecret={onSecret}
-                />
-              )
-            }
-          </RevealChoice>
-        </SettingsSection>
-        <SettingsSection
-          title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.PROMPT}</ReplayUnmask>}
-          frame={SETTINGS_SECTION_FRAME.NONE}
-        >
-          <AutomationPrompt
+    <AutomationForm>
+      {offersOwner ? (
+        <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.SHARING}</ReplayUnmask>}>
+          <OwnerRow
+            owner={draft.owner}
+            owners={owners}
+            mine={mine}
+            maker={maker}
             workspace={workspace}
-            repository={draft.repository}
-            disabledServers={draft.disabledServers}
-            label="Prompt"
-            rows={PROMPT_ROWS}
-            value={draft.prompt}
-            invalid={problems[DRAFT_FIELD.PROMPT] !== undefined}
-            onChange={(text) => onDraft({ prompt: text })}
-            onSave={onSave}
+            onOwner={(owner) => onDraft({ owner })}
           />
-          {/* What stops a save, said under the prompt once a save was pressed. */}
-          {problems[DRAFT_FIELD.PROMPT] === undefined ? null : (
-            <ErrorState failure={UNREPORTED.INPUT}>
-              <ReplayUnmask>{problems[DRAFT_FIELD.PROMPT]}</ReplayUnmask>
-            </ErrorState>
-          )}
+          {automation === undefined ? null : <MakerRow maker={maker} at={automation.createdAt} />}
         </SettingsSection>
-        <RunsGroup
-          draft={draft}
-          mine={mine}
-          maker={maker}
-          savedAgentId={savedAgentId}
-          workspace={workspace}
-          problems={problems}
-          taskBacked={taskBacked}
-          repositories={repositories}
-          // A saved delivery stays offered once the bot is gone, so it can still be turned off.
-          slackOffered={slackBot || automation?.slackDelivery === true}
-          onDraft={onDraft}
+      ) : null}
+      <SettingsSection title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.TRIGGER}</ReplayUnmask>}>
+        <SelectRow
+          width={CHIP_WIDTH.MIN_FIELD}
+          label="Type"
+          labelReplayUnmasked
+          value={draft.triggerKind}
+          options={triggers}
+          parse={triggerKindOf}
+          error={
+            draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE
+              ? undefined
+              : inputProblem(problems[DRAFT_FIELD.SCHEDULE])
+          }
+          onChange={(triggerKind) => onDraft({ triggerKind })}
         />
-      </AutomationForm>
-    </RevealArea>
+        <RevealChoice value={draft.triggerKind}>
+          {(kind) =>
+            kind === AUTOMATION_TRIGGER.SCHEDULE ? (
+              <ScheduleRows
+                draft={draft}
+                problem={problems[DRAFT_FIELD.SCHEDULE]}
+                onSchedule={(schedule) => onDraft({ schedule })}
+                onTimezone={(timezone) => onDraft({ timezone })}
+                onUnreadable={onUnreadable}
+              />
+            ) : kind === AUTOMATION_TRIGGER.GITHUB ? (
+              <>
+                <SelectRow
+                  width={CHIP_WIDTH.MIN_FIELD}
+                  label="Event"
+                  labelReplayUnmasked
+                  value={draft.githubEvent}
+                  options={GITHUB_EVENTS}
+                  parse={githubEventOf}
+                  onChange={(event) => onDraft(withGithubEvent(draft, event))}
+                />
+                <GitHubSettingsRows
+                  event={draft.githubEvent}
+                  settings={draft.githubSettings}
+                  onSettings={(githubSettings) => onDraft({ githubSettings })}
+                />
+              </>
+            ) : kind === AUTOMATION_TRIGGER.INTEGRATION ? (
+              <SentryRows
+                draft={draft}
+                sentry={sentry}
+                withheld={sentryWithheld(sentry, automation, draft)}
+                problems={problems}
+                onDraft={onDraft}
+              />
+            ) : (
+              <WebhookRows
+                automation={automation}
+                writes={writes}
+                secret={shownSecret}
+                onSecret={onSecret}
+              />
+            )
+          }
+        </RevealChoice>
+      </SettingsSection>
+      <SettingsSection
+        title={<ReplayUnmask>{AUTOMATION_EDITOR_SECTION.PROMPT}</ReplayUnmask>}
+        frame={SETTINGS_SECTION_FRAME.NONE}
+      >
+        <AutomationPrompt
+          workspace={workspace}
+          repository={draft.repository}
+          disabledServers={draft.disabledServers}
+          label="Prompt"
+          rows={PROMPT_ROWS}
+          value={draft.prompt}
+          invalid={problems[DRAFT_FIELD.PROMPT] !== undefined}
+          onChange={(text) => onDraft({ prompt: text })}
+          onSave={onSave}
+        />
+        {/* What stops a save, said under the prompt once a save was pressed. */}
+        {problems[DRAFT_FIELD.PROMPT] === undefined ? null : (
+          <ErrorState failure={UNREPORTED.INPUT}>
+            <ReplayUnmask>{problems[DRAFT_FIELD.PROMPT]}</ReplayUnmask>
+          </ErrorState>
+        )}
+      </SettingsSection>
+      <RunsGroup
+        draft={draft}
+        mine={mine}
+        maker={maker}
+        savedAgentId={savedAgentId}
+        workspace={workspace}
+        problems={problems}
+        taskBacked={taskBacked}
+        repositories={repositories}
+        // A saved delivery stays offered once the bot is gone, so it can still be turned off.
+        slackOffered={slackBot || automation?.slackDelivery === true}
+        onDraft={onDraft}
+      />
+    </AutomationForm>
   );
 }
 
@@ -2323,20 +2318,9 @@ function AutomationSetup({ children }: { children: ReactNode }): React.JSX.Eleme
 }
 
 /** The form, as Settings draws a page: each group's name over its card, the groups a section apart. */
-function AutomationForm({
-  ref,
-  children,
-  ...area
-}: {
-  ref?: Ref<HTMLDivElement> | undefined;
-  children: ReactNode;
-} & Partial<ReturnType<typeof revealArea>>): React.JSX.Element {
+function AutomationForm({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <div
-      ref={ref}
-      className="automation-form flex flex-col gap-page-section-gap [&_.settings-picker]:max-w-full"
-      {...area}
-    >
+    <div className="automation-form flex flex-col gap-page-section-gap [&_.settings-picker]:max-w-full">
       {children}
     </div>
   );
@@ -2508,7 +2492,9 @@ const EDITOR_SCREENS: NarrowColumns = {
 
 /**
  * One automation's page, or a new one's where none is given. A new one,
- * opened from a suggestion on the list, starts filled in from its preset;
+ * opened from a suggestion on the list, starts filled in from its preset,
+ * and one opened for an agent, as a Manager's Settings opens it, starts
+ * sending every run to that agent;
  * once made, it is handed to `onCreated`, which stands its own page where
  * this one stood. A deleted one is handed to `onDeleted`, which goes back
  * to the list.
@@ -2524,6 +2510,7 @@ const EDITOR_SCREENS: NarrowColumns = {
 export function AutomationEditor({
   automation,
   preset,
+  target,
   workspace,
   offersOwner,
   repositories,
@@ -2543,6 +2530,8 @@ export function AutomationEditor({
   automation: AutomationSummary | undefined;
   /** The preset a new automation starts filled in from, as the list's suggestion it was opened from names it; none for a blank one. */
   preset?: AutomationPresetName | undefined;
+  /** The agent a new automation sends every run to, as a Manager's Settings opened it for that Manager; none for one that starts a new agent each run. */
+  target?: string | undefined;
   workspace: Workspace | undefined;
   /** Whether the workspace is shared, so an automation in it may be the workspace's rather than its maker's. */
   offersOwner: boolean;
@@ -2590,6 +2579,11 @@ export function AutomationEditor({
       ...automationDraft(undefined, defaults),
       repository: repositories.recent[0] ?? null,
     };
+
+    // Note that an agent works in its own repository, which the page does not know, so one aimed at an agent starts in none.
+    if (target !== undefined) {
+      return { ...blank, repository: null, target: AUTOMATION_TARGET.SAME_AGENT, agentId: target };
+    }
 
     return preset === undefined ? blank : presetDraft(blank, automationPreset(preset), offersOwner);
   });

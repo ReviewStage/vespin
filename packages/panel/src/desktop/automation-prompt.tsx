@@ -12,6 +12,7 @@ import { appPlatform } from "../app-platform.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { useTaskListCollections } from "../task-list-collections.js";
 import { repositorySkillsQueryOptions } from "../tasks/agent-reads.js";
+import { useHandedWords } from "../tasks/box-words.js";
 import { MENTION_MENU_SIDE } from "../tasks/mention-picker.js";
 import { useMentionedPlace } from "../tasks/mentioned-place.js";
 import { MessageField, useMessageBox } from "../tasks/message-box.js";
@@ -70,7 +71,7 @@ function PromptField({
   const statuses = useIntegrationStatuses();
 
   const box = useMessageBox({
-    draft: value,
+    draft: useHandedWords(value),
     setDraft: onChange,
     placeholder: AUTOMATION_EDITOR_WORDS.PROMPT_PLACEHOLDER,
     label,

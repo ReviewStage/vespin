@@ -37,6 +37,7 @@ import {
   SLACK_REACH_REFUSAL,
   SLACK_USE,
   type SlackReach,
+  slackAsker,
 } from "./slack-reach.js";
 
 /** How many messages a read answers where it names none, and the most it may name. */
@@ -214,13 +215,13 @@ const authorNames = Effect.fn("web/slackAuthorNames")(function* (
   return names;
 });
 
-/** The messages as a read answers them: each by its timestamp, author, whether the bot wrote it, whether its words are outside, and those words fenced. */
+/** The messages as a read answers them: each by its timestamp, author, whether the bot wrote it, whether its words are outside (neither the bot's nor the asker's), and those words fenced. */
 const readMessages = Effect.fn("web/slackReadMessages")(function* (
   reach: SlackReach,
   messages: readonly SlackThreadMessage[],
 ) {
   const names = yield* authorNames(reach, messages);
-  const own = yield* reach.bot.memberSlackId(reach.agent.userId);
+  const own = yield* reach.bot.memberSlackId(yield* slackAsker(reach));
 
   return messages.map((message): WireRecord => {
     const byBot =

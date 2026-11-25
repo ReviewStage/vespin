@@ -28,7 +28,6 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
-import { playListMotions } from "../testing/pane-motion.js";
 import { type TasksControlOverrides, tasksControl } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
@@ -640,29 +639,7 @@ test("deleting a section removes it at once with no dialog, and Undo brings it b
   assert.equal(icon?.textContent, "🚀");
 });
 
-test("a deleted section slides out where it stood, out of reach, and leaves once its exit has played; the one that stays is not held", async () => {
-  const motions = playListMotions();
-  onTestFinished(motions.remove);
-  const writes: TaskSectionWrite[] = [];
-  const { container: sidebar, draw } = await mountSidebarRedrawn(writes, ICONLESS);
-  openSectionMenu(sidebar, "Launch");
-
-  await act(async () => item("Delete section").click());
-  await draw(applied(ICONLESS, writes.splice(0)));
-
-  const leaving = sidebar.querySelector<HTMLElement>("li[data-leaving]");
-  assert.match(leaving?.textContent ?? "", /Launch/u, "it is drawn on");
-  assert.equal(leaving?.hasAttribute("inert"), true, "out of reach while it goes");
-  const out = motions.played.find((each) => each.element === leaving);
-
-  await act(async () => out?.finish());
-  assert.equal(sidebar.querySelector("[data-leaving]"), null);
-  assert.deepEqual(sectionTitles(sidebar), ["Someday"]);
-});
-
-test("the last section deleted slides out too, and takes its group with it once its exit has played", async () => {
-  const motions = playListMotions();
-  onTestFinished(motions.remove);
+test("the last section deleted takes its group with it", async () => {
   const writes: TaskSectionWrite[] = [];
   const { container: sidebar, draw } = await mountSidebarRedrawn(writes);
   openSectionMenu(sidebar, "Launch");
@@ -670,10 +647,6 @@ test("the last section deleted slides out too, and takes its group with it once 
   await act(async () => item("Delete section").click());
   await draw(applied(SECTIONS, writes.splice(0)));
 
-  const leaving = sidebar.querySelector<HTMLElement>('nav[aria-label="Sections"] li[data-leaving]');
-  assert.match(leaving?.textContent ?? "", /Launch/u, "it is drawn on");
-
-  await act(async () => motions.played.find((each) => each.element === leaving)?.finish());
   assert.equal(sidebar.querySelector('nav[aria-label="Sections"]'), null);
 });
 
@@ -1476,9 +1449,7 @@ test("a drag put back with nothing pinned takes the empty Pinned away again", as
   assert.deepEqual(asked.marks, []);
 });
 
-test("Pinned stands once a pin exists, folding and counting it, and once the last is unpinned slides out before it goes", async () => {
-  const motions = playListMotions();
-  onTestFinished(motions.remove);
+test("Pinned stands once a pin exists, folding and counting it, and goes once the last is unpinned", async () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -1504,11 +1475,6 @@ test("Pinned stands once a pin exists, folding and counting it, and once the las
 
   await draw([task(PINNED.id, PINNED.name), INVITES, RETRIES]);
 
-  const leaving = pinnedGroup(container);
-  assert.equal(leaving?.hasAttribute("data-leaving"), true, "it is drawn on while it goes");
-  const out = motions.played.find((each) => each.element === leaving);
-  assert.equal(out?.keyframes.at(-1)?.opacity, 0, "it fades out");
-  await act(async () => out?.finish());
   assert.equal(pinnedGroup(container), null);
 });
 

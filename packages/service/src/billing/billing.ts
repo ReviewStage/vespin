@@ -18,8 +18,8 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { workspaceMonthTotals } from "@repo/database/models/usage-charges";
 import { workspaceBilling } from "@repo/database/models/workspace-billing";
-import type { BillingSessionAnswer, BillingStatusAnswer } from "@repo/features/billing-wire";
 import { billableMicroUsd, INCLUDED_USAGE_MICRO_USD } from "@repo/database/usage-vocabulary";
+import type { BillingSessionAnswer, BillingStatusAnswer } from "@repo/features/billing-wire";
 import { Clock, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { managedWorkspace } from "../accounts/workspace-access.js";

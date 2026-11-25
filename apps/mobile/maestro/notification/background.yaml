@@ -1,7 +1,9 @@
-# background.yaml -- the first half of the notification flow: the app launched on the Inbox fixture with notifications allowed, then sent to the background, where `ask.apns` is pushed to it.
+# background.yaml -- the opening of each round of the notification flow: the app launched on the Inbox fixture with notifications allowed, then sent to the background, where `ask.apns`, or in the second round `manager.apns`, is pushed to it.
 #
 # Maestro pushes nothing itself, so `scripts/simulator-screenshots.sh` runs
-# this flow, pushes `ask.apns` with `xcrun simctl push`, and runs `open.yaml`.
+# this flow, pushes `ask.apns` with `xcrun simctl push`, and runs `open.yaml`,
+# then does the same from a fresh install with `manager.apns` and
+# `open-manager.yaml`.
 # The payload is a decide on the fixture's "Who can withdraw an invite?"
 # thread, as the service writes one (`@repo/features/inbox-push-wire`).
 # Note that the script installs the app afresh and lets it notify first, so

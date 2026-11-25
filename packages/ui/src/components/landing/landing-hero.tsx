@@ -86,7 +86,6 @@ import {
   useLandingMember,
   WorkspaceFace,
 } from "./landing-desktop.js";
-import { MovingList } from "./landing-motion.js";
 import { DemoPointer, usePointer } from "./landing-pointer.js";
 import { PullRequestCard } from "./landing-scenes.js";
 import { MINUTE, STORY_NOW, still, useTimeline, useTyping } from "./landing-story.js";
@@ -646,7 +645,6 @@ function SidebarTaskRow({
 }): React.JSX.Element {
   return (
     <ListRow
-      motionKey={task.id}
       density={LIST_DENSITY.DENSE}
       ink={LIST_ROW_INK.SIDEBAR}
       leading={<TaskStatusMark status={task.status} />}
@@ -800,7 +798,6 @@ function InboxRow({
 
   return (
     <ListRow
-      motionKey={item.id}
       ink={LIST_ROW_INK.SIDEBAR}
       currentLook={LIST_ROW_CURRENT_LOOK.TINT}
       leading={<UnreadMark unread={unread} />}
@@ -1435,11 +1432,8 @@ export function LandingHeroApp(): React.JSX.Element {
   ).length;
 
   const inboxRows = (current: string | null) => (
-    <MovingList
-      label="Inbox items"
-      items={items}
-      keyOf={(each) => each.id}
-      row={(each) => (
+    <List label="Inbox items">
+      {items.map((each) => (
         <InboxRow
           key={each.id}
           item={each}
@@ -1448,8 +1442,8 @@ export function LandingHeroApp(): React.JSX.Element {
           current={each.id === current}
           onOpen={still}
         />
-      )}
-    />
+      ))}
+    </List>
   );
 
   const inboxPage = (): ReactNode => {

@@ -31,12 +31,15 @@ import { Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SERVICE_ORIGIN } from "../host/compose-mobile.js";
 import { APP_VERSION, useHostActs } from "../host/host-provider.js";
-import { launchLiveActivity } from "../host/launch-arguments.js";
+import { LAUNCH_LIVE_ACTIVITY, launchLiveActivity } from "../host/launch-arguments.js";
 import { registeredPushDevice, useFixtureRun, usePushDeviceKey } from "../push-device.js";
 import { type KeptPhone, liveActivityModule } from "./live-activity-module.js";
 
 /** How long ago each of the fixture's agents began its turn, so its timers read as a working afternoon. */
 const FIXTURE_TURN_AGES = { REFRESH: 94_000, ACTIVITIES: 612_000, INVITES: 8_000 } as const;
+
+/** The fixture's activity once none works, as the service's end leaves it: none running, none waiting, none listed. */
+const FIXTURE_DONE_STATE: LiveActivityContentState = { running: 0, waiting: 0, agents: [] };
 
 /** The fixture's activity: three agents working and one ask waiting, the newest turn first, as of `now`. */
 function fixtureContentState(now: number): LiveActivityContentState {
@@ -231,14 +234,18 @@ export function useLiveActivity(signedIn: boolean): void {
   useEffect(() => {
     if (!fixture) return;
 
+    const asked = launchLiveActivity();
+
+    const state =
+      asked === LAUNCH_LIVE_ACTIVITY.DONE ? FIXTURE_DONE_STATE : fixtureContentState(Date.now());
+
     // Note that the state is encoded through the service's own Schema, so the widget decodes the bytes a push would carry.
-    const started = launchLiveActivity()
-      ? liveActivityModule.startFixture(
-          JSON.stringify(
-            Schema.encodeSync(liveActivityContentStateSchema)(fixtureContentState(Date.now())),
-          ),
-        )
-      : liveActivityModule.endAll();
+    const started =
+      asked === undefined
+        ? liveActivityModule.endAll()
+        : liveActivityModule.startFixture(
+            JSON.stringify(Schema.encodeSync(liveActivityContentStateSchema)(state)),
+          );
 
     started.catch((cause: unknown) =>
       console.error("The fixture's Live Activity was not started or ended.", cause),

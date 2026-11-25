@@ -21,7 +21,6 @@ import {
   type AgentOverviewPullRequest,
   type AgentPullRequest,
   type AgentStatus,
-  type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -36,7 +35,7 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { managerChatLines, managerChatWork } from "@repo/features/manager-chat";
+import { managerChatView } from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
@@ -89,6 +88,7 @@ import {
   MentionSuggestions,
   MenuRow,
   type MenuRowAct,
+  managerChatItems,
   menuOfGroups,
   NO_GROUND,
   NO_TOGGLES,
@@ -101,6 +101,7 @@ import {
   StackSubtitle,
   shownFiles,
   shownMediaIds,
+  shownPictureIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptReveal,
@@ -141,6 +142,9 @@ import {
   useAgentPullRequests,
   useAgentTranscript,
   useFollowedAgent,
+  useManagerChat,
+  useManagerChatRetry,
+  useOlderChatPages,
   useOlderPages,
   useSentFiles,
   useShownAgent,
@@ -158,6 +162,11 @@ import {
 } from "../agents/use-agent-composer.js";
 import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
+import {
+  AgentPicturesProvider,
+  useAgentPictureFiles,
+  useAgentPictures,
+} from "../agents/use-agent-pictures.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
@@ -243,14 +252,6 @@ const RENAME_WORDS = {
 
 /** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
-
-/** A transcript's messages as its page draws them: a Manager's as its chat (`managerChatLines`), any other agent's whole. */
-function chatOrTranscript(
-  messages: readonly AgentTranscriptMessage[],
-  chat: boolean,
-): readonly AgentTranscriptMessage[] {
-  return chat ? managerChatLines(messages) : messages;
-}
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
@@ -533,7 +534,8 @@ const NONE_SHOWN: readonly TranscriptItem[] = [];
  * queue and its edits ask first: the one place the words typed live, so a
  * keystroke draws the composer alone, never the transcript over it. Note
  * that Edit on a sent line in the transcript reaches it through `editMessage`,
- * which it keeps pointed at its own.
+ * and Reply on a chat message through `replyTo`, which it keeps pointed at
+ * its own.
  */
 function AgentComposerArea({
   id,
@@ -543,6 +545,7 @@ function AgentComposerArea({
   messageSent,
   suggested,
   editMessage,
+  replyTo,
   undeliveredActs,
   approvals,
   onShowWaiting,
@@ -565,6 +568,7 @@ function AgentComposerArea({
   readonly messageSent: Parameters<typeof useAgentComposer>[4];
   readonly suggested: Parameters<typeof useAgentComposer>[5];
   readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
+  readonly replyTo: RefObject<AgentComposer["reply"] | undefined>;
   readonly undeliveredActs: RefObject<UndeliveredActs | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
@@ -593,8 +597,16 @@ function AgentComposerArea({
   const said = useNewestNote([composer.note, dictated.note, note]);
   useEffect(() => {
     editMessage.current = composer.editMessage;
+    replyTo.current = composer.reply;
     undeliveredActs.current = composer.undelivered;
-  }, [editMessage, composer.editMessage, undeliveredActs, composer.undelivered]);
+  }, [
+    editMessage,
+    composer.editMessage,
+    replyTo,
+    composer.reply,
+    undeliveredActs,
+    composer.undelivered,
+  ]);
 
   return (
     <>
@@ -870,9 +882,11 @@ const AgentConversation = memo(function AgentConversation({
     ],
   );
 
-  // Note that a Manager's page is its chat, never its transcript, as the panel draws it (`managerChatLines`): people's lines, its `send_to_user` words, and its `show_media` sets alone.
+  // Note that a Manager's page is its chat, never its transcript, as the panel draws it: the chat's own rows (`managerChat`), its transcript read only for the work each turn did.
   const chat = shown?.kind === AGENT_KIND.MANAGER;
   useManagerChatLooks(shown);
+  const chatHeld = useManagerChat(id, chat);
+  const chatPage = chatHeld?.rows;
 
   // The calls the agent holds for the member's answer, whose folds stand open so their rows draw them; a subagent's call has no row of its own.
   const pending = agent?.pendingApprovals;
@@ -885,53 +899,86 @@ const AgentConversation = memo(function AgentConversation({
     [pending],
   );
 
-  // Note that a Manager's work stays a press away from its chat, read from its whole transcript, the turn under way's under its working line.
-  const chatWork = useMemo(
+  const writing = status !== undefined && agentStillWriting(status);
+  // Note that the turn under way is the agent's newest while it may still write, whose work stands under the chat's working line rather than under a message.
+  const running = writing ? (agent?.turnId ?? undefined) : undefined;
+
+  // Note that a Manager's chat is its rows alone, with the work of each turn a press away, read from the transcript held beside it.
+  const chatItems = useMemo(
     () =>
-      chat && messages !== undefined
-        ? managerChatWork(messages, status !== undefined && agentStillWriting(status))
+      chat && chatPage !== undefined
+        ? managerChatItems(
+            managerChatView(chatPage.messages, messages ?? [], {
+              running,
+              sending: chatPage.sending ?? [],
+            }),
+            messages ?? [],
+            {
+              writing,
+              readerId,
+              toggles,
+              now: Date.now(),
+              pullRequests,
+              wholePart: whole.read,
+              suggestionAddress,
+              waitingCalls,
+              sending: chatPage.sending,
+              // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
+              greeting:
+                shown !== undefined && chatPage.before === undefined
+                  ? managerGreeting(shown.title)
+                  : undefined,
+            },
+          )
         : undefined,
-    [chat, messages, status],
+    [
+      chat,
+      chatPage,
+      messages,
+      running,
+      writing,
+      readerId,
+      toggles,
+      pullRequests,
+      whole.read,
+      suggestionAddress,
+      waitingCalls,
+      shown,
+    ],
   );
 
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
-  const items = useMemo(
+  const transcriptRows = useMemo(
     () =>
-      transcriptItems(chatOrTranscript(withSending(messages ?? [], sending ?? []), chat), {
-        writing: status !== undefined && agentStillWriting(status),
-        readerId,
-        toggles,
-        now: Date.now(),
-        pullRequests,
-        wholePart: whole.read,
-        origin,
-        suggestionAddress,
-        waitingCalls,
-        chat,
-        chatWork,
-        // Note that the greeting stands over the chat's first line, so it waits until no older page is left to read, as the panel draws it above its first message.
-        greeting:
-          chat && shown !== undefined && transcript?.before === undefined
-            ? managerGreeting(shown.title)
-            : undefined,
-      }),
+      chat
+        ? undefined
+        : transcriptItems(withSending(messages ?? [], sending ?? []), {
+            writing,
+            readerId,
+            toggles,
+            now: Date.now(),
+            pullRequests,
+            wholePart: whole.read,
+            origin,
+            suggestionAddress,
+            waitingCalls,
+          }),
     [
-      shown,
-      transcript?.before,
-      chatWork,
+      chat,
       waitingCalls,
       messages,
       sending,
-      status,
+      writing,
       readerId,
       toggles,
       pullRequests,
       whole.read,
       origin,
       suggestionAddress,
-      chat,
     ],
   );
+
+  const items = chatItems ?? transcriptRows ?? NONE_SHOWN;
 
   // A call opened on an answer its page carried cut reads it whole.
   const cuts = useMemo(() => openCuts(items), [items]);
@@ -946,11 +993,16 @@ const AgentConversation = memo(function AgentConversation({
     [messages, status],
   );
 
-  // Note that only the pictures and recordings of the rows on screen and the few beside them are read, so a transcript of hundreds of screenshots never holds them all as it opens, and the next rows to scroll in are drawn as they land.
-  const mediaIds = useMemo(
-    () => [...shownMediaIds(rowsNear(items, rowsShown, MEDIA_REACH)), ...appsDockMediaIds(inUse)],
-    [items, rowsShown, inUse],
-  );
+  // Note that only the pictures and recordings of the rows on screen and the few beside them are asked for, so a transcript of hundreds of screenshots never holds them all as it opens, and the next rows to scroll in are drawn as they land: a picture through expo-image's own view, a recording or a clip as the file it plays from, and the apps' capsules' pictures as the files SwiftUI and the viewer read.
+  const near = useMemo(() => rowsNear(items, rowsShown, MEDIA_REACH), [items, rowsShown]);
+  const pictureIds = useMemo(() => shownPictureIds(near), [near]);
+  const dockIds = useMemo(() => appsDockMediaIds(inUse), [inUse]);
+
+  const mediaIds = useMemo(() => {
+    const pictures = new Set(pictureIds);
+
+    return shownMediaIds(near).filter((each) => !pictures.has(each));
+  }, [near, pictureIds]);
 
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
@@ -973,12 +1025,31 @@ const AgentConversation = memo(function AgentConversation({
 
   // Note that Edit on a sent line reaches the composer through this one handle, so the page holds none of the composer's state, whose every keystroke would draw the transcript again.
   const editMessage = useRef<AgentComposer["editMessage"] | undefined>(undefined);
+  // Note that Reply on a chat message reaches it the same way.
+  const replyTo = useRef<AgentComposer["reply"] | undefined>(undefined);
   // Note that a refused line's Retry, Edit, and Delete reach the composer the same way.
   const undeliveredActs = useRef<UndeliveredActs | undefined>(undefined);
 
   // A line of the member's the service refused, marked Not delivered where it went, with why and what mends it, as the panel keeps it.
+  const chatSending = chatPage?.sending;
+
   const undelivered = useCallback(
     (lineId: string): UndeliveredLine | undefined => {
+      // Note that a Manager's chat marks its messages the service refused by the key each went under, the host keeping the files each carried, so each is sent again whole.
+      if (chat) {
+        const sent = chatSending?.find((each) => each.clientKey === lineId);
+
+        return sent?.refused === undefined
+          ? undefined
+          : {
+              why: messageFailureWords(sent.refused.failure),
+              newThread: false,
+              onRetry: () => undeliveredActs.current?.retry(lineId),
+              onEdit: () => undeliveredActs.current?.edit(lineId),
+              onDelete: () => undeliveredActs.current?.drop(lineId),
+            };
+      }
+
       const line = sending?.find((each) => each.id === lineId);
 
       if (line?.refused === undefined) return undefined;
@@ -992,21 +1063,30 @@ const AgentConversation = memo(function AgentConversation({
         onDelete: () => undeliveredActs.current?.drop(lineId),
       };
     },
-    [sending],
+    [chat, chatSending, sending],
   );
 
   const composer = useMemo(
     () => ({
       editMessage: (line: Parameters<AgentComposer["editMessage"]>[0]) =>
         editMessage.current?.(line),
+      reply: (words: string) => replyTo.current?.(words),
     }),
     [],
   );
 
   const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId ?? undefined);
-  const older = useOlderPages(id, transcript?.before);
-  const retry = useTranscriptRetry(id);
+  const transcriptOlder = useOlderPages(id, chat ? undefined : transcript?.before);
+  const chatOlder = useOlderChatPages(id, chat ? chatPage?.before : undefined);
+  const older = chat ? chatOlder : transcriptOlder;
+  const transcriptRetry = useTranscriptRetry(id);
+  const chatRetry = useManagerChatRetry(id);
+  const retry = chat ? chatRetry : transcriptRetry;
   const media = useAgentMedia(id, mediaIds);
+  const dockFiles = useAgentPictureFiles(id, dockIds);
+  const pictures = useAgentPictures(id, pictureIds);
+  // Note that every picture of the transcript is handed to its row by its id, which it reads where it is drawn, so one landing draws that picture alone and never this page, whose rows may hold an open long-press menu.
+  const pictureSet = useMemo(() => new Set(shownPictureIds(items)), [items]);
 
   // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
   const title =
@@ -1031,7 +1111,10 @@ const AgentConversation = memo(function AgentConversation({
       ? undefined
       : { kind: SEARCH_FOUND_KIND.AGENTS, id, workspaceId: shown.workspaceId },
   );
-  const failed = held?.failed === true || transcript?.failure !== undefined;
+
+  const failed = chat
+    ? chatHeld?.failed === true
+    : held?.failed === true || transcript?.failure !== undefined;
 
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
@@ -1103,7 +1186,7 @@ const AgentConversation = memo(function AgentConversation({
       ? undefined
       : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
-  // Note that a Manager's overview is pushed from the bar, where the workspace lists its Managers.
+  // Note that a Manager's overview stands beside its chat on the desktop; here it is pushed from the bar, where the workspace lists its Managers.
   const overviewShown = useManagersListed(shown?.workspaceId) && chat;
 
   const openSettings = () => router.push({ pathname: "/manager-settings", params: { agent: id } });
@@ -1118,6 +1201,15 @@ const AgentConversation = memo(function AgentConversation({
   const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
 
+  // Each chat message by its row, to the line it went as, which its Edit rewinds to; null for the Manager's own, which went as none.
+  const chatLines = useMemo(
+    () =>
+      chat
+        ? new Map((chatPage?.messages ?? []).map((message) => [message.id, message.lineId]))
+        : undefined,
+    [chat, chatPage?.messages],
+  );
+
   const messageActs = useMessageActs({
     agentId: id,
     agent: shown,
@@ -1125,6 +1217,7 @@ const AgentConversation = memo(function AgentConversation({
     readerId,
     composer,
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
+    chatLines,
   });
 
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
@@ -1178,9 +1271,7 @@ const AgentConversation = memo(function AgentConversation({
     <AgentComposerArea
       id={id}
       apps={
-        inUse === undefined
-          ? undefined
-          : { inUse, source: (pictureId) => media.sources.get(pictureId) }
+        inUse === undefined ? undefined : { inUse, source: (pictureId) => dockFiles.get(pictureId) }
       }
       pullRequest={pullRequests[0]}
       onOpenPullRequest={openPullRequest}
@@ -1190,6 +1281,7 @@ const AgentConversation = memo(function AgentConversation({
       messageSent={approvals.messageSent}
       suggested={suggested}
       editMessage={editMessage}
+      replyTo={replyTo}
       undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
@@ -1213,46 +1305,52 @@ const AgentConversation = memo(function AgentConversation({
   );
 
   const transcriptView = (
-    <AgentTranscript
-      items={rows}
-      onRowsShown={showRows}
-      reveal={reveal}
-      head={null}
-      empty={{
-        title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
-        symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
-        loading: !failed,
-        action: failed
-          ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
-          : undefined,
-      }}
-      older={older}
-      heldCall={approvals.heldCall}
-      suggestion={suggestion}
-      repository={agent?.repository}
-      onOpenLink={openLink}
-      onToggle={(item) => setToggles((held) => toggledAt(held, item))}
-      onOpenPage={openPage}
-      mediaSource={(pictureId) => media.sources.get(pictureId)}
-      fileSource={sentFiles.source}
-      onRetryFile={sentFiles.retry}
-      onRetryMedia={media.retry}
-      onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
-      onOpenAddress={openInSafari}
-      messageLink={messageLink}
-      messageMore={messageActs.more}
-      managerFace={chat ? shown?.face : undefined}
-      onOpenThread={openThread}
-      undelivered={undelivered}
-      onOpenPullRequest={(item) => openPullRequest(item.url)}
-      pullRequestActs={(item) => {
-        const key = keyOf(item.url);
+    <AgentPicturesProvider agentId={id}>
+      <AgentTranscript
+        items={rows}
+        onRowsShown={showRows}
+        reveal={reveal}
+        head={null}
+        empty={{
+          title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
+          symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
+          loading: !failed,
+          action: failed
+            ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
+            : undefined,
+        }}
+        older={older}
+        heldCall={approvals.heldCall}
+        suggestion={suggestion}
+        repository={agent?.repository}
+        onOpenLink={openLink}
+        onToggle={(item) => setToggles((held) => toggledAt(held, item))}
+        onOpenPage={openPage}
+        mediaSource={(mediaId) =>
+          pictureSet.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
+        }
+        fileSource={sentFiles.source}
+        onRetryFile={sentFiles.retry}
+        onRetryMedia={(mediaId) =>
+          pictureSet.has(mediaId) ? pictures.retry(mediaId) : media.retry(mediaId)
+        }
+        onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
+        onOpenAddress={openInSafari}
+        messageLink={messageLink}
+        messageMore={messageActs.more}
+        managerFace={chat ? shown?.face : undefined}
+        onOpenThread={openThread}
+        undelivered={undelivered}
+        onOpenPullRequest={(item) => openPullRequest(item.url)}
+        pullRequestActs={(item) => {
+          const key = keyOf(item.url);
 
-        return key === undefined || cardMergeOf(offers(key)) === undefined
-          ? []
-          : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
-      }}
-    />
+          return key === undefined || cardMergeOf(offers(key)) === undefined
+            ? []
+            : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
+        }}
+      />
+    </AgentPicturesProvider>
   );
 
   const asks = (

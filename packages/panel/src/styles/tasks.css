@@ -1086,12 +1086,17 @@
     margin-block: 0;
   }
 
-  /* Note that Preview, Run, and the merge control together may outgrow the
-     side panel at its least, so they wrap onto lines of their own, held to
-     the row's end, rather than run past an edge that clips them. */
+  /* The controls take the room the pill leaves on its line, whatever they
+     hold, so they stand beside it as one group rather than dropping to a
+     line of their own under a pill left alone. Note that Preview, Run, and
+     the merge control together may outgrow that room in the side panel at
+     its least, so what does not fit wraps onto a line of its own inside the
+     group, held to the row's end, rather than run past an edge that clips
+     it; the group drops under the pill only where its widest control could
+     not stand beside it at all. */
   .pull-request-title-actions {
-    min-width: 0;
-    flex: 0 1 auto;
+    min-width: min-content;
+    flex: 1 1 0;
     flex-wrap: wrap;
     justify-content: flex-end;
   }
@@ -2805,7 +2810,7 @@ svg.lucide {
 }
 
 /* A message of a Manager's chat that goes on its sender's run
-   (`managerChatRuns`) stands close under the one before it, as a chat app
+   (`managerChatView`) stands close under the one before it, as a chat app
    stands one sender's bubbles, so the run reads as one. */
 .agent-log-row-run {
   padding-block-start: var(--ui-tight-gap);

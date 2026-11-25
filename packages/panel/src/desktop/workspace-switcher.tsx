@@ -135,8 +135,8 @@ export function workspaceMenuGroups(
 
 /** What New task's glyph at the row's end is drawn with and opens. */
 export interface WorkspaceRowNewTask {
-  /** Whether New task's words are in sight: its card open, or Home shown. */
-  readonly shown: boolean;
+  /** Whether Home's composer is in sight, New task's words standing there. */
+  readonly home: boolean;
   readonly onOpen: () => void;
 }
 
@@ -175,7 +175,7 @@ export function WorkspaceSwitcher({
       >
         <WorkspaceRef workspace={listed} size={WORKSPACE_REF_SIZE.HEAD} />
       </NavItem>
-      <NewTaskButton tasks={tasks} current={newTask.shown} onNewTask={newTask.onOpen} />
+      <NewTaskButton tasks={tasks} home={newTask.home} onNewTask={newTask.onOpen} />
       {menu.drawn === undefined ? null : (
         <ActionMenu
           label={WORKSPACE_SWITCHER_WORDS.MENU}

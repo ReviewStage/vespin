@@ -104,7 +104,6 @@ export function InboxItemRows({
           label={label}
           inset={LIST_INSET.ROW}
           joinsWalk={joinsWalk}
-          moves={moves}
           run={{
             scroller,
             shiftedBy,

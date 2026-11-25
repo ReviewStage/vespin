@@ -19,6 +19,8 @@ export const ACCOUNT_ACT_KIND = {
   ACCOUNT_SIGN_OUT: "account.signOut",
   ACCOUNT_DELETE: "account.delete",
   ACCOUNT_SUPPORT_ACCESS: "account.supportAccess",
+  /** Where the iOS app's image loader reads a picture: the service's address and the account's header, answered only to screens in the host's own process. */
+  ACCOUNT_PICTURE_SOURCE: "account.pictureSource",
 } as const;
 
 /**
@@ -1009,11 +1011,6 @@ export const WINDOW_SURFACE_ACT_KIND = {
   WINDOW_COPY_RICH: "window.copyRich",
   WINDOW_SAVE_FILE: "window.saveFile",
   /**
-   * A downscaled still of part of the asking panel, as ⌃Tab's card previews a
-   * tab it left: answered to that panel alone and kept nowhere else.
-   */
-  WINDOW_CAPTURE: "window.capture",
-  /**
    * Whether the asking panel holds work it has not saved, told each time
    * that changes, so a quit, a restart to update, and a sign-out ask first
    * while it does.
@@ -1114,6 +1111,7 @@ export const PORT_ACT_USE = {
   ACCOUNT_SIGN_OUT: ACT_USE.WRITE,
   ACCOUNT_DELETE: ACT_USE.WRITE,
   ACCOUNT_SUPPORT_ACCESS: ACT_USE.WRITE,
+  ACCOUNT_PICTURE_SOURCE: ACT_USE.FETCH,
 
   PROVIDER_KEYS_FOLLOW: ACT_USE.READ,
   PROVIDER_KEYS_RETRY: ACT_USE.READ,
@@ -1410,7 +1408,6 @@ export const PORT_ACT_USE = {
   WINDOW_COPY_IMAGE: ACT_USE.WRITE,
   WINDOW_COPY_RICH: ACT_USE.WRITE,
   WINDOW_SAVE_FILE: ACT_USE.WRITE,
-  WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
   WINDOW_MENU_OFFERS: ACT_USE.WRITE,
   WINDOW_HANDOFF: ACT_USE.WRITE,

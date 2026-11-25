@@ -59,6 +59,8 @@ export interface AgentBox {
   readonly approvalsWaiting: number;
   /** The chips after the +: where the agent runs, with the move it offers, and the ports it forwards. */
   readonly tools: (narrow: boolean) => ReactNode;
+  /** The first of those chips alone, where the agent runs and the move it offers, as a Manager's Settings draws it on its Machine row. */
+  readonly place: (narrow: boolean) => ReactNode;
 }
 
 /**
@@ -121,5 +123,7 @@ export function useAgentBox(input: {
           <ForwardChip agent={agent} />
         </>
       ),
+    place: (narrow) =>
+      agent === undefined ? null : <AgentPlace agent={agent} move={placeMove} narrow={narrow} />,
   };
 }

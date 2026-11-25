@@ -230,8 +230,23 @@ const agentOn = (
 
     const [lineId = ""] = lineIds;
 
-    return { userId, agentId: agent.id, taskId: task.id, target, bearer, lineId, lineIds };
+    return {
+      userId,
+      agentId: agent.id,
+      taskId: task.id,
+      target,
+      bearer,
+      lineId,
+      lineIds,
+      payer: harness.payer,
+    };
   });
+
+/** The agent's payer recorded on the credential of this id, as its launch records the one it chose (`turnPayerOf`). */
+const launchedOn = (
+  agent: { readonly userId: string; readonly agentId: string; readonly payer: AgentPayer },
+  subscriptionId: string,
+) => recordAgentPayer(agent.userId, agent.agentId, agent.payer, subscriptionId);
 
 /** The task's status as the account reads it. */
 const taskStatusOf = (userId: string, taskId: string) =>
@@ -580,21 +595,22 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a NUL a tool's answer carries, in its text or in the JSON our own tool answers, lands as a replacement character, not a refused batch",
+    "a NUL or half a character a tool's answer carries, in its text or in the JSON our own tool answers, lands as a replacement character, not a refused batch",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
 
-        // A command's output may hold a NUL, and our own tool's JSON may spell one that its reading
-        // makes real, which no Postgres text or jsonb value can hold.
+        // A command's output may hold a NUL, and our own tool's JSON may spell one, or half an
+        // emoji a cut of its words split (STAG-3994), that its reading makes real, which no Postgres
+        // jsonb value can hold.
         const events = workflowTurn(agent.lineId).map(
           (event) =>
             // SAFETY: each event is one the pinned SDK or the runner emits, two tool answers' text alone changed.
             JSON.parse(
               JSON.stringify(event)
-                .replace("File created", "File\\u0000created")
-                .replace('\\"inbox\\":[]', '\\"inbox\\":[\\"a\\\\u0000b\\"]'),
+                .replace("File created", "File\\u0000created\\ud83d")
+                .replace('\\"inbox\\":[]', '\\"inbox\\":[\\"a\\\\u0000b\\",\\"adds \\\\ud83d\\"]'),
             ) as RunnerEvent,
         );
 
@@ -606,9 +622,9 @@ it.layer(SUITE)("the runner events route", (it) => {
           body: { applied: 6, sequence: 5 },
         });
         assert.deepEqual(rows.at(-1)?.parts.map(drawn).slice(1, 4), [
-          ["tool-Write", "output-available", "File�created"],
+          ["tool-Write", "output-available", "File�created�"],
           ["step-start"],
-          ["tool-read_inbox", "output-available", { status: "accepted", inbox: ["a�b"] }],
+          ["tool-read_inbox", "output-available", { status: "accepted", inbox: ["a�b", "adds �"] }],
         ]);
       }),
   );
@@ -2591,7 +2607,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           "Go on again.",
         ]);
 
-        yield* signedIn(agent.userId);
+        yield* launchedOn(agent, yield* signedIn(agent.userId));
         const [first, stopped, resumed] = codexLaunches(agent.lineIds);
         assert.ok(first && stopped && resumed);
         const statuses: (readonly [string | undefined, string | null])[] = [];
@@ -2749,12 +2765,74 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   );
 
   it.effect(
+    "a limit a Codex turn reaches on an agent with no subscription recorded is written to no plan, so the account's first is never marked for another's",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CODEX, ["Find the queue."]);
+        yield* signedIn(agent.userId);
+        yield* saveProviderKey(
+          agent.userId,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+          { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-second-sign-in" },
+          "ChatGPT",
+          null,
+          new Date(0),
+          null,
+          { add: true },
+        );
+
+        const resetsAt = Date.UTC(2026, 9, 22, 9);
+        yield* post(
+          agent.bearer,
+          refusedLaunch(
+            agent.lineId,
+            0,
+            {
+              message: 'unexpected status 429: {"error":{"code":"usage_limit_reached"}}',
+              codexErrorInfo: "usageLimitExceeded",
+              additionalDetails: null,
+            },
+            [
+              {
+                method: "account/rateLimits/updated",
+                params: {
+                  rateLimits: {
+                    limitId: null,
+                    limitName: null,
+                    primary: {
+                      usedPercent: 100,
+                      windowDurationMins: 300,
+                      resetsAt: resetsAt / 1000,
+                    },
+                    secondary: null,
+                    rateLimitReachedType: "rate_limit_reached",
+                  },
+                },
+              },
+            ],
+          ),
+        );
+        const rows = yield* listProviderKeyRows(agent.userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+
+        assert.deepEqual(
+          rows.map((row) => [row.status, row.limitResetsAt, row.usageWindows]),
+          [
+            [PROVIDER_KEY_STATUS.UNVERIFIED, null, null],
+            [PROVIDER_KEY_STATUS.UNVERIFIED, null, null],
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "an account OpenAI says is not eligible, or whose plan does not include Codex, is marked so; a failure that says nothing of the plan, or an agent a key pays for, leaves the row as it stood",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
         const ineligible = yield* agentOn(HARNESS.CODEX, ["Fix the test."]);
-        yield* signedIn(ineligible.userId);
+        yield* launchedOn(ineligible, yield* signedIn(ineligible.userId));
         yield* post(
           ineligible.bearer,
           refusedLaunch(ineligible.lineId, 0, {
@@ -2767,7 +2845,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
 
         // As Codex says a plan its ChatGPT backend answers `usage_not_included` for: under a limit's word, though none resets.
         const notIncluded = yield* agentOn(HARNESS.CODEX, ["Fix the test."]);
-        yield* signedIn(notIncluded.userId);
+        yield* launchedOn(notIncluded, yield* signedIn(notIncluded.userId));
         yield* post(
           notIncluded.bearer,
           refusedLaunch(notIncluded.lineId, 0, {
@@ -2779,7 +2857,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         );
 
         const unrelated = yield* agentOn(HARNESS.CODEX, ["Fix the test."]);
-        yield* signedIn(unrelated.userId);
+        yield* launchedOn(unrelated, yield* signedIn(unrelated.userId));
         yield* post(
           unrelated.bearer,
           refusedLaunch(unrelated.lineId, 0, {
@@ -2846,7 +2924,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           "Fix the test.",
         ]);
 
-        yield* saveProviderKey(
+        const key = yield* saveProviderKey(
           onKey.userId,
           PROVIDER_KEY_PROVIDER.OPENAI,
           PROVIDER_KEY_KIND.API_KEY,
@@ -2855,6 +2933,8 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           null,
           new Date(0),
         );
+
+        yield* launchedOn(onKey, key);
         yield* post(onKey.bearer, refusedLaunch(onKey.lineId, 0, expired));
 
         const onApp = yield* agentOn({ ...HARNESS.CODEX, payer: AGENT_PAYER.APP }, [
@@ -3048,7 +3128,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           "And again.",
         ]);
 
-        yield* pasted(agent.userId);
+        yield* launchedOn(agent, yield* pasted(agent.userId));
 
         const statuses: (readonly [string | undefined, string | null])[] = [
           yield* setupTokenRow(agent.userId),
@@ -3359,7 +3439,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const post = yield* standing;
         const top = { parent_tool_use_id: null, session_id: SESSION };
         const warned = yield* agentOn(HARNESS.CLAUDE_CODE, ["Fix the test."]);
-        yield* pasted(warned.userId);
+        yield* launchedOn(warned, yield* pasted(warned.userId));
         yield* post(
           warned.bearer,
           numberedFrom(
@@ -3380,7 +3460,8 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         ]);
 
         yield* pasted(onKey.userId);
-        yield* saveProviderKey(
+
+        const key = yield* saveProviderKey(
           onKey.userId,
           PROVIDER_KEY_PROVIDER.ANTHROPIC,
           PROVIDER_KEY_KIND.API_KEY,
@@ -3389,6 +3470,8 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           null,
           new Date(0),
         );
+
+        yield* launchedOn(onKey, key);
         yield* post(
           onKey.bearer,
           numberedFrom(

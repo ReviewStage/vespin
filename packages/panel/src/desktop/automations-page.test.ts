@@ -844,12 +844,12 @@ test("a personal automation another member made is not called Only you, in its r
   assert.equal(picked(editor, "Owner"), "Personal");
 });
 
-test("a new agent's MCP servers are a field chip of the owner's connected ones until switched off, the row naming those off, and a switch saves with the task", async () => {
+test("a new agent's MCP servers are a field chip saying how many of the owner's connected ones are on, the row naming the few off, and a switch saves with the task", async () => {
   world.standing = [{ ...SWEEP, mine: true }];
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
   await settle();
   const chip = serversChip() ?? assert.fail("the servers chip stands");
-  assert.equal(chip.querySelectorAll(".ui-provider-mark").length, 2, "Linear's and Sentry's marks");
+  assert.equal(nameOf(chip), "MCP servers All", "every connected server is on");
 
   act(() => chip.click());
   await settle();
@@ -861,8 +861,7 @@ test("a new agent's MCP servers are a field chip of the owner's connected ones u
   assert.ok(sentry, "the agent box's own switches stand");
   act(() => sentry.click());
   assert.match(page.textContent ?? "", /Sentry off\./u);
-  assert.equal(chip.querySelectorAll(".ui-provider-mark").length, 1, "Linear's mark alone");
-  assert.equal(nameOf(chip), "MCP servers", "marks draw no words, so the field's name stands");
+  assert.equal(nameOf(chip), "MCP servers 1 of 2", "the chip counts those on");
 
   const linear = document.querySelector<HTMLButtonElement>(
     "[role=switch][aria-label='Linear for this agent']",
@@ -872,7 +871,7 @@ test("a new agent's MCP servers are a field chip of the owner's connected ones u
   act(() => linear.click());
   assert.equal(nameOf(chip), "MCP servers None", "the name carries the word the chip draws");
   act(() => linear.click());
-  assert.equal(nameOf(chip), "MCP servers");
+  assert.equal(nameOf(chip), "MCP servers 1 of 2");
   act(() => button("Save").click());
   await settle();
 
@@ -911,11 +910,7 @@ test("a new agent's MCP servers row says a refused read of the owner's connectio
   act(() => button("Retry").click());
   await settle();
   await vi.waitFor(() => assert.ok(serversChip(), "the servers chip stands"));
-  assert.equal(
-    (serversChip() ?? assert.fail("the servers chip stands")).querySelectorAll(".ui-provider-mark")
-      .length,
-    2,
-  );
+  assert.equal(nameOf(serversChip() ?? assert.fail("the servers chip stands")), "MCP servers All");
 });
 
 test("another member's automation says which servers its creator switched off and why the reader cannot switch them, offering no switch of the reader's own", async () => {
@@ -1332,6 +1327,26 @@ test("Memory digest is suggested no more once the list holds the reader's own or
     act(() => world.root?.unmount());
     document.body.innerHTML = "";
   }
+});
+
+test("a new automation opened for an agent, as a Manager's Settings opens it, even over a new page already standing, is made sending every run to that agent, in no repository", async () => {
+  const managerId = "5b8c1d2e-3f4a-4b5c-8d6e-7f8091a2b3c4";
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
+  await settle();
+  act(() => world.sendTo({ kind: AUTOMATIONS_PAGE.NEW, target: managerId }));
+  await settle();
+
+  type(page.querySelector("input[aria-label='Automation name']"), "Morning release check");
+  writePrompt(page, "Say what blocks today's release.");
+  act(() => button("Create automation").click());
+  await settle();
+
+  const made = world.creates[0];
+  assert.ok(made, "the automation is made");
+  assert.deepEqual(
+    { target: made.target, repositories: made.repositories },
+    { target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: managerId }, repositories: [] },
+  );
 });
 
 test("a new automation started from Memory digest is made every Monday at nine in the member's zone, in no repository, archiving its finished runs", async () => {

@@ -34,8 +34,10 @@ import { pushLive } from "./live-push.js";
  * no gap.
  *
  * A message the reader sends stands drawn on the chat from the moment it is
- * sent (`sending`), whether or not the chat is held, until a row under the id
- * the service answered stands in the chat's messages. One the service
+ * sent (`sending`), whether or not the chat is held, until a row written
+ * under the key it went under stands in the chat's messages, which lets it go
+ * in the draw the row lands in, whether the read brings the row before the
+ * send answers or after. One the service
  * refused stands marked with why until it is sent again under its key,
  * which draws it on its way again, or let go (`unsend`). Note that the
  * messages on their way are kept for the account that sent them, in this
@@ -88,7 +90,7 @@ export type HeldManagerChats = HeldSlice<string> &
   HeldRows<string, AppManagerChat> & {
     /** Reads the page of `agentId`'s chat before `before` and lays it past the messages held where they still end there: whether it landed, or why it was not read. */
     readonly older: (agentId: string, before: number) => Effect.Effect<AgentTranscriptOlderAnswer>;
-    /** `send` drawn on the chat as the message it sends: on its way from the moment it is asked, under the id the service answers, or refused, marked with why. */
+    /** `send` drawn on the chat as the message it sends: on its way from the moment it is asked until its row lands, or refused, marked with why. */
     readonly sending: (send: ChatSend) => ChatSend;
     /** A refused message let go, by the key it went under. */
     readonly unsend: (params: ManagerChatUnsendParams) => Effect.Effect<void>;
@@ -213,12 +215,12 @@ export function heldManagerChats(
     /** The reader's messages on their way to each chat, by the agent's id, oldest sent first. */
     const sendings = new Map<string, readonly ManagerChatSending[]>();
 
-    /** `chat` with the messages on their way to it, each whose row it holds let go. */
+    /** `chat` with the messages on their way to it, each whose row it holds, by the key it went under, let go. */
     const drawn = (agentId: string, chat: ManagerChatPageView): AppManagerChat => {
-      const landed = new Set(chat.messages.map((message) => message.id));
+      const landed = new Set(chat.messages.map((message) => message.clientKey));
 
       const sending = (sendings.get(agentId) ?? []).filter(
-        (message) => message.messageId === undefined || !landed.has(message.messageId),
+        (message) => !landed.has(message.clientKey),
       );
 
       if (sending.length === 0) sendings.delete(agentId);
@@ -286,13 +288,14 @@ export function heldManagerChats(
       (send: ChatSend): ChatSend =>
       (params) =>
         Effect.gen(function* () {
-          const { agentId, clientKey, text, attachments } = params;
+          const { agentId, clientKey, text, attachments, threadRoot } = params;
           const sentBy = dependencies.accountId();
 
           const message: ManagerChatSending = {
             clientKey,
             text,
             ...(attachments === undefined ? undefined : { attachments }),
+            ...(threadRoot === undefined ? undefined : { threadRoot }),
             sentAt: dependencies.now(),
             ...(sentBy === undefined ? undefined : { sentBy }),
           };
@@ -300,12 +303,8 @@ export function heldManagerChats(
           draw(agentId, message);
           const answer = yield* send(params);
 
-          draw(
-            agentId,
-            "failure" in answer
-              ? { ...message, refused: answer }
-              : { ...message, messageId: answer.messageId },
-          );
+          // Note that a message the service took stands on its way until its row lands, which may be before this answer or after.
+          if ("failure" in answer) draw(agentId, { ...message, refused: answer });
 
           return answer;
         });

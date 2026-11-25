@@ -11,7 +11,7 @@
  * Cursor's own words for it: its model id, the parameter its effort is
  * spelled by (`effort`, `reasoning_effort`, or `reasoning`, as each model
  * names its own), whether it takes `fast`, the parameters every choice of
- * it sends as they are, its two context windows where it lists two, and
+ * it sends as they are, its context windows where it lists them, and
  * which of its variants run in Max Mode alone, so the runner is handed
  * Cursor's `ModelSelection` (`{ id, params, maxMode }`) whole.
  *
@@ -534,14 +534,24 @@ export const cursorModelCatalogLayer = Layer.effect(
 
 // ------------------------------------------------------------- the offer
 
-/** A model's windows as a catalog entry offers them; nothing for a speed with one window. */
-function offeredWindows(windows: CursorWindows | undefined) {
-  return windows === undefined
-    ? undefined
-    : {
-        contextWindows: { standardTokens: windows.standardTokens, longTokens: windows.longTokens },
-        contextWindow: windows.longTokens,
-      };
+/**
+ * A model's windows as a catalog entry offers them at one speed: its two
+ * where it runs on two, else the one window its pinned `context` names, as
+ * Grok 4.7's fast version runs on 256K alone; nothing for a model that lists
+ * no window, since a guessed one would tell its context ring a share of a
+ * window the model may not have.
+ */
+function offeredWindows(model: CursorModel, windows: CursorWindows | undefined) {
+  if (windows !== undefined) {
+    return {
+      contextWindows: { standardTokens: windows.standardTokens, longTokens: windows.longTokens },
+      contextWindow: windows.longTokens,
+    };
+  }
+
+  const one = tokensOf(model.pinned.find((param) => param.id === CURSOR_PARAMETER.CONTEXT)?.value);
+
+  return one === undefined ? undefined : { contextWindow: one };
 }
 
 /** The catalog entries one Cursor model is offered as: its own, and its fast version right after it where it takes `fast`, each with the windows it runs on at its speed. */
@@ -553,15 +563,17 @@ function catalogEntriesOf(model: CursorModel): readonly OfferedModel[] {
     efforts: model.effort?.values ?? [NO_EFFORT],
   };
 
-  if (!model.fast) return [{ ...own, ...offeredWindows(model.windows.standard) }];
+  const standard = { ...own, ...offeredWindows(model, model.windows.standard) };
+
+  if (!model.fast) return [standard];
 
   return [
-    { ...own, ...offeredWindows(model.windows.standard) },
+    standard,
     {
       ...own,
       id: modelIdAtSpeed(model.catalogId, MODEL_SPEED.FAST),
       name: `${model.name} (Fast)`,
-      ...offeredWindows(model.windows.fast),
+      ...offeredWindows(model, model.windows.fast),
     },
   ];
 }

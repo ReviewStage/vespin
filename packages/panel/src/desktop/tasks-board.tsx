@@ -72,8 +72,6 @@ import {
   INSET,
   InlineEdit,
   LAYOUT_ELEMENT,
-  ListMotion,
-  motionKey,
   PAGE_FRAME,
   PAGE_WIDTH,
   PROGRESS_COUNT_LOOK,
@@ -99,7 +97,6 @@ import {
   Text,
   Time,
   Tooltip,
-  useLeaving,
   useMinute,
   useRovingColumns,
   useRovingKeys,
@@ -472,7 +469,6 @@ const TaskBoardCard = memo(function TaskBoardCard({
       className={BOARD_CARD}
       {...place}
       data-task-id={task.id}
-      {...motionKey(task.id)}
       {...menu.props}
       data-editing={rename.editing ? "true" : undefined}
     >
@@ -801,14 +797,14 @@ function TaskBoardColumnView({
       ? unassigned
       : properties;
 
-  const cards = useLeaving(column.tasks, taskIdOf);
+  const cards = column.tasks;
 
   // Every repository the board stands a card for, which a card's pill tells its own apart from.
   const repositories = columns.flatMap((each) =>
     each.tasks.map((task) => ({ repository: task.repository })),
   );
 
-  const keys = useMemo(() => cards.map(({ key }) => key), [cards]);
+  const keys = useMemo(() => cards.map(taskIdOf), [cards]);
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => holdRun(run), [holdRun]);
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -897,7 +893,7 @@ function TaskBoardColumnView({
             <Stack ref={body} gap={GAP.ITEM} inset={INSET.RING} className="tasks-board-column-body">
               {/* Note that the quick add's lines stand in a list of their own, over the run, because a run draws only its rows. */}
               {adding ? (
-                <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.ITEM} moves className="tasks-board-adds">
+                <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.ITEM} className="tasks-board-adds">
                   <QuickAddLines quick={quick} line={boardQuickAddLine} />
                 </Stack>
               ) : null}
@@ -911,7 +907,6 @@ function TaskBoardColumnView({
                   overscan={finding ? keys.length : undefined}
                   anchor={VIRTUAL_ROWS_ANCHOR.START}
                   listItems
-                  moves
                   holdsFocus
                   className="tasks-board-cards data-[dragging=true]:cursor-grabbing"
                   onPointerDown={narrow ? undefined : drag}
@@ -921,7 +916,7 @@ function TaskBoardColumnView({
                   onAtEnd={onSettledEnd}
                 >
                   {(index, place) => {
-                    const task = cards[index]?.value;
+                    const task = cards[index];
 
                     return task === undefined ? null : (
                       <TaskBoardCard
@@ -974,7 +969,6 @@ export function TasksBoard({
   const now = useMinute();
   const waitingOn = useTasksWaiting(tasks);
   const ids = useId();
-  const board = useRef<HTMLDivElement>(null);
   const crossing = useRovingColumns<HTMLDivElement>();
   // The column a narrow room shows, held across the page's visits where the page holds it.
   const ownColumn = useCreateStore<string | undefined>(undefined);
@@ -1025,14 +1019,7 @@ export function TasksBoard({
   }, [chosenStands, columnStore]);
   const shown = chosenStands ? chosen : values.includes(FIRST_SHOWN) ? FIRST_SHOWN : values[0];
   const panelId = `${ids}panel`;
-  // Note that the motion is handed what lays the cards out, so a draw that moved none measures none.
   const properties = display.properties;
-  const shownColumn = narrow ? shown : undefined;
-
-  const laidOut = useMemo(
-    () => ({ columns, properties, shownColumn }),
-    [columns, properties, shownColumn],
-  );
 
   const drawnColumns = narrow
     ? columns.filter((column) => columnValue(column.head) === shown)
@@ -1126,49 +1113,45 @@ export function TasksBoard({
           {REFRESH_FAILED_WORDS}
         </ErrorState>
       ) : null}
-      <ListMotion root={board} change={laidOut}>
-        <SelectionRegion
-          id={selection.regionId}
-          selection={{ selected: selection.selected, onChange: selection.onChange }}
-          order={order}
-          bringIn={runs.bringIn}
-        >
-          <div ref={board} className={BOARD} data-row-drop-scope="" {...crossing}>
-            {columns.length === 0 ? (
-              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-                {NONE_STANDING}
-              </Text>
-            ) : null}
-            {drawnColumns.map((column) => (
-              <TaskBoardColumnView
-                key={columnValue(column.head)}
-                tasks={tasks}
-                rowTab={rowTab}
-                opened={opened}
-                column={column}
-                columns={columns}
-                workspaceName={workspaceName}
-                narrow={narrow}
-                panelId={panelId}
-                properties={properties}
-                people={people}
-                waitingOn={waitingOn}
-                subTasksOf={subTasksOf}
-                chosenOf={selection.chosenOf}
-                finding={finding}
-                holdRun={runs.hold}
-                measured={frame.measured}
-                onSelect={tasks.onSelect}
-                onStanding={setStanding}
-                onShowOlder={() => frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })}
-                onSettledEnd={
-                  mayHoldSettled(column.head) ? frame.settledPages?.onRunEnd : undefined
-                }
-              />
-            ))}
-          </div>
-        </SelectionRegion>
-      </ListMotion>
+      <SelectionRegion
+        id={selection.regionId}
+        selection={{ selected: selection.selected, onChange: selection.onChange }}
+        order={order}
+        bringIn={runs.bringIn}
+      >
+        <div className={BOARD} data-row-drop-scope="" {...crossing}>
+          {columns.length === 0 ? (
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              {NONE_STANDING}
+            </Text>
+          ) : null}
+          {drawnColumns.map((column) => (
+            <TaskBoardColumnView
+              key={columnValue(column.head)}
+              tasks={tasks}
+              rowTab={rowTab}
+              opened={opened}
+              column={column}
+              columns={columns}
+              workspaceName={workspaceName}
+              narrow={narrow}
+              panelId={panelId}
+              properties={properties}
+              people={people}
+              waitingOn={waitingOn}
+              subTasksOf={subTasksOf}
+              chosenOf={selection.chosenOf}
+              finding={finding}
+              holdRun={runs.hold}
+              measured={frame.measured}
+              onSelect={tasks.onSelect}
+              onStanding={setStanding}
+              onShowOlder={() => frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })}
+              onSettledEnd={mayHoldSettled(column.head) ? frame.settledPages?.onRunEnd : undefined}
+            />
+          ))}
+        </div>
+      </SelectionRegion>
       {/* Note that the bar floats over the columns' feet, taking no height from them, and stays across the page's width however far the board scrolls sideways. */}
       <div className="tasks-board-selection pointer-events-none sticky bottom-ui-16 left-0 z-4 h-0 w-[100cqw]">
         <div className="absolute inset-x-0 bottom-0 flex justify-center *:pointer-events-auto">

@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
-  AGENT_KIND,
   AGENT_STATUS,
   type AgentSummary,
   type AgentTranscriptMessage,
@@ -27,7 +26,6 @@ import {
 } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
-import { pointerCross } from "../testing/pointer-cross.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AgentComposer } from "./agent-composer.js";
@@ -605,42 +603,4 @@ test("on the agent's tab, Reply quotes its words into the tab's own box, and sta
   act(() => again.click());
   await settle();
   assert.equal(composerEditor(container).textContent?.includes("Option B waits for review."), true);
-});
-
-test("Reply beside a Manager's message quotes the whole message into the box as Reply over words selected does, nothing cut and nothing over the box", async () => {
-  const told = `**Plan**: the invite flow ships first.\n\n${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}`;
-
-  const { container, sent } = await mountedTab({ ...AGENT, kind: AGENT_KIND.MANAGER }, [
-    { id: "ask", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "What first?" }] },
-    {
-      id: "turn",
-      role: MESSAGE_ROLE.ASSISTANT,
-      parts: [
-        {
-          type: "tool-send_to_user",
-          toolCallId: "told",
-          state: "output-available",
-          input: { text: told },
-          output: { status: "accepted" },
-        },
-      ],
-    },
-  ]);
-
-  // The pointer comes onto the message, which draws its actions at once.
-  const message = container.querySelector('[data-message-id="turn"]');
-  assert.ok(message, "the Manager's message is drawn");
-  pointerCross(document.body, message);
-
-  const reply = container.querySelector<HTMLButtonElement>('button[aria-label="Reply"]');
-  assert.ok(reply, "Reply stands beside the Manager's message");
-  act(() => reply.click());
-  await settle();
-  typeInComposer(container, "Ship it");
-  pressInComposer(container, "Enter");
-  await settle();
-
-  assert.deepEqual(sent, [
-    `> **Plan**: the invite flow ships first.\n>\n> ${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}\n\nShip it`,
-  ]);
 });

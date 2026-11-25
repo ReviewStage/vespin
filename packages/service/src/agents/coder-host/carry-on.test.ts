@@ -66,11 +66,11 @@ const cutOff = (at: number): CarryOnTurn => ({
   settledAt: new Date(at),
 });
 
-/** The decision's input as it reads where everything holds: a Mac's agent, its turn just cut off, opened by the developer's own line, nothing queued. */
+/** The decision's input as it reads where everything holds: a Mac's agent, its turn just cut off, no carry-on among its lines, nothing queued. */
 const resumable = (now: number): CarryOnInput => ({
   agent: { archivedAt: null, machine: AGENT_MACHINE.DEVICE },
   turn: cutOff(now),
-  openerChannel: MESSAGE_CHANNEL.TYPED,
+  carriedOn: false,
   queued: false,
   now,
 });
@@ -162,10 +162,9 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
 
-        assert.deepEqual(
-          carryOnDecision({ ...resumable(now), openerChannel: MESSAGE_CHANNEL.CARRY_ON }),
-          { outcome: CARRY_ON_OUTCOME.NONE },
-        );
+        assert.deepEqual(carryOnDecision({ ...resumable(now), carriedOn: true }), {
+          outcome: CARRY_ON_OUTCOME.NONE,
+        });
       }),
   );
 
@@ -274,9 +273,13 @@ const carriedOnStands = (warm: WarmLocalAgent, turnId: string) =>
 it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
   "a local agent's turn cut off",
   (it) => {
-    it.effect(
-      "a runner its Mac settled mid-turn is carried on once: a carry-on line queues a launch for the Mac, and the carry-on's own turn cut off the same way fails as before",
-      () =>
+    // Note that a launch can end before it takes any line, its carry-on's among them, as one that fails on a line it was handed ahead of it does.
+    it.effect.each([
+      ["its runner took the carry-on's line", true],
+      ["its runner took no line", false],
+    ] as const)(
+      "a runner its Mac settled mid-turn is carried on once: a carry-on line queues a launch for the Mac, and the carry-on's own turn cut off the same way, where %s, fails as before",
+      ([, takesLine]) =>
         Effect.gen(function* () {
           const warm = yield* warmLocalAgent;
           const { userId, agent } = warm;
@@ -314,10 +317,14 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
             trigger: TURN_TRIGGER.ASK,
             at: yield* Clock.currentTimeMillis,
           });
-          yield* writer.takeAwaitingLine(target, {
-            clientId: sentLineId(carryOnKey(lost)),
-            turnId: resumed?.id ?? "",
-          });
+
+          if (takesLine) {
+            yield* writer.takeAwaitingLine(target, {
+              clientId: sentLineId(carryOnKey(lost)),
+              turnId: resumed?.id ?? "",
+            });
+          }
+
           yield* TestClock.adjust("1 second");
           yield* settledDeviceAgentLine(ownDeviceHost(userId, warm.deviceId), relaunch, 1);
           yield* turnEnded(warm);

@@ -85,6 +85,7 @@ const ENVIRONMENT: HostedEnvironmentValues = {
   posthogApiHost: undefined,
   posthogProjectApiKey: undefined,
   posthogIngestHost: undefined,
+  posthogDistinctIdKey: undefined,
   cronSecret: undefined,
   githubWebhookSecret: undefined,
   providerKeyEncryptionKeys: Redacted.make(`1:${Buffer.alloc(32, 9).toString("base64")}`),
@@ -1142,6 +1143,54 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
           (yield* byCode(admin, PATH.PAIRING, pending.userCode)).body.workspaces,
           [{ id: workspace, name: "Test Workspace" }],
           "the pairing still waits, offered to its admin",
+        );
+      }),
+  );
+
+  it.effect(
+    "an admin of another workspace neither lists, renames, nor removes the workspace's machine, naming that workspace or their own",
+    () =>
+      Effect.gen(function* () {
+        const admin = yield* account();
+        const outsider = yield* account();
+        const workspace = yield* openWorkspace(admin);
+        const theirs = yield* openWorkspace(outsider);
+        const connected = yield* startedWorkspaceBox({ machineId: "5".repeat(64) });
+        yield* approveToWorkspace(admin, connected.userCode, workspace);
+        const { deviceId } = (yield* pollPairing(connected.pollSecret)).body;
+
+        const asked = yield* Effect.forEach([workspace, theirs], (workspaceId) =>
+          Effect.all([
+            answerOf(
+              request(outsider, PATH.WORKSPACE_MACHINE_RENAME, {
+                body: { workspaceId, id: deviceId, name: "Mine" },
+              }),
+            ),
+            answerOf(
+              request(outsider, PATH.WORKSPACE_MACHINE_REMOVE, {
+                body: { workspaceId, id: deviceId },
+              }),
+            ),
+          ]),
+        );
+
+        const listed = yield* answerOf(
+          request(outsider, `${PATH.WORKSPACE_MACHINES}?workspaceId=${workspace}`),
+        );
+
+        assert.deepEqual(
+          [listed, ...asked.flat()],
+          Array.from({ length: 5 }, () => NOT_FOUND),
+        );
+        assert.deepEqual(
+          (yield* answerOf(
+            request(admin, `${PATH.WORKSPACE_MACHINES}?workspaceId=${workspace}`),
+          )).body.machines.map((machine: { readonly id: string; readonly name: string }) => [
+            machine.id,
+            machine.name,
+          ]),
+          [[deviceId, "fra-01"]],
+          "the machine still stands under its own name",
         );
       }),
   );

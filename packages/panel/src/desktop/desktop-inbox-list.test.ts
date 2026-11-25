@@ -16,7 +16,7 @@ import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { Effect } from "effect";
 import { act } from "react";
-import { beforeAll, onTestFinished, test, vi } from "vitest";
+import { beforeAll, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM } from "../shell-room.js";
@@ -91,7 +91,6 @@ import {
 } from "../testing/desktop-inbox.js";
 import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
-import { playMotions } from "../testing/pane-motion.js";
 import { pointerCross } from "../testing/pointer-cross.js";
 import { waitingOf } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
@@ -1022,29 +1021,6 @@ test("on a phone, a focused row whose item is answered elsewhere leaves the keyb
   assert.ok(document.activeElement === more(), "the keyboard is on the head's ⋯");
 });
 
-/** Gives the window the list's motion tokens beside the pane's, and an engine that records what is played; answers what was played. */
-function playListMotions() {
-  const motions = playMotions();
-  const root = document.documentElement.style;
-
-  const tokens = {
-    "--ui-duration-exit": "90ms",
-    "--ui-motion-exit": "ease",
-    "--ui-duration-shape": "460ms",
-    "--ui-spring": "ease-out",
-    "--ui-list-travel": "16px",
-  };
-
-  for (const [name, value] of Object.entries(tokens)) root.setProperty(name, value);
-  onTestFinished(() => {
-    motions.remove();
-
-    for (const name of Object.keys(tokens)) root.removeProperty(name);
-  });
-
-  return motions.played;
-}
-
 /** Answers the Invites item on another Mac, as main hears of it. */
 async function answerExpiryElsewhere(): Promise<void> {
   world.inboxes.set(INVITES.id, [
@@ -1059,46 +1035,8 @@ async function answerExpiryElsewhere(): Promise<void> {
   await settle();
 }
 
-test("on Needs you, an item answered on another Mac slides out from where its row stood, out of reach while it goes, and leaves the list once its exit has played", async () => {
+test("on Open, the last pinned task's item answered on another Mac takes Pinned with it at once, and the rows under Everything else stay drawn where they stand, under no heading", async () => {
   window.localStorage.removeItem(WHOSE_KEY);
-  const played = playListMotions();
-  const { page } = mount({ chosen: ON_THRESHOLD });
-  await settle();
-  showScope(page, "Open");
-  await answerExpiryElsewhere();
-  // The settled row Needs you held leaves with it.
-  const leaving = [...page.querySelectorAll<HTMLElement>("[data-leaving]")];
-  assert.deepEqual(
-    leaving
-      .map((each) =>
-        each.matches(".sidebar-tasks > li") ? each.querySelector(ROW_TITLE)?.textContent : null,
-      )
-      .toSorted(),
-    ["Expire after 7 days?", "How is a failed email retried?"],
-  );
-  assert.ok(
-    leaving.every((each) => each.hasAttribute("inert")),
-    "each is drawn on out of reach",
-  );
-  const fades = played.filter((each) => leaving.some((leaver) => leaver === each.element));
-  assert.deepEqual(
-    fades.map((each) => each.keyframes.at(-1)),
-    [
-      { opacity: 0, transform: "translateX(-16px)" },
-      { opacity: 0, transform: "translateX(-16px)" },
-    ],
-  );
-
-  act(() => {
-    for (const fade of fades) fade.finish();
-  });
-  assert.deepEqual(listed(page), ["▸ *Alert at 80%?"]);
-  assert.equal(page.querySelector("[data-leaving]"), null);
-});
-
-test("on Open, the last pinned task's item answered on another Mac takes Pinned with it: the section slides out with its row, out of reach while it goes, and the rows under Everything else stay drawn where they stand, under no heading once it has gone", async () => {
-  window.localStorage.removeItem(WHOSE_KEY);
-  const played = playListMotions();
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   showScope(page, "Open");
@@ -1114,24 +1052,9 @@ test("on Open, the last pinned task's item answered on another Mac takes Pinned 
   const staying = rowNamed(page, "Alert at 80%?");
   await answerExpiryElsewhere();
 
-  const pinned = [...page.querySelectorAll<HTMLElement>("[data-leaving]")].find(
-    (each) =>
-      each.querySelector(".ui-group-header-head")?.textContent?.startsWith("Pinned") === true,
-  );
-
-  assert.ok(pinned, "Pinned is drawn on while it goes");
-  assert.equal(pinned.querySelector(ROW_TITLE)?.textContent, "Expire after 7 days?");
-  assert.ok(pinned.hasAttribute("inert"), "out of reach");
-  const exit = played.find((each) => each.element === pinned);
-  assert.deepEqual(exit?.keyframes.at(-1), { opacity: 0, transform: "translateX(-16px)" });
   assert.ok(rowNamed(page, "Alert at 80%?") === staying, "the row staying is never drawn anew");
-
-  act(() => {
-    for (const each of played.splice(0)) each.finish();
-  });
   assert.deepEqual(heads(), [], "one run stands under no heading");
   assert.deepEqual(listed(page), ["▸ *Alert at 80%?"]);
-  assert.equal(page.querySelector("[data-leaving]"), null);
 });
 
 /** A read the test answers when it chooses. */
@@ -1570,47 +1493,6 @@ test("Addressed to in the view's menu offers Anyone, the reader as Me, then each
   act(() => clear.click());
   assert.equal(whoseChip(page), null, "the reader's own stand under no chip");
   assert.deepEqual(listed(page), ["How is a failed email retried?", "*Expire after 7 days?"]);
-});
-
-test("the Addressed to chip scales in as a teammate is chosen and out as its × lifts it, drawn on out of reach until its exit has played, the line standing hidden between", async () => {
-  world.listedWorkspace = SHARED_WORKSPACE;
-  world.members = SHARED_MEMBERS;
-  const played = playListMotions();
-  // Note that a chip arriving rides the quick beat, which the list's tokens leave out.
-  document.documentElement.style.setProperty("--ui-duration-quick", "140ms");
-  onTestFinished(() => {
-    document.documentElement.style.removeProperty("--ui-duration-quick");
-  });
-  const { page } = mount();
-  await settle();
-  const line = () => page.querySelector<HTMLElement>(".inbox-tasks-chips")?.parentElement;
-
-  const scaledIn = (element: Element | null | undefined) =>
-    played.some(
-      (each) =>
-        each.element === element &&
-        each.keyframes.some((frame) => String(frame.transform).includes("scale")),
-    );
-
-  assert.equal(line()?.hidden, true, "the line stands ready, hidden");
-
-  chooseView(page, "Addressed to", "Charles Pan");
-  const chip = page.querySelector("[data-motion-key='whose']");
-  assert.equal(line()?.hidden, false);
-  assert.ok(scaledIn(chip), "the chip scales in");
-
-  act(() => (chip?.querySelector("button") ?? assert.fail("a way to lift it")).click());
-  const leaving = page.querySelector("[data-motion-key='whose']");
-  assert.equal(leaving?.hasAttribute("data-leaving"), true, "drawn on while it goes");
-  assert.equal(leaving?.hasAttribute("inert"), true, "out of reach");
-  assert.equal(leaving?.querySelector(".ui-chip-name")?.textContent, "Charles Pan");
-  assert.ok(scaledIn(leaving), "it scales out");
-
-  act(() => {
-    for (const each of played.splice(0)) each.finish();
-  });
-  assert.equal(page.querySelector("[data-motion-key='whose']"), null);
-  assert.equal(line()?.hidden, true);
 });
 
 test("Addressed to offers Me though the window does not know the reader's id, and a Me chosen stays checked", async () => {

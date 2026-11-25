@@ -15,9 +15,14 @@
  * and the plan keeps what it last heard.
  * Its windows replace all the plan held, beside the rate-limit reset
  * credits it counts and, where it holds any, each available one's id and
- * expiry, read from the list Codex's client reads. The access token goes
- * to ChatGPT alone and is never logged; nothing of an answer is kept but
- * the windows and the credits.
+ * expiry, read from the list Codex's client reads. An answer whose every
+ * window has room left also lifts a limit a turn wrote on the plan
+ * (`setPlanStatus`), as a Claude plan's refresh does (`claude-usage.ts`),
+ * since a limit that named no reset, or one lifted early, otherwise stands
+ * until a turn runs on the plan, which a launch never gives it while
+ * another payer has room (`turnPayerOf`). The access token goes to ChatGPT
+ * alone and is never logged; nothing of an answer is kept but the windows,
+ * the credits, and that lift.
  */
 
 import type { KeyRing } from "@repo/database/models/provider-key-seal";
@@ -25,13 +30,18 @@ import {
   claimPlanUsageAsk,
   listProviderKeyRows,
   type ProviderKeyRow,
+  setPlanStatus,
   setPlanUsageWindows,
 } from "@repo/database/models/provider-key-store";
 import type {
   StoredResetCredits,
   StoredUsageWindow,
 } from "@repo/database/schemas/account-provider-key";
-import { PROVIDER_KEY_KIND, PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
+import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_PROVIDER,
+  PROVIDER_KEY_STATUS,
+} from "@repo/features/provider-key-wire";
 import { DateTime, Duration, Effect, Option, Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -56,6 +66,9 @@ const ACCOUNT_HEADER = "chatgpt-account-id";
 
 /** How long a plan's reading stands before a read of the keys asks ChatGPT again. */
 const FRESH_FOR = Duration.minutes(5);
+
+/** The share of a window at which it is spent, as Codex reads a reached limit from its windows. */
+const WINDOW_SPENT_PERCENT = 100;
 
 /** The status ChatGPT answers a read of the plan's usage with. */
 const HTTP_OK = 200;
@@ -229,7 +242,22 @@ const askAndKeep = /* @__PURE__ */ Effect.fnUntraced(function* (
   const read = yield* askUsage(userId, ring, row);
 
   if (Option.isNone(read) || read.value.windows.length === 0) return;
-  yield* setPlanUsageWindows(userId, row.id, read.value.windows, now, read.value.resetCredits);
+  const { windows, resetCredits } = read.value;
+  yield* setPlanUsageWindows(userId, row.id, windows, now, resetCredits);
+  const room = windows.every((window) => window.usedPercent < WINDOW_SPENT_PERCENT);
+
+  if (row.status !== PROVIDER_KEY_STATUS.LIMIT_REACHED || !room) return;
+  // Note that only a turn on the plan lifts a limit otherwise, and a plan passed over for another with room gets none.
+  yield* setPlanStatus(
+    userId,
+    PROVIDER_KEY_PROVIDER.OPENAI,
+    PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+    PROVIDER_KEY_STATUS.VERIFIED,
+    undefined,
+    now,
+    now,
+    row.id,
+  );
 });
 
 /** Asks ChatGPT for the usage of each of the account's ChatGPT plans whose reading is due, all at once, and keeps what each answered. */
