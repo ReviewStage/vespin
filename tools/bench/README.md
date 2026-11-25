@@ -1,8 +1,9 @@
 # The step bench
 
 `bench.ts` times what one step of a moving row costs the web client's
-window. A step is one agent's row moving, or one task's row moving as its
-agents' turns start and end. It times builds side by side, so a change is
+window. A step is one agent's row moving, one task's row moving as its
+agents' turns start and end, or a press on a row, opening a task from the
+sidebar say. It times builds side by side, so a change is
 measured against the commit it is based on. It is a tool, not a test:
 nothing is asserted, no CI job runs it, and nothing it writes is committed.
 It times the window only; `host-bench.ts` times the host's own task-list live
@@ -81,12 +82,34 @@ node tools/bench/bench.ts \
   `history.pushState(null, '', '/personal/agent/<id>'); dispatchEvent(new PopStateEvent('popstate'))`.
 - **`--names`:** adds a row for each named component: how many times it
   rendered per step.
-- **`--top N`:** lists each build's N components rendered most per step, to
-  find what to name.
+- **`--top N`:** lists each build's N components rendered most per step,
+  and the N rendered again most, to find what to name.
 - **Interleaving:** each round opens every scene on every build in turn, so
   a sandbox that slows down halfway weighs on both sides alike.
   `--rounds` (3), `--steps` (20), `--warm` (3), and `--settle` (150 ms
   waited after each step) set the run's size.
+
+## Opening a task from the sidebar
+
+A press scene steps by pressing rows rather than through the stage's door:
+`--press label=<selector>` makes each of that scene's steps click, with the
+mouse as a person does, the next of the elements the selector matches, in
+turn. The selector is read again before each press, so one that leaves out
+the open row never presses it. This one opens the sidebar's My tasks rows
+in turn, five tasks round and round:
+
+```sh
+node tools/bench/bench.ts \
+  --build before=http://localhost:4310 --build after=http://localhost:4311 \
+  --scene 'open=/app?fixture=tasks-open&scale=large&move=none&every=0' \
+  --press 'open=nav[aria-label="My tasks"] li.ui-list-row:not([data-current]) .ui-list-row-main' \
+  --warm 5 --steps 15 --settle 400 --rounds 3 --top 20
+```
+
+`--warm 5` opens each of the five once before any is counted, so every
+counted open is of a task opened before, as most are. `--settle 400` waits
+for what an open draws after its paint, the transcript and the tab strip,
+before the next press.
 
 ## What it reports
 
@@ -101,7 +124,18 @@ A cell is the range of the rounds' medians, one median step per round:
   work. Like DevTools, it walks only the children of a fiber whose children
   changed, since a bailed-out subtree keeps its flags from the commit it
   last rendered in.
+- **· rendered again:** of those, the ones that stood before the step and
+  ran again rather than mounted. Opening a task mounts its page, which is
+  its work; what renders again is where to cut.
 - **commits:** how many commits React made.
+
+A press scene adds the press's Event Timing first, as the window's
+`press.row` span reads it: **press → paint ms**, from the press to the
+paint after it (the browser rounds it to 8 ms), and its parts, **input
+delay** (before the handlers ran), **handlers** (the handlers, and React's
+render of the update they made, which it runs before the event ends), and
+**presentation** (from then to the paint). A press painted within 16 ms is
+not reported and counts as 0.
 
 The window is 1280×840, the size Vespin opens at. A sandbox's numbers
 compare only with each other, so quote both sides from the same run.
