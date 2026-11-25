@@ -188,6 +188,7 @@ import {
   usePullRequestsRead,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { rigBusyRender } from "../rig-busy-render.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -590,6 +591,7 @@ function AgentComposerArea({
 }) {
   const threadsLine = useAgentThreadsLine(id);
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
+  rigBusyRender();
   const dictated = useDictation(composer.words, composer.onWords);
   // Note that one pick holds the newest refusal, a send's, a dictation's or the page's, so an older one never hides why the last act did not go.
   const said = useNewestNote([composer.note, dictated.note, note]);

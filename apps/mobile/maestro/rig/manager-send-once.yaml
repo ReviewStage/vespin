@@ -1,0 +1,51 @@
+# manager-send-once.yaml -- a message typed into a Manager's chat while JavaScript is behind the field goes once, as the whole of what the field shows: keys typed and two presses of Send that reach JavaScript together, in one batch, post one message of every word typed, and leave the field empty.
+#
+# It lives under maestro/rig/ rather than maestro/, so the screenshot run,
+# which runs every flow at maestro/'s top, never runs it. `-busyRender`
+# holds each render of the agent's page for six seconds (`rig-busy-render.ts`),
+# as a Manager's page at work holds JavaScript, so every key typed and both
+# presses after the first key land while JavaScript is still drawing it, and
+# reach it in one batch, as Charles's "What abo" did, posted twice and cut
+# off. The press is Send's own, found by its name, and every wait is on what
+# the screen shows.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture and opened on its release Manager's
+# chat by `-agent <id>`; a message the run sends lands as the chat's row
+# (`fixture-host.ts`'s `keepChatSend`); nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 81e2a425-6d3f-4a07-92df-9eafb0c1d2e8
+      busyRender: "6000"
+- extendedWaitUntil:
+    visible: "Left before it ships.*"
+    timeout: 60000
+- tapOn:
+    id: "composer-field"
+# The first words land and are drawn, so Send stands.
+- inputText: "What abo"
+- extendedWaitUntil:
+    visible:
+      text: "Send"
+      enabled: true
+    timeout: 60000
+# The rest is typed and Send pressed twice while the page draws the first of
+# those keys, so the keys and both presses reach JavaScript together.
+- inputText: "ut the release"
+- tapOn: "Send"
+- tapOn: "Send"
+# The chat shows the whole message once, nothing cut off, and the field
+# stands empty.
+- extendedWaitUntil:
+    visible: "What about the release"
+    timeout: 60000
+- assertNotVisible:
+    id: "composer-field"
+    text: "What about the release"
+- assertNotVisible: "What abou?"
+- assertNotVisible:
+    text: "What about the release"
+    index: 1
+- takeScreenshot: manager-send-once
