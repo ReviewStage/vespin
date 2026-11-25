@@ -166,13 +166,11 @@ function listedAgents(userId: string, running: readonly RunningAgentTurn[]) {
   });
 }
 
-/** The member's running turns the activity shows at `now`: those short of `LIVE_ACTIVITY_PUSH.LONGEST_TURN`, the newest first. */
-function shownTurns(userId: string, now: number) {
+/** The running turns the activity shows at `now`: those short of `LIVE_ACTIVITY_PUSH.LONGEST_TURN`, in the order given. */
+function shownOf(running: readonly RunningAgentTurn[], now: number): readonly RunningAgentTurn[] {
   const longest = Duration.toMillis(LIVE_ACTIVITY_PUSH.LONGEST_TURN);
 
-  return Effect.map(listRunningAgentTurns(userId), (running) =>
-    running.filter((turn) => now - turn.startedAt.getTime() < longest),
-  );
+  return running.filter((turn) => now - turn.startedAt.getTime() < longest);
 }
 
 /** The member's activity as it now stands: how many agents run, how many threads wait on them, and the newest of the running agents. */
@@ -181,7 +179,7 @@ function contentStateOf(
   now: number,
 ): Effect.Effect<LiveActivityContentState, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
-    const running = yield* shownTurns(userId, now);
+    const running = shownOf(yield* listRunningAgentTurns(userId), now);
 
     return {
       running: running.length,
@@ -356,17 +354,18 @@ function endOn(
     const never = phone.notify === PUSH_NOTIFY.NEVER;
 
     // Note that whether an agent runs is read again here, as a turn may have begun since the state was read.
-    if (!never && (yield* shownTurns(userId, yield* Clock.currentTimeMillis)).length > 0) return;
+    const running = yield* listRunningAgentTurns(userId);
+
+    if (!never && shownOf(running, yield* Clock.currentTimeMillis).length > 0) return;
+    // An activity ended because its turns ran too long leaves at once, since its "Done" would say they finished.
+    const dismissAt =
+      running.length > 0 ? now : now + Duration.toMillis(LIVE_ACTIVITY_PUSH.DISMISS_AFTER);
 
     if (phone.activityToken !== null) {
       const delivery = yield* sendTo(
         phone,
         phone.activityToken,
-        endPayload(
-          never ? NOTHING_SHOWN : state,
-          now,
-          now + Duration.toMillis(LIVE_ACTIVITY_PUSH.DISMISS_AFTER),
-        ),
+        endPayload(never ? NOTHING_SHOWN : state, now, dismissAt),
         APNS_PRIORITY.IMMEDIATE,
         LIVE_ACTIVITY_PUSH.LIFETIME,
         now,

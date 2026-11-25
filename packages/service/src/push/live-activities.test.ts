@@ -522,11 +522,10 @@ it.layer(getTestDB())("a member's live activity", (it) => {
         yield* fresh.settle;
         yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
         assert.deepEqual(events(sender.sent), ["start", "end"]);
-        assert.deepEqual(said(sender.sent[1]).aps["content-state"], {
-          running: 0,
-          waiting: 0,
-          agents: [],
-        });
+        const end = said(sender.sent[1]).aps;
+        assert.deepEqual(end["content-state"], { running: 0, waiting: 0, agents: [] });
+        // Note that it leaves the lock screen at once, since the turn still runs and "Done" would say it finished.
+        assert.equal(end["dismissal-date"], end.timestamp);
       }).pipe(Effect.provide(sender.layer));
     },
   );
