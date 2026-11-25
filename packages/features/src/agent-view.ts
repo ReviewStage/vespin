@@ -63,7 +63,12 @@ import {
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
 import { machineAskAnswerRequestSchema } from "./machine-ask-wire.js";
-import { memoryIdSchema, memorySaveRequestSchema } from "./memory-wire.js";
+import {
+  MEMORY_QUERY,
+  memoryIdSchema,
+  memoryManagerIdSchema,
+  memorySaveRequestSchema,
+} from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
@@ -615,15 +620,19 @@ export const memoriesAnswerViewSchema = answerView(accountContract.forgetMemory)
 
 export type MemoriesAnswerView = typeof memoriesAnswerViewSchema.Type;
 
-/** Holding a workspace's memories, or reading them again, as the window asks it: the workspace Settings shows. */
+/** Holding a workspace's memories, or reading them again, as the window asks it: the workspace Settings shows, and the Manager whose own memories it shows in the workspace's place, where it names one. */
 export const memoriesFollowParamsSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,
+  [MEMORY_QUERY.MANAGER_ID]: memoryManagerIdSchema,
 });
 
-/** Forgetting a memory, as the window asks it: its workspace and the memory's id. */
+export type MemoriesFollowParams = typeof memoriesFollowParamsSchema.Type;
+
+/** Forgetting a memory, as the window asks it: its workspace, the memory's id, and the Manager it was kept for alone, where it names one. */
 export const memoryForgetParamsSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,
   id: memoryIdSchema,
+  [MEMORY_QUERY.MANAGER_ID]: memoryManagerIdSchema,
 });
 
 export type MemoryForgetParams = typeof memoryForgetParamsSchema.Type;

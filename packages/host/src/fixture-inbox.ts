@@ -198,6 +198,7 @@ import {
   type AppTranscript,
   OWN_TRANSCRIPT,
   RUN_PROFILE,
+  WORKSPACE_OWN_MEMORIES,
 } from "./app-state.js";
 import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
 import {
@@ -1364,6 +1365,33 @@ const MEMORIES: readonly MemorySummary[] = [
     source: null,
     recalls30d: 0,
     lastRecalledAt: null,
+  },
+];
+
+/** The Manager's own memories, kept for it alone: one Ada added in its Settings, one it kept itself as it worked for her. */
+const MANAGER_MEMORIES: readonly MemorySummary[] = [
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a71",
+    text: "Ada wants a coder's pull request left unarmed until she reads it.",
+    keptBy: { userId: ADA.userId, name: ADA.name },
+    forgettable: true,
+    createdAt: LANDED - 3 * DAY,
+    updatedAt: LANDED - 3 * DAY,
+    source: null,
+    recalls30d: 6,
+    lastRecalledAt: LANDED - 3 * HOUR,
+  },
+  {
+    id: "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a72",
+    text: "Screenshots for a UI change are taken light and dark, on desktop and on a phone.",
+    keptBy: { userId: ADA.userId, name: ADA.name },
+    forgettable: true,
+    createdAt: LANDED - 9 * DAY,
+    updatedAt: LANDED - 9 * DAY,
+    source: null,
+    managerSource: { agentId: AGENT.MANAGER, messageId: null, name: "Release manager" },
+    recalls30d: 2,
+    lastRecalledAt: LANDED - 2 * DAY,
   },
 ];
 
@@ -2767,8 +2795,11 @@ export function inboxAppState(
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
     // Note that Relay, the team a flow switches to, holds no memories and none of its own skills, so its pages draw their empty states rather than reading for good; the account's own skills stand in every workspace.
     [LIVE_READ.MEMORIES]: {
-      [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES },
-      [TEAM_WORKSPACE.id]: { rows: [] },
+      [FIXTURE_IDS.WORKSPACE]: {
+        [WORKSPACE_OWN_MEMORIES]: { rows: MEMORIES },
+        [AGENT.MANAGER]: { rows: MANAGER_MEMORIES },
+      },
+      [TEAM_WORKSPACE.id]: { [WORKSPACE_OWN_MEMORIES]: { rows: [] } },
     },
     [LIVE_READ.MCP_CLIENTS]: {
       [ADA.userId]: { rows: { serverUrl: "https://vespin.dev/api/mcp", clients: MCP_CLIENTS } },
@@ -3018,7 +3049,8 @@ export function savedMemoriesAppState(
   state: AppStateSnapshot,
   words: SavedMemoryWords,
 ): AppStateSnapshot {
-  const held = state[LIVE_READ.MEMORIES][FIXTURE_IDS.WORKSPACE];
+  const workspace = state[LIVE_READ.MEMORIES][FIXTURE_IDS.WORKSPACE];
+  const held = workspace?.[WORKSPACE_OWN_MEMORIES];
   const rows = held?.rows;
 
   if (words.size === 0 || held === undefined || rows === undefined) return state;
@@ -3040,7 +3072,7 @@ export function savedMemoriesAppState(
     ...state,
     [LIVE_READ.MEMORIES]: {
       ...state[LIVE_READ.MEMORIES],
-      [FIXTURE_IDS.WORKSPACE]: { ...held, rows: saved },
+      [FIXTURE_IDS.WORKSPACE]: { ...workspace, [WORKSPACE_OWN_MEMORIES]: { ...held, rows: saved } },
     },
   };
 }

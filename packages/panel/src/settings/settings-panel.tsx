@@ -32,7 +32,7 @@ import { HostsSection } from "./hosts-section.js";
 import { type IntegrationsFilter, IntegrationsSection } from "./integrations-page.js";
 import { MachineCommandsSection } from "./machine-commands-section.js";
 import { McpSection } from "./mcp-clients-section.js";
-import { MemorySection } from "./memory-page.js";
+import { MemorySection, WORKSPACE_MEMORY_SCOPE } from "./memory-page.js";
 import { PreferencesPage } from "./preferences-page.js";
 import { PrivacySection } from "./privacy-section.js";
 import { settingsRowsInput, shownWorkspace } from "./settings-rows.js";
@@ -172,6 +172,7 @@ export function SettingsPanel({
       {view === SETTINGS_VIEW.MEMORY ? (
         <MemorySection
           signedIn={signedIn}
+          scope={WORKSPACE_MEMORY_SCOPE}
           workspace={workspace ? shownWorkspace(workspace) : undefined}
           readerId={signedIn ? account.id : undefined}
           workspacesFailed={workspace?.listFailed ?? false}

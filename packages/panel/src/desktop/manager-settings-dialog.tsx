@@ -25,14 +25,21 @@
  * delete, whose question stands over the dialog, both through the same acts
  * the menu's items run (`agent-archive.tsx`, `agent-delete.tsx`). Anyone in
  * the workspace may delete a Manager, as with any agent.
+ *
+ * Memory lists the Manager's own memories, those it alone recalls, with
+ * workspace Settings › Memory's own section at the Manager's scope
+ * (`MemorySection`), so a memory added there is kept for it alone, in the
+ * workspace the Manager's task list row names, whichever surface opened it.
  */
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { DEFAULT_AUTOMATIONS_ORDER } from "@repo/features/automation-list-model";
 import { AUTOMATION_TARGET, type AutomationSummary } from "@repo/features/automation-wire";
 import { READING_AUTOMATIONS } from "@repo/features/automation-words";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
+import { MEMORY_SCOPE } from "@repo/features/memory-settings-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { EXPERIMENT } from "@repo/settings";
 import {
@@ -63,13 +70,15 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { refusedShown, unreadShown } from "../failure-report.js";
 import { renameWrite } from "../rename-write.js";
 import { replayMaskedError } from "../settings/marks.js";
+import { MemorySection } from "../settings/memory-page.js";
 import { usePhoneRoom } from "../stage-room.js";
+import { useTaskListCollections, useTaskListRowAs } from "../task-list-collections.js";
 import { type AgentBox, useAgentBox } from "../tasks/agent-box.js";
 import { RENAME_FAILED, teammateStarter } from "../tasks/agent-model.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuAction } from "./action-menu.js";
 import { AutomationRows } from "./automations-page.js";
@@ -81,6 +90,7 @@ const SECTION = {
   GENERAL: "general",
   PEOPLE: "people",
   AUTOMATIONS: "automations",
+  MEMORY: "memory",
 } as const;
 
 type Section = (typeof SECTION)[keyof typeof SECTION];
@@ -93,6 +103,7 @@ const SECTIONS: readonly SettingsDialogSection<Section>[] = [
     title: "Automations",
     icon: <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />,
   },
+  { id: SECTION.MEMORY, title: "Memory", icon: <GLYPH.MEMORY /> },
 ];
 
 /** What the dialog is named for a Manager drawn with no name. */
@@ -435,6 +446,32 @@ function AutomationsSection({
   );
 }
 
+/** Memory: the Manager's own memories, in the workspace it stands in, as workspace Settings › Memory lists the workspace's. */
+function MemoryOfManager({
+  agent,
+  workspaceId,
+}: {
+  agent: ManagerSettingsSubject;
+  /** The workspace the Manager stands in, as its task list row names it; none until that row arrives, while Memory stands on its skeleton. */
+  workspaceId: string | undefined;
+}): React.JSX.Element {
+  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const readerId = signedInAccountId(account);
+  const workspace = workspaces?.find((each) => each.id === workspaceId);
+
+  return (
+    <MemorySection
+      signedIn={readerId !== undefined}
+      scope={{ kind: MEMORY_SCOPE.MANAGER, managerId: agent.id }}
+      workspace={workspace}
+      readerId={readerId}
+      workspacesFailed={false}
+      onRetryWorkspaces={undefined}
+    />
+  );
+}
+
 /** The Settings dialog for `agent`, a Manager, saved through `agents` and archived or deleted through `acts`; it stands only while `shown`. */
 export function useManagerSettingsDialog(
   agent: ManagerSettingsSubject,
@@ -443,15 +480,26 @@ export function useManagerSettingsDialog(
   shown: boolean,
 ): ManagerSettingsAsk {
   const [open, setOpen] = useState(false);
-  const [section, setSection] = useState<Section>(SECTION.GENERAL);
+  const [chosen, setSection] = useState<Section>(SECTION.GENERAL);
   const close = () => setOpen(false);
+
+  // Note that the Manager's workspace is read off its task list row, whichever surface opened the dialog, and Memory stands only where that workspace has Memory on, as workspace Settings lists it.
+  const workspaceId = useTaskListRowAs(
+    useTaskListCollections().agents,
+    agent.id,
+    (row) => row?.workspaceId,
+  );
+
+  const memoryOn = useWorkspaceExperiment(workspaceId, EXPERIMENT.MEMORY);
+  const sections = memoryOn ? SECTIONS : SECTIONS.filter((each) => each.id !== SECTION.MEMORY);
+  const section = chosen === SECTION.MEMORY && !memoryOn ? SECTION.GENERAL : chosen;
 
   const dialog = (
     <SettingsDialog
       open={open && shown}
       title={agent.title ?? UNNAMED}
       titleReplayMasked={agent.title !== undefined}
-      sections={SECTIONS}
+      sections={sections}
       current={section}
       onChoose={setSection}
       onDismiss={close}
@@ -464,6 +512,9 @@ export function useManagerSettingsDialog(
       ) : null}
       {section === SECTION.AUTOMATIONS ? (
         <AutomationsSection agent={agent} onClose={close} />
+      ) : null}
+      {section === SECTION.MEMORY ? (
+        <MemoryOfManager agent={agent} workspaceId={workspaceId} />
       ) : null}
     </SettingsDialog>
   );

@@ -702,8 +702,16 @@ export const NO_KEYS_HELD: Readonly<Record<string, never>> = {};
  */
 export type AppHeldById<Rows> = Readonly<Record<string, AppHostRead<Rows>>>;
 
-/** Each workspace's memories the windows hold, by the workspace, most recently kept or corrected first, as the host's read of them stands, with every forget drawn over them until the read carries it (`memory-follow.ts`). */
-export type AppMemories = AppHeldById<readonly MemorySummary[]>;
+/** Whose memories a held read of a workspace's is, under the workspace: its own, or a Manager's alone by the Manager's id. */
+export const WORKSPACE_OWN_MEMORIES = "workspace";
+
+/** The key a workspace's held memories stand under in it: the Manager's id for a Manager's own, else the workspace's own (`WORKSPACE_OWN_MEMORIES`). */
+export function memoriesHolder(managerId: string | undefined): string {
+  return managerId ?? WORKSPACE_OWN_MEMORIES;
+}
+
+/** Each workspace's memories the windows hold, by the workspace and then whose they are (`memoriesHolder`), most recently kept or corrected first, as the host's read of them stands, with every forget drawn over them until the read carries it (`memory-follow.ts`). */
+export type AppMemories = Readonly<Record<string, AppHeldById<readonly MemorySummary[]>>>;
 
 /** The skills the account sees in each workspace the windows hold, by the workspace, the workspace's first and then its own, as the host's read of them stands, with every write drawn over them until the read carries it (`installed-skills-follow.ts`). */
 export type AppInstalledSkills = AppHeldById<readonly InstalledSkillSummary[]>;
@@ -1165,7 +1173,7 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.INTEGRATIONS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.INTEGRATION_TOOLS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.MEMORIES]: {
-    keys: READ_KEYS.ONE,
+    keys: READ_KEYS.TWO,
     on: KEYS_ON.SLICE,
     rowId: "id" satisfies keyof MemorySummary,
   },
