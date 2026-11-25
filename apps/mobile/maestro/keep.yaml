@@ -39,15 +39,17 @@ appId: dev.vespin.ios
       POINT: "94%, 60%"
 - assertNotVisible: "Save to Photos"
 - assertVisible: "The invite page"
-# The message's own menu, opened on its words. Note that they are scrolled to
-# the window's middle first, since the picture's menu closing left them under
-# the bar, where the long press landed on it instead.
+# The message's own menu, opened on its words. Note that the long press lands
+# on a paragraph of plain words, never one holding a mention's chip, whose own
+# hold opens the link's sheet first; and that the words are scrolled to the
+# window's middle first, since the picture's menu closing left them under the
+# bar, where the long press landed on it instead.
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
-      ELEMENT: ".*walked the invite flow.*"
+      ELEMENT: "The recording is under this.*"
       DIRECTION: UP
-- longPressOn: ".*walked the invite flow.*"
+- longPressOn: "The recording is under this.*"
 - assertVisible: "Copy message"
 - waitForAnimationToEnd
 - takeScreenshot: keep-message-menu
@@ -57,7 +59,7 @@ appId: dev.vespin.ios
     env:
       POINT: "94%, 60%"
 - assertNotVisible: "Copy message"
-- assertVisible: ".*walked the invite flow.*"
+- assertVisible: "The recording is under this.*"
 # The picture opens full screen in the app's viewer, whose share sheet copies
 # and saves it as the system's own wording names those acts.
 - tapOn: "The invite page"
