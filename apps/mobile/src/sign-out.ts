@@ -6,6 +6,7 @@ import { useHostActs } from "./host/host-provider.js";
 import { clearAccountNotifications } from "./notifications.js";
 import { forgetPictureFiles } from "./picture-files.js";
 import { reregisterPushDevice, unregisterPushDevice, useFixtureRun } from "./push-device.js";
+import { forgetServiceFiles } from "./service-file.js";
 import { useWrite } from "./use-write.js";
 
 /** Where a refused sign-out says why: in place, beside the row it was pressed on; none for the failure notice, with Try again. */
@@ -50,6 +51,12 @@ export function useSignOut(): (saying?: SignOutSaying) => Promise<boolean> {
               forgetPictureFiles().catch((cause: unknown) =>
                 console.error("The account's pictures were not let go.", cause),
               ),
+              // Note that the clips and files downloaded under the app's caches are let go too.
+              Promise.resolve()
+                .then(forgetServiceFiles)
+                .catch((cause: unknown) =>
+                  console.error("The account's downloaded files were not let go.", cause),
+                ),
             ]).then(() => undefined),
           (cause: unknown) => {
             reregisterPushDevice(acts, fixture).catch(() => undefined);

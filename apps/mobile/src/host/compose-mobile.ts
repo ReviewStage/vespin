@@ -69,7 +69,6 @@ import {
   type DuplicateGatewayMethod,
   type DuplicateHostAct,
   Environment,
-  type FileDownloadSeam,
   HOST_PLATFORM_CONCERN,
   HostAssemblyTag,
   type HostTag,
@@ -82,7 +81,6 @@ import {
   type KeepIssuedToken,
   OAUTH_ACCOUNT_CLIENT,
   oauthVaultAccountSourceLayerFor,
-  PlatformFileDownload,
   PlatformRenewalWindow,
   PlatformScreensInProcess,
   PlatformTokenVault,
@@ -168,8 +166,6 @@ export interface DeviceSeams {
   readonly localDatabaseDriver?: LocalDatabaseDriverSeam;
   /** Where the host's own lines go beside the console: the next crash or error report's trail (`crash-reports.ts`), or nowhere. */
   readonly keepLine?: (message: string) => void;
-  /** How a picture is downloaded straight into a file (`native-download.ts`); a device without one reads a picture as its bytes. */
-  readonly fileDownload?: FileDownloadSeam;
 }
 
 /** What the app hands the composition. */
@@ -262,9 +258,6 @@ function seamLayers(options: MobileHostOptions) {
     device.localDatabaseDriver === undefined
       ? Layer.empty
       : Layer.succeed(LocalDatabaseDriver, device.localDatabaseDriver),
-    device.fileDownload === undefined
-      ? Layer.empty
-      : Layer.succeed(PlatformFileDownload, device.fileDownload),
     // Note that the screens run in this process, so a picture's source may carry the account's header to their image loader (`ACCOUNT_PICTURE_SOURCE`).
     Layer.succeed(PlatformScreensInProcess, true),
   );

@@ -74,7 +74,6 @@ import {
   type Environment,
   LoopbackListener,
   MirrorPlatform,
-  PlatformFileDownload,
   Reporter,
   ShutdownSignal,
   TerminalSocket,
@@ -536,14 +535,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         }),
       );
 
-    // Note that a download straight into a file is the phone's alone, so a picture is read as bytes where this process offers none.
-    const fileDownload = yield* Effect.serviceOption(PlatformFileDownload);
-
     const agents = yield* served(
       composeAgents({
         kernel,
         keepsInbox: local?.keepsCollections === true,
-        fileDownload: Option.getOrUndefined(fileDownload),
         account,
         accountId,
         recordProductEvent: settings.recordProductEvent,

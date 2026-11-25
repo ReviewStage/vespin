@@ -54,7 +54,6 @@ import {
   type AgentModelsAnswer,
   type AgentPageAnswerView,
   type AgentPartView,
-  type AgentPictureFileView,
   type AgentPullRequestAnswerView,
   type AgentQueueAnswerView,
   type AgentRunActionAnswerView,
@@ -390,21 +389,6 @@ const inboxFileTypeSchema = literalsReadingUnknown(
 /** The headers a byte read asks for the video it plays by: `video/mp4` for MP4, and none for the WebM a read answers by default. */
 function playableHeaders(playable: PlayableVideoType): Record<string, string> | undefined {
   return playable === PLAYABLE_VIDEO_TYPE.MP4 ? { accept: MP4_TYPE } : undefined;
-}
-
-/**
- * A served file written to a file of the device by the client that carried
- * it, as the type it was served as, a type this build does not know as a
- * file of any other kind (`inboxFileTypeSchema`). Note that the bytes are never read here; the
- * client wrote them where it was told and answers the status and headers
- * alone.
- */
-function writtenFileOf(response: Response): AgentPictureFileView {
-  const contentType = Result.getOrUndefined(
-    readEither(inboxFileTypeSchema)(unparsedWire(response.headers.get("content-type"))),
-  );
-
-  return contentType === undefined ? UNANSWERED : { contentType };
 }
 
 /** A served file's bytes in base64 under its type: a picture, a recording, or a file an inbox answer carried or a queued message holds, one of a type this build does not know as a file of any other kind. */
@@ -1653,39 +1637,6 @@ export class HostedAgentClient {
       params: { id: agentId },
       body: { machineId },
     });
-  }
-
-  /**
-   * One picture a tool answered an agent, as `agentPicture` reads it, but
-   * carried by a client that writes the body to a file of the device
-   * rather than reading it, as the iOS app's native download does: the type
-   * it was served as; not found where the service said the status of one,
-   * whose body is in the file, not here; unanswered for anything else.
-   * Note that the 401's one renewal and retry are the call's own, as for
-   * every other request, so the credential is read and renewed in one place.
-   */
-  agentPictureFile(
-    agentId: string,
-    pictureId: string,
-    callId?: string,
-    playable: PlayableVideoType = PLAYABLE_VIDEO_TYPE.WEBM,
-  ): Effect.Effect<AgentPictureFileView, never, HttpClient.HttpClient> {
-    return Effect.map(
-      this.#call.send({
-        method: HTTP_METHOD.GET,
-        path: agentPicturePath(agentId, pictureId, callId),
-        headers: playableHeaders(playable),
-      }),
-      (answer): AgentPictureFileView => {
-        if (!callAnswered(answer)) return unansweredCall(answer);
-
-        if (answer.response.status === HTTP_STATUS.NOT_FOUND) {
-          return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
-        }
-
-        return answer.response.ok ? writtenFileOf(answer.response) : UNANSWERED;
-      },
-    );
   }
 
   /**
