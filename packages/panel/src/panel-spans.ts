@@ -236,7 +236,8 @@ function recordRowPresses(list: PerformanceObserverEntryList): void {
     const startedAt = performance.timeOrigin + entry.startTime;
     const delay = entry.processingStart - entry.startTime;
     const processing = entry.processingEnd - entry.processingStart;
-    const presentation = entry.startTime + entry.duration - entry.processingEnd;
+    // Note that a timing's duration is rounded to 8 ms while its handlers' end is not, so what is left past them is held at zero.
+    const presentation = Math.max(0, entry.startTime + entry.duration - entry.processingEnd);
     recordPanelSpan({
       name: PANEL_SPAN.ROW_PRESS,
       startedAt,
