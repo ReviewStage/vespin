@@ -27,7 +27,11 @@ import {
   waitingOnYouWords,
 } from "@repo/features/agent-approval-model";
 import type { AgentPendingApproval } from "@repo/features/agent-approval-wire";
-import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features/agent-view";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentApprovalAnswerView,
+  type agentApprovalAnswerParamsSchema,
+} from "@repo/features/agent-view";
 import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { allowedCommandWords } from "@repo/features/allowed-command-model";
 import { ACT_KIND } from "@repo/host/acts";
@@ -50,7 +54,7 @@ interface WaitingBanner {
   readonly answering: HeldAnswer | undefined;
   readonly note: string | undefined;
   readonly command: string | undefined;
-  readonly onAnswer: (answer: HeldAnswer) => void;
+  readonly onAnswer: HeldCall["onAnswer"];
 }
 
 /** How many calls wait on the member, and the oldest whose row the transcript draws, which the composer's denial line scrolls to. */
@@ -97,7 +101,7 @@ function answeredAsk(ask: Held, answered: AgentApprovalAnswerView): Held {
 }
 
 /** A held ask as its row draws it, answered through `answer`. */
-function heldCallOf(ask: Held, answer: (answer: HeldAnswer) => void): HeldCall {
+function heldCallOf(ask: Held, answer: HeldCall["onAnswer"]): HeldCall {
   return {
     words: ask.settled ?? HELD_WORDS.WAITING,
     waiting: ask.settled === undefined,
@@ -153,18 +157,25 @@ export function useAgentApprovals(
   );
 
   const answer = useCallback(
-    (approvalId: string, press: HeldAnswer) => {
+    (approvalId: string, press: HeldAnswer, why?: string) => {
       settle(agentId, approvalId, (ask) => ({ ...ask, answering: press, error: undefined }));
+
+      const request: typeof agentApprovalAnswerParamsSchema.Type = {
+        agentId,
+        approvalId,
+        answer: press,
+      };
+
+      // Note that a denial carries why only where the reader said, as the panel's note sends nothing when left empty.
+      const said = why === undefined ? request : { ...request, message: why };
       // Note that an answer refused says why under the call it answered, rather than in the notice. One refused because another reader settled the call first still buzzes as a refusal, since this press did not land, but its row reads settled rather than failed.
       write(
         () =>
-          acts[ACT_KIND.AGENTS_ANSWER_APPROVAL]({ agentId, approvalId, answer: press }).then(
-            (answered) => {
-              settle(agentId, approvalId, (ask) => answeredAsk(ask, answered));
+          acts[ACT_KIND.AGENTS_ANSWER_APPROVAL](said).then((answered) => {
+            settle(agentId, approvalId, (ask) => answeredAsk(ask, answered));
 
-              return answered;
-            },
-          ),
+            return answered;
+          }),
         {
           refused: (answered) =>
             "failure" in answered ? answerFailedOf(answered.failure).words : undefined,
@@ -233,7 +244,7 @@ export function useAgentApprovals(
 
         return ask === undefined
           ? undefined
-          : heldCallOf(ask, (press) => answer(ask.approval.id, press));
+          : heldCallOf(ask, (press, why) => answer(ask.approval.id, press, why));
       },
       waiting:
         newest === undefined
@@ -253,7 +264,7 @@ export function useAgentApprovals(
               answering: oldest.answering,
               note: oldest.error,
               command: commandOf(oldest),
-              onAnswer: (press) => answer(oldest.approval.id, press),
+              onAnswer: (press, why) => answer(oldest.approval.id, press, why),
             },
       messageSent,
     };

@@ -11,6 +11,7 @@ import {
 import {
   ALWAYS_ALLOW_COMMAND_WORDS,
   APPROVAL_PRESS_WORDS,
+  DENY_WHY_WORDS,
 } from "@repo/features/agent-approval-model";
 import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -18,6 +19,7 @@ import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { Text } from "./text.js";
+import { askForWords, WORDS_KIND } from "./system-asks.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -45,13 +47,34 @@ export type HeldCall = {
   readonly note: string | undefined;
   /** The command Always allow keeps for every agent of the member's, as it reads (`pnpm test *`); none where it lasts for this agent alone. */
   readonly command: string | undefined;
-  readonly onAnswer: (answer: HeldAnswer) => void;
+  /** Answers the call; a denial carries why, where the reader said. */
+  readonly onAnswer: (answer: HeldAnswer, why?: string) => void;
 };
+
+/**
+ * Asks why before a held call is denied, as the panel's Deny opens its note:
+ * the system's alert with a field, the words going to the agent with the
+ * denial, and Deny pressed with none denying it without them.
+ */
+function askWhyDenied(onAnswer: HeldCall["onAnswer"]) {
+  askForWords({
+    title: DENY_WHY_WORDS.LABEL,
+    message: DENY_WHY_WORDS.PLACEHOLDER,
+    kind: WORDS_KIND.NAME,
+    acts: [
+      {
+        label: APPROVAL_PRESS_WORDS.DENY,
+        takesBlank: true,
+        onWords: (why) => onAnswer(HELD_ANSWER.DENY, why === "" ? undefined : why),
+      },
+    ],
+  });
+}
 
 /**
  * Deny, Always allow and Allow side by side, Allow filled last as the act a
  * held call is for, Always allow bordered beside it as the panel's outlines
- * it; the press out reads busy, and none takes a press meanwhile. Where
+ * it, Deny asking why first (`askWhyDenied`); the press out reads busy, and none takes a press meanwhile. Where
  * Always allow keeps a command for every agent, a muted line under them
  * names it, as the panel's says it. Note that at an accessibility size they
  * stack, as an alert's buttons do, because side by side under a call's
@@ -85,7 +108,7 @@ function ApprovalPresses({
         label={deny}
         look={BUTTON_LOOK.BORDERED}
         disabled={out}
-        onPress={() => onAnswer(HELD_ANSWER.DENY)}
+        onPress={() => askWhyDenied(onAnswer)}
       />
       <Button
         key={always}

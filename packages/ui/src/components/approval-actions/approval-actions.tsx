@@ -1,6 +1,7 @@
 import {
   ALWAYS_ALLOW_COMMAND_WORDS,
   APPROVAL_PRESS_WORDS,
+  DENY_WHY_WORDS,
 } from "@repo/features/agent-approval-model";
 import { type ReactNode, useState } from "react";
 import type { ShownError } from "../../reported-failure.js";
@@ -52,8 +53,8 @@ export const DENY_NOTE_WORDS = {
   DENY: APPROVAL_PRESS_WORDS.DENY,
   DENYING: APPROVAL_PRESS_WORDS.DENYING,
   CANCEL: "Cancel",
-  LABEL: "Why you denied it",
-  PLACEHOLDER: "Tell the agent why (optional)",
+  LABEL: DENY_WHY_WORDS.LABEL,
+  PLACEHOLDER: DENY_WHY_WORDS.PLACEHOLDER,
 } as const;
 
 /** Where Always allow names the command it keeps: in its press, or on a muted line under the presses. */
