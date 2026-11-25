@@ -1,4 +1,4 @@
-# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, its title edited from a tap on it, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, its review opened whole in its conversation and reacted to from its long press, its thread replied to on its own screen and resolved and reopened from its long press, a new comment's field opened, turned to a draft and back from its state chip, its ⋯ holding only the GitHub link's acts, then closed from its state chip, with Undo reopening it; its Description and Conversation folded under their headings and opened again; and one in the merge queue, its long description folded behind Show more, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
+# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, its title edited from a tap on it, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, its review opened whole in its conversation and reacted to from its long press, its thread replied to on its own screen and resolved and reopened from its long press, a new comment's field opened, turned to a draft and back from its state chip, its ⋯ holding only the GitHub link's acts, then closed from its state chip, with Undo reopening it; its Description and Conversation folded under their headings and opened again; its chapters opened from their row, and on one that has none, generated; and one in the merge queue, its long description folded behind Show more, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -90,6 +90,32 @@ env:
 - extendedWaitUntil:
     visible: "Adds Invite by email.*"
     timeout: 10000
+# Its Chapters row, between Checks and Files changed as the panel's tabs
+# stand, counts them and pushes them: each chapter in reading order under
+# its place and title, with its summary, its risk, what to review, and its
+# files, "Other changes" last, and the model that told them at the foot.
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Chapters.*"
+- extendedWaitUntil:
+    visible: ".*Resend an expired invitation"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-chapters
+- scrollUntilVisible:
+    element: "Chapters by Haiku 5.5"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-chapters-end
+- tapOn:
+    id: "BackButton"
+- extendedWaitUntil:
+    visible: "Invite a teammate by email #128"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Invite a teammate by email #128"
+    direction: UP
 # Its title is edited where it stands: a tap on it opens the system's name
 # alert, as a task is renamed, and Save keeps the words, which the heading
 # draws at once and keeps once GitHub took them.
@@ -278,6 +304,31 @@ env:
 - extendedWaitUntil:
     visible: "Changes were requested.*"
     timeout: 10000
+# It has no chapters yet: its Chapters page offers Generate, which stands
+# as being made until the chapters it told land.
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Chapters.*"
+- extendedWaitUntil:
+    visible: "No chapters yet."
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-chapters-none
+- tapOn: "Generate chapters"
+- extendedWaitUntil:
+    visible: ".*Resend an expired invitation"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-chapters-generated
+- tapOn:
+    id: "BackButton"
+- extendedWaitUntil:
+    visible: "Changes requested"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Expire an invite after seven days.*"
+    direction: UP
 # Its conversation stands inline under the rows: the review that asked for
 # changes, its words a short preview, and the thread it started on a file's
 # lines. A press opens each whole, in Markdown, and the page goes back up.

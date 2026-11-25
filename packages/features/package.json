@@ -266,6 +266,7 @@
     "./pull-request-write-wire": "./src/pull-request-write-wire.js",
     "./pull-request-chapters": "./src/pull-request-chapters.js",
     "./pull-request-chapters-wire": "./src/pull-request-chapters-wire.js",
+    "./pull-request-chapters-shown": "./src/pull-request-chapters-shown.js",
     "./pull-request-chapters-view": "./src/pull-request-chapters-view.js",
     "./pull-request-chapters-live": "./src/pull-request-chapters-live.js",
     "./pull-request-moved-live": "./src/pull-request-moved-live.js",

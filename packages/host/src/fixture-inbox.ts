@@ -217,7 +217,11 @@ import {
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
-import { FIXTURE_PULL_REQUEST, fixtureChanges } from "./fixture-pull-requests.js";
+import {
+  FIXTURE_PULL_REQUEST,
+  fixtureChanges,
+  fixtureGeneratedChapters,
+} from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
 export { FIXTURE_RECORDING_ID } from "./fixture-agent-transcript.js";
@@ -3854,6 +3858,8 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.PULL_REQUESTS_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
   // The files the invitations agent's ready pull request changes, so Files changed lists them and opens their diffs.
   [ACT_KIND.PULL_REQUESTS_CHANGES]: ({ number }) => fixtureChanges(number),
+  // A Generate of a pull request's chapters is answered with them told, as the service answers once a model told them.
+  [ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: ({ number }) => fixtureGeneratedChapters(number),
   // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
   [ACT_KIND.AGENTS_PORTS]: () => ({
     running: true,
