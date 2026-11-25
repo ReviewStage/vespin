@@ -15,11 +15,11 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STATUS_TONE } from "@repo/ui";
 import { afterPaint } from "@repo/ui/after-paint";
 import { GLYPH } from "@repo/ui/icons";
-import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { firstNotKept, KEPT, type Kept, notKept, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { useAppCommand } from "../app-commands.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import { useToast } from "../toast.js";
 import { inboxItemChip } from "../toast-chip.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
@@ -96,9 +96,13 @@ export function useInboxReadMarks({
   readerId: string | undefined;
 }): InboxReadMarks {
   const toast = useToast();
-  const { mutateAsync: sendReadState } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_READ_STATE));
-  const { mutateAsync: sendReadAll } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_READ_ALL));
-  const { mutateAsync: sendRemind } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_REMIND));
+  const { mutateAsync: sendReadState } = useMutationCalls(
+    actMutation(ACT_KIND.AGENTS_INBOX_READ_STATE),
+  );
+  const { mutateAsync: sendReadAll } = useMutationCalls(
+    actMutation(ACT_KIND.AGENTS_INBOX_READ_ALL),
+  );
+  const { mutateAsync: sendRemind } = useMutationCalls(actMutation(ACT_KIND.AGENTS_INBOX_REMIND));
 
   const refused = useCallback(
     (words: string, cause: unknown, about: FailureAbout) =>

@@ -1644,7 +1644,8 @@ export function InboxList({
   const picks = drawn.filter(({ item }) => picked.has(item.id));
 
   if (picks.length !== picked.size) setPicked(new Set(picks.map(({ item }) => item.id)));
-  const unpick = () => setPicked(new Set());
+  // Note that a list choosing none keeps the set it holds, because a plain press on a row clears the choice, and a new empty set drew the whole Inbox again on every item opened.
+  const unpick = () => setPicked((was) => (was.size === 0 ? was : new Set()));
   const { width, onResize } = useInboxListWidth();
   const rowFocus = useRowFocusKept(rows);
   // Note that every row's draft is read here once, rather than by each row, so a word typed in the box beside the list draws no row.

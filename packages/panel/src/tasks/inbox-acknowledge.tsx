@@ -36,10 +36,10 @@ import {
 } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
-import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import { inboxItemChip } from "../toast-chip.js";
 import { pressTakeBack, type TakeBackWrite } from "../undo-stack.js";
 import {
@@ -126,8 +126,8 @@ const ACKNOWLEDGE_WRITE = {
 
 /** The Inbox's Got its by hand, each taken back by the service whenever its Undo asks. */
 export function useInboxAcknowledger(): InboxAcknowledger {
-  const { mutateAsync: nod } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_ANSWER));
-  const { mutateAsync: takeBack } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_TAKE_BACK));
+  const { mutateAsync: nod } = useMutationCalls(actMutation(ACT_KIND.AGENTS_INBOX_ANSWER));
+  const { mutateAsync: takeBack } = useMutationCalls(actMutation(ACT_KIND.AGENTS_INBOX_TAKE_BACK));
   const out = useRef(new Set<string>());
 
   return useCallback(
