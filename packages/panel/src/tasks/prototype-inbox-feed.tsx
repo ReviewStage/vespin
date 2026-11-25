@@ -387,15 +387,19 @@ function moved(): void {
 }
 
 function useFeedVersion(): number {
-  usePrototypeChat();
+  // Note that the chat's moves count too, so a Manager's word landing in its thread draws the feed again.
+  const chat = usePrototypeChat();
 
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
+  return (
+    chat * 100_000 +
+    useSyncExternalStore(
+      (listener) => {
+        listeners.add(listener);
 
-      return () => listeners.delete(listener);
-    },
-    () => version,
+        return () => listeners.delete(listener);
+      },
+      () => version,
+    )
   );
 }
 
