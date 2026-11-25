@@ -103,7 +103,13 @@ export async function startMobileHost(
       };
     };
 
-    return { bridge: host.bridge, acts: host.acts, follow, close: () => runtime.dispose() };
+    return {
+      bridge: host.bridge,
+      acts: host.acts,
+      inboxRows: host.inboxRows,
+      follow,
+      close: () => runtime.dispose(),
+    };
   } catch (error) {
     await runtime.dispose();
     throw error;

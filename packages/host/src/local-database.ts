@@ -34,6 +34,7 @@ import {
 import { repositoryPinSchema } from "@repo/features/task-wire";
 import { WORKSPACE_INVITATIONS_READ, WORKSPACE_MEMBERS_READ } from "@repo/features/workspace-live";
 import { workspaceSchema } from "@repo/features/workspace-wire";
+import type { KeepCollection, StoredKind } from "@repo/sync";
 import { Context, Data, Effect, Path, Schema, type Scope } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { placedInboxItemSchema } from "./inbox-collections.js";
@@ -43,6 +44,9 @@ const ACCOUNTS_FOLDER = "accounts";
 
 /** The database's file, in the account's folder. */
 const DATABASE_FILE = "local.sqlite";
+
+/** The file the account's collections kept on disk whole stand in, beside the database, so its writes never wait on the database's. */
+const COLLECTIONS_FILE = "collections.sqlite";
 
 /** The account's folder, which only the user may enter. */
 const FOLDER_MODE = 0o700;
@@ -151,9 +155,21 @@ export interface LocalDatabaseConnection {
   readonly close: () => void;
 }
 
+/** A database of collections kept on disk whole, as the platform opened it: how a stored kind's collection is kept in it, and its close. */
+export interface KeptCollectionsDatabase {
+  readonly keep: (stored: StoredKind) => KeepCollection;
+  readonly close: () => Promise<void>;
+}
+
 /** The platform's SQLite: opens the database at `file`, creating it where it stands not, or throws. */
 export interface LocalDatabaseDriverSeam {
   readonly open: (file: string) => LocalDatabaseConnection;
+  /**
+   * Opens the database of collections kept on disk whole at `file` through
+   * TanStack DB's persistence for the platform, or rejects; none where the
+   * platform keeps every kind in memory, as the Mac does.
+   */
+  readonly collections?: (file: string) => Promise<KeptCollectionsDatabase>;
 }
 
 /** The SQLite driver the platform's launch provides; a host given none keeps no local database. */
@@ -287,6 +303,45 @@ export const openLocalDatabase = Effect.fn("host/openLocalDatabase")(function* (
     }),
     (connection) => Effect.sync(() => connection.close()),
   );
+});
+
+/**
+ * Opens `accountId`'s database of collections kept on disk whole under
+ * `stateRoot` for as long as the caller's scope stands, closing it as the
+ * scope closes, its file readable by the user alone as the database's is;
+ * none where the platform keeps none. Fails as `LocalDatabaseFailed` where
+ * the folder, the file, or the platform's persistence fails, so the caller
+ * keeps every kind in memory instead.
+ */
+export const openKeptCollections = Effect.fn("host/openKeptCollections")(function* (
+  stateRoot: string,
+  accountId: string,
+): Effect.fn.Return<
+  KeptCollectionsDatabase["keep"] | undefined,
+  LocalDatabaseFailed,
+  LocalDatabaseDriver | FileSystem.FileSystem | Path.Path | Scope.Scope
+> {
+  const { collections } = yield* LocalDatabaseDriver;
+
+  if (collections === undefined) return undefined;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const folder = yield* accountFolder(stateRoot, accountId);
+  const file = path.join(folder, COLLECTIONS_FILE);
+  const failed = (cause: unknown) => new LocalDatabaseFailed({ accountId, cause });
+
+  yield* Effect.gen(function* () {
+    if (!(yield* fileSystem.exists(file)))
+      yield* fileSystem.writeFile(file, new Uint8Array(), { flag: "wx", mode: FILE_MODE });
+    yield* fileSystem.chmod(file, FILE_MODE);
+  }).pipe(Effect.mapError(failed));
+
+  const opened = yield* Effect.acquireRelease(
+    Effect.tryPromise({ try: () => collections(file), catch: failed }),
+    (database) => Effect.promise(() => database.close()),
+  );
+
+  return opened.keep;
 });
 
 /** Deletes `accountId`'s folder under `stateRoot`, its database and WAL files among it, as a sign-out does; one that stands not is already forgotten. */

@@ -32,6 +32,7 @@
     "@repo/settings": "workspace:*",
     "@repo/ui-native": "workspace:*",
     "@sentry/react-native": "8.28.0",
+    "@tanstack/expo-db-sqlite-persistence": "catalog:",
     "@tanstack/react-db": "catalog:",
     "@tanstack/react-query": "catalog:",
     "effect": "catalog:",

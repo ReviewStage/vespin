@@ -183,6 +183,8 @@ export function itemOf(row: PlacedInboxItem): InboxItem {
 /** An inbox item as the pool holds it, by its id, every write to it a change the item's reads draw over it, on the task it stood on. */
 export const INBOX_ITEM: RowKind<PlacedInboxItem, InboxChange> = {
   key: (item) => item.id,
+  // Note that the version moves with the row's shape, so a build that changes it reads its items again.
+  stored: { name: "inboxItem", version: 1 },
   drawn: (change, item) => {
     const changed = item === undefined ? undefined : changedItem(change, item);
 

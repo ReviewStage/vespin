@@ -47,9 +47,14 @@ catalog:
   "@sentry/profiling-node": 11.7.0
   "@tailwindcss/vite": 4.3.5
   "@tanstack/db": 1.0.0-rc.1.5
-  # TanStack DB's own SQLite persistence core, released with `@tanstack/db` at
-  # the same version, which the sync package's tests keep a stored kind in.
+  # TanStack DB's own SQLite persistence, released with `@tanstack/db` at the
+  # same version: the core the sync package's tests keep a stored kind in, and
+  # the Expo adapter the iPhone keeps it in over `expo-sqlite`. The adapter's
+  # declared peer range stops at expo-sqlite 57 while the app is on SDK 58's;
+  # the async calls it makes are SDK 58's own, so the install warns of the
+  # range and nothing patches it.
   "@tanstack/db-sqlite-persistence-core": 1.0.0-rc.1.5
+  "@tanstack/expo-db-sqlite-persistence": 1.0.0-rc.1.5
   "@tanstack/react-db": 1.0.0-rc.1.5
   "@tanstack/react-query": 5.106.1
   "@types/hast": 3.0.5
