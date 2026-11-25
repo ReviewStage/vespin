@@ -80,7 +80,6 @@ const WEB = {
   MENU_BAR: byDesign("A browser has no menu bar to dim"),
   MICROPHONE: byDesign("The browser asks for the microphone and picks its route itself"),
   NOTIFICATIONS: byDesign("The browser's own prompt asks for notifications"),
-  TAB_SWITCHER: byDesign("⌃Tab's card previews are the desktop app's"),
   UNSAVED_WORK: byDesign("The tab's own leave prompt holds unsaved work (page-leave.ts)"),
   UPDATER: byDesign("A tab loads the latest deploy itself"),
 } as const;
@@ -537,7 +536,6 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WINDOW_COPY_IMAGE]: panel(IOS.COPY_PICTURE),
   [PORT_ACT_KIND.WINDOW_COPY_RICH]: panel(IOS.COPY_RICH),
   [PORT_ACT_KIND.WINDOW_SAVE_FILE]: panel(IOS.SAVE_FILE),
-  [PORT_ACT_KIND.WINDOW_CAPTURE]: desktopOnly(WEB.TAB_SWITCHER, IOS.ONE_SCREEN),
   [PORT_ACT_KIND.WINDOW_UNSAVED_WORK]: desktopOnly(
     WEB.UNSAVED_WORK,
     notYet("iOS v1 has no editor to hold unsaved work"),

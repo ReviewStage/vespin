@@ -1,17 +1,12 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { it } from "@effect/vitest";
 import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { fileTab } from "@repo/ui/tab-strip-model";
-import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { holdExits } from "@repo/ui/testing/held-exits";
-import { Clock, Context, Duration, Effect } from "effect";
-import { TestClock } from "effect/testing";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
@@ -22,7 +17,6 @@ import { type Place, routedPlace, type StepTitle, taskPlace } from "../places/wi
 import type { MainTab } from "../tasks/use-main-tabs.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { fakeActPort } from "../testing/app-bridge.js";
 import { DESKTOP_CAPABILITIES, handCapabilities } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
@@ -38,8 +32,7 @@ import { TabSwitcher } from "./tab-switcher.js";
  * reach its own tests hold): a quick tap goes to the screen before as a
  * visit and draws nothing; a hold draws the cards, the screen here first and
  * dimmed, each named as Back's list names its step and wearing its place's
- * glyph; ⇧ steps back, Escape goes nowhere, a card pressed is gone to, and a
- * still of the work area left is kept for its card. The cards stand in a modal dialog that holds focus while they
+ * glyph; ⇧ steps back, Escape goes nowhere, and a card pressed is gone to. The cards stand in a modal dialog that holds focus while they
  * show and hands it back to where it was as they go, fading out on the exit
  * token, or at once where motion is held. A browser keeps ⌃Tab for its own
  * tabs, so a window that is no desktop app leaves it.
@@ -60,9 +53,6 @@ const README = fileTab("README.md");
 
 /** Another File tab of the task. */
 const NOTES = fileTab("docs/notes.md");
-
-/** A still as main answers one, synthetic. */
-const STILL = "data:image/jpeg;base64,AAAA";
 
 const roots: Root[] = [];
 
@@ -127,7 +117,7 @@ function windowSteps(screens: readonly Omit<RecentStep, "standing">[]) {
   return { steps, visits };
 }
 
-/** Lets what fell due land: the window's state, a capture sent, and main's answer to it. */
+/** Lets what fell due land: the window's state. */
 async function flushed(): Promise<void> {
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
@@ -367,139 +357,6 @@ test("a card pressed while the cards show is gone to", async () => {
   assert.deepEqual(visits, [settings.place]);
   assert.equal(document.querySelector(DIALOG), null);
 });
-
-test("the screen left is taken as a still of the work area for its card, drawn as it lands while the cards show", async () => {
-  handCapabilities(DESKTOP_CAPABILITIES);
-  const taken: unknown[] = [];
-  let answer: (still: string) => void = () => undefined;
-  fakeActPort({
-    [ACT_KIND.WINDOW_CAPTURE]: (part) => {
-      taken.push(part);
-
-      return new Promise<string>((resolve) => {
-        answer = resolve;
-      });
-    },
-  });
-  const work = document.createElement("main");
-  work.className = "desktop-main";
-  work.getBoundingClientRect = () => new DOMRect(240, 0, 1040, 800);
-  document.body.append(work);
-  await mounted(windowSteps([taskScreen(undefined, README), INBOX]).steps);
-
-  tab();
-  tab();
-  assert.equal(cards()[0]?.querySelector("img"), null, "no still yet, so the glyph stands");
-  // Note that the mutation sends the capture a moment after the cards show, so the test answers it once it is sent.
-  await vi.waitFor(() => assert.equal(taken.length, 1));
-  act(() => answer(STILL));
-  await vi.waitFor(() =>
-    assert.equal(cards()[0]?.querySelector("img")?.getAttribute("src") === STILL, true),
-  );
-
-  assert.deepEqual(taken, [{ x: 240, y: 0, width: 1040, height: 800 }]);
-  const preview = cards()[0]?.querySelector(".ui-tab-card-preview");
-  assert.equal(preview?.querySelector("img")?.getAttribute("src"), STILL);
-  assert.equal(cards()[1]?.querySelector("img"), null, "a screen with no still wears its glyph");
-});
-
-it.effect(
-  "a run of steps between screens, and the window used after it, take no still until the window stands quiet, then one",
-  () =>
-    Effect.gen(function* () {
-      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
-      handCapabilities(DESKTOP_CAPABILITIES);
-      const taken: unknown[] = [];
-      fakeActPort({
-        [ACT_KIND.WINDOW_CAPTURE]: (part) => {
-          taken.push(part);
-
-          return Promise.resolve(STILL);
-        },
-      });
-      const work = document.createElement("main");
-      work.className = "desktop-main";
-      work.getBoundingClientRect = () => new DOMRect(240, 0, 1040, 800);
-      document.body.append(work);
-
-      const screens = [
-        INBOX,
-        taskScreen(undefined, README),
-        taskScreen(undefined, NOTES),
-        placeScreen(ROUTED_PLACE.SETTINGS, "/settings/general", { label: "Settings" }),
-      ];
-
-      let standing = 0;
-
-      const steps: RecentSteps = {
-        recent: () => screens.map((screen, at) => ({ ...screen, standing: at === standing })),
-        standingStep: () => screens[standing]?.place,
-        onVisitStep: () => undefined,
-      };
-
-      const redraw = yield* Effect.promise(() => mounted(steps));
-      const pressed = () => key("keydown", { key: "ArrowDown", ctrlKey: true, altKey: true });
-
-      // Each step is a press and the screen it lands on, a second apart: slower than a quick sweep, quicker than the still's rest.
-      for (let at = 1; at < screens.length; at += 1) {
-        pressed();
-        standing = at;
-        yield* Effect.promise(redraw);
-        yield* TestClock.adjust(Duration.seconds(1));
-      }
-
-      // A press on the screen the run ended on, a field's or a list's, holds its still off afresh.
-      pressed();
-      yield* TestClock.adjust(Duration.seconds(1));
-      yield* Effect.promise(flushed);
-      assert.deepEqual(taken, [], "no still is taken while the window is moved through or used");
-
-      yield* TestClock.adjust(Duration.seconds(1));
-      yield* Effect.promise(flushed);
-      assert.deepEqual(taken, [{ x: 240, y: 0, width: 1040, height: 800 }]);
-    }),
-);
-
-it.effect(
-  "⌃Tab leaving a screen keeps a still younger than ten seconds and takes one older afresh",
-  () =>
-    Effect.gen(function* () {
-      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
-      handCapabilities(DESKTOP_CAPABILITIES);
-      let taken = 0;
-      fakeActPort({
-        [ACT_KIND.WINDOW_CAPTURE]: () => {
-          taken += 1;
-
-          return Promise.resolve(STILL);
-        },
-      });
-      const work = document.createElement("main");
-      work.className = "desktop-main";
-      work.getBoundingClientRect = () => new DOMRect(240, 0, 1040, 800);
-      document.body.append(work);
-      yield* Effect.promise(() =>
-        mounted(windowSteps([taskScreen(undefined, README), INBOX]).steps),
-      );
-
-      const heldAndCalledOff = () => {
-        tab();
-        key("keydown", { key: "Escape", ctrlKey: true });
-      };
-
-      // The window stands quiet on the screen, so it takes its still, then ⌃Tab is held and called off at once.
-      yield* TestClock.adjust(Duration.seconds(2));
-      yield* Effect.promise(flushed);
-      heldAndCalledOff();
-      yield* Effect.promise(flushed);
-      assert.equal(taken, 1, "a still two seconds old is kept");
-
-      yield* TestClock.adjust(Duration.seconds(10));
-      heldAndCalledOff();
-      yield* Effect.promise(flushed);
-      assert.equal(taken, 2, "a still past ten seconds is taken afresh");
-    }),
-);
 
 test("a window that is no desktop app leaves ⌃Tab to the browser", async () => {
   handCapabilities(DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP));

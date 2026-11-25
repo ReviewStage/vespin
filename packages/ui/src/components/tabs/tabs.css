@@ -426,7 +426,7 @@
   }
 
   /* A switcher's cards (their boxes are `tabs.tsx`'s utilities): a card
-     with no still yet wears its glyph, large and quiet; where it stands,
+     wears its glyph, large and quiet; where it stands,
      under the name, is inset to the name's words, and the line stands empty
      where a card has none, so every card is one height. */
   .ui-tab-card-detail {
