@@ -58,7 +58,12 @@ import { useTaskPullRequests } from "../tasks/use-task-work.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
-import { type OpenedTask, type TaskRowTab, useTaskMenuItems } from "./task-actions.js";
+import {
+  type OpenedTask,
+  TASK_MENU_KIND,
+  type TaskRowTab,
+  useTaskMenuItems,
+} from "./task-actions.js";
 import { TaskRowStatus } from "./task-card.js";
 import { AssigneeChip, PriorityChip, StatusChip, taskSubject } from "./task-row-parts.js";
 import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
@@ -245,6 +250,7 @@ export function TaskListRow({
   const actions = useTaskMenuItems(tasks, task.id, task.name, {
     rename: rename.begin,
     drawn: true,
+    kind: TASK_MENU_KIND.ROW,
     unread: unread ?? marked,
     chips: {
       status: drawn(TASK_ROW_CELL.STATUS),
