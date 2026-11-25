@@ -239,12 +239,15 @@ export function SettingsDialog<Id extends string>({
             start={TOOLBAR_INSET.COLUMN}
             end={TOOLBAR_INSET.COLUMN}
             lead={
-              <BackButton
-                label={title}
-                place={title}
-                command={NO_BACK_KEY}
-                onBack={() => setListed(true)}
-              />
+              // Note that the way back names the card, so it is masked as the card's name is.
+              <ReplayWords masked={titleReplayMasked}>
+                <BackButton
+                  label={title}
+                  place={title}
+                  command={NO_BACK_KEY}
+                  onBack={() => setListed(true)}
+                />
+              </ReplayWords>
             }
             title={shown?.title ?? ""}
             titleReplayUnmasked
