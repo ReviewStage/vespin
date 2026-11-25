@@ -31,7 +31,7 @@ import {
   readDescriptionAttachment,
   readServedDescriptionAttachment,
 } from "../description-attachments.js";
-import { createTask, deleteTask } from "../task-store.js";
+import { createTask, deleteTask, readTask } from "../task-store.js";
 
 /**
  * A description's pictures over a real dialect: kept by a member, read by every
@@ -101,6 +101,23 @@ it.layer(getTestDB())("a description's pictures", (it) => {
           DESCRIPTION_ATTACHMENT_KEEP.NO_TASK,
         );
       }),
+  );
+
+  it.effect("a task's read names each file its description keeps by its media type", () =>
+    Effect.gen(function* () {
+      const { owner, teammate, taskId } = yield* openSharedTask;
+      const empty = Option.getOrThrow(yield* readTask(owner, taskId));
+      assert.equal(empty.task.fileTypes, undefined);
+
+      const picture = keptId(yield* keepDescriptionAttachment(teammate, taskId, PICTURE));
+      const video = keptId(yield* keepDescriptionAttachment(teammate, taskId, VIDEO));
+
+      const read = Option.getOrThrow(yield* readTask(owner, taskId));
+      assert.deepEqual(read.task.fileTypes, {
+        [picture]: PICTURE_TYPE.PNG,
+        [video]: PICTURE_MEDIA_TYPE.WEBM,
+      });
+    }),
   );
 
   it.effect("a picture is read only under the description it was kept on", () =>
