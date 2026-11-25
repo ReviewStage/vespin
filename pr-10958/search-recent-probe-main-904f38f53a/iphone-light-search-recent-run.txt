@@ -1,0 +1,36 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow search-recent
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, searchRecent=({kind=tasks;id="0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60";workspaceId="workspace-personal";},{kind=tasks;id="3c9d5f7b-1e4a-4b62-8d8a-4f5a6b7c8d93";workspaceId="workspace-personal";},{kind=tasks;id="4dae6081-2f5b-4c73-9e9b-5a6b7c8d9ea4";workspaceId="workspace-personal";},{kind=tasks;id="81e2a425-6d9f-4ab7-92df-9eafb0c1d2e8";workspaceId="workspace-personal";},{kind=tasks;id="92f3b536-7eaf-4bc8-a3ea-afb0c1d2e3f9";workspaceId="workspace-personal";},{kind=tasks;id="a304c647-8fb0-4cd9-b4fb-b0c1d2e3f40a";workspaceId="workspace-personal";},{kind=tasks;id="b415d758-90c1-4dea-85ac-c1d2e3f4051b";workspaceId="workspace-personal";},{kind=tasks;id="c526e869-a1d2-4efb-96bd-d2e3f405162c";workspaceId="workspace-personal";},{kind=tasks;id="d637f97a-b2e3-4f0c-87ce-e3f405162737";workspaceId="workspace-personal";},{kind=tasks;id="e748a08b-c3f4-4a1d-98df-f405162738f4";workspaceId="workspace-personal";},{kind=tasks;id="f859b19c-d405-4b2e-a9e0-0516273849a5";workspaceId="workspace-personal";})})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: search-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Recent" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot search-recent-top... COMPLETED
+Scroll vertically... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot search-recent-scrolled... COMPLETED
+Scrolling DOWN until "Settings" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Assert that "Settings" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot search-recent-foot... COMPLETED
