@@ -61,6 +61,7 @@ public final class DiffViewModule: Module {
 
       Prop("path") { (view: DiffView, path: String) in
         view.language = DiffLanguage(path: path)
+        view.path = path
       }
 
       Prop("words") { (view: DiffView, words: WordsRecord) in
@@ -96,10 +97,12 @@ struct LookRecord: Record {
   @Field var cardEdge: UIColor? = nil
 }
 
-/// What a code row's long press menu says, in the panel's words, which JavaScript hands: commenting on its line, which the line's number follows, and copying it.
+/// What a code row says, in the panel's words, which JavaScript hands: its long press menu's commenting on its line, which the line's number follows, and copying it, and the words an added or a removed row is heard with.
 struct WordsRecord: Record {
   @Field var comment: String = ""
   @Field var copy: String = ""
+  @Field var added: String = ""
+  @Field var removed: String = ""
 }
 
 // MARK: - The diff as the view holds it
@@ -432,12 +435,31 @@ final class DiffLineCell: UICollectionViewCell {
   required init?(coder: NSCoder) { nil }
 
   /// Draws one display row: a split row's halves, or a row across the whole width.
-  func show(display: DisplayRow, rows: DiffRows, look: DiffLook, geometry: DiffGeometry, runs: [[ColorRun]]) {
+  func show(
+    display: DisplayRow,
+    rows: DiffRows,
+    look: DiffLook,
+    geometry: DiffGeometry,
+    runs: [[ColorRun]],
+    wording: WordsRecord
+  ) {
     switch display {
     case .single(let row):
-      show(row: row, rows: rows, look: look, geometry: geometry, runs: row < runs.count ? runs[row] : [])
+      show(row: row, rows: rows, look: look, geometry: geometry, runs: row < runs.count ? runs[row] : [], wording: wording)
     case .pair(let old, let new):
-      showPair(old: old, new: new, rows: rows, look: look, geometry: geometry, runs: runs)
+      showPair(old: old, new: new, rows: rows, look: look, geometry: geometry, runs: runs, wording: wording)
+    }
+  }
+
+  /// What a row of code is heard as: an added or a removed line says which with its own side's number, and a line of context both numbers, so a reader hears what changed, as GitHub's diff is read aloud.
+  private static func heard(_ row: Int, rows: DiffRows, wording: WordsRecord) -> String {
+    let line = rows.lines[row]
+
+    switch rows.kinds[row] {
+    case .added: return "\(wording.added), \(rows.newLines[row]) \(line)"
+    case .removed: return "\(wording.removed), \(rows.oldLines[row]) \(line)"
+    case .context: return "\(rows.oldLines[row]) \(rows.newLines[row]) \(line)"
+    case .hunk, .note, .thread: return String(line)
     }
   }
 
@@ -448,7 +470,8 @@ final class DiffLineCell: UICollectionViewCell {
     rows: DiffRows,
     look: DiffLook,
     geometry: DiffGeometry,
-    runs: [[ColorRun]]
+    runs: [[ColorRun]],
+    wording: WordsRecord
   ) {
     isPair = true
     isThread = false
@@ -483,15 +506,15 @@ final class DiffLineCell: UICollectionViewCell {
     half(old, rows.oldLines, leftGround, gutter, words)
     half(new, rows.newLines, rightGround, rightGutter, rightWords)
 
-    // Note that a split row is heard as each side's number and words, the old side first, as a screen reader reads GitHub's split diff.
-    let heard = [old.map { "\(rows.oldLines[$0]) \(rows.lines[$0])" }, new.map { "\(rows.newLines[$0]) \(rows.lines[$0])" }]
+    // Note that a split row is heard as each side's line, the old side first, as a screen reader reads GitHub's split diff, and a line of context, standing on both sides, once.
+    let sides = old == new ? [old] : [old, new]
     isAccessibilityElement = true
     accessibilityTraits = .staticText
-    accessibilityLabel = heard.compactMap { $0 }.joined(separator: ", ")
+    accessibilityLabel = sides.compactMap { $0 }.map { DiffLineCell.heard($0, rows: rows, wording: wording) }.joined(separator: ", ")
     setNeedsLayout()
   }
 
-  func show(row: Int, rows: DiffRows, look: DiffLook, geometry: DiffGeometry, runs: [ColorRun]) {
+  func show(row: Int, rows: DiffRows, look: DiffLook, geometry: DiffGeometry, runs: [ColorRun], wording: WordsRecord) {
     let kind = rows.kinds[row]
     isPair = false
     isThread = kind == .thread
@@ -529,9 +552,8 @@ final class DiffLineCell: UICollectionViewCell {
 
     if runs.isEmpty || kind == .hunk { words.text = line } else { words.attributedText = look.colored(line, runs: runs) }
     gutterWidth = geometry.gutterWidth
-    // Note that a row is heard as its line numbers and its words, as a screen reader reads GitHub's.
     isAccessibilityElement = true
-    accessibilityLabel = kind == .hunk ? line : "\(numbers.trimmingCharacters(in: .whitespaces)) \(line)"
+    accessibilityLabel = DiffLineCell.heard(row, rows: rows, wording: wording)
     setNeedsLayout()
   }
 
@@ -649,6 +671,19 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
       if language != oldValue { color() }
     }
   }
+
+  /// The file the diff is of; another file opens at its first row, as the arrows step to it, where the same file's rows handed again, or a change of width, keep the reader's place.
+  var path = "" {
+    didSet {
+      if path != oldValue {
+        opensAtTop = true
+        relayout()
+      }
+    }
+  }
+
+  /// Whether the next layout scrolls to the diff's first row.
+  private var opensAtTop = false
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -783,6 +818,15 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
       layout.geometry = DiffGeometry(rows: rows, display: display, look: look, width: bounds.width)
       layout.invalidateLayout()
       list.reloadData()
+
+      if opensAtTop {
+        opensAtTop = false
+        // Note that the top sits under the bar, so it is the inset the system adjusted, not zero.
+        list.setContentOffset(
+          CGPoint(x: -list.adjustedContentInset.left, y: -list.adjustedContentInset.top),
+          animated: false
+        )
+      }
     }
 
     guard let held = pending, bounds.width > 0 else { return }
@@ -801,7 +845,14 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
   func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
     let cell = collectionView.dequeueReusableCell(withReuseIdentifier: DiffLineCell.reuse, for: indexPath)
     guard indexPath.item < display.count else { return cell }
-    (cell as? DiffLineCell)?.show(display: display[indexPath.item], rows: rows, look: look, geometry: layout.geometry, runs: runs)
+    (cell as? DiffLineCell)?.show(
+      display: display[indexPath.item],
+      rows: rows,
+      look: look,
+      geometry: layout.geometry,
+      runs: runs,
+      wording: words
+    )
 
     return cell
   }

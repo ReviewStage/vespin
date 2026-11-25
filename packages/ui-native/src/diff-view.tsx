@@ -10,8 +10,13 @@ import { useColors } from "./tokens/colors.js";
 import { SYNTAX_COLORS } from "./tokens/syntax-colors.js";
 import { TEXT_SIZE } from "./tokens/type.js";
 
-/** What a code row's long press menu says, in the panel's words. */
-const LINE_MENU_WORDS = { comment: "Comment on line", copy: "Copy line" } as const;
+/** What a code row says, in the panel's words: its long press menu's acts, and what an added or a removed row is heard as before its number. */
+const LINE_WORDS = {
+  comment: "Comment on line",
+  copy: "Copy line",
+  added: "Added",
+  removed: "Removed",
+} as const;
 
 /** A line of the file a comment is asked on: its number, and the side it counts on. */
 export interface DiffLineTarget {
@@ -109,7 +114,7 @@ export function DiffView({
           onLineComment?.({ line, side: removed ? DIFF_SIDE.LEFT : DIFF_SIDE.RIGHT });
         }
       }}
-      words={LINE_MENU_WORDS}
+      words={LINE_WORDS}
       style={styles.fill}
       testID={testID}
     />
