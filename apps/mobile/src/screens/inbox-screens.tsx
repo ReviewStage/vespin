@@ -1293,10 +1293,10 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
 
   // Note that only the threads still listed stand chosen, so a thread a scope, a search, or the service took away is never acted on unseen.
   const picked = selecting.choosing.on ? selecting.choosing.chosen : [];
+  // Note that Select mode reaches only the rows drawn, so the thread the split view shows, kept among the steps though its run is folded (`inboxShownItems`), is never chosen without a row.
+  const rows = listing.runs?.flatMap(({ items }) => items) ?? listing.shown;
 
-  const pickedItems = listing.shown
-    .filter(({ item }) => picked.includes(item.id))
-    .map(({ item }) => item);
+  const pickedItems = rows.filter(({ item }) => picked.includes(item.id)).map(({ item }) => item);
 
   const choosing = selecting.choosing.on
     ? {
@@ -1310,13 +1310,13 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
             : selectedWords(pickedItems.length),
         acts: chosenActs(pickedItems, acts, remind, selecting.stop),
         // Note that Select all takes every thread listed, and Deselect all lets them go once all are chosen, as Mail's edit bar leads with them.
-        all: (pickedItems.length === listing.shown.length && pickedItems.length > 0
+        all: (pickedItems.length === rows.length && pickedItems.length > 0
           ? { label: SELECTION_WORDS.DESELECT_ALL, onPress: () => selecting.choose([]) }
           : {
               label: SELECTION_WORDS.SELECT_ALL,
               // Note that with nothing listed, such as under a search that finds nothing, Select all stands dimmed, so its press never lets go of the threads chosen before.
-              disabled: listing.shown.length === 0,
-              onPress: () => selecting.choose(listing.shown.map(({ item }) => item.id)),
+              disabled: rows.length === 0,
+              onPress: () => selecting.choose(rows.map(({ item }) => item.id)),
             }) satisfies BarAction,
         done: { label: SELECT_DONE, onPress: selecting.stop } satisfies BarAction,
       }
