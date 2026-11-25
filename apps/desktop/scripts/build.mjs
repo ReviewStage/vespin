@@ -330,6 +330,20 @@ await Promise.all([
     sourcemap: "external",
     logLevel: "info",
   }),
+  // The mirror matching process main forks with `utilityProcess`
+  // (`src/main/services/mirror-matching.ts`), its own bundle so a mirror's
+  // match reads and hashes its checkout off main's event loop.
+  build({
+    entryPoints: [path.join(appRoot, "src/utility/mirror-match.ts")],
+    outfile: path.join(outputRoot, "mirror-match.js"),
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    target: "node22",
+    external: ["electron"],
+    sourcemap: "external",
+    logLevel: "info",
+  }),
   // The code coloring process main forks with `utilityProcess`
   // (`src/main/services/task-code-coloring.ts`), its own bundle so Shiki,
   // its themes and its grammars ride in it alone and never in main's.

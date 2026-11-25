@@ -16,6 +16,7 @@
         "src/main/index.ts",
         "src/preload/index.ts",
         "src/utility/task-code.ts",
+        "src/utility/mirror-match.ts",
         "src/renderer/index.tsx",
         "src/renderer/call/index.tsx",
         "src/renderer/styles/index.css",

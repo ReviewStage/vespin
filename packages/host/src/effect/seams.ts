@@ -33,6 +33,7 @@ import type { ChildProcessSpawner } from "effect/process";
 import type { AccountSourceSeam } from "../account-source.js";
 import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
 import type { LaunchdJob } from "../daemon/launchd-job.js";
+import type { MatchMirror } from "../mirror-match-remote.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
 import type { SecretCipher as SecretCipherSeam, TokenVault } from "../settings-store.js";
 
@@ -222,6 +223,8 @@ export interface MirrorPlatformSeam {
   readonly removeScript: (worktree: string) => string;
   /** What the mirror's attempts and steps are traced on, main's Sentry on the desktop; Effect's own, which sends nothing, where none is handed. */
   readonly tracer?: Tracer.Tracer | undefined;
+  /** Where a mirror's files are matched against a manifest, a process of the desktop's own (`mirror-match-remote.ts`); in this one where none is handed. */
+  readonly match?: MatchMirror | undefined;
 }
 
 export class MirrorPlatform extends Context.Service<MirrorPlatform, MirrorPlatformSeam>()(
