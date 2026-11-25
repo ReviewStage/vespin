@@ -1,0 +1,60 @@
+# picture-scroll.yaml -- a thread's picture is left alone by a scroll that starts on it, and opens full screen only on a tap: a swipe up and a swipe down from the picture move the thread and open nothing, then a tap on it opens the viewer.
+#
+# Note that a finger dragging a list stays over the content it started on,
+# so a scroll begun on a picture also ends on it; the picture's press must be
+# cancelled by the scroll, as every system control's is, rather than opening
+# it as the finger lifts.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `keep.yaml` is, so the thread and
+# its picture are the fixture's and no server is reached.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The invite page"
+      DIRECTION: UP
+# A scroll down the thread begun on the picture opens nothing.
+- swipe:
+    from:
+      id: "markdown-picture"
+    direction: DOWN
+- waitForAnimationToEnd
+- assertNotVisible:
+    id: "picture-viewer-close"
+- assertVisible: "Recorded the invite flow"
+# Nor does one up it.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The invite page"
+      DIRECTION: UP
+- swipe:
+    from:
+      id: "markdown-picture"
+    direction: UP
+- waitForAnimationToEnd
+- assertNotVisible:
+    id: "picture-viewer-close"
+- assertVisible: "Recorded the invite flow"
+# A tap on the picture still opens it full screen.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The invite page"
+      DIRECTION: UP
+- tapOn: "The invite page"
+- assertVisible:
+    id: "picture-viewer-close"
+- tapOn:
+    id: "picture-viewer-close"
+- waitForAnimationToEnd
+- assertVisible: "Recorded the invite flow"

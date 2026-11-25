@@ -508,11 +508,14 @@ export function rowPlacement(
 export function LongPressMenu({
   groups,
   title,
+  onTap,
   children,
 }: {
   readonly groups: readonly LongPressGroup[];
   /** What heads the menu, such as when a message was sent, as Messages heads a held message's menu by its time; none where it says nothing over its acts. */
   readonly title?: string | undefined;
+  /** What a tap on the held content does, as SwiftUI's own tap, which a scroll that starts on it cancels as it cancels every system control's; none where a tap does nothing. */
+  readonly onTap?: (() => void) | undefined;
   readonly children: ReactElement;
 }) {
   const colors = useColors();
@@ -528,7 +531,12 @@ export function LongPressMenu({
   });
 
   return (
-    <HStack modifiers={[rowMenu(tree, false, (path) => menuPressAt(groups, path)?.())]}>
+    <HStack
+      modifiers={[
+        rowMenu(tree, false, (path) => menuPressAt(groups, path)?.()),
+        ...(onTap === undefined ? [] : [SwiftModifiers.onTapGesture(onTap)]),
+      ]}
+    >
       {children}
     </HStack>
   );

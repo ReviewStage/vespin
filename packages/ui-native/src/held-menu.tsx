@@ -30,6 +30,7 @@ import {
   keepActs,
 } from "./keep-model.js";
 import { LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
+import { Press } from "./press.js";
 import type { LongPressGroup } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE } from "./tokens/space.js";
@@ -545,6 +546,7 @@ export function HeldSwiftMenu({
   acts,
   title,
   groups = [],
+  onTap,
   children,
 }: {
   readonly acts: readonly HeldAct[];
@@ -552,10 +554,12 @@ export function HeldSwiftMenu({
   readonly title?: string | undefined;
   /** Groups the menu holds after the held thing's own acts, each set apart by a divider, such as a comment's Add reaction. */
   readonly groups?: readonly LongPressGroup[] | undefined;
+  /** What a tap on the held views does, as SwiftUI's own tap (`LongPressMenu`'s `onTap`). */
+  readonly onTap?: (() => void) | undefined;
   readonly children: ReactElement;
 }) {
   return (
-    <LongPressMenu groups={[acts.map(heldItem), ...groups]} title={title}>
+    <LongPressMenu groups={[acts.map(heldItem), ...groups]} title={title} onTap={onTap}>
       {children}
     </LongPressMenu>
   );
@@ -576,11 +580,14 @@ export function HeldMenu({
   acts,
   title,
   width: known,
+  onTap,
   children,
 }: {
   readonly acts: readonly HeldAct[];
   /** What heads the menu, such as when a message was sent. */
   readonly title?: string | undefined;
+  /** What a tap on the held views does, as SwiftUI's own tap over them (`LongPressMenu`'s `onTap`), never a React Native press inside them, which a scroll of the list around them never cancels, since its views stand in a host of their own; none where a tap does nothing. */
+  readonly onTap?: (() => void) | undefined;
   /** The width the held views stand in where the caller knows it before they are laid out, as a transcript's row does, so they are bounded from their first frame; else the width the menu measures where it stands. */
   readonly width?: number | undefined;
   readonly children: ReactElement;
@@ -589,12 +596,21 @@ export function HeldMenu({
   // Note that a width known up front bounds the views on their first layout, since one measured comes a frame later, and the views laid out unbounded in that frame stood one line wide past the screen, their host's height a step behind their words.
   const width = known ?? measured;
 
-  if (acts.length === 0) return children;
+  // Note that views offering no act stand in no host of their own, so a React Native press over them is one the list's scroll cancels, as it is everywhere else.
+  if (acts.length === 0) {
+    return onTap === undefined ? (
+      children
+    ) : (
+      <Press onPress={onTap} accessible={false}>
+        {children}
+      </Press>
+    );
+  }
 
   return (
     <View style={styles.host} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <InlineHost matchContents={{ vertical: true }} style={styles.host}>
-        <HeldSwiftMenu acts={acts} title={title}>
+        <HeldSwiftMenu acts={acts} title={title} onTap={onTap}>
           <RNHostView matchContents={{ vertical: true }}>
             <View style={width === undefined ? undefined : { width }}>{children}</View>
           </RNHostView>
