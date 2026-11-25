@@ -393,8 +393,11 @@ export function useAgentComposer(
 
   // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
   const sendQueues = suggested === undefined && writing && enterQueues && controlsQueue;
-  // Whether the agent is a Manager, whose messages are its chat's rows (`AGENTS_CHAT_SEND`), drawn on their way on its chat as the host holds it.
-  const chat = suggested === undefined && agent?.kind === AGENT_KIND.MANAGER;
+
+  // Whether the agent is a Manager, whose messages are its chat's rows (`AGENTS_CHAT_SEND`), drawn on their way on its chat as the host holds it. Note that a thread's box is a Manager chat's whatever the task list holds, so a reply never goes as a message to the agent.
+  const chat =
+    suggested === undefined && (thread !== undefined || agent?.kind === AGENT_KIND.MANAGER);
+
   const chatSelect = useMemo(() => selectManagerChat(agentId), [agentId]);
   const { data: chatHeld } = useQuery({ ...appStateQuery, select: chatSelect });
   const chatSending = chatHeld?.rows?.sending;
