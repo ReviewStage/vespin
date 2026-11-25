@@ -14,11 +14,14 @@ import { TASKS_READ } from "@repo/features/tasks-view";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
+import { File, Paths } from "expo-file-system";
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { finishLaunchTrace } from "./crash-reports.js";
 import { appStateQuery } from "./host/app-state-query.js";
+import { hostStateRootIn } from "./host/expo-file-system.js";
 import { useHostCount } from "./host/host-provider.js";
+import { launchBusyAccount } from "./host/launch-arguments.js";
 import {
   LAUNCH_PHASE,
   type LaunchPhase,
@@ -52,6 +55,9 @@ let leftSinceSignIn = false;
 
 /** Stops watching for the background since the sign-in; nothing while none is watched. */
 let stopWatching: () => void = () => undefined;
+
+/** Where a busy-account launch also writes its `app:ready` rungs, beside the answers it was served, for the rig to read. */
+const RIG_READY_FILE = `file://${hostStateRootIn(Paths.document.uri)}/busy-account/app-ready.json`;
 
 /** The build number this build was released as (`CFBundleVersion`), which a rung of the launch is read beside; none where the build names none. */
 const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
@@ -218,6 +224,21 @@ export function useAppReadyCount(shown: boolean): void {
 
     // Note that only a launch that waited in front ends its trace, since one timed from the front or a sign-in waited from elsewhere.
     if (after === PRODUCT_READY_AFTER.LAUNCH) finishLaunchTrace(elapsed, activeAt);
+
+    // Note that a busy-account launch also writes its rungs in milliseconds beside the answers it was served, for the rig to read (`scripts/busy-account.sh`), since the stub counts nothing.
+    if (launchBusyAccount()) {
+      new File(RIG_READY_FILE).writeSync(
+        JSON.stringify({
+          launch_ms: elapsed,
+          local_ms: local,
+          started_ms: started,
+          screens_ms: screens,
+          inbox_ms: inbox,
+          active_ms: activeAt,
+          first_rows: firstShownKept ? PRODUCT_FIRST_ROWS.KEPT : PRODUCT_FIRST_ROWS.FEED,
+        }),
+      );
+    }
 
     count(PRODUCT_SURFACE_EVENT.APP_READY, {
       launch_seconds: productLaunchSeconds(elapsed),
