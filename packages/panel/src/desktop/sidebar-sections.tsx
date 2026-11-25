@@ -25,6 +25,7 @@ import {
   undeleteWrites,
   unplaceWrite,
   workspaceSections,
+  writtenPositions,
 } from "@repo/features/task-sections-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { countWords, TERM } from "@repo/features/words";
@@ -831,8 +832,8 @@ function entryKeyOf(entry: SectionEntry): string {
 
 /**
  * A section's layout drawn in `order`, the section's entries in the order a
- * move asked for (`useDroppedOrder`): each run of rows under an entry, a
- * task's child tasks with it, in the order of their entries, and the rows
+ * move asked for (`useDroppedOrder`): each run of rows at the top, a task's
+ * child tasks with it, in the order of its top row's entry, and the runs
  * under no entry after them as they stood.
  */
 function inEntryOrder(layout: SectionLayout, order: readonly SectionEntry[]): SectionLayout {
@@ -843,9 +844,9 @@ function inEntryOrder(layout: SectionLayout, order: readonly SectionEntry[]): Se
     const entry = layout.entries[at];
     const last = runs.at(-1);
 
-    if (entry !== undefined || sectionDepthOf(row).depth === 0 || last === undefined) {
-      runs.push({ entry, at: [at] });
-    } else last.at.push(at);
+    // Note that a run starts only at a row at the top, as `sectionLayout` lays them, so a child task kept in the section in its own right goes with its parent.
+    if (sectionDepthOf(row).depth === 0 || last === undefined) runs.push({ entry, at: [at] });
+    else last.at.push(at);
   });
 
   const placeOf = (run: (typeof runs)[number]) =>
@@ -898,7 +899,7 @@ function SectionRows({
   const nested = useNestedRows(tasks, context.opened, context.current, context.every);
   const listed = useMemo(() => sectionLayout(drawn, nested, managers), [drawn, nested, managers]);
   // Note that the rows stand in the order a move asked for from the move's own draw, since main's state reaches the panel a moment after it (`dropped-order.ts`).
-  const { drawn: order, move: standMoved } = useDroppedOrder(listed.order, entryKeyOf);
+  const { drawn: order, move: standMoved, withWritten } = useDroppedOrder(listed.order, entryKeyOf);
   const layout = useMemo(() => inEntryOrder(listed, order), [listed, order]);
   const { rows } = layout;
   const keys = useMemo(() => rows.map(sectionDrawnKey), [rows]);
@@ -912,8 +913,18 @@ function SectionRows({
     const by = beside === undefined ? undefined : layout.entries[beside];
 
     if (moving === undefined || by === undefined) return;
-    context.dialogs.write(placeWritesWithin(layout.order, sectionId, moving, by));
-    standMoved(layout.order.indexOf(moving), layout.order.indexOf(by));
+    const placed = layout.order.map((entry) => withWritten(entryKeyOf(entry), entry));
+    const at = (entry: SectionEntry) => layout.order.indexOf(entry);
+
+    const writes = placeWritesWithin(
+      placed,
+      sectionId,
+      placed[at(moving)] ?? moving,
+      placed[at(by)] ?? by,
+    );
+
+    context.dialogs.write(writes);
+    standMoved(at(moving), at(by), writtenPositions(writes));
   };
 
   const move = folded
@@ -1198,12 +1209,13 @@ export function SidebarSections({
   context: SectionContext;
 }): React.JSX.Element | null {
   // Note that the sections stand in the order a move asked for from the move's own draw, since main's state reaches the panel a moment after it (`dropped-order.ts`).
-  const { drawn: sections, move: standMoved } = useDroppedOrder(listed, sectionKeyOf);
-  const order = sections.map((drawn) => drawn.section);
+  const { drawn: sections, move: standMoved, withWritten } = useDroppedOrder(listed, sectionKeyOf);
+  const order = sections.map(({ section }) => withWritten(section.id, section));
 
   const move = (from: number, to: number) => {
-    context.dialogs.write(sectionMoveWrites(order, from, to));
-    standMoved(from, to);
+    const writes = sectionMoveWrites(order, from, to);
+    context.dialogs.write(writes);
+    standMoved(from, to, writtenPositions(writes));
   };
 
   const drag = useRowDrag(move, { handle: SECTION_HANDLE });

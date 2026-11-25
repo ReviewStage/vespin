@@ -998,14 +998,21 @@ function placePins(positions: ReadonlyMap<PinnedRow, string>, tasks: SidebarTask
   tasks.onMovePins(moves, () => tasks.sidePanel.onPlacePins(before));
 }
 
-/** Stands the row at `from` under Pinned at `to`. */
+/**
+ * Stands the row at `from` under Pinned at `to`, each row placed by
+ * `placed`, and answers the positions that gave the rows.
+ */
 function movePinned(
   rows: readonly PinnedRow[],
   from: number,
   to: number,
   tasks: SidebarTasks,
-): void {
-  placePins(pinPositionsForMove(rows, from, to, placeOf), tasks);
+  placed: (row: PinnedRow) => PinPlace,
+): ReadonlyMap<PinnedRow, string> {
+  const positions = pinPositionsForMove(rows, from, to, placed);
+  placePins(positions, tasks);
+
+  return positions;
 }
 
 /**
@@ -1382,7 +1389,7 @@ function PinnedSection({
   carried: boolean;
 }): React.JSX.Element {
   // Note that the pins stand in the order a move asked for from the move's own draw, since main's state reaches the panel a moment after it (`dropped-order.ts`).
-  const { drawn: rows, move } = useDroppedOrder(listed, pinnedRowKey);
+  const { drawn: rows, move, withWritten } = useDroppedOrder(listed, pinnedRowKey);
   const folded = folds.pinnedFolded;
   const { taskOpened } = folds;
   const drawn = pinnedDrawn(rows, adopted, taskOpened, context.currentTask, context.every);
@@ -1470,8 +1477,11 @@ function PinnedSection({
             onOpenTab={onOpenTab}
             onOpenManager={onOpenManager}
             onMovePin={(from, to) => {
-              movePinned(rows, from, to, context.tasks);
-              move(from, to);
+              const positions = movePinned(rows, from, to, context.tasks, (row) =>
+                withWritten(pinnedRowKey(row), placeOf(row)),
+              );
+
+              move(from, to, new Map([...positions].map(([row, at]) => [pinnedRowKey(row), at])));
             }}
             onDropOut={onDropOut}
           />

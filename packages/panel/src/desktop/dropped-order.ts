@@ -32,22 +32,39 @@ const HOLD_LIMIT_MS = 10_000;
 
 /**
  * The order a list keeps: the keys in the order the last move asked for,
- * the order handed as it asked, and every order handed or asked since the
+ * the order handed as it asked, every order handed or asked since the
  * list was last drawn as handed that its writes may yet pass through on
- * their way, the first of them the order before any move.
+ * their way, the first of them the order before any move, and the
+ * positions its moves wrote, by key, which the order handed does not yet
+ * carry.
  */
 interface KeptOrder {
   readonly asked: readonly string[];
   readonly handed: readonly string[];
   readonly passing: readonly (readonly string[])[];
+  readonly written: ReadonlyMap<string, string>;
 }
 
 /** What a list draws, and how it asks to move a row. */
 export interface DroppedOrder<Item> {
   /** The items to draw: those handed, in the order the last move asked for while it is kept. */
   readonly drawn: readonly Item[];
-  /** Stands the item drawn at `from` at `to` among those drawn, at once, kept there until the order handed says so. */
-  readonly move: (from: number, to: number) => void;
+  /**
+   * Stands the item drawn at `from` at `to` among those drawn, at once,
+   * kept there until the order handed says so, with `written`, the
+   * positions the move wrote by each item's key, where its list keeps them.
+   */
+  readonly move: (from: number, to: number, written?: ReadonlyMap<string, string>) => void;
+  /**
+   * The place of the item keyed `key`, `place`, with the position a kept
+   * move wrote for it in place of the one handed, so a move made before the
+   * last one's positions are handed back is placed among the rows where they
+   * now stand rather than where they stood.
+   */
+  readonly withWritten: <Place extends { readonly position?: string | undefined }>(
+    key: string,
+    place: Place,
+  ) => Place;
 }
 
 /** Whether two runs of keys stand in one order. */
@@ -125,18 +142,30 @@ export function useDroppedOrder<Item>(
     return order.flatMap((key) => byKey.get(key) ?? []);
   }, [listed, order, keyOf]);
 
-  const move = (from: number, to: number) => {
+  const move = (from: number, to: number, written: ReadonlyMap<string, string> = new Map()) => {
     const asked = drawn.map(keyOf);
     const [moved] = asked.splice(from, 1);
 
     if (moved === undefined || from === to) return;
     asked.splice(Math.max(0, Math.min(to, asked.length)), 0, moved);
+    const standing = order === undefined ? undefined : kept;
+
     keep({
       asked,
       handed: keys,
-      passing: kept === undefined ? [keys] : [...kept.passing, kept.asked, keys],
+      passing: standing === undefined ? [keys] : [...standing.passing, standing.asked, keys],
+      written: new Map([...(standing?.written ?? []), ...written]),
     });
   };
 
-  return { drawn, move };
+  const withWritten = <Place extends { readonly position?: string | undefined }>(
+    key: string,
+    place: Place,
+  ): Place => {
+    const position = order === undefined ? undefined : kept?.written.get(key);
+
+    return position === undefined ? place : { ...place, position };
+  };
+
+  return { drawn, move, withWritten };
 }
