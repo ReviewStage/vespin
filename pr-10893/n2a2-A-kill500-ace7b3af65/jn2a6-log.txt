@@ -1,0 +1,18 @@
+pinned to ace7b3af65
+== bundle PJjn2a6 base ace7b3af65
+  built ace7b3af65 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2reqlog.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2A-write-1x seed: rc 0
+  n2A timed kill: tap done 1795636847731, outbox read 1795636847898 (+167 ms), kill 1795636848233 (+502 ms); outbox before the kill: 
+n2A-write-1x fn2mark: 17 steps,  marked [Thread 218: decide how a partial cent rounds in the billing rounding] settled [Thread 204: decide how a partial cent rounds in the description editor]
+  n2A search: s1 [Thread 218] 11 steps ; s2 [Thread 204 on All] 6 steps 
+  n2A db after rows: at 1795636883182 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_x7l2q6_1i collection_metadata persisted_index_registry cache_generation collection_registry t_x7l2q6_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:58cff672-fc63-4364-a5b6-6e0f0a640471|c_x7l2q6_1i|t_x7l2q6_1i|1|1795636584;tabl
+  n2A written.json: NO status after 121 polls (196428 ms after the relaunch): {"5eed0004-0000-4000-8000-0000003d09d9":{"carried":true,"unread":true}}
+  n2A times: second_launch_T=1795636797130 resolve_tap_done_T=1795636847731 outbox_read_T=1795636847898 kill_T=1795636848233 kill_after_tap_ms=502 terminate_T=1795636850481 mark_end_T=1795636850623 relaunch_T=1795636850654 s1_end_T=1795636873485 s2_end_T=1795636910034 written_status_T=1795637047082 tries=121 
+  n2A tap/kill times: 
+  n2A db at the end: at 1795637047639 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_x7l2q6_1i collection_metadata persisted_index_registry cache_generation collection_registry t_x7l2q6_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:58cff672-fc63-4364-a5b6-6e0f0a640471|c_x7l2q6_1i|t_x7l2q6_1i|1|1795636584;tabl
+  n2A requests (inbox and writes): 196 lines; PUT /api/account/time-zone passed to the plain stub at 1795636594637 (-256017 ms vs relaunch) took 0;POST /api/events passed to the plain stub at 1795636654209 (-196445 ms vs relaunch) took 0;POST /api/events passed to the plain stub at 1795636774245 (-76409 ms vs relaunch) took 1;PUT /api/account/time-zone passed to the plain stub at 1795636803967 (-46687 ms vs relaunch) took 0;DELETE /api/inbox/5eed0004-0000-4000-8000-0000003d09d9/read 200 at 1795636817225 (-33429 ms vs relaunch) took 1;PUT /api/account/time-zone passed to the plain stub at 1795636854168 (+3514 ms vs relaunch) took 0;POST /api/events passed to the plain stub at 1795636913794 (+63140 ms vs relaunch) took 0;POST /api/events 
