@@ -72,7 +72,6 @@ const UNNAMED = "Manager settings";
 /** What the rows say. */
 const WORDS = {
   NAME: "Manager name",
-  MANAGER: "Manager",
   REPOSITORIES: "Repositories",
   MACHINE: "Machine",
   MODEL: "Model",
@@ -167,7 +166,6 @@ function IdentityRow({
           />
         </ReplayMask>
       }
-      description={WORDS.MANAGER}
       editing={rename.editing}
       error={replayMaskedError(
         refusedShown(refusal, FAILURE_SURFACE.MANAGER_SETTINGS, { agentId: agent.id }),
