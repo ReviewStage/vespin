@@ -11,7 +11,7 @@ import { afterEach, beforeAll, expect, test, vi } from "vitest";
 import { fakeAppBridge } from "./testing/app-bridge.js";
 import { deliveryOf, signedInAs, stateWith } from "./testing/app-state.js";
 import { readAppState, testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
-import { appStateQuery } from "./use-app-state.js";
+import { appStateQuery, drawAhead } from "./use-app-state.js";
 
 /**
  * use-app-state.test.ts -- what a window's readers hold across deliveries of
@@ -191,4 +191,43 @@ test("a delivery heard after the window's second read is refused asks for the wh
 
   assert.equal(reads, 3, "the delivery asked for the whole document again");
   assert.deepEqual(testQueryClientNow().getQueryData(appStateQuery.queryKey), after);
+});
+
+test("a write drawn ahead that is refused leaves the window on the document main put back, though main delivered it before refusing", async () => {
+  const placed = (position: string): AppStateSnapshot => {
+    const state = stateWith({}, {});
+
+    const section = {
+      id: "section-launch",
+      workspaceId: "workspace",
+      title: "Launch",
+      position,
+      createdAt: 1,
+    };
+
+    return {
+      ...state,
+      tasks: {
+        ...state.tasks,
+        taskSections: { sections: [section], entries: [], agentEntries: [] },
+      },
+    };
+  };
+
+  const positionIn = (state: AppStateSnapshot | undefined) =>
+    state?.tasks.taskSections?.sections[0]?.position;
+
+  const { deliver } = await window(placed("a0"));
+  const held = () => positionIn(testQueryClientNow().getQueryData(appStateQuery.queryKey));
+  const { promise: refused, resolve: refuse } = Promise.withResolvers<boolean>();
+  act(() => drawAhead(testQueryClientNow(), () => placed("a2"), refused));
+  await settle();
+  assert.equal(held(), "a2", "the write is drawn at once");
+
+  // Note that main puts a refused write back before it answers the ask.
+  await deliver({ ...placed("a0"), version: 2 });
+  assert.equal(held(), "a2", "the write is drawn over main's document while it is asked");
+  refuse(false);
+  await settle();
+  assert.equal(held(), "a0");
 });

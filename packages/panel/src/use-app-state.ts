@@ -179,8 +179,10 @@ function aheadOf(client: QueryClient): DrawnAhead {
 function writeHanded(client: QueryClient, state: AppStateSnapshot): void {
   const ahead = aheadOf(client);
   ahead.handed = state;
-  ahead.written = ahead.patches.reduce((drawn, patch) => patch(drawn), state);
-  client.setQueryData(appStateQuery.queryKey, ahead.written);
+  ahead.written = client.setQueryData(
+    appStateQuery.queryKey,
+    ahead.patches.reduce((drawn, patch) => patch(drawn), state),
+  );
 }
 
 /** Draws `patch` over `client`'s document at once, and over every document main delivers, until `settled` settles. */
@@ -193,12 +195,9 @@ export function drawAhead(
   ahead.patches = [...ahead.patches, patch];
   const now = appStateIn(client);
 
-  if (now !== undefined) {
-    ahead.written = patch(now);
-    client.setQueryData(appStateQuery.queryKey, ahead.written);
-  }
+  if (now !== undefined) ahead.written = client.setQueryData(appStateQuery.queryKey, patch(now));
 
-  // Note that a settled patch is taken off main's document only where nothing but this layer wrote the document since, as a test's tree does.
+  // Note that a settled patch is taken off main's document only where nothing but this layer wrote the document since, as a test's tree does, the document compared being the one the client keeps, which shares what did not move with the one before (`shareAppState`).
   const done = () => {
     ahead.patches = ahead.patches.filter((each) => each !== patch);
 
