@@ -93,11 +93,138 @@ async function probeHeldStill(parts: readonly string[], past: number, read: stri
   });
 }
 
+/**
+ * PROBE: under `-probeMoving true` the stub answers as a busy account's
+ * service does after a gap (STAG-3917's catch-up trace): "what waits" names
+ * every task holding a thread, so each the list does not hold is read alone
+ * (`task-rows`), and the task list and the Inbox keep moving, one agent a
+ * second and one Inbox message every five, past each sync id. The bodies are
+ * the seed's (`PROBE_OLD_HOLDERS=1`).
+ */
+const PROBE_MOVING = Settings.get("probeMoving") === "true";
+
+/** How the moving account answers: the agent and Inbox moves' spacing, a read of one task, and "what waits" first and after. */
+const PROBE_MOVE_TIMING = {
+  AGENT_EVERY_MS: 1000,
+  INBOX_EVERY_MS: 5000,
+  TASK_ROWS_MS: 150,
+  WAITS_FIRST_MS: 400,
+  WAITS_AGAIN_MS: 30_000,
+} as const;
+
+/** The seed's answer file `name`, parsed once. */
+const probeJsonOnce = (() => {
+  const read = new Map<string, Promise<unknown>>();
+
+  return (name: string): Promise<unknown> => {
+    const held = read.get(name);
+    if (held !== undefined) return held;
+    const next = new File(Paths.document, `${PROBE_ANSWERS_DIR}/${name}`).text().then((text) => JSON.parse(text) as unknown);
+    read.set(name, next);
+
+    return next;
+  };
+})();
+
+/** One part of a moving answer past `past`, its rows as the wire writes them. */
+function probeMovedPart(name: string, rows: readonly unknown[], past: number) {
+  const sync = { past: String(past), next: String(past + 1) };
+
+  return {
+    capability: "probe",
+    queryFingerprint: name,
+    expiresAt: 4_000_000_000_000,
+    digest: `probe-${sync.next}`,
+    rows: JSON.stringify(rows),
+    sync,
+    gone: [],
+  };
+}
+
+/** The task list past `past`: one of the newest agents said something, a second after the ask. */
+async function probeTasksMoved(past: number): Promise<Response> {
+  await probeWait(PROBE_MOVE_TIMING.AGENT_EVERY_MS);
+  const agents = (await probeJsonOnce("moving-agents.json")) as Record<string, unknown>[];
+  const delta = (await probeJsonOnce("tasks-delta.json")) as { taskWorkspaces?: readonly string[] };
+  const n = past - PROBE_SYNC.TASKS_KEPT;
+  const agent = { ...agents[n % agents.length], saidAt: Date.now() };
+  probe("stub:moved:agent", { past });
+
+  return json({
+    url: LIVE_POLL_URL,
+    queries: {
+      tasks: probeMovedPart("tasks", [], past),
+      agents: probeMovedPart("agents", [agent], past),
+      issues: probeMovedPart("issues", [], past),
+    },
+    ...(delta.taskWorkspaces === undefined ? undefined : { taskWorkspaces: [...delta.taskWorkspaces] }),
+  });
+}
+
+/** The Inbox past `past`: one thread took a new message, five seconds after the ask. */
+async function probeInboxMoved(past: number): Promise<Response> {
+  await probeWait(PROBE_MOVE_TIMING.INBOX_EVERY_MS);
+  const moves = (await probeJsonOnce("inbox-moves.json")) as {
+    stamp: Record<string, unknown>;
+    item: Record<string, unknown>;
+    message: Record<string, unknown>;
+  }[];
+  const n = past - PROBE_SYNC.INBOX;
+  const move = moves[n % moves.length];
+  if (move === undefined) return new Response(null, { status: 404 });
+  const at = Date.now();
+  const id = `${String(move.message.id).slice(0, 24)}${(0x100000 + n).toString(16).padStart(12, "0")}`;
+  probe("stub:moved:inbox", { past });
+
+  return json({
+    url: LIVE_POLL_URL,
+    queries: {
+      stamps: probeMovedPart("stamps", [{ ...move.stamp, updatedAt: at, messages: Number(move.stamp.messages) + 1 + n }], past),
+      items: probeMovedPart("items", [{ ...move.item, updatedAt: at }], past),
+      messages: probeMovedPart("messages", [{ ...move.message, id, createdAt: at }], past),
+      files: probeMovedPart("files", [], past),
+    },
+  });
+}
+
+/** How many times "what waits" was asked, so the first is answered at once and each after held, as the service holds one with nothing new. */
+let probeWaitsAsked = 0;
+
+/** "What waits" whole: every task holding a thread, at once the first time and after a hold every time after. */
+async function probeWhatWaits(): Promise<Response> {
+  probeWaitsAsked += 1;
+  const askedAt = performance.now();
+  probe("stub:asked:what-waits", { n: probeWaitsAsked });
+
+  return probeAnswerFile(
+    "what-waits.json",
+    askedAt,
+    probeWaitsAsked === 1 ? PROBE_MOVE_TIMING.WAITS_FIRST_MS : PROBE_MOVE_TIMING.WAITS_AGAIN_MS,
+  );
+}
+
+/** One task read alone, as the seed wrote its answer, after a round trip; not found for one the seed wrote none for. */
+async function probeTaskRows(id: string | null): Promise<Response> {
+  const askedAt = performance.now();
+  probe("stub:asked:task-rows");
+  const file = new File(Paths.document, `${PROBE_ANSWERS_DIR}/task-rows/${id ?? "none"}.json`);
+
+  if (id === null || !file.exists) {
+    await probeWait(PROBE_MOVE_TIMING.TASK_ROWS_MS);
+
+    return new Response(null, { status: 404 });
+  }
+
+  return probeAnswerFile(`task-rows/${id}.json`, askedAt, PROBE_MOVE_TIMING.TASK_ROWS_MS);
+}
+
 /** The Inbox items read: whole where it asks past no sync id of the stub's, held where it asks past one. */
 function probeInboxAnswer(sync: string | null, askedAt: number): Promise<Response> {
   const past = Number(sync);
 
   if (Number.isInteger(past) && past >= PROBE_SYNC.INBOX) {
+    if (PROBE_MOVING) return probeInboxMoved(past);
+
     return probeHeldStill(Object.keys(INBOX_ITEMS_READ.parts), past, "inbox");
   }
   probe("stub:asked:inbox-whole", { sync });
@@ -114,6 +241,8 @@ function probeTasksAnswer(sync: string | null, askedAt: number): Promise<Respons
   }
 
   if (Number.isInteger(past) && past > PROBE_SYNC.TASKS_KEPT) {
+    if (PROBE_MOVING) return probeTasksMoved(past);
+
     return probeHeldStill(Object.keys(TASK_LIST_READ.parts), past, "tasks");
   }
   probe("stub:asked:tasks-whole", { sync });
@@ -220,6 +349,14 @@ export const stubAuthFetch: typeof globalThis.fetch = (input, init) => {
       if (!PROBE_ANSWERS) return Promise.resolve(new Response(null, { status: 404 }));
 
       return probeTasksAnswer(url.searchParams.get(LIVE_POLL.SYNC), performance.now());
+    case HOSTED_SERVICE_PATH.LIVE_INBOX:
+      if (!PROBE_MOVING) return Promise.resolve(new Response(null, { status: 404 }));
+
+      return probeWhatWaits();
+    case HOSTED_SERVICE_PATH.LIVE_TASK_ROWS:
+      if (!PROBE_MOVING) return Promise.resolve(new Response(null, { status: 404 }));
+
+      return probeTaskRows(url.searchParams.get("id"));
     case HOSTED_SERVICE_PATH.LIVE_WORKSPACES:
       if (PROBE_KEEP_ROWS) return Promise.resolve(new Response(null, { status: 404 }));
 
