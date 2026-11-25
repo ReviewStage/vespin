@@ -678,23 +678,24 @@ function SearchRecentList({ leave }: { readonly leave: (() => void) | undefined 
 }
 
 /**
- * Whether the Search tab is the one shown, by the route's segments
- * (`(tabs)`, `(search)`, ...): its root or a page pushed on its own stack;
- * while a sheet stands over the tabs, as it stood under the sheet. Note that
- * Recent reads the task list and the Inbox whole, so it stands only while
- * Search is shown, since the tab stays mounted behind the others and a read
- * there would be built again on each delivery for nothing.
+ * Whether the Search tab has been shown since launch, by the route's
+ * segments (`(tabs)`, `(search)`, ...): its root or a page pushed on its own
+ * stack. Note that Recent stands from then on, as a tab's whole-list read
+ * stays once begun (`useWholeListRead`): the tab stays mounted behind the
+ * others, so its rows are held and come back drawn on a return rather than
+ * read and drawn again, which took about a second each time. Behind, it
+ * draws only what a delivery changes, and before Search is first shown it
+ * reads nothing.
  */
-function useSearchTabShown(): boolean {
-  const tab = iosTabOfGroup(tabGroupOf(useSegments()));
-  const shown = tab === IOS_TAB.SEARCH;
-  const [kept, keep] = useState(shown);
+function useSearchTabBegun(): boolean {
+  const shown = iosTabOfGroup(tabGroupOf(useSegments())) === IOS_TAB.SEARCH;
+  const [begun, begin] = useState(shown);
 
   useEffect(() => {
-    if (tab !== undefined) keep(shown);
-  }, [tab, shown]);
+    if (shown) begin(true);
+  }, [shown]);
 
-  return tab === undefined ? kept : shown;
+  return begun || shown;
 }
 
 /**
@@ -814,7 +815,7 @@ function SearchStackScreen(words: SearchWords) {
   const compose = useComposeAction();
   const regular = useWindowSizeClass() !== WINDOW_SIZE_CLASS.COMPACT;
   const router = useRouter();
-  const shown = useSearchTabShown();
+  const begun = useSearchTabBegun();
   // Note that only a regular window ends the search, since it opens the pick on another tab, while a compact one pushes it on Search's own stack, whose results Back returns to.
   const leave = regular ? () => field.current?.cancelSearch() : undefined;
 
@@ -856,7 +857,7 @@ function SearchStackScreen(words: SearchWords) {
       </Stack.Toolbar>
       {query.trim() !== "" ? (
         <SearchStackFound {...words} leave={leave} />
-      ) : shown ? (
+      ) : begun ? (
         <SearchRecentList leave={leave} />
       ) : (
         <Screen>{null}</Screen>

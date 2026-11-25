@@ -681,6 +681,15 @@ function selectListingParts(state: AppStateSnapshot) {
 /** No repository kept at top, the same array every render. */
 const NO_REPOSITORY_PINS: readonly string[] = [];
 
+/** No tree: what a listing that draws none holds in the tree's place, such as Search's, which draws the rows it finds and those last opened alone. */
+const NO_TREE: TaskTree = {
+  pinned: undefined,
+  following: undefined,
+  sections: [],
+  tasksHead: "",
+  tasks: [],
+};
+
 /** The repositories the account keeps at the top of its list, by name, the first kept first. */
 function selectPinnedRepositories(state: AppStateSnapshot): readonly string[] {
   return (state.tasks.repositoryPins ?? []).map((pin) => pin.repository);
@@ -767,9 +776,11 @@ export function useTaskRowWrites(): TaskRowWrites {
  * `search` where one is typed, with each status a press set drawn at once;
  * every workspace's before the account's workspaces are read. Its tasks and
  * agents are read through live queries (`useListedRows`), so a delivery to
- * another part of the document draws nothing again.
+ * another part of the document draws nothing again. A caller that draws no
+ * tree, such as Search, passes `drawsTree` false, so the whole list is never
+ * grouped and ordered for rows nobody draws (`NO_TREE` in its place).
  */
-export function useTasksListing(search: string): ReadListing {
+export function useTasksListing(search: string, drawsTree = true): ReadListing {
   const acts = useHostActs();
   const write = useWrite();
   const workspace = useTasksWorkspace();
@@ -815,18 +826,20 @@ export function useTasksListing(search: string): ReadListing {
     const shared = (workspace?.memberCount ?? 1) > 1;
     const personName = (userId: string) => nameOf(userId, members, tasks);
 
-    const tree = keepTree(
-      taskTree({
-        view: { tasks, taskSections: view?.taskSections, repositoryPins: view?.repositoryPins },
-        workspaceId: workspace?.id,
-        readerId,
-        noRepository: NO_REPOSITORY,
-        tasksHead: tasksHeadOf(treeView.assignedTo, shared, readerId, personName),
-        treeView,
-        personName,
-        now: Date.now(),
-      }),
-    );
+    const tree = !drawsTree
+      ? NO_TREE
+      : keepTree(
+          taskTree({
+            view: { tasks, taskSections: view?.taskSections, repositoryPins: view?.repositoryPins },
+            workspaceId: workspace?.id,
+            readerId,
+            noRepository: NO_REPOSITORY,
+            tasksHead: tasksHeadOf(treeView.assignedTo, shared, readerId, personName),
+            treeView,
+            personName,
+            now: Date.now(),
+          }),
+        );
 
     const lookOf = (task: TaskSummary) =>
       taskRowLook(task, waiting.byTask.get(task.id) ?? 0, taskPullRequests);
@@ -887,6 +900,7 @@ export function useTasksListing(search: string): ReadListing {
       relations,
     };
   }, [
+    drawsTree,
     keepTree,
     acts,
     write,

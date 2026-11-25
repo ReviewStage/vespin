@@ -104,7 +104,8 @@ export interface SearchFound {
  */
 export function useSearchFound(typed: string): SearchFound {
   const query = useDeferredValue(typed);
-  const listing = useTasksListing(query);
+  // Note that Search draws no tree, so the listing never groups the whole list for one.
+  const listing = useTasksListing(query, false);
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: query });
   const inboxShown = useInboxShown();
   const collections = useTaskListCollections();
@@ -228,7 +229,8 @@ export interface SearchRecent {
  */
 export function useSearchRecent(): SearchRecent {
   const kept = useRecentOpened();
-  const listing = useTasksListing("");
+  // Note that Recent draws no tree, so the listing never groups the whole list for one.
+  const listing = useTasksListing("", false);
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: "" });
   const inboxShown = useInboxShown();
   const reading = useWholeListRead();
