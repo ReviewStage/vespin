@@ -1,4 +1,5 @@
 import type { AgentAttachment } from "@repo/features/agent-wire";
+import { fileMarker, fileMarkers } from "@repo/features/file-marker";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { pasteCutWords } from "@repo/features/words";
 import {
@@ -24,6 +25,7 @@ import { OPENAI_KEY_MISSING_NOTE } from "@repo/ui/microphone-access";
 import { UNREPORTED } from "@repo/ui/reported-failure";
 import { useQuery } from "@tanstack/react-query";
 import {
+  type ComponentProps,
   type HTMLAttributes,
   type ReactNode,
   type RefObject,
@@ -56,6 +58,7 @@ import {
   attachmentRow,
 } from "./attach-files-button.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
+import { type BoxWords, useWordsOf } from "./box-words.js";
 import { ComposerField, type ComposerFieldFiles } from "./composer-field.js";
 import { type ComposerPickers, useComposerPickers } from "./composer-pickers.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
@@ -172,12 +175,13 @@ export interface OverflowOffer {
 /** What the box's `@` and `/` lists and dictation take as `useComposerPickers` takes them: the agent the words go to, its skills and servers, Escape, and the lists' side. */
 type PickerOptions = Omit<
   Parameters<typeof useComposerPickers>[0],
-  "editor" | "room" | "draft" | "placeholder" | "keywords" | "onNote"
+  "editor" | "room" | "words" | "placeholder" | "keywords" | "onNote"
 >;
 
 /** Everything a box does: its words, what its field is called, Send and Enter, its files, its lists, and its keys. */
 interface MessageBoxOptions extends PickerOptions {
-  readonly draft: string;
+  /** The box's words as their source (`./box-words.ts`): the drafts' where its owner keeps them there, so the owner is not drawn again on each word typed, or the string an owner keeping them itself hands (`useHandedWords`). */
+  readonly draft: BoxWords;
   readonly setDraft: (text: string) => void;
   readonly placeholder: string;
   readonly label: string;
@@ -211,6 +215,8 @@ interface MessageBoxOptions extends PickerOptions {
 /** What `MessageBox` and `MessageField` draw a box from, which its owner never reads. */
 interface Drawn {
   readonly options: MessageBoxOptions;
+  /** The box's words, which each part reads what it draws of. */
+  readonly words: BoxWords;
   readonly inWords: BoxFiles;
   readonly module: DescriptionEditorModule | undefined;
   readonly pickers: ComposerPickers;
@@ -414,6 +420,13 @@ interface BoxFiles {
   readonly viewer: ReactNode;
 }
 
+/** The words' file markers alone, each spelled as the words spell it, which is all the files read of the words. */
+function markersOf(text: string): string {
+  return fileMarkers(text)
+    .map((marker) => fileMarker(marker.name))
+    .join(" ");
+}
+
 /**
  * The box's files: each file whose marker the words hold drawn there as its
  * chip, opening over the window and walking the files in the order the
@@ -422,10 +435,12 @@ interface BoxFiles {
  * editor not loaded or its bound reached, or whose chip was copied into
  * code. Where the box takes none into its words, every file beside them.
  */
-function useBoxFiles(takes: boolean, draft: string, files: AttachedFiles): BoxFiles {
+function useBoxFiles(takes: boolean, words: BoxWords, files: AttachedFiles): BoxFiles {
   const { attachments } = files;
   const chips = attachmentChips(attachments);
-  const shown = useWordFiles(chips, takes ? draft : "");
+  // Note that the files read only the words' markers, so a word typed between them draws nothing here.
+  const markers = useWordsOf(words, (text) => (takes ? markersOf(text) : ""));
+  const shown = useWordFiles(chips, markers);
   const names = useMemo(() => new Set(attachments.map((file) => file.name)), [attachments]);
 
   if (!takes) return { beside: attachments, field: undefined, viewer: null };
@@ -455,6 +470,24 @@ function useBoxFiles(takes: boolean, draft: string, files: AttachedFiles): BoxFi
   };
 }
 
+/**
+ * The card's foot, its counter saying how long the words stand. Note that it
+ * reads the words' length itself, so a word typed draws the foot's frame and
+ * counter again and none of what the card hands it, which stands the same.
+ */
+function BoxFoot({
+  words,
+  limit,
+  ...foot
+}: Omit<ComponentProps<typeof ComposerFoot>, "counter"> & {
+  words: BoxWords;
+  limit: number;
+}): React.JSX.Element {
+  const length = useWordsOf(words, (text) => text.length);
+
+  return <ComposerFoot {...foot} counter={{ length, limit }} />;
+}
+
 /** The box's field, as both its card and a field-only frame draw it; `onEnter` is what a bare Enter, or ⌘ with Enter where Enter writes, does. */
 function BoxField({
   box,
@@ -463,7 +496,7 @@ function BoxField({
   box: MessageBoxControl;
   onEnter: () => void;
 }): React.JSX.Element {
-  const { options, module, pickers, takesFocus, say, inWords } = box[DRAWN];
+  const { options, words, module, pickers, takesFocus, say, inWords } = box[DRAWN];
   const { files } = box;
   const held = options.held === true;
   const takesFiles = options.takesFiles !== false;
@@ -474,7 +507,7 @@ function BoxField({
       module={module}
       editor={box.editor}
       room={box.room}
-      draft={options.draft}
+      words={words}
       // Note that the words changing again takes a cut paste's note down, so it never outlives the paste it was said of.
       setDraft={(text) => {
         if (box.note?.cut === true) box.quiet();
@@ -523,12 +556,13 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
   // Whether the editor stood as the box first drew, which an owner that focuses the field focuses.
   const [mountedFirst] = useState(bundle.data !== undefined);
   const takesFiles = options.takesFiles !== false;
+  const words = options.draft;
 
   const files = useAttachedFiles({
     holder: options.holder,
     held: options.held === true || !takesFiles,
     onRefusal: (words) => say(SAID.FILE, words),
-    words: options.draft,
+    words: words.get(),
     inWords: takesFiles
       ? {
           place: () => {
@@ -541,17 +575,17 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
       : undefined,
   });
 
-  const inWords = useBoxFiles(takesFiles, options.draft, files);
-  const { draft, placeholder, keywords = NO_KEYWORDS, ...picked } = options;
+  const inWords = useBoxFiles(takesFiles, words, files);
+  const { placeholder, keywords = NO_KEYWORDS, ...picked } = options;
 
   const pickers = useComposerPickers({
     ...picked,
     editor,
     room,
-    draft,
+    words,
     placeholder,
     keywords,
-    onNote: (words) => say(SAID.DICTATION, words),
+    onNote: (said) => say(SAID.DICTATION, said),
   });
 
   const fold = useFootFold(frame);
@@ -587,6 +621,7 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
     handBack,
     [DRAWN]: {
       options,
+      words,
       inWords,
       module: bundle.data,
       pickers,
@@ -643,7 +678,7 @@ export function MessageBox({
   /** What the owner says under the bar over the box's own notes; nothing where it has nothing to say, which says the box's. */
   note?: ComposerNote | undefined;
 }): React.JSX.Element {
-  const { options, module, inWords } = box[DRAWN];
+  const { options, words, module, inWords } = box[DRAWN];
   const { files, room, dictation } = box;
   const picker = useRef<AttachPicker>(null);
   const held = options.held === true;
@@ -733,7 +768,9 @@ export function MessageBox({
           }}
         />
       </ComposerBody>
-      <ComposerFoot
+      <BoxFoot
+        words={words}
+        limit={options.maxLength}
         tools={
           <>
             {takesFiles ? (
@@ -750,7 +787,6 @@ export function MessageBox({
             {tools}
           </>
         }
-        counter={{ length: options.draft.length, limit: options.maxLength }}
         actions={
           <ComposerActions>
             {actions}

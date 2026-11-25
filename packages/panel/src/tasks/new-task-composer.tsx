@@ -40,6 +40,8 @@ import {
   type DraftPlace,
   EMPTY_DRAFT,
   useDraft,
+  useDraftBeside,
+  useDraftWords,
   useDraftWriter,
 } from "../composer-drafts.js";
 import { sectionGlyph } from "../desktop/section-icon-picker.js";
@@ -53,6 +55,7 @@ import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-
 import { modelsRunOn, unrunnableChoice } from "./agent-model.js";
 import { repositorySkillsQueryOptions } from "./agent-reads.js";
 import type { AgentServersControl } from "./agent-servers.js";
+import { useWordsOf } from "./box-words.js";
 import { ConnectAgentBanner, NOTICE_LOOK, type NoticeLook } from "./connect-agent-banner.js";
 import type { MentionMenuSide } from "./mention-picker.js";
 import { useMentionedReader } from "./mentioned-place.js";
@@ -383,8 +386,10 @@ export function NewTaskComposer({
   notices?: NoticeLook | undefined;
 }): React.JSX.Element {
   const forAutomation = purpose === NEW_TASK_PURPOSE.AUTOMATION;
-  const draft = useDraft(newTaskPlace(workspaceId, purpose));
-  const { text: words, attachments } = draft.draft;
+  // Note that the card reads its draft without the words, which the box reads where it stands and a press reads as it is pressed, so a word typed draws neither the card nor its chips.
+  const draft = useDraftBeside(newTaskPlace(workspaceId, purpose));
+  const typed = useDraftWords(newTaskPlace(workspaceId, purpose));
+  const { attachments } = draft.draft;
   // Words typed before the workspaces were read become the workspace's
   // draft once it is known, over one it kept, as the words written last win.
   const loose = useDraft(newTaskPlace(undefined, purpose)).draft;
@@ -553,10 +558,10 @@ export function NewTaskComposer({
 
   // A tree's two tasks work in one repository, the other task's, which the chip is held to.
   const repository = treeRelation === undefined ? picked : treeRelation.task.repository;
-  const said = words.trim();
   // Note that an automation's agent starts on words alone, since the brief fences them as the request, and a file's marker is no words of the request's.
-  const requested = wordsWithoutMarkers(said).trim() !== "";
-  const filled = forAutomation ? requested : hasWordsOrFiles(said, attachments);
+  const requested = useWordsOf(typed, (text) => wordsWithoutMarkers(text.trim()).trim() !== "");
+  const holdsWords = useWordsOf(typed, (text) => hasWordsOrFiles(text.trim(), attachments));
+  const filled = forAutomation ? requested : holdsWords;
 
   // An agent needs something to work on, words or files, and works in no repository where none is chosen.
   // Note that an agent nothing of the account's pays for is held here, with the press that connects one, rather than refused once pressed; a bare task needs none.
@@ -647,6 +652,8 @@ export function NewTaskComposer({
 
   const start = () => {
     if (!canStart) return;
+    const words = typed.get();
+    const said = words.trim();
     const prompt = forAutomation ? automationAgentBrief(said) : said;
 
     if (forAutomation && prompt.length > AGENT_BOUNDS.MAX_MESSAGE_CHARS) {
@@ -756,7 +763,7 @@ export function NewTaskComposer({
   );
 
   const composer: AgentComposerControl = {
-    held: draft.draft,
+    held: { words: typed, attachments },
     updateHeld: (next) => {
       let edited = false;
       // Note that the words are told against the draft as the change lands, never a render's copy, so an echo of the

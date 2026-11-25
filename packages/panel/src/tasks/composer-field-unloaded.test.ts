@@ -12,7 +12,7 @@ import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbo
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { onSideBundles, standInBundles } from "../testing/side-bundles.js";
 import { AgentComposer } from "./agent-composer.js";
-import { useAgentComposer, useHeldWords } from "./use-agent-composer.js";
+import { useAgentComposer } from "./use-agent-composer.js";
 
 // Each test's host starts with no message on its way.
 beforeEach(resetOutbox);
@@ -37,16 +37,14 @@ afterEach(() => {
 });
 
 function Box(): ReactNode {
-  const composer = useHeldWords(
-    useAgentComposer({
-      sending: useOutbox("agent-1"),
-      unsend: unsendOutbox,
-      agentId: "agent-1",
-      taskId: "plan-1",
-      messages: [],
-      send: outboxed(() => new Promise(() => undefined)),
-    }),
-  );
+  const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
+    agentId: "agent-1",
+    taskId: "plan-1",
+    messages: [],
+    send: outboxed(() => new Promise(() => undefined)),
+  });
 
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer });
 }

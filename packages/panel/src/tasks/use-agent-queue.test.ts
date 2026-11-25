@@ -21,7 +21,7 @@ import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbo
 import { STANDING_TOAST } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { useAgentPictureDoor } from "./agent-pictures.js";
-import { type AgentComposerControl, useAgentComposer, useHeldWords } from "./use-agent-composer.js";
+import { type HeldComposer, useAgentComposer } from "./use-agent-composer.js";
 import {
   type AgentQueueControl,
   type QueueEditing,
@@ -52,7 +52,7 @@ const roots: Root[] = [];
 /** The tab as it stands after each draw: its box, its queue, and the edit. */
 let held:
   | {
-      composer: AgentComposerControl;
+      composer: HeldComposer;
       queue: AgentQueueControl;
       editing: QueueEditing;
       page: (queue: AgentQueue | undefined) => void;
@@ -67,16 +67,14 @@ let owed: ((answer: AgentQueueAnswerView) => void)[] = [];
 function Tab(): ReactNode {
   const [page, setPage] = useState<AgentQueue | undefined>();
 
-  const composer = useHeldWords(
-    useAgentComposer({
-      sending: useOutbox("agent-1"),
-      unsend: unsendOutbox,
-      agentId: "agent-1",
-      taskId: "plan-1",
-      messages: [],
-      send: outboxed(() => new Promise(ignore)),
-    }),
-  );
+  const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
+    agentId: "agent-1",
+    taskId: "plan-1",
+    messages: [],
+    send: outboxed(() => new Promise(ignore)),
+  });
 
   const queue = useAgentQueue("agent-1", page);
   const files = useAgentPictureDoor("agent-1");
@@ -155,7 +153,7 @@ test("a message the queue refused comes back into the box it was queued from", a
   act(() => now().editing.queue());
   await answer(refused);
 
-  assert.equal(now().composer.held.text, "Please update the tests");
+  assert.equal(now().composer.heldNow().text, "Please update the tests");
 });
 
 test("a message the queue refused comes back ahead of the words and files written while it was out, in the tab drawn afresh meanwhile", async () => {
@@ -170,7 +168,7 @@ test("a message the queue refused comes back ahead of the words and files writte
   act(() => now().composer.updateHeld((now) => ({ ...now, attachments: [SPEC] })));
   await answer(refused);
 
-  assert.equal(now().composer.held.text, "Please update the tests\nAnd the docs");
+  assert.equal(now().composer.heldNow().text, "Please update the tests\nAnd the docs");
   assert.deepEqual(now().composer.held.attachments, [SHOT, SPEC]);
 });
 
@@ -183,7 +181,7 @@ test("a refused message that would pass a message's bound beside the box's newer
   act(() => now().editing.queue());
   act(() => now().composer.updateHeld((now) => ({ ...now, text: "And the docs" })));
   await answer(refused);
-  assert.equal(now().composer.held.text, "And the docs");
+  assert.equal(now().composer.heldNow().text, "And the docs");
 
   act(() => now().composer.updateHeld((now) => ({ ...now, text: "Ok" })));
 
@@ -196,7 +194,7 @@ test("a refused message that would pass a message's bound beside the box's newer
   act(() => press.click());
   act(() => press.click());
 
-  assert.equal(now().composer.held.text, `${long}\nOk`);
+  assert.equal(now().composer.heldNow().text, `${long}\nOk`);
   assert.deepEqual(
     [...document.querySelectorAll(`${STANDING_TOAST} button`)].flatMap(({ textContent: label }) =>
       label === "Put back" ? [label] : [],
@@ -216,9 +214,9 @@ test("an edit the queue refused to save stays open with its new words, the box's
   await answer(refused);
 
   assert.equal(now().editing.editing, "m1");
-  assert.equal(now().composer.held.text, "Run tests and fix failures");
+  assert.equal(now().composer.heldNow().text, "Run tests and fix failures");
   act(() => now().editing.cancel());
-  assert.equal(now().composer.held.text, "my own words");
+  assert.equal(now().composer.heldNow().text, "my own words");
 });
 
 test("an edit of a message the queue would not hold, already on its way, closes and gives the box back", async () => {
@@ -227,7 +225,7 @@ test("an edit of a message the queue would not hold, already on its way, closes 
   await answer(refused);
 
   assert.equal(now().editing.editing, undefined);
-  assert.equal(now().composer.held.text, "my own words");
+  assert.equal(now().composer.heldNow().text, "my own words");
 });
 
 test("an edit steered is one change of the message it edits, with its new words, and nothing sent beside it", async () => {
@@ -257,7 +255,7 @@ test("an edit whose message left the queue, sent or deleted elsewhere, closes an
   act(() => now().page({ messages: [], revision: 3 }));
 
   assert.equal(now().editing.editing, undefined);
-  assert.equal(now().composer.held.text, "Run tests and fix failures");
+  assert.equal(now().composer.heldNow().text, "Run tests and fix failures");
 });
 
 test("an edit saved, its message handed off before the queue's answer lands, gives the box back", async () => {
@@ -272,7 +270,7 @@ test("an edit saved, its message handed off before the queue's answer lands, giv
   await answer({ queue: { messages: [], revision: 3 } });
 
   assert.equal(now().editing.editing, undefined);
-  assert.equal(now().composer.held.text, "my own words");
+  assert.equal(now().composer.heldNow().text, "my own words");
 });
 
 test("an edit takes the message's files into the box, read as its row draws them, and Save sends the box's words and files as the message", async () => {

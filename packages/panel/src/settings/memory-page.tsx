@@ -97,6 +97,7 @@ import { confirmFailure } from "../failure-report.js";
 import { memoriesQuery, memoriesRetryMutation } from "../live-reads.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
+import { useHandedWords } from "../tasks/box-words.js";
 import { linkChip } from "../tasks/mention-chip.js";
 import { MessageBox, useMessageBox } from "../tasks/message-box.js";
 import { useMentionDoors } from "../tasks/task-mentions.js";
@@ -686,7 +687,7 @@ function MemoryCard({
   const title = editing.replaces === undefined ? MEMORY_EDITOR_WORDS.ADD : MEMORY_EDITOR_WORDS.EDIT;
 
   const box = useMessageBox({
-    draft: editing.text,
+    draft: useHandedWords(editing.text),
     setDraft: onChange,
     placeholder: MEMORY_EDITOR_WORDS.PLACEHOLDER,
     label: title,

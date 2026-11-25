@@ -6,13 +6,15 @@ import { INBOX_BOUNDS, type InboxItem, type InboxMessage } from "@repo/features/
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { Checkbox, type ComposerNote, STATUS_TONE } from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
+import { Equal } from "effect";
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from "react";
-import { useKeptDraft } from "../composer-drafts.js";
+import { useDraftWords } from "../composer-drafts.js";
 import { useConnected } from "../connection.js";
 import { failureShown } from "../failure-report.js";
 import { useToast } from "../toast.js";
 import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer } from "./agent-composer.js";
+import { useWordsOf } from "./box-words.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
 import { inboxNoteReading } from "./inbox-model.js";
@@ -110,6 +112,43 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
 /** Whether the box holds neither words nor files. */
 function emptyBox(draft: InboxDraft): boolean {
   return draft.note.trim() === "" && draft.attachments.length === 0;
+}
+
+/** What the box's send says of its draft: whether it is Got it, whether it lights, and what an unfinished answer lacks. */
+interface SendFacts {
+  readonly nod: boolean;
+  readonly sendable: boolean;
+  readonly missing: InboxMissing | undefined;
+}
+
+/**
+ * What the send says of `draft` on `thread`: Got it where the item awaits a
+ * nod and the box holds nothing, Send lit only where the box holds a reply
+ * the service takes (an answer to the open ask attached, or words or files),
+ * and what an unfinished answer lacks, said only once a send was refused.
+ */
+function sendFacts(
+  draft: InboxDraft,
+  thread: readonly InboxMessage[],
+  nodAwaited: boolean,
+  starts: boolean,
+): SendFacts {
+  const nod = nodAwaited && emptyBox(draft) && !starts;
+
+  const sendable = starts
+    ? !emptyBox(draft) && draft.note.trim().length <= INBOX_BOUNDS.MAX_MESSAGE_CHARS
+    : nod || inboxThreadSend(thread, draft) !== undefined;
+
+  return { nod, sendable, missing: starts || nod ? undefined : inboxMissing(thread, draft) };
+}
+
+/** Whether two sends say the same. */
+function sameSendFacts(one: SendFacts, other: SendFacts): boolean {
+  return (
+    one.nod === other.nod &&
+    one.sendable === other.sendable &&
+    Equal.equals(one.missing, other.missing)
+  );
 }
 
 /** What the press after an archived agent's note says. */
@@ -211,8 +250,9 @@ function AnswerCard({
   const toast = useToast();
   // Why the last thread start did not go, until the next send.
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
-  // Note that the box reads its own words, so a word typed draws the box again and never the pane around it.
-  const draft = { ...control.draftOf(item), note: useKeptDraft(control.placeOf(item)).text };
+  // Note that the box reads its words as their source, so a word typed draws its field and never the card, which reads only what its send says of them.
+  const typed = useDraftWords(control.placeOf(item));
+  const beside = control.draftOf(item);
   const [asNew, setAsNew] = useState(false);
   const [starting, setStarting] = useState(false);
   const starts = newThread !== undefined && asNew;
@@ -222,15 +262,13 @@ function AnswerCard({
   const acknowledgeHeld = useInboxAcknowledger();
   // Note that a failed held read still offers Got it, since opening then acknowledges nothing.
   const nodded = acknowledgedOnOpen(item, readerId) && !control.failed;
-  const nod = awaitsNod(item) && emptyBox(draft) && !nodded && !starts;
 
-  // Note that Send lights only where the box holds a reply the service takes: an answer to the open ask attached, or words or files, a notice's nod being Got it's.
-  const sendable = starts
-    ? !emptyBox(draft) && draft.note.trim().length <= INBOX_BOUNDS.MAX_MESSAGE_CHARS
-    : nod || inboxThreadSend(thread, draft) !== undefined;
+  const { nod, sendable, missing } = useWordsOf(
+    typed,
+    (note) => sendFacts({ ...beside, note }, thread, awaitsNod(item) && !nodded, starts),
+    sameSendFacts,
+  );
 
-  // Note that what an unfinished answer lacks is said only once a send was refused, and goes once it is filled.
-  const missing = starts || nod ? undefined : inboxMissing(thread, draft);
   const [wanting, setWanting] = useState(false);
 
   if (wanting && missing === undefined) setWanting(false);
@@ -285,7 +323,7 @@ function AnswerCard({
 
   const message = () => {
     setRefusal(undefined);
-    control.onMessage(item, draft);
+    control.onMessage(item, control.draftOf(item));
   };
 
   const acknowledge = () => {
@@ -296,6 +334,7 @@ function AnswerCard({
   // Note that the box lets go of what it sends at once, as a reply does, and never takes it back: a start that
   // did not go stands on the thread marked Not delivered (`inbox-pane.tsx`), whose Retry starts it again under its key.
   const start = (offer: AnswerNewThread) => {
+    const draft = control.draftOf(item);
     const text = draft.note.trim();
     const { attachments } = draft;
     setRefusal(undefined);
@@ -310,7 +349,7 @@ function AnswerCard({
   };
 
   const composer: AgentComposerControl = {
-    held: { text: draft.note, attachments: draft.attachments },
+    held: { words: typed, attachments: beside.attachments },
     updateHeld: (next) => control.onHeld(item, next),
     sending,
     note: undefined,
