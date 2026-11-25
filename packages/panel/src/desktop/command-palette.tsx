@@ -302,7 +302,6 @@ const PALETTE_FILTER = {
 
 type PaletteFilter = (typeof PALETTE_FILTER)[keyof typeof PALETTE_FILTER];
 
-/** A kind of row, which every filter but All is. */
 type PaletteKind = Exclude<PaletteFilter, typeof PALETTE_FILTER.ALL>;
 
 const PALETTE_FILTERS: readonly PaletteFilter[] = Object.values(PALETTE_FILTER);
@@ -509,10 +508,10 @@ const LISTED_COMMANDS: readonly AppCommand[] = [
   ...PALETTE_COMMANDS,
 ];
 
-/** One row as the palette draws it, the words its search reads, and what choosing it does. */
 /** Words a Copy link row is found by beside its name. */
 const COPY_LINK_TERMS = ["link", "share", "url"] as const;
 
+/** One row as the palette draws it, the words its search reads, and what choosing it does. */
 interface PaletteRow {
   icon?: React.ReactNode;
   label: string;
@@ -997,8 +996,7 @@ function taskRows(
 
   const listed = (task: TaskSummary) => listedId === undefined || task.workspaceId === listedId;
 
-  // The pinned stand first, newest pinned first, as the sidebar's; the rest by their last
-  // activity, as the sidebar, Home's Recent, and the row's time read it.
+  // The pinned stand first, newest pinned first, as the sidebar's.
   const pinnedFirst = (each: readonly TaskSummary[]) => {
     const { pinned, rest } = sidebarTasks(each);
 
@@ -1253,7 +1251,7 @@ function peopleRows(
   }));
 }
 
-/** The listed workspace's automations, each by its name and what fires it, as the Automations page lists it, then its task's name, hanging its card as every place naming one does, which choosing opens on its page; its task's name finds it too. */
+/** The listed workspace's automations as the Automations page lists them, each hanging its card and opening its page when chosen. */
 function automationRows(
   automations: readonly AutomationSummary[],
   workspaceName: string | undefined,
@@ -1848,8 +1846,6 @@ function paletteItem(
     );
 
   // Note that a task's key stands first at the row's end, as the Tasks list's row sets it, and never leads: a lead on the keyed rows alone pushes their glyph and name right of every row without one.
-  // Spoken, since a palette row is an option, which carries no
-  // `aria-keyshortcuts` to say the chord for it.
   const end =
     row.command === undefined &&
     row.endMark === undefined &&
@@ -1862,6 +1858,7 @@ function paletteItem(
             tokens={tokens}
           />
         )}
+        {/* Spoken, since a palette row is an option, which carries no `aria-keyshortcuts` to say the chord for it. */}
         {row.command === undefined ? null : (
           <Shortcut chord={APP_SHORTCUTS[row.command].chord} spoken />
         )}
@@ -2062,7 +2059,6 @@ export function CommandPalette({
   };
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  // The experiments on in the workspace the window lists, the account's own beside them.
   const experiments = useExperimentsIn(tasks.workspace?.id);
   const billing = useBillingShown(tasks.workspace);
   const inboxWaiting = useInboxWaitingTasks();
@@ -2079,7 +2075,6 @@ export function CommandPalette({
 
   // Note that a filter gone with its task, as This task is when the task closes under the palette, gives way to All.
   if (!filters.includes(filter)) setFilter(PALETTE_FILTER.ALL);
-  // How many times ⌘K has opened the palette, each of which chooses its first row.
   const [openings, setOpenings] = useState(0);
   const [query, setQuery] = useState("");
   // Each key pressed in the search field is timed to the paint after it, which its ranking of every row is among.
@@ -2140,12 +2135,11 @@ export function CommandPalette({
   const automationsDoor = useAutomationsDoor(tasks);
   const inboxDoor = useInboxDoor(tasks);
   const inboxStanding = useInboxView(tasks);
-  // The task list's rows read by id, each name as it is being typed.
   const rows = useTaskListRows(tasks.typedNames);
-  // A task, and an agent's tab, are always opened on the Tasks tab, as a
-  // press in the sidebar is.
   const { placeLeave } = tasks;
 
+  // A task, and an agent's tab, are always opened on the Tasks tab, as a
+  // press in the sidebar is.
   const onTasks = useCallback(
     (run: () => void) =>
       choose(() =>
@@ -2317,7 +2311,7 @@ export function CommandPalette({
 
   const changes = { people: changesPeople, pullRequests: taskPullRequests };
 
-  // The run actions of the agent the open task's column shows, each a row of its own, Run or Stop as it stands (`run-actions-button.tsx`).
+  // The run actions of the agent the open task's column shows (`runRows`).
   const showShell = useShowShellTab(tasks.sidePanel, noFocusMove);
 
   const terminalsRun =
@@ -2416,8 +2410,7 @@ export function CommandPalette({
   const byRow = (row: PaletteRow) => rowScore(row, sought);
   const runCommand = (command: AppCommand) => choose(() => runAppCommand(command));
 
-  // The tasks and the Inbox's items, which may number thousands, ranked by what their search
-  // reads and drawn only once listed.
+  // The tasks and the Inbox's items, ranked before they are drawn (`UndrawnRow`).
   const undrawnOf = {
     [PALETTE_FILTER.TASKS]: () => taskList,
     [PALETTE_FILTER.INBOX]: () =>
