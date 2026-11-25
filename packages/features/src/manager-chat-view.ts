@@ -9,7 +9,11 @@
  * `threads`). Consecutive messages of
  * one sender, the Manager or one person, none further from the one before
  * than `CHAT_RUN_GAP_MS`, are one run, within the chat's top or within one
- * thread, which a page draws under one head (`ChatRunPlace`).
+ * thread, which a page draws under one head (`ChatRunPlace`). The reader's
+ * messages on their way stand after the rows of their scope, the chat's top
+ * or their thread, each placed by the same rule from what its row will
+ * carry (its sender and when it was sent), so a message drawn on its way
+ * stands in the run its row lands in.
  *
  * The chat is the conversation; what the Manager did to say it is its
  * transcript, the work under it, and the two meet only by turn: each of the
@@ -53,17 +57,28 @@ export interface ManagerChatLine {
   readonly work?: string;
 }
 
+/** One of the reader's messages on its way to the chat, as the run its row will stand in reads it: the key it went under, the person who sent it and when, and the thread it replies in, where it does. */
+export interface ChatSendingMark {
+  readonly clientKey: string;
+  readonly sentAt: number;
+  readonly sentBy?: string;
+  readonly threadRoot?: string;
+}
+
 /**
  * A Manager's chat as a page draws it: every message oldest first in one
  * run of runs, as a page with no thread view draws it (`messages`); the
  * messages at its top and each thread's replies, by its root's id, each in
- * runs of their own, as a channel draws them (`top`, `threads`); each
- * turn's work by the turn's id; and the turn under way's work.
+ * runs of their own, as a channel draws them (`top`, `threads`), and where
+ * each of the reader's messages on their way stands in those runs, by its
+ * key (`sending`); each turn's work by the turn's id; and the turn under
+ * way's work.
  */
 export interface ManagerChatView {
   readonly messages: readonly ManagerChatLine[];
   readonly top: readonly ManagerChatLine[];
   readonly threads: ReadonlyMap<string, readonly ManagerChatLine[]>;
+  readonly sending: ReadonlyMap<string, ChatRunPlace>;
   readonly work: ReadonlyMap<string, readonly AgentPart[]>;
   /** The turn under way's work so far, which its working line opens; none where no turn is under way or it has done none. */
   readonly live: readonly AgentPart[];
@@ -76,16 +91,44 @@ function isWork(part: AgentPart): boolean {
   return !(part.kind === AGENT_PART.TOOL && (isChatSendTool(part.tool) || isShownSet(part)));
 }
 
+/** The place of a message that stands in a run of its own. */
+export const CHAT_RUN_ALONE: ChatRunPlace = { opens: true, closes: true };
+
+/** What a message's place in its sender's run is read from: who wrote it, and when. */
+type RunMark = Pick<ManagerChatLiveMessage, "authorKind" | "authorUserId" | "createdAt">;
+
 /** Whether two messages are one sender's: both the Manager's, or both one person's. */
-function sameSender(a: ManagerChatLiveMessage, b: ManagerChatLiveMessage): boolean {
+function sameSender(a: RunMark, b: RunMark): boolean {
   if (a.authorKind !== b.authorKind) return false;
 
   return a.authorKind === MANAGER_CHAT_AUTHOR.AGENT || a.authorUserId === b.authorUserId;
 }
 
 /** Whether `next` stands in the run of `before`: one sender's, with no pause between them past `CHAT_RUN_GAP_MS`. */
-function continuesRun(before: ManagerChatLiveMessage, next: ManagerChatLiveMessage): boolean {
+function continuesRun(before: RunMark, next: RunMark): boolean {
   return sameSender(before, next) && next.createdAt - before.createdAt <= CHAT_RUN_GAP_MS;
+}
+
+/** A message on its way as its row will read: a person's, by who sent it, written as it was sent. */
+function sendingMark(message: ChatSendingMark): RunMark {
+  return {
+    authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+    authorUserId: message.sentBy ?? null,
+    createdAt: message.sentAt,
+  };
+}
+
+/** Where each message of a scope, oldest first, stands in its sender's run within it. */
+function placesOf(run: readonly RunMark[]): readonly ChatRunPlace[] {
+  return run.map((mark, index) => {
+    const before = run[index - 1];
+    const after = run[index + 1];
+
+    return {
+      opens: before === undefined || !continuesRun(before, mark),
+      closes: after === undefined || !continuesRun(mark, after),
+    };
+  });
 }
 
 /** Each turn's work by the turn's id, the turn under way's apart as the live work. */
@@ -123,7 +166,11 @@ export function chatWorkWords(shown: boolean): string {
 export function managerChatView(
   rows: readonly ManagerChatLiveMessage[],
   transcript: readonly AgentTranscriptMessage[],
-  options: { readonly running: string | undefined },
+  options: {
+    readonly running: string | undefined;
+    /** The reader's messages on their way to the chat, oldest sent first; none where none is. */
+    readonly sending?: readonly ChatSendingMark[];
+  },
 ): ManagerChatView {
   const { work, live } = turnWork(transcript, options.running);
   const ordered = rows.toReversed();
@@ -136,32 +183,65 @@ export function managerChatView(
     if (!firstOfTurn.has(message.turnId)) firstOfTurn.set(message.turnId, message);
   }
 
-  /** A run of messages as lines, each placed in its sender's run within it, and the first of each turn that did work opening it. */
-  const linesOf = (run: readonly ManagerChatLiveMessage[]) =>
-    run.map((message, index): ManagerChatLine => {
-      const before = run[index - 1];
-      const after = run[index + 1];
+  /** Where each message on its way stands, by its key, as its scope placed it. */
+  const sending = new Map<string, ChatRunPlace>();
 
-      const place = {
-        opens: before === undefined || !continuesRun(before, message),
-        closes: after === undefined || !continuesRun(message, after),
-      };
+  /**
+   * A scope's messages as lines, each placed in its sender's run within it,
+   * and the first of each turn that did work opening it; the messages on
+   * their way to the scope (`going`) placed after them, by the same rule.
+   */
+  const linesOf = (
+    run: readonly ManagerChatLiveMessage[],
+    going: readonly ChatSendingMark[] = [],
+  ): readonly ManagerChatLine[] => {
+    const places = placesOf([...run, ...going.map(sendingMark)]);
 
+    for (const [index, message] of going.entries()) {
+      sending.set(message.clientKey, places[run.length + index] ?? CHAT_RUN_ALONE);
+    }
+
+    return run.map((message, index): ManagerChatLine => {
+      const place = places[index] ?? CHAT_RUN_ALONE;
       const turn = message.turnId;
       const opener = turn !== null && firstOfTurn.get(turn) === message && work.has(turn);
 
       return opener ? { message, place, work: turn } : { message, place };
     });
+  };
 
   const top = ordered.filter((message) => message.threadRoot === null || message.broadcast);
   const replies = new Map<string, ManagerChatLiveMessage[]>();
+  const repliesGoing = new Map<string, ChatSendingMark[]>();
 
   for (const message of ordered) {
     if (message.threadRoot === null) continue;
     replies.set(message.threadRoot, [...(replies.get(message.threadRoot) ?? []), message]);
   }
 
-  const threads = new Map([...replies].map(([root, thread]) => [root, linesOf(thread)]));
+  for (const message of options.sending ?? []) {
+    if (message.threadRoot === undefined) continue;
+    repliesGoing.set(message.threadRoot, [
+      ...(repliesGoing.get(message.threadRoot) ?? []),
+      message,
+    ]);
+  }
 
-  return { messages: linesOf(ordered), top: linesOf(top), threads, work, live };
+  const threads = new Map(
+    [...replies].map(([root, thread]) => [root, linesOf(thread, repliesGoing.get(root))]),
+  );
+
+  // Note that a reply on its way to a thread that holds no reply yet stands alone in it.
+  for (const [root, going] of repliesGoing) if (!replies.has(root)) linesOf([], going);
+
+  const topGoing = (options.sending ?? []).filter((message) => message.threadRoot === undefined);
+
+  return {
+    messages: linesOf(ordered),
+    top: linesOf(top, topGoing),
+    threads,
+    sending,
+    work,
+    live,
+  };
 }

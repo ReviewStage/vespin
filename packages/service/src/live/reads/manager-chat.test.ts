@@ -64,13 +64,15 @@ const openManager = (userId: string, workspaceId: string) =>
     return Option.getOrThrow(started).agent.id;
   });
 
-/** A message the account writes to the Manager's chat, answering its id. */
+/** A message the account writes to the Manager's chat, answering its id and the key it was written under. */
 const say = (userId: string, agentId: string, text: string) =>
   Effect.gen(function* () {
+    const clientKey = randomUUID();
+
     const outcome = yield* writeManagerChatMessage(userId, {
       agentId,
       id: randomUUID().slice(0, 8),
-      clientKey: randomUUID(),
+      clientKey,
       authorKind: MANAGER_CHAT_AUTHOR.PERSON,
       authorUserId: userId,
       authorName: "Dean Stratakos",
@@ -85,7 +87,7 @@ const say = (userId: string, agentId: string, text: string) =>
 
     assert.equal(outcome.status, MANAGER_CHAT_OUTCOME.DONE);
 
-    return outcome.message.id;
+    return { id: outcome.message.id, clientKey };
   });
 
 /** The statement run as raw SQL. */
@@ -144,8 +146,13 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
 
         const held = yield* readManagerChatPage(owner, agentId, { limit: MANAGER_CHAT_PAGE });
 
+        // Note that each message carries the key it was written under, which a reader's message on its way is held by.
         assert.deepEqual(
-          newest.messages,
+          newest.messages.map((message) => message.clientKey),
+          newestFirst.slice(0, MANAGER_CHAT_PAGE).map((message) => message.clientKey),
+        );
+        assert.deepEqual(
+          newest.messages.map(({ clientKey: _key, ...message }) => message),
           held.map((message) => ({
             ...message,
             attachments: [...message.attachments],
@@ -155,7 +162,7 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
         );
         assert.deepEqual(
           newest.messages.map((message) => message.id),
-          newestFirst.slice(0, MANAGER_CHAT_PAGE),
+          newestFirst.slice(0, MANAGER_CHAT_PAGE).map((message) => message.id),
         );
 
         assert.ok(newest.before !== undefined);
@@ -163,7 +170,7 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
 
         assert.deepEqual(
           older.messages.map((message) => message.id),
-          newestFirst.slice(MANAGER_CHAT_PAGE),
+          newestFirst.slice(MANAGER_CHAT_PAGE).map((message) => message.id),
         );
         assert.equal(older.before, undefined);
 

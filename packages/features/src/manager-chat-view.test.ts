@@ -27,6 +27,7 @@ function row(
   return {
     id,
     seq,
+    clientKey: `key-${id}`,
     authorKind: person ? MANAGER_CHAT_AUTHOR.PERSON : MANAGER_CHAT_AUTHOR.AGENT,
     authorUserId: person ? author.person : null,
     authorName: person ? author.person : "Manager",
