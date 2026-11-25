@@ -135,6 +135,7 @@ import { SEARCH_MATCHES_EXAMPLE } from "./examples/search-matches";
 import { SEARCHABLE_MENU_EXAMPLE } from "./examples/searchable-menu";
 import { SECRET_FIELDS_EXAMPLE } from "./examples/secret-fields";
 import { SELECTION_EXAMPLE } from "./examples/selection";
+import { SETTINGS_DIALOG_EXAMPLE } from "./examples/settings-dialog";
 import { SETTINGS_ORDERED_ROWS_EXAMPLE } from "./examples/settings-ordered-rows";
 import { SETTINGS_PAGE_EXAMPLE } from "./examples/settings-page";
 import { SETTINGS_ROW_EXAMPLE } from "./examples/settings-row";
@@ -326,6 +327,7 @@ export const EXAMPLES: readonly Example[] = [
   SECRET_FIELDS_EXAMPLE,
   NAME_VALUE_ROWS_EXAMPLE,
   SETTINGS_PAGE_EXAMPLE,
+  SETTINGS_DIALOG_EXAMPLE,
   SETTINGS_SECTION_EXAMPLE,
   SPINNERS_EXAMPLE,
   STEPS_EXAMPLE,
