@@ -1,14 +1,24 @@
 # open-link.yaml -- opens the app's link `LINK`, answering Open where the system asks before a custom scheme opens the app.
 #
 # Note that Open is pressed only while the system's question stands, known by
-# its Cancel, because a page the link opens may hold its own Open, such as a
+# its title, because a page the link opens may hold its own Open, such as a
 # pull request's state chip, whose press opened its menu over the page
-# (vjnatc2's pull-request-files lane).
+# (vjnatc2's pull-request-files lane). Note too that the question is waited
+# for, since it rises a moment after the link opens, and a check made at once
+# found nothing, left it standing, and it covered every flow after it
+# (vjsplit4r's inbox-off lane).
 appId: dev.vespin.ios
 ---
 - openLink: "${LINK}"
+- extendedWaitUntil:
+    visible: "Open in .Vespin.\\?"
+    timeout: 5000
+    optional: true
 - runFlow:
     when:
-      visible: "Cancel"
+      visible: "Open in .Vespin.\\?"
     commands:
       - tapOn: "Open"
+- extendedWaitUntil:
+    notVisible: "Open in .Vespin.\\?"
+    timeout: 5000

@@ -31,6 +31,20 @@ export function showPickedPage(): void {
   splitHost?.show("secondary");
 }
 
+/**
+ * Brings the list of the place picked in the sidebar forward on an iPad held
+ * upright, where the system's split view stands the sidebar over the list,
+ * as Mail's mailboxes step aside once a mailbox is picked. Note that a
+ * window wider than tall leaves the sidebar standing beside the list.
+ */
+export function showPlaceList(): void {
+  const { width, height } = Dimensions.get("window");
+
+  if (!APP_SIDEBAR || width >= height) return;
+
+  splitHost?.show("supplementary");
+}
+
 /** The system split view's display modes that stand its sidebar, beside the list or over it (UISplitViewController.DisplayMode). */
 const SIDEBAR_MODES: ReadonlySet<string> = new Set([
   "twoBesideSecondary",
