@@ -196,8 +196,18 @@ export function useInboxListing(view: {
   readonly search: string;
   readonly chosen?: string | undefined;
 }): InboxListing {
-  // Note that only All lists a settled thread the reader read, so only All reads every item kept.
-  const groups = useInboxGroups(view.show === INBOX_SHOW.ALL ? INBOX_WHOLE : INBOX_ATTENTION);
+  // Note that only All lists a settled thread the reader read, so only All reads every item kept; another scope reads the chosen thread beside what asks for attention, since the list keeps it once it is settled and read.
+  const reach = useMemo(
+    (): InboxReach =>
+      view.show === INBOX_SHOW.ALL
+        ? INBOX_WHOLE
+        : view.chosen === undefined
+          ? INBOX_ATTENTION
+          : { kind: INBOX_REACH.ATTENTION, thread: view.chosen },
+    [view.show, view.chosen],
+  );
+
+  const groups = useInboxGroups(reach);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
   const { data: feed = INBOX_FEED.READING } = useQuery({

@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "@effect/vitest";
 import { createLiveQueryCollection } from "@tanstack/db";
-import { Deferred, Effect, Exit, Scope } from "effect";
+import { Deferred, Effect, Exit, Schema, Scope } from "effect";
 import {
+  anyWrite,
   type CollectionsStore,
   type EntityPool,
   entityPool,
@@ -367,5 +368,55 @@ it.effect(
         ["a", "Ada"],
         ["b", "Bo updated"],
       ]);
+    }),
+);
+
+it.effect(
+  "a write laid back at launch over a row not yet loaded from disk draws it, and tells the pool's watchers, once a query loads it",
+  () =>
+    Effect.gen(function* () {
+      const file = join(yield* folder, "account.sqlite");
+
+      yield* launch(file, (pool) =>
+        Effect.gen(function* () {
+          const owner = yield* standing(pool, { owns: true, kept: KEPT });
+          yield* owner.rows.answer([ADA, BO], { cursor: { at: "1" } });
+        }),
+      );
+
+      /** A rename that may wait, sent where the service answers nothing, as on a launch offline. */
+      const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
+        kind: STORED,
+        keys: () => ["a"],
+        change: (name) => () => ({ name }),
+        send: () => Effect.succeed({ refused: "offline", unanswered: true as const }),
+        queue: { name: "rename", input: Schema.String, queued: () => "waits" },
+      };
+
+      const seen = yield* launch(file, (pool) =>
+        Effect.gen(function* () {
+          let told = 0;
+          pool.watch(() => {
+            told += 1;
+          });
+
+          yield* pool.requeue(
+            [{ name: "rename", key: "key-1", input: "Renamed" }],
+            [anyWrite(rename)],
+          );
+          const before = pool.standing(STORED)?.pending.get("a");
+          const toldBefore = told;
+          yield* keptRows(pool);
+          const after = pool.standing(STORED)?.pending.get("a");
+
+          return { before, after, toldOnLoad: told > toldBefore };
+        }),
+      );
+
+      assert.deepEqual(seen, {
+        before: undefined,
+        after: { id: "a", name: "Renamed" },
+        toldOnLoad: true,
+      });
     }),
 );

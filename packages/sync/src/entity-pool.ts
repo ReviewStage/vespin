@@ -758,6 +758,32 @@ function movedBy<Row extends object, Change>(
 }
 
 /**
+ * Tells the pool's watchers each time a kept kind's collection takes a row a
+ * write stands over, for as long as `scope` stands. Note that such a row is
+ * loaded from disk only once a query asks for it, so a write laid back over
+ * it at launch draws nothing until it lands; the subscription asks for no
+ * rows itself.
+ */
+function loadsHeard<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+  scope: Scope.Scope,
+): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const subscription = rows.synced.collection.subscribeChanges(
+      (changes) => {
+        if (changes.some((change) => standingOver(rows, String(change.key)))) rows.heard();
+      },
+      { includeInitialState: false },
+    );
+
+    return Scope.addFinalizer(
+      scope,
+      Effect.sync(() => subscription.unsubscribe()),
+    );
+  });
+}
+
+/**
  * Marks `keys`, whose synced rows moved, as unreported on every kept read of
  * `rows`, so the next answer of each tells its store of them; and tells the
  * pool's watchers where a write stands over any, since the row it draws
@@ -1705,13 +1731,13 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
 
         if (standing !== undefined) return Effect.succeed(standing);
 
-        return Effect.map(
+        return Effect.flatMap(
           Scope.provide(place.scope)(syncedCollection(kind.key, place.keep)),
           (synced) => {
             // Note that a kind made meanwhile by another fiber is the one kept, so a kind has one collection.
             const raced = made();
 
-            if (raced !== undefined) return raced;
+            if (raced !== undefined) return Effect.succeed(raced);
 
             const fresh: KindRows<Row, Change> = {
               kind,
@@ -1726,7 +1752,9 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
             kinds.set(kind, fresh);
             heard();
 
-            return fresh;
+            return synced.kept
+              ? Effect.as(loadsHeard(fresh, place.scope), fresh)
+              : Effect.succeed(fresh);
           },
         );
       });
@@ -1750,7 +1778,7 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
           const drawn = drawnRow(rows, key);
 
           if (drawn !== undefined) pending.set(key, drawn);
-          else if (rows.synced.collection.has(key)) pending.set(key, ROW_GONE);
+          else if (rows.synced.row(key) !== undefined) pending.set(key, ROW_GONE);
         }
 
         return { collection: rows.synced.collection, pending };
