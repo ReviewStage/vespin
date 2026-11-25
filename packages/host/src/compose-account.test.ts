@@ -266,7 +266,7 @@ it.effect(
 
       assert.deepEqual(yield* phone.acts.ACCOUNT_PICTURE_SOURCE(picture), {
         uri: `${SERVICE_BASE_URL}/api/agents/agent-1/pictures/picture-1`,
-        headers: { authorization: "Bearer access-1" },
+        headers: { authorization: "Bearer access-1", accept: "video/mp4" },
       });
       assert.deepEqual(yield* window.acts.ACCOUNT_PICTURE_SOURCE(picture), {
         failure: PICTURE_SOURCE_FAILURE.UNOFFERED,

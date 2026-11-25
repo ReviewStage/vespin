@@ -967,14 +967,14 @@ function ShownMediaView({
   readonly onOpenElsewhere: (() => void) | undefined;
   readonly onRetry: (() => void) | undefined;
 }) {
-  // Note that a recording or a clip plays from a file alone, so one held any other way stands as one that could not be read.
+  // Note that a clip plays from a file alone, so one held any other way stands as one that could not be read; a recording plays from its address too, as a picture draws from it.
   const played = source == null || Predicate.isString(source) ? source : null;
 
   switch (shown.kind) {
     case SHOWN_MEDIA.VIDEO:
       return (
         <Video
-          source={played}
+          source={source}
           label={shown.label}
           onOpenElsewhere={onOpenElsewhere}
           onRetry={onRetry}
