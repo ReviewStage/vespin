@@ -21,6 +21,7 @@ import { agentBootSchema } from "./agent-boot.js";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
+import { isStillGif } from "./gif-frames.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
 import { managerFacePickSchema, managerFaceSchema } from "./manager-face.js";
@@ -565,6 +566,7 @@ export const AGENT_ATTACHMENT_TYPE = {
   PNG: "image/png",
   JPEG: "image/jpeg",
   WEBP: "image/webp",
+  GIF: "image/gif",
   PDF: "application/pdf",
   TEXT: "text/plain",
 } as const;
@@ -584,6 +586,7 @@ const AGENT_ATTACHMENT_BYTES = {
   [AGENT_ATTACHMENT_TYPE.PNG]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
   [AGENT_ATTACHMENT_TYPE.JPEG]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
   [AGENT_ATTACHMENT_TYPE.WEBP]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
+  [AGENT_ATTACHMENT_TYPE.GIF]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
   [AGENT_ATTACHMENT_TYPE.PDF]: AGENT_BOUNDS.MAX_PDF_BYTES,
   [AGENT_ATTACHMENT_TYPE.TEXT]: AGENT_BOUNDS.MAX_TEXT_BYTES,
 } as const satisfies Record<AgentAttachmentType, number>;
@@ -630,10 +633,15 @@ const ONE_LINE_PATTERN = /^[^\r\n]*$/u;
 /** Standard base64, padded, with no data-URL prefix and no line breaks. */
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/u;
 
+/** The bytes base64 spells. */
+function bytesOf(base64: string): Uint8Array {
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
 /** Whether base64 spells UTF-8 text, as a text file must to be inlined for the model. */
 function spellsUtf8(base64: string): boolean {
   try {
-    const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+    const bytes = bytesOf(base64);
     new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 
     return true;
@@ -642,7 +650,20 @@ function spellsUtf8(base64: string): boolean {
   }
 }
 
-/** Whether a file is within its type's bound and, where it is text, spells UTF-8. */
+/** Whether base64 spells a GIF of one frame; base64 a decoder refuses spells none. */
+function spellsStillGif(base64: string): boolean {
+  try {
+    return isStillGif(bytesOf(base64));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a file is within its type's bound and, where it is text, spells
+ * UTF-8, and where it is a GIF, is a GIF of one frame (`gif-frames.ts`),
+ * since an animation is taken as an image by no model.
+ */
 function attachmentIsReadable(attachment: {
   readonly mediaType: AgentAttachmentType;
   readonly data: string;
@@ -650,6 +671,8 @@ function attachmentIsReadable(attachment: {
   if (attachment.data.length > base64Chars(AGENT_ATTACHMENT_BYTES[attachment.mediaType])) {
     return false;
   }
+
+  if (attachment.mediaType === AGENT_ATTACHMENT_TYPE.GIF) return spellsStillGif(attachment.data);
 
   return attachment.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT || spellsUtf8(attachment.data);
 }

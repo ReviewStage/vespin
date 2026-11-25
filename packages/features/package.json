@@ -95,6 +95,7 @@
     "./cli-transcript": "./src/cli-transcript.js",
     "./cli-workspace": "./src/cli-workspace.js",
     "./audio-signature": "./src/audio-signature.js",
+    "./gif-frames": "./src/gif-frames.js",
     "./image-signature": "./src/image-signature.js",
     "./installed-skill-check": "./src/installed-skill-check.js",
     "./installed-skill-client": "./src/installed-skill-client.js",
