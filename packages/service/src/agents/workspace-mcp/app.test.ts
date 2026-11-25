@@ -1028,7 +1028,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           });
 
         const posting = yield* described("inbox_post");
-        assert.ok(posting.includes("Use it for anything you need a person to decide"), posting);
+        assert.ok(posting.includes("Use this whenever you need a person to decide"), posting);
         assert.ok(!posting.includes("whenever you need something"), posting);
 
         yield* writeAccountPreferences(agent.userId, { inbox: false });

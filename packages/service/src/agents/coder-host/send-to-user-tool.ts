@@ -24,7 +24,6 @@ import { Clock, Effect, Predicate, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { type AgentCall, agentToolRejected, callerAgent } from "../agent-tools.js";
-import { MANAGER_THREAD_ASKS } from "./inbox.js";
 import { MANAGER_SAID, writeManagerSaid } from "./manager-chat-row.js";
 import { readNativeTurnHanded } from "./turn-message.js";
 
@@ -85,7 +84,7 @@ const SEND_TO_USER_WORDS =
 /** `chat_send` as a Manager is offered it: its name, its words, and its input. */
 export const SEND_TO_USER_TOOL = {
   name: AGENT_TOOL.SEND_TO_USER,
-  description: `${SEND_TO_USER_WORDS} Don't ask people things here: for ${MANAGER_THREAD_ASKS}, post an Inbox thread with an ask instead, and say here in one line that it's in their Inbox.`,
+  description: `${SEND_TO_USER_WORDS} Don't ask people things here. If you need someone to decide, answer, approve, or do something, post it to the Inbox and mention it here in one line.`,
   inputSchema: SEND_TO_USER_INPUT,
 } as const;
 
