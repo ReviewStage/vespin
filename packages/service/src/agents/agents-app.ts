@@ -23,6 +23,7 @@ import {
   hostedStoreOrUnavailable,
   playableVideoOf,
   resolvedUserId,
+  servedBytesHeaders,
   type UserIdResolver,
   uuidOf,
 } from "../http/http-effect.js";
@@ -169,7 +170,7 @@ const inboxAttachmentEndpoint = /* @__PURE__ */ Effect.fn("web/inboxAttachmentEn
   return HttpServerResponse.uint8Array(found.value.bytes, {
     status: HOSTED_HTTP_STATUS.OK,
     contentType: found.value.contentType,
-    headers: HOSTED_BYTES_HEADERS,
+    headers: servedBytesHeaders(found.value.contentType),
   });
 });
 
@@ -220,14 +221,14 @@ const pictureEndpoint = /* @__PURE__ */ Effect.fn("web/agentPictureEndpoint")(fu
     return HttpServerResponse.uint8Array(Buffer.from(queued.value.data, "base64"), {
       status: HOSTED_HTTP_STATUS.OK,
       contentType: queued.value.mediaType,
-      headers: HOSTED_BYTES_HEADERS,
+      headers: servedBytesHeaders(queued.value.mediaType),
     });
   }
 
   return HttpServerResponse.uint8Array(found.value.bytes, {
     status: HOSTED_HTTP_STATUS.OK,
     contentType: found.value.contentType,
-    headers: HOSTED_BYTES_HEADERS,
+    headers: servedBytesHeaders(found.value.contentType),
   });
 });
 

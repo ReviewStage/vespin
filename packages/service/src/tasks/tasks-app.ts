@@ -6,7 +6,6 @@ import { Effect, Layer, Option, type Scope } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import {
-  HOSTED_BYTES_HEADERS,
   HOSTED_REFUSAL,
   type HostedRefusal,
   hostedNotFoundRoute,
@@ -14,6 +13,7 @@ import {
   hostedStoreOrUnavailable,
   playableVideoOf,
   resolvedUserId,
+  servedBytesHeaders,
   type UserIdResolver,
   uuidOf,
 } from "../http/http-effect.js";
@@ -86,7 +86,7 @@ const attachmentEndpoint = /* @__PURE__ */ Effect.fn("web/descriptionAttachmentE
     return HttpServerResponse.uint8Array(found.value.bytes, {
       status: HOSTED_HTTP_STATUS.OK,
       contentType: found.value.contentType,
-      headers: HOSTED_BYTES_HEADERS,
+      headers: servedBytesHeaders(found.value.contentType),
     });
   },
 );
