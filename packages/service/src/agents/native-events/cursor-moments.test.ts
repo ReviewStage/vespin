@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { RUNNER_END, RUNNER_EVENT } from "@repo/agent-runner/protocol";
+import { CURSOR_MODEL_CALL, RUNNER_END, RUNNER_EVENT } from "@repo/agent-runner/protocol";
 import { RUN_EVENT, type RunEvent } from "@repo/features/turn-run";
 import type { WireValue } from "@repo/wire";
 import { test } from "vitest";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { cursorMoments } from "./cursor-moments.js";
-import { NATIVE_MOMENT, type NativeHeld } from "./native-moments.js";
+import { NATIVE_MOMENT, type NativeContextUsage, type NativeHeld } from "./native-moments.js";
 import {
   heldProjection,
   NATIVE_WRITE,
@@ -22,7 +22,9 @@ const README = "/vercel/sandbox/repository/README.md";
  * hand: thinking and words a token a message, a read said running twice
  * before it completes, an edit whose change is in its answer's diff, a call
  * to our own tool through the custom tools' server, a shell command a review
- * refused and that never completes, the run's usage, and the launch's end.
+ * refused and that never completes, each of its two model calls as the
+ * runner posts them, the run's usage, which is their sum, and the launch's
+ * end.
  */
 const RECORDED: readonly WireValue[] = [
   { type: RUNNER_EVENT.ACCEPTED, uuid: "10000000-0000-4000-8000-000000000001" },
@@ -106,6 +108,18 @@ const RECORDED: readonly WireValue[] = [
     message: { role: "assistant", content: [{ type: "text", text: " read it." }] },
   },
   {
+    type: CURSOR_MODEL_CALL,
+    agent_id: AGENT,
+    model_call_id: "model-call-1",
+    usage: { inputTokens: 12000, outputTokens: 40, cacheReadTokens: 10048, cacheWriteTokens: 0 },
+  },
+  {
+    type: CURSOR_MODEL_CALL,
+    agent_id: AGENT,
+    model_call_id: "model-call-2",
+    usage: { inputTokens: 12726, outputTokens: 368, cacheReadTokens: 10048, cacheWriteTokens: 0 },
+  },
+  {
     type: "usage",
     ...IDS,
     usage: {
@@ -124,6 +138,7 @@ function folded(messages: readonly WireValue[]) {
   let state: NativeProjection = heldProjection(null);
   const told: RunEvent[] = [];
   const sessions: string[] = [];
+  const contexts: NativeContextUsage[] = [];
 
   messages.forEach((message, index) => {
     const held: NativeHeld = {
@@ -151,14 +166,16 @@ function folded(messages: readonly WireValue[]) {
       if (write.kind === NATIVE_WRITE.EVENT) told.push(write.event);
 
       if (write.kind === NATIVE_WRITE.SESSION) sessions.push(write.sessionId);
+
+      if (write.kind === NATIVE_WRITE.CONTEXT) contexts.push(write.usage);
     }
   });
 
-  return { told, sessions };
+  return { told, sessions, contexts };
 }
 
-test("a Cursor run reads as one turn: its tokens joined into whole reasoning and words, each call started once and stored under the name its row draws by, our own tool's answer read as its JSON, a call left running settled as the turn ends, and its usage metered", () => {
-  const { told, sessions } = folded(RECORDED);
+test("a Cursor run reads as one turn: its tokens joined into whole reasoning and words, each call started once and stored under the name its row draws by, our own tool's answer read as its JSON, a call left running settled as the turn ends, its usage metered, and the context its last model call read", () => {
+  const { told, sessions, contexts } = folded(RECORDED);
 
   assert.deepEqual(sessions, [AGENT]);
   assert.deepEqual(
@@ -201,6 +218,13 @@ test("a Cursor run reads as one turn: its tokens joined into whole reasoning and
     outputTokens: 408,
     cachedInputTokens: 20096,
     reasoningTokens: 0,
+    cacheWriteTokens: 0,
+  });
+  // Note that the run's usage sums its calls, so the context is the last call's prompt, never that sum.
+  assert.deepEqual(contexts.at(-1), {
+    inputTokens: 12726,
+    outputTokens: 368,
+    cachedInputTokens: 10048,
     cacheWriteTokens: 0,
   });
 });
