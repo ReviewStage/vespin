@@ -3,15 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { it } from "@effect/vitest";
 import { createLiveQueryCollection } from "@tanstack/db";
-import {
-  createSQLiteCorePersistenceAdapter,
-  persistedCollectionOptions,
-  SingleProcessCoordinator,
-  type SQLiteDriver,
-} from "@tanstack/db-sqlite-persistence-core";
 import { Deferred, Effect, Exit, Scope } from "effect";
 import {
   type CollectionsStore,
@@ -25,6 +18,7 @@ import {
   type RowKind,
   type WriteDeclaration,
 } from "./entity-pool.js";
+import { nodeKeptCollections } from "./testing/index.js";
 
 interface Row {
   readonly id: string;
@@ -40,99 +34,17 @@ const STORED: RowKind<Row, FieldChange<Row>> = {
 /** The kept read every case stands, whose cursor rides beside its rows. */
 const KEPT = { name: "rows", kind: "row" } as const;
 
-/** The values a statement binds, as `node:sqlite` takes them. */
-function bound(params: readonly unknown[]): SQLInputValue[] {
-  // SAFETY: the persistence binds SQLite's own values alone, text, numbers, null, and blobs, each of which `node:sqlite` takes.
-  return params as SQLInputValue[];
-}
-
-/** TanStack's SQLite driver over one `node:sqlite` connection, each call in turn, a nested transaction a savepoint. */
-function nodeDriver(database: DatabaseSync): SQLiteDriver {
-  let queue: Promise<unknown> = Promise.resolve();
-  let savepoints = 0;
-
-  const inTurn = <T>(step: () => Promise<T> | T): Promise<T> => {
-    const next = queue.then(step, step);
-    queue = next.catch(() => undefined);
-
-    return next;
-  };
-
-  const direct: SQLiteDriver = {
-    exec: async (sql) => {
-      database.exec(sql);
-    },
-    // SAFETY: each statement the persistence reads names the columns of the row type it asks for, which is what a row of `node:sqlite` holds.
-    query: (async (sql: string, params: readonly unknown[] = []) =>
-      database.prepare(sql).all(...bound(params))) as SQLiteDriver["query"],
-    run: async (sql, params = []) => {
-      database.prepare(sql).run(...bound(params));
-    },
-    transaction: async (fn) => {
-      savepoints += 1;
-      const name = `sp_${savepoints}`;
-      database.exec(`SAVEPOINT ${name}`);
-
-      try {
-        const result = await fn(direct);
-        database.exec(`RELEASE SAVEPOINT ${name}`);
-
-        return result;
-      } catch (cause) {
-        database.exec(`ROLLBACK TO SAVEPOINT ${name}`);
-        database.exec(`RELEASE SAVEPOINT ${name}`);
-        throw cause;
-      }
-    },
-  };
-
-  return {
-    exec: (sql) => inTurn(() => direct.exec(sql)),
-    query: (sql, params) => inTurn(() => direct.query(sql, params)),
-    run: (sql, params) => inTurn(() => direct.run(sql, params)),
-    transaction: (fn) =>
-      inTurn(async () => {
-        database.exec("BEGIN IMMEDIATE");
-
-        try {
-          const result = await fn(direct);
-          database.exec("COMMIT");
-
-          return result;
-        } catch (cause) {
-          database.exec("ROLLBACK");
-          throw cause;
-        }
-      }),
-  };
-}
-
 /** An account's database at `file`, opened as a store opens it for a sign-in, for as long as the scope it hands back stands. */
 function opened(file: string) {
   return Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const database = new DatabaseSync(file);
+    const database = nodeKeptCollections(file);
     yield* Scope.addFinalizer(
       scope,
-      Effect.sync(() => database.close()),
+      Effect.promise(() => database.close()),
     );
 
-    const persistence = {
-      adapter: createSQLiteCorePersistenceAdapter({ driver: nodeDriver(database) }),
-      coordinator: new SingleProcessCoordinator(),
-    };
-
-    const collections: CollectionsStore = {
-      keep: (stored) => (config) =>
-        persistedCollectionOptions({
-          ...config,
-          id: stored.name,
-          schemaVersion: stored.version,
-          persistence,
-          syncMode: "on-demand",
-        }),
-      scope,
-    };
+    const collections: CollectionsStore = { keep: database.keep, scope };
 
     return { collections, close: Scope.close(scope, Exit.void) };
   });
