@@ -210,6 +210,8 @@ export const GLYPH = {
   SAVE: lucide(LUCIDE_SYMBOL.DOWNLOAD),
   LINK: lucide(LUCIDE_SYMBOL.LINK),
   UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),
+  /** A webhook, what fires an automation called at its address, the panel's Lucide Webhook, among every glyph the catalog holds. */
+  WEBHOOK: catalogLucide("Webhook"),
   /** Open, which brings a row's lifted preview up to its whole page in the app; the arrow out is kept for what leaves it. */
   OPEN: lucide(LUCIDE_SYMBOL.MAXIMIZE_2),
   OPEN_EXTERNALLY: lucide(LUCIDE_SYMBOL.EXTERNAL_LINK),
