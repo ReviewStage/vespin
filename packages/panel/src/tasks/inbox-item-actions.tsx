@@ -51,8 +51,11 @@ interface InboxItemDoors {
 
 /** An item's acts as a menu draws them. */
 interface InboxItemActions {
-  /** The menu's groups, with `lead` over the item's own: a phone's, standing for what its bar draws. */
-  readonly groups: (lead?: readonly MenuAction[][]) => MenuEntry[][];
+  /** The menu's groups, with `lead` over the item's own and `trail` under them: a phone's, standing for what its bar draws. */
+  readonly groups: (
+    lead?: readonly MenuAction[][],
+    trail?: readonly MenuAction[][],
+  ) => MenuEntry[][];
   /** Opens the item in a tab of its own, which a middle-click on its row takes; none where the window opens no tabs. */
   readonly openInTab: (() => void) | undefined;
 }
@@ -77,7 +80,7 @@ export function useInboxItemActions(item: InboxItem, doors: InboxItemDoors): Inb
   const openInTab = useOpenInTab()(inboxItemPlace(item));
   const resolve = resolveAction([item], onResolve, subject);
 
-  const groups = (lead: readonly MenuAction[][] = []) =>
+  const groups = (lead: readonly MenuAction[][] = [], trail: readonly MenuAction[][] = []) =>
     [
       ...lead,
       links,
@@ -86,6 +89,7 @@ export function useInboxItemActions(item: InboxItem, doors: InboxItemDoors): Inb
         ...(remind === undefined ? [] : remindEntries(item, remind, subject)),
         ...(resolve === undefined ? [] : [resolve]),
       ],
+      ...trail,
     ].filter((group) => group.length > 0);
 
   return { groups, openInTab };
