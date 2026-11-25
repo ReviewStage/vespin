@@ -7,6 +7,7 @@ import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure
 import { Checkbox, type ComposerNote, STATUS_TONE } from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { useKeptDraft } from "../composer-drafts.js";
 import { useConnected } from "../connection.js";
 import { failureShown } from "../failure-report.js";
 import { useToast } from "../toast.js";
@@ -210,7 +211,8 @@ function AnswerCard({
   const toast = useToast();
   // Why the last thread start did not go, until the next send.
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
-  const draft = control.draftOf(item);
+  // Note that the box reads its own words, so a word typed draws the box again and never the pane around it.
+  const draft = { ...control.draftOf(item), note: useKeptDraft(control.placeOf(item)).text };
   const [asNew, setAsNew] = useState(false);
   const [starting, setStarting] = useState(false);
   const starts = newThread !== undefined && asNew;

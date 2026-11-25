@@ -37,6 +37,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DRAFT_PLACE,
   type Draft,
+  type DraftPlace,
   draftOfItem,
   EMPTY_DRAFT,
   holdsPicks,
@@ -44,7 +45,7 @@ import {
   picksStandOn,
   useDraftWriter,
   useInboxDraftStandings,
-  useInboxDrafts,
+  useInboxDraftsBeside,
   withoutPicks,
 } from "../composer-drafts.js";
 import {
@@ -243,12 +244,16 @@ export interface TaskInboxControl {
   readonly notes: ReadonlyMap<string, InboxNote>;
   /** Lets go of an item's note once what it said no longer stands, as an agent unarchived from it; nothing where a later send has said something else since. */
   readonly onDropNote: (itemId: string, note: InboxNote) => void;
-  /** What the developer has put on the item's card so far, at the revision it stands at; an empty card where nothing, or where the agent has changed the item since. */
+  /** What the developer has put on the item's card so far, at the revision it stands at, as it stands at the moment of asking; an empty card where nothing, or where the agent has changed the item since. */
   readonly draftOf: (item: InboxItem) => InboxDraft;
+  /** Where the item's card keeps its draft, which its box reads its words at, so a word typed draws the box and not what stands around it. */
+  readonly placeOf: (item: InboxItem) => DraftPlace;
   /** Whether a card holds a draft for its item as it now stands, which the Inbox tab marks with the pencil (`draft-mark.tsx`). */
   readonly drafted: boolean;
   /** Keeps what the developer has put on the item's card, at its revision. */
   readonly onDraft: (item: InboxItem, draft: InboxDraft) => void;
+  /** Keeps the options, fields, steps, and press picked on the item's card, at its revision, its words and files as they stand. */
+  readonly onPicks: (item: InboxItem, picks: InboxPicks) => void;
   /** Moves the words and files on the item's card on together from what they are as the write lands: every change its box makes, and a refused send put back (`refused-send.ts`). */
   readonly onHeld: (item: InboxItem, next: Parameters<HeldUpdate>[0]) => void;
   /** Nods to a notice, settling it at the revision drawn, after every message of the item's on its way; nothing where a nod is out. Got it pressed hands its nod to `held` once its turn comes, which holds it behind an Undo (`inbox-acknowledge.tsx`); an opening sends it as it is (`useNodOnOpen`). */
@@ -478,7 +483,13 @@ function holdsNothing(draft: Draft): boolean {
 }
 
 /** The doors of a held read's cards' drafts (`useInboxCardDrafts`). */
-type InboxCardDrafts = Pick<TaskInboxControl, "draftOf" | "drafted" | "onDraft" | "onHeld">;
+type InboxCardDrafts = Pick<
+  TaskInboxControl,
+  "draftOf" | "placeOf" | "drafted" | "onDraft" | "onPicks" | "onHeld"
+>;
+
+/** What an ask's controls pick on a card: everything but its words and files. */
+export type InboxPicks = Pick<InboxDraft, "choices" | "values" | "steps" | "press">;
 
 /**
  * A held read without its cards' drafts, which the window's Inbox reads in
@@ -1001,15 +1012,16 @@ export function useInboxDraftsLetGo(
 
 /**
  * The cards' drafts of a held read (`useHeldTaskInbox`), as the box that
- * writes them reads them (`../composer-drafts.ts`), read here alone, so a
- * word typed in a box draws only what reads this.
+ * writes them reads them (`../composer-drafts.ts`), read here without their
+ * words, so a word typed in a box draws only the box, which reads its own
+ * (`placeOf`); a read through `draftOf` finds the words as they stand.
  */
 export function useInboxCardDrafts(
   control: Pick<HeldTaskInboxControl, "board">,
   scope: DraftScopeOf,
 ): InboxCardDrafts {
   const draftsOn = scope.taskId ?? null;
-  const drafts = useInboxDrafts(draftsOn);
+  const drafts = useInboxDraftsBeside(draftsOn);
   const writer = useDraftWriter();
   const { board } = control;
   const items = useMemo(() => [...board.open, ...board.settled], [board]);
@@ -1017,7 +1029,14 @@ export function useInboxCardDrafts(
   const draftOf = useCallback(
     (item: InboxItem): InboxDraft => {
       const found = drafts.find((each) => each.place.itemId === item.id);
-      const kept = found === undefined ? undefined : draftOfItem(found, item);
+
+      // Note that the list stands as its drafts were but for their words, which are read as they stand now.
+      const now =
+        found === undefined
+          ? undefined
+          : writer.heldAt((place) => Equal.equals(place, found.place));
+
+      const kept = now === undefined ? undefined : draftOfItem(now, item);
 
       return kept === undefined
         ? EMPTY_INBOX_DRAFT
@@ -1030,8 +1049,10 @@ export function useInboxCardDrafts(
             press: kept.press,
           };
     },
-    [drafts],
+    [drafts, writer],
   );
+
+  const placeOf = useCallback((item: InboxItem) => draftPlace(item, draftsOn), [draftsOn]);
 
   const drafted = drafts.some((kept) =>
     items.some((item) => item.id === kept.place.itemId && !holdsNothing(draftOfItem(kept, item))),
@@ -1052,11 +1073,24 @@ export function useInboxCardDrafts(
     [writer, draftsOn],
   );
 
+  const onPicks = useCallback(
+    (item: InboxItem, picks: InboxPicks) =>
+      writer.update(draftPlace(item, draftsOn), (was) => ({
+        ...was,
+        revision: item.revision,
+        choices: picks.choices,
+        values: picks.values,
+        steps: picks.steps,
+        press: picks.press,
+      })),
+    [writer, draftsOn],
+  );
+
   const onHeld = useCallback(
     (item: InboxItem, next: Parameters<HeldUpdate>[0]) =>
       heldUpdateOver<Draft>((moved) => writer.update(draftPlace(item, draftsOn), moved))(next),
     [writer, draftsOn],
   );
 
-  return { draftOf, drafted, onDraft, onHeld };
+  return { draftOf, placeOf, drafted, onDraft, onPicks, onHeld };
 }

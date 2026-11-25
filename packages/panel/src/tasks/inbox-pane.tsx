@@ -344,7 +344,7 @@ function useOptionNumbers(
 
       if (picked === undefined) return;
       event.preventDefault();
-      control.onDraft(item, picked);
+      control.onPicks(item, picked);
       row.focus();
     };
 
@@ -1754,7 +1754,8 @@ export function InboxPane({
 
   // Note that the item's words are read under its own workspace, its plan's, never the one the Inbox lists, which may not be the item's.
   const workspaceId = holderWorkspaceId(holder);
-  const onDraft = (next: InboxDraft) => control.onDraft(item, next);
+  // Note that the ask's controls write its picks alone, never the words, which the box reads and writes where it stands.
+  const onDraft = (next: InboxDraft) => control.onPicks(item, next);
   // The open ask's controls stand in the draft reply, over its note.
   const asking = openAskOf(thread);
   const openAsk = asking !== undefined && knownAsk(asking.ask) ? asking.ask : undefined;
