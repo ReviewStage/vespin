@@ -710,10 +710,8 @@
     var(--ui-space-4)
   );
   /* A channel's gutter, where a message's sender's picture stands beside its
-     name and words, a card head's disc wide; and a thread's pane beside the
-     channel (`ChannelMessage`, `ThreadPane`). */
+     name and words, a card head's disc wide (`ChannelMessage`). */
   --spacing-channel-avatar: var(--spacing-avatar-card);
-  --spacing-thread-pane: 380px; /* off-scale: a thread's pane, a narrow column's measure */
   --spacing-avatar-page: var(--ui-space-48); /* a page head's disc */
   --spacing-avatar-masthead: 56px; /* off-scale: a masthead's disc */
   --spacing-avatar-portrait: var(--ui-space-64); /* a portrait's disc */

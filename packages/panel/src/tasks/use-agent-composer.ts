@@ -309,6 +309,8 @@ export function useAgentComposer(input: {
   agentId: string;
   /** The agent's task, whose repository a refusal's remedy mends; null for an agent with no task, whose refusal says its words alone. */
   taskId: string | null;
+  /** The thread of a Manager's chat the box replies in, by the message it stands on, whose draft it keeps apart from the chat's own box; none for that box. */
+  thread?: string | undefined;
   /** The transcript as the tab holds it, which a rewind's cut is read from. */
   messages: readonly AgentTranscriptMessage[];
   /** The member's messages on their way and refused, as the host draws them (`AppTranscript.sending`). */
@@ -340,7 +342,14 @@ export function useAgentComposer(input: {
     | undefined;
 }): HeldComposer {
   const { agentId, messages, sending } = input;
-  const kept = useDraft({ kind: DRAFT_PLACE.AGENT, taskId: input.taskId, agentId });
+  const { thread } = input;
+
+  const kept = useDraft(
+    thread === undefined
+      ? { kind: DRAFT_PLACE.AGENT, taskId: input.taskId, agentId }
+      : { kind: DRAFT_PLACE.AGENT, taskId: input.taskId, agentId, thread },
+  );
+
   const queryClient = useQueryClient();
   const [held, setHeld] = useState<Held>(() => fresh(agentId));
 

@@ -8,7 +8,8 @@
  * or an object naming what it shows: one coding agent, a draft agent not yet
  * started, one subagent, one file, one pull request, one agent turn's
  * changes, one terminal of
- * an agent's, one page, or one Browser tab in an agent's cloud browser,
+ * an agent's, one page, one Browser tab in an agent's cloud browser, or one
+ * thread of a Manager's chat,
  * tagged with its kind (`STRIP_TAB_KIND`) and built by its kind's
  * constructor (`agentTab`, …). Two tabs are the same where they name the
  * same thing, as each kind declares it (`TAB_IDENTITY`), so a tab rebuilt
@@ -75,6 +76,7 @@ export const STRIP_TAB_KIND = {
   LOCAL: "local",
   PAGE: "page",
   CLOUD_BROWSER: "cloudBrowser",
+  THREAD: "thread",
 } as const;
 
 export type StripTabKind = (typeof STRIP_TAB_KIND)[keyof typeof STRIP_TAB_KIND];
@@ -182,6 +184,13 @@ export interface TranscriptStripTab {
   readonly transcript: string;
 }
 
+/** One thread of a Manager's chat in the side panel beside its page, named by the message it stands on and the Manager whose chat holds it. */
+export interface ThreadStripTab {
+  readonly kind: typeof STRIP_TAB_KIND.THREAD;
+  readonly thread: string;
+  readonly manager: string;
+}
+
 /** A tab naming what it shows, of any object kind. */
 type ObjectStripTab =
   | AgentStripTab
@@ -194,7 +203,8 @@ type ObjectStripTab =
   | TerminalStripTab
   | LocalStripTab
   | PageStripTab
-  | CloudBrowserStripTab;
+  | CloudBrowserStripTab
+  | ThreadStripTab;
 
 /** A tab of either strip: a word of its column's own, or one naming what it shows. */
 export type StripTab = string | ObjectStripTab;
@@ -272,6 +282,11 @@ export function pageTab(page: string): PageStripTab {
 /** One Browser tab in an agent's cloud browser, by the id the service keeps it under. */
 export function cloudBrowserTab(cloudBrowser: string): CloudBrowserStripTab {
   return { kind: STRIP_TAB_KIND.CLOUD_BROWSER, cloudBrowser };
+}
+
+/** One thread of a Manager's chat, by the message it stands on, and the Manager. */
+export function threadTab(thread: string, manager: string): ThreadStripTab {
+  return { kind: STRIP_TAB_KIND.THREAD, thread, manager };
 }
 
 /** A tab's kind: a word's for a string, and an object's own otherwise. */
@@ -400,7 +415,8 @@ const NO_AGENT = (): undefined => undefined;
  * (`pullRequestKey`), and a turn's Changes tab by one made for its agent and
  * its turn (`turnKey`); a Terminal or Local tab by the id its terminal was
  * minted under, a page's by the page's own id, and a cloud Browser tab's by
- * the id the service keeps it under. An agent's tab, a turn's Changes tab,
+ * the id the service keeps it under, and a Manager's chat's thread's by the
+ * id of the message it stands on. An agent's tab, a turn's Changes tab,
  * its Terminal tab, and its Local tab are the agent's own, which is where a
  * terminal command means that agent (`terminal-entry.ts`); a Pull request
  * tab is no agent's.
@@ -460,6 +476,11 @@ const TAB_IDENTITY = {
   [STRIP_TAB_KIND.CLOUD_BROWSER]: {
     same: (a, b) => a.cloudBrowser === b.cloudBrowser,
     key: (tab) => tab.cloudBrowser,
+    agent: NO_AGENT,
+  },
+  [STRIP_TAB_KIND.THREAD]: {
+    same: (a, b) => a.thread === b.thread && a.manager === b.manager,
+    key: (tab) => tab.thread,
     agent: NO_AGENT,
   },
 } as const satisfies { readonly [K in StripTabKind]: TabIdentity<StripTabOf<K>> };

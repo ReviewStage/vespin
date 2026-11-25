@@ -71,9 +71,18 @@ import {
   useMenu,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { agentTab, pageTab, type StripTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
+import {
+  agentTab,
+  pageTab,
+  STRIP_TAB_KIND,
+  type StripTab,
+  TAB_WORDS,
+  type ThreadStripTab,
+  threadTab,
+} from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
+import { Predicate } from "effect";
 import { useEffect, useId, useMemo, useState } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
@@ -86,6 +95,8 @@ import { useTaskListCollections, useTaskListRow } from "../task-list-collections
 import { agentName } from "../tasks/agent-model.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
+import { ManagerThreadTab } from "../tasks/manager-chat-tab.js";
+import { ThreadDoorsProvider } from "../tasks/manager-chat-threads.js";
 import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { ManagerGlyph } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
@@ -562,6 +573,41 @@ function OwnAgentPage({
     else tasks.onShowAgent(target.task, target.agent);
   };
 
+  // A Manager's chat opens each thread in a tab of the panel beside its page, as the panel opens anything beside a page.
+  const shownThread =
+    sidePanel.open &&
+    sidePanel.tab !== undefined &&
+    !Predicate.isString(sidePanel.tab) &&
+    sidePanel.tab.kind === STRIP_TAB_KIND.THREAD
+      ? sidePanel.tab.thread
+      : undefined;
+
+  const openThread = useSteadyDoor((root: string) => openPanelTab(threadTab(root, agent.id)));
+
+  const threadDoors = useMemo(
+    () => ({ open: shownThread, onOpen: openThread }),
+    [shownThread, openThread],
+  );
+
+  const summary =
+    agents.agents?.find((each) => each.id === agent.id) ??
+    agents.archived?.find((each) => each.id === agent.id);
+
+  const thread =
+    summary === undefined || !manager
+      ? undefined
+      : (tab: ThreadStripTab) => (
+          <ManagerThreadTab
+            key={tab.thread}
+            agent={summary}
+            control={agents}
+            shown={tasks.shown}
+            root={tab.thread}
+            onOpenTarget={openTarget}
+            cards={cards.agent(agent.id)}
+          />
+        );
+
   return (
     <OwnAgentPlaceProvider place={place} readerId={tasks.me}>
       <OpenAddressesHere value={openHere}>
@@ -623,23 +669,25 @@ function OwnAgentPage({
                 role={manager ? "tabpanel" : undefined}
                 aria-labelledby={manager ? panels(view).tab : undefined}
               >
-                <AgentPane
-                  label={label}
-                  tabbed={false}
-                  tab={agentTab(agent.id)}
-                  agents={agents}
-                  shown={tasks.shown && !sidePanel.fullScreen}
-                  views={views}
-                  // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
-                  onOpenDelegation={(_agent, callId, _task, status) =>
-                    views.onWorkerStatus(callId, status)
-                  }
-                  onOpenPullRequest={openPullRequest}
-                  onOpenTarget={openTarget}
-                  cards={cards}
-                  threads={threads}
-                  chat={chat}
-                />
+                <ThreadDoorsProvider value={manager ? threadDoors : undefined}>
+                  <AgentPane
+                    label={label}
+                    tabbed={false}
+                    tab={agentTab(agent.id)}
+                    agents={agents}
+                    shown={tasks.shown && !sidePanel.fullScreen}
+                    views={views}
+                    // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
+                    onOpenDelegation={(_agent, callId, _task, status) =>
+                      views.onWorkerStatus(callId, status)
+                    }
+                    onOpenPullRequest={openPullRequest}
+                    onOpenTarget={openTarget}
+                    cards={cards}
+                    threads={threads}
+                    chat={chat}
+                  />
+                </ThreadDoorsProvider>
               </FindScope>
             )}
           </Fill>
@@ -663,6 +711,7 @@ function OwnAgentPage({
               onOpenTarget={openTarget}
               phone={away === undefined ? undefined : { back: label, onBack: sidePanel.onToggle }}
               taskOfTab={tasks}
+              thread={thread}
             />
           ) : null}
         </div>

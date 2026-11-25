@@ -106,6 +106,8 @@ const draftPlaceSchema = Schema.Union([
     /** The agent's plan, which the sidebar marks; null for an agent with none. */
     taskId: Schema.NullOr(Schema.String),
     agentId: Schema.String,
+    /** The thread of a Manager's chat the box replies in, by the message it stands on, so each thread keeps its words apart from the chat's own box; none for that box. */
+    thread: Schema.optionalKey(Schema.String),
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.NEW_AGENT),
