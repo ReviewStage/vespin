@@ -8,7 +8,7 @@ import {
 import { useEffect, useId, useState } from "react";
 import { Backpack, Cat, Ghost, type KawaiiProps, Mug, Planet, SpeechBubble } from "react-kawaii";
 import { WorkingMark } from "../working-mark/working-mark.js";
-import { FACE_DIRECTION, useFaceDirection } from "./prototype-face-direction.js";
+import { FACE_DIRECTION, useFaceDirection, usePickedFace } from "./prototype-face-direction.js";
 
 export {
   FACE_DIRECTION,
@@ -175,10 +175,13 @@ function useLivelyMood(
 
 /** A Manager's face in its seat, livelier and wearing the working mark while `working`; PROTOTYPE: drawn in the direction the switcher names. */
 export function ManagerFace({
-  face,
+  face: stored,
   size,
   working = false,
+  raw = false,
 }: {
+  /** PROTOTYPE: draws the face as given, never the one picked over it, as a picker's choices are. */
+  raw?: boolean | undefined;
   /** The character and the color, as the service stores them. */
   face: ManagerFaceValue;
   /** The seat: a sidebar row's, a chat message's, or a glyph's among words. */
@@ -188,6 +191,8 @@ export function ManagerFace({
 }): React.JSX.Element {
   // Note that Kawaii names its face's mask by this, so many faces on one page never share a mask; it keeps only an id's safe characters.
   const maskId = useId().replace(/[^\w-]/g, "");
+  const picked = usePickedFace(stored) ?? stored;
+  const face = raw ? stored : picked;
   const { direction, working: everyWorking } = useFaceDirection();
   const atWork = working || everyWorking;
   const lively = direction === FACE_DIRECTION.LIVELY;

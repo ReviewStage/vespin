@@ -104,3 +104,45 @@ export function setFaceDirection(direction: FaceDirection): void {
 export function setFacesWorking(working: boolean): void {
   set({ ...state, working });
 }
+
+/* ----- PROTOTYPE: the faces picked in this tab, since the fixture answers a pick but never redraws it ----- */
+
+interface PickableFace {
+  readonly character: string;
+  readonly color: string;
+  readonly emoji?: string | undefined;
+}
+
+let picked: ReadonlyMap<string, PickableFace> = new Map();
+const pickListeners = new Set<() => void>();
+
+function faceKey(face: PickableFace): string {
+  return JSON.stringify([face.character, face.color, face.emoji ?? null]);
+}
+
+function subscribePicks(listener: () => void): () => void {
+  pickListeners.add(listener);
+
+  return () => pickListeners.delete(listener);
+}
+
+function readPicks(): ReadonlyMap<string, PickableFace> {
+  return picked;
+}
+
+/** Keeps `next` as the face drawn wherever the fixture still stores `stored`. */
+export function keepPickedFace(stored: PickableFace, next: PickableFace): void {
+  picked = new Map(picked).set(faceKey(stored), next);
+
+  for (const listener of pickListeners) listener();
+}
+
+/** The face drawn for a face the fixture stores: the one picked over it in this tab, or itself. */
+export function usePickedFace<F extends PickableFace>(stored: F | undefined): F | undefined {
+  const map = useSyncExternalStore(subscribePicks, readPicks, readPicks);
+
+  if (stored === undefined) return undefined;
+
+  // SAFETY: a face kept over a stored one is a face of the same shape.
+  return (map.get(faceKey(stored)) as F | undefined) ?? stored;
+}

@@ -22,6 +22,7 @@ import {
   ManagerFace,
   useFaceDirection,
 } from "./manager-face.js";
+import { keepPickedFace, usePickedFace } from "./prototype-face-direction.js";
 
 /**
  * manager-face-picker.tsx -- where a Manager's face is picked: the app's one icon picker (`IconPicker`), as a section's icon is picked, listing every face, one group to each character in each of the colors.
@@ -186,9 +187,9 @@ function characterFace(character: ManagerFaceCharacter, color: ManagerFaceColor)
 
 /** The picker; see the module's head. A pick hands the face to `onChange`. PROTOTYPE: laid out as the direction the switcher names. */
 export function ManagerFacePicker({
-  face,
+  face: stored,
   search,
-  onChange,
+  onChange: handOn,
 }: {
   /** The face standing, pressed; none before a pick where the service picks one. */
   face: ManagerFaceValue | undefined;
@@ -197,6 +198,12 @@ export function ManagerFacePicker({
   onChange: (next: ManagerFaceValue) => void;
 }): React.JSX.Element {
   const { direction } = useFaceDirection();
+  // PROTOTYPE: the face picked over the stored one in this tab, which the fixture never redraws.
+  const face = usePickedFace(stored);
+  const onChange = (next: ManagerFaceValue) => {
+    if (stored !== undefined) keepPickedFace(stored, next);
+    handOn(next);
+  };
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<FaceKind>(
     face?.emoji === undefined ? FACE_KIND.CHARACTERS : FACE_KIND.EMOJI,
@@ -223,7 +230,7 @@ export function ManagerFacePicker({
         label={label}
         pressed={pressed}
         stop={stop}
-        face={<ManagerFace face={one} size={MANAGER_FACE_SIZE.ROW} />}
+        face={<ManagerFace face={one} size={MANAGER_FACE_SIZE.ROW} raw />}
         onPress={() => onChange(one)}
       />
     );

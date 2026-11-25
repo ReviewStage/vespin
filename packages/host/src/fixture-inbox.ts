@@ -3306,7 +3306,9 @@ function standsOn(agent: AgentSummary, change: AgentChange): boolean {
 
   if (
     face !== undefined &&
-    (face.character !== agent.face?.character || face.color !== agent.face?.color)
+    (face.character !== agent.face?.character ||
+      face.color !== agent.face?.color ||
+      face.emoji !== agent.face?.emoji)
   ) {
     return false;
   }
