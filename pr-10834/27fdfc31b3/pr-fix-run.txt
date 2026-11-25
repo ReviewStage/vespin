@@ -1,0 +1,10 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 17 Pro (jprchip2) - iOS 27.2 - 0EF5F042-06DF-4F84-BFEC-B2F3FDB0A685
+ > Flow fprchip
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5, pullRequest=126})... COMPLETED
+Assert that "Queued #2" is visible... COMPLETED
+Tap on "Queued #2"... COMPLETED
+Assert that "View merge queue" is visible... COMPLETED
+Take screenshot prchip-immediate... COMPLETED

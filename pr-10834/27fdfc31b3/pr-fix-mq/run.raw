@@ -1,0 +1,9 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2fd6b6c7 (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 17 Pro (jprchip2) - iOS 27.2 - 0EF5F042-06DF-4F84-BFEC-B2F3FDB0A685
+ > Flow fprchipmq
+Tap on "View merge queue"... COMPLETED
+Assert that "Merge queue" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot prchipmq-page... COMPLETED
