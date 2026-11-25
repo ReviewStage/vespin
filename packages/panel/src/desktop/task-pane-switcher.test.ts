@@ -303,6 +303,7 @@ test("on a phone Overview is headed by the way out of the task, New agent, and o
   const newAgent = page.container.querySelector<HTMLButtonElement>(
     '.task-head button[aria-label="New agent"]',
   );
+
   assert.ok(newAgent, "the row offers New agent before its ⋯");
   act(() => newAgent.click());
   assert.deepEqual(page.told, [`column ${JSON.stringify(DRAFT)}`], "New agent opens a draft");
