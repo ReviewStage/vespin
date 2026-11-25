@@ -1,0 +1,28 @@
+# working-manager.yaml -- the working-Manager rig's launch: the release Manager's chat opened while its turn streams (`scripts/working-manager.sh`), and, where `TYPE` is true, a sentence typed into its composer key by key while the turn moves.
+#
+# It lives under maestro/rig/ rather than maestro/, so the screenshot run,
+# which runs every flow at maestro/'s top, never runs it. `-streamTurn`
+# moves the Manager's turn a change every `STREAM_MS` milliseconds once its
+# page follows it (`fixture-host.ts`'s `streamTurn`), and the page measures
+# itself over a window from its first draw (`src/rig-agent-load.ts`); every
+# wait is on what the screen shows.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 81e2a425-6d3f-4a07-92df-9eafb0c1d2e8
+      streamTurn: ${STREAM_MS}
+# The chat's streamed exchanges stand once the turn's first change lands.
+- extendedWaitUntil:
+    visible: "Item 25 is done.*"
+    timeout: 60000
+- runFlow:
+    when:
+      true: ${TYPE == 'true'}
+    commands:
+      - tapOn:
+          id: "composer-field"
+      - inputText: "Which of the release checks still wait on me, and which can I skip today?"
+- takeScreenshot: working-manager

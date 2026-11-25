@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity (`-liveActivity done` starts it as it stands once none works), `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-setupOwed true`, which stands a fixture run's account as one owed setup, `-inboxOff true`, which stands a fixture run's account with its Inbox turned off, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, `-busyAccount true`, which has the stub answer as a busy account's service does after a gap (`busy-account-server.ts`), `-pillField true`, which opens on the pill field's scratch page, and `-sentryTest <js|native>`, which sends a test crash report.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity (`-liveActivity done` starts it as it stands once none works), `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-setupOwed true`, which stands a fixture run's account as one owed setup, `-inboxOff true`, which stands a fixture run's account with its Inbox turned off, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, `-busyAccount true`, which has the stub answer as a busy account's service does after a gap (`busy-account-server.ts`), `-pillField true`, which opens on the pill field's scratch page, `-streamTurn <ms>`, which has a fixture run's release Manager stream a turn, a change every that many milliseconds, while its page follows it, and `-sentryTest <js|native>`, which sends a test crash report.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -28,6 +28,7 @@ const LAUNCH_ARGUMENT = {
   REFUSE_WRITES: "refuseWrites",
   BUSY_ACCOUNT: "busyAccount",
   PILL_FIELD: "pillField",
+  STREAM_TURN: "streamTurn",
   SENTRY_TEST: "sentryTest",
 } as const;
 
@@ -129,6 +130,15 @@ export function launchUpdateNeeded(): boolean {
 /** Whether this launch opens on the pill field's scratch page, as `-pillField true` asks (`maestro/pill-field.yaml`). */
 export function launchPillField(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.PILL_FIELD);
+}
+
+/** How often a fixture run's release Manager moves its turn while its page follows it, in milliseconds, as `-streamTurn <ms>` names it (`scripts/working-manager.sh`); none in a live run, and where none is named. */
+export function launchStreamTurn(): number | undefined {
+  if (launchFixtureProfile() === undefined) return undefined;
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.STREAM_TURN);
+  const ms = Predicate.isNumber(named) ? named : Number(named);
+
+  return Number.isFinite(ms) && ms > 0 ? ms : undefined;
 }
 
 /** Whether this launch's fixture run refuses the writes a flow presses, as `-refuseWrites true` asks, so a flow shoots the failure notice (`maestro/failure-notice.yaml`). */

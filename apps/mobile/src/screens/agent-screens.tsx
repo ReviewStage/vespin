@@ -188,6 +188,7 @@ import {
   usePullRequestsRead,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { rigAgentDrawn, useRigAgentLoad } from "../rig-agent-load.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -588,6 +589,7 @@ function AgentComposerArea({
   /** The apps the agent uses on the reader's Mac this turn; none where its turn used none. */
   readonly apps: AppsDock | undefined;
 }) {
+  rigAgentDrawn("composer");
   const threadsLine = useAgentThreadsLine(id);
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
   const dictated = useDictation(composer.words, composer.onWords);
@@ -775,6 +777,8 @@ const AgentConversation = memo(function AgentConversation({
   /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
   readonly brief?: string | undefined;
 }) {
+  rigAgentDrawn("page");
+  useRigAgentLoad();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const onTab = useOnTab();

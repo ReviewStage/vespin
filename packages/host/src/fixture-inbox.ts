@@ -49,6 +49,7 @@ import {
   AGENT_RUNTIME,
   AGENT_STATUS,
   type AgentQueueChange,
+  type AgentStatus,
   type AgentSummary,
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
@@ -208,6 +209,7 @@ import {
   fixtureDigestTranscript,
   fixtureLongTranscript,
   fixtureManagerTranscript,
+  fixtureStreamedManager,
 } from "./fixture-agent-transcript.js";
 import {
   FIXTURE_PICTURE_PNG,
@@ -2373,6 +2375,62 @@ function stagedTranscripts(
   return staged;
 }
 
+/** The agent a fixture run streams a turn of: the release Manager, whose page a working Manager's is measured on (`-streamTurn`). */
+export const STREAMED_AGENT_ID = AGENT.MANAGER;
+
+/** The change that holds the streamed agent at work while its turn streams, laid over its row as a run's choices are (`chosenTasksView`). */
+export const STREAMED_AGENT_CHANGE: AgentChange = { status: AGENT_STATUS.RUNNING };
+
+/** The streamed turn last built, by how many changes it stands after. */
+let lastStreamed:
+  | { readonly changes: number; readonly streamed: ReturnType<typeof fixtureStreamedManager> }
+  | undefined;
+
+/**
+ * The document with the release Manager at work after `changes` changes of
+ * its streamed turn (`fixtureStreamedManager`): its transcript a chat's
+ * first page of exchanges long and its newest turn still running, and the
+ * messages that turn sent standing newest in its chat; the document itself
+ * before the first change.
+ */
+export function streamedTurnAppState(state: AppStateSnapshot, changes: number): AppStateSnapshot {
+  if (changes === 0) return state;
+  const transcripts = state[LIVE_READ.TRANSCRIPT];
+  const held = transcripts[AGENT.MANAGER]?.[OWN_TRANSCRIPT]?.rows;
+  const chat = state[LIVE_READ.MANAGER_CHAT][AGENT.MANAGER]?.rows;
+
+  if (held === undefined || chat === undefined) return state;
+
+  // Note that the turn is built once a change, since the run stages the document again on every change the host writes, and a turn built afresh each time would be walked whole to be found the same.
+  const streamed =
+    lastStreamed?.changes === changes
+      ? lastStreamed.streamed
+      : fixtureStreamedManager(
+          MANAGER_TRANSCRIPT,
+          MANAGER_STARTED,
+          ADA,
+          "Release manager",
+          changes,
+        );
+
+  lastStreamed = { changes, streamed };
+
+  return {
+    ...state,
+    [LIVE_READ.TRANSCRIPT]: {
+      ...transcripts,
+      [AGENT.MANAGER]: {
+        ...transcripts[AGENT.MANAGER],
+        [OWN_TRANSCRIPT]: { rows: streamed.transcript },
+      },
+    },
+    [LIVE_READ.MANAGER_CHAT]: {
+      ...state[LIVE_READ.MANAGER_CHAT],
+      [AGENT.MANAGER]: { rows: { ...chat, messages: [...streamed.chat, ...chat.messages] } },
+    },
+  };
+}
+
 /** Where the page older than the invitations agent's transcript is read below, which a phone's fixture run offers. */
 const INVITES_OLDER_CURSOR = "0:0";
 
@@ -3153,6 +3211,8 @@ export interface AgentChange {
   readonly face?: ManagerFace;
   /** Whether the run archived the agent or brought it back. */
   readonly archived?: boolean;
+  /** Where the agent stands, as a run that streams its turn holds it at work. */
+  readonly status?: AgentStatus;
 }
 
 /** What a fixture run changed of its agents, by agent. */
@@ -3243,6 +3303,7 @@ const CHANGED_FIELDS = [
   "permissionMode",
   "disabledServers",
   "title",
+  "status",
 ] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face" | "archived">[];
 
 /** Whether every field of the change already stands on the agent, a face by its character and color. */
