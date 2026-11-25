@@ -68,6 +68,7 @@ import { fileMarkers } from "@repo/features/file-marker";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
 import {
+  CHAT_RUN_ALONE,
   type ChatRunPlace,
   chatWorkWords,
   type ManagerChatLine,
@@ -1460,14 +1461,14 @@ function chatLineItems(
  * The reader's messages on their way to a Manager's chat as their own lines
  * after its messages, each under the key it went under, so the page marks
  * one refused Not delivered by it (`AgentTranscript`'s `undelivered`), each
- * joining the run of the reader's own line before it, as the panel draws
- * them.
+ * in the run the chat's view placed it in (`places`), the one its row will
+ * stand in, as the panel draws them.
  */
 function chatSendingItems(
   sending: readonly ManagerChatSending[],
-  lastOwn: boolean,
+  places: ReadonlyMap<string, ChatRunPlace>,
 ): readonly { readonly item: TranscriptItem; readonly place: ChatRunPlace }[] {
-  return sending.map((line, index) => ({
+  return sending.map((line) => ({
     item: {
       place: linePlace(line.clientKey, line.clientKey),
       depth: 0,
@@ -1481,7 +1482,7 @@ function chatSendingItems(
       joinsAbove: false,
       joinsBelow: false,
     },
-    place: { opens: index === 0 && !lastOwn, closes: index === sending.length - 1 },
+    place: places.get(line.clientKey) ?? CHAT_RUN_ALONE,
   }));
 }
 
@@ -1503,13 +1504,7 @@ export function managerChatItems(
   const turns = new Map(transcript.map((message) => [message.id, message]));
   const items = view.messages.flatMap((line) => chatLineItems(line, view, turns, read));
   const newest = view.messages.at(-1)?.message;
-
-  const lastOwn =
-    newest !== undefined &&
-    newest.authorKind === MANAGER_CHAT_AUTHOR.PERSON &&
-    newest.authorUserId === reading.readerId;
-
-  const sending = chatSendingItems(reading.sending ?? [], lastOwn);
+  const sending = chatSendingItems(reading.sending ?? [], view.sending.messages);
 
   const runs = new Map<string, ChatRunPlace>([
     ...view.messages.map((line) => [line.message.id, line.place] as const),

@@ -66,11 +66,22 @@ export interface ChatSendingMark {
 }
 
 /**
+ * Where each of the reader's messages on their way stands, by its key: after
+ * every message in `messages`' one run of runs, as a page with no thread view
+ * draws it, and after its scope's in the channel, the chat's top or its
+ * thread.
+ */
+export interface ChatSendingPlaces {
+  readonly messages: ReadonlyMap<string, ChatRunPlace>;
+  readonly channel: ReadonlyMap<string, ChatRunPlace>;
+}
+
+/**
  * A Manager's chat as a page draws it: every message oldest first in one
  * run of runs, as a page with no thread view draws it (`messages`); the
  * messages at its top and each thread's replies, by its root's id, each in
- * runs of their own, as a channel draws them (`top`, `threads`), and where
- * each of the reader's messages on their way stands in those runs, by its
+ * runs of their own, as a channel draws them (`top`, `threads`); where each
+ * of the reader's messages on their way stands in the runs of each, by its
  * key (`sending`); each turn's work by the turn's id; and the turn under
  * way's work.
  */
@@ -78,7 +89,7 @@ export interface ManagerChatView {
   readonly messages: readonly ManagerChatLine[];
   readonly top: readonly ManagerChatLine[];
   readonly threads: ReadonlyMap<string, readonly ManagerChatLine[]>;
-  readonly sending: ReadonlyMap<string, ChatRunPlace>;
+  readonly sending: ChatSendingPlaces;
   readonly work: ReadonlyMap<string, readonly AgentPart[]>;
   /** The turn under way's work so far, which its working line opens; none where no turn is under way or it has done none. */
   readonly live: readonly AgentPart[];
@@ -183,22 +194,28 @@ export function managerChatView(
     if (!firstOfTurn.has(message.turnId)) firstOfTurn.set(message.turnId, message);
   }
 
-  /** Where each message on its way stands, by its key, as its scope placed it. */
-  const sending = new Map<string, ChatRunPlace>();
+  const going = options.sending ?? [];
+
+  const sending = {
+    messages: new Map<string, ChatRunPlace>(),
+    channel: new Map<string, ChatRunPlace>(),
+  };
 
   /**
    * A scope's messages as lines, each placed in its sender's run within it,
    * and the first of each turn that did work opening it; the messages on
-   * their way to the scope (`going`) placed after them, by the same rule.
+   * their way to the scope (`after`) placed after them by the same rule, into
+   * `placed`.
    */
   const linesOf = (
     run: readonly ManagerChatLiveMessage[],
-    going: readonly ChatSendingMark[] = [],
+    placed: Map<string, ChatRunPlace>,
+    after: readonly ChatSendingMark[] = [],
   ): readonly ManagerChatLine[] => {
-    const places = placesOf([...run, ...going.map(sendingMark)]);
+    const places = placesOf([...run, ...after.map(sendingMark)]);
 
-    for (const [index, message] of going.entries()) {
-      sending.set(message.clientKey, places[run.length + index] ?? CHAT_RUN_ALONE);
+    for (const [index, message] of after.entries()) {
+      placed.set(message.clientKey, places[run.length + index] ?? CHAT_RUN_ALONE);
     }
 
     return run.map((message, index): ManagerChatLine => {
@@ -219,7 +236,7 @@ export function managerChatView(
     replies.set(message.threadRoot, [...(replies.get(message.threadRoot) ?? []), message]);
   }
 
-  for (const message of options.sending ?? []) {
+  for (const message of going) {
     if (message.threadRoot === undefined) continue;
     repliesGoing.set(message.threadRoot, [
       ...(repliesGoing.get(message.threadRoot) ?? []),
@@ -228,17 +245,22 @@ export function managerChatView(
   }
 
   const threads = new Map(
-    [...replies].map(([root, thread]) => [root, linesOf(thread, repliesGoing.get(root))]),
+    [...replies].map(([root, thread]) => [
+      root,
+      linesOf(thread, sending.channel, repliesGoing.get(root)),
+    ]),
   );
 
   // Note that a reply on its way to a thread that holds no reply yet stands alone in it.
-  for (const [root, going] of repliesGoing) if (!replies.has(root)) linesOf([], going);
+  for (const [root, replying] of repliesGoing) {
+    if (!replies.has(root)) linesOf([], sending.channel, replying);
+  }
 
-  const topGoing = (options.sending ?? []).filter((message) => message.threadRoot === undefined);
+  const topGoing = going.filter((message) => message.threadRoot === undefined);
 
   return {
-    messages: linesOf(ordered),
-    top: linesOf(top, topGoing),
+    messages: linesOf(ordered, sending.messages, going),
+    top: linesOf(top, sending.channel, topGoing),
     threads,
     sending,
     work,

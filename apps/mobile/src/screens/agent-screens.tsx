@@ -908,7 +908,10 @@ const AgentConversation = memo(function AgentConversation({
     () =>
       chat && chatPage !== undefined
         ? managerChatItems(
-            managerChatView(chatPage.messages, messages ?? [], { running }),
+            managerChatView(chatPage.messages, messages ?? [], {
+              running,
+              sending: chatPage.sending ?? [],
+            }),
             messages ?? [],
             {
               writing,
