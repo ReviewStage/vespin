@@ -861,15 +861,22 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   };
 });
 
+/** The snapshot, as Postgres spells one (`xmin:xmax:xip,…`), that shows every transaction below `at` and none at or past it. */
+function atSnapshot(at: number): string {
+  return `${at}:${at}:`;
+}
+
 /**
  * One page of a delta read's whole answer (`./live-pages.ts`): the parents
  * past `after`, or the first where it names none, and every part read
  * through the read's statements narrowed to them, each part with the
  * settled id `at` read before the first page and the page after it where
- * more stand. Note that a page carries no snapshot, because a write its
- * snapshot shows may have moved a row of a page read before it, so the
- * reader confirms a write by the id once the last page is joined on, as
- * after a delta. Unavailable where its statements can't be built or read.
+ * more stand. Note that a page carries no snapshot it was read at,
+ * because a write that snapshot shows may have moved a row of a page read
+ * before it: the last page carries instead the one snapshot every write
+ * below `at` shows and none at or past it (`atSnapshot`), which is what the
+ * reader holds once it is joined on, so a write before the first page is
+ * confirmed then. Unavailable where its statements can't be built or read.
  */
 const pagedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends AnyLiveRead>(
   page: NonNullable<NonNullable<BoundLiveRead<Read>["delta"]>["page"]>,
@@ -888,12 +895,14 @@ const pagedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
     ...Option.match(parents.next, { onNone: () => undefined, onSome: (word) => ({ page: word }) }),
   };
 
+  const held = Option.isNone(parents.next) ? { snapshot: atSnapshot(at) } : undefined;
+
   // SAFETY: every part is kept, each with where it stands beside it.
   const queries = Object.fromEntries(
     Object.entries<SealedLiveQueryWire>(read.queries).map(([part, sealed]) => {
       const { snapshot: _snapshot, ...rows } = sealed;
 
-      return [part, { ...rows, sync }];
+      return [part, { ...rows, sync, ...held }];
     }),
   ) as Record<PartOf<Read>, SealedLiveQueryWire>;
 

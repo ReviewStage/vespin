@@ -2856,6 +2856,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         assert.deepEqual(idsOf(last.agents), [agentId]);
         assert.equal(last.tasks.sync?.next, at);
         assert.equal(last.tasks.sync?.page, undefined);
+        assert.equal(last.tasks.snapshot, `${at}:${at}:`);
 
         const caught = yield* askTasks(dana, at);
         assert.deepEqual(idsOf(caught.tasks), [renamed]);
