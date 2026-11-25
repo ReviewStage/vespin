@@ -22,6 +22,7 @@ import {
   agentPermissionModeRequestSchema,
   approvalAnswerRequestSchema,
 } from "./agent-approval-wire.js";
+import type { AgentFollowersAnswerView } from "./agent-followers-view.js";
 import {
   AGENT_ARCHIVE_RENAMES,
   AGENT_CALL_FAILURE,
@@ -1388,6 +1389,49 @@ export class HostedAgentClient {
       ),
       rowWritten,
     );
+  }
+
+  /** A Manager's followers, its owner first, or why they could not be read. */
+  followers(
+    agentId: string,
+  ): Effect.Effect<AgentFollowersAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agentFollowers.list, { id: agentId });
+  }
+
+  /** The account follows a Manager, or stops, which its owner may not; answers its followers as they then stand, or why they are unchanged. */
+  follow(
+    agentId: string,
+    following: boolean,
+  ): Effect.Effect<AgentFollowersAnswerView, never, HttpClient.HttpClient> {
+    const followers = this.#hosted.agentFollowers;
+
+    return following
+      ? hostedCall(followers.follow, { id: agentId })
+      : hostedCall(followers.unfollow, { id: agentId });
+  }
+
+  /** The account's own switch on a Manager it follows: whether it may use the account's machines; answers as `follow` does. */
+  setFollowerMachines(
+    agentId: string,
+    machines: boolean,
+  ): Effect.Effect<AgentFollowersAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agentFollowers.setMachines, {
+      params: { id: agentId },
+      body: { machines },
+    });
+  }
+
+  /** Another member of a Manager's workspace added as a follower, their machines off, or taken away, which its owner may not be; answers as `follow` does. */
+  changeFollower(
+    agentId: string,
+    userId: string,
+    following: boolean,
+  ): Effect.Effect<AgentFollowersAnswerView, never, HttpClient.HttpClient> {
+    const followers = this.#hosted.agentFollowers;
+
+    return following
+      ? hostedCall(followers.add, { params: { id: agentId }, body: { userId } })
+      : hostedCall(followers.remove, { id: agentId, userId });
   }
 
   /** Deletes one agent for good, a turn it still runs stopped first; that it was, or why not: gone already, or one still starting with no turn to stop yet. */

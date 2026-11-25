@@ -140,6 +140,9 @@ const IOS = {
   FOLLOWERS: notYet(
     "iOS's Following sheet adds a follower but leaves taking one away to the desktop and the web for now",
   ),
+  MANAGER_PEOPLE: notYet(
+    "iOS's Manager Settings has no People section yet, so a Manager's followers are listed and changed on the desktop and the web",
+  ),
   MENTION_APPS: notYet(
     "iOS's composers offer skills after a `/` and no `@` list yet, so no app is offered to mention",
   ),
@@ -314,6 +317,12 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_SERVERS]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PERMISSION_MODE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_FACE]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_FOLLOWERS]: panel(IOS.MANAGER_PEOPLE),
+  [PORT_ACT_KIND.AGENTS_FOLLOW]: panel(IOS.MANAGER_PEOPLE),
+  [PORT_ACT_KIND.AGENTS_UNFOLLOW]: panel(IOS.MANAGER_PEOPLE),
+  [PORT_ACT_KIND.AGENTS_SET_FOLLOWER_MACHINES]: panel(IOS.MANAGER_PEOPLE),
+  [PORT_ACT_KIND.AGENTS_ADD_FOLLOWER]: panel(IOS.MANAGER_PEOPLE),
+  [PORT_ACT_KIND.AGENTS_REMOVE_FOLLOWER]: panel(IOS.MANAGER_PEOPLE),
   [PORT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_QUEUE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_STOP]: EVERYWHERE,

@@ -29,6 +29,11 @@ import {
   type AgentPermissionMode,
   APPROVAL_STATUS_OF_ANSWER,
 } from "@repo/features/agent-approval-wire";
+import {
+  AGENT_FOLLOWER_FAILURE,
+  type AgentFollowersAnswerView,
+} from "@repo/features/agent-followers-view";
+import type { AgentFollowerWire } from "@repo/features/agent-followers-wire";
 import { type AgentQueue, QUEUE_PAUSE, type QueuedMessage } from "@repo/features/agent-queue-wire";
 import {
   AGENT_CALL_FAILURE,
@@ -3486,6 +3491,42 @@ export function automationSwitchOf(
   return change.enabled === undefined ? undefined : { automationId, enabled: change.enabled };
 }
 
+/**
+ * The Release manager's followers as a fixture run stages them: Ada, the
+ * account, its owner, and Grace, who lets it use her machines, so People
+ * lists both and Alan stands to be added. A write moves them for the run,
+ * as the service would, so a press is seen to land.
+ */
+let managerFollowers: readonly AgentFollowerWire[] = [
+  { userId: ADA.userId, owner: true, machines: true },
+  { userId: GRACE.userId, owner: false, machines: true },
+];
+
+/** The Manager's followers moved by `move`, answered as the service answers a follower write; a Manager the fixture does not stage answers as none. */
+function followersMoved(
+  agentId: string,
+  move: (followers: readonly AgentFollowerWire[]) => readonly AgentFollowerWire[],
+): AgentFollowersAnswerView {
+  if (agentId !== AGENT.MANAGER) return { failure: AGENT_FOLLOWER_FAILURE.NOT_FOUND };
+  managerFollowers = move(managerFollowers);
+
+  return { agentId, followers: managerFollowers };
+}
+
+/** A follower added last, their machines off, where they do not follow already. */
+function followerAdded(userId: string) {
+  return (followers: readonly AgentFollowerWire[]) =>
+    followers.some((each) => each.userId === userId)
+      ? followers
+      : [...followers, { userId, owner: false, machines: false }];
+}
+
+/** A follower taken away, which the owner may not be. */
+function followerRemoved(userId: string) {
+  return (followers: readonly AgentFollowerWire[]) =>
+    followers.filter((each) => each.owner || each.userId !== userId);
+}
+
 /** One kind's staged answer: its result. */
 type StagedAnswer<Kind extends PortActKind> = (
   payload: PortActPayload<Kind>,
@@ -3715,6 +3756,19 @@ const ANSWERS: StagedAnswers = {
     labels: [{ port: 5173, label: "vite" }],
   }),
   [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: null }),
+  [ACT_KIND.AGENTS_FOLLOWERS]: ({ agentId }) => followersMoved(agentId, (followers) => followers),
+  [ACT_KIND.AGENTS_FOLLOW]: ({ agentId }) => followersMoved(agentId, followerAdded(ADA.userId)),
+  [ACT_KIND.AGENTS_UNFOLLOW]: ({ agentId }) => followersMoved(agentId, followerRemoved(ADA.userId)),
+  [ACT_KIND.AGENTS_SET_FOLLOWER_MACHINES]: ({ agentId, machines }) =>
+    followersMoved(agentId, (followers) =>
+      followers.map((each) =>
+        each.userId === ADA.userId && !each.owner ? { ...each, machines } : each,
+      ),
+    ),
+  [ACT_KIND.AGENTS_ADD_FOLLOWER]: ({ agentId, userId }) =>
+    followersMoved(agentId, followerAdded(userId)),
+  [ACT_KIND.AGENTS_REMOVE_FOLLOWER]: ({ agentId, userId }) =>
+    followersMoved(agentId, followerRemoved(userId)),
   // Note that a message, a queue change, and a Stop are taken as the service takes them, answered with the agent or the queue as it then stands, though nothing here moves, so the transcript reads as staged; the iOS run lays a queue change and a Stop's pause over the transcript itself (`queuedAppState`).
   [ACT_KIND.AGENTS_MESSAGE]: ({ agentId }) => {
     const held = stagedAgent(agentId);

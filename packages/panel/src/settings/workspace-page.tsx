@@ -79,7 +79,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import type { ActResult, ActVariables } from "../act.js";
 import { actMutation, pressMutation } from "../act-mutations.js";
-import { ACTOR_SIZE, ActorMark, actorMarkWidth, YouBadge } from "../actor-ref.js";
+import { ACTOR_SIZE, ActorMark, actorMarkWidth, PersonName } from "../actor-ref.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
@@ -368,13 +368,7 @@ function MemberRow({
               <ActorMark actor={memberActor(member, readerId)} size={ACTOR_SIZE.CARD} />
             </ReplayMask>
           ),
-          label: (
-            // The person card's own wrapper, so You stands off the name as it does on the card.
-            <span className="actor-card-name inline-flex items-center gap-item-gap">
-              <ReplayMask>{member.name}</ReplayMask>
-              {userId === readerId ? <YouBadge /> : null}
-            </span>
-          ),
+          label: <PersonName name={member.name} you={userId === readerId} />,
           description: (
             <OneLine hint={wholeWordsHint(member.email)}>
               <ReplayMask>{member.email}</ReplayMask>
