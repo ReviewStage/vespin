@@ -14,8 +14,9 @@
  * file found there is never one cut short, and one that failed is deleted;
  * that the header goes to the download alone, never to a log, a file's
  * name, or a notice, and a failure says only the app's own words; and that
- * every file here is let go on sign-out (`forgetServiceFiles`), so another
- * account signed in never reads this one's. A fixture run's file, answered
+ * every file here is let go on sign-out and whenever the account signed in
+ * changes (`forgetServiceFiles`, `account-files.ts`), so another account
+ * signed in never reads this one's. A fixture run's file, answered
  * as its own `data:` address, is written from it.
  */
 
@@ -233,6 +234,9 @@ export async function serviceFile(
     partial.move(file);
 
     return { uri: file.uri, contentType: type, bytes: file.size };
+  } catch (cause: unknown) {
+    // Note that any other failure, a file system's or the host's, leaves as the app's own words alone, since its own might name the request.
+    throw cause instanceof FileUnread ? cause : new FileUnread();
   } finally {
     if (partial.exists) partial.delete();
   }

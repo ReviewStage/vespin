@@ -17,6 +17,7 @@ import { useQuickActionRouting } from "expo-quick-actions/router";
 import { usePathname, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
+import { useAccountFiles } from "../../account-files.js";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxShown, useKeepInboxShown } from "../../inbox/inbox-shown.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
@@ -113,6 +114,8 @@ export default function TabsLayout() {
   const waiting = useInboxBadge();
   // The members of the workspace the phone works in, whose pictures every face reads, followed once for every tab.
   useMemberPicturesFollow();
+  // The pictures and files kept for another account let go as this one signs in, however it came to.
+  useAccountFiles();
   useSidebarChoiceLapse();
   // New task over the app setup's Finish just let in, where the workspace reaches a repository.
   useNewTaskAfterSetup();
