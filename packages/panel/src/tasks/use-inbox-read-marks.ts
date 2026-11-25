@@ -96,12 +96,15 @@ export function useInboxReadMarks({
   readerId: string | undefined;
 }): InboxReadMarks {
   const toast = useToast();
+
   const { mutateAsync: sendReadState } = useMutationCalls(
     actMutation(ACT_KIND.AGENTS_INBOX_READ_STATE),
   );
+
   const { mutateAsync: sendReadAll } = useMutationCalls(
     actMutation(ACT_KIND.AGENTS_INBOX_READ_ALL),
   );
+
   const { mutateAsync: sendRemind } = useMutationCalls(actMutation(ACT_KIND.AGENTS_INBOX_REMIND));
 
   const refused = useCallback(
