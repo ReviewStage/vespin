@@ -33,18 +33,37 @@ type TasksFixture = {
   | "fixtureOpensTasks"
 >;
 
+/** A list a fixture run stages. */
+type StagedList = NonNullable<ReturnType<TasksFixture["fixtureTasksView"]>>;
+
 let landed: TasksFixture | undefined;
 let loading: Promise<void> | undefined;
 
 /** The Query client the window's document is written into, whose `run` a fixture run's acts are staged by (`act.ts`). */
 let documentClient: QueryClient | undefined;
 
-/** The tasks fixture with the Inbox's tasks, answers, and document laid over its own, which come last. */
+/**
+ * The tasks fixture with the Inbox's tasks, answers, and document laid over
+ * its own, which come last. Note that the Inbox's list is laid once for each
+ * list the tasks fixture hands, and handed again as the same list after,
+ * as a live window's list stands the same until main writes another: every
+ * selector over the document reads it, and a list laid afresh at each read
+ * would make each of them walk and redraw it, which no live window pays.
+ */
 function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
+  const laid = new WeakMap<StagedList, { readonly profile: string; readonly view: StagedList }>();
+
   const fixtureTasksView: TasksFixture["fixtureTasksView"] = (run) => {
     const view = tasks.fixtureTasksView(run);
 
-    return view === undefined ? undefined : inbox.inboxTasksView(run.profile, view);
+    if (view === undefined) return undefined;
+    const kept = laid.get(view);
+
+    if (kept?.profile === run.profile) return kept.view;
+    const laidView = inbox.inboxTasksView(run.profile, view);
+    laid.set(view, { profile: run.profile, view: laidView });
+
+    return laidView;
   };
 
   return {

@@ -174,7 +174,6 @@ const STILL_MOTION_CSS = `
   --ui-duration-fast: 0s !important;
   --ui-duration-hover: 0s !important;
   --ui-duration-pane: 0s !important;
-  --ui-row-stagger: 0s !important;
   --ui-late-delay: 0s !important;
   --ui-hint-delay: 0s !important;
   --ui-settle-delay: 0s !important;

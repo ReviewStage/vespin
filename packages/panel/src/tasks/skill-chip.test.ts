@@ -17,6 +17,7 @@ import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
+import { useHandedWords } from "./box-words.js";
 import type { BoxHeld } from "./refused-send.js";
 import { SentWords, SkillFiles } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
@@ -102,7 +103,7 @@ function Composer({ words, commands = false }: { words: string; commands?: boole
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
     composer: {
-      held,
+      held: { words: useHandedWords(held.text), attachments: held.attachments },
       updateHeld: (next) => setHeld((now) => next(now) ?? now),
       sending: false,
       note: undefined,

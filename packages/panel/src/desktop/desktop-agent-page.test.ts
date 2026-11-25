@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 
 /**
- * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; ⌘F finds in its conversation; its box offers Talk; and a page its words link opens in the panel beside it. Synthetic throughout.
+ * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; ⌘F finds in its conversation; its box offers Talk; a Manager's Settings stands as a button beside its ⋯, which no longer lists it; a page its words link opens in the panel beside it; a Manager's Inbox tab lists its threads as the window's Inbox's view chooses; and a Manager's page on a phone stands on its chat with its threads. Synthetic throughout.
  */
 
 import assert from "node:assert/strict";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import { AGENT_RUNTIME, AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
+import {
+  AGENT_KIND,
+  AGENT_RUNTIME,
+  AGENT_STATUS,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
+import { EVERYONES, INBOX_SHOW } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -15,8 +21,10 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
+import { LIVE_READ } from "@repo/features/live-wire";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
-import type { TasksSkillsParams } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, type TasksSkillsParams } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -47,7 +55,7 @@ import {
 import { handHostReads, handInboxItems, handState, holdPages } from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, typeInComposer } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
-import { ACME } from "../testing/desktop-inbox.js";
+import { ACME, SHOW_KEY, WHOSE_KEY } from "../testing/desktop-inbox.js";
 import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { pushedTranscripts, tasksControl } from "../testing/tasks-control.js";
@@ -283,6 +291,39 @@ test("an agent on no task's box offers Talk, as an agent's tab on a task does", 
   );
 });
 
+test("a Manager's page stands Settings as a button beside its ⋯, which opens its card, and its ⋯ no longer lists it", async () => {
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const manager = { ...MANAGER, kind: AGENT_KIND.MANAGER };
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+  const container = await mountAgentPage(history, tasks);
+
+  const more =
+    container.querySelector<HTMLElement>('button[aria-label="Agent actions"]') ??
+    assert.fail("the head stands its ⋯");
+
+  act(() => more.click());
+
+  const items = [...document.querySelectorAll('[role="menuitem"]')].map(
+    (item) => item.textContent ?? "",
+  );
+
+  assert.ok(items.length > 0, "the ⋯ opens its menu");
+  assert.ok(!items.some((item) => item.includes("Settings")), "the ⋯ leaves Settings out");
+  act(() => more.click());
+
+  const settings =
+    container.querySelector<HTMLElement>('button[aria-label="Settings"]') ??
+    assert.fail("the head stands a Settings button");
+
+  act(() => settings.click());
+  await settleQueries();
+  assert.ok(document.querySelector('[role="dialog"]'), "Settings opens the Manager's card");
+});
+
 test("a page a Manager's words link opens in the panel beside its chat, read on its task, as a task's page opens one, the Manager's page still standing", async () => {
   const taskId = "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d";
   const pageId = "3c4d5e6f-0000-4000-8000-000000000001";
@@ -343,4 +384,142 @@ test("a page a Manager's words link opens in the panel beside its chat, read on 
     "the page stands in the panel beside the chat",
   );
   assert.equal(history.location.pathname, at, "the Manager's page still stands");
+});
+
+test("a Manager's Inbox tab counts its open threads, and the dock over its box opens that tab on the oldest waiting rather than the window's Inbox", async () => {
+  handInboxItems({
+    rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: { [MANAGER.id]: [NEWER, OLDER] } },
+  });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const manager: ListedAgent = { ...MANAGER, kind: AGENT_KIND.MANAGER };
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+  const container = await mountAgentPage(history, tasks);
+
+  const inboxTab =
+    [...container.querySelectorAll<HTMLElement>("[role='tab']")].find((tab) =>
+      /^Inbox/u.test(tab.textContent ?? ""),
+    ) ?? assert.fail("a Manager's page offers an Inbox tab");
+
+  assert.match(inboxTab.textContent ?? "", /Inbox\s*2/u, "it counts both open threads");
+
+  const press =
+    container.querySelector<HTMLElement>(
+      ".agent-threads-dock [role='button'], .agent-threads-dock button",
+    ) ?? assert.fail("the Manager's box docks its threads");
+
+  act(() => press.click());
+  await settleQueries();
+  assert.equal(history.location.pathname, `/acme/agent/${MANAGER.id}`, "the page stands");
+  assert.equal(inboxTab.getAttribute("aria-selected"), "true", "the Inbox tab is chosen");
+  assert.ok(
+    [...container.querySelectorAll("h2")].some((heading) => heading.textContent === OLDER.title),
+    "the oldest waiting thread is shown",
+  );
+});
+
+test("a Manager's page on a phone stands on its chat, a message's thread summed under it, with no row of views, where its transcript stood", async () => {
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const manager: ListedAgent = { ...MANAGER, kind: AGENT_KIND.MANAGER };
+
+  const said = (
+    id: string,
+    seq: number,
+    text: string,
+    threadRoot: string | null,
+  ): ManagerChatLiveMessage => ({
+    id,
+    seq,
+    clientKey: `key-${id}`,
+    authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+    authorUserId: null,
+    authorName: "Release manager",
+    text,
+    attachments: [],
+    threadRoot,
+    broadcast: false,
+    turnId: null,
+    lineId: null,
+    createdAt: seq * 1_000,
+    editedAt: null,
+  });
+
+  // The chat holds one message with one reply in its thread, newest first, as the service pages it.
+  handState(
+    {},
+    {
+      tasks: IDLE_TASKS_VIEW,
+      [LIVE_READ.MANAGER_CHAT]: {
+        [manager.id]: {
+          rows: {
+            messages: [
+              said("reply", 2, "The web app's.", "first"),
+              said("first", 1, "On it.", null),
+            ],
+            sending: [],
+          },
+        },
+      },
+    },
+  );
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+
+  const container = await mountAgentPage(history, tasks, () =>
+    createElement(AgentRoutePage, { tasks, away: { label: "Home", onPress: () => {} } }),
+  );
+
+  const page = container.querySelector(".agent-page") ?? assert.fail("the Manager's page stands");
+  assert.match(page.textContent ?? "", /On it\./u, "the chat's message stands");
+  assert.match(page.textContent ?? "", /1 reply/u, "its thread's reply is summed under it");
+  assert.equal(page.querySelector("[role='tablist']"), null, "no row of views stands");
+});
+
+test("a Manager's Inbox tab lists its threads as the window's Inbox's view chooses, offering that view's menu", async () => {
+  const answered: InboxItem = {
+    ...ask("7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d03", "Rename the branch?", 5),
+    status: INBOX_STATUS.ANSWERED,
+  };
+
+  // The window's Inbox shows Open, addressed to anyone.
+  window.localStorage.setItem(SHOW_KEY, JSON.stringify(INBOX_SHOW.OPEN));
+  window.localStorage.setItem(WHOSE_KEY, JSON.stringify(EVERYONES));
+  handInboxItems({
+    rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: { [MANAGER.id]: [NEWER, answered] } },
+  });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const manager: ListedAgent = { ...MANAGER, kind: AGENT_KIND.MANAGER };
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+  const container = await mountAgentPage(history, tasks);
+
+  const inboxTab =
+    [...container.querySelectorAll<HTMLElement>("[role='tab']")].find((tab) =>
+      /^Inbox/u.test(tab.textContent ?? ""),
+    ) ?? assert.fail("a Manager's page offers an Inbox tab");
+
+  act(() => inboxTab.click());
+  await settleQueries();
+
+  const threads =
+    container.querySelector<HTMLElement>(".agent-threads") ??
+    assert.fail("the Inbox tab draws the Manager's threads");
+
+  assert.ok(
+    threads.querySelector("[aria-label='View options']") !== null,
+    "the list offers the window's Inbox's view's menu",
+  );
+  assert.match(threads.textContent ?? "", /Ship the notes\?/u, "the open thread is listed");
+  assert.doesNotMatch(
+    threads.textContent ?? "",
+    /Rename the branch\?/u,
+    "the answered thread is left out under the window's Inbox's Open",
+  );
 });

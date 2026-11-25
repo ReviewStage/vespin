@@ -219,6 +219,7 @@ it.layer(getTestDB())("the models route", (it) => {
             posthogApiHost: undefined,
             posthogProjectApiKey: undefined,
             posthogIngestHost: undefined,
+            posthogDistinctIdKey: undefined,
             cronSecret: undefined,
             githubWebhookSecret: undefined,
             providerKeyEncryptionKeys: undefined,

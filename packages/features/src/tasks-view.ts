@@ -47,7 +47,7 @@ import {
   workspaceSentryAnswerSchema,
   workspaceSentryDisconnectRequestSchema,
 } from "./sentry-install-wire.js";
-import { HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
+import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
 import {
   workspaceSlackBotAnswerSchema,
   workspaceSlackBotChannelRequestSchema,
@@ -202,6 +202,16 @@ export const tasksViewSchema = EffectSchema.Struct({
    * or from a service before it was answered.
    */
   taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
+  /**
+   * The tasks outside the list this run read one by one and drew, a task a
+   * window opened or the Inbox named, and how long their drawing held the
+   * thread in all, in milliseconds, as the iOS app's `launch:load` counts
+   * them; absent before the first is drawn. Note that a drawing's time rides
+   * with the view's next telling, so the last one's may not be told yet.
+   */
+  coldReads: EffectSchema.optionalKey(
+    EffectSchema.Struct({ count: countedNumber, drawMs: countedNumber }),
+  ),
   /** Whether what the host follows live is current (`HOST_LIVE`); absent before the list's follow first says, which reads as live. */
   live: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(HOST_LIVE))),
   /** The workspaces the account is a member of, its first one first, as the last list read answered; none before the first lands. */

@@ -71,9 +71,6 @@ import {
   GroupHeader,
   joinRefs,
   LAYOUT_ELEMENT,
-  ListMotion,
-  motionKey,
-  motionRows,
   NoRepositoryGlyph,
   PAGE_FRAME,
   PAGE_WIDTH,
@@ -91,7 +88,6 @@ import {
   Text,
   taskRowColumns,
   taskRowFit,
-  useLeaving,
   useMinute,
   useRovingKeys,
 } from "@repo/ui";
@@ -110,6 +106,7 @@ import {
 } from "@repo/ui/virtual-rows";
 import { Schema } from "effect";
 import {
+  Fragment,
   memo,
   type ReactNode,
   type RefObject,
@@ -829,8 +826,7 @@ function TasksListGroup({
   measured: Map<string, VirtualRowMeasurements> | undefined;
 }): React.JSX.Element {
   const runKey = groupKey(group.head);
-  const drawn = useLeaving(group.tasks, taskIdOf);
-  const keys = useMemo(() => drawn.map(({ key }) => key), [drawn]);
+  const keys = useMemo(() => group.tasks.map(taskIdOf), [group.tasks]);
   const run = useRef<VirtualRowsHandle>(null);
   const { holdRun } = place;
   useLayoutEffect(() => holdRun(run), [holdRun]);
@@ -854,7 +850,7 @@ function TasksListGroup({
   };
 
   const rows =
-    drawn.length === 0 && !adding ? (
+    group.tasks.length === 0 && !adding ? (
       group.older === undefined ? (
         <Text
           variant={TEXT_VARIANT.CAPTION}
@@ -868,16 +864,11 @@ function TasksListGroup({
       <>
         {/* Note that the quick add's lines stand in a list of their own, over the run, because a run draws only its rows. */}
         {adding ? (
-          <Stack
-            as={LAYOUT_ELEMENT.UL}
-            gap={GAP.NONE}
-            moves
-            className={`tasks-list-adds ${ROWS_GRID}`}
-          >
+          <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.NONE} className={`tasks-list-adds ${ROWS_GRID}`}>
             <QuickAddLines quick={quick} line={rowQuickAddLine(properties)} />
           </Stack>
         ) : null}
-        {drawn.length === 0 ? null : (
+        {group.tasks.length === 0 ? null : (
           <VirtualRows
             scroller={place.scroller}
             shiftedBy={place.list}
@@ -886,7 +877,6 @@ function TasksListGroup({
             overscan={place.finding ? keys.length : undefined}
             anchor={VIRTUAL_ROWS_ANCHOR.START}
             listItems
-            moves
             holdsFocus
             className={`tasks-list-rows ${ROWS_GRID} data-[dragging=true]:cursor-grabbing`}
             aria-label={head.name}
@@ -898,9 +888,9 @@ function TasksListGroup({
             onAtEnd={onSettledEnd}
           >
             {(index, at) => {
-              const entry = drawn[index];
+              const task = group.tasks[index];
 
-              return entry === undefined ? null : row(entry.value, at);
+              return task === undefined ? null : row(task, at);
             }}
           </VirtualRows>
         )}
@@ -916,9 +906,8 @@ function TasksListGroup({
 
   return (
     <section
-      className="tasks-list-group col-span-full grid grid-cols-subgrid content-start gap-y-list-gap rounded-ui-10 transition-[background-color] duration-(--ui-duration-hover) ease-motion-exit data-leaving:grid-cols-tasks-list data-leaving:gap-x-block-gap data-[drop-target=true]:bg-muted [&>:not(.tasks-list-rows)]:col-span-full"
+      className="tasks-list-group col-span-full grid grid-cols-subgrid content-start gap-y-list-gap rounded-ui-10 transition-[background-color] duration-(--ui-duration-hover) ease-motion-exit data-[drop-target=true]:bg-muted [&>:not(.tasks-list-rows)]:col-span-full"
       aria-label={head.name}
-      {...motionKey(groupKey(group.head))}
       data-row-drop={draggable ? zone : undefined}
       data-folded={folded ? "true" : undefined}
     >
@@ -946,19 +935,6 @@ function TasksListGroup({
       )}
     </section>
   );
-}
-
-/** The List's groups, each drawn on after its last task left it, or the filter took it away, until its exit has played (`ListMotion`); kept while the grouping stands, so changing it swaps every group at once. */
-function LeavingTasksGroups({
-  groups,
-  group,
-}: {
-  groups: readonly TasksGroup[];
-  group: (group: TasksGroup) => ReactNode;
-}): React.JSX.Element {
-  const drawn = useLeaving(groups, (each) => groupKey(each.head));
-
-  return <>{drawn.map(({ value }) => group(value))}</>;
 }
 
 /** The List: the listed workspace's tasks under their pins, sections, and the grouping chosen, in one grid whose columns line up down the page. */
@@ -1137,8 +1113,6 @@ export function TasksList({
   // Note that only rows an open group lists stay chosen, so a task the filter or a fold took away is never acted on.
   const selection = useTasksSelection(tasks, new Set(order), frame.chosen);
   const { regionId, selected } = selection;
-  // Note that the motion is handed what lays the rows out, so a draw that moved none measures none; a fold tells it of its own (`useListMotionReplay`).
-  const laidOut = useMemo(() => ({ groups, properties }), [groups, properties]);
 
   return (
     <CollectionPage
@@ -1184,84 +1158,80 @@ export function TasksList({
         order={[order]}
         bringIn={runs.bringIn}
       >
-        <ListMotion root={list} change={laidOut}>
-          <div
-            {...roving}
-            ref={listRef}
-            className="tasks-list grid grid-cols-tasks-list gap-x-block-gap gap-y-section-gap pb-ui-24"
-            data-row-drop-scope=""
-            {...motionRows()}
-            style={listStyle}
-          >
-            {/* Note that an empty section stands as a place to drag into, so the view matches nothing where no group holds a task. */}
-            {groups.every((group) => group.tasks.length === 0) ? (
-              <Text
-                variant={TEXT_VARIANT.CAPTION}
-                tone={TEXT_TONE.MUTED}
-                className="tasks-list-none col-span-full"
-              >
-                {NONE_STANDING}
-              </Text>
-            ) : null}
-            <LeavingTasksGroups
-              key={display.grouping}
-              groups={groups}
-              group={(group) => {
-                const named = groupHead(group.head, listTasks, repositories, people, pictures);
+        <div
+          {...roving}
+          ref={listRef}
+          className="tasks-list grid grid-cols-tasks-list gap-x-block-gap gap-y-section-gap pb-ui-24"
+          data-row-drop-scope=""
+          style={listStyle}
+        >
+          {/* Note that an empty section stands as a place to drag into, so the view matches nothing where no group holds a task. */}
+          {groups.every((group) => group.tasks.length === 0) ? (
+            <Text
+              variant={TEXT_VARIANT.CAPTION}
+              tone={TEXT_TONE.MUTED}
+              className="tasks-list-none col-span-full"
+            >
+              {NONE_STANDING}
+            </Text>
+          ) : null}
+          {/* Note that the groups are keyed by the grouping, so changing it swaps every group at once. */}
+          <Fragment key={display.grouping}>
+            {groups.map((group) => {
+              const named = groupHead(group.head, listTasks, repositories, people, pictures);
 
-                return (
-                  <TasksListGroup
-                    key={groupKey(group.head)}
-                    group={group}
-                    head={named}
-                    folded={folds.folded(group.head)}
-                    onToggle={() => folds.toggle(group.head)}
-                    drops={drops}
-                    draggable={!narrow}
-                    onShowOlder={() =>
-                      frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })
-                    }
-                    onSettledEnd={
-                      mayHoldSettled(group.head) ? frame.settledPages?.onRunEnd : undefined
-                    }
-                    tasks={tasks}
-                    properties={properties}
-                    place={runsPlace}
-                    measured={frame.measured}
-                    row={(task, at) => (
-                      <TasksPageRow
-                        key={task.id}
-                        place={at}
-                        tasks={rowTab}
-                        task={task}
-                        opened={opened?.task.id === task.id ? opened : undefined}
-                        workspaceName={workspaceName}
-                        repositoryName={
-                          task.repository === null
-                            ? NO_REPOSITORY
-                            : repositoryLabel(task.repository, repositories)
-                        }
-                        waiting={waitingOn.get(task.id) ?? 0}
-                        properties={properties}
-                        assigneeHeld={
-                          !narrow &&
-                          group.head.kind === TASKS_GROUP.ASSIGNEE &&
-                          group.head.assigneeId === (task.assignee?.userId ?? null)
-                        }
-                        subTasksFinished={subTaskCounts.get(task.id)?.finished ?? 0}
-                        subTasksTotal={subTaskCounts.get(task.id)?.total ?? 0}
-                        chosen={selection.chosenOf(task.id)}
-                        more={more}
-                        onSelect={tasks.onSelect}
-                        onStanding={setStanding}
-                      />
-                    )}
-                  />
-                );
-              }}
-            />
-          </div>
-        </ListMotion>
+              return (
+                <TasksListGroup
+                  key={groupKey(group.head)}
+                  group={group}
+                  head={named}
+                  folded={folds.folded(group.head)}
+                  onToggle={() => folds.toggle(group.head)}
+                  drops={drops}
+                  draggable={!narrow}
+                  onShowOlder={() =>
+                    frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })
+                  }
+                  onSettledEnd={
+                    mayHoldSettled(group.head) ? frame.settledPages?.onRunEnd : undefined
+                  }
+                  tasks={tasks}
+                  properties={properties}
+                  place={runsPlace}
+                  measured={frame.measured}
+                  row={(task, at) => (
+                    <TasksPageRow
+                      key={task.id}
+                      place={at}
+                      tasks={rowTab}
+                      task={task}
+                      opened={opened?.task.id === task.id ? opened : undefined}
+                      workspaceName={workspaceName}
+                      repositoryName={
+                        task.repository === null
+                          ? NO_REPOSITORY
+                          : repositoryLabel(task.repository, repositories)
+                      }
+                      waiting={waitingOn.get(task.id) ?? 0}
+                      properties={properties}
+                      assigneeHeld={
+                        !narrow &&
+                        group.head.kind === TASKS_GROUP.ASSIGNEE &&
+                        group.head.assigneeId === (task.assignee?.userId ?? null)
+                      }
+                      subTasksFinished={subTaskCounts.get(task.id)?.finished ?? 0}
+                      subTasksTotal={subTaskCounts.get(task.id)?.total ?? 0}
+                      chosen={selection.chosenOf(task.id)}
+                      more={more}
+                      onSelect={tasks.onSelect}
+                      onStanding={setStanding}
+                    />
+                  )}
+                />
+              );
+            })}
+          </Fragment>
+        </div>
       </SelectionRegion>
       {/* Note that the bar floats at the page's foot rather than over the rows, so choosing a row moves none under the pointer. */}
       <div className="tasks-list-selection pointer-events-none sticky bottom-ui-16 z-4 flex justify-center *:pointer-events-auto">

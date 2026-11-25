@@ -33,6 +33,7 @@ import {
   type ReactNode,
   type RefObject,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -57,6 +58,7 @@ import { AgentModelChip } from "./agent-model-chip.js";
 import { PayerValue, usePayerPlan } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { type NewAgentTalk, useAgentTalk } from "./agent-talk.js";
+import { useWordsOf } from "./box-words.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
 import type { MoveCarry } from "./move-agent.js";
@@ -226,6 +228,21 @@ export const BUTTON = {
   SAVE: "Save",
 } as const;
 
+/** No rows of the owner's own on the + menu. */
+const NO_PLUS: readonly MenuEntry[] = [];
+
+/**
+ * What Send says while a send goes other than steering: Save for an edit, and
+ * Queue or Steer as ⌘ turns it. Note that each glyph is drawn once, here, so
+ * Send is handed the same one on every key and draws again only as the way
+ * it sends changes.
+ */
+const SEND_WAY = {
+  SAVE: { label: BUTTON.SAVE, icon: <GLYPH.DONE /> },
+  QUEUE: { label: BUTTON.QUEUE, icon: <GLYPH.QUEUED /> },
+  STEER: { label: BUTTON.STEER, icon: <GLYPH.STEER /> },
+} as const;
+
 /**
  * The room the composer's card stands in, a note under it, on the
  * transcript's own inset so the card and the column line up, with none above
@@ -327,7 +344,7 @@ export function AgentComposer({
   payerSubscriptionId,
   owner,
   servers,
-  plus = [],
+  plus = NO_PLUS,
   context,
   brief,
   onStop,
@@ -499,8 +516,13 @@ export function AgentComposer({
 
   const statuses = useIntegrationStatuses();
 
+  // Note that the box reads its words as their source, so a word typed draws the field and never the box around it, which reads only whether it is empty.
+  const words = composer.held.words;
+  const heldFiles = composer.held.attachments;
+  const holdsWords = useWordsOf(words, (text) => hasWordsOrFiles(text.trim(), heldFiles));
+
   const box = useMessageBox({
-    draft: composer.held.text,
+    draft: words,
     // Note that the box's words are moved on from what its draft holds as the change lands, never from a render's copy, since one keystroke may hand back several words.
     setDraft: (text) => composer.updateHeld((now) => ({ ...now, text })),
     // Note that a closed box asks for nothing, since it takes nothing.
@@ -560,11 +582,7 @@ export function AgentComposer({
 
   // Note that an edit's Save stands with the box emptied, since saving nothing gives the edit up.
   const empty =
-    answer === undefined
-      ? !sendsEmpty &&
-        !editingQueued &&
-        !hasWordsOrFiles(composer.held.text.trim(), composer.held.attachments)
-      : !answer.sendable;
+    answer === undefined ? !sendsEmpty && !editingQueued && !holdsWords : !answer.sendable;
 
   const showsStop = empty && stoppable && !composer.sending && !editingQueued;
   // While a turn runs and the box holds a message it may go two ways; holding ⌘ says on Send which a send takes.
@@ -711,9 +729,9 @@ export function AgentComposer({
     switch (name) {
       case SLASH_COMMAND.COMPACT:
       case SLASH_COMMAND.GOAL: {
-        const words = leadingCommand(composer.held.text)?.words ?? "";
+        const after = leadingCommand(words.get())?.words ?? "";
 
-        if (chosen) editor.current?.replace(`/${name} ${words}`);
+        if (chosen) editor.current?.replace(`/${name} ${after}`);
 
         return;
       }
@@ -751,7 +769,7 @@ export function AgentComposer({
    */
   const typedCommand = (): SlashCommand | undefined => {
     if (editingQueued) return undefined;
-    const typed = leadingCommand(composer.held.text);
+    const typed = leadingCommand(words.get());
 
     if (typed === undefined || !isSlashCommand(typed.name)) return undefined;
 
@@ -812,18 +830,55 @@ export function AgentComposer({
   // Save for an edit, and Queue or Steer as ⌘ turns it.
   const sendWay =
     editingQueued && !modifierHeld
-      ? { label: BUTTON.SAVE, icon: <GLYPH.DONE /> }
+      ? SEND_WAY.SAVE
       : queuesNow
-        ? { label: BUTTON.QUEUE, icon: <GLYPH.QUEUED /> }
+        ? SEND_WAY.QUEUE
         : (queues || editingQueued) && modifierHeld
-          ? { label: BUTTON.STEER, icon: <GLYPH.STEER /> }
+          ? SEND_WAY.STEER
           : undefined;
 
+  // Note that what the foot draws from the box's owner is drawn again only as the owner hands it anew, never on a word typed, since the words reach the box alone.
+  const narrowTools = box.folds(FOLD_WIDTH.TOOLS);
+  const toolsDrawn = useMemo(() => tools?.(narrowTools), [tools, narrowTools]);
+  const narrowModel = box.folds(FOLD_WIDTH.MODEL);
+
+  const modelChip = useMemo(
+    () =>
+      model === undefined ? null : (
+        <AgentModelChip
+          model={model}
+          models={models}
+          modelsFailed={modelsFailed}
+          readModels={readModels}
+          usage={usage}
+          payer={payer}
+          payerSubscriptionId={payerSubscriptionId}
+          owner={owner}
+          narrow={narrowModel}
+          permissions={mode}
+          asked={modelAsk}
+        />
+      ),
+    [
+      model,
+      models,
+      modelsFailed,
+      readModels,
+      usage,
+      payer,
+      payerSubscriptionId,
+      owner,
+      narrowModel,
+      mode,
+      modelAsk,
+    ],
+  );
+
   // What the + offers beside files, its menu's rows after Attachment: the servers' popover, where the box hands servers, then its owner's.
-  const plusRows: readonly MenuEntry[] = [
-    ...(servers === undefined ? [] : [serversMenuPanel(servers, statuses)]),
-    ...plus,
-  ];
+  const plusRows: readonly MenuEntry[] = useMemo(
+    () => [...(servers === undefined ? [] : [serversMenuPanel(servers, statuses)]), ...plus],
+    [servers, statuses, plus],
+  );
 
   return (
     <ComposerCard data-status={status} data-closed={closed ? "" : undefined} {...files.drop.target}>
@@ -840,28 +895,14 @@ export function AgentComposer({
           ) : undefined)
         }
         plus={plusRows}
-        tools={tools?.(box.folds(FOLD_WIDTH.TOOLS))}
+        tools={toolsDrawn}
         call={talk?.press}
         talk={talk?.talk}
         dictates={talk?.onCall !== true}
         actions={
           <>
             {actions?.(box.folds(FOLD_WIDTH.ACTIONS))}
-            {model === undefined ? null : (
-              <AgentModelChip
-                model={model}
-                models={models}
-                modelsFailed={modelsFailed}
-                readModels={readModels}
-                usage={usage}
-                payer={payer}
-                payerSubscriptionId={payerSubscriptionId}
-                owner={owner}
-                narrow={box.folds(FOLD_WIDTH.MODEL)}
-                permissions={mode}
-                asked={modelAsk}
-              />
-            )}
+            {modelChip}
             <AgentContextRing
               context={context}
               brief={brief}

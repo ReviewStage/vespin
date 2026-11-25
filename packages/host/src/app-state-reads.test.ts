@@ -12,6 +12,7 @@ import type { AppStateSnapshot } from "./app-state.js";
 import {
   answerKeeper,
   INBOX_FEED,
+  inboxFeedHolds,
   inboxGroupsIn,
   selectInboxFeed,
   selectInboxHoldings,
@@ -223,5 +224,22 @@ describe("selectInboxHoldings", () => {
     ]);
     expect(grouped(manager.workspaceId)).toContainEqual(["Release manager", ["cut-the-release"]]);
     expect(grouped("another-workspace")).toEqual([]);
+  });
+
+  it("holds a Manager's thread the feed carries under its agent, so a screen waits on the list that names the agent rather than looking for it", () => {
+    const launched = documentWith(byTask, false, [{ taskId: "older" }]);
+
+    const document: AppStateSnapshot = {
+      ...launched,
+      [LIVE_READ.INBOX_ITEMS]: {
+        rows: {
+          [INBOX_SCOPE_KIND.TASK]: byTask,
+          agents: { "manager-1": [thread("cut-the-release", 400)] },
+        },
+      },
+    };
+
+    expect(inboxFeedHolds(document, "cut-the-release")).toBe(true);
+    expect(inboxFeedHolds(document, "elsewhere")).toBe(false);
   });
 });

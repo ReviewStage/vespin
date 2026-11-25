@@ -63,7 +63,7 @@ import { heldHosts, hostRemove } from "./hosts-follow.js";
 import type { HeldSlice } from "./live-collection.js";
 import { heldMachineAsks } from "./machine-asks-follow.js";
 import { heldMachines, machineChange, machineRemove } from "./machines-follow.js";
-import { heldMemories, memoryForget, memorySave } from "./memory-follow.js";
+import { heldMemories, MemoriesKey, memoryForget, memorySave } from "./memory-follow.js";
 import type { WindowFocus } from "./window-focus.js";
 
 /** The service's side of the account's asks, as this concern asks it. */
@@ -167,7 +167,7 @@ export interface AccountAsksComposer extends Composer {
 /** The live follows' reads the windows hold (`contract/live-follow.ts`), each held through its stream's scope. */
 interface LiveFollows {
   /** Every workspace's memories Settings › Memory holds, by the workspace. */
-  readonly memories: HeldSlice<string>;
+  readonly memories: HeldSlice<MemoriesKey>;
   /** The account's hosts Settings › Hosts holds, by the account. */
   readonly hosts: HeldSlice<string>;
   /** The windows' one hold on the hosts, under the account signed in. */
@@ -232,11 +232,11 @@ function liveFollows(
     const gate = gateOf(dependencies);
 
     const memories = yield* heldMemories({
-      seal: (workspaceId, userId, poll, after) =>
+      seal: ({ workspaceId, managerId }, userId, poll, after) =>
         asked(
           client.liveRead(
             WORKSPACE_MEMORIES_READ,
-            { userId, workspaceId },
+            { userId, workspaceId, ...(managerId !== undefined && { managerId }) },
             poll ? { after } : undefined,
           ),
         ),
@@ -677,8 +677,10 @@ function actsOf(
     },
     // A workspace's memories are held for the windows while Settings › Memory shows them; a forget is drawn gone over them the moment it is asked.
     MEMORIES_FOLLOW: {
-      hold: ({ workspaceId }) => memories.hold(workspaceId),
-      retry: ({ workspaceId }) => memories.retry(workspaceId),
+      hold: ({ workspaceId, managerId }) =>
+        memories.hold(new MemoriesKey({ workspaceId, managerId })),
+      retry: ({ workspaceId, managerId }) =>
+        memories.retry(new MemoriesKey({ workspaceId, managerId })),
     },
   };
 }

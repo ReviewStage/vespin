@@ -7,6 +7,7 @@ import type { OpenConsent } from "@repo/credentials";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
 import { PRODUCT_ACCOUNT_ACTION, PRODUCT_EVENT, PRODUCT_PLATFORM } from "@repo/features/analytics";
+import { PICTURE_OWNER, PICTURE_SOURCE_FAILURE } from "@repo/features/picture-source-wire";
 import { SIGN_IN_FAILURE } from "@repo/features/words";
 import { GATEWAY_EVENT, type GatewayEventKind, RefusedRefusal } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
@@ -20,7 +21,13 @@ import { composeAccount } from "./compose-account.js";
 import { composeSettings } from "./compose-settings.js";
 import { type CookieSessionDoor, cookieAccountSourceLayer } from "./cookie-account-source.js";
 import { HostKernelTag } from "./effect/kernel.js";
-import { AppIdentity, Environment, SecretCipher, SignInConsent } from "./effect/seams.js";
+import {
+  AppIdentity,
+  Environment,
+  PlatformScreensInProcess,
+  SecretCipher,
+  SignInConsent,
+} from "./effect/seams.js";
 import { ActRefused } from "./host-acts.js";
 import { type HostKernel, hostKernelOver } from "./host-kernel.js";
 import { oauthAccountSourceLayer } from "./oauth-account-source.js";
@@ -80,6 +87,7 @@ const until = (holds: () => boolean) =>
 const signedInAccount = (input: {
   readonly kernel: HostKernel;
   readonly machine: Layer.Layer<AppIdentity>;
+  readonly screensInProcess?: boolean;
 }) => desktopAccount({ ...input, consent: grantingConsent, signedIn: true });
 
 /**
@@ -92,6 +100,8 @@ const desktopAccount = (input: {
   readonly machine: Layer.Layer<AppIdentity>;
   readonly consent: OpenConsent;
   readonly signedIn: boolean;
+  /** Whether the screens run in the host's own process, as the phone's do (`PlatformScreensInProcess`). */
+  readonly screensInProcess?: boolean;
   /** The host's capability gate, as `compose-host.ts` links it; none moves nothing. */
   readonly capabilities?: {
     readonly startCapabilities: Effect.Effect<void>;
@@ -118,6 +128,7 @@ const desktopAccount = (input: {
       ),
       NodeFileSystem.layer,
       NodePath.layer,
+      input.screensInProcess === true ? Layer.succeed(PlatformScreensInProcess, true) : Layer.empty,
     );
 
     // Settings' lifetime is not run, so its counted events stay disarmed and send nothing.
@@ -217,6 +228,50 @@ it.effect(
       Effect.provide([NodeFileSystem.layer, NodePath.layer]),
     );
   },
+);
+
+it.effect(
+  "a picture's source carries the account's header only to screens in the host's own process, and is answered nothing elsewhere",
+  () =>
+    Effect.gen(function* () {
+      const kernelIn = (stateRoot: string) =>
+        hostKernelOver({
+          stateRoot,
+          runMode: runModeFor({ capture: false, fixture: false }),
+          accountBaseUrl: ACCOUNT_BASE_URL,
+          now: () => 0,
+          createId: () => "id",
+          report: () => undefined,
+          emit: () => undefined,
+        });
+
+      const machine = Layer.succeed(AppIdentity, {
+        appVersion: "0.0.0-test",
+        packaged: false,
+        platform: PRODUCT_PLATFORM.IOS,
+      });
+
+      const picture = { owner: PICTURE_OWNER.AGENT, agentId: "agent-1", pictureId: "picture-1" };
+
+      const phone = yield* signedInAccount({
+        kernel: kernelIn(yield* temporaryDirectoryScoped("account-picture-phone-")),
+        machine,
+        screensInProcess: true,
+      });
+
+      const window = yield* signedInAccount({
+        kernel: kernelIn(yield* temporaryDirectoryScoped("account-picture-window-")),
+        machine,
+      });
+
+      assert.deepEqual(yield* phone.acts.ACCOUNT_PICTURE_SOURCE(picture), {
+        uri: `${SERVICE_BASE_URL}/api/agents/agent-1/pictures/picture-1`,
+        headers: { authorization: "Bearer access-1", accept: "video/mp4" },
+      });
+      assert.deepEqual(yield* window.acts.ACCOUNT_PICTURE_SOURCE(picture), {
+        failure: PICTURE_SOURCE_FAILURE.UNOFFERED,
+      });
+    }).pipe(Effect.provide([NodeFileSystem.layer, NodePath.layer])),
 );
 
 it.effect("a sign-in after a deletion in the same run lets session replay record again", () =>

@@ -91,6 +91,7 @@ import {
   type AppWorkspaceMembers,
   EVERY_WORKSPACE,
   RUN_PROFILE,
+  WORKSPACE_OWN_MEMORIES,
 } from "@repo/host/app-state";
 import {
   CLI_INSTALL_OUTCOME,
@@ -479,6 +480,8 @@ const USAGE_ALERTS = { taskId: "2b8c4e6a-0d3f-4a51-9c79-3e4f5a6b7c82", taskName:
 const MEMORY_AGENT = {
   CLAUDE: "5d9f3b7c-2e4a-4f6b-8c0d-3e5f7a9b1c2d",
   CODEX: "6e0b4c8d-3f5a-4a7c-9d1e-4f6b8a0c2d3e",
+  /** A Manager, which works on no task, so the task list names it not and the service does. */
+  MANAGER: "8a2c6e0f-5b7d-4c9e-8f3a-6b8d0f2a4c5e",
 } as const;
 
 /** An agent on the Usage alerts task, as the task list carries it, which names the memories it kept. */
@@ -544,7 +547,13 @@ const MEMORIES: readonly MemorySummary[] = [
     recalls30d: 31,
     lastRecalledAt: NOW - 2 * HOUR,
   }),
-  memory(2, "Invite links expire after 7 days; an accepted one is never reused.", ADA, 2),
+  memory(2, "Invite links expire after 7 days; an accepted one is never reused.", ADA, 2, {
+    managerSource: {
+      agentId: MEMORY_AGENT.MANAGER,
+      messageId: "9b3d7f1a-6c8e-4d0f-9a4b-7c9e1a3b5d6f",
+      name: "Release desk",
+    },
+  }),
   memory(
     3,
     "Pull requests are reviewed in the morning; one asked after noon waits a day.",
@@ -1336,7 +1345,7 @@ function memoriesStaged(): AppMemories {
     lastRecalledAt: each.lastRecalledAt === null ? null : each.lastRecalledAt + shift,
   }));
 
-  stagedMemories = { [WORKSPACE.ACME]: { rows } };
+  stagedMemories = { [WORKSPACE.ACME]: { [WORKSPACE_OWN_MEMORIES]: { rows } } };
 
   return stagedMemories;
 }

@@ -70,7 +70,10 @@ import type { PullRequestWrites } from "./pull-request-writes.js";
  * saying Queued and its place, as stage-cli's does, one with auto-merge on
  * no chip of its own, Disable auto-merge saying it is on, and one held up by
  * its checks alone no chip, since the Checks tab under the
- * header says how they went in its glyph and its color. A narrow header draws the chip's glyph alone,
+ * header says how they went in its glyph and its color, and one a member may
+ * bypass no chip either, since Bypass rules and merge says it is held and
+ * says why in its hint, over its methods, and in the question it asks first.
+ * A narrow header draws the chip's glyph alone,
  * its word still read, but under a finger, a phone's, which has no hover to
  * raise its hint, the word stays drawn; a tap on the chip opens its sentence.
  *
@@ -91,9 +94,12 @@ import type { PullRequestWrites } from "./pull-request-writes.js";
  *   queue may hold up the pull requests behind it;
  * - blocked by a rule or behind its base, with nothing else to offer, for a
  *   member GitHub lets merge past the base's rules as it lets an admin,
- *   Bypass rules and merge… by the method chosen, its chevron choosing it
- *   too, which asks first, naming what it bypasses, and merges as
- *   `gh pr merge --admin` does.
+ *   Bypass rules and merge by the method chosen, outlined as Enable
+ *   auto-merge is, its chevron choosing it too, which asks first, naming
+ *   what it bypasses, its act in red, and merges as `gh pr merge --admin`
+ *   does. Note that its words take no ellipsis, as Remove from queue's
+ *   take none: a press that only asks to be sure needs nothing more of the
+ *   member, and in a narrow header an ellipsis reads as words cut off.
  *
  * The method is kept per repository across launches, in this window's own
  * storage as the sidebar's folds are (`folded-groups.ts`); the first the
@@ -169,8 +175,9 @@ function blockedChip(merging: PullRequestMerging | undefined): ChipFace | undefi
  * The chip for where the pull request stands and what the press offers, or
  * none where it would only say what the press, the pill, or the Checks tab
  * already does: a merge ready and offered, auto-merge on, a draft, one in the
- * merge queue, or one waiting on its checks. With auto-merge on, a chip
- * still says what holds the merge up.
+ * merge queue, one waiting on its checks, or one the member may bypass,
+ * whose press says why it is held. With auto-merge on, a chip still says
+ * what holds the merge up.
  */
 function chipOf(
   pullRequest: AgentOverviewPullRequest,
@@ -178,7 +185,7 @@ function chipOf(
 ): ChipFace | undefined {
   const { merge, merging } = pullRequest;
 
-  if ((merging?.queued ?? null) !== null) return undefined;
+  if ((merging?.queued ?? null) !== null || action === MERGE_ACTION.BYPASS) return undefined;
 
   if (pullRequest.state === PULL_REQUEST_STATE.DRAFT || merge === MERGE_STATE.DRAFT) {
     return undefined;
@@ -243,11 +250,13 @@ function busyProps(busyLabel: string | undefined) {
 /**
  * A press by the method chosen: a split button whose chevron opens the
  * methods the repository allows, the chosen one checked, where it allows
- * more than one; else the press alone.
+ * more than one; else the press alone. Where it is given a sentence, its
+ * hint says it, and so does a heading over the methods.
  */
 function MethodPress({
   variant,
   words,
+  sentence,
   methods,
   method,
   busy,
@@ -258,6 +267,8 @@ function MethodPress({
 }: {
   variant: ButtonVariant;
   words: string;
+  /** Why the press stands where it does, GitHub's sentence, for its hint and over its methods; none for a press that says it all. */
+  sentence?: string | undefined;
   methods: readonly MergeMethod[];
   method: MergeMethod | undefined;
   /** Whether any change to the pull request is out. */
@@ -273,7 +284,7 @@ function MethodPress({
   const icon = variant === BUTTON_VARIANT.PRIMARY ? <GitMergeIcon aria-hidden="true" /> : undefined;
 
   if (methods.length < 2) {
-    return (
+    const press = (
       <Button
         variant={variant}
         icon={icon}
@@ -284,6 +295,8 @@ function MethodPress({
         {words}
       </Button>
     );
+
+    return sentence === undefined ? press : <Tooltip label={sentence}>{press}</Tooltip>;
   }
 
   return (
@@ -293,6 +306,7 @@ function MethodPress({
         icon={icon}
         disabled={busy && busyLabel === undefined}
         width={width}
+        hintLabel={sentence}
         onClick={onPress}
         {...busyProps(busyLabel)}
         menu={{ label: MERGE_WORDS.CHOOSE_METHOD, ...menu.trigger() }}
@@ -303,6 +317,7 @@ function MethodPress({
         <ActionMenu
           replayUnmasked
           label={MERGE_WORDS.CHOOSE_METHOD}
+          heading={sentence}
           menu={menu.drawn}
           groups={[methodItems(methods, method, busy, onChoose)]}
           onClose={menu.close}
@@ -337,8 +352,10 @@ interface BypassAsked {
 
 /**
  * The press a member who may bypass the base's rules is offered where they
- * hold the merge up: Bypass rules and merge… by the method chosen, outlined
- * in red, its chevron choosing the method as a merge's does. It asks first,
+ * hold the merge up: Bypass rules and merge by the method chosen, outlined
+ * rather than red, since it is the one merge they may make there and the
+ * question it asks first says the risk in red; its chevron chooses the
+ * method as a merge's does. It asks first,
  * then merges at the head it asked about, so GitHub refuses a head pushed
  * since. The question goes once a read finds another head or another
  * base, so it never merges a head, or into a base, the member was not asked
@@ -387,8 +404,9 @@ function BypassPress({
   return (
     <>
       <MethodPress
-        variant={BUTTON_VARIANT.DANGER_OUTLINE}
-        words={`${MERGE_WORDS.BYPASS}…`}
+        variant={BUTTON_VARIANT.OUTLINE}
+        words={MERGE_WORDS.BYPASS}
+        sentence={mergeSentence(pullRequest, MERGE_ACTION.BYPASS)}
         methods={methods}
         method={method}
         busy={busy}

@@ -176,6 +176,7 @@ function environment(secret: string | undefined): HostedEnvironmentValues {
     posthogApiHost: undefined,
     posthogProjectApiKey: undefined,
     posthogIngestHost: undefined,
+    posthogDistinctIdKey: undefined,
     cronSecret: undefined,
     githubWebhookSecret: secret === undefined ? undefined : Redacted.make(secret),
     providerKeyEncryptionKeys: undefined,
@@ -885,7 +886,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
   );
 
   it.effect(
-    "a trigger's settings choose whose pull requests fire it, at which moments, and whether drafts and forks do, and a push by Vespin's agents never fires it",
+    "a trigger's settings choose whose pull requests fire it, at which moments, and whether drafts and forks do",
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
@@ -974,10 +975,10 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
           [1, 2], // marked ready: not a moment the review chose
           [2, 3], // a person's push: both
           [3, 4], // our agent opens one: both hear our agents
-          [3, 4], // our agent pushes: never, whatever a trigger says
-          [3, 5], // another bot: only the trigger that hears other bots
-          [3, 6], // a draft: only the trigger that asks for drafts
-          [3, 7], // a fork's: only the trigger that asks for forks
+          [4, 5], // our agent pushes: both hear our agents
+          [4, 6], // another bot: only the trigger that hears other bots
+          [4, 7], // a draft: only the trigger that asks for drafts
+          [4, 8], // a fork's: only the trigger that asks for forks
         ]);
       }),
   );
@@ -1058,10 +1059,10 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
           [0, 1], // an agent opens its pull request as its developer
           [0, 2], // and marks it ready
           [0, 3], // and reopens it
-          [0, 3], // its push is the App's, which fires nothing
-          [1, 3], // the developer's own push to the agent's branch is a person's
-          [2, 3], // a fork's luke/ branch is no agent's
-          [3, 3], // any other branch is a person's
+          [0, 4], // its push is the App's, which is our agents'
+          [1, 4], // the developer's own push to the agent's branch is a person's
+          [2, 4], // a fork's luke/ branch is no agent's
+          [3, 4], // any other branch is a person's
         ]);
       }),
   );

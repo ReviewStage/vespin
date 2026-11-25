@@ -121,7 +121,8 @@ export interface MachineLayout {
   readonly linesRead: boolean;
   /**
    * Whether a session the store does not hold whole still resumes from the
-   * CLI's own files where the place was not made anew, the store left out
+   * CLI's own files where the place was not made anew, for a harness that
+   * keeps them there (`RunnerHarness`'s `sessionsOnDisk`), the store left out
    * of that launch: a Mac's, whose sessions begun before it kept
    * transcripts stand on its disk alone; a sandbox's such session is let go.
    */

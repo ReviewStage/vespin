@@ -27,12 +27,12 @@ export const PULL_REQUEST_TAB = lazy(() =>
   loadPullRequestTab().then((loaded) => ({ default: loaded.PullRequestTab })),
 );
 
-/** Whether the Pull request tab's module has landed (`LazyBoundary`'s `loaded`). */
 /** A turn's Changes tab, in the Pull request tab's chunk. */
 export const TURN_CHANGES_TAB = lazy(() =>
   loadPullRequestTab().then((loaded) => ({ default: loaded.TurnChangesTab })),
 );
 
+/** Whether the Pull request tab's module has landed (`LazyBoundary`'s `loaded`). */
 export function pullRequestTabLoaded(): boolean {
   return pullRequestTabLanded;
 }

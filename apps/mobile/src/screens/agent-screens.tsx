@@ -21,10 +21,9 @@ import {
   type AgentOverviewPullRequest,
   type AgentPullRequest,
   type AgentStatus,
-  type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { PRODUCT_PICTURE_KIND, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { appsInUse } from "@repo/features/apps-in-use";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import { UNDELIVERED_FILES_LOST } from "@repo/features/inbox-undelivered";
@@ -36,9 +35,10 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { managerChatLines, managerChatWork } from "@repo/features/manager-chat";
+import { managerChatView } from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -89,6 +89,8 @@ import {
   MentionSuggestions,
   MenuRow,
   type MenuRowAct,
+  managerChatItems,
+  menuOfGroups,
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
@@ -96,13 +98,17 @@ import {
   Screen,
   SettingsForm,
   SkillSuggestions,
+  StackBarMenu,
   StackSubtitle,
   shownFiles,
   shownMediaIds,
+  shownPictureIds,
+  shownRecordingIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptReveal,
   type TranscriptToggles,
+  taskLead,
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
@@ -138,6 +144,9 @@ import {
   useAgentPullRequests,
   useAgentTranscript,
   useFollowedAgent,
+  useManagerChat,
+  useManagerChatRetry,
+  useOlderChatPages,
   useOlderPages,
   useSentFiles,
   useShownAgent,
@@ -157,7 +166,7 @@ import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
-import { useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
+import { useChatFaces, useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
@@ -185,6 +194,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useDictation } from "../use-dictation.js";
+import { PicturesProvider, useAgentPictureFiles, usePictures } from "../use-pictures.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
 
@@ -240,14 +250,6 @@ const RENAME_WORDS = {
 
 /** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
-
-/** A transcript's messages as its page draws them: a Manager's as its chat (`managerChatLines`), any other agent's whole. */
-function chatOrTranscript(
-  messages: readonly AgentTranscriptMessage[],
-  chat: boolean,
-): readonly AgentTranscriptMessage[] {
-  return chat ? managerChatLines(messages) : messages;
-}
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
@@ -524,7 +526,8 @@ const NONE_SHOWN: readonly TranscriptItem[] = [];
  * queue and its edits ask first: the one place the words typed live, so a
  * keystroke draws the composer alone, never the transcript over it. Note
  * that Edit on a sent line in the transcript reaches it through `editMessage`,
- * which it keeps pointed at its own.
+ * and Reply on a chat message through `replyTo`, which it keeps pointed at
+ * its own.
  */
 function AgentComposerArea({
   id,
@@ -534,6 +537,7 @@ function AgentComposerArea({
   messageSent,
   suggested,
   editMessage,
+  replyTo,
   undeliveredActs,
   approvals,
   onShowWaiting,
@@ -556,6 +560,7 @@ function AgentComposerArea({
   readonly messageSent: Parameters<typeof useAgentComposer>[4];
   readonly suggested: Parameters<typeof useAgentComposer>[5];
   readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
+  readonly replyTo: RefObject<AgentComposer["reply"] | undefined>;
   readonly undeliveredActs: RefObject<UndeliveredActs | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
@@ -584,8 +589,16 @@ function AgentComposerArea({
   const said = useNewestNote([composer.note, dictated.note, note]);
   useEffect(() => {
     editMessage.current = composer.editMessage;
+    replyTo.current = composer.reply;
     undeliveredActs.current = composer.undelivered;
-  }, [editMessage, composer.editMessage, undeliveredActs, composer.undelivered]);
+  }, [
+    editMessage,
+    composer.editMessage,
+    replyTo,
+    composer.reply,
+    undeliveredActs,
+    composer.undelivered,
+  ]);
 
   return (
     <>
@@ -861,9 +874,12 @@ const AgentConversation = memo(function AgentConversation({
     ],
   );
 
-  // Note that a Manager's page is its chat, never its transcript, as the panel draws it (`managerChatLines`): people's lines, its `send_to_user` words, and its `show_media` sets alone.
+  // Note that a Manager's page is its chat, never its transcript, as the panel draws it: the chat's own rows (`managerChat`), its transcript read only for the work each turn did.
   const chat = shown?.kind === AGENT_KIND.MANAGER;
   useManagerChatLooks(shown);
+  const chatFaces = useChatFaces(chat ? shown : undefined, readerId);
+  const chatHeld = useManagerChat(id, chat);
+  const chatPage = chatHeld?.rows;
 
   // The calls the agent holds for the member's answer, whose folds stand open so their rows draw them; a subagent's call has no row of its own.
   const pending = agent?.pendingApprovals;
@@ -876,53 +892,89 @@ const AgentConversation = memo(function AgentConversation({
     [pending],
   );
 
-  // Note that a Manager's work stays a press away from its chat, read from its whole transcript, the turn under way's under its working line.
-  const chatWork = useMemo(
+  const writing = status !== undefined && agentStillWriting(status);
+  // Note that the turn under way is the agent's newest while it may still write, whose work stands under the chat's working line rather than under a message.
+  const running = writing ? (agent?.turnId ?? undefined) : undefined;
+
+  // Note that a Manager's chat is its rows alone, with the work of each turn a press away, read from the transcript held beside it.
+  const chatItems = useMemo(
     () =>
-      chat && messages !== undefined
-        ? managerChatWork(messages, status !== undefined && agentStillWriting(status))
+      chat && chatPage !== undefined
+        ? managerChatItems(
+            managerChatView(chatPage.messages, messages ?? [], {
+              running,
+              sending: chatPage.sending ?? [],
+            }),
+            messages ?? [],
+            {
+              writing,
+              readerId,
+              toggles,
+              now: Date.now(),
+              pullRequests,
+              wholePart: whole.read,
+              suggestionAddress,
+              waitingCalls,
+              sending: chatPage.sending,
+              managerName: chatFaces?.managerName,
+              readerName: chatFaces?.readerName,
+              // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
+              greeting:
+                shown !== undefined && chatPage.before === undefined
+                  ? managerGreeting(shown.title)
+                  : undefined,
+            },
+          )
         : undefined,
-    [chat, messages, status],
+    [
+      chat,
+      chatPage,
+      messages,
+      running,
+      writing,
+      readerId,
+      toggles,
+      pullRequests,
+      whole.read,
+      suggestionAddress,
+      waitingCalls,
+      shown,
+      chatFaces,
+    ],
   );
 
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
-  const items = useMemo(
+  const transcriptRows = useMemo(
     () =>
-      transcriptItems(chatOrTranscript(withSending(messages ?? [], sending ?? []), chat), {
-        writing: status !== undefined && agentStillWriting(status),
-        readerId,
-        toggles,
-        now: Date.now(),
-        pullRequests,
-        wholePart: whole.read,
-        origin,
-        suggestionAddress,
-        waitingCalls,
-        chat,
-        chatWork,
-        // Note that the greeting stands over the chat's first line, so it waits until no older page is left to read, as the panel draws it above its first message.
-        greeting:
-          chat && shown !== undefined && transcript?.before === undefined
-            ? managerGreeting(shown.title)
-            : undefined,
-      }),
+      chat
+        ? undefined
+        : transcriptItems(withSending(messages ?? [], sending ?? []), {
+            writing,
+            readerId,
+            toggles,
+            now: Date.now(),
+            pullRequests,
+            wholePart: whole.read,
+            origin,
+            suggestionAddress,
+            waitingCalls,
+          }),
     [
-      shown,
-      transcript?.before,
-      chatWork,
+      chat,
       waitingCalls,
       messages,
       sending,
-      status,
+      writing,
       readerId,
       toggles,
       pullRequests,
       whole.read,
       origin,
       suggestionAddress,
-      chat,
     ],
   );
+
+  const items = chatItems ?? transcriptRows ?? NONE_SHOWN;
 
   // A call opened on an answer its page carried cut reads it whole.
   const cuts = useMemo(() => openCuts(items), [items]);
@@ -937,10 +989,20 @@ const AgentConversation = memo(function AgentConversation({
     [messages, status],
   );
 
-  // Note that only the pictures and recordings of the rows on screen and the few beside them are read, so a transcript of hundreds of screenshots never holds them all as it opens, and the next rows to scroll in are drawn as they land.
+  // Note that only the pictures and recordings of the rows on screen and the few beside them are asked for, so a transcript of hundreds of screenshots never holds them all as it opens, and the next rows to scroll in are drawn as they land: a picture through expo-image's own view, a recording or a clip as the file it plays from, and the apps' capsules' pictures as the files SwiftUI and the viewer read.
+  const near = useMemo(() => rowsNear(items, rowsShown, MEDIA_REACH), [items, rowsShown]);
+  const pictureIds = useMemo(() => shownPictureIds(near), [near]);
+  const dockIds = useMemo(() => appsDockMediaIds(inUse), [inUse]);
+
+  // Note that every picture and recording of the transcript is handed to its row by its id, which it reads where it is drawn, so one landing draws that piece alone and never this page, whose rows may hold an open long-press menu; a sound clip alone is read here, as the file it plays from.
+  const addressed = useMemo(
+    () => new Set([...shownPictureIds(items), ...shownRecordingIds(items)]),
+    [items],
+  );
+
   const mediaIds = useMemo(
-    () => [...shownMediaIds(rowsNear(items, rowsShown, MEDIA_REACH)), ...appsDockMediaIds(inUse)],
-    [items, rowsShown, inUse],
+    () => shownMediaIds(near).filter((each) => !addressed.has(each)),
+    [near, addressed],
   );
 
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
@@ -964,12 +1026,31 @@ const AgentConversation = memo(function AgentConversation({
 
   // Note that Edit on a sent line reaches the composer through this one handle, so the page holds none of the composer's state, whose every keystroke would draw the transcript again.
   const editMessage = useRef<AgentComposer["editMessage"] | undefined>(undefined);
+  // Note that Reply on a chat message reaches it the same way.
+  const replyTo = useRef<AgentComposer["reply"] | undefined>(undefined);
   // Note that a refused line's Retry, Edit, and Delete reach the composer the same way.
   const undeliveredActs = useRef<UndeliveredActs | undefined>(undefined);
 
   // A line of the member's the service refused, marked Not delivered where it went, with why and what mends it, as the panel keeps it.
+  const chatSending = chatPage?.sending;
+
   const undelivered = useCallback(
     (lineId: string): UndeliveredLine | undefined => {
+      // Note that a Manager's chat marks its messages the service refused by the key each went under, the host keeping the files each carried, so each is sent again whole.
+      if (chat) {
+        const sent = chatSending?.find((each) => each.clientKey === lineId);
+
+        return sent?.refused === undefined
+          ? undefined
+          : {
+              why: messageFailureWords(sent.refused.failure),
+              newThread: false,
+              onRetry: () => undeliveredActs.current?.retry(lineId),
+              onEdit: () => undeliveredActs.current?.edit(lineId),
+              onDelete: () => undeliveredActs.current?.drop(lineId),
+            };
+      }
+
       const line = sending?.find((each) => each.id === lineId);
 
       if (line?.refused === undefined) return undefined;
@@ -983,21 +1064,28 @@ const AgentConversation = memo(function AgentConversation({
         onDelete: () => undeliveredActs.current?.drop(lineId),
       };
     },
-    [sending],
+    [chat, chatSending, sending],
   );
 
   const composer = useMemo(
     () => ({
       editMessage: (line: Parameters<AgentComposer["editMessage"]>[0]) =>
         editMessage.current?.(line),
+      reply: (words: string) => replyTo.current?.(words),
     }),
     [],
   );
 
   const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId ?? undefined);
-  const older = useOlderPages(id, transcript?.before);
-  const retry = useTranscriptRetry(id);
+  const transcriptOlder = useOlderPages(id, chat ? undefined : transcript?.before);
+  const chatOlder = useOlderChatPages(id, chat ? chatPage?.before : undefined);
+  const older = chat ? chatOlder : transcriptOlder;
+  const transcriptRetry = useTranscriptRetry(id);
+  const chatRetry = useManagerChatRetry(id);
+  const retry = chat ? chatRetry : transcriptRetry;
   const media = useAgentMedia(id, mediaIds);
+  const dockFiles = useAgentPictureFiles(id, dockIds);
+  const pictures = usePictures(PICTURE_OWNER.AGENT, id, pictureIds);
 
   // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
   const title =
@@ -1022,7 +1110,10 @@ const AgentConversation = memo(function AgentConversation({
       ? undefined
       : { kind: SEARCH_FOUND_KIND.AGENTS, id, workspaceId: shown.workspaceId },
   );
-  const failed = held?.failed === true || transcript?.failure !== undefined;
+
+  const failed = chat
+    ? chatHeld?.failed === true
+    : held?.failed === true || transcript?.failure !== undefined;
 
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
@@ -1085,6 +1176,8 @@ const AgentConversation = memo(function AgentConversation({
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
   const taskId = shown?.taskId ?? undefined;
+  // Note that Open task leads with the task's status ring, as its rows do, read from the listed tasks.
+  const taskStatus = useTaskListRow(useTaskListCollections().tasks, taskId)?.status;
 
   // Note that the agent's task opens as a page pushed over it on the stack the reader stands in, as a thread's path opens its task and the panel's crumbs do. A compact stack's title holds no menu, so Open task leads the ⋯ menu.
   const openTask =
@@ -1092,7 +1185,7 @@ const AgentConversation = memo(function AgentConversation({
       ? undefined
       : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
-  // Note that a Manager's overview is pushed from the bar, where the workspace lists its Managers.
+  // Note that a Manager's overview stands beside its chat on the desktop; here it is pushed from the bar, where the workspace lists its Managers.
   const overviewShown = useManagersListed(shown?.workspaceId) && chat;
 
   const openSettings = () => router.push({ pathname: "/manager-settings", params: { agent: id } });
@@ -1107,6 +1200,15 @@ const AgentConversation = memo(function AgentConversation({
   const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
 
+  // Each chat message by its row, to the line it went as, which its Edit rewinds to; null for the Manager's own, which went as none.
+  const chatLines = useMemo(
+    () =>
+      chat
+        ? new Map((chatPage?.messages ?? []).map((message) => [message.id, message.lineId]))
+        : undefined,
+    [chat, chatPage?.messages],
+  );
+
   const messageActs = useMessageActs({
     agentId: id,
     agent: shown,
@@ -1114,6 +1216,7 @@ const AgentConversation = memo(function AgentConversation({
     readerId,
     composer,
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
+    chatLines,
   });
 
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
@@ -1138,6 +1241,10 @@ const AgentConversation = memo(function AgentConversation({
   // Note that a thread opens on the agent's own tab, pushed over its page, as the Inbox opens one found elsewhere.
   const openThread = (threadId: string) =>
     router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: threadId })));
+
+  // Note that a chat message's thread opens on its own page pushed over the chat, on iPhone and iPad alike, as Slack's app pushes a thread.
+  const openChatThread = (root: string) =>
+    router.push({ pathname: onOwnTab("/tasks/agent/[id]/thread/[root]"), params: { id, root } });
 
   // Note that a pull request the agent's workspace is not read for yet opens on GitHub, which reads it whoever opened it.
   const openPullRequest = (url: string) => {
@@ -1167,9 +1274,7 @@ const AgentConversation = memo(function AgentConversation({
     <AgentComposerArea
       id={id}
       apps={
-        inUse === undefined
-          ? undefined
-          : { inUse, source: (pictureId) => media.sources.get(pictureId) }
+        inUse === undefined ? undefined : { inUse, source: (pictureId) => dockFiles.get(pictureId) }
       }
       pullRequest={pullRequests[0]}
       onOpenPullRequest={openPullRequest}
@@ -1179,6 +1284,7 @@ const AgentConversation = memo(function AgentConversation({
       messageSent={approvals.messageSent}
       suggested={suggested}
       editMessage={editMessage}
+      replyTo={replyTo}
       undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
@@ -1202,46 +1308,53 @@ const AgentConversation = memo(function AgentConversation({
   );
 
   const transcriptView = (
-    <AgentTranscript
-      items={rows}
-      onRowsShown={showRows}
-      reveal={reveal}
-      head={null}
-      empty={{
-        title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
-        symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
-        loading: !failed,
-        action: failed
-          ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
-          : undefined,
-      }}
-      older={older}
-      heldCall={approvals.heldCall}
-      suggestion={suggestion}
-      repository={agent?.repository}
-      onOpenLink={openLink}
-      onToggle={(item) => setToggles((held) => toggledAt(held, item))}
-      onOpenPage={openPage}
-      mediaSource={(pictureId) => media.sources.get(pictureId)}
-      fileSource={sentFiles.source}
-      onRetryFile={sentFiles.retry}
-      onRetryMedia={media.retry}
-      onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
-      onOpenAddress={openInSafari}
-      messageLink={messageLink}
-      messageMore={messageActs.more}
-      managerFace={chat ? shown?.face : undefined}
-      onOpenThread={openThread}
-      undelivered={undelivered}
-      onOpenPullRequest={(item) => openPullRequest(item.url)}
-      pullRequestActs={(item) => {
-        const key = keyOf(item.url);
+    <PicturesProvider owner={PICTURE_OWNER.AGENT} ownerId={id} kind={PRODUCT_PICTURE_KIND.AGENT}>
+      <AgentTranscript
+        items={rows}
+        onRowsShown={showRows}
+        reveal={reveal}
+        head={null}
+        empty={{
+          title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
+          symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
+          loading: !failed,
+          action: failed
+            ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
+            : undefined,
+        }}
+        older={older}
+        heldCall={approvals.heldCall}
+        suggestion={suggestion}
+        repository={agent?.repository}
+        onOpenLink={openLink}
+        onToggle={(item) => setToggles((held) => toggledAt(held, item))}
+        onOpenPage={openPage}
+        mediaSource={(mediaId) =>
+          addressed.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
+        }
+        fileSource={sentFiles.source}
+        onRetryFile={sentFiles.retry}
+        onRetryMedia={(mediaId) =>
+          addressed.has(mediaId) ? pictures.retry(mediaId) : media.retry(mediaId)
+        }
+        onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
+        onOpenAddress={openInSafari}
+        messageLink={messageLink}
+        messageMore={messageActs.more}
+        channel={chatFaces?.faces}
+        onOpenChatThread={chat ? openChatThread : undefined}
+        onOpenThread={openThread}
+        undelivered={undelivered}
+        onOpenPullRequest={(item) => openPullRequest(item.url)}
+        pullRequestActs={(item) => {
+          const key = keyOf(item.url);
 
-        return key === undefined || cardMergeOf(offers(key)) === undefined
-          ? []
-          : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
-      }}
-    />
+          return key === undefined || cardMergeOf(offers(key)) === undefined
+            ? []
+            : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
+        }}
+      />
+    </PicturesProvider>
   );
 
   const asks = (
@@ -1285,6 +1398,162 @@ const AgentConversation = memo(function AgentConversation({
     </>
   );
 
+  // Note that the ⋯ is SwiftUI's own menu, as every bar's menu stands (`StackBarMenu`), its groups in the panel's order (`agentMenuGroups`): where it opens its task and its Manager's overview, the copies, then the name, then where it opens, then going on, then moving and archiving, and Permanently delete last and alone.
+  const moreMenu =
+    copyable || openable || openTask !== undefined
+      ? menuOfGroups(MENU_WORDS.MORE, GLYPH.MORE, [
+          {
+            items:
+              openTask === undefined
+                ? []
+                : [{ label: PATH_OPENS.TASK, ...taskLead(taskStatus), onPress: openTask }],
+          },
+          {
+            items:
+              openOverview === undefined
+                ? []
+                : [{ label: MENU_WORDS.OVERVIEW, symbol: GLYPH.LIST, onPress: openOverview }],
+          },
+          {
+            items: [
+              ...(copyable && address !== undefined
+                ? [{ label: MENU_WORDS.COPY_LINK, symbol: GLYPH.LINK, onPress: actions.copyLink }]
+                : []),
+              ...(copyable && copiable
+                ? [
+                    {
+                      label: COPY_TRANSCRIPT_WORDS.COPY,
+                      symbol: GLYPH.COPY,
+                      choices: [],
+                      actions: [
+                        {
+                          label: COPY_TRANSCRIPT_WORDS.CONCISE,
+                          onPress: () => copyTranscript(TRANSCRIPT_COPY.CONCISE),
+                        },
+                        {
+                          label: COPY_TRANSCRIPT_WORDS.FULL,
+                          onPress: () => copyTranscript(TRANSCRIPT_COPY.FULL),
+                        },
+                        {
+                          label: COPY_TRANSCRIPT_WORDS.SHARE,
+                          symbol: GLYPH.SHARE,
+                          onPress: () => shareTranscript(TRANSCRIPT_COPY.FULL),
+                        },
+                      ],
+                    },
+                  ]
+                : []),
+            ],
+          },
+          {
+            items:
+              agent === undefined
+                ? []
+                : [
+                    // Note that a Manager is named from its Settings, its one place to configure it, as the desktop's menu offers Settings… in Rename's place.
+                    chat
+                      ? { label: MENU_WORDS.SETTINGS, symbol: GLYPH.OPTIONS, onPress: openSettings }
+                      : { label: MENU_WORDS.RENAME, symbol: GLYPH.RENAME, onPress: askRename },
+                    ...(barActs
+                      ? []
+                      : [
+                          {
+                            label: actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN,
+                            symbol: actions.pinned ? GLYPH.UNPIN : GLYPH.PIN,
+                            onPress: actions.pin,
+                          },
+                        ]),
+                  ],
+          },
+          {
+            items: openable
+              ? [
+                  ...(address === undefined
+                    ? []
+                    : [
+                        {
+                          label: VERB.OPEN_IN_BROWSER,
+                          symbol: GLYPH.OPEN_EXTERNALLY,
+                          onPress: () => openInSafari(address),
+                        },
+                      ]),
+                  ...(agent !== undefined && hasPorts
+                    ? [{ label: AGENT_PORTS_WORDS.PORTS, symbol: GLYPH.PLUG, onPress: openPorts }]
+                    : []),
+                ]
+              : [],
+          },
+          {
+            items:
+              openable && agent !== undefined && runActions.length > 0
+                ? [
+                    {
+                      label: RUN_ACTION_WORDS.SUBMENU,
+                      symbol: GLYPH.RUN,
+                      choices: [],
+                      actions: runActions.map((offered) => ({
+                        label: runActionMenuLabel(offered.action, offered.runs),
+                        symbol: offered.runs ? GLYPH.STOP : GLYPH.RUN,
+                        detail: offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command,
+                        onPress: offered.onPress,
+                      })),
+                    },
+                  ]
+                : [],
+          },
+          {
+            items:
+              continueOf === undefined
+                ? []
+                : [{ label: continueOf.label, symbol: GLYPH.CONTINUE, onPress: continueAgent }],
+          },
+          {
+            // Note that Move to stands before Archive, as the panel's menu stands them.
+            items: [
+              ...(agent === undefined || move.places === undefined
+                ? []
+                : [
+                    {
+                      label: MENU_WORDS.MOVE_TO,
+                      symbol: GLYPH.MOVE,
+                      choices: [],
+                      actions: move.places.map((place) => ({
+                        label: place.label,
+                        symbol: place.glyph,
+                        detail: place.detail,
+                        onPress: place.onPress,
+                      })),
+                    },
+                  ]),
+              ...(agent === undefined || barActs
+                ? []
+                : [
+                    archived
+                      ? {
+                          label: MENU_WORDS.UNARCHIVE,
+                          symbol: GLYPH.UNARCHIVE,
+                          onPress: actions.unarchive,
+                        }
+                      : { label: MENU_WORDS.ARCHIVE, symbol: GLYPH.ARCHIVE, onPress: askArchive },
+                  ]),
+            ],
+          },
+          {
+            items:
+              agent === undefined
+                ? []
+                : [
+                    {
+                      label: MENU_WORDS.DELETE,
+                      symbol: GLYPH.DELETE,
+                      destructive: true,
+                      onPress: () => setDeleting(true),
+                    },
+                  ],
+          },
+        ])
+      : undefined;
+
   const barOptions = { title, headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT } };
 
   return (
@@ -1307,168 +1576,11 @@ const AgentConversation = memo(function AgentConversation({
         }
       />
       <Stack.Toolbar placement="right">
-        {copyable || openable || openTask !== undefined ? (
-          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
-            {openTask === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.TASK)} onPress={openTask}>
-                  {PATH_OPENS.TASK}
-                </Stack.Toolbar.MenuAction>
-              </Stack.Toolbar.Menu>
-            )}
-            {openOverview === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LIST)} onPress={openOverview}>
-                  {MENU_WORDS.OVERVIEW}
-                </Stack.Toolbar.MenuAction>
-              </Stack.Toolbar.Menu>
-            )}
-            {/* Note that the groups keep the panel's order (`agentMenuGroups`): the copies, then the name, then where it opens, then archiving, and Permanently delete last and alone. */}
-            {copyable ? (
-              <Stack.Toolbar.Menu inline>
-                {address === undefined ? null : (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(GLYPH.LINK)}
-                    onPress={actions.copyLink}
-                  >
-                    {MENU_WORDS.COPY_LINK}
-                  </Stack.Toolbar.MenuAction>
-                )}
-                {copiable ? (
-                  <Stack.Toolbar.Menu
-                    icon={glyphSymbol(GLYPH.COPY)}
-                    title={COPY_TRANSCRIPT_WORDS.COPY}
-                  >
-                    <Stack.Toolbar.MenuAction
-                      onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}
-                    >
-                      {COPY_TRANSCRIPT_WORDS.CONCISE}
-                    </Stack.Toolbar.MenuAction>
-                    <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.FULL)}>
-                      {COPY_TRANSCRIPT_WORDS.FULL}
-                    </Stack.Toolbar.MenuAction>
-                    <Stack.Toolbar.MenuAction
-                      icon={glyphSymbol(GLYPH.SHARE)}
-                      onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
-                    >
-                      {COPY_TRANSCRIPT_WORDS.SHARE}
-                    </Stack.Toolbar.MenuAction>
-                  </Stack.Toolbar.Menu>
-                ) : null}
-              </Stack.Toolbar.Menu>
-            ) : null}
-            {agent === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                {/* Note that a Manager is named from its Settings, its one place to configure it, as the desktop's menu offers Settings… in Rename's place. */}
-                {chat ? (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(GLYPH.OPTIONS)}
-                    onPress={openSettings}
-                  >
-                    {MENU_WORDS.SETTINGS}
-                  </Stack.Toolbar.MenuAction>
-                ) : (
-                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
-                    {MENU_WORDS.RENAME}
-                  </Stack.Toolbar.MenuAction>
-                )}
-                {barActs ? null : (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
-                    onPress={actions.pin}
-                  >
-                    {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
-                  </Stack.Toolbar.MenuAction>
-                )}
-              </Stack.Toolbar.Menu>
-            )}
-            {openable ? (
-              <Stack.Toolbar.Menu inline>
-                {address === undefined ? null : (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
-                    onPress={() => openInSafari(address)}
-                  >
-                    {VERB.OPEN_IN_BROWSER}
-                  </Stack.Toolbar.MenuAction>
-                )}
-                {agent !== undefined && hasPorts ? (
-                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
-                    {AGENT_PORTS_WORDS.PORTS}
-                  </Stack.Toolbar.MenuAction>
-                ) : null}
-                {agent === undefined || runActions.length === 0 ? null : (
-                  <Stack.Toolbar.Menu
-                    icon={glyphSymbol(GLYPH.RUN)}
-                    title={RUN_ACTION_WORDS.SUBMENU}
-                  >
-                    {runActions.map((offered) => (
-                      <Stack.Toolbar.MenuAction
-                        key={offered.action.id}
-                        icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
-                        subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
-                        onPress={offered.onPress}
-                      >
-                        {runActionMenuLabel(offered.action, offered.runs)}
-                      </Stack.Toolbar.MenuAction>
-                    ))}
-                  </Stack.Toolbar.Menu>
-                )}
-              </Stack.Toolbar.Menu>
-            ) : null}
-            {continueOf === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction
-                  icon={glyphSymbol(GLYPH.CONTINUE)}
-                  onPress={continueAgent}
-                >
-                  {continueOf.label}
-                </Stack.Toolbar.MenuAction>
-              </Stack.Toolbar.Menu>
-            )}
-            {agent === undefined || (barActs && move.places === undefined) ? null : (
-              <Stack.Toolbar.Menu inline>
-                {move.places === undefined ? null : (
-                  <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MOVE)} title={MENU_WORDS.MOVE_TO}>
-                    {move.places.map((place) => (
-                      <Stack.Toolbar.MenuAction
-                        key={place.key}
-                        icon={glyphSymbol(place.glyph)}
-                        {...(place.detail === undefined ? undefined : { subtitle: place.detail })}
-                        onPress={place.onPress}
-                      >
-                        {place.label}
-                      </Stack.Toolbar.MenuAction>
-                    ))}
-                  </Stack.Toolbar.Menu>
-                )}
-                {barActs ? null : archived ? (
-                  <Stack.Toolbar.MenuAction
-                    icon={glyphSymbol(GLYPH.UNARCHIVE)}
-                    onPress={actions.unarchive}
-                  >
-                    {MENU_WORDS.UNARCHIVE}
-                  </Stack.Toolbar.MenuAction>
-                ) : (
-                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
-                    {MENU_WORDS.ARCHIVE}
-                  </Stack.Toolbar.MenuAction>
-                )}
-              </Stack.Toolbar.Menu>
-            )}
-            {agent === undefined ? null : (
-              <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction
-                  icon={glyphSymbol(GLYPH.DELETE)}
-                  destructive
-                  onPress={() => setDeleting(true)}
-                >
-                  {MENU_WORDS.DELETE}
-                </Stack.Toolbar.MenuAction>
-              </Stack.Toolbar.Menu>
-            )}
-          </Stack.Toolbar.Menu>
-        ) : null}
+        {moreMenu === undefined ? null : (
+          <Stack.Toolbar.View>
+            <StackBarMenu menu={moreMenu} />
+          </Stack.Toolbar.View>
+        )}
         {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
         {/* Note that a Manager's Overview stands as a glyph in every window, nearest the ⋯, since on the desktop it is never hidden beside the chat. */}
         {openOverview === undefined ? null : (

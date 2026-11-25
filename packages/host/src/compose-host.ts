@@ -452,6 +452,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         focus,
         pool,
         offlineRefused,
+        recordProductEvent: settings.recordProductEvent,
         client: new HostedTaskClient({
           serviceBaseUrl: kernel.hostedServiceBaseUrl,
           credential: account.credential,
@@ -543,6 +544,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         fileDownload: Option.getOrUndefined(fileDownload),
         account,
         accountId,
+        recordProductEvent: settings.recordProductEvent,
         kept,
         focus,
         reader: () => {
@@ -739,6 +741,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           openSocket: yield* TerminalSocket,
           platform: yield* MirrorPlatform,
           agentListed,
+          listDrawn: () => tasks.agentsListed() !== undefined,
           listings: tasks.pullRequestListings,
           recordProductEvent: settings.recordProductEvent,
         })

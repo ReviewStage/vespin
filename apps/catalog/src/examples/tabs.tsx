@@ -145,11 +145,6 @@ function Strip({
   );
 }
 
-/** A small picture of a screen, standing in for a switcher's still. */
-const STILL = `data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="352" height="220"><rect width="352" height="220" fill="#f4f4f5"/><rect x="16" y="16" width="200" height="14" rx="4" fill="#d4d4d8"/><rect x="16" y="44" width="320" height="8" rx="4" fill="#e4e4e7"/><rect x="16" y="60" width="280" height="8" rx="4" fill="#e4e4e7"/><rect x="16" y="76" width="300" height="8" rx="4" fill="#e4e4e7"/></svg>',
-)}`;
-
 /** A switcher's recent screens: the one here dimmed, the one after it chosen. */
 function Cards(): React.JSX.Element {
   const [chosen, setChosen] = useState(1);
@@ -160,15 +155,13 @@ function Cards(): React.JSX.Element {
       icon: <DocumentIcon />,
       label: "Fix token refresh",
       detail: "Description · Code",
-      still: STILL,
     },
-    { icon: <FolderIcon />, label: "Inbox", detail: undefined, still: undefined },
+    { icon: <FolderIcon />, label: "Inbox", detail: undefined },
     {
       icon: <DocumentIcon />,
       label: "Migrate the sessions table",
       detail: "Changes",
       detailIcon: <UserIcon />,
-      still: undefined,
     },
   ];
 
@@ -182,7 +175,6 @@ function Cards(): React.JSX.Element {
             label={card.label}
             detail={card.detail}
             detailIcon={card.detailIcon}
-            still={card.still}
             here={at === 0}
             chosen={at === chosen}
             onPoint={() => setChosen(at)}

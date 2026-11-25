@@ -7,12 +7,17 @@
  * the failure's own kind and, for a `SqlError`, the code its driver's error
  * carries, and never a value it carried, since a Schema failure's issue may
  * quote the row and a statement's sentence can quote the key a constraint
- * refused. A route carries the failure onward as the unavailable refusal.
+ * refused. A route carries the failure onward as the unavailable refusal,
+ * which its caller may try again, unless the failure is one the same write
+ * meets every time (`isDataException`), which a route may pass over instead.
  */
 
 import type { StoreFailure } from "@repo/database/core/query";
-import { failureDetail, failureKind } from "@repo/runtime/effect";
+import { failureCode, failureDetail, failureKind } from "@repo/runtime/effect";
 import { Effect, Option } from "effect";
+
+/** The SQLSTATE class of a data exception (`22P02`, `22P05`, `22021`, `22003`): a value the statement carried that no column of its type takes. */
+const DATA_EXCEPTION_CLASS = "22";
 
 /**
  * The failure as one warning line of kinds alone: a `SqlError` by the kind of
@@ -25,10 +30,25 @@ import { Effect, Option } from "effect";
  * annotation (`orpc/base.ts`).
  */
 export function logStoreFailure(failure: StoreFailure): Effect.Effect<void> {
+  return Effect.logWarning(`Hosted store unavailable: ${storeFailureWords(failure)}`);
+}
+
+/** The failure in the words `logStoreFailure` writes it in: its kinds, and its driver's code where it carries one. */
+export function storeFailureWords(failure: StoreFailure): string {
   const detail = Option.match(failureDetail(failure), {
     onNone: () => "",
     onSome: (said) => ` (${said})`,
   });
 
-  return Effect.logWarning(`Hosted store unavailable: ${failureKind(failure)}${detail}`);
+  return `${failureKind(failure)}${detail}`;
+}
+
+/**
+ * Whether the statement failed on a value it carried, a SQLSTATE of class
+ * 22 (half a character in a JSON value, a number out of range), which the
+ * database refuses each time the same write is made, unlike a connection
+ * lost or a statement timed out, which a later try may get past.
+ */
+export function isDataException(failure: StoreFailure): boolean {
+  return Option.exists(failureCode(failure), (code) => code.startsWith(DATA_EXCEPTION_CLASS));
 }

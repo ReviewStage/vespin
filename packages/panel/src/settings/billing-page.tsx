@@ -35,19 +35,18 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /** The words the page says. */
 const WORDS = {
-  USAGE_CAPTION:
-    "Usage this month, in UTC. Each workspace's first usage each month is included, and what passes it is billed at the end of the month.",
+  USAGE_CAPTION: "This month in UTC; usage past the included amount is billed at month's end.",
   INCLUDED_LEFT: "Included usage left",
   OWED: "Owed past included usage",
   READING: "billing",
   READ_FAILED: "Billing could not be read.",
-  STATUS: "Billing",
+  STATUS: "Card",
   SET_UP: "Set up billing",
   SETTING_UP: "Opening",
   MANAGE: "Manage billing",
   MANAGING: "Opening",
   NOT_SET_UP: "Not set up",
-  NOT_SET_UP_LINE: "Add a card to pay for usage past the included amount.",
+  NOT_SET_UP_LINE: "Add one to pay for usage past the included amount.",
   BLOCKED: "Blocked by a failed payment",
   BLOCKED_LINE:
     "An invoice could not be collected, so new cloud agents are held until it is paid. Update the card from Manage billing.",
@@ -55,7 +54,7 @@ const WORDS = {
 
 /** What each kind of usage is called, a kind a newer service adds read by its own name. */
 const USAGE_KIND_WORDS = new Map<string, string>([
-  [BILLING_USAGE_KIND.SANDBOX_SESSION, "Sandbox usage"],
+  [BILLING_USAGE_KIND.SANDBOX_SESSION, "Cloud agents"],
 ]);
 
 /** How often the status is read while setup is awaited, in milliseconds. */

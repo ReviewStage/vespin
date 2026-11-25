@@ -59,7 +59,11 @@ afterEach(() => {
 function Presses(): React.JSX.Element {
   const dictation = useDictation({ editor: NO_EDITOR, keywords: NO_KEYWORDS, onNote: ignore });
 
-  return createElement(DictateButton, { dictation, disabled: false });
+  return createElement(DictateButton, {
+    keyMissing: dictation.keyMissing,
+    onStart: dictation.start,
+    disabled: false,
+  });
 }
 
 /** The presses drawn for `account`, the keys held as `held` stands, recording what the presses opened and how often the keys were held. */

@@ -48,6 +48,8 @@ export interface HostedEnvironmentValues {
   readonly posthogProjectApiKey: Redacted.Redacted | undefined;
   /** A deployment-configured ingestion host; the shared default otherwise. */
   readonly posthogIngestHost: string | undefined;
+  /** The key the service's own counts hash an account's id under (`analytics-distinct-id.ts`); absent records none of them. */
+  readonly posthogDistinctIdKey: Redacted.Redacted | undefined;
   /** Vercel's own bearer on every scheduled call, which the maintenance routes asked by hand take too; absent refuses every sweep. */
   readonly cronSecret: Redacted.Redacted | undefined;
   /** The secret GitHub signs our GitHub App's webhook deliveries with; absent refuses every delivery. */
@@ -126,6 +128,7 @@ export const hostedEnvironment = Layer.effect(
       posthogApiHost: Config.option(Config.String(POSTHOG_ENVIRONMENT.API_HOST)),
       posthogProjectApiKey: Config.option(Config.Redacted(POSTHOG_ENVIRONMENT.PROJECT_API_KEY)),
       posthogIngestHost: Config.option(Config.String(POSTHOG_ENVIRONMENT.HOST)),
+      posthogDistinctIdKey: Config.option(Config.Redacted(POSTHOG_ENVIRONMENT.DISTINCT_ID_KEY)),
       cronSecret: Config.option(Config.Redacted(CRON_ENVIRONMENT.CRON_SECRET)),
       githubWebhookSecret: Config.option(Config.Redacted(GITHUB_APP_ENVIRONMENT.WEBHOOK_SECRET)),
       providerKeyEncryptionKeys: Config.option(
@@ -156,6 +159,7 @@ export const hostedEnvironment = Layer.effect(
         posthogApiHost: present(read.posthogApiHost),
         posthogProjectApiKey: presentRedacted(read.posthogProjectApiKey),
         posthogIngestHost: present(read.posthogIngestHost),
+        posthogDistinctIdKey: presentRedacted(read.posthogDistinctIdKey),
         cronSecret,
         githubWebhookSecret: presentRedacted(read.githubWebhookSecret),
         providerKeyEncryptionKeys: presentRedacted(read.providerKeyEncryptionKeys),

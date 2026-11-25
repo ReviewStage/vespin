@@ -27,9 +27,9 @@
  * its head alone.
  */
 
-import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
-import { agentLastMovedAt } from "@repo/features/task-agents-model";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import type { TaskAgentPin } from "@repo/features/task-wire";
+import { TERM } from "@repo/features/words";
 import {
   MANAGER_SORT,
   type ManagerSort,
@@ -45,7 +45,6 @@ import {
   LIST_DENSITY,
   List,
   type ListRowNest,
-  motionKey,
   NOTE_LINE_LOOK,
   NoteLine,
   PlusIcon,
@@ -56,34 +55,29 @@ import { ArrowUpDownIcon, GLYPH, SlidersHorizontalIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { type RefObject, useMemo, useRef } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
-import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { type ManagerSortControl, useManagerSort } from "../tasks/manager-sort.js";
 import {
   type PinnedManager,
   pinnedManagersOf,
+  sameForManagers,
   useManagerAgents,
   useWorkspaceManagers,
 } from "../tasks/workspace-managers.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu, type MenuSubmenu } from "./action-menu.js";
-import { AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
+import { AGENT_ROW_LOOK } from "./agent-list-row.js";
 import type { FoldedGroups } from "./folded-groups.js";
+import { ManagerRow } from "./manager-row.js";
 import { NEW_MANAGER, useNewManagerDialog } from "./new-manager-dialog.js";
-import { type CountNoun, sidebarHead } from "./sidebar-fold.js";
+import { sidebarHead } from "./sidebar-fold.js";
 import { type SidebarTasksControl, useSidebarOpen } from "./sidebar-open.js";
 import { useRowDrag } from "./use-row-drag.js";
 
 /** What the section is called, on its head and its list alike. */
 const MANAGERS_HEAD = "Managers";
-
-/** What its head counts. */
-const MANAGER_NOUN: CountNoun = { one: "manager", many: "managers" };
-
-/** Its key, by which the groups under it glide as it comes and goes. */
-const MANAGERS_KEY = "managers";
 
 /** What View options is called, on its button and its menu alike, as the Tasks head's is. */
 const VIEW_OPTIONS = "View options";
@@ -106,9 +100,6 @@ const NO_LISTED: readonly ListedAgent[] = [];
 
 /** The zone Managers is as a drop zone, which takes a Manager out of every section. */
 export const MANAGERS_DROP_ZONE = "managers";
-
-/** No pull request, which a Manager's row never names, since a Manager opens none of its own. */
-const NO_PULL_REQUESTS: ReadonlyMap<string, AgentPullRequest> = new Map();
 
 /** The workspace's Managers, while its Managers experiment is on and the reader is signed in; none while it is off. */
 function useListedManagers(tasks: SidebarTasksControl): ReturnType<typeof useWorkspaceManagers> & {
@@ -185,33 +176,21 @@ export function SidebarManagerRow({
 }): React.JSX.Element {
   const more = !useCoarsePointer();
   // Note that the row acts through the window's agents control as it stands, which moves as a task opens, so it reads it itself rather than the sidebar handing it on (`sidebar-open.tsx`).
-  const agents = useManagerAgents(useSidebarOpen((open) => open.tasks.agents));
-  const at = agentLastMovedAt(agent);
-
-  const subject = listedRowSubject(agent, at, {
-    models: agents.models,
-    me: tasks.me,
-    pullRequests: NO_PULL_REQUESTS,
-  });
+  const agents = useManagerAgents(useSidebarOpen((open) => open.tasks.agents, sameForManagers));
 
   return (
-    <AgentListRow
+    <ManagerRow
       agent={agent}
       agents={agents}
+      me={tasks.me}
       shown={shown}
-      subject={subject}
-      at={at}
-      card={<AgentCard subject={subject} models={agents.models} />}
-      pullRequest={undefined}
+      more={more}
+      current={agent.id === tasks.agentView.agentId}
       chosen={undefined}
       place={place}
       nest={nest}
-      more={more}
-      current={agent.id === tasks.agentView.agentId}
-      runsOn={false}
       look={AGENT_ROW_LOOK.SIDEBAR}
-      onPress={() => onOpen(agent.id)}
-      onOpenPullRequest={() => onOpen(agent.id)}
+      onOpen={onOpen}
     />
   );
 }
@@ -250,7 +229,6 @@ export function ManagerRows({
         label={MANAGERS_HEAD}
         density={LIST_DENSITY.DENSE}
         joinsWalk
-        moves
         onPointerDown={drops === undefined ? undefined : drag}
       >
         {managers.map((agent) => (
@@ -312,6 +290,29 @@ function ManagerViewOptions({
   );
 }
 
+/**
+ * The New Manager card, which the Managers head's + asks through `asking`.
+ * Note that it is a component of its own, because the card reads the newest
+ * read of the models, which moves as New task opens (`useNewTaskShown`), so
+ * New task opening draws it alone rather than the Managers and their rows.
+ */
+function NewManagerCard({
+  tasks,
+  asking,
+  onOpen,
+}: {
+  tasks: SidebarTasksControl;
+  /** Where the card hands the + its ask, the newest at each draw. */
+  asking: RefObject<() => void>;
+  /** Opens a Manager's page, the sidebar put away where it floats. */
+  onOpen: (agentId: string) => void;
+}): React.JSX.Element {
+  const newManager = useNewManagerDialog({ tasks, onOpen });
+  asking.current = newManager.ask;
+
+  return newManager.dialog;
+}
+
 /** The Managers section; see the module's head. Nothing while the workspace listed has the Managers experiment off. */
 export function SidebarManagers({
   tasks,
@@ -336,7 +337,7 @@ export function SidebarManagers({
   onOpen: (agentId: string) => void;
 }): React.JSX.Element | null {
   const { listed, managers } = useListedManagers(tasks);
-  const newManager = useNewManagerDialog({ tasks, onOpen });
+  const askNewManager = useRef<() => void>(() => undefined);
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const sorting = useManagerSort(tasks.workspace?.id, staged);
 
@@ -369,14 +370,13 @@ export function SidebarManagers({
       className="sidebar-group"
       aria-label={MANAGERS_HEAD}
       data-row-drop={drops === undefined ? undefined : MANAGERS_DROP_ZONE}
-      {...motionKey(MANAGERS_KEY)}
     >
       <GroupHeader
         {...sidebarHead({
           folded,
           onToggle: folds.toggleManagers,
           count: listedManagers.length,
-          noun: MANAGER_NOUN,
+          noun: TERM.MANAGER,
         })}
         glyph={<GLYPH.MANAGER />}
         label={MANAGERS_HEAD}
@@ -388,7 +388,7 @@ export function SidebarManagers({
                 icon={<PlusIcon />}
                 label={NEW_MANAGER}
                 size={BUTTON_SIZE.COMPACT}
-                onClick={newManager.ask}
+                onClick={() => askNewManager.current()}
               />
             </Tooltip>
             <ManagerViewOptions shown={shown} control={sorting} />
@@ -400,7 +400,7 @@ export function SidebarManagers({
         ) : null}
         {listedManagers.length === 0 ? null : rows(listedManagers)}
       </GroupHeader>
-      {newManager.dialog}
+      <NewManagerCard tasks={tasks} asking={askNewManager} onOpen={onOpen} />
     </nav>
   );
 }

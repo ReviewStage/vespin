@@ -1,4 +1,5 @@
 import { fileMarker, fileMarkers } from "@repo/features/file-marker";
+import type { MessageFileChip } from "@repo/features/message-files";
 import {
   holdsSlashWord,
   leadingCommandToken,
@@ -23,6 +24,7 @@ import {
   useState,
 } from "react";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { KeptFileChips, WordFilesOf } from "./agent-pictures.js";
 import { CommandRef, sentCommands } from "./command-ref.js";
 import { WordFilesContext } from "./file-chips.js";
 import type { SkillSource } from "./skill-picker.js";
@@ -312,5 +314,37 @@ export function SentWords({
 
   return (
     <TranscriptWords text={text} element={element} typed asDocument={asDocument} line={line} />
+  );
+}
+
+/** A sent message's files' row and its words, which its surface stands where it draws them. */
+export interface SentMessageBody {
+  readonly files: ReactNode;
+  readonly words: ReactNode;
+}
+
+/**
+ * A message a person sent, as every surface draws one: each file its words
+ * name stands in them as its chip, the rest in its files' row, and its Copy
+ * carries them. While it is on its way its files wear the upload's cover.
+ */
+export function SentMessage({
+  files,
+  words,
+  sending = false,
+  children,
+}: {
+  files: readonly MessageFileChip[];
+  words: string;
+  sending?: boolean;
+  children: (body: SentMessageBody) => ReactNode;
+}): ReactNode {
+  return (
+    <WordFilesOf files={files} words={words} sending={sending}>
+      {children({
+        files: <KeptFileChips files={files} sending={sending} />,
+        words: words === "" ? null : <SentWords text={words} />,
+      })}
+    </WordFilesOf>
   );
 }

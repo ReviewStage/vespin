@@ -7,6 +7,7 @@ import {
   readAccountPreferences,
   writeAccountPreferences,
 } from "@repo/database/models/account-store";
+import { recordAgentPullRequests } from "@repo/database/models/agent-pull-requests";
 import {
   agentTaskId,
   archiveAgent,
@@ -18,6 +19,7 @@ import {
   claimAutomationRun,
   createAutomation,
   deleteAutomation,
+  readAutomation,
   recordAutomationRun,
 } from "@repo/database/models/automation-store";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
@@ -35,6 +37,7 @@ import {
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { readReplyButton } from "@repo/database/models/reply-buttons";
 import { readRunsOnPick } from "@repo/database/models/runs-on-pick";
+import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import { writePage } from "@repo/database/models/task-pages";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
 import {
@@ -65,6 +68,7 @@ import {
   joinWorkspace,
   leaveWorkspace,
   openHostedStoreTestDatabase,
+  openRunningTurn,
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
@@ -82,7 +86,9 @@ import {
   AGENT_RUNTIME,
   AGENT_STATUS,
   agentMessageReplyLine,
+  CHECK_SUMMARY,
   CONTEXT_WINDOW,
+  PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
@@ -193,7 +199,7 @@ import { AgentBrowser } from "../browser/agent-browser.js";
 import { COMPUTER_TOOL } from "../computer-tool.js";
 import { RUN_ON_MAC_TOOL } from "../machine-command.js";
 import { LIST_MACHINES_TOOL } from "../machines-tool.js";
-import { FORGET_MEMORY_TOOL, LIST_MEMORIES_TOOL } from "../memory-tools.js";
+import { FORGET_MEMORY_TOOL, LIST_MEMORIES_TOOL, saveMemoryToolOf } from "../memory-tools.js";
 import { ADD_SUGGESTION_REFUSAL, ADD_SUGGESTION_TOOL } from "../reply-buttons/add-suggestion.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
@@ -224,6 +230,11 @@ import {
 } from "./agent-message.js";
 import { CODER_REFUSAL } from "./bounds.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
+import {
+  READ_CHAT_MESSAGES_TOOL,
+  READ_CHAT_THREAD_TOOL,
+  SEARCH_CHAT_TOOL,
+} from "./manager-chat-tools.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { NativeAgentSessions } from "./runtime-sessions.js";
@@ -338,7 +349,7 @@ function hostOf(summaryModel?: SummaryModelOf): AgentDoorSeams {
 }
 
 /** The agent's own conversation as the MCP door admits its runner's bearer: its starter's, on the session it recorded. */
-function admittedOf(agent: StartedAgent): AdmittedConversation {
+function admittedOf(agent: CallingAgent): AdmittedConversation {
   return {
     caller: agent.userId,
     target: { userId: agent.userId, conversationId: agent.conversationId },
@@ -346,6 +357,9 @@ function admittedOf(agent: StartedAgent): AdmittedConversation {
     timeZone: undefined,
   };
 }
+
+/** An agent whose own session a call is made from: a task's agent or a Manager on none. */
+type CallingAgent = Pick<StartedAgent, "userId" | "conversationId" | "sessionId">;
 
 interface StartedAgent extends ConversationTarget {
   readonly id: string;
@@ -624,7 +638,7 @@ const UNREACHED = Layer.mergeAll(
  */
 function callAsAgent(
   host: AgentDoorSeams,
-  agent: StartedAgent,
+  agent: CallingAgent,
   tool: ServedTool,
   input: WireBoundaryInput,
   callId: string,
@@ -641,7 +655,7 @@ function callAsAgent(
 /** A caller of the agent tools from the agent's own session, as the MCP server runs them through the catalog under the seams given, over the suite's catalog and a configured Sentry integration unless others are given. */
 async function peerCaller(
   host: AgentDoorSeams,
-  agent: StartedAgent,
+  agent: CallingAgent,
   services: Awaited<ReturnType<typeof fakeCoderSessions>>["services"],
   catalog: Layer.Layer<ModelCatalog> = modelCatalogOf(CATALOG),
   sentry: Layer.Layer<SentryApp> = SENTRY_CONFIGURED,
@@ -922,7 +936,7 @@ test("list_agents names every other agent of the caller's workspace, on any task
   assert.equal(agentSessions.sent.length, 0, "a list sends nothing");
 });
 
-test("list_agents narrows by archive, by whose agents, by an automation's runs, and by where their task stands, refusing a starter named by no person or by the retired mine", async () => {
+test("list_agents narrows by archive, by whose agents, by an automation's runs, by where their task stands, and by the pull request they linked, refusing a starter named by no person or by the retired mine", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -951,6 +965,28 @@ test("list_agents narrows by archive, by whose agents, by an automation's runs, 
 
   const bobsLink = `[@Bob](https://vespin.dev/workspace-${workspaceId}/person/${agents.teammates.userId})`;
 
+  // The same pull request linked in another workspace the caller is also in is none of this list's.
+  for (const agent of [agents.teammates, agents.otherWorkspaces]) {
+    await database.run(
+      recordAgentPullRequests(agent.userId, agent.id, [
+        {
+          repository: RELAY_FULL_NAME,
+          headBranch: "agent/billing",
+          pullRequest: {
+            number: 57,
+            title: "Bill by the seat",
+            url: `https://github.com/${RELAY_FULL_NAME}/pull/57`,
+            state: PULL_REQUEST_STATE.OPEN,
+            checks: CHECK_SUMMARY.PASSING,
+            additions: 30,
+            deletions: 2,
+            changedFiles: 3,
+          },
+        },
+      ]),
+    );
+  }
+
   // The caller's own task's agents come first, then the rest newest first.
   assert.deepEqual(await idsOf({}), [agents.archived.id, sweeper.id, agents.teammates.id]);
   assert.deepEqual(await idsOf({ archived: true }), [agents.archived.id]);
@@ -960,6 +996,10 @@ test("list_agents narrows by archive, by whose agents, by an automation's runs, 
   assert.deepEqual(await idsOf({ automation: false }), [agents.archived.id, agents.teammates.id]);
   assert.deepEqual(await idsOf({ automationId }), [sweeper.id]);
   assert.deepEqual(await idsOf({ taskStatus: TASK_STATUS.DONE }), [agents.teammates.id]);
+  assert.deepEqual(await idsOf({ pullRequest: { repository: RELAY_FULL_NAME, number: 57 } }), [
+    agents.teammates.id,
+  ]);
+  assert.deepEqual(await idsOf({ pullRequest: { repository: RELAY_FULL_NAME, number: 58 } }), []);
   assert.deepEqual(await call(AGENT_TOOL.LIST_AGENTS, { mine: true }), {
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: AGENT_LIST_FILTER_REFUSAL.MINE_KEY,
@@ -1364,6 +1404,73 @@ test("start_agent starts an agent on the caller's own task as the deployment act
       .map((properties) => ("started_by" in properties ? properties.started_by : undefined)),
     [SERVER_AGENT_STARTER.AGENT],
   );
+});
+
+/** A Manager the account started in the workspace, on no task, its session recorded as the store hook records it. */
+async function managerOn(userId: string, workspaceId: string): Promise<CallingAgent> {
+  const started = await database.run(
+    createAgent(userId, {
+      ...AGENT_CHOICE,
+      payer: AGENT_PAYER.API_KEY,
+      idempotencyKey: randomUUID(),
+      taskId: null,
+      workspaceId,
+      descriptionSnapshot: null,
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      kind: AGENT_KIND.MANAGER,
+    }),
+  );
+
+  assert.ok(Option.isSome(started));
+  const target = { userId, conversationId: started.value.agent.conversationId };
+  const session = sessionId();
+  assert.equal(await database.run(claimRuntimeSession(target, session, new Date(NOW))), true);
+
+  return { ...target, sessionId: session };
+}
+
+test("start_agent from a Manager, with Managers act for whoever asked on, starts the agent as the member whose line opened its turn, refuses one whose asker pays for none of the model rather than paying as the owner, and with it off starts the owner's", async () => {
+  const { workspaceId, plans: tasks, agents } = await openWorkspaces();
+  const owner = agents.caller.userId;
+  const asker = agents.teammates.userId;
+  // A member whose only key is OpenAI's, so nothing of theirs pays for Opus while the owner's would.
+  const keyless = await database.createUser();
+  await database.run(connectAgentApiKeys(keyless, { providers: [PROVIDER_KEY_PROVIDER.OPENAI] }));
+  await database.run(joinWorkspace(workspaceId, keyless));
+  const manager = await managerOn(owner, workspaceId);
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), manager, agentSessions.services);
+  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, true);
+
+  const start = (callId: string) =>
+    call(
+      AGENT_TOOL.START_AGENT,
+      {
+        ...CHOSEN,
+        runsOn: IN_THE_CLOUD,
+        taskId: tasks.invitations,
+        branch: DEFAULT_BRANCH,
+        prompt: "Write the migration that adds the invitation's expiry.",
+      },
+      callId,
+    );
+
+  await database.run(openRunningTurn(manager, [{ member: asker }]));
+  const askers = await storedStart(asker, await start("call-asked"));
+  assert.equal(askers.userId, asker);
+  assert.equal(agentSessions.sent.at(-1)?.headers.get(HEADER.ACCOUNT), asker);
+
+  await database.run(openRunningTurn(manager, [{ member: keyless }]));
+  assert.deepEqual(await start("call-keyless"), {
+    status: ACTION_RESULT_STATUS.REJECTED,
+    reason:
+      "Not started: an agent you start is Test User's, who asked for this turn, and no subscription or API key of theirs pays for that model, and Vespin's key pays for no agent. Start it on a model whose provider they connected, or tell them to connect one in Settings › Agents.",
+  });
+
+  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, false);
+  const owners = await storedStart(owner, await start("call-off"));
+  assert.equal(owners.userId, owner);
 });
 
 test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {
@@ -1855,8 +1962,22 @@ test("message_agent shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "message-agent-input", MESSAGE_AGENT_TOOL.inputSchema);
 });
 
-test("send_to_user shows the model the recorded input", async () => {
+test("chat_send shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "send-to-user-input", SEND_TO_USER_TOOL.inputSchema);
+});
+
+test("a Manager's chat reads show the model the recorded inputs", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "read-chat-messages-input",
+    READ_CHAT_MESSAGES_TOOL.inputSchema,
+  );
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "read-chat-thread-input",
+    READ_CHAT_THREAD_TOOL.inputSchema,
+  );
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "search-chat-input", SEARCH_CHAT_TOOL.inputSchema);
 });
 
 test("send_slack_message shows the model the recorded input", async () => {
@@ -1887,6 +2008,14 @@ test("list_machines shows the model the recorded input", async () => {
 test("list_memories and forget_memory show the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "list-memories-input", LIST_MEMORIES_TOOL.inputSchema);
   await settleJsonSchemaGolden(GOLDEN_ROOT, "forget-memory-input", FORGET_MEMORY_TOOL.inputSchema);
+});
+
+test("a Manager's save_memory shows the model the recorded input, its scope among it", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "manager-save-memory-input",
+    saveMemoryToolOf(true).inputSchema,
+  );
 });
 
 test("schedule_wakeup shows the model the recorded input", async () => {
@@ -3212,6 +3341,44 @@ test("create_task makes a task in the caller's workspace for the member the agen
     agentSessions.sent.length,
     1,
     "a taskless agent's start naming no task starts nothing",
+  );
+});
+
+test("a Manager's create_task in a turn a teammate opened starts the task for them, assigned to them, its owner following nothing", async () => {
+  const { workspaceId, plans: tasks, agents } = await openWorkspaces();
+  const alice = agents.caller.userId;
+  const bob = agents.teammates.userId;
+  const manager = await agentOn(alice, tasks.invitations);
+
+  await database.run(
+    Effect.gen(function* () {
+      yield* (yield* Database)
+        .update(agentTable)
+        .set({ kind: AGENT_KIND.MANAGER, taskId: null })
+        .where(eq(agentTable.id, manager.id));
+      yield* openRunningTurn(manager, [{ member: bob }]);
+    }),
+  );
+
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), manager, agentSessions.services);
+
+  const made = await call(
+    AGENT_TOOL.CREATE_TASK,
+    { name: "Invite expiry", repository: null, status: TASK_STATUS.TODO },
+    "call-asked",
+  );
+
+  assert.ok(isRecord(made.task) && isWireString(made.task.id), JSON.stringify(made));
+  const stored = Option.getOrThrow(await database.run(readTask(bob, made.task.id)));
+  assert.deepEqual(
+    [stored.ownerId, stored.task.assignee?.userId, stored.task.origin],
+    [bob, bob, { actor: DESCRIPTION_ACTOR.AGENT, agentId: manager.id }],
+  );
+  const followers = Option.getOrThrow(await database.run(listTaskFollowers(bob, made.task.id)));
+  assert.deepEqual(
+    followers.map((each) => each.userId),
+    [bob],
   );
 });
 
@@ -5702,6 +5869,66 @@ test("list_automations, create_automation, update_automation, and delete_automat
   assert.equal(
     automationChanges.filter((each) => "action" in each && each.action === "delete").length,
     1,
+  );
+});
+
+test("a Manager's create_automation in a turn a teammate opened makes the teammate's automation, aimed at the Manager, which update_automation then changes as theirs", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const { caller: manager, teammates } = agents;
+  const agentSessions = await fakeCoderSessions(workspaceId);
+
+  await database.run(
+    Effect.flatMap(Database, (db) =>
+      Effect.andThen(
+        db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, manager.id)),
+        openRunningTurn(manager, [{ member: teammates.userId }]),
+      ),
+    ),
+  );
+  const call = await peerCaller(hostOf(), manager, agentSessions.services);
+
+  const created = await call(
+    AGENT_TOOL.CREATE_AUTOMATION,
+    {
+      name: "Morning sweep",
+      prompt: "Look over what changed overnight.",
+      trigger: { kind: "schedule", cron: "0 9 * * 1", timezone: "Europe/London" },
+      repositories: [],
+      model: OPUS,
+      effort: "high",
+      scope: "personal",
+      archiveSuccessful: true,
+      slackDelivery: false,
+      runsOn: { machine: AGENT_MACHINE.VERCEL },
+      agentId: manager.id,
+    },
+    "manager-make",
+  );
+
+  assert.equal(created.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(created));
+  const id = isRecord(created.automation) ? created.automation.id : undefined;
+  assert.ok(isWireString(id));
+  const kept = await database.run(readAutomation(teammates.userId, id));
+
+  assert.deepEqual(
+    Option.map(kept, (automation) => [automation.userId, automation.targetAgentId]),
+    Option.some([teammates.userId, manager.id]),
+  );
+
+  const changed = await call(
+    AGENT_TOOL.UPDATE_AUTOMATION,
+    { automationId: id, name: "Evening sweep" },
+    "manager-change",
+  );
+
+  assert.equal(changed.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(changed));
+  const renamed = await database.run(readAutomation(teammates.userId, id));
+  assert.deepEqual(
+    Option.map(renamed, (automation) => automation.name),
+    Option.some("Evening sweep"),
   );
 });
 

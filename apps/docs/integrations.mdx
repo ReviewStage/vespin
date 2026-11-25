@@ -76,18 +76,20 @@ Which services you see can depend on your account.
 
 ## More than one account
 
-Some services let you connect more than one account, such as two Notion workspaces. Choose **Add another account** from the **⋯** menu, and use **Rename** to tell them apart. When an agent isn't sure which account you mean, it asks before making changes.
+Some services let you connect more than one account, such as two Notion workspaces. Press **Add account** on the service's page, and use **Rename** in an account's **⋯** menu to tell them apart. When an agent isn't sure which account you mean, it asks before making changes.
 
 ## What agents get
 
-Every agent you start can use every tool from your connected integrations, including tools that make changes. Automation runs get them too, since they run as you.
+By default, every agent you start can use every tool from your connected integrations, including tools that make changes. Automation runs get them too, since they run as you. To start new agents without an integration, switch it off under **MCP servers** in **Settings › Agents**.
 
 To turn an integration off for one agent, open **MCP servers** from the **+** menu in its message box. You can also `@`-mention a server to give the agent access for its next turn only.
+
+While the newest message to your agent is a teammate's, its calls to your integrations are refused. See [Handoff](/handoff).
 
 Anything a tool returns, including a credential, ends up in the agent's transcript and is sent to its model.
 
 ## Disconnect
 
-Choose **Disconnect** from the **⋯** menu. Vespin revokes its access at the service, and agents lose the account on their next call. Other accounts at the same service stay connected.
+Press **Disconnect** at the foot of the service's page, or, with several accounts there, choose it from an account's **⋯** menu. Vespin revokes its access at the service, and agents lose the account on their next call. Other accounts at the same service stay connected.
 
 From a terminal, use `vespin integrations`. See [Workspace](/cli/workspace).

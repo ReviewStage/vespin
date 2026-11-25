@@ -24,6 +24,8 @@ export type AutomationsPlace =
       readonly kind: typeof AUTOMATIONS_PAGE.NEW;
       /** The suggestion on the list it was opened from, whose preset fills its draft in, as its address's `preset` names it; none for a blank one. */
       readonly preset?: AutomationPresetName;
+      /** The agent every run of it is sent to, as a Manager's Settings opened it for that Manager, by its address's `target`; none for one that starts a new agent each run. */
+      readonly target?: string;
     }
   | {
       readonly kind: typeof AUTOMATIONS_PAGE.EDIT;

@@ -63,7 +63,9 @@ import {
   type AppStateRead,
   type AppStateSnapshot,
   type AppTranscript,
+  memoriesHolder,
   OWN_TRANSCRIPT,
+  sharesUsageData,
   withAppStateDelivery,
 } from "./app-state.js";
 
@@ -321,6 +323,10 @@ export const selectSettingsHeld = (state: AppStateSnapshot): boolean =>
 /** The settings as the panel draws them. */
 export const selectAppSettingsView = (state: AppStateSnapshot): AppSettingsView | undefined =>
   state.settings === undefined ? undefined : appSettingsView(state.settings);
+
+/** Whether this device shares usage data, undefined before the settings are read (`sharesUsageData`). */
+export const selectSharesUsageData = (state: AppStateSnapshot): boolean | undefined =>
+  sharesUsageData(state);
 
 /** Whether the account keeps an Inbox (`@repo/settings`'s `inbox`): every window draws it but the account's that turned it off; signed out, or before the settings are read, it stands. */
 export const selectInboxOn = (state: AppStateSnapshot): boolean =>
@@ -801,8 +807,9 @@ function keptHoldersHoldAll(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]
 }
 
 /**
- * Whether the account's feed holds a thread on any task: true for one the
- * feed read before the task list that holds it, which `inboxGroups` cannot
+ * Whether the account's feed holds a thread on any task, or on no task
+ * under its agent, a Manager's: true for one the feed read before the task
+ * list that holds its task or lists its agent, which `inboxGroups` cannot
  * group until that list is read (`selectTaskListStatus`).
  */
 export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefined): boolean {
@@ -810,8 +817,8 @@ export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefin
 
   if (rows === undefined || itemId === undefined) return false;
 
-  return Object.values(rows[INBOX_SCOPE_KIND.TASK]).some((items) =>
-    items.some((item) => item.id === itemId),
+  return [...Object.values(rows[INBOX_SCOPE_KIND.TASK]), ...Object.values(rows.agents ?? {})].some(
+    (items) => items.some((item) => item.id === itemId),
   );
 }
 
@@ -941,11 +948,12 @@ export function selectWorkspaceRuns(
   return (state) => state[LIVE_READ.AUTOMATION_WORKSPACE_RUNS][workspaceId];
 }
 
-/** The memories the host holds for one workspace, with every save and delete drawn over them (`ACT_KIND.MEMORIES_FOLLOW`), as a `select`; none before they are read. */
+/** The memories the host holds for one workspace, or for one Manager in it where `managerId` names one, with every save and delete drawn over them (`ACT_KIND.MEMORIES_FOLLOW`), as a `select`; none before they are read. */
 export function selectWorkspaceMemories(
   workspaceId: string,
-): (state: AppStateSnapshot) => AppMemories[string] | undefined {
-  return (state) => state[LIVE_READ.MEMORIES][workspaceId];
+  managerId?: string,
+): (state: AppStateSnapshot) => AppMemories[string][string] | undefined {
+  return (state) => state[LIVE_READ.MEMORIES][workspaceId]?.[memoriesHolder(managerId)];
 }
 
 /** Whether the reader pinned the agent, as the task list follows their pins, as a `select`. */

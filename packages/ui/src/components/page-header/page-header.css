@@ -35,6 +35,11 @@
     margin-top: calc((var(--ui-type-title-leading) - var(--ui-control-height)) / 2);
   }
 
+  /* A page in a dialog's card centers its acts on the dialog title's line. */
+  .ui-page-header[data-look="dialog"] > .ui-page-header-actions {
+    margin-top: calc((var(--ui-type-dialog-leading) - var(--ui-control-height)) / 2);
+  }
+
   /* A quiet act ends with its words on the content's edge. Note that the
      actions take the margin rather than the button, because a button wider
      than its container by its own negative margin would be held to it and

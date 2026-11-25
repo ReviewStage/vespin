@@ -1,7 +1,7 @@
 /**
  * sandbox-door.ts -- the door to a native agent's sandbox a tool of our MCP server reads a file through.
  *
- * `post_thread`, `edit_description`, `show_media`, and `show_page` read a
+ * `inbox_post`, `edit_description`, `show_media`, and `show_page` read a
  * file the agent names by its path through a door made here, and
  * `look_at_picture` writes a description's PDF in through it, over the
  * agent's machine (`../machine/agent-machine.ts`, the one its row names, a

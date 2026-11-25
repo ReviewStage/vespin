@@ -16,6 +16,9 @@
  *   fresh session a new one, which the runner makes the agent under. The
  *   runner keeps the agent's store at the transcripts route under the
  *   project `cursor`, and resumes it from there in a sandbox made anew.
+ *   Cursor keeps nothing on a Mac's disk (`sessionsOnDisk`), so a Mac's
+ *   launch of a session the store does not hold whole replays the agent's
+ *   steps into a fresh one, as a sandbox's does.
  * - Every turn in the cloud is paid by the account's Cursor API key (Cursor
  *   keeps no plan here), declared as `CURSOR_API_KEY`: a placeholder minted for the
  *   launch, swapped for the key at the sandbox's firewall on both hosts
@@ -107,7 +110,7 @@ function apiKeyCredential(key: Redacted.Redacted<string>): RunnerCredential {
   };
 }
 
-/** The agent's model, on its window, as Cursor's SDK takes it, read against the Cursor models its starter is offered; refused where it is none of them. */
+/** The agent's model, on its window, as Cursor's SDK takes it, read against the Cursor models its starter is offered (`cursorModelSelectionOf`); refused only where it is not Cursor's. */
 const selectionOf = Effect.fnUntraced(function* (agent: Agent) {
   const cursorModels = yield* (yield* CursorModelCatalog).forAccount(agent.userId);
 
@@ -224,6 +227,7 @@ function cursor(options: RunnerSessionsOptions): RunnerHarness<{ readonly _tag: 
     name: "Cursor",
     runtime: SERVER_AGENT_HARNESS.CURSOR,
     sessionPrefix: NATIVE_SESSION_PREFIX[CONVERSATION_RUNTIME.CURSOR],
+    sessionsOnDisk: false,
     launch,
     config,
     ahead,

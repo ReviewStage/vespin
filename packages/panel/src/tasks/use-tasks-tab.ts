@@ -166,7 +166,7 @@ import { useIdleTabs } from "./use-idle-tabs.js";
 import { useInboxWaitingTasks } from "./use-inbox-slices.js";
 import { useInboxTaskAgents } from "./use-inbox-task-agents.js";
 import { isOverviewTab, type MainTab, type MainTabsControl, useMainTabs } from "./use-main-tabs.js";
-import { type NewTask, useNewTask } from "./use-new-task.js";
+import { type NewTask, type NewTaskShown, useNewTask } from "./use-new-task.js";
 import { usePinWrites } from "./use-pin-writes.js";
 import { usePinnedTabTasks } from "./use-pinned-tab-tasks.js";
 import {
@@ -708,6 +708,17 @@ function readInboxItemHome(
   );
 }
 
+/**
+ * The Tasks tab as the window holds it: the control handed to its parts,
+ * steady while what they read holds, and what of New task moves, which the
+ * window provides apart (`NewTaskShownContext`) so a press of New task draws
+ * its readers alone.
+ */
+export interface TasksTab {
+  readonly control: TasksControl;
+  readonly newTaskShown: NewTaskShown;
+}
+
 export function useTasksTab(input: {
   /** What main holds of the account's tasks but the list itself, which the window reads from its collections (`task-list-collections.tsx`); a fixture run's own stand in for them. */
   tasks: TasksView;
@@ -753,7 +764,7 @@ export function useTasksTab(input: {
   startStands: () => void;
   /** Answers whether the window stands on a start's page, letting it go (`places/window-history.ts`'s `onLeaveStart`). */
   leaveStart: () => boolean;
-}): TasksControl {
+}): TasksTab {
   const { shown, placeLeave } = input;
   // Note that the reads below stay on `act` until they move to queries; every write is a mutation, and
   // none invalidates a query, since what each changes comes back through app state.
@@ -1110,7 +1121,7 @@ export function useTasksTab(input: {
   // The open task as the list carries it, looked up by its id alone; its agents are followed only where the list carries it.
   const openListed = useTaskListRow(listCollections.tasks, viewed.activeTaskId);
 
-  const agents = useAgents({
+  const { control: agents, modelsRead } = useAgents({
     taskId: viewed.activeTaskId,
     repository:
       openDocument?.id === viewed.activeTaskId ? (openDocument?.repository ?? null) : null,
@@ -2264,7 +2275,7 @@ export function useTasksTab(input: {
   };
 
   // New task's flow, handed where the window stands and the moves a start makes there, each read as it stands at the call.
-  const newTask = useNewTask({
+  const { newTask, shown: newTaskShown } = useNewTask({
     shown,
     workspaceId: listedWorkspace?.id,
     typedNames: drafts,
@@ -2291,6 +2302,7 @@ export function useTasksTab(input: {
       showMention: (mention) => arriveOnMention(mention),
     },
     agents,
+    modelsRead,
     showTab: mainTabs.onShow,
   });
 
@@ -3701,5 +3713,5 @@ export function useTasksTab(input: {
     agentsCarried,
   });
 
-  return steady;
+  return { control: steady, newTaskShown };
 }

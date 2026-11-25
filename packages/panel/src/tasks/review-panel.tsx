@@ -18,6 +18,7 @@ import { GLYPH, MessageSquarePlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { type ReactNode, type RefObject, useId, useMemo, useRef } from "react";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
+import { useHandedWords } from "./box-words.js";
 import { MessageBox, useMessageBox } from "./message-box.js";
 import { PENDING_WORDS } from "./pending-comments.js";
 
@@ -130,7 +131,7 @@ function ReviewPanel({
   onLeave: (left: EventTarget | null) => void;
 }): React.JSX.Element {
   const box = useMessageBox({
-    draft: draft.body,
+    draft: useHandedWords(draft.body),
     setDraft: draft.setBody,
     placeholder: words.placeholder,
     label: words.body,

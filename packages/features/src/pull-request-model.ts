@@ -52,7 +52,7 @@ import {
  * since leaving the queue may hold up the pull requests behind it; and,
  * blocked by a rule or behind its base with nothing else to offer, for a
  * member GitHub lets merge past the base's rules as it lets an admin
- * (`canBypassRules`, read on their own sign-in), Bypass rules and merge…,
+ * (`canBypassRules`, read on their own sign-in), Bypass rules and merge,
  * which asks first, naming what it bypasses (`bypassSentence`).
  */
 

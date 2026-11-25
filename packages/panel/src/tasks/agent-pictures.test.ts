@@ -7,6 +7,7 @@ import {
   PICTURE_OMISSION,
 } from "@repo/features/conversation-picture-wire";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
+import { messageFileChips } from "@repo/features/message-files";
 import type { PictureAnswer } from "@repo/ui/picture-read";
 import { MESSAGE_ROLE, type WireRecord, type WireValue } from "@repo/wire";
 import { Effect } from "effect";
@@ -16,11 +17,7 @@ import { afterEach, beforeAll, test, vi } from "vitest";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { viewerPlace } from "../testing/viewer-place.js";
-import {
-  type AgentPictureDoor,
-  AgentPicturesProvider,
-  MessageFileChips,
-} from "./agent-pictures.js";
+import { type AgentPictureDoor, AgentPicturesProvider, KeptFileChips } from "./agent-pictures.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
 
 /**
@@ -1075,7 +1072,13 @@ test("a line still on its way draws its files going up with no share, each takin
   roots.push(root);
 
   const draw = (sending: boolean) =>
-    act(() => root.render(withQueryClient(createElement(MessageFileChips, { message, sending }))));
+    act(() =>
+      root.render(
+        withQueryClient(
+          createElement(KeptFileChips, { files: messageFileChips(message), sending }),
+        ),
+      ),
+    );
 
   draw(true);
   const meter = host.querySelector('[role="progressbar"]') ?? assert.fail("a file going up");

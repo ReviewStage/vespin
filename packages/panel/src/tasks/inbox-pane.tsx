@@ -83,6 +83,7 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  TOOLBAR_CORNERS,
   TOOLBAR_INSET,
   Toolbar,
   Tooltip,
@@ -98,11 +99,11 @@ import {
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
-import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { isWireString } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import {
@@ -344,7 +345,7 @@ function useOptionNumbers(
 
       if (picked === undefined) return;
       event.preventDefault();
-      control.onDraft(item, picked);
+      control.onPicks(item, picked);
       row.focus();
     };
 
@@ -355,6 +356,14 @@ function useOptionNumbers(
 }
 
 /** What the draft reply's head names the reader by, where nothing else names them. */
+/** Where the pane stands the item's pager and ⋯: in a bar over the thread, or at its title's end where a tab row over the pane is its bar. */
+export const INBOX_PANE_ACTIONS = {
+  BAR: "bar",
+  SUBJECT: "subject",
+} as const;
+
+export type InboxPaneActions = (typeof INBOX_PANE_ACTIONS)[keyof typeof INBOX_PANE_ACTIONS];
+
 const DRAFT_HEAD = {
   YOU: "You",
 } as const;
@@ -1096,42 +1105,20 @@ const NO_LEAD: readonly MenuAction[][] = [];
 export interface InboxPanePhone {
   /** Opens the side panel beside the item, which the title bar's toggle opens elsewhere; none while it is open or where there is none. */
   readonly onShowPanel: (() => void) | undefined;
-  /** The task the Inbox is narrowed to, by its name, which the head says the item stands in; none while it lists every task's. */
+  /** The task the Inbox is narrowed to, by its name, which the way back names; none while it lists every task's. */
   readonly narrowedTask?: string | undefined;
 }
 
 /**
  * What a phone's ⋯ leads with, in place of what the wide bar draws as
- * buttons and crumbs: the pager's steps, then what the crumbs open, the
- * item's task and its agent, then the side panel.
+ * crumbs: what the path opens, the item's task and its agent, under the
+ * path itself (`phonePath`); a thread on no task opens its agent alone.
  */
-function phoneItemGroups(
+function phonePathGroups(
   holder: InboxAnyHolder,
   by: ItemAgent,
   doors: InboxPaneDoors,
-  pager: InboxPager | undefined,
-  phone: InboxPanePhone,
 ): MenuAction[][] {
-  const steps: MenuAction[] =
-    pager === undefined || (pager.onPrevious === undefined && pager.onNext === undefined)
-      ? []
-      : [
-          {
-            label: "Previous inbox item",
-            icon: <ChevronUpIcon />,
-            disabled: pager.onPrevious === undefined,
-            onSelect: () => pager.onPrevious?.(),
-            command: APP_COMMAND.PREVIOUS_INBOX_ITEM,
-          },
-          {
-            label: "Next inbox item",
-            icon: <ChevronDownIcon />,
-            disabled: pager.onNext === undefined,
-            onSelect: () => pager.onNext?.(),
-            command: APP_COMMAND.NEXT_INBOX_ITEM,
-          },
-        ];
-
   const { onOpenHolder } = doors;
   const task = holderTask(holder);
 
@@ -1158,12 +1145,37 @@ function phoneItemGroups(
     onSelect: by.onOpen,
   };
 
-  const panel: MenuAction[] =
-    phone.onShowPanel === undefined
-      ? []
-      : [{ label: "Show panel", icon: <SidePanelIcon />, onSelect: phone.onShowPanel }];
+  return [[...holderItem, agentItem]];
+}
 
-  return [steps, [...holderItem, agentItem], panel].filter((group) => group.length > 0);
+/** What a phone's ⋯ ends with, past the item's own actions: the side panel, which opens over the whole screen on a phone. */
+function phonePanelGroups(phone: InboxPanePhone): MenuAction[][] {
+  return phone.onShowPanel === undefined
+    ? []
+    : [[{ label: "Show panel", icon: <SidePanelIcon />, onSelect: phone.onShowPanel }]];
+}
+
+/** The path a phone's ⋯ is headed by, as the wide bar's crumbs lead the title: the item's task, then its agent; a thread on no task's agent alone. */
+function phonePath(holder: InboxAnyHolder, by: ItemAgent): string {
+  const task = holderTask(holder);
+
+  return task === undefined ? by.subject.name : `${task.name} › ${by.subject.name}`;
+}
+
+/**
+ * A phone's arrows up and down the list, before its ⋯, as Mail's message
+ * bar stands them: each dimmed at the list's end rather than gone, so the
+ * other never moves under the thumb, and both dimmed where the item stands
+ * on no row of the list.
+ */
+function PhoneSteps({ pager }: { pager: InboxPager | undefined }): React.JSX.Element {
+  return (
+    <ReplayUnmask>
+      <InboxPagerControls
+        pager={{ count: undefined, onPrevious: pager?.onPrevious, onNext: pager?.onNext }}
+      />
+    </ReplayUnmask>
+  );
 }
 
 /** What a phone's ⋯ calls the crumbs' presses. */
@@ -1188,6 +1200,7 @@ function InboxItemMenu({
   onClose,
   onRemind,
   lead = NO_LEAD,
+  trail = NO_LEAD,
   heading,
 }: {
   item: InboxItem;
@@ -1195,9 +1208,11 @@ function InboxItemMenu({
   onMark: InboxPaneDoors["onMark"];
   onRemind?: InboxReminder | undefined;
   onClose: InboxResolver | undefined;
-  /** Groups over the item's own, as a phone's head leads its ⋯ with what its bar drew as buttons (`phoneItemGroups`); none elsewhere. */
+  /** Groups over the item's own, as a phone's head leads its ⋯ with what the wide bar's crumbs open (`phonePathGroups`); none elsewhere. */
   lead?: readonly MenuAction[][];
-  /** Muted over the items, pressed by nothing: where the item stands in the list, on a phone. */
+  /** Groups under the item's own, as a phone's ⋯ ends with the side panel (`phonePanelGroups`); none elsewhere. */
+  trail?: readonly MenuAction[][];
+  /** Muted over the items, pressed by nothing: the item's path, on a phone. */
   heading?: React.ReactNode;
 }): React.JSX.Element | null {
   const menu = useMenu(shown);
@@ -1212,7 +1227,7 @@ function InboxItemMenu({
   });
 
   // Note that a phone's ⋯, the one given a lead, also stands in for ⌘F, read here as the menu is drawn rather than as the lead was made.
-  const groups = itemGroups(lead === NO_LEAD ? lead : [...lead, ...phoneFindGroups()]);
+  const groups = itemGroups(lead, lead === NO_LEAD ? trail : [...phoneFindGroups(), ...trail]);
 
   if (groups.length === 0) return null;
 
@@ -1271,27 +1286,35 @@ function Subject({
   item,
   heading,
   first,
+  actions,
 }: {
   item: InboxItem;
   /** Takes the title's heading, which the bar watches scroll away (`useHeadingAway`). */
   heading: (element: HTMLElement | null) => void;
   /** Whether it is the page's first heading, as on a phone, whose bar names what holds the item and whose list is not drawn beside it. */
   first: boolean;
+  /** The item's pager and ⋯ at the title's end, where no bar stands over the pane (`INBOX_PANE_ACTIONS.SUBJECT`); none where its bar holds them. */
+  actions?: React.ReactNode;
 }): React.JSX.Element {
   return (
     <header
       className="inbox-subject flex flex-col gap-tight-gap border-b border-border pb-block-gap"
       {...{ [REPLY_SCOPE]: "" }}
     >
-      <Text
-        as={first ? TEXT_ELEMENT.H1 : TEXT_ELEMENT.H2}
-        variant={TEXT_VARIANT.DIALOG}
-        ref={heading}
-        className="inbox-subject-title"
-        data-inbox-title=""
-      >
-        {cardTitle(item.title)}
-      </Text>
+      <div className="flex items-start gap-control-gap">
+        <Text
+          as={first ? TEXT_ELEMENT.H1 : TEXT_ELEMENT.H2}
+          variant={TEXT_VARIANT.DIALOG}
+          ref={heading}
+          className="inbox-subject-title min-w-0 flex-1"
+          data-inbox-title=""
+        >
+          {cardTitle(item.title)}
+        </Text>
+        {actions === undefined ? null : (
+          <div className="flex flex-none items-center gap-control-gap">{actions}</div>
+        )}
+      </div>
     </header>
   );
 }
@@ -1554,38 +1577,6 @@ function agentCrumb(by: ItemAgent, fixed = false, held?: CrumbHeld | undefined):
 }
 
 /**
- * A phone's bar's name for the item: its task, as the wide path leads with
- * it, pressing where the wide path's does; a thread on no task's agent, as
- * its path leads with it. Where the Inbox is narrowed to a
- * task, the Inbox leads it, pressing back to that narrowed list, so the
- * screen a thread's link lands on says the list it stands in. Note that the
- * bar never names the item's title, because the thread's heading right
- * under it already does.
- */
-function PhoneHolder({
-  holder,
-  by,
-  doors,
-  narrowed,
-}: {
-  holder: InboxAnyHolder;
-  by: ItemAgent;
-  doors: InboxPaneDoors;
-  /** Goes back to the list narrowed to the task; none while it lists every task's. */
-  narrowed: (() => void) | undefined;
-}): React.JSX.Element {
-  const task = holderTask(holder);
-  const holds = task === undefined ? agentCrumb(by) : taskCrumb(task, doors);
-
-  return (
-    <Breadcrumbs
-      label="Path"
-      crumbs={narrowed === undefined ? [holds] : [{ label: "Inbox", onPress: narrowed }, holds]}
-    />
-  );
-}
-
-/**
  * One item at reading size, as a comment thread: under the pane's crumbs,
  * the item's title alone as the thread's subject, then every message of
  * its thread, oldest first, the reader's plain replies on their way after
@@ -1609,6 +1600,7 @@ export function InboxPane({
   phone,
   newThread,
   within,
+  actionsAt = INBOX_PANE_ACTIONS.BAR,
 }: {
   /** What holds the item: its task, or the agent that posted it where it stands on no task. */
   holder: InboxAnyHolder;
@@ -1642,6 +1634,12 @@ export function InboxPane({
    * type, once its heading has scrolled away.
    */
   within?: boolean | undefined;
+  /**
+   * Where the item's pager and ⋯ stand: in the bar, or at the title's end
+   * under a tab row that is the pane's bar, as a Manager's Inbox tab's, the
+   * bar then drawn only where the item stands alone, for its way back.
+   */
+  actionsAt?: InboxPaneActions | undefined;
 }): React.JSX.Element {
   const now = useMinute();
   const board = useRef<HTMLDivElement>(null);
@@ -1731,7 +1729,8 @@ export function InboxPane({
 
   // Note that the item's words are read under its own workspace, its plan's, never the one the Inbox lists, which may not be the item's.
   const workspaceId = holderWorkspaceId(holder);
-  const onDraft = (next: InboxDraft) => control.onDraft(item, next);
+  // Note that the ask's controls write its picks alone, never the words, which the box reads and writes where it stands.
+  const onDraft = (next: InboxDraft) => control.onPicks(item, next);
   // The open ask's controls stand in the draft reply, over its note.
   const asking = openAskOf(thread);
   const openAsk = asking !== undefined && knownAsk(asking.ask) ? asking.ask : undefined;
@@ -1794,6 +1793,30 @@ export function InboxPane({
     </AnswerMentions>
   );
 
+  const itemActions = (
+    <>
+      {pager === undefined ||
+      (pager.onPrevious === undefined && pager.onNext === undefined) ? null : (
+        <ReplayUnmask>
+          <InboxPagerControls pager={pager} />
+        </ReplayUnmask>
+      )}
+      <InboxItemMenu
+        key={item.id}
+        item={item}
+        shown={!hidden}
+        onMark={doors.onMark}
+        onRemind={doors.onRemind}
+        onClose={doors.onClose}
+      />
+    </>
+  );
+
+  // Note that a phone's head holds the item's actions in its own ⋯, so they stand at the title only off a phone.
+  const atSubject = actionsAt === INBOX_PANE_ACTIONS.SUBJECT && !phoneHead;
+  // The bar stands under a tab row only where the item stands alone, for its way back to the list.
+  const barless = atSubject && onBack === undefined;
+
   return (
     <section
       ref={pane}
@@ -1801,9 +1824,10 @@ export function InboxPane({
       aria-label={cardTitle(item.title)}
       hidden={hidden}
     >
-      {phoneHead ? (
+      {barless ? null : phoneHead ? (
         <PhoneHead
           place="inbox-item"
+          corners={TOOLBAR_CORNERS.FIT}
           start={
             <BackButton
               label={phone.narrowedTask === undefined ? "Inbox" : `${phone.narrowedTask} · Inbox`}
@@ -1811,29 +1835,22 @@ export function InboxPane({
               onBack={onBack}
             />
           }
-          title={
-            <PhoneHolder
-              holder={holder}
-              by={by}
-              doors={doors}
-              narrowed={phone.narrowedTask === undefined ? undefined : onBack}
-            />
-          }
+          title={cardTitle(item.title)}
           end={
-            <InboxItemMenu
-              key={item.id}
-              item={item}
-              shown={!hidden}
-              onMark={doors.onMark}
-              onRemind={doors.onRemind}
-              onClose={doors.onClose}
-              lead={phoneItemGroups(holder, by, doors, pager, phone)}
-              heading={
-                pager?.count === undefined ? undefined : (
-                  <ReplayUnmask>{`${pager.count.at} of ${pager.count.total}`}</ReplayUnmask>
-                )
-              }
-            />
+            <>
+              <PhoneSteps pager={pager} />
+              <InboxItemMenu
+                key={item.id}
+                item={item}
+                shown={!hidden}
+                onMark={doors.onMark}
+                onRemind={doors.onRemind}
+                onClose={doors.onClose}
+                lead={phonePathGroups(holder, by, doors)}
+                trail={phonePanelGroups(phone)}
+                heading={<ReplayMask>{phonePath(holder, by)}</ReplayMask>}
+              />
+            </>
           }
         />
       ) : (
@@ -1864,24 +1881,7 @@ export function InboxPane({
             )
           }
           pickUp={within === true ? { name: cardTitle(item.title), shown: headingAway } : undefined}
-          actions={
-            <>
-              {pager === undefined ||
-              (pager.onPrevious === undefined && pager.onNext === undefined) ? null : (
-                <ReplayUnmask>
-                  <InboxPagerControls pager={pager} />
-                </ReplayUnmask>
-              )}
-              <InboxItemMenu
-                key={item.id}
-                item={item}
-                shown={!hidden}
-                onMark={doors.onMark}
-                onRemind={doors.onRemind}
-                onClose={doors.onClose}
-              />
-            </>
-          }
+          actions={atSubject ? undefined : itemActions}
         />
       )}
       <Fill className="desktop-inbox">
@@ -1890,7 +1890,12 @@ export function InboxPane({
             className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
           >
             <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
-              <Subject item={item} heading={setHeading} first={phoneHead} />
+              <Subject
+                item={item}
+                heading={setHeading}
+                first={phoneHead}
+                actions={atSubject ? itemActions : undefined}
+              />
               <ReplyDoorProvider value={quoteDoor?.lay}>
                 {/* Each item's thread is a run of its own, so it opens at its newest message. Note that every row is drawn, because the thread is a few dozen messages at most and its comments' timeline is drawn from each to the next. */}
                 <ConversationRows

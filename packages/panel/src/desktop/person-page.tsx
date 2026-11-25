@@ -1,4 +1,4 @@
-import type { AgentPullRequest } from "@repo/features/agent-wire";
+import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import {
   automationOwner,
@@ -70,7 +70,6 @@ import {
   TEXT_VARIANT,
   Text,
   type ToolbarPickUp,
-  useLeaving,
   useMenu,
   useMinute,
   usePageScroll,
@@ -127,11 +126,13 @@ import {
   useAgentsStartedBy,
   useListedAgentPullRequests,
 } from "../tasks/use-workspace-agents.js";
+import { useManagerAgents } from "../tasks/workspace-managers.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
-import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
+import { AGENT_ROW_CELLS, AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
 import { STANDING_GLYPH } from "./automation-runs-panel.js";
+import { ManagerRow } from "./manager-row.js";
 
 import {
   PERSON_SECTION_FOLD,
@@ -160,7 +161,8 @@ import { useAutomations } from "./use-automations.js";
  * wherever the window names a member, the reader among them, or someone
  * who left. Its head is their face at the page's size, their name, and
  * their role and email as the members read lists them, or that they left.
- * Under it stand their agents at work, the Inbox
+ * Under it stand the Managers they started, each the sidebar's Manager
+ * row (`ManagerRow`), then their agents at work, the Inbox
  * items their agents wait on, the tasks assigned to them, the rest of the
  * tasks they created, and their other
  * agents, each from the listed workspace's task list and Inbox
@@ -182,9 +184,8 @@ import { useAutomations } from "./use-automations.js";
  * row opens what it names, and its ⋯, a right-click, and the menu key open
  * its acts: a task's the sidebar's, an agent's Copy link and Archive, an
  * Item's and an automation's Copy link, each link written under the
- * workspace the page stands in. Its lists move: a row arriving slides in, one
- * leaving slides out, and one taken from a section into another glides
- * across. Each section folds on a press on its head, its count read with
+ * workspace the page stands in. A row arriving, leaving, or taken from a
+ * section into another moves at once. Each section folds on a press on its head, its count read with
  * its noun, as a task's Overview's groups do.
  */
 
@@ -239,7 +240,7 @@ function PersonSection({
 }): React.JSX.Element {
   return (
     <PersonSectionFrame label={title} title={title} count={count} noun={noun} fold={fold}>
-      <List label={title} inset={LIST_INSET.ROW} moves>
+      <List label={title} inset={LIST_INSET.ROW}>
         {children}
       </List>
     </PersonSectionFrame>
@@ -337,18 +338,11 @@ function useHeldAgents(list: readonly PersonAgent[]): readonly PersonAgent[] {
   return useSteadyList(kept);
 }
 
-/** An agent's key, by which its row leaves its list and glides into another (`ListMotion`). */
-function agentKey({ agent }: PersonAgent): string {
-  return agent.id;
-}
-
 /** How wide the cells whose words differ row to row stand: an agent's row draws none of them. */
 const AGENT_ROWS_FIT = {};
 
 /**
- * A section of their agents: its name and count over its rows, each drawn
- * on after it is no longer listed until its exit has played (`useLeaving`),
- * drawing only those near the view of the page's scroller (`usePageScroll`),
+ * A section of their agents: its name and count over its rows, drawing only those near the view of the page's scroller (`usePageScroll`),
  * every row while a find bar stands open (`VirtualTaskRows`' `overscan`),
  * chosen together as a task's related tasks are, a row chosen among several
  * offering Archive, or Unarchive, and Permanently delete on every one chosen
@@ -371,8 +365,7 @@ const PersonAgentsSection = memo(function PersonAgentsSection({
   /** The pull request each listed agent opened, by agent. */
   pullRequests: ReadonlyMap<string, AgentPullRequest>;
 }): React.JSX.Element {
-  const drawn = useLeaving(agents, agentKey);
-  const keys = useMemo(() => drawn.map(({ key }) => key), [drawn]);
+  const keys = useMemo(() => agents.map(({ agent }) => agent.id), [agents]);
   const { scroller, shiftedBy } = usePageScroll();
   // Note that the run draws every row while a find bar stands open over the page.
   const finding = useFindOpen();
@@ -405,7 +398,6 @@ const PersonAgentsSection = memo(function PersonAgentsSection({
           cells={AGENT_ROW_CELLS}
           more={more}
           selection={{ selected: selection.selected, onChange: selection.onChange }}
-          moves
           scroller={scroller}
           shiftedBy={shiftedBy}
           keys={keys}
@@ -413,17 +405,120 @@ const PersonAgentsSection = memo(function PersonAgentsSection({
           fit={AGENT_ROWS_FIT}
         >
           {(index, place) => {
-            const entry = drawn[index];
+            const each = agents[index];
 
-            return entry === undefined ? null : (
+            return each === undefined ? null : (
               <AgentRow
-                key={entry.key}
-                each={entry.value}
+                key={each.agent.id}
+                each={each}
                 tasks={tasks}
                 agents={control}
                 pullRequests={pullRequests}
                 more={more}
-                chosen={selection.chosenOf(entry.key)}
+                chosen={selection.chosenOf(each.agent.id)}
+                place={place}
+              />
+            );
+          }}
+        </VirtualTaskRows>
+      </ReplayMask>
+      {selection.dialog}
+    </PersonSectionFrame>
+  );
+});
+
+/** One of their Managers as a row, the sidebar's Manager row (`ManagerRow`), reading its own agent so a step of its turn draws it alone, its face wearing the working mark while it works. */
+function PersonManagerRow({
+  handed,
+  tasks,
+  agents,
+  more,
+  chosen,
+  place,
+}: {
+  handed: ListedAgent;
+  tasks: TasksControl;
+  /** The agents control its menu acts through (`useManagerAgents`). */
+  agents: AgentsControl;
+  /** Whether it draws its ⋯, as its list does. */
+  more: boolean;
+  /** The selection it stands in, where it is one of several chosen. */
+  chosen: ChosenRows | undefined;
+  /** Where it stands in its section's run of rows (`VirtualTaskRows`). */
+  place: VirtualRowPlace;
+}): React.JSX.Element {
+  const agent = useTaskListRow(useTaskListCollections().agents, handed.id) ?? handed;
+
+  return (
+    <ManagerRow
+      agent={agent}
+      agents={agents}
+      me={tasks.me}
+      shown={tasks.shown}
+      more={more}
+      current={false}
+      chosen={chosen}
+      place={place}
+      look={AGENT_ROW_LOOK.LIST}
+      onOpen={tasks.agentView.onOpen}
+    />
+  );
+}
+
+/**
+ * The section of their Managers, the workspace's agents on no task they
+ * started, drawn as their agents' section is (`PersonAgentsSection`): its
+ * name and count over its rows, chosen together, each a Manager's row
+ * (`ManagerRow`). Every Manager of theirs is listed, since the list
+ * carries the workspace's every one, so it counts what it lists.
+ */
+const PersonManagersSection = memo(function PersonManagersSection({
+  managers,
+  tasks,
+}: {
+  managers: readonly ListedAgent[];
+  tasks: TasksControl;
+}): React.JSX.Element {
+  const title = PERSON_PAGE_WORDS.MANAGERS;
+  const keys = useMemo(() => managers.map(({ id }) => id), [managers]);
+  const { scroller, shiftedBy } = usePageScroll();
+  const finding = useFindOpen();
+  const more = !useCoarsePointer();
+  const control = useManagerAgents(tasks.agents);
+  const selection = useAgentsSelection(control, managers, tasks.shown);
+
+  return (
+    <PersonSectionFrame
+      label={title}
+      title={title}
+      count={managers.length}
+      noun={TERM.MANAGER}
+      fold={PERSON_SECTION_FOLD}
+    >
+      <ReplayMask>
+        <VirtualTaskRows
+          id={selection.regionId}
+          label={title}
+          cells={AGENT_ROW_CELLS}
+          more={more}
+          selection={{ selected: selection.selected, onChange: selection.onChange }}
+          scroller={scroller}
+          shiftedBy={shiftedBy}
+          keys={keys}
+          overscan={finding ? keys.length : undefined}
+          fit={AGENT_ROWS_FIT}
+        >
+          {(index, place) => {
+            const handed = managers[index];
+
+            return handed === undefined ? null : (
+              <PersonManagerRow
+                key={handed.id}
+                handed={handed}
+                tasks={tasks}
+                agents={control}
+                more={more}
+                chosen={selection.chosenOf(handed.id)}
                 place={place}
               />
             );
@@ -576,7 +671,7 @@ interface PersonAutomations {
 function usePersonAutomations(workspaceId: string | undefined, userId: string): PersonAutomations {
   const { read, reload } = useAutomations(workspaceId);
 
-  // Note that their automations keep one identity while the read stands, because the list that draws them follows it (`useLeaving`).
+  // Note that their automations keep one identity while the read stands, so their rows draw again only as it changes.
   const theirs = useMemo(
     () =>
       read === undefined || "failure" in read
@@ -627,7 +722,6 @@ function AutomationRow({
   return (
     <RowHintOptions card={<AutomationCard automation={automation} workspaceName={workspaceName} />}>
       <ListRow
-        motionKey={automation.id}
         leading={
           <span className={HOME_ROW_PICTURE}>
             <ActorMark actor={automationActor(automation)} />
@@ -663,12 +757,7 @@ function AutomationRow({
   );
 }
 
-/** An automation's key, by which its row leaves its list (`ListMotion`). */
-function automationKey({ id }: AutomationSummary): string {
-  return id;
-}
-
-/** Their automations' rows, a row no longer listed drawn on until its exit has played (`useLeaving`). */
+/** Their automations' rows. */
 function AutomationRows({
   automations,
   tasks,
@@ -678,14 +767,13 @@ function AutomationRows({
   tasks: TasksControl;
   now: number;
 }): React.JSX.Element {
-  const drawn = useLeaving(automations, automationKey);
   const door = useAutomationsDoor(tasks);
 
   return (
     <>
-      {drawn.map(({ key, value: automation }) => (
+      {automations.map((automation) => (
         <AutomationRow
-          key={key}
+          key={automation.id}
           automation={automation}
           workspaceName={tasks.workspace?.name}
           now={now}
@@ -816,7 +904,6 @@ function MachineRow({
   return (
     <ListRow
       id={machineRowId(machine.id)}
-      motionKey={machine.id}
       leading={<DeviceStandingGlyph device={machine} standing={standing} hinted={false} />}
       title={name}
       titleReplayMasked
@@ -962,12 +1049,7 @@ const PersonTasks = memo(function PersonTasks({
   );
 });
 
-/** A task's key, by which its row leaves its list and glides into another (`ListMotion`). */
-function taskKey({ id }: TaskSummary): string {
-  return id;
-}
-
-/** A section's first `PERSON_TASKS_SHOWN` tasks, a row no longer listed drawn on until its exit has played (`useLeaving`). */
+/** A section's first `PERSON_TASKS_SHOWN` tasks. */
 function PersonTaskRows({
   title,
   listed,
@@ -980,19 +1062,17 @@ function PersonTaskRows({
   unread: (task: TaskSummary) => boolean;
 }): React.JSX.Element {
   const shown = useMemo(() => listed.slice(0, PERSON_TASKS_SHOWN), [listed]);
-  const drawn = useLeaving(shown, taskKey);
 
   return (
     <ReplayMask>
       <RecentTasks
         tasks={tasks}
         label={title}
-        listed={drawn.map(({ value }) => value)}
+        listed={shown}
         unread={unread}
         // Note that a teammate's tasks are looked at rather than gone back to, so each opens on its plan.
         onOpen={tasks.onSelect}
         face={false}
-        moves
       />
     </ReplayMask>
   );
@@ -1092,16 +1172,22 @@ function PersonColumn({
     ),
   );
 
-  // Note that the page keeps one identity while the list stands, because each of its lists follows its rows (`useLeaving`).
-  const page = useMemo(() => personPage(userId, listed, liveAgents), [userId, listed, liveAgents]);
+  // Note that the page keeps one identity while the list stands, so its lists draw again only as it changes.
+  const workspaceId = tasks.workspace?.id;
+
+  const page = useMemo(
+    () => personPage(userId, listed, liveAgents, workspaceId),
+    [userId, listed, liveAgents, workspaceId],
+  );
+
   // Note that each section is handed its list as it was while its items stand, so a turn ending, which re-sorts their tasks, draws only the rows it moves.
   const working = useHeldAgents(page.working);
   const theirAgents = useHeldAgents(page.agents);
+  const managers = useSteadyList(page.managers);
   const assigned = useSteadyList(page.assigned);
   const created = useSteadyList(page.created);
   // Each section counts what the list holds and what the service counted past it.
   const held = personHeld(page);
-  const workspaceId = tasks.workspace?.id;
 
   const counted = useQuery(personPageQueryOptions(workspaceId, userId, held, tasks.listRead));
 
@@ -1201,15 +1287,7 @@ function PersonColumn({
         // A phone's page offers its acts from its bar's one ⋯ instead.
         actions={away === undefined ? actions : undefined}
       >
-        <PersonBody
-          reading={
-            !tasks.listRead ||
-            read.reading ||
-            theirAutomations.reading ||
-            theirMachines.reading ||
-            unnamed
-          }
-        >
+        <PersonBody>
           <PersonTop>{note}</PersonTop>
           {tasks.listFailed ? (
             <div className="home-note my-tight-gap">
@@ -1227,6 +1305,9 @@ function PersonColumn({
               fold={PERSON_SECTION_FOLD}
             />
           ) : null}
+          {managers.length === 0 ? null : (
+            <PersonManagersSection managers={managers} tasks={tasks} />
+          )}
           {working.length === 0 ? null : (
             <PersonAgentsSection
               title={PERSON_PAGE_WORDS.WORKING}

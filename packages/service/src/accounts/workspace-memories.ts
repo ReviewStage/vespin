@@ -26,6 +26,12 @@
  * how often agents were handed it in the last thirty days and when last
  * (`tallyMemoryRecalls`). A keep is counted, by what it came to and whether
  * an agent or a member kept it, and never by its words.
+ *
+ * Each takes a scope (`MemoryScope`), the workspace's own memories unless
+ * handed another: a Manager recalls the workspace's and its own, and keeps
+ * one for itself alone where it chooses (`managerMemories`), and Settings
+ * reads and forgets one Manager's own. A correction stays where the memory
+ * it corrects is kept (`correctionScope`).
  */
 
 import {
@@ -37,11 +43,15 @@ import {
   listMemories,
   MEMORY_FORGET,
   MEMORY_OUTCOME,
+  MEMORY_SCOPE,
+  type MemoryKeepScope,
+  type MemoryScope,
   type MemorySource,
   type MemorySourceRead,
   readMemorySources,
   rememberMemory,
   type StoredMemory,
+  WORKSPACE_MEMORIES,
 } from "@repo/database/models/memory-store";
 import {
   readAccountNames,
@@ -264,6 +274,22 @@ function summariesFor(
   );
 }
 
+/**
+ * Where a memory's words came from, as the wire says it: the agent's task
+ * (`source`), or the Manager standing on none (`managerSource`) beside a
+ * null `source`, which a client from before Managers' sources reads as none.
+ */
+function sourcesOf(
+  read: MemorySourceRead | undefined,
+): Pick<MemorySummary, "source" | "managerSource"> {
+  if (read === undefined) return { source: null };
+  const { agentId, messageId } = read;
+
+  return read.taskId === null
+    ? { source: null, managerSource: { agentId, messageId, name: read.managerName } }
+    : { source: { agentId, messageId, taskId: read.taskId, taskName: read.taskName } };
+}
+
 /** One memory as the reader sees it, what is read beside it filled in. */
 function summaryOf(
   userId: string,
@@ -280,22 +306,23 @@ function summaryOf(
     forgettable: manages || kept.userId === userId,
     createdAt: kept.createdAt,
     updatedAt: kept.updatedAt,
-    source: readings.sources.get(kept.id) ?? null,
+    ...sourcesOf(readings.sources.get(kept.id)),
     recalls30d: tally?.recalls30d ?? 0,
     lastRecalledAt: tally?.lastRecalledAt ?? null,
   };
 }
 
-/** The workspace's memories, to a member of it. */
+/** The workspace's memories in the scope, to a member of it. */
 export function readWorkspaceMemories(
   userId: string,
   workspaceId: string,
+  scope: MemoryScope = WORKSPACE_MEMORIES,
 ): WorkspaceStoreEffect<WorkspaceMemoryAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
 
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
-    const stored = yield* listMemories(workspaceId);
+    const stored = yield* listMemories(workspaceId, scope);
 
     const memories = yield* summariesFor(
       userId,
@@ -309,8 +336,8 @@ export function readWorkspaceMemories(
 }
 
 /**
- * Forgets one of the workspace's memories, where the member may, and answers
- * the memories as they then stand, with the transaction it was deleted in. A
+ * Forgets one of the workspace's memories in the scope, where the member
+ * may, and answers the memories of the scope as they then stand, with the transaction it was deleted in. A
  * memory already gone answers the same as one forgotten now, with no
  * transaction, so a forget retried after it landed answers the same.
  */
@@ -318,13 +345,14 @@ export function forgetWorkspaceMemory(
   userId: string,
   workspaceId: string,
   id: string,
+  scope: MemoryScope = WORKSPACE_MEMORIES,
 ): WorkspaceStoreEffect<WorkspaceMemoryAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
 
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
     const manages = MANAGING_ROLES.has(role.value);
-    const forgot = yield* forgetMemory(workspaceId, id, { userId, manages });
+    const forgot = yield* forgetMemory(workspaceId, id, { userId, manages }, scope);
 
     if (forgot.outcome === MEMORY_FORGET.NOT_PERMITTED)
       return { kind: WORKSPACE_MEMORY.NOT_PERMITTED } as const;
@@ -333,7 +361,7 @@ export function forgetWorkspaceMemory(
       userId,
       workspaceId,
       manages,
-      yield* listMemories(workspaceId),
+      yield* listMemories(workspaceId, scope),
     );
 
     return {
@@ -390,7 +418,9 @@ export type WorkspaceMemorySearchAnswer =
  * with the memory as the member then sees it. Words that look like a
  * credential are refused before the store is reached. `source` is the
  * coding agent keeping them and its turn's line; a member's own keep hands
- * none. Each keep is counted once the request has answered.
+ * none. `scope` is where a new memory lands, the workspace's own unless
+ * handed a Manager's, and where the memory `replaces` names is looked for.
+ * Each keep is counted once the request has answered.
  */
 export function saveWorkspaceMemory(
   userId: string,
@@ -398,6 +428,7 @@ export function saveWorkspaceMemory(
   text: string,
   replaces: string | undefined,
   source?: MemorySource,
+  scope: MemoryKeepScope = WORKSPACE_MEMORIES,
 ): WorkspaceStoreEffect<WorkspaceMemorySaveAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
@@ -405,7 +436,7 @@ export function saveWorkspaceMemory(
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY_SAVE.NOT_MEMBER } as const;
 
     if (looksLikeCredential(text)) return { kind: WORKSPACE_MEMORY_SAVE.CREDENTIAL } as const;
-    const outcome = yield* rememberMemory(workspaceId, userId, text, replaces, source);
+    const outcome = yield* rememberMemory(workspaceId, userId, text, replaces, source, scope);
 
     switch (outcome.kind) {
       case MEMORY_OUTCOME.NOT_FOUND:
@@ -431,17 +462,18 @@ export function saveWorkspaceMemory(
   });
 }
 
-/** The workspace's memories a search's words find, best first, as recall ranks them, and how many it holds, to a member of it. */
+/** The workspace's memories in the scope a search's words find, best first, as recall ranks them, and how many it holds, to a member of it. */
 export function searchWorkspaceMemories(
   userId: string,
   workspaceId: string,
   query: string | undefined,
+  scope: MemoryScope = WORKSPACE_MEMORIES,
 ): WorkspaceStoreEffect<WorkspaceMemorySearchAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
 
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
-    const stored = yield* listMemories(workspaceId);
+    const stored = yield* listMemories(workspaceId, scope);
     const found = rankMemories(stored, query);
 
     const memories = yield* summariesFor(
@@ -462,12 +494,14 @@ export function searchWorkspaceMemories(
  * longer than a search's few words. Unlike a search, text with no telling
  * word, or a workspace whose memories hold none of its words, answers none
  * rather than the most recent, so a turn is handed only what bears on it;
- * and an account no member of the workspace is answered none.
+ * and an account no member of the workspace is answered none. The
+ * memories are the scope's, the workspace's own unless handed another.
  */
 export function matchWorkspaceMemories(
   userId: string,
   workspaceId: string,
   text: string,
+  scope: MemoryScope = WORKSPACE_MEMORIES,
 ): WorkspaceStoreEffect<readonly StoredMemory[]> {
   return Effect.gen(function* () {
     const asked = askedWords(
@@ -481,7 +515,7 @@ export function matchWorkspaceMemories(
     if (Option.isNone(yield* roleIn(userId, workspaceId))) return [];
 
     return matchingMemories(
-      yield* listMemories(workspaceId),
+      yield* listMemories(workspaceId, scope),
       asked,
       MEMORY_SEARCH_BOUNDS.TURN_RESULTS,
     );
@@ -489,7 +523,7 @@ export function matchWorkspaceMemories(
 }
 
 /**
- * One page of the workspace's memories kept or corrected at or after
+ * One page of the workspace's memories in the scope kept or corrected at or after
  * `since` (epoch milliseconds), most recent first, to a member of it, and
  * how many there are across every page. Unlike a search, nothing is ranked
  * or capped past the page, and only the page's memories are read beside
@@ -500,12 +534,16 @@ export function listWorkspaceMemoriesSince(
   workspaceId: string,
   since: number,
   page: { readonly offset: number; readonly limit: number },
+  scope: MemoryScope = WORKSPACE_MEMORIES,
 ): WorkspaceStoreEffect<WorkspaceMemoryPageAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
 
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
-    const recent = (yield* listMemories(workspaceId)).filter((kept) => kept.updatedAt >= since);
+
+    const recent = (yield* listMemories(workspaceId, scope)).filter(
+      (kept) => kept.updatedAt >= since,
+    );
 
     const memories = yield* summariesFor(
       userId,
@@ -515,5 +553,35 @@ export function listWorkspaceMemoriesSince(
     );
 
     return { kind: WORKSPACE_MEMORY.READ, memories, total: recent.length } as const;
+  });
+}
+
+/** What a Manager recalls: the workspace's memories and its own. */
+export function managerMemories(managerId: string): MemoryScope {
+  return { kind: MEMORY_SCOPE.WORKSPACE_AND_MANAGER, managerId };
+}
+
+/**
+ * Where a Manager's keep lands: where the memory `replaces` names is kept,
+ * the workspace's own or the Manager's, so a correction never moves a
+ * memory; and for a new memory, or one the Manager recalls none of, where
+ * it chose (`chosen`), which the store then answers as it finds it.
+ */
+export function correctionScope(
+  workspaceId: string,
+  managerId: string,
+  replaces: string | undefined,
+  chosen: MemoryKeepScope,
+): WorkspaceStoreEffect<MemoryKeepScope> {
+  if (replaces === undefined) return Effect.succeed(chosen);
+
+  return Effect.map(listMemories(workspaceId, managerMemories(managerId)), (recalled) => {
+    const target = recalled.find((kept) => kept.id === replaces.toLowerCase());
+
+    if (target === undefined) return chosen;
+
+    return target.managerId === null
+      ? WORKSPACE_MEMORIES
+      : { kind: MEMORY_SCOPE.MANAGER, managerId: target.managerId };
   });
 }

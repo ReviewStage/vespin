@@ -1,11 +1,14 @@
-import { WHOLE_PART } from "@repo/features/agent-parts";
+import { agentParts, WHOLE_PART } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
-import { managerChatLines, managerChatWork } from "@repo/features/manager-chat";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
+import { managerChatView } from "@repo/features/manager-chat-view";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import {
   drawnCallIds,
+  managerChatItems,
+  managerThreadItems,
   NO_TOGGLES,
   openCuts,
   rowsNear,
@@ -353,121 +356,6 @@ describe("transcriptItems", () => {
       ["f", false, false, "Morning triage", false, true],
       ["Ship it.", false, false, "Triage", false, true],
     ]);
-  });
-
-  it("draws a Manager's chat as bubbles: its greeting first, each message it sent a received bubble in the run it sent it in, with no turn's foot, and its working line a bubble", () => {
-    const minute = 60 * 1000;
-
-    const sent = (callId: string, text: string) => ({
-      type: "tool-send_to_user",
-      toolCallId: callId,
-      state: "output-available",
-      input: { text },
-      output: { status: "accepted" },
-    });
-
-    const lines = managerChatLines([
-      {
-        id: "ask",
-        role: MESSAGE_ROLE.USER,
-        parts: [{ type: "text", text: "Fix the login." }],
-        sentAt: 0,
-      },
-      {
-        id: "turn",
-        role: MESSAGE_ROLE.ASSISTANT,
-        parts: [
-          { type: "text", text: "Its own words, left out." },
-          sent("first", "On it."),
-          sent("second", "Started an agent."),
-        ],
-        startedAt: minute,
-        finishedAt: 2 * minute,
-      },
-      {
-        id: "thanks",
-        role: MESSAGE_ROLE.USER,
-        parts: [{ type: "text", text: "Thanks!" }],
-        sentAt: 3 * minute,
-      },
-    ]);
-
-    const items = transcriptItems(lines, {
-      writing: true,
-      readerId: "u1",
-      toggles: NO_TOGGLES,
-      now: 3 * minute,
-      pullRequests: [],
-      chat: true,
-      greeting: "Hi, I'm Pat.",
-    });
-
-    expect(
-      items.map((item) =>
-        item.kind === TRANSCRIPT_ITEM.SAID
-          ? [item.words, item.received, item.joinsAbove, item.joinsBelow]
-          : [item.kind, item.kind === TRANSCRIPT_ITEM.WORKING && item.chat],
-      ),
-    ).toEqual([
-      ["Hi, I'm Pat.", true, false, false],
-      ["Fix the login.", false, false, false],
-      ["On it.", true, false, true],
-      ["Started an agent.", true, true, false],
-      ["Thanks!", false, false, false],
-      [TRANSCRIPT_ITEM.WORKING, true],
-    ]);
-  });
-
-  it("opens the work a Manager's message came of under its bubble on Show work, and folds it away again", () => {
-    const transcript = [
-      {
-        id: "turn",
-        role: MESSAGE_ROLE.ASSISTANT,
-        parts: [
-          {
-            type: "tool-list_tasks",
-            toolCallId: "look",
-            state: "output-available",
-            input: {},
-            output: { tasks: [] },
-          },
-          {
-            type: "tool-send_to_user",
-            toolCallId: "send",
-            state: "output-available",
-            input: { text: "Nothing open." },
-            output: { status: "accepted" },
-          },
-        ],
-        startedAt: 0,
-        finishedAt: 1,
-      },
-    ];
-
-    const read = (toggles: typeof NO_TOGGLES) =>
-      transcriptItems(managerChatLines(transcript), {
-        writing: false,
-        readerId: "u1",
-        toggles,
-        now: 2,
-        pullRequests: [],
-        chat: true,
-        chatWork: managerChatWork(transcript, false),
-      });
-
-    const closed = read(NO_TOGGLES);
-    const bubble = closed[0];
-
-    expect(closed).toHaveLength(1);
-    expect(bubble).toMatchObject({ kind: TRANSCRIPT_ITEM.SAID, workShown: false });
-
-    const opened = read(bubble === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, bubble));
-
-    expect(opened.map((item) => [item.kind, item.depth])).toEqual([
-      [TRANSCRIPT_ITEM.SAID, 0],
-      [TRANSCRIPT_ITEM.CALL, 1],
-    ]);
-    expect(opened[0]).toMatchObject({ workShown: true });
   });
 
   it("names an app's line while the reader is not yet known", () => {
@@ -946,5 +834,243 @@ describe("rowsNear", () => {
       "picture-4",
     ]);
     expect(shownMediaIds(rowsNear(items, [], 1))).toEqual([]);
+  });
+});
+
+describe("managerChatItems", () => {
+  const minute = 60 * 1000;
+
+  /** One message of a Manager's chat as its row delivers it. */
+  const row = (
+    id: string,
+    seq: number,
+    said: Partial<ManagerChatLiveMessage> & Pick<ManagerChatLiveMessage, "authorKind" | "text">,
+  ): ManagerChatLiveMessage => ({
+    id,
+    seq,
+    clientKey: `key-${id}`,
+    authorUserId: null,
+    authorName: "Pat",
+    attachments: [],
+    threadRoot: null,
+    broadcast: false,
+    turnId: null,
+    lineId: null,
+    createdAt: seq * minute,
+    editedAt: null,
+    ...said,
+  });
+
+  const run = (opens: boolean, closes: boolean) => ({ opens, closes });
+
+  it("draws the chat's rows as a channel's, each headed by who sent it: its greeting first, the reader's own and a teammate's with the picture it kept and the file it carried, the Manager's in the runs placed, a set it showed as its pictures, a message on its way opening a run of its own after a pause past ten minutes, and its working line the Manager's", () => {
+    // Note that the chat's rows stand newest first, as the slice holds them.
+    const rows = [
+      row("a2", 5, {
+        authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+        authorUserId: "u1",
+        text: "Thanks!",
+      }),
+      row("g1", 4, {
+        authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+        authorUserId: "u2",
+        authorName: "Grace",
+        text: "And the signup.",
+        attachments: [
+          { id: "kept-shot", mediaType: "image/png", name: "signup.png" },
+          { name: "notes.txt", mediaType: "text/plain", url: "data:text/plain;base64,YQpi" },
+        ],
+      }),
+      row("m2", 3, {
+        authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+        text: "",
+        attachments: [{ id: "shot", mediaType: "image/png" }],
+      }),
+      row("m1", 2, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "On it." }),
+      row("a1", 1, {
+        authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+        authorUserId: "u1",
+        text: "Fix the login.",
+      }),
+    ];
+
+    const sending = [
+      { clientKey: "k1", text: "One more thing.", sentAt: 16 * minute, sentBy: "u1" },
+    ];
+
+    const items = managerChatItems(managerChatView(rows, [], { running: undefined, sending }), [], {
+      writing: true,
+      readerId: "u1",
+      toggles: NO_TOGGLES,
+      now: 16 * minute,
+      pullRequests: [],
+      greeting: "Hi, I'm Pat.",
+      sending,
+      managerName: "Pat",
+      readerName: "Ada",
+    });
+
+    expect(
+      items.map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? [item.words, item.channel?.name, item.received, item.joinsAbove]
+          : item.kind === TRANSCRIPT_ITEM.MEDIA
+            ? [item.kind, item.media.map((media) => [media.id, media.label])]
+            : [item.kind, item.kind === TRANSCRIPT_ITEM.WORKING && item.sender?.name],
+      ),
+    ).toEqual([
+      ["Hi, I'm Pat.", "Pat", true, false],
+      ["Fix the login.", "Pat", false, false],
+      ["On it.", "Pat", true, false],
+      ["", "Pat", true, true],
+      [TRANSCRIPT_ITEM.MEDIA, [["shot", "Picture"]]],
+      ["And the signup.", "Grace", true, false],
+      ["Thanks!", "Pat", false, false],
+      ["One more thing.", "Ada", false, false],
+      [TRANSCRIPT_ITEM.WORKING, "Pat"],
+    ]);
+    expect(items[5]).toMatchObject({
+      pictures: [{ name: "signup.png", pictureId: "kept-shot", url: undefined }],
+      files: [{ name: "notes.txt", base64: "YQpi", size: "2 lines" }],
+    });
+  });
+
+  it("stands a thread's replies on its own page, the channel summing them under the message they answer: the root alone, a rule counting them, the replies, and the reader's reply on its way", () => {
+    const rows = [
+      row("r2", 4, {
+        authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+        authorName: "Pat",
+        text: "Done.",
+        threadRoot: "q1",
+      }),
+      row("r1", 3, {
+        authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+        authorUserId: "u2",
+        authorName: "Grace",
+        text: "Which branch?",
+        threadRoot: "q1",
+      }),
+      row("q1", 2, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, authorName: "Pat", text: "Shipped." }),
+      row("s1", 1, {
+        authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+        authorUserId: "u2",
+        authorName: "Grace",
+        text: "Looks right.",
+        threadRoot: "p1",
+      }),
+      row("p1", 0, {
+        authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+        authorName: "Pat",
+        text: "",
+        attachments: [{ id: "shot", mediaType: "image/png" }],
+      }),
+    ];
+
+    const sending = [
+      { clientKey: "k1", text: "Thanks!", sentAt: 5 * minute, sentBy: "u1", threadRoot: "q1" },
+    ];
+
+    const view = managerChatView(rows, [], { running: undefined, sending });
+
+    const reading = {
+      writing: false,
+      readerId: "u1",
+      toggles: NO_TOGGLES,
+      now: 6 * minute,
+      pullRequests: [],
+      sending,
+      readerName: "Ada",
+    };
+
+    const channel = managerChatItems(view, [], reading);
+
+    // Note that a message of what the Manager showed alone still stands as a line, which sums its thread's replies.
+    expect(
+      channel.map((item) => (item.kind === TRANSCRIPT_ITEM.SAID ? item.words : item.kind)),
+    ).toEqual(["", TRANSCRIPT_ITEM.MEDIA, "Shipped."]);
+    expect(channel[0]).toMatchObject({ thread: { root: "p1", replies: 1, words: "1 reply" } });
+    expect(channel[2]).toMatchObject({
+      thread: { root: "q1", replies: 2, words: "2 replies" },
+    });
+    expect(
+      channel[2]?.kind === TRANSCRIPT_ITEM.SAID
+        ? channel[2].thread?.repliers.map((sender) => sender.name)
+        : undefined,
+    ).toEqual(["Grace", "Pat"]);
+
+    const thread = managerThreadItems(view, "q1", [], reading);
+
+    expect(
+      thread?.map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? [item.words, item.channel?.name, item.thread]
+          : [item.kind, item.kind === TRANSCRIPT_ITEM.RULE && item.words],
+      ),
+    ).toEqual([
+      ["Shipped.", "Pat", undefined],
+      [TRANSCRIPT_ITEM.RULE, "2 replies"],
+      ["Which branch?", "Grace", undefined],
+      ["Done.", "Pat", undefined],
+      ["Thanks!", "Ada", undefined],
+    ]);
+    expect(managerThreadItems(view, "gone", [], reading)).toBeUndefined();
+  });
+
+  it("folds a finished turn's work over the Manager's message that opens it, under the Manager's head, saying how long it worked, and opens it on the work", () => {
+    const said = row("m1", 1, {
+      authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+      text: "Nothing open.",
+      turnId: "turn",
+    });
+
+    const turn = {
+      id: "turn",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        {
+          type: "tool-list_tasks",
+          toolCallId: "look",
+          state: "output-available",
+          input: {},
+          output: { tasks: [] },
+        },
+      ],
+      startedAt: 0,
+      finishedAt: 78_000,
+    };
+
+    const read = (toggles: typeof NO_TOGGLES) =>
+      managerChatItems(
+        {
+          messages: [{ message: said, place: run(true, true), work: "turn" }],
+          top: [{ message: said, place: run(true, true), work: "turn" }],
+          threads: new Map(),
+          sending: { messages: new Map(), channel: new Map() },
+          work: new Map([["turn", agentParts(turn)]]),
+          live: [],
+        },
+        [turn],
+        { writing: false, readerId: "u1", toggles, now: 2 * minute, pullRequests: [] },
+      );
+
+    const closed = read(NO_TOGGLES);
+    const fold = closed[0];
+
+    expect(closed.map((item) => [item.kind, item.depth])).toEqual([
+      [TRANSCRIPT_ITEM.FOLD, 0],
+      [TRANSCRIPT_ITEM.SAID, 0],
+    ]);
+    expect(fold).toMatchObject({ summary: "Worked for 1m 18s", open: false });
+    // Note that the fold stands under the Manager's head, as the panel's stands under the name, and the message under it goes on the run with no head of its own.
+    expect(fold).toMatchObject({ channel: { name: "Pat", manager: true } });
+    expect(closed[1]).toMatchObject({ joinsAbove: true, stamp: undefined });
+
+    const opened = read(fold === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, fold));
+
+    expect(opened.map((item) => [item.kind, item.depth])).toEqual([
+      [TRANSCRIPT_ITEM.FOLD, 0],
+      [TRANSCRIPT_ITEM.CALL, 1],
+      [TRANSCRIPT_ITEM.SAID, 0],
+    ]);
   });
 });

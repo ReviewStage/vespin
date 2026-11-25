@@ -15,10 +15,13 @@ import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE, MANAGER_FACE_FILL } from "@repo/brand/palette";
 import { PRODUCT_MARK_SYMBOL_TEMPLATE } from "@repo/brand/product-mark-symbol";
 import {
-  CLAWD_PATH,
+  CLAUDE_PATH,
+  CLAUDE_VIEW_BOX,
   CURSOR_PATH,
   GITHUB_PATH,
   GOOGLE_MARK_LAYERS,
+  OPENAI_PATH,
+  OPENAI_VIEW_BOX,
 } from "@repo/brand/provider-marks";
 import {
   TASK_PRIORITY_SYMBOL_TEMPLATES,
@@ -28,7 +31,12 @@ import type { ManagerFaceColor } from "@repo/features/manager-face";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
-import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
+import {
+  IOSConfig,
+  withAppDelegate,
+  withDangerousMod,
+  withXcodeProject,
+} from "expo/config-plugins";
 
 /**
  * The bundle identifier the App ID, the associated domain, and TestFlight are
@@ -87,9 +95,9 @@ const PNG_COLOR_TYPE_RGB = 2;
 // `ProviderButton` reads (`PROVIDER_MARK_ASSET`), the web's sign-in buttons'
 // marks from the brand's paths: GitHub's a template SwiftUI draws in the ink
 // of the words beside it, Google's in its own four colors; and the harness
-// marks `AgentTile` draws (`HARNESS_MARK_ASSET`), Claude Code's Clawd in its
-// own clay, centered on a square canvas so it never stretches, and Cursor's
-// cube a template in the ink of the row it leads.
+// marks `AgentTile` draws (`HARNESS_MARK_ASSET`), Claude's spark in its own
+// clay, and OpenAI's blossom and Cursor's cube templates in the ink of the
+// row they lead.
 const IMAGE_SETS = [
   {
     NAME: "BrandMark",
@@ -114,11 +122,18 @@ const IMAGE_SETS = [
     TEMPLATE: false,
   },
   {
-    NAME: "ClawdMark",
+    NAME: "ClaudeMark",
     LIGHT: {
-      SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -4.5 47 47"><path fill="#D97757" d="${CLAWD_PATH}"/></svg>`,
+      SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${CLAUDE_VIEW_BOX}"><path fill="#D97757" d="${CLAUDE_PATH}"/></svg>`,
     },
     TEMPLATE: false,
+  },
+  {
+    NAME: "OpenAIMark",
+    LIGHT: {
+      SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${OPENAI_VIEW_BOX}"><path fill="#000" d="${OPENAI_PATH}"/></svg>`,
+    },
+    TEMPLATE: true,
   },
   {
     NAME: "CursorMark",
@@ -155,21 +170,6 @@ const MANAGER_FACES_FOLDER = "ManagerFaces";
 const MANAGER_FACE_FILLS: Readonly<
   Record<ManagerFaceColor, { readonly LIGHT: string; readonly DARK: string }>
 > = MANAGER_FACE_FILL;
-
-// The pictures `AgentTile` draws that have no vector: Codex's, OpenAI's own
-// picture in its own colors, from the files the panel serves, at one, two,
-// and three device pixels to the point, so it is sharp up to 16 points, as
-// a row's tile draws it (an agent preview's larger tile scales it a little).
-const PICTURE_SETS = [
-  {
-    NAME: "CodexMark",
-    SCALES: [
-      { FILE: "../../packages/panel/marks/codex-16.png", SCALE: "1x" },
-      { FILE: "../../packages/panel/marks/codex-32.png", SCALE: "2x" },
-      { FILE: "../../packages/panel/marks/codex-48.png", SCALE: "3x" },
-    ],
-  },
-] as const;
 
 /** One build configuration of the Xcode project, as its section holds it: its settings by name. */
 interface XcodeBuildConfiguration {
@@ -429,9 +429,9 @@ const SENTRY = {
 const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "production" : "test";
 
 // What the SDK's native half starts on as the app launches, before React
-// Native loads: the plugin writes `RNSentrySDK.start()` into the AppDelegate,
-// which reads these options from the `sentry.options.json` it copies into the
-// bundle. So a crash before the JavaScript bundle runs, or in the first native
+// Native loads: the AppDelegate calls `RNSentrySDK.start()` where the device
+// shares usage data (`withCrashReportsLaunch`), which reads these options
+// from the `sentry.options.json` the plugin copies into the bundle. So a crash before the JavaScript bundle runs, or in the first native
 // draw, is reported on the next launch, where a start from JavaScript alone
 // never saw it. They name the DSN, environment, release and build number
 // `src/crash-reports.ts` starts the SDK under once the bundle runs, which
@@ -439,7 +439,8 @@ const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "producti
 // Note that the JavaScript filters cannot reach this window, so it sends only
 // what a native crash report holds, with no request breadcrumbs. A build
 // without a DSN, a local or simulator one, gets no native start at all
-// (`useNativeInit` off), since the SDK's start faults on an empty DSN.
+// (`withCrashReportsLaunch` writes none), since the SDK's start faults on
+// an empty DSN, and neither does a device that turned usage data off.
 const SENTRY_LAUNCH_OPTIONS = {
   dsn: SENTRY.DSN,
   enabled: SENTRY.DSN !== "",
@@ -482,6 +483,37 @@ const colorSet = (role: keyof typeof BRAND_PALETTE.LIGHT) => {
     info: { author: "xcode", version: 1 },
   };
 };
+
+// Sentry's native start, written into the AppDelegate as Sentry's plugin
+// writes it (`useNativeInit`), at the head of `didFinishLaunching`, but held
+// to whether the device shares usage data, as the JavaScript last kept it
+// (`modules/crash-reports/`). Note that it is the AppDelegate's, not the
+// module's, because Sentry's pod hands its framework search paths to the
+// app's target alone, so no other pod can import it. A build that names no
+// DSN gets no start at all. Note that the crash-reports module is imported
+// `internal`, because Expo's generated ExpoModulesProvider imports every
+// local module that way, and Swift 6 refuses one module imported at two
+// access levels in a target (TestFlight 81's archive).
+const withCrashReportsLaunch = (config: ExpoConfig): ExpoConfig =>
+  SENTRY.DSN === ""
+    ? config
+    : withAppDelegate(config, (modConfig) => {
+        const { contents } = modConfig.modResults;
+
+        const started = contents.replace(
+          /(func application\([^)]*\) -> Bool \{)\s*\n(\s*)/s,
+          "$1\n$2if CrashReportsLaunch.sharesUsageData() { RNSentrySDK.start() }\n$2",
+        );
+
+        if (started === contents)
+          throw new Error("The AppDelegate has no didFinishLaunching to start Sentry in.");
+        modConfig.modResults.contents = started.replace(
+          /(import \S+\n)/,
+          "$1import RNSentry\ninternal import VespinCrashReports\n",
+        );
+
+        return modConfig;
+      });
 
 // Note that Expo has no setting for the app's tint, so the accent is written
 // as the asset catalog's AccentColor, light and dark, which Xcode names as the
@@ -800,8 +832,7 @@ const withLiveActivityIntents = (config: ExpoConfig): ExpoConfig => {
 type ImageSource = { readonly FILE: string } | { readonly SVG: string };
 
 // Each of `IMAGE_SETS` as a vector image set of the asset catalog, its dark
-// appearance beside its light one where it has one, each of `PICTURE_SETS`
-// as an image set of its files at their scales, and every one of Lucide's
+// appearance beside its light one where it has one, and every one of Lucide's
 // glyphs as a symbol set, a custom SF Symbol from the brand's outlined
 // template, so it sizes with Dynamic Type, weighs with its text, and sits on
 // its baseline as SF Symbols do. Note that every glyph is written, not only
@@ -942,26 +973,6 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
 
           writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
         }
-      }
-
-      for (const set of PICTURE_SETS) {
-        const imageSet = join(catalog, `${set.NAME}.imageset`);
-        mkdirSync(imageSet, { recursive: true });
-
-        for (const { FILE } of set.SCALES)
-          copyFileSync(join(projectRoot, FILE), join(imageSet, basename(FILE)));
-
-        const contents = {
-          images: set.SCALES.map(({ FILE, SCALE }) => ({
-            filename: basename(FILE),
-            idiom: "universal",
-            scale: SCALE,
-          })),
-          info: { author: "xcode", version: 1 },
-          properties: { "template-rendering-intent": "original" },
-        };
-
-        writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
 
       // Note that the glyphs the app names stand as their committed templates, and every other Lucide glyph a section may wear is outlined here, each a variable template as theirs are.
@@ -1126,7 +1137,8 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
           project: SENTRY.PROJECT,
           url: SENTRY.URL,
           disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
-          useNativeInit: SENTRY.DSN !== "",
+          // Note that the native start is written by `withCrashReportsLaunch` rather than the plugin, so it is held to whether the device shares usage data.
+          useNativeInit: false,
           options: SENTRY_LAUNCH_OPTIONS,
         },
       ],
@@ -1145,7 +1157,9 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
 const config = (context?: ConfigContext): ExpoConfig =>
   [NOTIFICATION_SERVICE, NOTIFICATION_CONTENT, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
     withAppExtension,
-    withLiveActivityIntents(withMarketingIcon(withImageSets(baseConfig(context)))),
+    withCrashReportsLaunch(
+      withLiveActivityIntents(withMarketingIcon(withImageSets(baseConfig(context)))),
+    ),
   );
 
 export default config;

@@ -22,21 +22,25 @@ import {
   LoopbackListener,
   MirrorPlatform,
   oauthAccountSourceLayer,
+  PlatformLoopStalls,
   RunMode,
   reporterLayer,
   SecretCipher,
+  ServiceOrigin,
   ShutdownSignal,
   SignInConsent,
   StateRoot,
   TerminalSocket,
 } from "@repo/host/effect";
 import { armedWatchLayer, mirrorPlatform, nodeSqliteDriverLayer } from "@repo/host/node";
-import { ConfigProvider, Layer } from "effect";
+import { ConfigProvider, Effect, Layer } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { net } from "electron";
 import { computerUseHelperLayer } from "../native/computer-use";
 import { thisMacHostLayer } from "../native/this-mac-host";
 import type { DesktopConfig } from "./desktop-config";
+import { mainLoopStalls } from "./main-loop-stalls";
+import { matchMirrorsInUtilityProcess } from "./mirror-matching";
 import { mainSentryTracer } from "./telemetry-service";
 
 interface HostSeamDependencies {
@@ -67,7 +71,13 @@ function hostSeamLayersFor(dependencies: HostSeamDependencies) {
       deviceZone: readerZone,
     }),
     Layer.succeed(Environment, ConfigProvider.fromEnvRecord(config.environment)),
+    // Note that the service origin is the one bootstrap settled, because the
+    // host's own derivation drops every override from a packaged build, the
+    // end-to-end build's loopback one included (`bootstrap.ts`).
+    Layer.succeed(ServiceOrigin, config.hostedServiceBaseUrl),
     Layer.succeed(IdSource, { create: () => randomUUID() }),
+    // The host runs in main, so a stall in main holds its reads; it says so beside a transcript's.
+    Layer.succeed(PlatformLoopStalls, mainLoopStalls),
     reporterLayer(config.report),
     // The account's local database opens on Node's own `node:sqlite`, bundled with Electron.
     nodeSqliteDriverLayer,
@@ -76,7 +86,15 @@ function hostSeamLayersFor(dependencies: HostSeamDependencies) {
     Layer.succeed(LoopbackListener, listenOnLoopbackOverNet),
     // Cloud agents' mirrors stand beside the local agents' clones under the member's own home, `~/.vespin`.
     // Each mirror's attempts are traced on main's Sentry.
-    Layer.succeed(MirrorPlatform, { ...mirrorPlatform(os.homedir()), tracer: mainSentryTracer }),
+    // Each mirror's match runs in a process of main's own (`mirror-matching.ts`).
+    Layer.effect(
+      MirrorPlatform,
+      Effect.map(matchMirrorsInUtilityProcess(config.resourceDirectory), (match) => ({
+        ...mirrorPlatform(os.homedir()),
+        tracer: mainSentryTracer,
+        match,
+      })),
+    ),
     thisMacHostLayer({
       stateRoot: config.stateRoot,
       appVersion: config.appVersion,

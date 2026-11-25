@@ -5,7 +5,7 @@
  * their address names, read from the address alone: the list at
  * `/<workspace>/automations`, its Runs tab at `/automations/runs`, a new
  * automation's page at `/automations/new`, filled in from a suggestion's
- * preset where its `?preset=` names one, an automation's at
+ * preset where its `?preset=` names one and sent to one agent every run where its `?target=` names it, an automation's at
  * `/automation/<id>`, its runs alone at `/automation/<id>/runs`, and one of
  * its runs at `/automation/<id>/run/<runId>`, which a narrow room stands
  * alone too. Each is a step of its own but the automation a new page made,
@@ -102,9 +102,14 @@ function placeOf(
 
   if (page.kind === AUTOMATIONS_PAGE.NEW) {
     const preset = presetOf(search.preset);
+    const target = search.target === "" ? undefined : search.target;
 
     return {
-      place: preset === undefined ? { kind: page.kind } : { kind: page.kind, preset },
+      place: {
+        kind: page.kind,
+        ...(preset === undefined ? undefined : { preset }),
+        ...(target === undefined ? undefined : { target }),
+      },
       runs: false,
     };
   }
@@ -132,7 +137,10 @@ function navigationTo(to: AutomationsPlace, workspace: string): NavigateOptions 
       return {
         to: "/$workspace/automations/new",
         params: { workspace },
-        search: to.preset === undefined ? {} : { preset: to.preset },
+        search: {
+          ...(to.preset === undefined ? undefined : { preset: to.preset }),
+          ...(to.target === undefined ? undefined : { target: to.target }),
+        },
       };
     case AUTOMATIONS_PAGE.EDIT:
       return to.runId === undefined

@@ -7,8 +7,8 @@ import { linkSlackInstallation } from "@repo/database/models/slack-installation-
 import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, openWorkspace } from "@repo/database/testing";
-import { AGENT_PAYER } from "@repo/features/agent-wire";
+import { getTestDB, joinWorkspace, openRunningTurn, openWorkspace } from "@repo/database/testing";
+import { AGENT_KIND, AGENT_PAYER } from "@repo/features/agent-wire";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { Effect, Option } from "effect";
 import { AGENT_CALLER } from "../agents/agent-tools.js";
@@ -129,6 +129,20 @@ const slackWithChannel: SlackWebApi = (method) => {
   }
 };
 
+/** The Slack user Dean is, found by his email, who wrote the channel's one message. */
+const DEAN_SLACK_ID = "U0002";
+
+/** The Slack of `slackWithChannel`, but finding Dean by his own email and everyone else as the agent's member. */
+const slackWithDean =
+  (dean: string): SlackWebApi =>
+  (method, args) =>
+    method === "users.lookupByEmail"
+      ? Effect.succeed({
+          ok: true,
+          user: { id: args.email === `${dean}@app.test` ? DEAN_SLACK_ID : MEMBER_SLACK_ID },
+        })
+      : slackWithChannel(method, args);
+
 /** A member of a fresh workspace, connected to the Slack team where `connected`, and an agent of theirs, as the agent calls its tools. */
 const openAgent = (connected: boolean) =>
   Effect.gen(function* () {
@@ -165,6 +179,41 @@ const openAgent = (connected: boolean) =>
 
     return { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: false } as const;
   });
+
+/** Charles's workspace, connected to the Slack team, with Dean a member of it and a Manager Charles started there in a turn Dean opened. */
+const openManagerDeanAsked = Effect.gen(function* () {
+  const db = yield* Database;
+  const [charles, dean] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
+  for (const id of [charles, dean]) {
+    yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+  }
+
+  const organizationId = yield* openWorkspace(charles);
+  yield* joinWorkspace(organizationId, dean);
+  yield* linkSlackInstallation({ organizationId, teamId: TEAM, teamName: "Team", userId: charles });
+
+  const agent = Option.getOrThrow(
+    yield* createAgent(charles, {
+      taskId: null,
+      workspaceId: organizationId,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: null,
+      descriptionSnapshot: null,
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      kind: AGENT_KIND.MANAGER,
+    }),
+  ).agent;
+
+  yield* openRunningTurn({ userId: charles, conversationId: agent.conversationId }, [
+    { member: dean },
+  ]);
+
+  return { dean, caller: { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: false } as const };
+});
 
 it.layer(getTestDB())("an agent's Slack tools as the bot", (it) => {
   it.effect("a workspace that holds no Slack bot token is refused", () =>
@@ -231,5 +280,23 @@ it.layer(getTestDB())("an agent's Slack tools as the bot", (it) => {
         },
       ]);
     }),
+  );
+
+  it.effect(
+    "in a turn a member opened, a Manager reads that member's own lines as not outside",
+    () =>
+      Effect.gen(function* () {
+        const { dean, caller } = yield* openManagerDeanAsked;
+
+        const read = yield* runReadSlack({ caller }, { channel: "#release" }).pipe(
+          Effect.provideService(SlackBot, slackBotOver(slackWithDean(dean))),
+        );
+
+        assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
+        assert.deepEqual(
+          Array.isArray(read.messages) ? read.messages.map((message) => message?.outside) : [],
+          [false],
+        );
+      }),
   );
 });

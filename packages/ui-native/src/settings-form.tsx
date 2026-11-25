@@ -1284,6 +1284,8 @@ type NoteRowProps = {
   readonly symbol?: Glyph | undefined;
   /** The harness a credential's row stands for, whose mark leads it in the glyph's place, as the panel leads a plan's and a key's rows with its provider's logo. */
   readonly harness?: ModelProvider | undefined;
+  /** A provider's mark leading it in the glyph's place, such as GitHub's for what fires an automation; none for the glyph. */
+  readonly mark?: IntegrationMarkAsset | undefined;
   /** The note's own words, such as a memory's, drawn whole however many lines they take. */
   readonly words: string;
   /** What it is, under its words in the body's ink, such as a skill's description. */
@@ -1314,6 +1316,7 @@ type NoteRowProps = {
 export function NoteRow({
   symbol,
   harness,
+  mark,
   words,
   detail,
   line,
@@ -1352,6 +1355,8 @@ export function NoteRow({
     >
       {harness !== undefined ? (
         <HarnessMark provider={harness} size={leadSize} />
+      ) : mark !== undefined ? (
+        <ProviderLead mark={mark} size={leadSize} />
       ) : symbol === undefined ? null : (
         <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
       )}
@@ -1614,6 +1619,30 @@ export const AUTOMATION_ROW_LOOK = {
 
 type AutomationRowLook = (typeof AUTOMATION_ROW_LOOK)[keyof typeof AUTOMATION_ROW_LOOK];
 
+/** A provider's mark leading a row in its glyph's place, as a connection's row leads with it, at the glyph's size. */
+function ProviderLead({
+  mark,
+  size,
+}: {
+  readonly mark: IntegrationMarkAsset;
+  readonly size: number;
+}) {
+  const colors = useColors();
+
+  return (
+    <Image
+      assetName={mark}
+      modifiers={[
+        resizable(),
+        aspectRatio({ contentMode: "fit" }),
+        frame({ width: size, height: size }),
+        foregroundStyle(colors.TEXT),
+        accessibilityHidden(),
+      ]}
+    />
+  );
+}
+
 type AutomationRowProps = {
   /** Where it stands: a form's card, or a plain list's ground; a form's where none is given. */
   readonly look?: AutomationRowLook | undefined;
@@ -1627,6 +1656,8 @@ type AutomationRowProps = {
   readonly standingWords?: string | undefined;
   /** The glyph its lead stands at rest. */
   readonly symbol: Glyph;
+  /** A provider's mark its lead stands at rest in the glyph's place, such as GitHub's for what fires it (`firingLook`); none for the glyph. */
+  readonly mark?: IntegrationMarkAsset | undefined;
   /** When it last moved, at its end in the muted ink, such as a run's "2h"; none for none. */
   readonly when?: string | undefined;
   /** Whether its words stand muted, as an automation turned off does. */
@@ -1661,6 +1692,7 @@ export function AutomationRow({
   standing,
   standingWords,
   symbol,
+  mark,
   when,
   faded = false,
   onPress,
@@ -1679,6 +1711,8 @@ export function AutomationRow({
       <WorkingMark />
     ) : standing === AUTOMATION_RUN_STANDING.FAILED ? (
       <FailedMark />
+    ) : mark !== undefined ? (
+      <ProviderLead mark={mark} size={leadSize} />
     ) : (
       <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
     );

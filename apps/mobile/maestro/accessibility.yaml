@@ -138,7 +138,7 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-decide
-# New task, the sheet the tab bar's round + opens.
+# New task, the sheet the Inbox bar's compose opens.
 - launchApp:
     arguments:
       fixture: inbox

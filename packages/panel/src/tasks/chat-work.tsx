@@ -1,16 +1,16 @@
 /**
- * chat-work.tsx -- a Manager's work a press away from its chat: Show work beside a message, or beside its working line, and the item in a message's menu.
+ * chat-work.tsx -- the work of a Manager's turn under way a press away from its chat: Show work beside its working line.
  *
- * A Manager's chat draws its messages alone (`@repo/features/manager-chat`),
- * and keeps the work each came of, its thoughts, calls, and own words
- * (`managerChatWork`), out of sight until the reader asks: Show work beside
- * a message, and in the menu a right-click or a long press on it opens,
- * draws that work under the bubble as the transcript draws a turn's, and
- * Hide work folds it away again. The working line offers the same for the
- * turn under way, so a finished chat draws no more than its messages.
+ * A Manager's chat draws its messages alone (`@repo/features/manager-chat-view`),
+ * and keeps the work each turn did, its thoughts, calls, and own words, out
+ * of sight until the reader asks. A turn that has ended keeps its work
+ * folded over its first message (`manager-chat-tab.tsx`); the turn under way
+ * offers Show work beside its working line instead, which draws its work so
+ * far under the line as the transcript draws a turn's, and Hide work folds
+ * it away again, so a finished chat draws no more than its messages.
  */
 
-import { chatWorkWords } from "@repo/features/manager-chat";
+import { chatWorkWords } from "@repo/features/manager-chat-view";
 import { MessageActions } from "@repo/ui";
 import { ListTreeIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";
@@ -22,8 +22,8 @@ export interface ChatWorkToggle {
   readonly onToggle: () => void;
 }
 
-/** The press beside a message, or the working line, that opens the work under it, or folds it away. */
-export function WorkMessageAction({ toggle }: { toggle: ChatWorkToggle }): ReactNode {
+/** The press beside the working line that opens the work under it, or folds it away. */
+function WorkMessageAction({ toggle }: { toggle: ChatWorkToggle }): ReactNode {
   const words = chatWorkWords(toggle.shown);
 
   return (

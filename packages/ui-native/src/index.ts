@@ -66,6 +66,8 @@ export type { CaretAtWord } from "./caret-at-word.js";
 
 export { ChangedFileRow } from "./changed-file-row.js";
 
+export type { ChannelFaces } from "./channel-row.js";
+
 export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
 export {
@@ -142,6 +144,8 @@ export {
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
 export { releaseFields } from "./field-focus.js";
+
+export { type FiringLook, firingLook } from "./firing-look.js";
 
 export {
   AttachRow,
@@ -231,7 +235,7 @@ export {
 
 export { MachineAskSheet } from "./machine-ask-sheet.js";
 
-export { managerFaceMenu } from "./manager-face-look.js";
+export { managerFaceMenu } from "./manager-face-menu.js";
 
 export { ManagerFaceRow, ManagerFaceSheet } from "./manager-face-picker.js";
 
@@ -276,6 +280,24 @@ export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
 export { PersonHead } from "./person-head.js";
 
 export { PictureSet, type SetPicture } from "./picture-set.js";
+
+export {
+  LoaderImage,
+  PICTURE_CACHE,
+  PICTURE_FIT,
+  type PictureById,
+  PictureByIdProvider,
+  type PictureCache,
+  type PictureEvents,
+  PictureEventsProvider,
+  type PictureFit,
+  type PictureRef,
+  type PictureSource,
+  peekPicture,
+  pictureUri,
+  type RemotePicture,
+  type UsePictureById,
+} from "./picture-source.js";
 
 export { PillField, type PillFieldHandle } from "./pill-field.js";
 
@@ -409,12 +431,15 @@ export {
   type BarFootItem,
   type BarMenu,
   type BarMenuAction,
+  type BarMenuEntry,
   type BarMenuGroup,
   type BarPath,
   type BarSearch,
   type ColumnBar,
   groupKey,
   isBarMenu,
+  isMenuEntry,
+  menuOfGroups,
   menuWithout,
   PATH_PART,
   SplitView,
@@ -506,6 +531,8 @@ export {
 
 export {
   drawnCallIds,
+  managerChatItems,
+  managerThreadItems,
   NO_TOGGLES,
   openCuts,
   rowsNear,
@@ -513,6 +540,8 @@ export {
   type ShownFile,
   shownFiles,
   shownMediaIds,
+  shownPictureIds,
+  shownRecordingIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptToggles,

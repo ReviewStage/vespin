@@ -14,7 +14,7 @@ import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { isRecord, type WireValue } from "@repo/wire";
 import { Deferred, Duration, Effect, Fiber, Predicate } from "effect";
 import { TestClock } from "effect/testing";
-import type { AppAccountPreferences, AppModels } from "./app-state.js";
+import { type AppAccountPreferences, type AppModels, WORKSPACE_OWN_MEMORIES } from "./app-state.js";
 
 import {
   GATE_CLOSED_SIGNED_OUT,
@@ -183,7 +183,8 @@ function memoryRow(memory: MemorySummary) {
 
 /** The ids of the workspace's memories as the host last told them; none where it told none. */
 function memoryIdsOf(told: WireValue | undefined): readonly string[] | undefined {
-  const read = isRecord(told) ? told[WORKSPACE_ID] : undefined;
+  const workspace = isRecord(told) ? told[WORKSPACE_ID] : undefined;
+  const read = isRecord(workspace) ? workspace[WORKSPACE_OWN_MEMORIES] : undefined;
   const rows = isRecord(read) ? read.rows : undefined;
 
   return Array.isArray(rows)
@@ -244,7 +245,8 @@ it.effect(
 
 /** The words of the workspace's memories as the host last told them; none where it told none. */
 function memoryTextsOf(told: WireValue | undefined): readonly string[] | undefined {
-  const read = isRecord(told) ? told[WORKSPACE_ID] : undefined;
+  const workspace = isRecord(told) ? told[WORKSPACE_ID] : undefined;
+  const read = isRecord(workspace) ? workspace[WORKSPACE_OWN_MEMORIES] : undefined;
   const rows = isRecord(read) ? read.rows : undefined;
 
   return Array.isArray(rows)

@@ -205,9 +205,15 @@ export const GLYPH = {
   EDIT: lucide(LUCIDE_SYMBOL.PENCIL_LINE),
   WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
   COPY: lucide(LUCIDE_SYMBOL.COPY),
+  /** Reply, which quotes a message into the composer, the panel's Lucide Reply, among every glyph the catalog holds. */
+  REPLY: catalogLucide("Reply"),
+  /** Reply in thread, which opens a Manager chat message's thread, the panel's Lucide MessageSquareReply, among every glyph the catalog holds. */
+  REPLY_IN_THREAD: catalogLucide("MessageSquareReply"),
   SAVE: lucide(LUCIDE_SYMBOL.DOWNLOAD),
   LINK: lucide(LUCIDE_SYMBOL.LINK),
   UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),
+  /** A webhook, what fires an automation called at its address, the panel's Lucide Webhook, among every glyph the catalog holds. */
+  WEBHOOK: catalogLucide("Webhook"),
   /** Open, which brings a row's lifted preview up to its whole page in the app; the arrow out is kept for what leaves it. */
   OPEN: lucide(LUCIDE_SYMBOL.MAXIMIZE_2),
   OPEN_EXTERNALLY: lucide(LUCIDE_SYMBOL.EXTERNAL_LINK),

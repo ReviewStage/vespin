@@ -361,6 +361,8 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 
   const { home, again } = useItemHome(id, lookedFor);
   const found = home === undefined || Predicate.isString(home) ? undefined : home;
+  // Note that a thread on no task, a Manager's, has no task's inbox to read it from, so one the feed does not hold is not found rather than read forever.
+  const homeless = found !== undefined && found.taskId === null;
   const homed = useHomeGroups(found?.taskId ?? undefined);
   const outside = useSendsDrawn(homed.groups);
   const listed = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
@@ -371,7 +373,7 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
       : tasksRead === TASKS_READ.FAILED
         ? INBOX_FEED.FAILED
         : INBOX_FEED.READING
-    : listed !== undefined || home === HOME_READ.MISSING
+    : listed !== undefined || home === HOME_READ.MISSING || homeless
       ? answered
       : home === undefined
         ? INBOX_FEED.READING

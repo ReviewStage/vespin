@@ -17,6 +17,12 @@
  */
 
 import {
+  agentFollowerMachinesParamsSchema,
+  agentFollowerParamsSchema,
+  agentFollowersAnswerViewSchema,
+  agentFollowersParamsSchema,
+} from "@repo/features/agent-followers-view";
+import {
   AGENT_CALL_FAILURE,
   agentAgentAnswerSchema,
   agentApprovalAnswerParamsSchema,
@@ -360,6 +366,54 @@ export const AGENT_ACTS = declaredActs({
     door: ACT.ROW_WRITE,
     unanswered: AGENT_UNANSWERED,
     byHand: true,
+  }),
+  AGENTS_FOLLOWERS: hostAct({
+    input: agentFollowersParamsSchema,
+    output: agentFollowersAnswerViewSchema,
+    refusal: "Could not read the Manager's followers on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_FOLLOW: hostAct({
+    input: agentFollowersParamsSchema,
+    output: agentFollowersAnswerViewSchema,
+    refusal: "Could not follow that Manager on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_UNFOLLOW: hostAct({
+    input: agentFollowersParamsSchema,
+    output: agentFollowersAnswerViewSchema,
+    refusal: "Could not unfollow that Manager on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_SET_FOLLOWER_MACHINES: hostAct({
+    input: agentFollowerMachinesParamsSchema,
+    output: agentFollowersAnswerViewSchema,
+    refusal: "Could not change whether that Manager may use your machines on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_ADD_FOLLOWER: hostAct({
+    input: agentFollowerParamsSchema,
+    output: agentFollowersAnswerViewSchema,
+    refusal: "Could not add that follower on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_REMOVE_FOLLOWER: hostAct({
+    input: agentFollowerParamsSchema,
+    output: agentFollowersAnswerViewSchema,
+    refusal: "Could not remove that follower on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
   }),
   AGENTS_ANSWER_APPROVAL: hostAct({
     input: agentApprovalAnswerParamsSchema,

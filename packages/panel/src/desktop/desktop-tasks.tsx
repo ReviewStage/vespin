@@ -1,5 +1,6 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
-import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { NO_ITEMS, taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   LINK_DESTINATION,
@@ -17,6 +18,7 @@ import type {
 import { RENAME_FAILED_NOTE, TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
+import { taskKey } from "@repo/features/workspace-key";
 import { EXPERIMENT, INTRO } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -57,6 +59,7 @@ import { Activity, Fragment, memo, useCallback, useEffect, useMemo, useRef, useS
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
+import { EntityGlyph, TaskStatusGlyph } from "../entities/entity-glyph.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
@@ -104,13 +107,18 @@ import { taskLinkDestination, useOfferTaskRename } from "../tasks/task-menu-item
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
-import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
+import {
+  parentOf,
+  type TaskRepositoryDoor,
+  type TaskStandingDoor,
+} from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
 import { agentsNow, useTaskAgentName, useTaskPullRequestsOf } from "../tasks/use-agents.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
+import { useNewTaskShown } from "../tasks/use-new-task.js";
 import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/use-open-link.js";
 import { usePins } from "../tasks/use-pin-writes.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
@@ -438,6 +446,50 @@ const PHONE_THING = {
   [TASK_PANE.AGENT]: "Agent",
   [TASK_PANE.PANEL]: "Tab",
 } as const satisfies Record<TaskPane, string>;
+
+/** What stands between the steps of a phone's task path ("ada/relay › AL-42"). */
+const PHONE_PATH_STEP = " › ";
+
+/**
+ * A task's path as a phone's head names it on Overview, as the description's
+ * own path over its title reads: its repository's `owner/name` and its key,
+ * each where it has one; none where it has neither.
+ */
+function phonePath(
+  task: { readonly repository?: string | null | undefined; readonly number?: number | undefined },
+  workspaceName: string,
+): string | undefined {
+  const key =
+    task.number === undefined || workspaceName === ""
+      ? undefined
+      : taskKey(workspaceName, task.number);
+
+  const steps = [task.repository ?? undefined, key].filter((step) => step !== undefined);
+
+  return steps.length === 0 ? undefined : steps.join(PHONE_PATH_STEP);
+}
+
+/** What a phone's ⋯ calls opening the task's parent. */
+const OPEN_PARENT = "Open parent task";
+
+/**
+ * A phone's way to the task's parent, which its path's crumb presses
+ * elsewhere: the ⋯'s first item on Overview, by the parent's status mark,
+ * naming the parent under its words.
+ */
+function parentItem(parent: TaskSummary, onOpen: (taskId: string) => void): MenuEntry {
+  return {
+    label: OPEN_PARENT,
+    detail: parent.name,
+    icon:
+      parent.status === undefined ? (
+        <EntityGlyph kind={ENTITY_KIND.PLAN} />
+      ) : (
+        <TaskStatusGlyph status={parent.status} />
+      ),
+    onSelect: () => onOpen(parent.id),
+  };
+}
 
 /** What a phone's header's ⋯ calls letting a draft go. */
 const DISCARD_DRAFT = "Discard draft";
@@ -1130,8 +1182,19 @@ function DescriptionDocument({
       onOpenTask: openTask,
       relations,
       inSight: descriptionShown,
+      // A phone's bar names the path, and its ⋯ offers the repository and the parent the path's crumbs press (`parentItem`).
+      pathless: phone,
     }),
-    [workspaceName, setStanding, repositoryDoor, blockTasks, openTask, relations, descriptionShown],
+    [
+      workspaceName,
+      setStanding,
+      repositoryDoor,
+      blockTasks,
+      openTask,
+      relations,
+      descriptionShown,
+      phone,
+    ],
   );
 
   const reveal = revealed?.taskId === openedId ? revealed?.reveal : undefined;
@@ -1413,8 +1476,9 @@ function DescriptionDocument({
       <AgentThreads
         key={tabAgent}
         agentId={tabAgent}
-        task={listed}
+        holder={taskHolder(listed)}
         tasks={tasks}
+        agentsOf={tasks.agents}
         inbox={inbox}
         chosen={threadsShown.itemId}
         shown={tasks.shown && !sidePanel.fullScreen}
@@ -1533,9 +1597,14 @@ function DescriptionDocument({
   // What the header's ⋯ offers follows what is on screen: the task's own menu on Overview, the
   // agent's on its screen, Discard draft on a draft's, and the tab's on one of the panel's, each
   // agent's item left unnamed, since the header names the agent.
+  const parent = parentOf(listed, blockTasks);
+
   const shownGroups = (opener: HTMLElement): readonly (readonly MenuEntry[])[] =>
     pane === TASK_PANE.OVERVIEW
-      ? descriptionMenu.groups()
+      ? [
+          ...(parent === undefined ? [] : [[parentItem(parent, openTask)]]),
+          ...descriptionMenu.groups(),
+        ]
       : draftShown !== undefined
         ? [
             [
@@ -1561,7 +1630,10 @@ function DescriptionDocument({
               ? columnLabel
               : undefined
       }
+      path={pane === TASK_PANE.OVERVIEW ? phonePath(listed, workspaceName) : undefined}
       pickUp={{ name: descriptionHeading.name, shown: descriptionHeading.away }}
+      // Note that New agent stands before the ⋯ on Overview alone, as the page's Agents "+" starts one; an agent's screen and a tab's offer their own menus.
+      newAgent={pane === TASK_PANE.OVERVIEW ? newAgentStarts(mainTabs, agents)[0] : undefined}
       rename={{
         editing: rename.editing,
         onEnd: (end) => {
@@ -1861,13 +1933,25 @@ interface WorkColumnProps {
   away?: TaskHeadBack | undefined;
 }
 
-/** A task New task is starting with its agent, which stands as its page until the start answers, wherever it was started. */
-function startingPage(
-  tasks: TasksControl,
-  room: ShellRoom,
-  away: TaskHeadBack | undefined,
-): React.JSX.Element | undefined {
-  if (!tasks.newTask.starting) return undefined;
+/**
+ * A task New task is starting with its agent, which stands as its page until
+ * the start answers, wherever it was started; else the page itself
+ * (`children`). Note that it reads whether a start is under way itself, so
+ * New task moving draws it alone, and the page it hands back, made by its
+ * owner's last draw, is not drawn again.
+ */
+function StartingOr({
+  tasks,
+  room,
+  away,
+  children,
+}: {
+  tasks: TasksControl;
+  room: ShellRoom;
+  away: TaskHeadBack | undefined;
+  children: React.ReactNode;
+}): React.ReactNode {
+  if (!useNewTaskShown().starting) return children;
 
   return (
     <StartingTaskPage
@@ -1931,31 +2015,31 @@ export const DesktopTasks = memo(function DesktopTasks({
   room = SHELL_ROOM.WIDE,
   away,
 }: WorkColumnProps): React.JSX.Element {
-  const starting = startingPage(tasks, room, away);
-
-  if (starting !== undefined) return starting;
-
-  if (tasks.page === TASKS_PAGE.HOME) return <TaskOpening tasks={tasks} room={room} away={away} />;
-
   return (
-    <SkillFiles
-      source={tasks.agents.readSkills}
-      // Note that a skill's file opens as a file a chip names does, whole, through the window's
-      // one door for a press (`tab-press.ts`), so its tab stands on this task though the app never showed it.
-      onOpen={(skill) =>
-        pressTab(
-          { ...tasks, onKeys: tasks.onTabKeys },
-          { kind: TAB_PRESS.FILE, ref: { path: skill.path } },
-        )
-      }
-    >
-      <DescriptionDocument
-        tasks={tasks}
-        looks={looks}
-        room={room}
-        away={away ?? { label: HOME_BACK, onPress: tasks.onGoHome }}
-      />
-    </SkillFiles>
+    <StartingOr tasks={tasks} room={room} away={away}>
+      {tasks.page === TASKS_PAGE.HOME ? (
+        <TaskOpening tasks={tasks} room={room} away={away} />
+      ) : (
+        <SkillFiles
+          source={tasks.agents.readSkills}
+          // Note that a skill's file opens as a file a chip names does, whole, through the window's
+          // one door for a press (`tab-press.ts`), so its tab stands on this task though the app never showed it.
+          onOpen={(skill) =>
+            pressTab(
+              { ...tasks, onKeys: tasks.onTabKeys },
+              { kind: TAB_PRESS.FILE, ref: { path: skill.path } },
+            )
+          }
+        >
+          <DescriptionDocument
+            tasks={tasks}
+            looks={looks}
+            room={room}
+            away={away ?? { label: HOME_BACK, onPress: tasks.onGoHome }}
+          />
+        </SkillFiles>
+      )}
+    </StartingOr>
   );
 }, sameWorkColumn);
 
@@ -1971,18 +2055,14 @@ export const DesktopHomePage = memo(function DesktopHomePage({
   accountName,
   staged = false,
 }: WorkColumnProps): React.JSX.Element {
-  const starting = startingPage(tasks, room, away);
-
-  if (starting !== undefined) return starting;
-
   return (
-    <>
+    <StartingOr tasks={tasks} room={room} away={away}>
       <div className="desktop-drag-strip" />
       <PageFind page={FIND_PAGE.HOME} active={tasks.shown}>
         <Fill as={FILL_ELEMENT.SECTION} className="home" aria-label="Home">
           <DesktopHome tasks={tasks} room={room} accountName={accountName} staged={staged} />
         </Fill>
       </PageFind>
-    </>
+    </StartingOr>
   );
 });

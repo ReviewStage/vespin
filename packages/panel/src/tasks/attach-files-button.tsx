@@ -1,7 +1,7 @@
 import { IconButton, riseAbove, Tooltip, useFilePicker, useMenu } from "@repo/ui";
 import { PaperclipIcon } from "@repo/ui/icons";
 import { PlusIcon } from "lucide-react";
-import { type Ref, useImperativeHandle } from "react";
+import { memo, type Ref, useImperativeHandle } from "react";
 import { ActionMenu, type MenuEntry } from "../desktop/action-menu.js";
 
 /**
@@ -34,7 +34,7 @@ export function attachmentRow(open: () => void, disabled: boolean): MenuEntry {
   return { label: ATTACH_FILES, icon: <PaperclipIcon />, disabled, onSelect: open };
 }
 
-export function AttachFilesButton({
+export const AttachFilesButton = memo(function AttachFilesButton({
   onFiles,
   disabled = false,
   label = ATTACH_FILES,
@@ -83,4 +83,4 @@ export function AttachFilesButton({
       )}
     </>
   );
-}
+});

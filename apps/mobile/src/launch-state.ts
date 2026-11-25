@@ -1,4 +1,4 @@
-// launch-state.ts -- whether this launch has spent any time in the background, when it last came to the front since, and when it first came active, watched from the bundle's first run, before expo-router loads the screens.
+// launch-state.ts -- whether this launch began in the background or has spent any time there since, when it last came to the front since, and when it first came active, watched from the bundle's first run, before expo-router loads the screens.
 
 import { AppState } from "react-native";
 import { sinceLaunch } from "./launch-phases.js";
@@ -12,6 +12,9 @@ import { sinceLaunch } from "./launch-phases.js";
  * background can reach hours later, once it's brought forward.
  */
 let leftFront = AppState.currentState === "background";
+
+/** Whether this launch began in the background, which nothing after the bundle's first run changes. */
+const beganAway = leftFront;
 
 /** Whether the app has been in the background since it last came active, so its next coming active is a return to the front. */
 let awayNow = leftFront;
@@ -39,6 +42,11 @@ AppState.addEventListener("change", (state) => {
     frontAt = sinceLaunch();
   }
 });
+
+/** Whether this launch began in the background, the system having woken the app with nothing on screen, as a push does. */
+export function launchBeganAway(): boolean {
+  return beganAway;
+}
 
 /** Whether this launch has been in the background at any point since the bundle first ran. */
 export function launchLeftFront(): boolean {

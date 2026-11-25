@@ -4,12 +4,13 @@ import { requireNativeView } from "expo";
 import type { ComponentType, Ref } from "react";
 import type { ColorValue, NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
 
-/** A pill as the view draws it: the Markdown it is written back as, its words and glyph, and what VoiceOver hears. */
+/** A pill as the view draws it: the Markdown it is written back as, its words and glyph, what VoiceOver hears, and, for a held picture's, the file its thumbnail is drawn from in the glyph's place. */
 export interface NativePill {
   readonly markdown: string;
   readonly words: string;
   readonly glyph: string;
   readonly heard: string;
+  readonly thumbnail?: string | undefined;
 }
 
 /** A run of the words as the view takes it: plain words, or one pill. */
@@ -69,6 +70,10 @@ interface NativePillFieldProps {
   readonly onWords: (event: NativeSyntheticEvent<NativeWords>) => void;
   readonly onHeight: (event: NativeSyntheticEvent<{ readonly height: number }>) => void;
   readonly onFocusChange: (event: NativeSyntheticEvent<{ readonly focused: boolean }>) => void;
+  /** A press on a pill that wears a thumbnail, by the pill's Markdown. */
+  readonly onPillPress?:
+    | ((event: NativeSyntheticEvent<{ readonly markdown: string }>) => void)
+    | undefined;
   /** Whether a list is offered over the field, whose rows a hardware keyboard's ↑ and ↓ move through rather than the caret. */
   readonly listKeys?: boolean | undefined;
   /** Whether an arrow has chosen one of the list's rows, which Return then picks rather than breaking the line. */

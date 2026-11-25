@@ -5,6 +5,7 @@ import {
   PRODUCT_EVENT_PROPERTY,
   PRODUCT_EXPERIMENT,
   PRODUCT_EXPERIMENT_SCOPE,
+  PRODUCT_LOAD_WINDOW,
   PRODUCT_OPEN_ORDER,
   PRODUCT_PAGE_DATA,
   PRODUCT_PAGE_VERSION,
@@ -18,6 +19,8 @@ import {
   productEventBuildFromWire,
   productEventFromWire,
   productLaunchSeconds,
+  productLoadCount,
+  productLoadMilliseconds,
   productOpenMilliseconds,
 } from "./product-events.js";
 
@@ -220,6 +223,104 @@ test("a launch may add when its bundle evaluated, its account was read, its loca
   );
 });
 
+test("a launch with no Inbox 10 s in travels the phases it reached and where each first read stood, each from its set, and refuses any other word", () => {
+  const stood = {
+    [PRODUCT_EVENT_PROPERTY.READY_AFTER]: "launch",
+    [PRODUCT_EVENT_PROPERTY.INBOX_READ]: "out",
+    [PRODUCT_EVENT_PROPERTY.TASKS_READ]: "kept",
+    [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: "answered",
+    [PRODUCT_EVENT_PROPERTY.STARTED_SECONDS]: 1,
+    [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: 2,
+    [PRODUCT_EVENT_PROPERTY.DELIVERIES]: 5,
+    [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "79",
+  };
+
+  assert.deepEqual(
+    productEventFromWire({ name: PRODUCT_EVENT.APP_NOT_READY, at: AT, properties: stood }),
+    { name: PRODUCT_EVENT.APP_NOT_READY, at: AT, properties: stood },
+  );
+  // A read's state is one of its four words, so a failure's own words refuse the event rather than travel.
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.APP_NOT_READY,
+      at: AT,
+      properties: { ...stood, [PRODUCT_EVENT_PROPERTY.INBOX_READ]: "failed: 503 from /api/inbox" },
+    }),
+    undefined,
+  );
+});
+
+test("rows a read dropped travel as their kind and a count on a rung, never a raw count or another word", () => {
+  const dropped = {
+    [PRODUCT_EVENT_PROPERTY.ROW_KIND]: "task_list_agents",
+    [PRODUCT_EVENT_PROPERTY.DROPPED]: 5,
+  };
+
+  assert.deepEqual(
+    productEventFromWire({ name: PRODUCT_EVENT.ROWS_DROPPED, at: AT, properties: dropped }),
+    { name: PRODUCT_EVENT.ROWS_DROPPED, at: AT, properties: dropped },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.ROWS_DROPPED,
+      at: AT,
+      properties: { ...dropped, [PRODUCT_EVENT_PROPERTY.DROPPED]: 4391 },
+    }),
+    undefined,
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.ROWS_DROPPED,
+      at: AT,
+      properties: { ...dropped, [PRODUCT_EVENT_PROPERTY.ROW_KIND]: "agents of task-1" },
+    }),
+    undefined,
+  );
+});
+
+test("a launch's load travels its held thread and its one-by-one reads as counts and times on rungs, never raw, and nothing else", () => {
+  assert.equal(productLoadCount(0), 0);
+  assert.equal(productLoadCount(2), 1);
+  assert.equal(productLoadCount(419), 300);
+  assert.equal(productLoadMilliseconds(180), 0);
+  assert.equal(productLoadMilliseconds(4200), 2000);
+  assert.equal(productLoadMilliseconds(240_000), 120_000);
+
+  const load = {
+    [PRODUCT_EVENT_PROPERTY.LONG_TASKS]: 100,
+    [PRODUCT_EVENT_PROPERTY.LONG_TASK_MS]: 30_000,
+    [PRODUCT_EVENT_PROPERTY.COLD_READS]: 300,
+    [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: 10_000,
+    [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: PRODUCT_LOAD_WINDOW.WHOLE,
+    [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "82",
+  };
+
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.LAUNCH_LOAD,
+      at: AT,
+      properties: { ...load, taskId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d" },
+    }),
+    { name: PRODUCT_EVENT.LAUNCH_LOAD, at: AT, properties: load },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.LAUNCH_LOAD,
+      at: AT,
+      properties: { ...load, [PRODUCT_EVENT_PROPERTY.LONG_TASKS]: 137 },
+    }),
+    undefined,
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.LAUNCH_LOAD,
+      at: AT,
+      properties: { ...load, [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: 4321 },
+    }),
+    undefined,
+  );
+});
+
 test("a reply's wait to stand in its thread travels on a rung, with what it carried, never its words or the raw time", () => {
   assert.equal(productDrawnMilliseconds(640), 500);
   assert.equal(productDrawnMilliseconds(40), 0);
@@ -303,6 +404,32 @@ test("a page's open travels its waits on rungs with its kind and order, never wh
       },
     }),
     undefined,
+  );
+  // A tab's first switch travels its waits from the tap on the same rungs, with its kind, never what it shows.
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.TAB_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.SURFACE]: PRODUCT_SURFACE.TASKS,
+        [PRODUCT_EVENT_PROPERTY.BUSY_MS]: 500,
+        [PRODUCT_EVENT_PROPERTY.START_MS]: 600,
+        [PRODUCT_EVENT_PROPERTY.STAND_MS]: 1250,
+        [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "80",
+        workspaceId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.TAB_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.SURFACE]: PRODUCT_SURFACE.TASKS,
+        [PRODUCT_EVENT_PROPERTY.BUSY_MS]: 500,
+        [PRODUCT_EVENT_PROPERTY.START_MS]: 600,
+        [PRODUCT_EVENT_PROPERTY.STAND_MS]: 1250,
+        [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "80",
+      },
+    },
   );
   // A page an agent showed travels its read and its draw on the same rungs, with where its version came from, never which page.
   assert.deepEqual(

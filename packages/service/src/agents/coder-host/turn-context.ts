@@ -169,7 +169,7 @@ const SPOKEN_WORDS = `## This turn is spoken
 
 The developer is speaking to you through a voice that reads your replies aloud, so this turn's message is what they said, and your final reply is what they hear. Answer short, in plain facts: no Markdown, code blocks, or tables, and no file paths or links read out. Lead with the result and any decision waiting on the developer, a sentence or two at a time, and leave the detail to what you write to the task.`;
 
-/** How the agent's reply reaches the developer on a typed turn: its last message, or a Manager's `send_to_user` messages. */
+/** How the agent's reply reaches the developer on a typed turn: its last message, or a Manager's `chat_send` messages. */
 export const TURN_REPLY = {
   LAST_MESSAGE: "last-message",
   SEND_TO_USER: "send-to-user",
@@ -180,7 +180,7 @@ export type TurnReply = (typeof TURN_REPLY)[keyof typeof TURN_REPLY];
 /**
  * What a Manager's spoken turn is told beside them: the voice reads its
  * final plain text, as it does every agent's, so on this turn alone it
- * answers there and sends nothing with `send_to_user`, whose standing rule
+ * answers there and sends nothing with `chat_send`, whose standing rule
  * its instructions give it.
  */
 const SPOKEN_CHAT = `For this turn only, your standing rule that only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people does not hold: do not call \`${AGENT_TOOL.SEND_TO_USER}\` this turn. Your final plain text is the reply the voice says, so end the turn with your answer as plain text.`;
@@ -204,7 +204,7 @@ const TYPED_AFTER_CALL = {
   [TURN_ASK.REPLY]: `${TYPED_AFTER_CALL_LEAD} in your reply.`,
 } as const satisfies Record<TurnAsk, string>;
 
-/** The line a Manager's turn opens with after a spoken one: its standing `send_to_user` rule holds again. */
+/** The line a Manager's turn opens with after a spoken one: its standing `chat_send` rule holds again. */
 const TYPED_AFTER_CALL_CHAT = `This turn is typed (nothing you write is heard), so "This turn is spoken" above no longer holds: only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people again, so answer there, since your plain text is never shown.`;
 
 /** What a spoken turn is told, by how the agent replies on a typed one. */
@@ -215,10 +215,10 @@ const SPOKEN_BY_REPLY = {
 
 /**
  * What a turn opens with of its kind: on a spoken turn the words for a reply
- * read aloud, and for a Manager that its plain text, not `send_to_user`,
+ * read aloud, and for a Manager that its plain text, not `chat_send`,
  * is this turn's reply; handed every time since they are short. On a typed
  * turn after a spoken one, a line saying those words in its history no
- * longer hold, and for a Manager that `send_to_user` is its reply again; and
+ * longer hold, and for a Manager that `chat_send` is its reply again; and
  * nothing for a typed turn otherwise.
  */
 export function turnKindWords(

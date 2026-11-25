@@ -46,6 +46,11 @@ import {
   type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
 import { AGENT_ARCHIVER, type AgentSummary, CONTEXT_WINDOW } from "@repo/features/agent-wire";
+import {
+  PRODUCT_ROW_KIND,
+  type ProductRowKind,
+  type RecordProductEvent,
+} from "@repo/features/analytics";
 import { GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_SOURCE, githubImageOf } from "@repo/features/github-image";
 import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
@@ -92,7 +97,7 @@ import {
   gateOf,
 } from "./account-gate.js";
 import { type AccountInboxes, accountInboxes, followAccountInbox } from "./account-inbox-follow.js";
-import { followAccountItems } from "./account-items-follow.js";
+import { type AccountItemsPart, followAccountItems } from "./account-items-follow.js";
 import {
   agentDefaultWritten,
   chaptersProviderWritten,
@@ -121,6 +126,7 @@ import {
   type PULL_REQUEST_ACTS,
   PULL_REQUEST_FOLLOWS,
 } from "./contract/index.js";
+import { droppedRowsCount } from "./dropped-rows.js";
 import type { FileDownloadSeam } from "./effect/seams.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { type AccountHeld, accountHeld, type HeldFetch, heldFetch } from "./held-fetch.js";
@@ -253,6 +259,10 @@ export type AgentClient = Pick<
   | "rename"
   | "switchServers"
   | "changeFace"
+  | "followers"
+  | "follow"
+  | "setFollowerMachines"
+  | "changeFollower"
   | "choosePermissionMode"
   | "answerApproval"
   | "changeQueue"
@@ -345,7 +355,17 @@ export interface AgentsDependencies extends AccountGateDependencies {
   inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
   /** The task list's summaries of the tasks named, of those it holds now, which the account's kept Inbox keeps beside its items (`account-items-follow.ts`); none keeps none. */
   tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
+  /** Counts a product event, as the rows the account's items read left out are counted (`dropped-rows.ts`). */
+  recordProductEvent: RecordProductEvent;
 }
+
+/** The kind each part of the account's items read counts its dropped rows as. */
+const ACCOUNT_ITEMS_ROW_KIND = {
+  stamps: PRODUCT_ROW_KIND.INBOX_STAMPS,
+  items: PRODUCT_ROW_KIND.INBOX_ITEMS,
+  messages: PRODUCT_ROW_KIND.INBOX_MESSAGES,
+  files: PRODUCT_ROW_KIND.INBOX_FILES,
+} as const satisfies Record<AccountItemsPart, ProductRowKind>;
 
 /** The tasks an account inbox answer holds items of, once each: those with an item waiting on the reader first, as they are counted, then every other holding one. */
 function inboxTaskIds(answer: AccountInboxAnswer): readonly string[] {
@@ -468,6 +488,7 @@ export function composeAgents(
   dependencies: AgentsDependencies,
 ): Effect.Effect<AgentsComposer, never, Scope.Scope | HttpClient.HttpClient> {
   return Effect.gen(function* () {
+    const countDropped = droppedRowsCount(dependencies.recordProductEvent);
     const http = yield* HttpClient.HttpClient;
     const asked = askedOf(dependencies, http);
     const { client } = dependencies;
@@ -620,6 +641,7 @@ export function composeAgents(
             ),
           pool: dependencies.pool,
           accountWide,
+          dropped: (part, count) => countDropped(ACCOUNT_ITEMS_ROW_KIND[part], count),
           ...(dependencies.tasksListed === undefined
             ? undefined
             : { tasksListed: dependencies.tasksListed }),
@@ -1314,6 +1336,16 @@ function composed(
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),
     AGENTS_PERMISSION_MODE: declaredWrite(dependencies.pool, moded),
     AGENTS_FACE: declaredWrite(dependencies.pool, faced),
+    // Note that a Manager's followers are asked of the service as its Settings shows them and held nowhere here, so each write answers them whole for the window to draw.
+    AGENTS_FOLLOWERS: ({ agentId }) => asked(client.followers(agentId)),
+    AGENTS_FOLLOW: ({ agentId }) => asked(client.follow(agentId, true)),
+    AGENTS_UNFOLLOW: ({ agentId }) => asked(client.follow(agentId, false)),
+    AGENTS_SET_FOLLOWER_MACHINES: ({ agentId, machines }) =>
+      asked(client.setFollowerMachines(agentId, machines)),
+    AGENTS_ADD_FOLLOWER: ({ agentId, userId }) =>
+      asked(client.changeFollower(agentId, userId, true)),
+    AGENTS_REMOVE_FOLLOWER: ({ agentId, userId }) =>
+      asked(client.changeFollower(agentId, userId, false)),
     // Note that an answer draws nothing on the agent's row, whose ask the service takes off as it settles, so it is asked and answered alone.
     AGENTS_ANSWER_APPROVAL: ({ agentId, approvalId, ...request }) =>
       asked(client.answerApproval(agentId, approvalId, request)),

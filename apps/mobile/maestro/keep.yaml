@@ -24,24 +24,42 @@ appId: dev.vespin.ios
 - assertVisible: "Share…"
 - waitForAnimationToEnd
 - takeScreenshot: keep-picture-menu
-- tapOn:
-    point: "50%, 10%"
-- waitForAnimationToEnd
-# The message's own menu, opened on its words. Note that they are scrolled to
-# the window's middle first, since the picture's menu closing left them under
-# the bar, where the long press landed on it instead.
+# Note that a menu is put away by a tap off it at a point, through the
+# flows' own `dismiss.yaml`, the one place this flow acts on a position,
+# because iOS takes everything under an open context menu out of the
+# accessibility tree, so no named control exists to tap, and a swipe off it
+# leaves it standing. The point is the window's trailing margin beside the
+# thread's recording, where nothing presses even with no menu standing, and
+# the flow then asserts the menu gone and the page as it stood, the item the
+# menu opened on still there, so a tap that ever lands on something fails
+# here.
+- runFlow:
+    file: subflows/dismiss.yaml
+    env:
+      POINT: "94%, 60%"
+- assertNotVisible: "Save to Photos"
+- assertVisible: "The invite page"
+# The message's own menu, opened on its words. Note that the long press lands
+# on a paragraph of plain words, never one holding a mention's chip, whose own
+# hold opens the link's sheet first; and that the words are scrolled to the
+# window's middle first, since the picture's menu closing left them under the
+# bar, where the long press landed on it instead.
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
-      ELEMENT: ".*walked the invite flow.*"
+      ELEMENT: "The recording is under this.*"
       DIRECTION: UP
-- longPressOn: ".*walked the invite flow.*"
+- longPressOn: "The recording is under this.*"
 - assertVisible: "Copy message"
 - waitForAnimationToEnd
 - takeScreenshot: keep-message-menu
-- tapOn:
-    point: "50%, 10%"
-- waitForAnimationToEnd
+# The message's menu is put away the same way, then asserted gone with the message still there.
+- runFlow:
+    file: subflows/dismiss.yaml
+    env:
+      POINT: "94%, 60%"
+- assertNotVisible: "Copy message"
+- assertVisible: "The recording is under this.*"
 # The picture opens full screen in the app's viewer, whose share sheet copies
 # and saves it as the system's own wording names those acts.
 - tapOn: "The invite page"
@@ -54,8 +72,17 @@ appId: dev.vespin.ios
 - assertVisible: "Copy"
 - waitForAnimationToEnd
 - takeScreenshot: keep-viewer-share
-- tapOn:
-    point: "50%, 10%"
+# The share sheet is put away as the system puts a sheet away, by a swipe down
+# on the sheet itself. Note that the swipe starts on the sheet's own header,
+# the file's name, since iOS 26 floats the sheet over the viewer with nothing
+# dimmed above it, and a swipe begun just above it drags the viewer closed
+# instead; the viewer is then asserted still open.
+- swipe:
+    start: "50%, 63%"
+    end: "50%, 98%"
 - waitForAnimationToEnd
+- assertNotVisible: "Save Image"
+- assertVisible:
+    id: "picture-viewer-close"
 - tapOn:
     id: "picture-viewer-close"

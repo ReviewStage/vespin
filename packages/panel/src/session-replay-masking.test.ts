@@ -66,7 +66,6 @@ test("a recording asterisks every attribute it does not lay out by, those that c
     "src",
     "srcset",
     "content",
-    "data-motion-key",
     "data-value",
     "data-threads",
     "id",

@@ -31,11 +31,22 @@ export const TOOLBAR_LOOK = {
 
 export type ToolbarLook = (typeof TOOLBAR_LOOK)[keyof typeof TOOLBAR_LOOK];
 
+/** How wide a phone's corners stand. */
+export const TOOLBAR_CORNERS = {
+  /** One control wide each, the title centered between them. */
+  ONE: "one",
+  /** As wide as the wider corner's controls, both alike, so a corner of several (a thread's arrows and its ⋯) keeps the title centered where there is room and cuts it where there is not. */
+  FIT: "fit",
+} as const;
+
+export type ToolbarCorners = (typeof TOOLBAR_CORNERS)[keyof typeof TOOLBAR_CORNERS];
+
 /** The bar's banner, inset at each edge as named, holding `children` as they are laid. */
 export function ToolbarFrame({
   start = TOOLBAR_INSET.PAGE,
   end = TOOLBAR_INSET.PAGE,
   look = TOOLBAR_LOOK.WINDOW,
+  corners = TOOLBAR_CORNERS.ONE,
   place,
   measure = false,
   folded = false,
@@ -47,6 +58,7 @@ export function ToolbarFrame({
   start?: ToolbarInset | undefined;
   end?: ToolbarInset | undefined;
   look?: ToolbarLook | undefined;
+  corners?: ToolbarCorners | undefined;
   place?: string | undefined;
   measure?: boolean | undefined;
   folded?: boolean | undefined;
@@ -62,6 +74,7 @@ export function ToolbarFrame({
       data-start={start}
       data-end={end}
       data-look={look}
+      data-corners={look === TOOLBAR_LOOK.PHONE ? corners : undefined}
       data-measure={measure ? "true" : undefined}
       data-folded={folded ? "true" : undefined}
       data-wrap-heading={wrapHeading ? "true" : undefined}

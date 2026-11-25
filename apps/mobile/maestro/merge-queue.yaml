@@ -1,4 +1,4 @@
-# merge-queue.yaml -- the Merge queue screen, opened from the Tasks list's bar in a compact window: each repository's queue under its header, its pull requests front first, each with its checks, its author, and when it should merge, and a row's long press holding Open on GitHub and Copy GitHub link.
+# merge-queue.yaml -- the Merge queue screen, opened from Search's Go to: each repository's queue under its header, its pull requests front first, each with its checks, its author, and when it should merge, and a row's long press holding Open on GitHub and Copy GitHub link.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -16,13 +16,15 @@ env:
 - runFlow:
     file: subflows/tab.yaml
     env:
-      TAB: Tasks
-# Note that a regular window opens the screen from its sidebar instead, so only a window whose Tasks bar offers the button runs the rest.
+      TAB: Search
+# Note that Search lists Go to before anything is typed, so Merge queue stands there while the experiment is on.
 - runFlow:
     when:
       visible: "Merge queue"
     commands:
-      - tapOn: "Merge queue"
+      - tapOn:
+          text: "Merge queue"
+          below: "Go to"
       - extendedWaitUntil:
           visible: "Invite a teammate by email"
           timeout: 15000

@@ -1,13 +1,15 @@
-import type { MemorySaveAnswerView } from "@repo/features/agent-view";
+import type { MemoriesFollowParams, MemorySaveAnswerView } from "@repo/features/agent-view";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { markdownTree } from "@repo/features/markdown-tree";
 import {
   ADD_MEMORY,
   forgetQuestion as forgetWords,
+  MANAGER_MEMORY_WORDS,
   MEMORY_ACT,
   MEMORY_EDITOR_WORDS,
   MEMORY_PAGE_WORDS,
   MEMORY_SAVED_WORDS,
+  MEMORY_SCOPE,
   MEMORY_UNRECALLED_WORDS,
   MEMORY_VIEW,
   MEMORY_VIEW_CAPTION,
@@ -21,7 +23,7 @@ import {
   selectAllWords,
 } from "@repo/features/memory-settings-words";
 import { MEMORY_BOUNDS, type MemorySummary } from "@repo/features/memory-wire";
-import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
+import { encodeMention, MENTION_KIND, type Mention } from "@repo/features/mention-link";
 import { formatCount } from "@repo/features/number-format";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -97,6 +99,7 @@ import { confirmFailure } from "../failure-report.js";
 import { memoriesQuery, memoriesRetryMutation } from "../live-reads.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
+import { useHandedWords } from "../tasks/box-words.js";
 import { linkChip } from "../tasks/mention-chip.js";
 import { MessageBox, useMessageBox } from "../tasks/message-box.js";
 import { useMentionDoors } from "../tasks/task-mentions.js";
@@ -176,7 +179,20 @@ import {
  * memories the reader may not forget are left chosen and said so. A memory
  * is members' own words about their work, so the list stands under the
  * mask mark, which Settings' own unmask would otherwise leave readable.
+ *
+ * A Manager's Settings lists its own memories with the same section, by its
+ * scope (`MEMORY_SCOPE.MANAGER`): the memories only that Manager recalls,
+ * read, kept, and forgotten under its id, so a memory added there is kept
+ * for it alone, which a caption over the list says.
  */
+
+/** Whose memories a Memory section lists: the workspace's own, or one Manager's alone. */
+export type MemorySectionScope =
+  | { readonly kind: typeof MEMORY_SCOPE.WORKSPACE }
+  | { readonly kind: typeof MEMORY_SCOPE.MANAGER; readonly managerId: string };
+
+/** The workspace's own memories, as Settings › Memory lists them. */
+export const WORKSPACE_MEMORY_SCOPE: MemorySectionScope = { kind: MEMORY_SCOPE.WORKSPACE };
 
 /** What the page says while it cannot read or write, and with no account. */
 const PAGE_LINE = {
@@ -254,16 +270,65 @@ function forgetterOf(memory: MemorySummary, actor: Actor): string {
     : `Only ${keeper}, or an owner or admin`;
 }
 
-/** Where a memory's words came from, as a reader who may open its task sees it. */
-type MemorySource = NonNullable<MemorySummary["source"]>;
+/**
+ * Where a memory's words came from, as its chip draws it: the agent and the
+ * line that kept them, the agent's task, none for a Manager, which works on
+ * none, and the mention the chip is, with the name it wears.
+ */
+interface ShownSource {
+  readonly agentId: string;
+  readonly messageId: string | null;
+  readonly taskId: string | undefined;
+  readonly mention: Mention;
+  readonly name: string;
+}
 
-/** One memory with whose words it holds, as the members the panel reads name them, and the agent that saved it as the window names it. */
+/** One memory with whose words it holds, as the members the panel reads name them, and where it came from as its chip draws it. */
 interface ShownMemory {
   readonly memory: MemorySummary;
   readonly actor: Actor;
   readonly keeper: string;
-  /** The agent's name where the window holds it; none where it names the agent not. */
-  readonly agentName: string | undefined;
+  /** Where its words came from; none where the reader is told of no source. */
+  readonly source: ShownSource | undefined;
+}
+
+/**
+ * Where a memory's words came from, as its chip draws it: the agent, by
+ * the name the window holds for it, or its task's where the window names
+ * it not; or the Manager, which works on no task, by the window's name for
+ * it or else the service's.
+ */
+function shownSourceOf(
+  memory: MemorySummary,
+  agents: ReadonlyMap<string, string>,
+): ShownSource | undefined {
+  const { source, managerSource } = memory;
+
+  if (source !== null) {
+    const { agentId, messageId, taskId, taskName } = source;
+    const agentName = agents.get(agentId);
+
+    return agentName === undefined
+      ? { agentId, messageId, taskId, mention: { kind: MENTION_KIND.TASK, taskId }, name: taskName }
+      : {
+          agentId,
+          messageId,
+          taskId,
+          mention: { kind: MENTION_KIND.AGENT, agentId },
+          name: agentName,
+        };
+  }
+
+  if (managerSource === undefined) return undefined;
+  const { agentId, messageId, name } = managerSource;
+
+  return {
+    agentId,
+    messageId,
+    taskId: undefined,
+    mention: { kind: MENTION_KIND.AGENT, agentId },
+    name: agents.get(agentId) ?? name,
+  };
 }
 
 /**
@@ -274,39 +339,33 @@ interface ShownMemory {
  */
 function SourceChip({
   source,
-  agentName,
   workspaceStep,
 }: {
-  source: MemorySource;
-  agentName: string | undefined;
+  source: ShownSource;
   /** The step the workspace's links name it by: its slug, or its id where none traveled. */
   workspaceStep: string;
 }): React.JSX.Element | null {
-  const { agentId, messageId, taskId, taskName } = source;
+  const { agentId, messageId, taskId, mention, name } = source;
   const doors = useMentionDoors();
   const openPlace = useOpenPlace();
 
   const opened = useMemo(() => {
     if (messageId === null || openPlace === undefined) return doors;
 
-    const openLine = () =>
-      openPlace({ kind: LINK_DESTINATION.MESSAGE, taskId: taskId, agentId, messageId });
+    // Note that a Manager's line is opened by its agent alone, since it works on no task.
+    const line =
+      taskId === undefined
+        ? { kind: LINK_DESTINATION.MESSAGE, agentId, messageId }
+        : { kind: LINK_DESTINATION.MESSAGE, taskId, agentId, messageId };
+
+    const openLine = () => openPlace(line);
 
     return { ...doors, onOpenTask: openLine, onOpenAgent: openLine };
   }, [doors, openPlace, agentId, messageId, taskId]);
 
   const place = { workspace: workspaceStep, repository: null };
 
-  const chip =
-    agentName === undefined
-      ? linkChip(encodeMention({ kind: MENTION_KIND.TASK, taskId }, place), `@${taskName}`, opened)
-      : linkChip(
-          encodeMention({ kind: MENTION_KIND.AGENT, agentId }, place),
-          `@${agentName}`,
-          opened,
-        );
-
-  return chip ?? null;
+  return linkChip(encodeMention(mention, place), `@${name}`, opened) ?? null;
 }
 
 /** A memory's recalls, as its row's end says them on its first lines: how many in the window, then when last, or never. */
@@ -329,7 +388,7 @@ function MemoryUse({ memory }: { memory: MemorySummary }): React.JSX.Element {
   );
 }
 
-/** Who saved a memory and when, as Always allowed says who added a command: "Saved 2h ago by" its keeper, "from" the agent it came from. */
+/** Who saved a memory and when, as Always allowed says who added a command: "Saved 2h ago by" its keeper, "from" the agent it came from, or "via" the Manager, on no task, that kept it for them. */
 function SavedLine({
   shown,
   workspaceStep,
@@ -337,7 +396,7 @@ function SavedLine({
   shown: ShownMemory;
   workspaceStep: string;
 }): React.JSX.Element {
-  const { memory, actor, agentName } = shown;
+  const { memory, actor, source } = shown;
 
   return (
     // Note that whom and whence are parts of their own, so a narrow row wraps between them rather than cutting a name.
@@ -348,11 +407,11 @@ function SavedLine({
         {` ${MEMORY_SAVED_WORDS.BY} `}
         <ActorRef actor={actor} />
       </ActorLine>
-      {memory.source === null ? null : (
+      {source === undefined ? null : (
         <ActorLine>
           {/* Note that the space between the parts leads this one's words, since a flex line drops a run of spaces standing alone. */}
-          {` ${MEMORY_SAVED_WORDS.FROM} `}
-          <SourceChip source={memory.source} agentName={agentName} workspaceStep={workspaceStep} />
+          {` ${source.taskId === undefined ? MEMORY_SAVED_WORDS.VIA : MEMORY_SAVED_WORDS.FROM} `}
+          <SourceChip source={source} workspaceStep={workspaceStep} />
         </ActorLine>
       )}
     </SettingsRowStateLine>
@@ -492,10 +551,17 @@ function keepersOf(listed: readonly ShownMemory[]): readonly FilterPerson[] {
   );
 }
 
-/** What Delete asks, of one memory or of several, and what it says of those the reader may not delete. */
-function forgetQuestion(asked: readonly MemorySummary[], left: number) {
+/** Where `scope`'s memories are read, kept, and forgotten: the workspace, and the Manager where it names one. */
+function placeOf(workspaceId: string, scope: MemorySectionScope): MemoriesFollowParams {
+  return scope.kind === MEMORY_SCOPE.MANAGER
+    ? { workspaceId, managerId: scope.managerId }
+    : { workspaceId };
+}
+
+/** What Delete asks, of one memory or of several of `scope`, and what it says of those the reader may not delete. */
+function forgetQuestion(asked: readonly MemorySummary[], left: number, scope: MemorySectionScope) {
   return {
-    ...forgetWords(asked.length, left),
+    ...forgetWords(asked.length, left, scope.kind),
     loss: CONFIRM_LOSS.IRREVERSIBLE,
     replayUnmasked: true,
   };
@@ -527,22 +593,22 @@ function NothingShown({
 }
 
 /**
- * Memories forgotten in `workspaceId`, as Forget's question holds its own
+ * Memories forgotten in `place`, as Forget's question holds its own
  * mutation over them: one after another through the port, each sent once
  * the one before answered, the first refusal stopping the rest. Note that
  * the host draws a forget gone the moment it is asked and keeps it gone
  * until the read carries it, so the answer only says whether it was taken.
  */
-function memoriesForgetMutation(workspaceId: string) {
+function memoriesForgetMutation(place: MemoriesFollowParams) {
   return mutationOptions({
-    mutationKey: [ACT_KIND.MEMORIES_FORGET, workspaceId],
+    mutationKey: [ACT_KIND.MEMORIES_FORGET, place.workspaceId, place.managerId],
     mutationFn: (ids: readonly string[]): Promise<ActionResult> =>
       ids.reduce<Promise<ActionResult>>(
         (before, id) =>
           before.then((result) =>
             result.status !== ACTION_RESULT_STATUS.ACCEPTED
               ? result
-              : sendAct(ACT_KIND.MEMORIES_FORGET, { workspaceId, id })
+              : sendAct(ACT_KIND.MEMORIES_FORGET, { ...place, id })
                   .catch(() => undefined)
                   .then(
                     (answer): ActionResult =>
@@ -643,7 +709,7 @@ function MemoryCard({
   const title = editing.replaces === undefined ? MEMORY_EDITOR_WORDS.ADD : MEMORY_EDITOR_WORDS.EDIT;
 
   const box = useMessageBox({
-    draft: editing.text,
+    draft: useHandedWords(editing.text),
     setDraft: onChange,
     placeholder: MEMORY_EDITOR_WORDS.PLACEHOLDER,
     label: title,
@@ -708,15 +774,15 @@ function refusalNote(result: ActionResult): ComposerNote | undefined {
  * that follows finds no opening of its own standing, so it opens nothing
  * again.
  */
-function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
+function useMemoryEditor(place: MemoriesFollowParams, kept: ReadonlySet<string>) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [openings, setOpenings] = useState(0);
 
   const saving = useMutation({
-    mutationKey: [ACT_KIND.MEMORIES_SAVE, workspaceId],
+    mutationKey: [ACT_KIND.MEMORIES_SAVE, place.workspaceId, place.managerId],
     mutationFn: (save: { readonly text: string; readonly replaces: string | undefined }) =>
       sendAct(ACT_KIND.MEMORIES_SAVE, {
-        workspaceId,
+        ...place,
         text: save.text,
         ...(save.replaces !== undefined && { replaces: save.replaces }),
       }),
@@ -794,18 +860,20 @@ function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
 function MemoryList({
   readerId,
   memories,
-  workspaceId,
+  scope,
+  place,
   workspaceStep,
 }: {
   /** The signed-in account, whose own memories read as You and Me. */
   readerId: string | undefined;
   memories: readonly MemorySummary[];
-  /** The workspace the memories are kept in, whose forgets every Forget waits out. */
-  workspaceId: string;
+  scope: MemorySectionScope;
+  /** Where the memories are kept, the workspace and the Manager where the scope names one, whose forgets every Forget waits out. */
+  place: MemoriesFollowParams;
   /** The step the workspace's links name it by, which a memory's source is written under. */
   workspaceStep: string;
 }): React.JSX.Element {
-  const forgets = memoriesForgetMutation(workspaceId);
+  const forgets = memoriesForgetMutation(place);
   const forgettingAll = useMutation(forgets);
   // Note that a forget out locks every Forget in its workspace until it answers.
   const forgetting = useIsMutating({ mutationKey: forgets.mutationKey }) > 0;
@@ -827,7 +895,7 @@ function MemoryList({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [asked, setAsked] = useState<readonly MemorySummary[]>([]);
   const found = searchTokens(query);
-  const editor = useMemoryEditor(workspaceId, new Set(memories.map((memory) => memory.id)));
+  const editor = useMemoryEditor(place, new Set(memories.map((memory) => memory.id)));
 
   const all = memories.map((memory): ShownMemory => {
     // Note that the service names a memory's keeper as nobody only once their account is deleted.
@@ -837,9 +905,8 @@ function MemoryList({
         : personActor(memory.keptBy, members, readerId, former);
 
     const keeper = memory.keptBy?.name ?? "";
-    const agentName = memory.source === null ? undefined : agents.get(memory.source.agentId);
 
-    return { memory, actor, keeper, agentName };
+    return { memory, actor, keeper, source: shownSourceOf(memory, agents) };
   });
 
   const searched = all.filter((each) => matchesTokens([each.memory.text, each.keeper], found));
@@ -943,7 +1010,12 @@ function MemoryList({
     <SettingsSection anchor={SETTINGS_SEARCH_ROW.MEMORY} frame={SETTINGS_SECTION_FRAME.NONE}>
       <Stack gap={GAP.SECTION}>
         <Stack gap={GAP.CONTROL}>
-          <Inline justify={JUSTIFY.END}>
+          <Inline justify={scope.kind === MEMORY_SCOPE.MANAGER ? JUSTIFY.BETWEEN : JUSTIFY.END}>
+            {scope.kind === MEMORY_SCOPE.MANAGER ? (
+              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+                {MANAGER_MEMORY_WORDS.CAPTION}
+              </Text>
+            ) : null}
             <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={editor.add}>
               {ADD_MEMORY}
             </Button>
@@ -992,7 +1064,13 @@ function MemoryList({
             <NothingShown
               // Note that a view the search and the filter leave empty while another holds their matches says so as the view, not as a search that missed.
               narrowed={narrowed.length === 0 && (found.length > 0 || kept.size > 0)}
-              empty={MEMORY_VIEW_EMPTY[memories.length === 0 ? MEMORY_VIEW.ALL : view]}
+              empty={
+                memories.length > 0
+                  ? MEMORY_VIEW_EMPTY[view]
+                  : scope.kind === MEMORY_SCOPE.MANAGER
+                    ? MANAGER_MEMORY_WORDS.EMPTY
+                    : MEMORY_VIEW_EMPTY[MEMORY_VIEW.ALL]
+              }
               onClear={clear}
             />
           ) : (
@@ -1020,7 +1098,7 @@ function MemoryList({
       <ConfirmDialog
         open
         confirm={forgetConfirm}
-        question={forgetQuestion(asked, asked.length - forgettable.length)}
+        question={forgetQuestion(asked, asked.length - forgettable.length, scope)}
       />
       {editor.card}
     </SettingsSection>
@@ -1029,12 +1107,15 @@ function MemoryList({
 
 export function MemorySection({
   signedIn,
+  scope,
   workspace,
   readerId,
   workspacesFailed,
   onRetryWorkspaces,
 }: {
   signedIn: boolean;
+  /** Whose memories it lists: the workspace's own, or one Manager's alone in it. */
+  scope: MemorySectionScope;
   /** The workspace Settings shows, whose memories the page reads; absent before the workspaces are read. */
   workspace: Workspace | undefined;
   /** The signed-in account, whose own memories read as You. */
@@ -1046,7 +1127,8 @@ export function MemorySection({
 }): React.JSX.Element {
   const workspaceId = workspace?.id;
   // The memories as the host holds them, followed live while the page shows them, so a memory an agent keeps meanwhile draws as it lands.
-  const memories = useQuery(memoriesQuery(signedIn ? workspaceId : undefined));
+  const managerId = scope.kind === MEMORY_SCOPE.MANAGER ? scope.managerId : undefined;
+  const memories = useQuery(memoriesQuery(signedIn ? workspaceId : undefined, managerId));
   const retryMemories = useMutation(memoriesRetryMutation());
 
   if (!signedIn) return <SettingsLine>{PAGE_LINE.SIGNED_OUT}</SettingsLine>;
@@ -1073,7 +1155,8 @@ export function MemorySection({
           key={workspace.id}
           readerId={readerId}
           memories={memories.data}
-          workspaceId={workspace.id}
+          scope={scope}
+          place={placeOf(workspace.id, scope)}
           workspaceStep={workspace.slug ?? workspace.id}
         />
       </ReplayMask>
@@ -1083,7 +1166,7 @@ export function MemorySection({
       line={PAGE_LINE.FAILED}
       surface={FAILURE_SURFACE.MEMORIES_READ}
       about={{ workspaceId: workspace.id }}
-      onRetry={() => retryMemories.mutate({ workspaceId: workspace.id })}
+      onRetry={() => retryMemories.mutate(placeOf(workspace.id, scope))}
     />
   ) : (
     <MemoriesSkeleton label={READING_LABEL.MEMORY} />

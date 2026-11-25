@@ -1,6 +1,6 @@
 import { APP_COMMAND, APP_SHORTCUTS, SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import { BUTTON_VARIANT, Button, Shortcut } from "@repo/ui";
-import { CommandDialog, type CommandGroup } from "@repo/ui/command";
+import { COMMAND_PRESENTATION, CommandDialog, type CommandGroup } from "@repo/ui/command";
 import { GLYPH } from "@repo/ui/icons";
 import { useState } from "react";
 import type { Example } from "../example";
@@ -9,8 +9,9 @@ import { CatalogSection } from "../section";
 /**
  * command-dialog.tsx -- a palette of tasks and actions, found by typing and
  * chosen with the arrows and Return, its keys' hints along its foot and a
- * failed source's note under its group; and one still reading its rows.
- * Each opens from its button and goes with Escape, a press on the dimmed
+ * failed source's note under its group; one still reading its rows; and one
+ * drawn as a page, as a phone's Search tab, its groups' headings ending in a
+ * press of their own. Each opens from its button and goes with Escape, a press on the dimmed
  * window, or a row chosen.
  */
 
@@ -93,6 +94,7 @@ function PaletteFoot(): React.JSX.Element {
 function CommandDialogExample(): React.JSX.Element {
   const [palette, setPalette] = useState(false);
   const [reading, setReading] = useState(false);
+  const [page, setPage] = useState(false);
 
   return (
     <>
@@ -128,6 +130,27 @@ function CommandDialogExample(): React.JSX.Element {
           placeholder="Search tasks"
           groups={[]}
           loading="Reading tasks"
+        />
+      </CatalogSection>
+      <CatalogSection id="command-dialog-page" title="Drawn as a page, its headings' presses">
+        <Button
+          variant={BUTTON_VARIANT.OUTLINE}
+          aria-haspopup="dialog"
+          onClick={() => setPage(true)}
+        >
+          Open as a page
+        </Button>
+        <CommandDialog
+          open={page}
+          onOpenChange={setPage}
+          label="Search"
+          placeholder="Search tasks and actions"
+          presentation={COMMAND_PRESENTATION.PAGE}
+          head={<strong>Search</strong>}
+          groups={paletteGroups(() => setPage(false)).map((group) => ({
+            ...group,
+            act: { label: "Show all", onPress: () => setPage(false) },
+          }))}
         />
       </CatalogSection>
     </>

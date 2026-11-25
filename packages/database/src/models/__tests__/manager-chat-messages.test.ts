@@ -24,10 +24,11 @@ import { storeWriter } from "../writer.js";
 
 /**
  * A Manager's chat, over a real dialect: a write lands once under its key,
- * a reply stands in its root's thread, a clashing id and a reply to no
- * message are refused, the chat reads by page and by words, a rewind's
- * drop takes its messages and their threads, a call's line grows in place,
- * and no other account reads or writes any of it. Synthetic accounts.
+ * a reply stands in its root's thread, half a character is kept as the
+ * replacement character, a clashing id and a reply to no message are
+ * refused, the chat reads by page and by words, a rewind's drop takes its
+ * messages and their threads, a call's line grows in place, and no other
+ * account reads or writes any of it. Synthetic accounts.
  */
 
 const SENT_AT = new Date("2026-11-24T12:00:00Z");
@@ -142,6 +143,34 @@ it.layer(getTestDB())("a Manager's chat", (it) => {
       }),
   );
 
+  it.effect(
+    "a message holding half a character, as a cut that split an emoji leaves, lands with the half replaced rather than refused",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const agentId = yield* openManager(owner);
+
+        const message = landed(
+          yield* writeManagerChatMessage(
+            owner,
+            personSays(agentId, owner, "Done \ud83d", {
+              authorName: "Test \udc4d",
+              attachments: [{ id: "picture-1", mediaType: "image/png", caption: "Before \ud83d" }],
+            }),
+          ),
+        );
+
+        assert.deepEqual(
+          [message.text, message.authorName, message.attachments],
+          [
+            "Done \uFFFD",
+            "Test \uFFFD",
+            [{ id: "picture-1", mediaType: "image/png", caption: "Before \uFFFD" }],
+          ],
+        );
+      }),
+  );
+
   it.effect("refuses an id another message holds, and a reply to no message", () =>
     Effect.gen(function* () {
       const owner = yield* openAccount;
@@ -243,40 +272,55 @@ it.layer(getTestDB())("a Manager's chat", (it) => {
       }),
   );
 
-  it.effect("a call's line recorded in three fragments stands whole as the caller's message", () =>
-    Effect.gen(function* () {
-      const owner = yield* openAccount;
-      const manager = yield* openManagerAgent(owner);
-      const writer = yield* storeWriter({ tools: {} });
-      const target = { userId: owner, conversationId: manager.conversationId };
-      const callId = randomUUID();
-      const sender = { kind: MESSAGE_SENDER.MEMBER, userId: owner } as const;
-      const asked = { key: randomUUID(), callId, speaker: VOICE_SPEAKER.CALLER, sender };
+  it.effect(
+    "a call's line recorded in fragments stands whole as the caller's message, a fragment ending on half an emoji waiting for the rest of it",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const manager = yield* openManagerAgent(owner);
+        const writer = yield* storeWriter({ tools: {} });
+        const target = { userId: owner, conversationId: manager.conversationId };
+        const callId = randomUUID();
+        const sender = { kind: MESSAGE_SENDER.MEMBER, userId: owner } as const;
+        const asked = { key: randomUUID(), callId, speaker: VOICE_SPEAKER.CALLER, sender };
 
-      for (const text of ["Can you", "Can you ship", "Can you ship the table?"]) {
-        yield* writer.recordVoiceLine(target, { ...asked, text });
-      }
+        // The second record ends between 👍's two halves, which the third completes.
+        for (const text of [
+          "Can you",
+          "Can you ship \uD83D",
+          "Can you ship \uD83D\uDC4D the table?",
+        ]) {
+          yield* writer.recordVoiceLine(target, { ...asked, text });
 
-      yield* writer.recordVoiceLine(target, {
-        key: randomUUID(),
-        callId,
-        speaker: VOICE_SPEAKER.VOICE,
-        text: "On it.",
-        sender,
-      });
+          if (text.endsWith("\uD83D")) {
+            const [standing] = yield* readManagerChatPage(owner, manager.id, { limit: 1 });
+            assert.equal(standing?.text, "Can you ship ");
+          }
+        }
 
-      assert.deepEqual(
-        (yield* readManagerChatPage(owner, manager.id, { limit: 10 })).map((message) => [
-          message.text,
-          message.authorKind,
-          message.authorUserId,
-        ]),
-        [
-          ["On it.", MANAGER_CHAT_AUTHOR.AGENT, null],
-          ["Can you ship the table?", MANAGER_CHAT_AUTHOR.PERSON, owner],
-        ],
-      );
-    }),
+        // A late copy of that second record is a repeat, never a cut back.
+        yield* writer.recordVoiceLine(target, { ...asked, text: "Can you ship \uD83D" });
+
+        yield* writer.recordVoiceLine(target, {
+          key: randomUUID(),
+          callId,
+          speaker: VOICE_SPEAKER.VOICE,
+          text: "On it.",
+          sender,
+        });
+
+        assert.deepEqual(
+          (yield* readManagerChatPage(owner, manager.id, { limit: 10 })).map((message) => [
+            message.text,
+            message.authorKind,
+            message.authorUserId,
+          ]),
+          [
+            ["On it.", MANAGER_CHAT_AUTHOR.AGENT, null],
+            ["Can you ship \uD83D\uDC4D the table?", MANAGER_CHAT_AUTHOR.PERSON, owner],
+          ],
+        );
+      }),
   );
 
   it.effect("another account reads, writes, and deletes none of a Manager's chat", () =>

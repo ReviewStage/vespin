@@ -429,10 +429,62 @@ function rowsOf<Part extends string>(
   return Object.fromEntries(rows) as Readonly<Record<Part, readonly unknown[]>>;
 }
 
+/**
+ * Each of `parts` whose `decoded` rows hold fewer than `read` carried, and
+ * how many fewer: rows of a shape this build does not read, which the
+ * reading drops rather than failing the answer
+ * (`@repo/features/live-read`'s `rowsReading`), so no screen would
+ * otherwise say they went missing.
+ */
+export function droppedParts<Part extends string>(
+  parts: readonly Part[],
+  read: SealedRead<Part>,
+  decoded: { readonly [Name in Part]: readonly object[] },
+): ReadonlyArray<readonly [Part, number]> {
+  return parts.flatMap((part) => {
+    const carried = read.queries[part].rows?.length ?? 0;
+    const kept = decoded[part].length;
+
+    return carried > kept ? [[part, carried - kept] as const] : [];
+  });
+}
+
 /** An answer's rows, undecoded, and whether its cursor parts are only what moved past the reader's cursor, for the caller to join onto the rows it holds. */
 interface LiveAnswer<Part extends string> {
   readonly rows: Readonly<Record<Part, readonly unknown[]>>;
   readonly past: boolean;
+}
+
+/** An answer handed on, and its text once a later answer was compared with it. */
+interface HandedAnswer<Part extends string> {
+  readonly answer: LiveAnswer<Part>;
+  said?: string;
+}
+
+/** The answer's text, written the first time it is asked for. */
+function saidOf<Part extends string>(handed: HandedAnswer<Part>): string {
+  handed.said ??= JSON.stringify(handed.answer);
+
+  return handed.said;
+}
+
+/** Whether two answers say the same: compared by text only where each part carries as many rows in both, and both are past the cursor or neither. */
+function sameAnswer<Part extends string>(
+  one: HandedAnswer<Part>,
+  other: HandedAnswer<Part>,
+): boolean {
+  if (one.answer.past !== other.answer.past) return false;
+  const parts = Object.keys(one.answer.rows);
+
+  // SAFETY: both answers carry the read's own parts, which `parts` names.
+  const counted = (handed: HandedAnswer<Part>, part: string) =>
+    handed.answer.rows[part as Part]?.length;
+
+  if (parts.length !== Object.keys(other.answer.rows).length) return false;
+
+  if (parts.some((part) => counted(one, part) !== counted(other, part))) return false;
+
+  return saidOf(one) === saidOf(other);
 }
 
 /**
@@ -452,13 +504,14 @@ function liveAnswers<Part extends string>(
 
   return Stream.callback<LiveAnswer<Part>, LiveBroken>((queue) =>
     Effect.gen(function* () {
-      let last: string | undefined;
+      // Note that the last answer's text is written only once an answer could repeat it, because the first is a whole account's rows, megabytes to stringify, that nothing before it can equal.
+      let last: HandedAnswer<Part> | undefined;
 
       const emit = (answer: LiveAnswer<Part>) => {
-        const said = JSON.stringify(answer);
+        const next: HandedAnswer<Part> = { answer };
 
-        if (said === last) return;
-        last = said;
+        if (last !== undefined && sameAnswer(last, next)) return;
+        last = next;
         Queue.offerUnsafe(queue, answer);
       };
 

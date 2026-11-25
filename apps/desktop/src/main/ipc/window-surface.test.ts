@@ -41,9 +41,6 @@ const SUBMISSION = {
 const PNG = "iVBORw0KGgo=";
 const UNDRAWN_PNG = "AAAA";
 
-/** A still as the system answers one, synthetic. */
-const STILL = "data:image/jpeg;base64,AAAA";
-
 /** Every act port a fixture opened, closed once its test is done. */
 const ports: TestActPort<WebContents>[] = [];
 
@@ -96,13 +93,6 @@ function fixture() {
 
           return { delivered: true };
         }),
-      captureStill: async (sender, rect) => {
-        heard.push(
-          `still:${sender === panelContents ? "panel" : "other"}:${rect.width}x${rect.height}`,
-        );
-
-        return STILL;
-      },
       tellUnsavedWork: (sender, holding) =>
         heard.push(`unsaved:${sender === panelContents ? "panel" : "other"}:${holding}`),
       tellMenuOffers: (_sender, commands) => heard.push(`offers:${commands.join()}`),
@@ -153,23 +143,6 @@ it("the panel is focused and a file saved from a panel, and refused from any oth
     refused: "Could not save that file on this system.",
   });
   assert.deepEqual(heard, [`focus:${DISPLAY}`, "save:panel:notes.md:# Notes"]);
-});
-
-it("a still is taken of the panel that asks, none of an empty part, and refused from any other window", async () => {
-  const { port, panel, other, heard } = fixture();
-  const part = { x: 240, y: 0, width: 800, height: 600 };
-
-  assert.deepEqual(await port.call(panel, KIND.WINDOW_CAPTURE, part), { answer: STILL });
-  assert.deepEqual(await port.call(panel, KIND.WINDOW_CAPTURE, { ...part, width: 0 }), {
-    answer: null,
-  });
-  assert.deepEqual(await port.call(other, KIND.WINDOW_CAPTURE, part), {
-    refused: "Could not take a still of the window.",
-  });
-  assert.deepEqual(await port.call(panel, KIND.WINDOW_CAPTURE, { ...part, x: -1 }), {
-    refused: "Could not take a still of the window.",
-  });
-  assert.deepEqual(heard, ["still:panel:800x600"]);
 });
 
 it("a panel's unsaved work is kept as it tells it, and refused from any other window", async () => {

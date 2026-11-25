@@ -751,7 +751,9 @@ function automationsAddress(place: AutomationsPlace): string {
     case AUTOMATIONS_PAGE.RUNS:
       return `${under}/automations/runs`;
     case AUTOMATIONS_PAGE.NEW:
-      return `${under}/automations/new`;
+      return place.target === undefined
+        ? `${under}/automations/new`
+        : `${under}/automations/new?target=${place.target}`;
     case AUTOMATIONS_PAGE.EDIT:
       return place.runId === undefined
         ? `${under}/automation/${place.automationId}`

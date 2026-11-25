@@ -1,6 +1,7 @@
 // automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each in the order View options chose, a finished one-time automation folded under Finished, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
 
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
+import { firingMark } from "@repo/features/automation-firing-mark";
 import {
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
@@ -38,6 +39,7 @@ import {
   type BarMenu,
   ConfirmAsk,
   EmptyState,
+  firingLook,
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
@@ -80,7 +82,7 @@ import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.
 import { SettingsBarButton } from "../settings-button.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
+import { useComposeAction } from "./app-sidebar.js";
 
 /** What the list's field says before anything is typed. */
 const SEARCH_AUTOMATIONS = "Search automations";
@@ -130,8 +132,7 @@ function viewMenu(order: AutomationsOrder, setOrder: (next: AutomationsOrder) =>
     actions: [],
     groups: [
       {
-        actions: [],
-        submenus: [
+        items: [
           {
             label: TASKS_VIEW_WORDS.ORDER_BY,
             symbol: GLYPH.TIME,
@@ -146,7 +147,7 @@ function viewMenu(order: AutomationsOrder, setOrder: (next: AutomationsOrder) =>
         ],
       },
       {
-        actions: [
+        items: [
           {
             label: TASKS_VIEW_WORDS.RESET_VIEW,
             symbol: GLYPH.RESTORE,
@@ -214,14 +215,12 @@ export function AutomationsScreen() {
           accessibilityLabel={NEW_AUTOMATION}
           onPress={() => router.push(newAutomationRoute())}
         />
-        {/* Note that an iPad's tab bar has no round +, so its list's bar offers New task too, as every tab root's does. */}
-        {PLUS_TAB ? null : (
-          <Stack.Toolbar.Button
-            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
-            accessibilityLabel={compose.label}
-            onPress={compose.onPress}
-          />
-        )}
+        {/* Note that New task's compose ends the bar, as every tab root's does. */}
+        <Stack.Toolbar.Button
+          icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+          accessibilityLabel={compose.label}
+          onPress={compose.onPress}
+        />
       </Stack.Toolbar>
       <Screen>
         {chosen === undefined ? null : (
@@ -487,7 +486,7 @@ function AutomationListRow({
       line={automationPhoneLine(automation, now)}
       standing={automationRunStanding(automation.lastRun)}
       standingWords={automationLastRunWords(automation)}
-      symbol={GLYPH.AUTOMATION}
+      {...firingLook(firingMark(automation.trigger))}
       when={lastRunWhen(automation, now)}
       faded={!automation.enabled}
       onPress={onOpen}

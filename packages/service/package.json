@@ -159,7 +159,6 @@
     "./member-mcp/client-consents": "./src/member-mcp/client-consents.js",
     "./member-mcp/resource": "./src/member-mcp/resource.js",
     "./maintenance/maintenance-bounds": "./src/maintenance/maintenance-bounds.js",
-    "./maintenance/manager-chat-backfill-app": "./src/maintenance/manager-chat-backfill-app.js",
     "./maintenance/maintenance-sweep": "./src/maintenance/maintenance-sweep.js",
     "./billing/metronome-webhook-app": "./src/billing/metronome-webhook-app.js",
     "./billing/stripe-webhook-app": "./src/billing/stripe-webhook-app.js",
@@ -226,8 +225,8 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.107",
-    "@ai-sdk/openai": "4.0.122",
+    "@ai-sdk/anthropic": "4.0.108",
+    "@ai-sdk/openai": "4.0.123",
     "@better-auth/cimd": "1.7.7",
     "@better-auth/drizzle-adapter": "1.7.7",
     "@better-auth/electron": "1.7.7",

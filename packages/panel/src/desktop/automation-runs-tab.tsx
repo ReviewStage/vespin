@@ -11,13 +11,11 @@ import {
   type CountPart,
   EmptyState,
   List,
-  ListMotion,
   STATUS_TONE,
   type StatusTone,
 } from "@repo/ui";
 import { ClockIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { useRef } from "react";
 import { CREATOR, RunRow } from "./automation-runs-panel.js";
 import type { WorkspaceRunsRead } from "./use-automation-runs.js";
 
@@ -32,7 +30,7 @@ import type { WorkspaceRunsRead } from "./use-automation-runs.js";
  * draws (`automation-runs-panel.tsx`), its automation named on a line of
  * its own, and the tab narrows them to the runs still working or the ones
  * that failed. A run with nothing of its own to open opens its automation,
- * as the automation's row in the list does. A run that starts slides in at
+ * as the automation's row in the list does. A run that starts stands at
  * the top.
  */
 
@@ -90,33 +88,30 @@ export function WorkspaceRuns({
   /** Opens the automation named, for a run with nothing of its own to open. */
   onOpenAutomation: (automationId: string) => void;
 }): React.JSX.Element {
-  const body = useRef<HTMLDivElement | null>(null);
   const kept = shownRuns(runs, shown);
 
   if (kept.length === 0)
     return <EmptyState icon={<ClockIcon />}>{RUNS_SHOWN_NONE[shown]}</EmptyState>;
 
   return (
-    <div ref={body}>
+    <div>
       {/* Note that a run's row here names its automation in its lead, which the row measures as words and cannot mask itself, so the rows stay masked in a screen recording but for the words a row unmasks itself. */}
       <ReplayMask>
-        <ListMotion root={body}>
-          <List label="Runs" moves>
-            {kept.map((run) => (
-              <RunRow
-                key={run.id}
-                run={run}
-                keyHolder={mine(run.automation.id) ? undefined : CREATOR}
-                automationId={run.automation.id}
-                automationName={run.automation.name}
-                linked={false}
-                now={now}
-                onOpenAgent={onOpenAgent}
-                onOpenAutomation={() => onOpenAutomation(run.automation.id)}
-              />
-            ))}
-          </List>
-        </ListMotion>
+        <List label="Runs">
+          {kept.map((run) => (
+            <RunRow
+              key={run.id}
+              run={run}
+              keyHolder={mine(run.automation.id) ? undefined : CREATOR}
+              automationId={run.automation.id}
+              automationName={run.automation.name}
+              linked={false}
+              now={now}
+              onOpenAgent={onOpenAgent}
+              onOpenAutomation={() => onOpenAutomation(run.automation.id)}
+            />
+          ))}
+        </List>
       </ReplayMask>
     </div>
   );

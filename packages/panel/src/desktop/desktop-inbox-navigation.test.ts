@@ -685,7 +685,7 @@ function heldStarts(): AgentInboxStartParams[] {
   return sent;
 }
 
-test("on a phone an item is headed by its way back's glyph, its task centered, which opens it as its crumb does, and one ⋯ that says where it stands and holds the pager, what the crumbs opened, the panel, and the item's own actions", async () => {
+test("on a phone an item is headed by its way back, its thread's title, the arrows that step through the list, and one ⋯ headed by its path that opens its task and agent first", async () => {
   const { page, asked } = mount({ room: SHELL_ROOM.NARROW });
   await settle();
   layOut(page, 390);
@@ -697,37 +697,41 @@ test("on a phone an item is headed by its way back's glyph, its task centered, w
     [...head.querySelectorAll("button")].map(
       (each) => each.textContent?.trim() || each.getAttribute("aria-label"),
     ),
-    ["Inbox", INVITES.name, "Inbox item actions"],
-    "one control a corner, the item's task between them",
+    ["Inbox", "Previous inbox item", "Next inbox item", "Inbox item actions"],
+    "the way back, then the arrows and the ⋯",
   );
   assert.equal(
     head.querySelector(".ui-toolbar-heading")?.textContent,
-    INVITES.name,
-    "the bar names the item's task, not the title its thread is headed by under it",
+    "Expire after 7 days?",
+    "the bar names the thread",
   );
-  assert.deepEqual(
-    [...page.querySelectorAll("h1")].flatMap((each) =>
-      each.closest("[hidden]") === null ? [each.textContent] : [],
-    ),
-    ["Expire after 7 days?"],
-    "the thread's title is the page's one top heading",
+
+  const shown = head.querySelector(".ui-toolbar-heading")?.textContent;
+  act(() => arrowNamed(page, "Next inbox item").click());
+  await settle();
+  assert.notEqual(
+    head.querySelector(".ui-toolbar-heading")?.textContent,
+    shown,
+    "the arrow steps to the next thread, which the bar names",
   );
+  act(() => arrowNamed(page, "Previous inbox item").click());
+  await settle();
 
   act(() => head.querySelector<HTMLButtonElement>('[aria-label="Inbox item actions"]')?.click());
   const menu = document.querySelector<HTMLElement>('[role="menu"]:not([data-leaving])');
   assert.ok(menu, "the ⋯ opens");
-  assert.match(menu.textContent ?? "", /\d of \d/, "it says where the item stands");
+  assert.ok(
+    menu.querySelector(".ui-menu-heading")?.textContent?.startsWith(`${INVITES.name} › `),
+    "the path heads it, the item's task first",
+  );
   const labels = [...menu.querySelectorAll(".ui-menu-item-label")].map((each) => each.textContent);
+  assert.deepEqual(
+    labels.slice(0, 3),
+    ["Open task", "Open agent", "Copy link"],
+    "the path's opens lead",
+  );
 
-  for (const offered of [
-    "Previous inbox item",
-    "Next inbox item",
-    "Open task",
-    "Open agent",
-    "Show panel",
-    "Find",
-    "Copy link",
-  ]) {
+  for (const offered of ["Show panel", "Find"]) {
     assert.ok(labels.includes(offered), `the ⋯ offers ${offered}`);
   }
 
@@ -736,18 +740,7 @@ test("on a phone an item is headed by its way back's glyph, its task centered, w
   );
 
   act(() => openTask?.click());
-  assert.deepEqual(
-    asked.shownTasks,
-    [INVITES.id],
-    "Open task opens the item's task, as its crumb did",
-  );
-
-  const task = [...head.querySelectorAll("button")].find(
-    (each) => each.textContent?.trim() === INVITES.name,
-  );
-
-  act(() => task?.click());
-  assert.deepEqual(asked.shownTasks, [INVITES.id, INVITES.id], "the task's name opens it too");
+  assert.deepEqual(asked.shownTasks, [INVITES.id], "Open task opens the item's task");
 
   act(() => head.querySelector<HTMLButtonElement>("button")?.click());
   assert.deepEqual(columnsShown(page), ["list"], "the way back stands the list");

@@ -177,7 +177,7 @@ export function tasksViewMenu(input: TasksViewMenuInput): BarMenu {
     actions: [],
     submenus: shared ? [status, assignedTo] : [status],
     groups: [
-      { actions: [], submenus: [groupBy, orderBy] },
+      { items: [groupBy, orderBy] },
       {
         choices: [
           {
@@ -187,11 +187,10 @@ export function tasksViewMenu(input: TasksViewMenuInput): BarMenu {
             onPress: () => change({ subTasks: !view.subTasks }),
           },
         ],
-        actions: [],
-        submenus: [completed],
+        items: [completed],
       },
       {
-        actions: [
+        items: [
           {
             label: TASKS_VIEW_WORDS.RESET_VIEW,
             symbol: GLYPH.RESTORE,

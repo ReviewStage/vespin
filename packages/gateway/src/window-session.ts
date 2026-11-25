@@ -3,12 +3,13 @@
  * every version of the app-state document.
  *
  * It carries what the renderer cannot work out for itself and nothing else.
- * There is no switch among it, because recording has none: whether a run
- * records is the main process's answer alone, `permitted` below, and since
- * every version of the document carries it, an answer that turns false — an
- * account deleted mid-run — stops a recording where it stands, and one that
- * turns true again at the next sign-in resumes it, rather than either waiting
- * for the next launch. Even where it is true, nothing records until an
+ * Whether a run records is the host's answer alone, `permitted` below, the
+ * device's "Share usage data" switch among what it weighs, and since every
+ * version of the document carries it, an answer that turns false — the
+ * switch turned off, or an account deleted mid-run — stops a recording where
+ * it stands, and one that turns true again — the switch turned back on, or
+ * the next sign-in — resumes it, rather than either waiting for the next
+ * launch. Even where it is true, nothing records until an
  * account is signed in (`packages/panel/src/session-replay.ts`).
  * Where a recording goes is not here either: the processor's address is fixed
  * by the build, in the renderer beside the connect policy that names it.
@@ -17,7 +18,8 @@ export interface SessionReplayBootstrap {
   /**
    * Whether this run may record at all. False for a fixture and a capture
    * run, which must stay deterministic and send nothing, false for an
-   * unpackaged development run, and false after an
+   * unpackaged development run, false while the device does not share usage
+   * data or has not read whether it does, and false after an
    * account is deleted until the next sign-in. Being signed out is not one of
    * the host's reasons: the recorder waits for `accountId` on its own.
    */

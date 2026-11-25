@@ -56,10 +56,11 @@ import { Toolbar, type ToolbarPickUp } from "../toolbar/toolbar.js";
  * and the reach of what the caller lays in.
  */
 
-/** How far in from its sides the page stands its words: a page's inset, or a column's, as tabs read at the measure stand theirs. */
+/** How far in from its sides the page stands its words: a page's inset, a column's, as tabs read at the measure stand theirs, or the window's toolbar's, where that bar stands outside the page over it. */
 export const DETAIL_PAGE_INSET = {
   PAGE: "page",
   READING: "reading",
+  TOOLBAR: "toolbar",
 } as const;
 
 export type DetailPageInset = (typeof DETAIL_PAGE_INSET)[keyof typeof DETAIL_PAGE_INSET];

@@ -1,20 +1,3 @@
-import {
-  CURSOR_TOOL,
-  claudeCodeWorkspaceTool,
-  WORKSPACE_MCP_SERVER_NAMES,
-} from "@repo/features/agent-tools";
-import type { ToolCallSettlement } from "@repo/features/turn-run";
-import { isRecord, type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
-import { Option, Schema } from "effect";
-import { storedServerCall } from "../../integrations/connection-tools.js";
-import { NATIVE_MOMENT, type NativeHeld, type NativeMoment } from "./native-moments.js";
-import {
-  FAILURE_CHARS,
-  PICTURE_STAND_IN,
-  runnerMoments,
-  toolAnswerSettlement,
-} from "./runner-moments.js";
-
 /**
  * cursor-moments.ts -- Cursor's SDK messages, as its runner posts them, read as the moments of a native run.
  *
@@ -33,8 +16,10 @@ import {
  * integration's server as that integration's call (`storedServerCall`); and
  * one to any other MCP server as `cursorMcp`. A subagent's task keeps its
  * answer short: the steps its subagent took, which Cursor nests in a shape
- * of its own, are left out. Each run's usage meters the turn and says the
- * context it read; a summary written stamps the agent compacted; and the
+ * of its own, are left out. Each run's usage, the sum of its model calls,
+ * meters the turn, and each model call the runner posts says the context
+ * that call read, so the ring reads the last call's prompt rather than
+ * that sum; a summary written stamps the agent compacted; and the
  * agent's id, on every message, is the session a relaunch resumes. A call
  * Cursor gave up on can be left running with no answer, as one its review
  * refused is while the model tries again under a new id, so every call
@@ -42,6 +27,25 @@ import {
  * read with a schema of the fields this reads alone, so a field Cursor adds
  * changes nothing here, and a message no schema fits is no moment.
  */
+
+import { CURSOR_MODEL_CALL } from "@repo/agent-runner/protocol";
+import {
+  CURSOR_TOOL,
+  claudeCodeWorkspaceTool,
+  storedToolName,
+  WORKSPACE_MCP_SERVER_NAMES,
+} from "@repo/features/agent-tools";
+import type { ToolCallSettlement } from "@repo/features/turn-run";
+import { isRecord, type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
+import { Option, Schema } from "effect";
+import { storedServerCall } from "../../integrations/connection-tools.js";
+import { NATIVE_MOMENT, type NativeHeld, type NativeMoment } from "./native-moments.js";
+import {
+  FAILURE_CHARS,
+  PICTURE_STAND_IN,
+  runnerMoments,
+  toolAnswerSettlement,
+} from "./runner-moments.js";
 
 /** The message types read here, as the SDK spells them. */
 const MESSAGE = {
@@ -51,6 +55,7 @@ const MESSAGE = {
   TOOL_CALL: "tool_call",
   USAGE: "usage",
   SUMMARY: "summary",
+  MODEL_CALL: CURSOR_MODEL_CALL,
 } as const;
 
 /**
@@ -198,10 +203,10 @@ interface StoredCall {
 }
 
 /**
- * A call to an MCP server as it is stored: our tool's own name for our own
- * server, reached as a custom tool or as a server of ours; an integration's
- * call for an integration's server; `cursorMcp` naming the server and tool
- * otherwise.
+ * A call to an MCP server as it is stored: our tool's stored name
+ * (`storedToolName`) for our own server, reached as a custom tool or as a
+ * server of ours; an integration's call for an integration's server;
+ * `cursorMcp` naming the server and tool otherwise.
  */
 function storedMcpCall(callId: string, args: WireValue | undefined): StoredCall {
   const mcp = readMcpArgs(args);
@@ -218,7 +223,10 @@ function storedMcpCall(callId: string, args: WireValue | undefined): StoredCall 
         : undefined
       : claudeCodeWorkspaceTool(named);
 
-  if (workspaceTool !== undefined) return { name: workspaceTool, input, workspaceTool };
+  if (workspaceTool !== undefined) {
+    return { name: storedToolName(workspaceTool), input, workspaceTool };
+  }
+
   const server = named === undefined ? providerIdentifier : serverOf(named);
   const tool = named === undefined ? toolName : toolOf(named);
 
@@ -373,7 +381,7 @@ function statusMoments(message: WireValue): readonly NativeMoment[] {
   ];
 }
 
-/** A run's usage, as the meter and the context ring read it. Note that Cursor counts the cache's reads and writes within the input, as the record counts them. */
+/** A run's usage, the sum of its model calls, as the meter reads it. Note that Cursor counts the cache's reads and writes within the input, as the record counts them. */
 function usageMoments(message: WireValue): readonly NativeMoment[] {
   return Option.match(readUsage(message), {
     onSome: ({ usage }): readonly NativeMoment[] => [
@@ -387,6 +395,15 @@ function usageMoments(message: WireValue): readonly NativeMoment[] {
           cacheWriteTokens: usage.cacheWriteTokens,
         },
       },
+    ],
+    onNone: () => [],
+  });
+}
+
+/** One model call's usage, as the context ring reads it: the whole prompt the call read, the cache's reads and writes within it. */
+function modelCallMoments(message: WireValue): readonly NativeMoment[] {
+  return Option.match(readUsage(message), {
+    onSome: ({ usage }): readonly NativeMoment[] => [
       {
         kind: NATIVE_MOMENT.CONTEXT,
         usage: {
@@ -451,6 +468,8 @@ function messageMoments(
       return toolCallMoments(message, held);
     case MESSAGE.USAGE:
       return usageMoments(message);
+    case MESSAGE.MODEL_CALL:
+      return modelCallMoments(message);
     case MESSAGE.SUMMARY:
       return summaryMoments(message);
     default:

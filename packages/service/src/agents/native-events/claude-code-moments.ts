@@ -1,5 +1,9 @@
 import type { ClaudeCodeMessage } from "@repo/agent-runner/protocol";
-import { CLAUDE_CODE_TOOL, claudeCodeWorkspaceTool } from "@repo/features/agent-tools";
+import {
+  CLAUDE_CODE_TOOL,
+  claudeCodeWorkspaceTool,
+  storedToolName,
+} from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
 import type { ToolCallSettlement } from "@repo/features/turn-run";
@@ -428,10 +432,11 @@ const MCP_SERVER_SEPARATOR = "__";
 type StoredClaudeCodeCallResult = { readonly name: string; readonly input: UnparsedWireValue };
 
 /**
- * The name and input a call is stored under: our tool's own for a call
- * to our MCP server; for a call to an integration's own server, its
- * integration's fixed name and envelope, as the retired runtime's nested call of the tool is
- * stored (`storedServerCall`); the CLI's otherwise.
+ * The name and input a call is stored under: our tool's stored name
+ * (`storedToolName`) for a call to our MCP server; for a call to an
+ * integration's own server, its integration's fixed name and envelope, as
+ * the retired runtime's nested call of the tool is stored
+ * (`storedServerCall`); the CLI's otherwise.
  */
 function storedClaudeCodeCall(
   callId: string,
@@ -440,7 +445,7 @@ function storedClaudeCodeCall(
 ): StoredClaudeCodeCallResult {
   const workspaceTool = claudeCodeWorkspaceTool(name);
 
-  if (workspaceTool !== undefined) return { name: workspaceTool, input };
+  if (workspaceTool !== undefined) return { name: storedToolName(workspaceTool), input };
 
   if (!name.startsWith(MCP_TOOL_PREFIX)) return { name, input };
   const named = name.slice(MCP_TOOL_PREFIX.length);

@@ -11,7 +11,7 @@
  * Cursor's own words for it: its model id, the parameter its effort is
  * spelled by (`effort`, `reasoning_effort`, or `reasoning`, as each model
  * names its own), whether it takes `fast`, the parameters every choice of
- * it sends as they are, its two context windows where it lists two, and
+ * it sends as they are, its context windows where it lists them, and
  * which of its variants run in Max Mode alone, so the runner is handed
  * Cursor's `ModelSelection` (`{ id, params, maxMode }`) whole.
  *
@@ -33,8 +33,11 @@
  * since Cursor answers to `auto` too and a tab reads the label off the id.
  *
  * Where Cursor's list cannot be read (no key yet, Cursor down, an answer
- * of another shape), the few models pinned here stand in, so a member
- * still sees Cursor's mark and a Connect where no key is saved.
+ * of another shape), the account's last list stands, and where it has none
+ * the few models pinned here stand in, so a member still sees Cursor's mark
+ * and a Connect where no key is saved. An agent's model is never refused
+ * for the list's not naming it: a Cursor model it does not name runs on its
+ * id alone (`cursorModelSelectionOf`).
  *
  * Who is offered them is `withCursorModels`'s to say: an account with Cursor agents on
  * (`EXPERIMENT.CURSOR`, each person's own choice), on a client that reads
@@ -50,10 +53,12 @@ import { modelIdAtSpeed } from "@repo/features/model-effort";
 import { type MacOffer, MODEL_PROVIDER, MODEL_SPEED, NO_EFFORT } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import {
+  Cache,
   Clock,
   Context,
   Duration,
   Effect,
+  Exit,
   Layer,
   Option,
   Predicate,
@@ -65,7 +70,7 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { ownApiKeyOf } from "../accounts/own-api-key.js";
 import { HostedEnvironment } from "../environment.js";
-import type { OfferedModel } from "./model-catalog.js";
+import { type OfferedModel, providerModelOf } from "./model-catalog.js";
 
 /** The first hosted API version (`HOSTED_API_VERSION`) whose clients read `cursor` as a provider; a catalog answer to an older one never holds a Cursor entry, which would refuse its whole read. */
 const CURSOR_CLIENT_API_VERSION = 4;
@@ -75,6 +80,9 @@ const CURSOR_MODELS_URL = "https://api.cursor.com/v1/models";
 
 /** How long one account's read of Cursor's list stands before it is read again. */
 const CURSOR_MODELS_TTL = Duration.minutes(10);
+
+/** How many accounts' last lists the instance keeps, the least recently used let go first. */
+const CURSOR_MODELS_KEPT = 1_000;
 
 /** How long a read of Cursor's list may take before the pinned models stand in. */
 const CURSOR_MODELS_TIMEOUT = Duration.seconds(5);
@@ -460,10 +468,20 @@ const readCursorList = Effect.fnUntraced(function* (
   return Option.some(models);
 });
 
+/** One account's last read of Cursor's list, and until when it stands before it is read again. */
+interface KeptList {
+  readonly until: number;
+  readonly models: readonly CursorModel[];
+}
+
 /**
- * Cursor's list as each account's key reads it, kept for `CURSOR_MODELS_TTL`
- * by the account; the pinned models where the account saved no Cursor key
- * or Cursor's list could not be read, which is read again on the next ask.
+ * Cursor's list as each account's key reads it, read again once
+ * `CURSOR_MODELS_TTL` passed; the pinned models where the account saved no
+ * Cursor key. Where Cursor's list could not be read, as when it timed out,
+ * the account's last list stands until a read lands, the pinned models
+ * where none was read yet, so an agent on a model Cursor listed keeps its
+ * effort and window through Cursor's outage. The instance keeps the last
+ * lists of `CURSOR_MODELS_KEPT` accounts.
  */
 export const cursorModelCatalogLayer = Layer.effect(
   CursorModelCatalog,
@@ -471,16 +489,21 @@ export const cursorModelCatalogLayer = Layer.effect(
     const client = yield* HttpClient.HttpClient;
     const environment = yield* HostedEnvironment;
 
-    const kept = new Map<
-      string,
-      { readonly until: number; readonly models: readonly CursorModel[] }
-    >();
+    // Note that entries are written by hand alone, so the lookup never runs and nothing lapses but by capacity.
+    const kept = yield* Cache.makeWith(
+      (_userId: string): Effect.Effect<Option.Option<KeptList>> => Effect.succeedNone,
+      {
+        capacity: CURSOR_MODELS_KEPT,
+        timeToLive: (exit) =>
+          Exit.isSuccess(exit) && Option.isSome(exit.value) ? Duration.infinity : Duration.zero,
+      },
+    );
 
     const forAccount = Effect.fnUntraced(function* (userId: string) {
       const now = yield* Clock.currentTimeMillis;
-      const standing = kept.get(userId);
+      const standing = Option.flatten(yield* Cache.getOption(kept, userId));
 
-      if (standing !== undefined && standing.until > now) return standing.models;
+      if (Option.isSome(standing) && standing.value.until > now) return standing.value.models;
 
       const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.CURSOR, environment).pipe(
         Effect.catch(() => Effect.succeed(undefined)),
@@ -489,8 +512,18 @@ export const cursorModelCatalogLayer = Layer.effect(
       if (key === undefined || key === PROVIDER_KEY_UNREADABLE) return PINNED_CURSOR_MODELS;
       const read = yield* readCursorList(client, key);
 
-      if (Option.isNone(read)) return PINNED_CURSOR_MODELS;
-      kept.set(userId, { until: now + Duration.toMillis(CURSOR_MODELS_TTL), models: read.value });
+      if (Option.isNone(read)) {
+        return Option.match(standing, {
+          onNone: () => PINNED_CURSOR_MODELS,
+          onSome: (last) => last.models,
+        });
+      }
+
+      yield* Cache.set(
+        kept,
+        userId,
+        Option.some({ until: now + Duration.toMillis(CURSOR_MODELS_TTL), models: read.value }),
+      );
 
       return read.value;
     });
@@ -501,14 +534,24 @@ export const cursorModelCatalogLayer = Layer.effect(
 
 // ------------------------------------------------------------- the offer
 
-/** A model's windows as a catalog entry offers them; nothing for a speed with one window. */
-function offeredWindows(windows: CursorWindows | undefined) {
-  return windows === undefined
-    ? undefined
-    : {
-        contextWindows: { standardTokens: windows.standardTokens, longTokens: windows.longTokens },
-        contextWindow: windows.longTokens,
-      };
+/**
+ * A model's windows as a catalog entry offers them at one speed: its two
+ * where it runs on two, else the one window its pinned `context` names, as
+ * Grok 4.7's fast version runs on 256K alone; nothing for a model that lists
+ * no window, since a guessed one would tell its context ring a share of a
+ * window the model may not have.
+ */
+function offeredWindows(model: CursorModel, windows: CursorWindows | undefined) {
+  if (windows !== undefined) {
+    return {
+      contextWindows: { standardTokens: windows.standardTokens, longTokens: windows.longTokens },
+      contextWindow: windows.longTokens,
+    };
+  }
+
+  const one = tokensOf(model.pinned.find((param) => param.id === CURSOR_PARAMETER.CONTEXT)?.value);
+
+  return one === undefined ? undefined : { contextWindow: one };
 }
 
 /** The catalog entries one Cursor model is offered as: its own, and its fast version right after it where it takes `fast`, each with the windows it runs on at its speed. */
@@ -520,15 +563,17 @@ function catalogEntriesOf(model: CursorModel): readonly OfferedModel[] {
     efforts: model.effort?.values ?? [NO_EFFORT],
   };
 
-  if (!model.fast) return [{ ...own, ...offeredWindows(model.windows.standard) }];
+  const standard = { ...own, ...offeredWindows(model, model.windows.standard) };
+
+  if (!model.fast) return [standard];
 
   return [
-    { ...own, ...offeredWindows(model.windows.standard) },
+    standard,
     {
       ...own,
       id: modelIdAtSpeed(model.catalogId, MODEL_SPEED.FAST),
       name: `${model.name} (Fast)`,
-      ...offeredWindows(model.windows.fast),
+      ...offeredWindows(model, model.windows.fast),
     },
   ];
 }
@@ -604,13 +649,34 @@ function matches(
 }
 
 /**
+ * A Cursor model the models given do not name, as where Cursor's list could
+ * not be read and the account has no list of its own yet: Cursor's id, and
+ * `fast` on its fast version, so it runs as Cursor's default variant of it
+ * otherwise, since only Cursor's list says how its effort and window are
+ * spelled. Cursor answers an id it does not run itself, as OpenAI and
+ * Anthropic answer theirs on Codex and Claude Code, whose ids are never
+ * checked against a list either. None for an id that is not Cursor's.
+ */
+function unlistedSelectionOf(catalogId: string): CursorModelSelection | undefined {
+  const model = providerModelOf(catalogId);
+
+  if (model?.provider !== MODEL_PROVIDER.CURSOR) return undefined;
+  const id = model.modelId === CURSOR_AUTO.SLUG ? CURSOR_AUTO.CURSOR_ID : model.modelId;
+
+  if (model.speed !== MODEL_SPEED.FAST) return { id };
+
+  return { id, params: [{ id: CURSOR_PARAMETER.FAST, value: FAST_ON }] };
+}
+
+/**
  * The model a Cursor agent on the catalog id, effort, and window given
  * runs, as Cursor's SDK takes it (`ModelSelection`): Cursor's id, every
  * parameter the model pins, its larger `context` on the long window of a
  * model with two, the default, its effort under the parameter it spells it
  * by where it lists the effort, `fast` where it takes it, true for the fast
  * version, and Max Mode where the choice matches only variants that run in
- * it alone. None for an id that is not one of the Cursor models given.
+ * it alone; a Cursor model the models given do not name runs on its id
+ * alone (`unlistedSelectionOf`). None for an id that is not Cursor's.
  */
 export function cursorModelSelectionOf(
   cursorModels: readonly CursorModel[],
@@ -620,7 +686,7 @@ export function cursorModelSelectionOf(
 ): CursorModelSelection | undefined {
   const found = cursorModelAt(cursorModels, catalogId);
 
-  if (found === undefined) return undefined;
+  if (found === undefined) return unlistedSelectionOf(catalogId);
   const { model } = found;
   const windows = found.fast ? model.windows.fast : model.windows.standard;
   const longContext = contextWindow === CONTEXT_WINDOW.STANDARD ? undefined : windows?.longContext;

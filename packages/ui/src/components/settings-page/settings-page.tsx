@@ -2,8 +2,7 @@ import { type ReactNode, useRef, useState } from "react";
 import { said } from "../../said.js";
 import { type PageScroll, PageScrollContext } from "../page-frame/page-scroll.js";
 import { useHeadingAway } from "../page-header/heading-away.js";
-import { PAGE_HEADER_END, PageHeader } from "../page-header/page-header.js";
-import { RevealArea, revealArea } from "../reveal/reveal.js";
+import { PAGE_HEADER_END, PAGE_HEADER_LOOK, PageHeader } from "../page-header/page-header.js";
 import {
   type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
@@ -23,9 +22,7 @@ import { TOOLBAR_INSET, TOOLBAR_LOOK, Toolbar, type ToolbarLook } from "../toolb
  * edges and its sections: the inset around the column, which narrows when the page
  * does, the measure the column reads at, the title's place and size, the
  * room under the head, and the room between one section (`SettingsSection`)
- * and the next. Its column of sections is a reveal area (`RevealArea`), so
- * as a setting's rows unroll in (`Reveal`), the sections under them glide
- * down with the rows. A section owns its heading and card, and a row its padding,
+ * and the next. A section owns its heading and card, and a row its padding,
  * so a caller sets no length anywhere on a settings page. The page heads
  * itself with a document's header (`PageHeader`): the title is the page's
  * `h1`, which each section's `h2` heads a part of. What acts on the whole
@@ -90,6 +87,126 @@ export const SETTINGS_PAGE_WIDTH = {
 
 export type SettingsPageWidth = (typeof SETTINGS_PAGE_WIDTH)[keyof typeof SETTINGS_PAGE_WIDTH];
 
+/**
+ * A settings page's column, the part under its bar: its own scroller, which
+ * dissolves rows scrolled up into its top edge, at the page's inset, around
+ * a column at the page's measure holding the head (the title, its line
+ * under it, and what acts on the whole page at the title's end) over the
+ * sections a page's gap apart, handing its sections the page's scroller (`usePageScroll`). A
+ * page whose title a phone's bar draws (`titled`) opens on its line alone,
+ * under the bar. `SettingsPage` stands it under the window's bar, and a
+ * settings dialog (`SettingsDialog`) beside its section list, so a section
+ * there reads exactly as a page here does.
+ */
+export function SettingsPageColumn({
+  title,
+  titleId,
+  description,
+  actions,
+  width = SETTINGS_PAGE_WIDTH.MEASURE,
+  titled = false,
+  titledWhenNarrow = false,
+  look = SETTINGS_PAGE_LOOK.PAGE,
+  scroller,
+  head,
+  children,
+}: {
+  /** The page's name, its `h1`. */
+  title: ReactNode;
+  /** The id the title stands under, for a region to name itself by. */
+  titleId?: string | undefined;
+  /** One quiet line under the title that holds for the whole page. */
+  description?: ReactNode;
+  /** What acts on the whole page, at the end of the title's line. */
+  actions?: ReactNode;
+  /** How wide the column stands, its head and sections alike. */
+  width?: SettingsPageWidth | undefined;
+  /** Whether a bar above already draws the title, as a phone's does, so the column opens on its line alone. */
+  titled?: boolean | undefined;
+  /** Whether that bar stands only where the room is narrow (`room-narrow`), as a settings dialog's does, which answers the room in what it draws rather than in what it is handed: there the head gives way to the bar as `titled`'s does. */
+  titledWhenNarrow?: boolean | undefined;
+  /** How it stands: a page's, unless it stands in a dialog's card. */
+  look?: SettingsPageLook | undefined;
+  /** The scroller, for an owner that watches it; one of its own where none is handed. */
+  scroller?: React.RefObject<HTMLDivElement | null> | undefined;
+  /** The head, for an owner that watches it scroll away. */
+  head?: React.Ref<HTMLDivElement> | undefined;
+  /** The sections, a section's gap apart. */
+  children: ReactNode;
+}): React.JSX.Element {
+  const own = useRef<HTMLDivElement>(null);
+  const page = scroller ?? own;
+  const sections = useRef<HTMLDivElement>(null);
+  const [scroll] = useState((): PageScroll => ({ scroller: page, shiftedBy: sections }));
+
+  return (
+    <div
+      ref={page}
+      data-width={width}
+      data-look={look}
+      className="ui-settings-page @container/ui-settings-page box-border min-h-0 min-w-0 grow basis-0 overflow-x-clip overflow-y-auto overscroll-contain scroll-py-page-inset [scrollbar-gutter:stable]"
+    >
+      <div
+        className={
+          titled
+            ? "ui-settings-page-column mx-auto pt-title-under-bar"
+            : titledWhenNarrow
+              ? "ui-settings-page-column mx-auto room-narrow:pt-title-under-bar"
+              : "ui-settings-page-column mx-auto"
+        }
+      >
+        {titled ? (
+          said(description) ? (
+            <div className="ui-settings-page-head mb-ui-24">
+              <Text tone={TEXT_TONE.MUTED}>{description}</Text>
+            </div>
+          ) : null
+        ) : (
+          <div
+            ref={head}
+            className={
+              titledWhenNarrow
+                ? "ui-settings-page-head mb-ui-24 room-narrow:hidden"
+                : "ui-settings-page-head mb-ui-24"
+            }
+          >
+            <PageHeader
+              title={title}
+              titleId={titleId}
+              description={description}
+              actions={actions}
+              end={PAGE_HEADER_END.WORDS}
+              look={
+                look === SETTINGS_PAGE_LOOK.DIALOG ? PAGE_HEADER_LOOK.DIALOG : PAGE_HEADER_LOOK.PAGE
+              }
+            />
+          </div>
+        )}
+        <div
+          ref={sections}
+          className="ui-settings-page-sections flex min-w-0 flex-col gap-page-section-gap"
+        >
+          <PageScrollContext value={scroll}>{children}</PageScrollContext>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * How a settings page's column stands: a page's, at the page's inset all
+ * round under its title in the title's role; or a page in a dialog's card
+ * (a settings dialog's section), its top and foot at the card's own inset and
+ * its title in the dialog's role, as every dialog names itself, its sides
+ * and measure still a page's, so its rows read as Settings' do.
+ */
+export const SETTINGS_PAGE_LOOK = {
+  PAGE: "page",
+  DIALOG: "dialog",
+} as const;
+
+export type SettingsPageLook = (typeof SETTINGS_PAGE_LOOK)[keyof typeof SETTINGS_PAGE_LOOK];
+
 /** A column of `children`, one section each, under `title` and its `description`, beside them `actions`, or on a phone under a bar ending with them. */
 export function SettingsPage({
   title,
@@ -120,9 +237,7 @@ export function SettingsPage({
 }): React.JSX.Element {
   const page = useRef<HTMLDivElement>(null);
   const head = useRef<HTMLDivElement>(null);
-  const sections = useRef<HTMLDivElement>(null);
   const named = useHeadingAway(page, head);
-  const [scroll] = useState((): PageScroll => ({ scroller: page, shiftedBy: sections }));
   const phone = look === TOOLBAR_LOOK.PHONE;
 
   return (
@@ -141,45 +256,17 @@ export function SettingsPage({
             }
           : { pickUp: { name: named.name, shown: named.away } })}
       />
-      <div
-        ref={page}
-        data-width={width}
-        className="ui-settings-page @container/ui-settings-page box-border min-h-0 min-w-0 grow basis-0 overflow-x-clip overflow-y-auto overscroll-contain scroll-py-page-inset [scrollbar-gutter:stable]"
+      <SettingsPageColumn
+        title={title}
+        description={description}
+        actions={actions}
+        width={width}
+        titled={phone}
+        scroller={page}
+        head={head}
       >
-        <div
-          className={
-            phone
-              ? "ui-settings-page-column mx-auto pt-title-under-bar"
-              : "ui-settings-page-column mx-auto"
-          }
-        >
-          {phone ? (
-            said(description) ? (
-              <div className="ui-settings-page-head mb-ui-24">
-                <Text tone={TEXT_TONE.MUTED}>{description}</Text>
-              </div>
-            ) : null
-          ) : (
-            <div ref={head} className="ui-settings-page-head mb-ui-24">
-              <PageHeader
-                title={title}
-                description={description}
-                actions={actions}
-                end={PAGE_HEADER_END.WORDS}
-              />
-            </div>
-          )}
-          <RevealArea root={sections}>
-            <div
-              ref={sections}
-              className="ui-settings-page-sections flex min-w-0 flex-col gap-page-section-gap"
-              {...revealArea()}
-            >
-              <PageScrollContext value={scroll}>{children}</PageScrollContext>
-            </div>
-          </RevealArea>
-        </div>
-      </div>
+        {children}
+      </SettingsPageColumn>
     </div>
   );
 }

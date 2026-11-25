@@ -13,7 +13,7 @@ import {
   integrationConnectionOf,
 } from "./integration-wire.js";
 import { searchTokens } from "./search-tokens.js";
-import { MCP_SERVER_LABEL, readFailedWords, VERB } from "./words.js";
+import { andList, MCP_SERVER_LABEL, readFailedWords, VERB } from "./words.js";
 
 /**
  * agent-servers-model.ts -- what the MCP servers popover at an agent's composer says of each server: whether this agent has it on, or how to connect it; which section it stands under; and what a search of it finds.
@@ -328,6 +328,50 @@ export function providerGroups(rows: readonly ServerRow[]): readonly ProviderGro
 /** What the Connected heading counts: how many of its servers this agent has on, of how many ("2 of 3 on"). */
 export function serversOnWords(rows: readonly ServerRow[]): string {
   return `${rows.filter((row) => row.on).length} of ${rows.length} on`;
+}
+
+/** The most servers a servers row names under its label; past it the chip's count says enough. */
+const SERVERS_NAMED_MOST = 3;
+
+/** What a settings row choosing an agent's servers says: its chip's face, and the line under its label where it has one. */
+export interface ServersChoiceWords {
+  /** "All", "None", or how many are on of how many ("3 of 21"), as the popover's Connected heading counts. */
+  readonly face: string;
+  /** The few servers that differ from the rest, or none where the face says it all or too many differ to read. */
+  readonly note: string | undefined;
+}
+
+/**
+ * The words of a row choosing which connected servers an agent is handed,
+ * by the names of those on and those off. Note that only the smaller side
+ * is named, and only while it is a few, because the full list of a large
+ * account's servers is a paragraph that says no more than the chip.
+ */
+export function serversChoiceWords(names: {
+  readonly on: readonly string[];
+  readonly off: readonly string[];
+}): ServersChoiceWords {
+  const { on, off } = names;
+
+  if (on.length === 0 && off.length === 0) return { face: "None", note: "None connected yet." };
+
+  if (off.length === 0) return { face: "All", note: undefined };
+
+  if (on.length === 0) return { face: "None", note: undefined };
+  const face = `${on.length} of ${on.length + off.length}`;
+
+  if (off.length <= on.length) {
+    return { face, note: off.length <= SERVERS_NAMED_MOST ? `${andList(off)} off.` : undefined };
+  }
+
+  return { face, note: on.length <= SERVERS_NAMED_MOST ? `Only ${andList(on)} on.` : undefined };
+}
+
+/** What a reader who cannot switch an automation's servers is shown of its creator's: "All", "All but Linear", or "All but 18" where naming them would run long. */
+export function switchedOffWords(off: readonly string[]): string {
+  if (off.length === 0) return "All";
+
+  return `All but ${off.length <= SERVERS_NAMED_MOST ? andList(off) : off.length}`;
 }
 
 /**

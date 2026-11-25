@@ -1,5 +1,6 @@
 // automation-page-screens.tsx -- one automation's page, as the desktop's editor reads it: its switch and Run now, what fires it and when it runs next, its prompt, where its runs work and land, who it is for and who made it, and its newest runs, each opening the agent it started; its ⋯ runs it, turns it, copies its link, takes it over, and deletes it.
 
+import { firingMark } from "@repo/features/automation-firing-mark";
 import {
   automationNextRuns,
   automationOwner,
@@ -45,6 +46,7 @@ import {
   ConfirmAsk,
   EmptyState,
   FailedReadRow,
+  firingLook,
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
@@ -185,7 +187,7 @@ function automationMenu(
     ],
     groups: [
       {
-        actions: [
+        items: [
           {
             label: AUTOMATION_PHONE_WORDS.COPY_LINK,
             symbol: GLYPH.LINK,
@@ -195,7 +197,7 @@ function automationMenu(
         ],
       },
       {
-        actions: [
+        items: [
           {
             label: AUTOMATION_PHONE_WORDS.DELETE,
             symbol: GLYPH.DELETE,
@@ -322,7 +324,7 @@ function AutomationDetail({
             }
           >
             <NoteRow
-              symbol={GLYPH.AUTOMATION}
+              {...firingLook(firingMark(automation.trigger))}
               words={automationTriggerText(automation.trigger, automation.repositories ?? [])}
               line={ownerLine(automation, workspace)}
             />
@@ -337,7 +339,6 @@ function AutomationDetail({
           </ListSection>
           <ListSection title={AUTOMATION_PHONE_WORDS.PROMPT}>
             <NoteRow
-              symbol={GLYPH.AGENT}
               words={markdownPlainText(automation.action.prompt)}
               line={automationWhereWords(automation)}
             />
@@ -424,7 +425,7 @@ function AutomationRunRow({
       title={automationRunTitle(run)}
       line={automationRunLine(run)}
       standing={automationRunStanding(run)}
-      symbol={GLYPH.AGENT}
+      {...firingLook(firingMark(run.firing))}
       when={sinceText(run.firedAt, now)}
       onPress={onPress}
     />
@@ -599,7 +600,7 @@ export function WorkspaceRunsScreen() {
                 title={run.automation.name}
                 line={`${automationRunTitle(run)} · ${automationRunLine(run)}`}
                 standing={automationRunStanding(run)}
-                symbol={GLYPH.AGENT}
+                {...firingLook(firingMark(run.firing))}
                 when={sinceText(run.firedAt, now)}
                 onPress={
                   openAgent(run) ??

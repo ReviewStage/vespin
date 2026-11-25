@@ -1,6 +1,6 @@
 export { bothInOrder } from "./both-in-order.js";
 
-export { causeKind, failureDetail, failureKind } from "./failure-kind.js";
+export { causeKind, failureCode, failureDetail, failureKind } from "./failure-kind.js";
 
 export { catchAllButInterrupt, unlessInterrupted } from "./fallback.js";
 

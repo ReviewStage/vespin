@@ -360,6 +360,25 @@ export interface AppTranscript {
    * (`agent-queue-writes.ts`); none on a worker's transcript.
    */
   readonly sending?: readonly SendingMessage[];
+  /** How the host read the page it laid last, which the window's spans say beside their own times; none where what it laid last was no page read, as the live read's rows are. */
+  readonly read?: AppTranscriptRead;
+}
+
+/**
+ * How the host read one page of a transcript, in the epoch's milliseconds:
+ * when the follow that read it began, when it asked the service, when the
+ * service answered, and when the page was laid for the windows; and the
+ * longest the host's process stood still from the follow's start to the lay,
+ * where its platform hears that (`PlatformLoopStalls`). Note that a stall
+ * there holds the answer and the lay alike, however soon the service
+ * answered.
+ */
+export interface AppTranscriptRead {
+  readonly followedAt: number;
+  readonly askedAt: number;
+  readonly answeredAt: number;
+  readonly laidAt: number;
+  readonly stalledMs?: number;
 }
 
 /**
@@ -683,8 +702,16 @@ export const NO_KEYS_HELD: Readonly<Record<string, never>> = {};
  */
 export type AppHeldById<Rows> = Readonly<Record<string, AppHostRead<Rows>>>;
 
-/** Each workspace's memories the windows hold, by the workspace, most recently kept or corrected first, as the host's read of them stands, with every forget drawn over them until the read carries it (`memory-follow.ts`). */
-export type AppMemories = AppHeldById<readonly MemorySummary[]>;
+/** Whose memories a held read of a workspace's is, under the workspace: its own, or a Manager's alone by the Manager's id. */
+export const WORKSPACE_OWN_MEMORIES = "workspace";
+
+/** The key a workspace's held memories stand under in it: the Manager's id for a Manager's own, else the workspace's own (`WORKSPACE_OWN_MEMORIES`). */
+export function memoriesHolder(managerId: string | undefined): string {
+  return managerId ?? WORKSPACE_OWN_MEMORIES;
+}
+
+/** Each workspace's memories the windows hold, by the workspace and then whose they are (`memoriesHolder`), most recently kept or corrected first, as the host's read of them stands, with every forget drawn over them until the read carries it (`memory-follow.ts`). */
+export type AppMemories = Readonly<Record<string, AppHeldById<readonly MemorySummary[]>>>;
 
 /** The skills the account sees in each workspace the windows hold, by the workspace, the workspace's first and then its own, as the host's read of them stands, with every write drawn over them until the read carries it (`installed-skills-follow.ts`). */
 export type AppInstalledSkills = AppHeldById<readonly InstalledSkillSummary[]>;
@@ -1146,7 +1173,7 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.INTEGRATIONS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.INTEGRATION_TOOLS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.MEMORIES]: {
-    keys: READ_KEYS.ONE,
+    keys: READ_KEYS.TWO,
     on: KEYS_ON.SLICE,
     rowId: "id" satisfies keyof MemorySummary,
   },
@@ -1829,17 +1856,37 @@ export function isAppStateDelivery(value: UnparsedWireValue): boolean {
 }
 
 /**
+ * Whether this device shares usage data, Settings › Account › "Share usage
+ * data", as the document carries it: undefined until the host has read the
+ * device's settings, so a reader that must not send before the device has
+ * chosen can wait for the answer rather than take a default for it. Every
+ * optional telemetry a client sends follows it: the counts, session replay
+ * (`sessionReplayBootstrap`), and the client's Sentry
+ * (`@repo/features/sentry-usage-data`).
+ */
+export function sharesUsageData(state: Pick<AppState, "settings">): boolean | undefined {
+  return state.settings === undefined ? undefined : state.settings.stored.usageData === true;
+}
+
+/**
  * What this run may record, as the renderer is handed it. Note that an
  * unpackaged run never records, whatever its bundle was built with, because
  * `pnpm start` builds the renderer in whatever shell it is run from, and one
  * left holding the release's replay key would otherwise record a development
- * run into production's project.
+ * run into production's project. Nor does a device that does not share usage
+ * data, or one whose settings are not read yet: turning the switch off stops
+ * a recording where it stands, and turning it on starts one, at once.
  */
 export function sessionReplayBootstrap(
   state: Pick<AppState, "run" | "sessionReplay">,
+  usageData: boolean | undefined,
 ): SessionReplayBootstrap {
   return {
-    permitted: state.run.packaged && state.sessionReplay.permitted && !state.sessionReplay.halted,
+    permitted:
+      state.run.packaged &&
+      usageData === true &&
+      state.sessionReplay.permitted &&
+      !state.sessionReplay.halted,
     appVersion: state.run.appVersion,
     packaged: state.run.packaged,
     ...(state.sessionReplay.accountId ? { accountId: state.sessionReplay.accountId } : undefined),

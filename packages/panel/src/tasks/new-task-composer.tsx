@@ -40,6 +40,8 @@ import {
   type DraftPlace,
   EMPTY_DRAFT,
   useDraft,
+  useDraftBeside,
+  useDraftWords,
   useDraftWriter,
 } from "../composer-drafts.js";
 import { sectionGlyph } from "../desktop/section-icon-picker.js";
@@ -53,6 +55,7 @@ import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-
 import { modelsRunOn, unrunnableChoice } from "./agent-model.js";
 import { repositorySkillsQueryOptions } from "./agent-reads.js";
 import type { AgentServersControl } from "./agent-servers.js";
+import { useWordsOf } from "./box-words.js";
 import { ConnectAgentBanner, NOTICE_LOOK, type NoticeLook } from "./connect-agent-banner.js";
 import type { MentionMenuSide } from "./mention-picker.js";
 import { useMentionedReader } from "./mentioned-place.js";
@@ -84,7 +87,14 @@ import { SkillFiles } from "./skill-chip.js";
 import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
-import type { AgentAsk, NewTaskPress, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
+import {
+  type AgentAsk,
+  type NewTaskPreset,
+  type NewTaskPress,
+  type NewTaskRefusal,
+  type NewTaskStart,
+  useNewTaskShown,
+} from "./use-new-task.js";
 import { useTaskSections } from "./use-pin-writes.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
@@ -226,8 +236,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
 /** ⌘Return: a bare task from a box with nothing in it. */
 const BARE_CHORD: ShortcutChord = { key: SHORTCUT_KEY.ENTER };
 
-/** Each purpose's head row title, before the repository's chip: drawn for an automation's, and named to a reader alone for a task's. */
-const PURPOSE_HEADING = {
+/** Each purpose's head row title, before the repository's chip: drawn for an automation's, and named to a reader alone for a task's; a phone's sheet draws it in its own head (`titledByOwner`). */
+export const PURPOSE_HEADING = {
   [NEW_TASK_PURPOSE.TASK]: "New task",
   [NEW_TASK_PURPOSE.AUTOMATION]: CREATE_WITH_AGENT_WORDS.TITLE,
 } as const satisfies Record<NewTaskPurpose, string>;
@@ -352,17 +362,21 @@ function useDefaultChoice(
 
 export function NewTaskComposer({
   newTask,
+  preset,
   workspaceId,
   onStarting,
   onLeave,
   focusedByOwner = false,
   takesFocus = true,
   titleId,
+  titledByOwner = false,
   listSide,
   purpose = NEW_TASK_PURPOSE.TASK,
   notices = NOTICE_LOOK.INSET,
 }: {
   newTask: TasksControl["newTask"];
+  /** What the press that opened the card chose, or the start refused that it opens again on (`NewTaskShown.preset`); none for a card opened bare. */
+  preset?: NewTaskPreset | undefined;
   /** The workspace the task starts in, the owner's to choose; none before the workspaces are read. */
   workspaceId: string | undefined;
   /** Hears whether a start is out, during which the owner holds what it draws around the card. */
@@ -375,6 +389,8 @@ export function NewTaskComposer({
   takesFocus?: boolean;
   /** The id the head row's title stands under, which names the dialog's card. */
   titleId?: string | undefined;
+  /** Whether the owner draws the purpose's title in a head of its own, as a phone's sheet does, so the head row draws none. */
+  titledByOwner?: boolean | undefined;
   /** Which side of the caret's line an `@` or `/` list opens: over it in the dialog, under it on Home, whose card stands near the page's top, where a list risen over it is cut off under the page's head. */
   listSide: MentionMenuSide;
   /** What the card starts; a task's agent where none is named. */
@@ -383,8 +399,10 @@ export function NewTaskComposer({
   notices?: NoticeLook | undefined;
 }): React.JSX.Element {
   const forAutomation = purpose === NEW_TASK_PURPOSE.AUTOMATION;
-  const draft = useDraft(newTaskPlace(workspaceId, purpose));
-  const { text: words, attachments } = draft.draft;
+  // Note that the card reads its draft without the words, which the box reads where it stands and a press reads as it is pressed, so a word typed draws neither the card nor its chips.
+  const draft = useDraftBeside(newTaskPlace(workspaceId, purpose));
+  const typed = useDraftWords(newTaskPlace(workspaceId, purpose));
+  const { attachments } = draft.draft;
   // Words typed before the workspaces were read become the workspace's
   // draft once it is known, over one it kept, as the words written last win.
   const loose = useDraft(newTaskPlace(undefined, purpose)).draft;
@@ -395,9 +413,9 @@ export function NewTaskComposer({
     writer.update(newTaskPlace(undefined, purpose), () => EMPTY_DRAFT);
   }, [workspaceId, loose, writer, purpose]);
   // A card opened again on a start refused after it closed starts where it was left, saying why.
-  const refused = newTask.preset?.refused;
+  const refused = preset?.refused;
   // A card opened on a tree's relation starts on the other task's repository, which it keeps once the relation is removed.
-  const presetRelation = newTask.preset?.relation;
+  const presetRelation = preset?.relation;
 
   const repositories = newTask.repositoriesIn(workspaceId);
   const workspace = newTask.workspaces.find((each) => each.id === workspaceId);
@@ -409,7 +427,7 @@ export function NewTaskComposer({
       ? refused.card.repository
       : presetRelation !== undefined && treeKind(presetRelation.kind)
         ? presetRelation.task.repository
-        : newTask.preset?.repository,
+        : preset?.repository,
   );
 
   const { chosen, choose: setChosen } = repositoryDefault;
@@ -418,7 +436,7 @@ export function NewTaskComposer({
 
   // The section the press that opened the card chose, or the refused card's, which the chip's × lets go.
   const [sectionId, setSectionId] = useState<string | undefined>(
-    refused !== undefined ? refused.card.sectionId : newTask.preset?.sectionId,
+    refused !== undefined ? refused.card.sectionId : preset?.sectionId,
   );
 
   // A section is the card's workspace's, so the owner's switch, as Home's, lets it go for good, in the render that
@@ -539,8 +557,10 @@ export function NewTaskComposer({
   const device = deviceOfPlace(place);
 
   // Start is held until a read made since the card opened lands, where the member's last pick is a device (`useDevicesRead`).
+  const { modelsRead } = useNewTaskShown();
+
   const { unread: devicesUnread, failed: devicesFailed } = useDevicesRead(
-    newTask.modelsRead,
+    modelsRead,
     runsOnStands && keptDevice,
   );
 
@@ -553,10 +573,10 @@ export function NewTaskComposer({
 
   // A tree's two tasks work in one repository, the other task's, which the chip is held to.
   const repository = treeRelation === undefined ? picked : treeRelation.task.repository;
-  const said = words.trim();
   // Note that an automation's agent starts on words alone, since the brief fences them as the request, and a file's marker is no words of the request's.
-  const requested = wordsWithoutMarkers(said).trim() !== "";
-  const filled = forAutomation ? requested : hasWordsOrFiles(said, attachments);
+  const requested = useWordsOf(typed, (text) => wordsWithoutMarkers(text.trim()).trim() !== "");
+  const holdsWords = useWordsOf(typed, (text) => hasWordsOrFiles(text.trim(), attachments));
+  const filled = forAutomation ? requested : holdsWords;
 
   // An agent needs something to work on, words or files, and works in no repository where none is chosen.
   // Note that an agent nothing of the account's pays for is held here, with the press that connects one, rather than refused once pressed; a bare task needs none.
@@ -647,6 +667,8 @@ export function NewTaskComposer({
 
   const start = () => {
     if (!canStart) return;
+    const words = typed.get();
+    const said = words.trim();
     const prompt = forAutomation ? automationAgentBrief(said) : said;
 
     if (forAutomation && prompt.length > AGENT_BOUNDS.MAX_MESSAGE_CHARS) {
@@ -756,7 +778,7 @@ export function NewTaskComposer({
   );
 
   const composer: AgentComposerControl = {
-    held: draft.draft,
+    held: { words: typed, attachments },
     updateHeld: (next) => {
       let edited = false;
       // Note that the words are told against the draft as the change lands, never a render's copy, so an echo of the
@@ -816,7 +838,7 @@ export function NewTaskComposer({
       ) : null}
       <div className="new-task-head flex min-w-0 flex-wrap items-center gap-item-gap">
         <div className="new-task-title flex min-w-0 max-w-full items-center gap-item-gap">
-          {forAutomation ? (
+          {titledByOwner ? null : forAutomation ? (
             <Text
               variant={TEXT_VARIANT.DIALOG}
               as={TEXT_ELEMENT.H2}

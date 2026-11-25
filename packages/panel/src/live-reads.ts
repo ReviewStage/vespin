@@ -87,8 +87,10 @@ import {
   EVERY_WORKSPACE,
   HOST_READ_SLICE,
   KEYS_ON,
+  memoriesHolder,
   OWN_TRANSCRIPT,
   READ_KEY_DEPTH,
+  WORKSPACE_OWN_MEMORIES,
 } from "@repo/host/app-state";
 import {
   type Query,
@@ -260,6 +262,8 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
     ),
   [LIVE_READ.HISTORY]: ([taskId = ""]) =>
     askAct(ACT_KIND.TASKS_HISTORY_FOLLOW, { taskId: String(taskId) }),
+  [LIVE_READ.MANAGER_CHAT]: ([agentId = ""]) =>
+    askAct(ACT_KIND.AGENTS_MANAGER_CHAT_FOLLOW, { agentId: String(agentId) }),
   [LIVE_READ.INSTALLED_SKILLS]: ([workspaceId = ""]) =>
     askAct(ACT_KIND.INSTALLED_SKILLS_FOLLOW, { workspaceId: String(workspaceId) }),
   [LIVE_READ.INTEGRATIONS]: () => askAct(ACT_KIND.INTEGRATIONS_FOLLOW),
@@ -269,8 +273,11 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.WORKSPACE_TOOLS]: ([agentId = ""]) =>
     askAct(ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW, { agentId: String(agentId) }),
   [LIVE_READ.MCP_CLIENTS]: () => askAct(ACT_KIND.MCP_CLIENTS_FOLLOW),
-  [LIVE_READ.MEMORIES]: ([workspaceId = ""]) =>
-    askAct(ACT_KIND.MEMORIES_FOLLOW, { workspaceId: String(workspaceId) }),
+  [LIVE_READ.MEMORIES]: ([workspaceId = "", holder = WORKSPACE_OWN_MEMORIES]) =>
+    askAct(ACT_KIND.MEMORIES_FOLLOW, {
+      workspaceId: String(workspaceId),
+      ...(holder !== WORKSPACE_OWN_MEMORIES && { managerId: String(holder) }),
+    }),
   [LIVE_READ.REPOSITORY_LISTS]: ([workspace = ""]) =>
     askAct(ACT_KIND.TASKS_REPOSITORIES_FOLLOW, repositoryScope(String(workspace))),
   [LIVE_READ.SLACK_CHANNELS]: ([workspaceId = ""]) =>
@@ -353,6 +360,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS,
   LIVE_READ.TRANSCRIPT,
   LIVE_READ.HISTORY,
+  LIVE_READ.MANAGER_CHAT,
   LIVE_READ.INSTALLED_SKILLS,
   LIVE_READ.INTEGRATIONS,
   LIVE_READ.INTEGRATION_TOOLS,
@@ -600,6 +608,10 @@ export const transcriptQuery = (transcript: AgentTranscriptKey | undefined) =>
 export const historyQuery = (taskId: string | undefined) =>
   liveReadQuery(LIVE_READ.HISTORY, taskId === undefined ? undefined : [taskId]);
 
+/** One Manager's chat, by the agent, which its page holds while it shows: its newest page, then each older page read. */
+export const managerChatQuery = (agentId: string | undefined) =>
+  liveReadQuery(LIVE_READ.MANAGER_CHAT, agentId === undefined ? undefined : [agentId]);
+
 /** One task's pages, by its place; none offers Try again, since the host reads them again on its own. */
 export const pagesQuery = (place: PagePlace | undefined) =>
   liveReadQuery(LIVE_READ.PAGES, place === undefined ? undefined : [PAGE_OWNER.TASK, place.taskId]);
@@ -702,9 +714,12 @@ export const workspaceToolsQuery = (agentId: string | undefined) =>
 export const mcpClientsQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.MCP_CLIENTS, accountIds(accountId));
 
-/** A workspace's memories, by the workspace. */
-export const memoriesQuery = (workspaceId: string | undefined) =>
-  liveReadQuery(LIVE_READ.MEMORIES, oneId(workspaceId));
+/** A workspace's memories, or one Manager's own in it where `managerId` names one, by the workspace and then whose they are. */
+export const memoriesQuery = (workspaceId: string | undefined, managerId: string | undefined) =>
+  liveReadQuery(
+    LIVE_READ.MEMORIES,
+    workspaceId === undefined ? undefined : [workspaceId, memoriesHolder(managerId)],
+  );
 
 /** The repositories the account reaches, by the workspace or every one (`EVERY_WORKSPACE`). */
 export const repositoryListsQuery = (workspace: string | undefined) =>
@@ -792,6 +807,9 @@ export const transcriptRetryMutation = () => actMutation(ACT_KIND.AGENTS_TRANSCR
 
 /** Try again on a plan's history. */
 export const historyRetryMutation = () => actMutation(ACT_KIND.TASKS_HISTORY_RETRY);
+
+/** A Manager's chat read again, as its failed read's Try again asks. */
+export const managerChatRetryMutation = () => actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_RETRY);
 
 /** Try again on a workspace's skills. */
 export const installedSkillsRetryMutation = () => actMutation(ACT_KIND.INSTALLED_SKILLS_RETRY);

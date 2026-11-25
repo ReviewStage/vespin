@@ -6,7 +6,7 @@
  * taking a kernel that holds all of them.
  */
 import type { AccountRenewalWindow, OpenConsent } from "@repo/credentials";
-import type { ProductClientPlatform } from "@repo/features/analytics";
+import type { ProductClientPlatform, ProductLaunchedIn } from "@repo/features/analytics";
 import type {
   DeviceArch,
   DeviceCapability,
@@ -33,6 +33,7 @@ import type { ChildProcessSpawner } from "effect/process";
 import type { AccountSourceSeam } from "../account-source.js";
 import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
 import type { LaunchdJob } from "../daemon/launchd-job.js";
+import type { MatchMirror } from "../mirror-match-remote.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
 import type { SecretCipher as SecretCipherSeam, TokenVault } from "../settings-store.js";
 
@@ -54,6 +55,12 @@ export interface AppIdentityFacts {
    * member's, which names none.
    */
   readonly deviceZone?: () => string;
+  /**
+   * Where this launch began, which its count says (`app:launch`): in the
+   * background where the system woke the app with nothing on screen, as a
+   * phone's push does; none on a platform with no such launch.
+   */
+  readonly launchedIn?: ProductLaunchedIn;
 }
 
 export class AppIdentity extends Context.Service<AppIdentity, AppIdentityFacts>()(
@@ -120,6 +127,32 @@ export class PlatformFileDownload extends Context.Service<PlatformFileDownload, 
   "@repo/host/PlatformFileDownload",
 ) {}
 
+/**
+ * That the platform's screens run in the host's own process, as the
+ * iPhone's do, so the account's header may reach them for its image loader
+ * (`ACCOUNT_PICTURE_SOURCE`). The desktop's and the web's windows stand
+ * apart from the host and provide none, so the act answers them nothing.
+ */
+export class PlatformScreensInProcess extends Context.Service<PlatformScreensInProcess, true>()(
+  "@repo/host/PlatformScreensInProcess",
+) {}
+
+/**
+ * How long this process's event loop stood still within a stretch of time,
+ * in the epoch's milliseconds, as the platform hears it ticking
+ * (`loop-stalls.ts`), which a transcript's read says beside its times. It is
+ * optional: the desktop's main process provides it, since a stall there holds
+ * every request and push the host makes; a platform that hears none provides
+ * none.
+ */
+export interface LoopStallsSeam {
+  readonly worstWithin: (from: number, to: number) => number;
+}
+
+export class PlatformLoopStalls extends Context.Service<PlatformLoopStalls, LoopStallsSeam>()(
+  "@repo/host/PlatformLoopStalls",
+) {}
+
 /** The ids the host mints for its own records. */
 export interface IdSourceSeam {
   readonly create: () => string;
@@ -134,7 +167,8 @@ export class IdSource extends Context.Service<IdSource, IdSourceSeam>()("@repo/h
  * cross-origin. Every hosted address the host builds — the account service
  * and the hosted routes — then stands on it, and no development
  * override redirects any of them. It is optional: a host handed none derives
- * its addresses as a desktop build does, so the desktop provides none.
+ * its addresses itself. The desktop provides the origin its bootstrap
+ * settled, which alone honors an end-to-end build's loopback service.
  */
 export class ServiceOrigin extends Context.Service<ServiceOrigin, string>()(
   "@repo/host/ServiceOrigin",
@@ -205,6 +239,8 @@ export interface MirrorPlatformSeam {
   readonly removeScript: (worktree: string) => string;
   /** What the mirror's attempts and steps are traced on, main's Sentry on the desktop; Effect's own, which sends nothing, where none is handed. */
   readonly tracer?: Tracer.Tracer | undefined;
+  /** Where a mirror's files are matched against a manifest, a process of the desktop's own (`mirror-match-remote.ts`); in this one where none is handed. */
+  readonly match?: MatchMirror | undefined;
 }
 
 export class MirrorPlatform extends Context.Service<MirrorPlatform, MirrorPlatformSeam>()(

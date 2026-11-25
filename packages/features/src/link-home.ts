@@ -29,10 +29,11 @@ export const LINK_HOME = {
 /** The origin every link is written under. */
 export const LINK_ORIGIN = `https://${LINK_HOME.HOST}`;
 
-/** Our own pages a client opens by name rather than as a place of the app: what each release changed, and the docs. */
+/** Our own pages a client opens by name rather than as a place of the app: what each release changed, the docs, and the privacy policy (`PRIVACY.md`). */
 export const LINK_PAGE = {
   CHANGELOG: `${LINK_ORIGIN}/changelog`,
   DOCS: `${LINK_ORIGIN}/docs`,
+  PRIVACY: `${LINK_ORIGIN}/privacy`,
 } as const;
 
 /** The scheme a link is written in for the desktop, its colon after it, as `URL.protocol` spells one. */
@@ -55,7 +56,7 @@ export const APP_HOME_LINK = `${APP_LINK_PROTOCOL}//${LINK_HOME.HOST}/`;
  */
 export const PANEL_PATH = "/app";
 
-/** Where the web build emits the panel's static files, the harness marks and the voice clips (`apps/web/scripts/panel-build.ts`). */
+/** Where the web build emits the panel's static files, the voice clips (`apps/web/scripts/panel-build.ts`). */
 export const PANEL_ASSET_BASE = `${PANEL_PATH}/`;
 
 const HOSTS: ReadonlySet<string> = new Set([LINK_HOME.HOST, ...LINK_HOST_ALIASES]);

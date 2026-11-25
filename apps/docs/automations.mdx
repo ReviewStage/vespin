@@ -3,21 +3,21 @@ title: "Automations"
 description: "Start agents on a schedule, on GitHub and Sentry events, or from a webhook"
 ---
 
-An automation starts an agent with a prompt you write whenever its trigger fires. Each run gets its own task, assigned to you, and runs in the cloud as you: with your GitHub access, your model and plan, and your integrations.
+An automation starts an agent with a prompt you write whenever its trigger fires. Each run gets its own task, assigned to you, and runs in the cloud as you: with your model and plan, and your integrations. Its agent reaches GitHub through the workspace's GitHub App.
 
-Open **Automations** (<kbd>⇧⌘U</kbd>) and click **New automation**. To describe what you want in words instead, click **Create with an agent**, and an agent sets it up for you.
+Open **Automations** (<kbd>⇧⌘U</kbd>) and click **New automation**. To describe what you want in words instead, click **Create with an agent**, and an agent sets it up for you. An automation an agent sets up can start its runs on one of your [machines](/machines) instead of the cloud.
 
 ## Triggers
 
 ### Schedule
 
-Hourly, daily, weekdays, weekly, once at a date and time, or a custom five-field cron, in a time zone you pick. It runs at most every 15 minutes. A run more than an hour late is skipped, and the schedule moves on to its next time.
+Hourly, daily, weekdays, weekly, once at a date and time, or a custom five-field cron, in a time zone you pick. It runs at most every 15 minutes.
 
 ### GitHub event
 
 Pull request opened or updated, opened, labeled, or merged; issue opened or labeled; checks failed; commits pushed; or release published. The repository must be one Vespin's GitHub App can reach.
 
-By default, only events from people start a run. Turn on **From Vespin's agents** or **From other bots** to include those. A push by Vespin's own agents never starts a run.
+By default, only events from people start a run. Turn on **From Vespin's agents** or **From other bots** to include those.
 
 ### Webhook
 
@@ -39,10 +39,16 @@ New issues or triggered alerts, filtered by project, environment, and level. An 
 
 The agent gets your prompt, then a note saying which automation started it and why, then the event itself: the GitHub event, the webhook body, or the Sentry issue. No one watches the run as it goes, so write the prompt to say what done looks like.
 
-Under **Runs land in**, choose **New agent each run**, or **Same agent** to send every run to one agent as a new message.
+Under **Runs land in**, choose **New agent each run**, or **Same agent** to send every run to one agent, on one task, as a new message.
+
+With **New agent each run**, **Mark finished runs Done** archives a run's agents and moves its task to Done once each agent finished well, with nothing open in your Inbox and no pull request open. It's on for a new automation. A run whose agent failed or was stopped stays where it is.
+
+With the Vespin bot connected to Slack, **Send the result to me on Slack** DMs you each run's final message, or that it failed or was stopped. See [Slack](/slack).
 
 **Run now** starts a run at any time, even when the automation is off.
 
 ## Sharing
 
-A new automation belongs to you: only you can see and run it, and your workspace's owners and admins can turn it off or delete it. Share it with the workspace, and every member can see it, run it, and turn it off.
+A new automation belongs to you: only you can change and run it, and your workspace's owners and admins can see it, turn it off, or delete it. Share it with the workspace, and every member can see it, run it, and turn it off.
+
+When a member leaves the workspace, their automations turn off, and each shows a failed run to owners and admins. An owner or admin can **Take over** one, which makes it theirs and leaves it off until they turn it on.

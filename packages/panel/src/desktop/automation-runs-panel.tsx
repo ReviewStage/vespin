@@ -21,7 +21,6 @@ import {
   LIST_ROW_LEAD,
   LIST_ROW_META,
   List,
-  ListMotion,
   ListRow,
   RESIZE_EDGE_SIDE,
   ResizeEdge,
@@ -96,9 +95,6 @@ const SKELETON_RUNS = [
   { title: "44%", line: "66%" },
   { title: "52%", line: "72%" },
 ] as const;
-
-/** How wide a placeholder run's glyph stands: the row's own glyph size. */
-const SKELETON_GLYPH = actorMarkWidth(ACTOR_SIZE.ROW);
 
 /** How wide a placeholder run's time stands, as wide as a short "2h ago". */
 const SKELETON_TIME = "36px";
@@ -244,7 +240,10 @@ export function RunsSkeleton(): React.JSX.Element {
         {SKELETON_RUNS.map(({ title, line }) => (
           <ListRow
             key={title}
-            leading={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_GLYPH} />}
+            // Note that the placeholder's glyph is the row's own glyph size, read as it draws, since the module may load before the actor marks'.
+            leading={
+              <Skeleton kind={SKELETON_KIND.CIRCLE} width={actorMarkWidth(ACTOR_SIZE.ROW)} />
+            }
             title={<Skeleton width={title} />}
             description={<Skeleton width={line} />}
             meta={<Skeleton width={SKELETON_TIME} />}
@@ -277,8 +276,7 @@ interface RunsShown {
  * The runs under their heading, or none where the screen is headed Runs
  * already, scrolling by themselves: quiet blocks in
  * their place while they are first read, or that there are none yet, or
- * that they could not be read. A run that starts slides in at the top, and
- * the runs under it glide down (`ListMotion`).
+ * that they could not be read. A run that starts stands at the top.
  */
 function RunsBody({
   headed,
@@ -292,14 +290,10 @@ function RunsBody({
   onOpenSetup,
 }: RunsShown & { headed: boolean }): React.JSX.Element {
   const now = useMinute();
-  const body = useRef<HTMLDivElement | null>(null);
 
   return (
     <ScrollArea fade={SCROLL_FADE.START}>
-      <div
-        ref={body}
-        className="automation-runs-body flex min-h-full flex-col gap-control-gap p-ui-16"
-      >
+      <div className="automation-runs-body flex min-h-full flex-col gap-control-gap p-ui-16">
         {headed ? (
           <div className="automation-runs-head px-ui-2">
             <Text variant={TEXT_VARIANT.SECTION} tone={TEXT_TONE.MUTED} as={TEXT_ELEMENT.H2}>
@@ -322,22 +316,20 @@ function RunsBody({
         ) : runs.runs.length === 0 ? (
           <EmptyState icon={<ClockIcon />}>{NO_RUNS_LINE}</EmptyState>
         ) : (
-          <ListMotion root={body}>
-            <List label="Runs" moves>
-              {runs.runs.map((run) => (
-                <RunRow
-                  key={run.id}
-                  run={run}
-                  keyHolder={mine ? undefined : CREATOR}
-                  automationId={automationId}
-                  linked={run.id === linkedRun}
-                  now={now}
-                  onOpenAgent={onOpenAgent}
-                  onOpenAutomation={onOpenSetup}
-                />
-              ))}
-            </List>
-          </ListMotion>
+          <List label="Runs">
+            {runs.runs.map((run) => (
+              <RunRow
+                key={run.id}
+                run={run}
+                keyHolder={mine ? undefined : CREATOR}
+                automationId={automationId}
+                linked={run.id === linkedRun}
+                now={now}
+                onOpenAgent={onOpenAgent}
+                onOpenAutomation={onOpenSetup}
+              />
+            ))}
+          </List>
         )}
       </div>
     </ScrollArea>

@@ -353,7 +353,6 @@ body:has(.app-stage[data-capture="true"]) {
   --ui-duration-fast: 0s;
   --ui-duration-hover: 0s;
   --ui-duration-pane: 0s;
-  --ui-row-stagger: 0s;
   /* A late state, a hint and a delayed ring show at once, so a capture never
      waits on their delay. */
   --ui-late-delay: 0s;

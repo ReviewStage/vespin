@@ -12,10 +12,8 @@
  * banner's is, and the card has no ×: the reader says they have read it.
  *
  * Whether it stands is the caller's (`shown`), which `onDismiss` asks to
- * turn off. It comes and goes as the rows a setting reveals do (`Reveal`):
- * where its place is a reveal area (`RevealArea`), it rolls up as Got it is
- * pressed and what stands under it closes over it, and elsewhere it goes at
- * once. Where it stands, and the room around it, is its place's, and the
+ * turn off. It comes and goes at once, as the rows a setting reveals do
+ * (`Reveal`). Where it stands, and the room around it, is its place's, and the
  * banner already drops its presses under the words where a column is too
  * narrow for both. Its words are the app's own, so the screen recording
  * shows them (`ReplayUnmask`).

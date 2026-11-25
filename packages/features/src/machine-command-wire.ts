@@ -721,7 +721,7 @@ export const machineCommandModeSchema = EffectSchema.Literals(MACHINE_COMMAND_MO
 export const MACHINE_UNREACHED = {
   /** The machine has not listened lately: off, asleep, or not running the app. */
   OFFLINE: "offline",
-  /** The machine's owner does not let this task's agents use their machines. */
+  /** The machine's owner does not let this task's or Manager's agents use their machines. */
   NOT_LET: "not-let",
   /** The machine is set to Never, so it runs no terminal command. */
   COMMANDS_NEVER: "commands-never",

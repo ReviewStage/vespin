@@ -101,4 +101,5 @@ export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.MOVE_AGENTS]: "experiment-move-agents",
   [EXPERIMENT.CURSOR]: "experiment-cursor",
   [EXPERIMENT.MANAGERS]: "experiment-managers",
+  [EXPERIMENT.MANAGER_ACTS_FOR_ASKER]: "experiment-manager-acts-for-asker",
 } as const satisfies Record<Experiment, string>;

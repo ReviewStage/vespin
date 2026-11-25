@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- a regular window's tab roots: each tab's list column beside its detail under the workspace switcher, and New task, the compose button leading the detail's bar where the tab bar has no round +.
+// app-sidebar.tsx -- a regular window's tab roots: each tab's list column beside its detail under the workspace switcher, and New task, the compose button leading the detail's bar.
 
 import {
   AccountBarItem,
@@ -16,7 +16,7 @@ import { useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
-/** New task as the detail's bar offers it, under the compose glyph, as the tab bar's round + names it. */
+/** New task as a bar offers it, under the compose glyph. */
 const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
 
 /** The list a tab's split view stands beside its detail, and its bar: its title, its menu, and its search. */
@@ -40,21 +40,17 @@ type FirstColumn = SidebarVisibility & {
 };
 
 /**
- * Whether the tab bar stands its round + for New task: on an iPhone, the
- * iPhone Duo's either posture included, and never on an iPad, read by the
- * device's idiom rather than the window. Note that the + is never hidden as
- * the window crosses between compact and regular, because expo-router keys
- * the tabs' view on the names of the tabs that stand, so a + coming or going
- * would mount every tab again and drop its pages and drafts on each fold,
- * rotation, or resize.
+ * Whether the app runs on an iPad, read by the device's idiom rather than
+ * the window, as the tab bar's preferred placement is: a placement that
+ * followed the window would mount every tab again on each fold, rotation,
+ * or resize.
  */
-export const PLUS_TAB = !(Platform.OS === "ios" && Platform.isPad);
+export const PAD_IDIOM = Platform.OS === "ios" && Platform.isPad;
 
 /**
- * New task's compose: leading the detail's bar where the tab bar has no
- * round + (`PLUS_TAB`), as Mail's stands over its message, and ending the
- * Inbox's and Tasks' own bars in a compact window, as Messages' stands;
- * ⌘N opens it from the menu bar too.
+ * New task's compose: leading the detail's bar in a regular window, as
+ * Mail's stands over its message, and ending each tab root's own bar in a
+ * compact window, as Messages' stands; ⌘N opens it from the menu bar too.
  */
 export function useComposeAction(): BarAction {
   const router = useRouter();
@@ -63,14 +59,13 @@ export function useComposeAction(): BarAction {
 }
 
 /**
- * The detail's bar beside a regular window's list column, led on an iPad by
- * New task's compose, as Mail's stands over its message. The open Duo keeps
- * the tab rail's round + instead, so no window offers New task twice.
+ * The detail's bar beside a regular window's list column, led by New task's
+ * compose, as Mail's stands over its message.
  */
 export function useDetailColumnBar(bar: ColumnBar | undefined): ColumnBar {
   const compose = useComposeAction();
 
-  return PLUS_TAB ? { ...bar } : { ...bar, lead: [compose] };
+  return { ...bar, lead: [compose] };
 }
 
 /**

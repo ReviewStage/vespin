@@ -52,10 +52,18 @@ export const PRODUCT_EVENT = {
   MIRROR_READY: "mirror:ready",
   /** A launch drew its first Inbox rows, counted once a launch by how long that took from the app's start, on a rung. */
   APP_READY: "app:ready",
+  /** A launch whose Inbox had drawn no rows 10 s after the app's start, counted once a launch by the phases it had reached, each on a rung, and where each of its first reads stood. */
+  APP_NOT_READY: "app:not_ready",
+  /** A followed read's answer carried rows of one kind that this build's reading of them left out, since they did not decode, counted once a session for each kind by how many, on a rung. */
+  ROWS_DROPPED: "rows:dropped",
   /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
   REPLY_DRAWN: "reply:drawn",
-  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was busy before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew. */
+  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was held by long tasks (50 ms or more) before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew. */
   OPEN_DRAWN: "open:drawn",
+  /** A tab of the iOS app chosen for the first time since launch, Tasks, counted once a launch by how long from the tap that chose it the app took to hear the switch, to draw the tab's first frame, and to draw its rows, each on a rung of `productOpenMilliseconds`, and its kind: never what it shows. */
+  TAB_DRAWN: "tab:drawn",
+  /** A launch of the iOS app begun in front, counted once its first three minutes are over, or as it leaves the front before then: how many times the JS thread was held over 50 ms and for how long in all, and how many tasks outside the live list were read one by one and drawn and how long their drawing took, each on a rung, and whether the window ran its whole length; never what was read. */
+  LAUNCH_LOAD: "launch:load",
   /** A page an agent showed, opened on the iOS app, counted once an open by how long it took to read its HTML and to draw it, each on a rung of `productOpenMilliseconds`, whether its opener named its version or it waited on the task's pages for the newest, and whether it was the first page since launch. */
   PAGE_SHOWN: "page:shown",
   /** A picture an agent showed, drawn on the iOS app, counted once a read by how long it took from the page asking for it to its file in hand, on a rung of `productOpenMilliseconds`, whether it came from the phone's own copy or was read through the service, its kind, and its size on a rung. */
@@ -81,8 +89,11 @@ export const PRODUCT_SURFACE_EVENT = {
   SEARCH_OPEN: PRODUCT_EVENT.SEARCH_OPEN,
   SURFACE_OPEN: PRODUCT_EVENT.SURFACE_OPEN,
   APP_READY: PRODUCT_EVENT.APP_READY,
+  APP_NOT_READY: PRODUCT_EVENT.APP_NOT_READY,
   REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
   OPEN_DRAWN: PRODUCT_EVENT.OPEN_DRAWN,
+  TAB_DRAWN: PRODUCT_EVENT.TAB_DRAWN,
+  LAUNCH_LOAD: PRODUCT_EVENT.LAUNCH_LOAD,
   PAGE_SHOWN: PRODUCT_EVENT.PAGE_SHOWN,
   PICTURE_SHOWN: PRODUCT_EVENT.PICTURE_SHOWN,
 } as const;
@@ -133,9 +144,14 @@ export const PRODUCT_EVENT_PROPERTY = {
   SCREENS_SECONDS: "screens_seconds",
   ACTIVE_SECONDS: "active_seconds",
   DELIVERIES: "deliveries",
+  ROW_KIND: "row_kind",
+  DROPPED: "dropped",
   APP_BUILD: "app_build",
   FIRST_ROWS: "first_rows",
   READY_AFTER: "ready_after",
+  INBOX_READ: "inbox_read",
+  TASKS_READ: "tasks_read",
+  WORKSPACES_READ: "workspaces_read",
   START_MS: "start_ms",
   STAND_MS: "stand_ms",
   OPEN_ORDER: "open_order",
@@ -147,6 +163,12 @@ export const PRODUCT_EVENT_PROPERTY = {
   PICTURE_FROM: "picture_from",
   PICTURE_KIND: "picture_kind",
   PICTURE_BYTES: "picture_bytes",
+  LAUNCHED_IN: "launched_in",
+  LONG_TASKS: "long_tasks",
+  LONG_TASK_MS: "long_task_ms",
+  COLD_READS: "cold_reads",
+  COLD_READ_MS: "cold_read_ms",
+  LOAD_WINDOW: "load_window",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -385,6 +407,7 @@ export const PRODUCT_EXPERIMENT = {
   MOVE_AGENTS: "move-agents",
   CURSOR: "cursor",
   MANAGERS: "managers",
+  MANAGER_ACTS_FOR_ASKER: "manager-acts-for-asker",
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   STARTER_TASKS: "starter-tasks",
 } as const;
@@ -524,6 +547,42 @@ export const PRODUCT_READY_AFTER = {
 
 export type ProductReadyAfter = (typeof PRODUCT_READY_AFTER)[keyof typeof PRODUCT_READY_AFTER];
 
+/**
+ * Where a launch began: in front, as a tap opens it, or in the background,
+ * where the system woke the app with nothing on screen, as a push's wake
+ * does on a phone. Note that a launch counted in the background shows its
+ * first screen only once it is brought forward, so the time from its count
+ * to that screen is time spent away, never a launch's wait.
+ */
+export const PRODUCT_LAUNCHED_IN = {
+  FRONT: "front",
+  BACKGROUND: "background",
+} as const;
+
+export type ProductLaunchedIn = (typeof PRODUCT_LAUNCHED_IN)[keyof typeof PRODUCT_LAUNCHED_IN];
+
+/** Where one of a launch's first reads stood: not yet drawn, drawn from the rows the phone kept, the service's answer drawn, or failed. */
+export const PRODUCT_READ_STATE = {
+  OUT: "out",
+  KEPT: "kept",
+  ANSWERED: "answered",
+  FAILED: "failed",
+} as const;
+
+export type ProductReadState = (typeof PRODUCT_READ_STATE)[keyof typeof PRODUCT_READ_STATE];
+
+/** Which rows of a followed read a count of dropped rows names: the task list's tasks or agents, or one part of the account's Inbox items read. */
+export const PRODUCT_ROW_KIND = {
+  TASK_LIST_TASKS: "task_list_tasks",
+  TASK_LIST_AGENTS: "task_list_agents",
+  INBOX_STAMPS: "inbox_stamps",
+  INBOX_ITEMS: "inbox_items",
+  INBOX_MESSAGES: "inbox_messages",
+  INBOX_FILES: "inbox_files",
+} as const;
+
+export type ProductRowKind = (typeof PRODUCT_ROW_KIND)[keyof typeof PRODUCT_ROW_KIND];
+
 const PRODUCT_LAUNCH_LADDER: readonly ProductLaunchSeconds[] = Object.values(
   PRODUCT_LAUNCH_SECONDS,
 ).sort((left, right) => right - left);
@@ -623,6 +682,72 @@ export function productOpenMilliseconds(milliseconds: number): ProductOpenMillis
 
   return PRODUCT_OPEN_LADDER.find((rung) => milliseconds >= rung) ?? PRODUCT_OPEN_MS.UNDER_100;
 }
+
+/**
+ * The rungs a launch's load counts travel on (`launch:load`): how many times
+ * its JS thread was held, or how many tasks it read one by one, in its first
+ * minutes. Note that these reach past the shared ladder's top
+ * (`productSessionCountBucket`), since a launch that froze holds its thread
+ * hundreds of times where a smooth one holds it a few, and a ladder that
+ * stopped at 25 would tell the two apart from neither side.
+ */
+const PRODUCT_LOAD_COUNT = {
+  NONE: 0,
+  ONE: 1,
+  FEW: 3,
+  TENS: 10,
+  THIRTY: 30,
+  HUNDRED: 100,
+  HUNDREDS: 300,
+} as const;
+
+export type ProductLoadCount = (typeof PRODUCT_LOAD_COUNT)[keyof typeof PRODUCT_LOAD_COUNT];
+
+const PRODUCT_LOAD_COUNT_LADDER: readonly ProductLoadCount[] = Object.values(
+  PRODUCT_LOAD_COUNT,
+).sort((left, right) => right - left);
+
+/** The highest rung a launch's load count reaches; anything under one, or a count that is no number, is none. */
+export function productLoadCount(count: number): ProductLoadCount {
+  if (!Number.isFinite(count)) return PRODUCT_LOAD_COUNT.NONE;
+
+  return PRODUCT_LOAD_COUNT_LADDER.find((rung) => count >= rung) ?? PRODUCT_LOAD_COUNT.NONE;
+}
+
+/** The rungs a launch's held time travels on, in milliseconds summed over its first minutes (`launch:load`), each the least that reaches it: from a quarter second to two minutes, the range between a launch nobody felt and one that took no touch for minutes. */
+const PRODUCT_LOAD_MS = {
+  UNDER_250: 0,
+  MS_250: 250,
+  MS_500: 500,
+  S_1: 1000,
+  S_2: 2000,
+  S_5: 5000,
+  S_10: 10_000,
+  S_30: 30_000,
+  S_60: 60_000,
+  S_120: 120_000,
+} as const;
+
+export type ProductLoadMilliseconds = (typeof PRODUCT_LOAD_MS)[keyof typeof PRODUCT_LOAD_MS];
+
+const PRODUCT_LOAD_MS_LADDER: readonly ProductLoadMilliseconds[] = Object.values(
+  PRODUCT_LOAD_MS,
+).sort((left, right) => right - left);
+
+/** The highest rung a launch's held time in milliseconds reaches; anything under the first rung, or a time that is no number, is the first. */
+export function productLoadMilliseconds(milliseconds: number): ProductLoadMilliseconds {
+  if (!Number.isFinite(milliseconds)) return PRODUCT_LOAD_MS.UNDER_250;
+
+  return PRODUCT_LOAD_MS_LADDER.find((rung) => milliseconds >= rung) ?? PRODUCT_LOAD_MS.UNDER_250;
+}
+
+/** Whether a launch's load was counted over its whole window, or cut short as the app left the front before the window ended. */
+export const PRODUCT_LOAD_WINDOW = {
+  WHOLE: "whole",
+  CUT_SHORT: "cut_short",
+} as const;
+
+export type ProductLoadWindow = (typeof PRODUCT_LOAD_WINDOW)[keyof typeof PRODUCT_LOAD_WINDOW];
 
 /** Whether a page pushed open was the first of its kind since the app launched, which draws kinds it has not drawn before, or a later one. */
 export const PRODUCT_OPEN_ORDER = {
@@ -727,9 +852,15 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.DELIVERIES]: ProductSessionCountBucket;
+  [PRODUCT_EVENT_PROPERTY.ROW_KIND]: ProductRowKind;
+  [PRODUCT_EVENT_PROPERTY.DROPPED]: ProductSessionCountBucket;
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: ProductReadyAfter;
+  [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: ProductLaunchedIn;
+  [PRODUCT_EVENT_PROPERTY.INBOX_READ]: ProductReadState;
+  [PRODUCT_EVENT_PROPERTY.TASKS_READ]: ProductReadState;
+  [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: ProductReadState;
   [PRODUCT_EVENT_PROPERTY.START_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.STAND_MS]: ProductOpenMilliseconds;
   [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: ProductOpenOrder;
@@ -741,6 +872,11 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.PICTURE_FROM]: ProductPictureFrom;
   [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: ProductPictureKind;
   [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: ProductPictureBytes;
+  [PRODUCT_EVENT_PROPERTY.LONG_TASKS]: ProductLoadCount;
+  [PRODUCT_EVENT_PROPERTY.LONG_TASK_MS]: ProductLoadMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.COLD_READS]: ProductLoadCount;
+  [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: ProductLoadMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: ProductLoadWindow;
 }
 
 /**
@@ -772,7 +908,12 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.DELIVERIES
+  | typeof PRODUCT_EVENT_PROPERTY.DROPPED
   | typeof PRODUCT_EVENT_PROPERTY.APP_BUILD
+  | typeof PRODUCT_EVENT_PROPERTY.LONG_TASKS
+  | typeof PRODUCT_EVENT_PROPERTY.LONG_TASK_MS
+  | typeof PRODUCT_EVENT_PROPERTY.COLD_READS
+  | typeof PRODUCT_EVENT_PROPERTY.COLD_READ_MS
 >;
 
 /** Every value each enumerable property may ever hold. */
@@ -794,12 +935,18 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
+  [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: Object.values(PRODUCT_LAUNCHED_IN),
+  [PRODUCT_EVENT_PROPERTY.INBOX_READ]: Object.values(PRODUCT_READ_STATE),
+  [PRODUCT_EVENT_PROPERTY.TASKS_READ]: Object.values(PRODUCT_READ_STATE),
+  [PRODUCT_EVENT_PROPERTY.WORKSPACES_READ]: Object.values(PRODUCT_READ_STATE),
+  [PRODUCT_EVENT_PROPERTY.ROW_KIND]: Object.values(PRODUCT_ROW_KIND),
   [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: Object.values(PRODUCT_OPEN_ORDER),
   [PRODUCT_EVENT_PROPERTY.PAGE_DATA]: Object.values(PRODUCT_PAGE_DATA),
   [PRODUCT_EVENT_PROPERTY.PAGE_VERSION]: Object.values(PRODUCT_PAGE_VERSION),
   [PRODUCT_EVENT_PROPERTY.PICTURE_FROM]: Object.values(PRODUCT_PICTURE_FROM),
   [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: Object.values(PRODUCT_PICTURE_KIND),
   [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: Object.values(PRODUCT_PICTURE_BYTES),
+  [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: Object.values(PRODUCT_LOAD_WINDOW),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -845,12 +992,32 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS,
   ],
   [PRODUCT_EVENT.APP_READY]: [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS],
+  [PRODUCT_EVENT.APP_NOT_READY]: [
+    PRODUCT_EVENT_PROPERTY.READY_AFTER,
+    PRODUCT_EVENT_PROPERTY.INBOX_READ,
+    PRODUCT_EVENT_PROPERTY.TASKS_READ,
+    PRODUCT_EVENT_PROPERTY.WORKSPACES_READ,
+  ],
+  [PRODUCT_EVENT.ROWS_DROPPED]: [PRODUCT_EVENT_PROPERTY.ROW_KIND, PRODUCT_EVENT_PROPERTY.DROPPED],
   [PRODUCT_EVENT.REPLY_DRAWN]: [PRODUCT_EVENT_PROPERTY.DRAWN_MS, PRODUCT_EVENT_PROPERTY.REPLY_KIND],
   [PRODUCT_EVENT.OPEN_DRAWN]: [
     PRODUCT_EVENT_PROPERTY.SURFACE,
     PRODUCT_EVENT_PROPERTY.START_MS,
     PRODUCT_EVENT_PROPERTY.STAND_MS,
     PRODUCT_EVENT_PROPERTY.OPEN_ORDER,
+  ],
+  [PRODUCT_EVENT.TAB_DRAWN]: [
+    PRODUCT_EVENT_PROPERTY.SURFACE,
+    PRODUCT_EVENT_PROPERTY.BUSY_MS,
+    PRODUCT_EVENT_PROPERTY.START_MS,
+    PRODUCT_EVENT_PROPERTY.STAND_MS,
+  ],
+  [PRODUCT_EVENT.LAUNCH_LOAD]: [
+    PRODUCT_EVENT_PROPERTY.LONG_TASKS,
+    PRODUCT_EVENT_PROPERTY.LONG_TASK_MS,
+    PRODUCT_EVENT_PROPERTY.COLD_READS,
+    PRODUCT_EVENT_PROPERTY.COLD_READ_MS,
+    PRODUCT_EVENT_PROPERTY.LOAD_WINDOW,
   ],
   [PRODUCT_EVENT.PAGE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.READ_MS,
@@ -873,6 +1040,7 @@ const PRODUCT_EVENT_PROPERTIES = {
  * phone has updated.
  */
 const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
+  [PRODUCT_EVENT.APP_LAUNCH]: [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN],
   [PRODUCT_EVENT.APP_READY]: [
     PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
     PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS,
@@ -887,11 +1055,25 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
     PRODUCT_EVENT_PROPERTY.READY_AFTER,
   ],
+  [PRODUCT_EVENT.APP_NOT_READY]: [
+    PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
+    PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS,
+    PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS,
+    PRODUCT_EVENT_PROPERTY.LOCAL_SECONDS,
+    PRODUCT_EVENT_PROPERTY.STARTED_SECONDS,
+    PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS,
+    PRODUCT_EVENT_PROPERTY.INBOX_SECONDS,
+    PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS,
+    PRODUCT_EVENT_PROPERTY.DELIVERIES,
+    PRODUCT_EVENT_PROPERTY.APP_BUILD,
+  ],
   [PRODUCT_EVENT.OPEN_DRAWN]: [
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
     PRODUCT_EVENT_PROPERTY.BUSY_MS,
     PRODUCT_EVENT_PROPERTY.PAGE_DATA,
   ],
+  [PRODUCT_EVENT.TAB_DRAWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
+  [PRODUCT_EVENT.LAUNCH_LOAD]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PAGE_SHOWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PICTURE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.PICTURE_BYTES,
@@ -1039,6 +1221,18 @@ function openReader(value: UnparsedWireValue): ProductOpenMilliseconds | undefin
   return isProductOpenMilliseconds(value) ? value : undefined;
 }
 
+const isProductLoadCount = Schema.is(Schema.Literals(Object.values(PRODUCT_LOAD_COUNT)));
+
+function loadCountReader(value: UnparsedWireValue): ProductLoadCount | undefined {
+  return isProductLoadCount(value) ? value : undefined;
+}
+
+const isProductLoadMilliseconds = Schema.is(Schema.Literals(Object.values(PRODUCT_LOAD_MS)));
+
+function loadMillisecondsReader(value: UnparsedWireValue): ProductLoadMilliseconds | undefined {
+  return isProductLoadMilliseconds(value) ? value : undefined;
+}
+
 /** A build number as `CFBundleVersion` holds one: a whole number of up to six digits and nothing else, which has no room for a word. */
 const BUILD_NUMBER_PATTERN = /^[1-9][0-9]{0,5}$/;
 
@@ -1105,7 +1299,12 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.SCREENS_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.ACTIVE_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.DELIVERIES]: bucketReader,
+  [PRODUCT_EVENT_PROPERTY.DROPPED]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: buildNumberReader,
+  [PRODUCT_EVENT_PROPERTY.LONG_TASKS]: loadCountReader,
+  [PRODUCT_EVENT_PROPERTY.LONG_TASK_MS]: loadMillisecondsReader,
+  [PRODUCT_EVENT_PROPERTY.COLD_READS]: loadCountReader,
+  [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: loadMillisecondsReader,
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: experimentScopeReader,
 };
 
@@ -1256,6 +1455,27 @@ export function productEventBuildFromWire(value: UnparsedWireValue): ProductEven
   if (!isRecord(value)) return {};
 
   return Option.getOrElse(decodeProductEventBuild(value.build), () => ({}));
+}
+
+/**
+ * The batch field naming the install it came from: a random UUID one Mac
+ * app, browser, or iPhone made for itself and keeps, and that the service
+ * files the batch's counts under in place of the account.
+ */
+export const PRODUCT_EVENT_INSTALL_ID_FIELD = "installId";
+
+/** A UUID in its canonical lowercase form, so the field can carry nothing else. */
+const INSTALL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+
+/**
+ * Reads a batch's install id, which is never a reason to refuse it: a build
+ * from before the field sends none, and anything but a UUID reads as none.
+ */
+export function productEventInstallIdFromWire(value: UnparsedWireValue): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const installId = value[PRODUCT_EVENT_INSTALL_ID_FIELD];
+
+  return isWireString(installId) && INSTALL_ID_PATTERN.test(installId) ? installId : undefined;
 }
 
 /** What every emitter is handed: a name, and exactly that name's properties. */

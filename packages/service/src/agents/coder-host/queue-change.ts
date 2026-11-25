@@ -98,7 +98,7 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
 
       if (outcome === QUEUE_OUTCOME.FULL) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 
-      if (outcome === QUEUE_OUTCOME.QUEUED) yield* followAsMessaged(userId, agent.taskId);
+      if (outcome === QUEUE_OUTCOME.QUEUED) yield* followAsMessaged(userId, agent);
 
       return;
     }

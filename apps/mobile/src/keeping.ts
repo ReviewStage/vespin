@@ -8,7 +8,11 @@
  * address is written under the app's caches before Photos or the share
  * sheet takes it, named for what it shows; one the app already wrote to a
  * file, as an agent's are, a recording, and a file are taken as the file the
- * app wrote (`cached-media.ts`). Quick Look
+ * app wrote (`cached-media.ts`). A recording the system's player plays from
+ * the service's address is downloaded under the caches as it is kept, with
+ * the header its read carries, and deleted once Photos or the share sheet is
+ * done with it; the header goes to that download alone, never to a log or a
+ * notice, and a download that failed says so in the app's own words. Quick Look
  * reads a file too, so a picture is written the same way before it opens,
  * and one drawn from a web address is fetched under the caches first, once,
  * so it opens again from that file; Quick Look's own share button then
@@ -22,6 +26,7 @@
  */
 
 import type { DraftCopy } from "@repo/features/draft-text";
+import { sniffImageType } from "@repo/features/image-signature";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   BUZZ,
@@ -33,12 +38,15 @@ import {
   type Keeping,
   type Kept,
   NOTICE_KIND,
+  pictureExtension,
   useFailureNotices,
   type ViewedPicture,
 } from "@repo/ui-native";
+import { Predicate } from "effect";
 import { setImageAsync, setStringAsync } from "expo-clipboard";
-import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
-import { Directory, File, Paths } from "expo-file-system";
+import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from "expo-crypto";
+import { Directory, File, FileMode, Paths } from "expo-file-system";
+import { Image } from "expo-image";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { useMemo } from "react";
 import { Share } from "react-native";
@@ -84,12 +92,46 @@ const WEB_ADDRESS = /^https?:\/\//iu;
 /** The scheme of a file the app already wrote, which Quick Look reads as it is. */
 const FILE_ADDRESS = "file://";
 
+/** The folder prefix a picture the image loader keeps stands under once named for what it is, as Photos and the share sheet read it. */
+const LOADER_PREFIX = "loaded";
+
+/** How many of a picture's first bytes say what kind of picture it is. */
+const SIGNATURE_BYTES = 16;
+
+/** The folder prefix a recording downloaded to be saved or shared stands under in the app's caches, until it is let go. */
+const DOWNLOADED_PREFIX = "downloaded";
+
+/** The name a recording that says nothing of itself is written under. */
+const RECORDING_NAME = "Recording";
+
+/** The extension a recording the system's player plays is written under, which Photos takes, and the one it cannot play under. */
+const RECORDING_EXTENSION = { PLAYS: "mp4", ELSE: "webm" } as const;
+
+/** A file's name's last extension, taken off a recording's name before its own is put on. */
+const NAME_EXTENSION = /\.[^./]+$/u;
+
+/** What a recording that could not be downloaded to be kept says, in the app's own words, never the download's. */
+const RECORDING_UNREAD = "The recording could not be downloaded.";
+
+/** A recording kept, as it is held. */
+type KeptVideo = Extract<Kept, { readonly kind: typeof KEPT_KIND.VIDEO }>;
+
+/** The service's address of a recording the player plays from, with the header its read carries. */
+type VideoAddress = Exclude<KeptVideo["source"], string>;
+
 /** Photos refused the app's add-only access. */
 class PhotosRefused extends Error {}
 
+/** A recording could not be downloaded to be kept; it carries no word of the request. */
+class RecordingUnread extends Error {
+  constructor() {
+    super(RECORDING_UNREAD);
+  }
+}
+
 /** A picture's bytes as its `data:` address holds them, which every act on a picture needs. */
-function picturesBytes(kept: Kept) {
-  const held = heldPicture(kept.source);
+function picturesBytes(source: string) {
+  const held = heldPicture(source);
 
   if (held === undefined) throw new Error("A picture with no bytes held was kept.");
 
@@ -104,8 +146,14 @@ function picturesBytes(kept: Kept) {
  * written rather than a second write of it.
  */
 async function fileOf(kept: Kept): Promise<string> {
-  if (kept.kind !== KEPT_KIND.PICTURE || kept.source.startsWith(FILE_ADDRESS)) return kept.source;
-  const held = picturesBytes(kept);
+  if (kept.kind !== KEPT_KIND.PICTURE) {
+    if (Predicate.isString(kept.source)) return kept.source;
+
+    throw new Error("A recording held by its address has no file of its own.");
+  }
+
+  if (kept.source.startsWith(FILE_ADDRESS)) return kept.source;
+  const held = picturesBytes(kept.source);
   const name = kept.name.trim().slice(0, NAME_MAX).trim() || PICTURE_NAME;
   const digest = await digestStringAsync(CryptoDigestAlgorithm.SHA256, held.base64);
 
@@ -118,14 +166,62 @@ async function copied(kept: Kept): Promise<void> {
     // Note that a picture the app wrote to a file is read for the copy alone, so its bytes stand in memory only while the pasteboard takes them.
     const bytes = kept.source.startsWith(FILE_ADDRESS)
       ? await new File(kept.source).base64()
-      : picturesBytes(kept).base64;
+      : picturesBytes(kept.source).base64;
 
     await setImageAsync(bytes);
 
     return;
   }
 
-  await setStringAsync(await new File(kept.source).text());
+  await setStringAsync(await new File(await fileOf(kept)).text());
+}
+
+/** The address a recording is held by, where it is held by one rather than a file. */
+function videoAddressOf(kept: Kept): VideoAddress | undefined {
+  return kept.kind === KEPT_KIND.VIDEO && !Predicate.isString(kept.source)
+    ? kept.source
+    : undefined;
+}
+
+/** The name a downloaded recording is written under: what it is called, with the extension of what it is. */
+function recordingName(kept: KeptVideo): string {
+  const name = kept.name.trim().replace(NAME_EXTENSION, "").replaceAll("/", "-");
+  const extension = kept.plays === true ? RECORDING_EXTENSION.PLAYS : RECORDING_EXTENSION.ELSE;
+
+  return `${name.slice(0, NAME_MAX).trim() || RECORDING_NAME}.${extension}`;
+}
+
+/**
+ * Runs `work` on the file a kept thing is: the one the app holds, or, for a
+ * recording held by the service's address, one downloaded now under the
+ * caches with the header its read carries and deleted once `work` is done.
+ * Note that a download that failed throws the app's own words alone, since
+ * the download's error may name the request it made.
+ */
+async function withFile(kept: Kept, work: (file: string) => Promise<void>): Promise<void> {
+  const address = videoAddressOf(kept);
+
+  if (address === undefined || kept.kind !== KEPT_KIND.VIDEO) {
+    await work(await fileOf(kept));
+
+    return;
+  }
+
+  const folder = new Directory(Paths.cache, `${DOWNLOADED_PREFIX}-${randomUUID()}`);
+
+  try {
+    folder.create({ intermediates: true, idempotent: true });
+    const file = new File(folder, recordingName(kept));
+
+    await File.downloadFileAsync(address.uri, file, { headers: { ...address.headers } }).catch(
+      () => {
+        throw new RecordingUnread();
+      },
+    );
+    await work(file.uri);
+  } finally {
+    if (folder.exists) folder.delete();
+  }
 }
 
 /**
@@ -148,12 +244,17 @@ async function savedToPhotos(kept: Kept): Promise<void> {
   const access = await requestPermissionsAsync(true);
 
   if (!access.granted) throw new PhotosRefused();
-  await Asset.create(await fileOf(kept));
+  await withFile(kept, async (file) => {
+    await Asset.create(file);
+  });
 }
 
 /** Opens the system's share sheet on the file, which also saves it to Files or opens it in another app. */
 async function shared(kept: Kept): Promise<void> {
-  await Share.share({ url: await fileOf(kept), title: kept.name });
+  // Note that the share sheet answers once it is let go, so a downloaded recording stands until the app it went to has taken it.
+  await withFile(kept, async (file) => {
+    await Share.share({ url: file, title: kept.name });
+  });
 }
 
 /** Each fetch of a web picture still under way, by its address, so a second press waits on the first rather than fetching it again. */
@@ -191,9 +292,7 @@ function fetchedPicture(source: string): Promise<string> {
 
 /** The file Quick Look reads: a picture written from its bytes or fetched from its address, or the file a recording or a file already is. */
 function previewFile(kept: Kept): Promise<string> {
-  if (kept.kind !== KEPT_KIND.PICTURE || kept.source.startsWith(FILE_ADDRESS)) {
-    return Promise.resolve(kept.source);
-  }
+  if (kept.kind !== KEPT_KIND.PICTURE || kept.source.startsWith(FILE_ADDRESS)) return fileOf(kept);
 
   return WEB_ADDRESS.test(kept.source) ? fetchedPicture(kept.source) : fileOf(kept);
 }
@@ -218,9 +317,13 @@ async function opened(kept: Kept): Promise<void> {
  * the same of UIKit and shares it where refused too.
  */
 async function viewed(pictures: readonly ViewedPicture[], index: number): Promise<void> {
+  const files = await Promise.all(
+    pictures.map((picture) => loaderPicture(picture.source, picture.title)),
+  );
+
   const shown = await pictureViewerModule.show(
-    pictures.map((picture) => ({
-      uri: picture.source,
+    pictures.map((picture, at) => ({
+      uri: files[at] ?? picture.source,
       ...picture.place,
       title: picture.title,
       subtitle: picture.subtitle ?? null,
@@ -231,8 +334,53 @@ async function viewed(pictures: readonly ViewedPicture[], index: number): Promis
   const pressed = pictures[index];
 
   if (!shown && pressed !== undefined) {
-    await opened({ kind: KEPT_KIND.PICTURE, source: pressed.source, name: pressed.title });
+    await opened({
+      kind: KEPT_KIND.PICTURE,
+      source: files[index] ?? pressed.source,
+      name: pressed.title,
+    });
   }
+}
+
+/**
+ * The file a picture drawn from a web address is read from: the one the
+ * image loader keeps for it, as every picture of the service's is drawn
+ * (`use-pictures.tsx`), copied once under a name of what it shows and
+ * its kind's extension, since the loader's own file is named by a digest
+ * with none, which Photos and the share sheet read no kind from; the address
+ * as it is where the loader keeps none, as for any other address.
+ */
+async function loaderPicture(source: string, name: string): Promise<string> {
+  if (!WEB_ADDRESS.test(source)) return source;
+  const path = await Image.getCachePathAsync(source);
+
+  if (path === null) return source;
+  const cached = new File(`${FILE_ADDRESS}${path}`);
+  const handle = cached.open(FileMode.ReadOnly);
+  const head = await handle.readBytes(SIGNATURE_BYTES).finally(() => handle.close());
+  const type = sniffImageType(head);
+  const extension = type === undefined ? undefined : pictureExtension(type);
+
+  if (extension === undefined) return cached.uri;
+  const digest = await digestStringAsync(CryptoDigestAlgorithm.SHA256, source);
+  const folder = new Directory(Paths.cache, `${LOADER_PREFIX}-${digest}`);
+  folder.create({ intermediates: true, idempotent: true });
+
+  const named = new File(
+    folder,
+    `${name.trim().slice(0, NAME_MAX).trim() || PICTURE_NAME}.${extension}`,
+  );
+
+  if (!named.exists) cached.copy(named);
+
+  return named.uri;
+}
+
+/** What is held, a picture drawn from a web address read as the file the image loader keeps for it. */
+async function loaderKept(kept: Kept): Promise<Kept> {
+  if (kept.kind !== KEPT_KIND.PICTURE) return kept;
+
+  return { ...kept, source: await loaderPicture(kept.source, kept.name) };
 }
 
 /** Each act's work. */
@@ -271,10 +419,10 @@ export function useKeeping(): Keeping {
     };
 
     return {
-      open: (kept) => run(() => opened(kept), OPEN_FAILED, false),
+      open: (kept) => run(() => loaderKept(kept).then(opened), OPEN_FAILED, false),
       view: (pictures, index) => run(() => viewed(pictures, index), OPEN_FAILED, false),
       keep: (kept, act) =>
-        run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
+        run(() => loaderKept(kept).then(KEEP_WORK[act]), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>
         run(() => setStringAsync(words).then(() => undefined), KEEP_FAILED[KEEP_ACT.COPY], true),
       shareWords: (words) =>

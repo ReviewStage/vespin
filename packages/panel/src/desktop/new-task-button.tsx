@@ -4,7 +4,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BUTTON_SIZE, ComposeIcon, IconButton, PlusIcon, Tooltip } from "@repo/ui";
 import { memo } from "react";
 import { useSteadyDoor } from "../steady-door.js";
-import type { QuickAddInto } from "../tasks/use-new-task.js";
+import { type QuickAddInto, useNewTaskShown } from "../tasks/use-new-task.js";
 import type { SidebarTasksControl } from "./sidebar-open.js";
 
 /**
@@ -35,19 +35,23 @@ export function groupStanding(head: TasksGroupHead): TaskStanding | undefined {
  * dialog over whatever stands, or Home's own composer on Home, the way a
  * chat app keeps its compose button in reach; `onNewTask` asks for it where
  * a press must first leave a place, else the tasks' own door is pressed.
- * Where told, it is the place shown while New task's words are in sight.
- * Pressed by nothing while no one is signed in.
+ * It is the place shown while New task's words are in sight: its card open,
+ * or, where told, Home's composer. Pressed by nothing while no one is
+ * signed in. Note that it reads whether the card stands itself
+ * (`useNewTaskShown`), so the card opening draws it alone.
  */
 export function NewTaskButton({
   tasks,
-  current = false,
+  home = false,
   onNewTask = tasks.newTask.onOpen,
 }: {
   tasks: SidebarTasksControl;
-  /** Whether New task's words are in sight: its card open, or Home shown. */
-  current?: boolean;
+  /** Whether Home's composer is in sight, New task's words standing there. */
+  home?: boolean;
   onNewTask?: () => void;
 }): React.JSX.Element {
+  const current = useNewTaskShown().open || home;
+
   return (
     <Tooltip label="New task" command={APP_COMMAND.NEW_TASK}>
       <IconButton

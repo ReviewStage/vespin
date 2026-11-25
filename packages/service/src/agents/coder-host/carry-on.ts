@@ -19,14 +19,23 @@
  * and the `carry_on` channel), which opens a fresh turn through the one
  * path a message takes, so the sweep's reap of the cut-off turn always
  * lands first and nothing fights it; a steer into a turn still running,
- * as a lost connection's carry-on is, takes the same line.
+ * as a lost connection's carry-on is, takes the same line. The lines sent
+ * to the cut-off turn that its runner never took (a member's words, another
+ * agent's message, a thread's answer) follow the carry-on into its turn, in
+ * the order they were written, and its words say they follow: the turn the
+ * carry-on opens is newer than the failed one, so the next send's resend of
+ * lost lines (`steer.ts`'s `resendLostLines`) would never find them.
  *
  * The decision (`carryOnDecision`) resumes only where every one of these
  * holds: the agent is not archived; the turn was cut off, not failed for a
  * reason of its own (`cutOffReasonOf`); it had started, since a turn still
- * queued lost no work and its line is resent with the next message; the
- * line that opened it was not itself a carry-on, so a Mac that dies at
- * every resume carries on once and then fails as before; and it was
+ * queued lost no work and its line is resent with the next message; fewer
+ * than `CARRY_ON.LIMIT` carry-ons stand since the agent last answered
+ * (`carryOnsUnanswered`), a carry-on still awaiting a turn among them, so a
+ * runner that dies at every resume, even a launch that ends before it takes
+ * any line, as one that fails on a line an earlier launch left it does, is
+ * carried on a few times and then fails as before, while an agent that
+ * works between its runner's losses is carried on every time; and it was
  * settled within the window (`CARRY_ON.WINDOW`): an hour covers a reboot,
  * an update, and a laptop closed over a break, with the sweep's own lag
  * inside it, while a Mac back a day later would revive every agent it ran
@@ -38,6 +47,7 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { carryOnsUnanswered } from "@repo/database/models/agent-carry-ons";
 import { agentQueueNow, pauseAgentQueue } from "@repo/database/models/agent-queue-store";
 import {
   type Agent,
@@ -52,7 +62,7 @@ import {
   ownDeviceHost,
 } from "@repo/database/models/device-agent-store";
 import { hostLastSeen } from "@repo/database/models/device-store";
-import { type LostLine, storeWriter, turnOpeningLine } from "@repo/database/models/writer";
+import { cutOffTurnLines, storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
@@ -65,10 +75,11 @@ import type * as HttpClient from "effect/http/HttpClient";
 import { MESSAGE_CHANNEL, TURN_FAILURE, TURN_STATUS } from "../../core.js";
 import type { GitHubApp } from "../../github/github-app.js";
 import { afterResponse } from "../../http/after-response.js";
+import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import { agentLogIds } from "./agent-log.js";
 import type { QueueSessions } from "./runtime-sessions.js";
 import { hostLostOf } from "./status.js";
-import { STEER_DELIVERY, steerAgentWritten } from "./steer.js";
+import { resendLostLines, STEER_DELIVERY, steerAgentWritten } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
 /** The services a carry-on's send runs over: the store, and what a message to an agent reaches (`steerAgentWritten`). */
@@ -77,6 +88,8 @@ export type CarryOnServices = DatabaseServices | HttpClient.HttpClient | GitHubA
 const CARRY_ON = {
   /** How long after its settle a cut-off turn is still carried on, as the header says. */
   WINDOW: Duration.hours(1),
+  /** How many carry-ons in a row the agent may answer nothing after before a cut-off turn is left failed, as the header says. */
+  LIMIT: 3,
 } as const;
 
 /** What comes after a cut-off turn: a carry-on sent, the queued message handed on in its place, either once its Mac is back, or nothing. */
@@ -104,8 +117,8 @@ export interface CarryOnInput {
   readonly agent: Pick<Agent, "archivedAt" | "machine">;
   /** The agent's newest turn; none before its first. */
   readonly turn: CarryOnTurn | undefined;
-  /** The channel the line that opened the turn names; none where no line opened it, or it names none. */
-  readonly openerChannel: string | undefined;
+  /** How many carry-on lines stand since the agent last answered (`carryOnsUnanswered`). */
+  readonly unanswered: number;
   /** Whether a message stands queued behind the turn. */
   readonly queued: boolean;
   /** Whether the agent's Mac is away past its lease, as its row says; unsaid reads as not, as a sandboxed agent's is. */
@@ -152,14 +165,18 @@ function carryOnLine(reason: CarryOnReason): CarryOnLineMetadata {
 
 /**
  * The words the carry-on sends the agent: that its previous turn was
- * interrupted and why, and to check the state of its work before going on,
+ * interrupted and why, whether messages sent to that turn that never
+ * reached it follow, and to check the state of its work before going on,
  * since what the turn had under way may be half done and the model's own
  * memory of it stops where the turn did.
  */
-function carryOnPrompt(reason: CarryOnReason): string {
+function carryOnPrompt(reason: CarryOnReason, sentMeanwhile: boolean): string {
   return (
     `${PROMPT_LEAD} your previous turn was interrupted before it ended: ${CUT_OFF_WORDS[reason]}. ` +
-    "Nothing was sent to you meanwhile. Whatever that turn had under way may be half done: " +
+    (sentMeanwhile
+      ? "Messages sent to you during it never reached you, and follow this one: read and answer each. "
+      : "Nothing was sent to you meanwhile. ") +
+    "Whatever that turn had under way may be half done: " +
     "check the state of your work first, your files, your branch, and any command or background task it had running, " +
     "then carry on from where it stopped. If it had finished, say so and end your turn."
   );
@@ -198,8 +215,8 @@ export function carryOnDecision(input: CarryOnInput): CarryOnDecision {
   // A turn that never started lost no work: its line is resent with the next message.
   if (turn.startedAt === null) return { outcome: CARRY_ON_OUTCOME.NONE };
 
-  // A carry-on cut off in its turn is not carried on again, so a crash at every resume never loops.
-  if (input.openerChannel === MESSAGE_CHANNEL.CARRY_ON) return { outcome: CARRY_ON_OUTCOME.NONE };
+  // Carry-ons the agent answered nothing after stop at the limit, so a runner that dies at every resume never loops.
+  if (input.unanswered >= CARRY_ON.LIMIT) return { outcome: CARRY_ON_OUTCOME.NONE };
   const settledAt = turn.settledAt?.getTime() ?? input.now;
 
   if (input.now - settledAt > Duration.toMillis(CARRY_ON.WINDOW)) {
@@ -214,14 +231,7 @@ export function carryOnDecision(input: CarryOnInput): CarryOnDecision {
   return { outcome: CARRY_ON_OUTCOME.RESUME, reason };
 }
 
-/** The channel the line names, where its row keeps one. */
-function channelOf(line: LostLine | undefined): string | undefined {
-  const metadata = line?.metadata;
-
-  return metadata != null && "channel" in metadata ? metadata.channel : undefined;
-}
-
-/** The decision over the agent and its newest turn as they stand, the turn's opening line, the queue, and the Mac's own row read for it. */
+/** The decision over the agent and its newest turn as they stand, the carry-ons it answered nothing after, the queue, and the Mac's own row read for it. */
 export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(function* (
   agent: Agent,
   turn: AgentLatestTurn | undefined,
@@ -229,11 +239,11 @@ export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(fu
   const now = yield* Clock.currentTimeMillis;
 
   if (cutOffReasonOf(agent, turn) === undefined || turn === undefined) {
-    return carryOnDecision({ agent, turn, openerChannel: undefined, queued: false, now });
+    return carryOnDecision({ agent, turn, unanswered: 0, queued: false, now });
   }
 
   const target = { userId: agent.userId, conversationId: agent.conversationId };
-  const opener = yield* turnOpeningLine(target, turn.id);
+  const unanswered = yield* carryOnsUnanswered(target);
   const queue = yield* agentQueueNow(agent.id);
 
   const hostAway =
@@ -244,7 +254,7 @@ export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(fu
   return carryOnDecision({
     agent,
     turn,
-    openerChannel: channelOf(Option.getOrUndefined(opener)),
+    unanswered,
     queued: queue.messages.length > 0,
     hostAway,
     now,
@@ -267,13 +277,16 @@ export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
 ) {
   return yield* Effect.gen(function* () {
     const agentSessions = yield* sessionsFor(agent.userId);
+    const writer = storeWriter({ tools: CODER_TOOL_SET });
+    const target = { userId: agent.userId, conversationId: agent.conversationId };
+    const meanwhile = yield* hostedStoreOrUnavailable(cutOffTurnLines(target, turnId));
     yield* steerAgentWritten(
       agentSessions,
-      storeWriter({ tools: CODER_TOOL_SET }),
+      writer,
       agent.userId,
       agent,
       {
-        text: carryOnPrompt(reason),
+        text: carryOnPrompt(reason, meanwhile.length > 0),
         clientKey: carryOnKey(turnId, occurrence),
         sender: { kind: MESSAGE_SENDER.APP },
         metadata: carryOnLine(reason),
@@ -281,8 +294,20 @@ export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
       // Note that a carry-on is the cut-off turn's own continuation, which the queue already stood aside for.
       STEER_DELIVERY.NOW,
     );
+
+    // Note that the lines sent to the cut-off turn that its runner never took go after the carry-on, into its turn,
+    // because the turn the carry-on opened buries them from the next send's resend, and nobody else sends them again.
+    if (meanwhile.length > 0) {
+      yield* resendLostLines(agentSessions, writer, agent.userId, agent, turnId).pipe(
+        Effect.catch((refusal) =>
+          Effect.logWarning(`a cut-off turn's lines were not handed on: ${refusal.error}`),
+        ),
+        Effect.annotateLogs({ turnId, reason }),
+      );
+    }
+
     yield* Effect.logInfo("a cut-off turn was carried on").pipe(
-      Effect.annotateLogs({ turnId, reason }),
+      Effect.annotateLogs({ turnId, reason, handedOn: meanwhile.length }),
     );
 
     return true;

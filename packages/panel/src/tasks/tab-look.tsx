@@ -15,12 +15,17 @@ import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-fac
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TASK_REGION } from "@repo/features/tasks-model";
-import { AgentPlaceholderIcon, DocumentIcon, PlusIcon, TaskStatusMark } from "@repo/ui";
+import {
+  AgentPlaceholderIcon,
+  DocumentIcon,
+  HarnessMark,
+  PlusIcon,
+  TaskStatusMark,
+} from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { HarnessMark } from "../harness-marks.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import type { TaskListRows } from "../task-list-collections.js";
 import { providerOf } from "./agent-model.js";
@@ -70,12 +75,16 @@ export const TAB_KIND = {
   PAGE: "page",
   /** A Browser tab, named by its page's title once it has one. */
   BROWSER: "browser",
+  /** One thread of a Manager's chat, beside its page. */
+  THREAD: "thread",
 } as const;
 
 /** Where an agent stands as its glyph wears it: its model, and where it stands where that is known. */
 interface AgentStanding {
   readonly model: string;
   readonly status?: AgentStatus | undefined;
+  /** A Manager's face, which it wears in place of its harness's mark; none for a coder. */
+  readonly face?: ManagerFaceValue | undefined;
 }
 
 /** A task as its tab or its row names it: its name, and its status where the place knows it. */
@@ -136,7 +145,8 @@ export type TabSubject =
       readonly kind: typeof TAB_KIND.BROWSER;
       /** Its page's title, or its address until it has one; none before a page is opened. */
       readonly title: string | undefined;
-    };
+    }
+  | { readonly kind: typeof TAB_KIND.THREAD };
 
 /** A tab's look: its glyph and its name. */
 export interface KindLook {
@@ -219,9 +229,15 @@ export function SubagentMark({ model }: { model: string | undefined }) {
  * says the failure at its end (`agentEndMark`). An agent whose standing is
  * not known, a pin's whose task is not open, wears its mark at rest, and one
  * this window does not list, one another Mac started, the mark of no known
- * harness, so a row naming it keeps the glyph's column.
+ * harness, so a row naming it keeps the glyph's column. A Manager wears its
+ * face instead (`ManagerGlyph`), wherever its tab, its title, or a row names it.
  */
 export function AgentGlyph({ agent }: { agent: AgentStanding | undefined }) {
+  // A Manager wears its face wherever its glyph stands, as its sidebar row does.
+  if (agent?.face !== undefined) {
+    return <ManagerGlyph face={agent.face} status={agent.status} />;
+  }
+
   const provider = agent === undefined ? undefined : providerOf(agent.model);
   const state = agent?.status === undefined ? GLYPH_STATE.REST : agentGlyphState(agent.status);
 
@@ -243,9 +259,9 @@ export function ManagerGlyph({
   status,
 }: {
   face: ManagerFaceValue;
-  status: AgentStatus;
+  status: AgentStatus | undefined;
 }): React.JSX.Element {
-  const state = agentGlyphState(status);
+  const state = status === undefined ? GLYPH_STATE.REST : agentGlyphState(status);
   const working = state === GLYPH_STATE.WORKING;
 
   const drawn = <ManagerFace face={face} size={MANAGER_FACE_SIZE.ROW} working={working} />;
@@ -358,5 +374,7 @@ export function tabLook(subject: TabSubject): KindLook {
       return { icon: <EntityGlyph kind={ENTITY_KIND.PAGE} />, label: subject.title };
     case TAB_KIND.BROWSER:
       return { icon: <GLYPH.WEBSITE />, label: subject.title ?? TAB_WORDS.BROWSER };
+    case TAB_KIND.THREAD:
+      return { icon: <EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />, label: TAB_WORDS.THREAD };
   }
 }

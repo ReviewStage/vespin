@@ -118,6 +118,7 @@ const ENVIRONMENT: HostedEnvironmentValues = {
   posthogApiHost: undefined,
   posthogProjectApiKey: undefined,
   posthogIngestHost: undefined,
+  posthogDistinctIdKey: undefined,
   cronSecret: undefined,
   githubWebhookSecret: undefined,
   providerKeyEncryptionKeys: Redacted.make(RING),
@@ -975,6 +976,8 @@ it.layer(SUITE)("a queued turn whose launch its plan's limit refuses", (it) => {
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
 
       // The account's one plan meets its limit before the turn's delivery launches a runner, and no API key is kept.
+      const [plan] = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN);
+      assert.ok(plan, "the account keeps its plan");
       const now = yield* DateTime.nowAsDate;
       const resetsAt = now.getTime() + Duration.toMillis(LIMIT_FOR);
       yield* setPlanStatus(
@@ -985,6 +988,7 @@ it.layer(SUITE)("a queued turn whose launch its plan's limit refuses", (it) => {
         new Date(resetsAt),
         now,
         now,
+        plan.id,
       );
       yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
 

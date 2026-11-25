@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: labeled glass tabs for Inbox with its count, Tasks, Automations, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, which an iPad folds away rather than moving to the top, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: labeled glass tabs for Inbox with its count, Tasks, Automations, and search, and over them the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, which an iPad folds away rather than moving to the top, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import {
   IOS_TAB,
@@ -14,14 +14,14 @@ import {
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuickActionRouting } from "expo-quick-actions/router";
-import { usePathname, useRouter, useSegments } from "expo-router";
+import { usePathname, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxShown, useKeepInboxShown } from "../../inbox/inbox-shown.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
-import { PLUS_TAB } from "../../screens/app-sidebar.js";
+import { PAD_IDIOM } from "../../screens/app-sidebar.js";
 import { useNewTaskAfterSetup } from "../../setup/setup-place.js";
 import { useSidebarChoiceLapse } from "../../sidebar-shown.js";
 import { useTabSurfaceOpen } from "../../surface-open.js";
@@ -70,26 +70,17 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // Note that nothing here draws the bar: the system draws it in Liquid Glass
 // and minimizes it as a list scrolls down, and, on iOS 26 alone, floats it at the top of a
 // portrait iPad. Every tab keeps its label in any window, as Apple's own
-// apps do, since a bar of icons alone read as empty; the round + alone is an
-// icon in a compact window, its label heard still as its accessibility
-// label, since it is an act rather than a place. The selected tab is tinted in the brand's copper,
+// apps do, since a bar of icons alone read as empty. The selected tab is tinted in the brand's copper,
 // and the Inbox carries the panel's count of what waits on you, hidden at
 // none, its fill the attention fill, the light copper in either theme, since
 // the system's white figures read at under 3:1 on the dark theme's accent,
 // counted on the same threads the Inbox lists. Search is the system's search
-// tab (`role="search"`), which iOS 26 stands on its own glass at the trailing
-// end; iOS 27 gives that place to the one prominent tab, the round +, and
-// stands Search last in the bar beside it. The round + opens New task as a
-// sheet over whatever tab stands, rather than standing a tab of its own: it
-// is held unselectable (`disabled`, which keeps its look and only stops the
-// system selecting it), and its press opens the sheet. It stands on an
-// iPhone, the Duo folded or open, its rail included, and never on an iPad,
-// which stands New task as the compose button leading its detail's or its
-// list's bar instead (`useComposeAction`), as Mail does, so a window never
-// offers it twice. Note that it reads the device's idiom (`PLUS_TAB`) rather
-// than the window, because expo-router keys the tabs' view on the names of
-// the tabs that stand: a + hidden by the window would mount every tab again,
-// its pages and drafts dropped, on each fold, rotation, or resize.
+// tab (`role="search"`), which the system stands on its own round glass at the
+// bar's trailing end. Note that the bar holds no round + for New task, which
+// held that round slot on iOS 27 and pushed Search in among the tabs, where
+// four labeled tabs left the Inbox's count under the selected tab's glass
+// (the developer, Nov 24, 2026); New task is the compose button on every tab
+// root's bar instead (`useComposeAction`), as Mail and Messages stand it.
 //
 // The bar is `sidebarAdaptable` everywhere, as Apple's tab sidebar guidance
 // has it: folded, iOS 27 stands the Duo's tabs as a glass rail on the outer
@@ -97,7 +88,7 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // system draws its own tab sidebar. Note that an iPad prefers the sidebar
 // (`preferredPlacement`, iOS 27), so hiding it folds it away rather than
 // moving the tabs into a floating bar over the page, which the developer ruled out
-// (Nov 23, 2026); its placement is read by the device's idiom, as the + is,
+// (Nov 23, 2026); its placement is read by the device's idiom (`PAD_IDIOM`),
 // so nothing mounts again as the window turns or resizes. Each tab's root stands its own
 // list beside its detail in a regular window (`SplitView`), and Tasks keeps
 // Pinned, Following, and the member's sections as groups atop its list.
@@ -117,7 +108,6 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // drawn, carries it.
 export default function TabsLayout() {
   const colors = useColors();
-  const router = useRouter();
   const inboxShown = useInboxShown();
   useKeepInboxShown(inboxShown);
   const waiting = useInboxBadge();
@@ -148,7 +138,7 @@ export default function TabsLayout() {
       hidden={iconOnly && (conversation || choosing)}
       minimizeBehavior="onScrollDown"
       sidebarAdaptable
-      {...(PLUS_TAB ? {} : { preferredPlacement: "sidebar" })}
+      {...(PAD_IDIOM ? { preferredPlacement: "sidebar" } : {})}
       tintColor={colors.ACCENT}
       badgeBackgroundColor={colors.ATTENTION_FILL}
       badgeTextColor={colors.ON_ACCENT}
@@ -193,17 +183,6 @@ export default function TabsLayout() {
         {/* Note that Search keeps the system's magnifier, since a search tab is iOS's own chrome. */}
         <NativeTabs.Trigger.Icon sf="magnifyingglass" />
         <NativeTabs.Trigger.Label>Search</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger
-        name="new-task"
-        prominent
-        disabled
-        hidden={!PLUS_TAB}
-        accessibilityLabel="New task"
-        listeners={{ tabPress: () => router.push("/start-task") }}
-      >
-        <NativeTabs.Trigger.Icon xcasset={GLYPH.ADD} />
-        <NativeTabs.Trigger.Label hidden={iconOnly}>New task</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

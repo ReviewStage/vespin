@@ -516,6 +516,9 @@ function pageNow(
   };
 }
 
+/** A page's read as the host times it while the test's clock stands at its start. */
+const UNMOVED_READ = { followedAt: 0, askedAt: 0, answeredAt: 0, laidAt: 0 };
+
 /** The newest page the service answers: one message, the cursor to follow on from, and where the older page is read below. */
 function newestPage(cursor: string, text: string, before?: string): AgentNewestAnswer {
   return {
@@ -528,7 +531,7 @@ function newestPage(cursor: string, text: string, before?: string): AgentNewestA
 }
 
 it.effect(
-  "a held transcript opens on its newest page, read once beside the live read and laid on the held transcripts, then follows on from its cursor once the live read's first rows land, missing nothing written between; a short page is caught up, and the next is read only as the statements move or at the edge the service names; letting it go stops the following",
+  "a held transcript opens on its newest page, read once beside the live read and laid on the held transcripts, and reads on from its cursor at once, caught up before the live read stands; once its first rows land it reads on again, so a message written while the live read was sealed is laid, once; a short page is caught up, and the next is read only as the statements move or at the edge the service names; letting it go stops the following",
   () =>
     Effect.gen(function* () {
       const {
@@ -545,50 +548,70 @@ it.effect(
       const newest = newestPage("1:0", "Reading the invites.", "40");
       pageNewest(newest);
 
-      // A message written after the newest page was read, before the live read's first rows landed.
+      // The first read past the newest page finds nothing new; a message is written after it, while the live read is sealed.
       const between = {
         ...pageNow("2:0", { holds: true, text: "Writing the expiry." }),
         wakeIn: 3_000,
       };
 
-      script(between);
+      script(pageNow("1:0", { holds: true }), between);
       const letGo = yield* holding(acts.AGENTS_TRANSCRIPT.hold(FOLLOWED));
       yield* settled;
+      const word = { status: AGENT_STATUS.RUNNING, title: "Invites" };
+
       assert.deepEqual(held(), [
         {
           messages: newest.messages,
           before: "40",
           cursor: "1:0",
-          word: { status: AGENT_STATUS.RUNNING, title: "Invites", caughtUp: false },
+          word: { ...word, caughtUp: false },
           pages: 1,
+          // The clock stands at the start, so every time of the read is its start; the fake service answers at once.
+          read: UNMOVED_READ,
+        },
+        {
+          messages: newest.messages,
+          before: "40",
+          cursor: "1:0",
+          word: { ...word, caughtUp: true },
+          pages: 2,
+          read: UNMOVED_READ,
         },
       ]);
       assert.deepEqual(asked.toSorted(), [
         `messages-newest:${AGENT_ID}:cut`,
+        `messages-now:${AGENT_ID}:1:0`,
         `transcript-live:${AGENT_ID}`,
       ]);
 
-      // The live read's first rows read on from the newest page's cursor, never from the start.
+      // The live read's first rows read on from the newest page's cursor again, never from the start, and the message written between is laid once.
       transcriptRows(live, 2);
       yield* settled;
-      assert.deepEqual(held()[1], {
+      assert.deepEqual(held()[2], {
         messages: [...newest.messages, ...between.messages],
         before: "40",
         cursor: "2:0",
-        word: { status: AGENT_STATUS.RUNNING, title: "Invites", caughtUp: true },
-        pages: 2,
+        word: { ...word, caughtUp: true },
+        pages: 3,
+        read: UNMOVED_READ,
       });
       const reads = asked.filter((ask) => ask.startsWith("messages-"));
-      assert.deepEqual(reads, [`messages-newest:${AGENT_ID}:cut`, `messages-now:${AGENT_ID}:1:0`]);
+
+      assert.deepEqual(reads, [
+        `messages-newest:${AGENT_ID}:cut`,
+        `messages-now:${AGENT_ID}:1:0`,
+        `messages-now:${AGENT_ID}:1:0`,
+      ]);
 
       // Note that a short page is caught up, so nothing is read again until the clock reaches the edge the service named.
       yield* TestClock.adjust("2 seconds");
       yield* settled;
-      assert.equal(held().length, 2);
+      assert.equal(held().length, 3);
       yield* TestClock.adjust("1 second");
       yield* settled;
-      assert.equal(held().length, 3);
+      assert.equal(held().length, 4);
       assert.equal(asked.at(-1), `messages-now:${AGENT_ID}:2:0`);
+      assert.deepEqual(ids(held().at(-1)), ["m-1:0", "m-2:0"]);
 
       const moved = pageNow("3:0", { holds: false, text: "Testing the expiry." });
       script(moved);
@@ -1314,8 +1337,8 @@ it.effect(
       const { acts, asked, held, sealTranscript } = yield* subject();
       yield* acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
       yield* settled;
-      assert.deepEqual(ids(held().at(-1)), ["m-1"]);
-      assert.equal(held().at(-1)?.cursor, "1:0");
+      assert.deepEqual(ids(held()[0]), ["m-1"]);
+      assert.equal(held()[0]?.cursor, "1:0");
 
       yield* TestClock.adjust("1 minute");
       yield* settled;
@@ -1337,6 +1360,22 @@ it.effect(
       assert.equal(held().at(-1)?.failure, undefined, "reading again lets the failure go");
       // Note that the newest page laid before stands, so reading again opens on it rather than reading it anew.
       assert.equal(asked.filter((ask) => ask === `messages-newest:${AGENT_ID}:cut`).length, 1);
+    }),
+);
+
+it.effect(
+  "a live read refused as not found ends the follow at once, though the newest page beside it keeps getting no answer",
+  () =>
+    Effect.gen(function* () {
+      const { acts, held, sealTranscript, pageNewest } = yield* subject();
+      sealTranscript({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
+      pageNewest(OFFLINE);
+      yield* acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
+      yield* settled;
+      yield* TestClock.adjust("2 minutes");
+      yield* settled;
+
+      assert.equal(held().at(-1)?.failure?.failure, AGENT_CALL_FAILURE.NOT_FOUND);
     }),
 );
 
@@ -1438,9 +1477,12 @@ it.effect(
   "an older page read below the place the window names is laid before the messages held and answers that it landed; one asked below a place they no longer begin at, as once a newer page took their place, is dropped, and a worker's is read under its call",
   () =>
     Effect.gen(function* () {
-      const { acts, asked, held, sealTranscript, pageNewest } = yield* subject();
+      const { acts, asked, held, sealTranscript, pageNewest, pageNow: script } = yield* subject();
+
       sealTranscript(LIVE_ANSWERED);
       pageNewest(newestPage("1:0", "Reading the invites.", "40"));
+      // Nothing was written past the newest page.
+      script(pageNow("1:0", { holds: true }));
       yield* acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
       yield* settled;
       assert.equal(held().at(-1)?.before, "40");
@@ -1529,7 +1571,7 @@ function followedOnce(
 }
 
 it.effect(
-  "a transcript held again stands as the host held it before the service is asked anything, then is read on once from its cursor, so a message written while away arrives",
+  "a transcript held again stands as the host held it before the service is asked anything, then is read on from its cursor at once, so a message written while away arrives, and again from there once the live read stands",
   () =>
     Effect.gen(function* () {
       const harness = yield* subject();
@@ -1553,7 +1595,10 @@ it.effect(
       assert.equal(laid[0]?.asked, askedBefore, "what was held stands before any read");
       assert.equal(laid[0]?.rows?.word?.caughtUp, false, "not caught up until read on");
       assert.deepEqual(ids(laid.at(-1)?.rows), ["m-1:0", "m-2:0", "m-3:0"]);
-      assert.deepEqual(asked.slice(askedBefore), [`messages-now:${AGENT_ID}:2:0`]);
+      assert.deepEqual(asked.slice(askedBefore), [
+        `messages-now:${AGENT_ID}:2:0`,
+        `messages-now:${AGENT_ID}:3:0`,
+      ]);
     }),
 );
 
@@ -1621,6 +1666,7 @@ it.effect(
         `messages-now:${AGENT_ID}:2:0`,
         `messages-newest:${AGENT_ID}:cut`,
         `messages-now:${AGENT_ID}:5:0`,
+        `messages-now:${AGENT_ID}:6:0`,
       ]);
     }),
 );
@@ -1990,11 +2036,12 @@ it.effect(
     }),
 );
 
-/** A Manager's chat's message as its row is delivered, by its `seq`: the Manager's words, sent at the instant its `seq` names. */
+/** A Manager's chat's message as its row is delivered, by its `seq`: the Manager's words, written under a key of its own and sent at the instant its `seq` names. */
 function chatRow(seq: number) {
   return {
     id: `m${seq}`,
     seq,
+    clientKey: `key-${seq}`,
     authorKind: "agent",
     authorUserId: null,
     authorName: "Manager",
@@ -2073,7 +2120,7 @@ it.effect(
 );
 
 it.effect(
-  "a message sent to a Manager's chat stands drawn on it from its send, under the id answered, until its row lands, and one refused stands marked until it is let go",
+  "a message sent to a Manager's chat stands drawn on it from its send until a row written under its key lands, the row landing before the send answers included, and one refused stands marked until it is let go",
   () =>
     Effect.gen(function* () {
       const { acts, live, managerChats, answerChat } = yield* subject();
@@ -2083,16 +2130,26 @@ it.effect(
       live.managerChat.set({ messages: chatRows(3, 1) });
       yield* acts.AGENTS_MANAGER_CHAT_FOLLOW.hold({ agentId: AGENT_ID });
       yield* settled;
-      const told = managerChats().length;
+      const answered = yield* Deferred.make<void>();
+      answerChat({ agent: AGENT, messageId: "a1b2c3d4" }, Deferred.await(answered));
 
-      yield* acts.AGENTS_CHAT_SEND({ agentId: AGENT_ID, text: "Ship it.", clientKey: "send-1" });
-      assert.deepEqual(managerChats().slice(told).map(sendingOf), [
-        [sent],
-        [{ ...sent, messageId: "a1b2c3d4" }],
-      ]);
+      const sending = yield* Effect.forkChild(
+        acts.AGENTS_CHAT_SEND({ agentId: AGENT_ID, text: "Ship it.", clientKey: "send-1" }),
+      );
 
-      live.managerChat.set({ messages: [{ ...chatRow(4), id: "a1b2c3d4" }, ...chatRows(3, 1)] });
+      yield* settled;
+      assert.deepEqual(sendingOf(managerChats().at(-1)), [sent]);
+
+      // The chat's read brings the message's row while its send has not answered.
+      const landed = { ...chatRow(4), id: "a1b2c3d4", clientKey: "send-1" };
+      live.managerChat.set({ messages: [landed, ...chatRows(3, 1)] });
       yield* nextPoll;
+      assert.deepEqual(managerChats().at(-1)?.[AGENT_ID]?.rows, {
+        messages: [landed, ...chatRows(3, 1)],
+      });
+
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(sending);
       assert.equal(sendingOf(managerChats().at(-1)), undefined);
 
       const refused = { failure: AGENT_CALL_FAILURE.UNANSWERED };

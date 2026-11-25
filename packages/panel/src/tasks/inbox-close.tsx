@@ -23,11 +23,11 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind } from "@repo/host/contract";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { GLYPH } from "@repo/ui/icons";
-import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import type { MenuAction } from "../desktop/action-menu.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import type { ShortcutSubject } from "../shortcut-target.js";
 import { inboxItemChip } from "../toast-chip.js";
 import { pressTakeBack, type TakeBackUndoRefusal, type TakeBackWrite } from "../undo-stack.js";
@@ -189,8 +189,8 @@ const RESOLVE_WRITE = {
 
 /** The Inbox's resolves, each taken back by the service whenever its Undo asks. */
 export function useInboxResolver(): InboxResolver {
-  const { mutateAsync: close } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE));
-  const { mutateAsync: takeBack } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_TAKE_BACK));
+  const { mutateAsync: close } = useMutationCalls(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE));
+  const { mutateAsync: takeBack } = useMutationCalls(actMutation(ACT_KIND.AGENTS_INBOX_TAKE_BACK));
   const out = useRef(new Set<string>());
 
   return useCallback(

@@ -1,4 +1,5 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { type Actor, type OriginAgent, originActor } from "@repo/ui/actor-model";
@@ -27,6 +28,7 @@ interface ListedAgent {
   readonly model: string;
   readonly status: AgentStatus;
   readonly automationName?: string | undefined;
+  readonly face?: ManagerFace | undefined;
 }
 
 /** An agent as a task it made draws it. */
@@ -41,6 +43,7 @@ function originAgentOf(
     name: agentName(agent),
     provider: providerOf(agent.model),
     state: agentActorState(agent.status),
+    ...(agent.face === undefined ? undefined : { face: agent.face }),
     ...(taskId === null || taskId === undefined ? undefined : { taskId }),
     ...(taskName === undefined ? undefined : { taskName }),
     ...(agent.automationName === undefined ? undefined : { automationName: agent.automationName }),
@@ -98,6 +101,7 @@ export function useTaskOrigin(asked: boolean): (task: OriginTask) => Actor | und
           model: agent.model,
           status: agent.status,
           automationName: agent.automationName,
+          face: agent.face,
         }))
       : undefined,
   );

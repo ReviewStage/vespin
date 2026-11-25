@@ -14,6 +14,8 @@ export * from "./agent-boot.js";
 
 export * from "./agent-browser-tab.js";
 
+export * from "./agent-follower.js";
+
 export * from "./agent-pin.js";
 
 export * from "./agent-pull-request.js";

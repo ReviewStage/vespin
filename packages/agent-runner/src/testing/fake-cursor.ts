@@ -4,15 +4,16 @@
  * It stands at the one door the runner reaches Cursor's SDK through
  * (`cursor-sdk.ts`'s `CursorSdk`), so a test sees what the SDK would: the
  * options each agent was made or resumed with, every message sent and
- * steered in order, each cancel, and the changes to the process's
- * environment. As the SDK does, it keeps the agent in the store it was
- * handed: a row as the agent is made, and a checkpoint blob and the row
- * naming it as each run ends, and it resumes only an agent whose row the
- * store answers for the checkout it was asked in.
+ * steered in order, and the environment the agent's shell would inherit.
+ * As the SDK does, it keeps the agent in the store it was handed: a row as
+ * the agent is made, and a checkpoint blob and the row naming it as each
+ * run ends; it resumes only an agent whose row the store answers for the
+ * checkout it was asked in, and refuses to summarize while a run goes.
  */
 
 import type {
   AgentOptions,
+  InteractionUpdate,
   LocalAgentDocument,
   LocalAgentStore,
   RunResultStatus,
@@ -21,37 +22,55 @@ import type {
   SendOptions,
   SteerAckOutcome,
 } from "@cursor/sdk";
-import { Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { type CursorAgentHandle, type CursorRun, CursorSdk } from "../cursor-sdk.js";
+
+/** An update the SDK hands the send's `onDelta` alone, as it does a model call's end, in its place among the run's messages. */
+export interface FakeDelta {
+  readonly delta: InteractionUpdate;
+}
 
 /** One run as the fake plays it: its messages, how it ends, and what it answers a steer. */
 export interface FakeRun {
-  readonly messages: readonly SDKMessage[];
+  readonly messages: readonly (SDKMessage | FakeDelta)[];
   readonly status?: RunResultStatus;
   readonly error?: string;
   /** Holds the run open past its messages until the test releases it or a cancel ends it. */
   readonly held?: boolean;
   /** What a steer into the run is answered; delivered where unscripted. */
   readonly steered?: SteerAckOutcome;
+  /** How many bytes the checkpoint the run ends on holds; a few where unscripted. */
+  readonly checkpointBytes?: number;
+  /** Why the SDK refuses to start the run, as it throws for a summary of an agent with no conversation yet. */
+  readonly refused?: string;
+  /** Whether the SDK never answers the call that starts the run, as a summary Cursor never starts. */
+  readonly stalled?: boolean;
 }
 
 /** What the fake SDK was handed, in the order it was handed it. */
 interface CursorRecord {
   readonly created: AgentOptions[];
-  readonly resumed: { readonly agentId: string; readonly options: AgentOptions }[];
+  readonly resumed: {
+    readonly agentId: string;
+    readonly options: AgentOptions;
+    /** The checkpoint the agent's row names, as the store answered it. */
+    readonly checkpoint: Uint8Array | null;
+  }[];
   readonly sent: { readonly message: SDKUserMessage; readonly options: SendOptions }[];
   readonly steers: string[];
   readonly summaries: number[];
-  cancels: number;
-  readonly environment: Readonly<Record<string, string | undefined>>[];
+  /** The process's environment as the runner left it, which the agent's shell inherits. */
+  readonly environment: Record<string, string>;
   closed: boolean;
 }
 
-/** The blob a run's end checkpoints, named for the run. */
-export function fakeBlobOf(run: number) {
+/** The blob a run's end checkpoints, named for the run, `bytes` long where given. */
+export function fakeBlobOf(run: number, bytes?: number) {
+  const words = new TextEncoder().encode(`conversation through run ${run}`);
+
   return {
     blobId: `blob-${run}`,
-    data: new TextEncoder().encode(`conversation through run ${run}`),
+    data: bytes === undefined ? words : new Uint8Array(bytes).map((_, at) => at % 251),
   };
 }
 
@@ -68,11 +87,13 @@ function settler() {
 
 /**
  * A fake SDK that plays `runs` in order, one for each message sent or
- * summary asked. `release` lets the held run going end as scripted.
+ * summary asked, in a process whose environment starts as `env`. `release`
+ * lets the held run going end as scripted, and `until` waits for the record
+ * to hold what a test looks for.
  */
 export function fakeCursor(
   runs: readonly FakeRun[],
-  options: { readonly signedIn?: boolean } = {},
+  options: { readonly signedIn?: boolean; readonly env?: Readonly<Record<string, string>> } = {},
 ) {
   const record: CursorRecord = {
     created: [],
@@ -80,15 +101,38 @@ export function fakeCursor(
     sent: [],
     steers: [],
     summaries: [],
-    cancels: 0,
-    environment: [],
+    environment: { ...options.env },
     closed: false,
   };
 
   let played = 0;
+  let going = false;
   let release = () => {};
+  const waiters = new Set<{ readonly holds: () => boolean; readonly settle: () => void }>();
 
-  const runOf = (store: LocalAgentStore | undefined, agentId: string): CursorRun => {
+  // Each change to the record settles the waits it now satisfies.
+  const changed = () => {
+    for (const waiter of waiters) {
+      if (!waiter.holds()) continue;
+      waiters.delete(waiter);
+      waiter.settle();
+    }
+  };
+
+  const until = (holds: (seen: CursorRecord) => boolean) =>
+    Effect.promise(
+      () =>
+        new Promise<void>((settle) => {
+          waiters.add({ holds: () => holds(record), settle });
+          changed();
+        }),
+    );
+
+  const runOf = (
+    store: LocalAgentStore | undefined,
+    agentId: string,
+    sendOptions?: SendOptions,
+  ): CursorRun => {
     const script = runs[played] ?? { messages: [] };
     played += 1;
     const number = played;
@@ -103,21 +147,29 @@ export function fakeCursor(
       const row = await store?.agents.get({ agentId });
 
       if (store === undefined || row === null || row === undefined) return;
-      const blob = fakeBlobOf(number);
+      const blob = fakeBlobOf(number, script.checkpointBytes);
       await store.checkpoints.create({ agentId, ...blob });
       await store.agents.update({
         agent: { ...row, latestCheckpoint: { schemaVersion: 1, rootBlobId: blob.blobId } },
       });
     };
 
+    going = true;
+
     const ended = (async () => {
       await held.settled;
       await checkpoint();
+      going = false;
     })();
 
     return {
+      // Note that the SDK hands a delta to `onDelta`, awaited, before it streams the next message.
       stream: async function* () {
-        yield* script.messages;
+        for (const item of script.messages) {
+          if ("delta" in item) await sendOptions?.onDelta?.({ update: item.delta });
+          else yield item;
+        }
+
         await ended;
       },
       wait: async () => {
@@ -130,12 +182,12 @@ export function fakeCursor(
         };
       },
       cancel: async () => {
-        record.cancels += 1;
         canceled = true;
         held.settle();
       },
       steer: async (text) => {
         record.steers.push(text);
+        changed();
 
         return script.steered ?? "complete_delivered";
       },
@@ -145,11 +197,21 @@ export function fakeCursor(
   const agentOf = (options: AgentOptions, agentId: string): CursorAgentHandle => ({
     send: async (message, sendOptions) => {
       record.sent.push({ message, options: sendOptions });
+      changed();
 
-      return runOf(options.local?.store, agentId);
+      return runOf(options.local?.store, agentId, sendOptions);
     },
     summarize: async () => {
+      if (going) throw new Error("Cursor cannot summarize while the agent runs.");
       record.summaries.push(played);
+      const refused = runs[played]?.refused;
+
+      if (runs[played]?.stalled === true) return new Promise<never>(() => {});
+
+      if (refused !== undefined) {
+        played += 1;
+        throw new Error(refused);
+      }
 
       return runOf(options.local?.store, agentId);
     },
@@ -173,12 +235,21 @@ export function fakeCursor(
       };
 
       await options.local?.store?.agents.create({ agent: row });
+      changed();
 
       return agentOf(options, agentId);
     },
     resume: async (_sdk, agentId, options) => {
-      record.resumed.push({ agentId, options });
-      const row = await options.local?.store?.agents.get({ agentId });
+      const store = options.local?.store;
+      const row = await store?.agents.get({ agentId });
+      const root = row?.latestCheckpoint?.rootBlobId;
+
+      const checkpoint =
+        root === undefined
+          ? null
+          : ((await store?.checkpoints.get({ agentId, blobId: root })) ?? null);
+
+      record.resumed.push({ agentId, options, checkpoint });
 
       // The SDK reads only the rows naming the checkout it was asked in.
       if (row === null || row === undefined || row.cwd !== options.local?.cwd) {
@@ -189,9 +260,12 @@ export function fakeCursor(
     },
     signedIn: async () => options.signedIn ?? true,
     setEnvironment: (changes) => {
-      record.environment.push(changes);
+      for (const [name, value] of Object.entries(changes)) {
+        if (value === undefined) delete record.environment[name];
+        else record.environment[name] = value;
+      }
     },
   });
 
-  return { layer, record, release: () => release() };
+  return { layer, record, until, release: () => release() };
 }

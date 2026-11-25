@@ -4,18 +4,17 @@ import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import { chatWorkWords } from "@repo/features/manager-chat";
-import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
+import { CHAT_THREAD_WORDS, chatWorkWords } from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
+import { Predicate } from "effect";
 import { SymbolView } from "expo-symbols";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
   AccessibilityInfo,
   ActivityIndicator,
-  Image as AppIcon,
   type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -29,13 +28,13 @@ import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessib
 import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import {
-  BUBBLE_PADDING,
-  BUBBLE_SHARE,
-  CHAT_RUN,
-  CHAT_SIDE,
-  ChatBubble,
-  chatRunOf,
-} from "./chat-bubble.js";
+  CHANNEL_SEAT,
+  type ChannelFaces,
+  ChannelMessage,
+  ThreadReplies,
+  ThreadRule,
+} from "./channel-row.js";
+import { BUBBLE_PADDING, BUBBLE_SHARE, CHAT_SIDE, ChatBubble, chatRunOf } from "./chat-bubble.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
 import { GitHubLineCard } from "./github-line-card.js";
@@ -45,6 +44,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import {
   CopyWordsMenu,
   type HeldAct,
+  HeldLeadProvider,
   HeldMenu,
   MessageMenu,
   MessageWords,
@@ -56,9 +56,10 @@ import {
 import { InlineHost } from "./inline-host.js";
 import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
-import { IntegrationMark, ManagerFace, WorkingMark } from "./marks.js";
+import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
+import { LoaderImage, PICTURE_FIT, type PictureRef, usePictureRef } from "./picture-source.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -69,6 +70,7 @@ import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
   type CallStanding,
+  type ChatSender,
   type OriginPart,
   type SaidFile,
   type SaidPicture,
@@ -84,15 +86,8 @@ import { Video } from "./video.js";
 /** Who the reader's own line is from, as a picture's viewer names it. */
 const SENT_BY_YOU = "You";
 
-/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart, and in a Manager's chat `CHAT_RUN_GAP` twice, as Messages' do. */
+/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
 const RUN_GAP = 1;
-const CHAT_RUN_GAP = SPACE.ROW / 2;
-
-/** A Manager's face beside its chat's bubbles, as Messages stands a sender's picture beside a group's: its side, and how far it stands from the bubble, room for the bubble's tail. */
-const CHAT_FACE = { SIZE: MARK_SIZE.AVATAR, GAP: 8 } as const;
-
-/** How far a Manager's bubbles stand in from the row's edge, past its face. */
-const CHAT_FACE_ROOM = CHAT_FACE.SIZE + CHAT_FACE.GAP;
 
 /** How far a row a fold or a group holds stands in, for each step it is held. */
 const DEPTH_INSET = 18;
@@ -179,10 +174,6 @@ const styles = StyleSheet.create({
   turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
-  faced: { alignSelf: "stretch", flexDirection: "row", alignItems: "flex-end" },
-  // Note that the face stands over the bubble's tail, whose cut of the ground reaches into its room.
-  faceSeat: { width: CHAT_FACE_ROOM, zIndex: 1 },
-  facedBubble: { flex: 1, alignItems: "flex-start" },
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
   wrapped: { flexWrap: "wrap" },
@@ -268,6 +259,9 @@ function useOwnSend(items: readonly TranscriptItem[], onSent: () => void): void 
 
 type InsetResult = { readonly paddingLeft: number };
 
+/** A fold standing inside a channel row's words, which sets it in already. */
+const FOLD_IN_CHANNEL: InsetResult = { paddingLeft: 0 };
+
 /** The step a row stands in by, for the folds that hold it. */
 function inset(depth: number): InsetResult {
   return { paddingLeft: SPACE.EDGE + depth * DEPTH_INSET };
@@ -284,37 +278,119 @@ function bubbleWordsWidth(column: number, room = 0): number {
 }
 
 /**
- * A Manager's bubble with its face beside it, as Messages stands a sender's
- * picture: shown level with the foot of its run's last bubble (`shown`),
- * and its room kept beside the run's others, so the run's bubbles line up,
- * as the panel's chat stands its face. The face is SwiftUI's, in a host of
- * its own only where it shows, so a run costs one host, never one a
- * bubble; it stands over the bubble's tail, whose cut of the ground reaches
- * into its room. The bubble alone where the chat wears no face.
+ * A message of a Manager's chat as a channel's row (`ChannelMessage`): its
+ * sender's face, name, and time where it opens their run, then what it
+ * carried, its pictures and files, then its words, held for its menu,
+ * which leads with Reply in thread where the channel opens threads, and
+ * under them the summary of its thread's replies, which opens it, as the
+ * panel's channel stands each message whoever sent it.
  */
-function ChatFaced({
-  face,
-  shown,
-  working = false,
-  children,
+function ChannelSaid({
+  item,
+  sender,
+  faces,
+  drawing,
 }: {
-  readonly face: ManagerFaceValue | undefined;
-  readonly shown: boolean;
-  readonly working?: boolean | undefined;
-  readonly children: ReactNode;
+  readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>;
+  readonly sender: ChatSender;
+  readonly faces: ChannelFaces;
+  readonly drawing: RowDrawing;
 }) {
-  if (face === undefined) return children;
+  const width = rowWidth(drawing.column) - CHANNEL_SEAT;
+  const open = drawing.onOpenChatThread;
+  const thread = open === undefined ? undefined : item.thread;
+  const wordless = item.words.trim() === "";
+
+  const threadAct: readonly HeldAct[] =
+    thread === undefined || open === undefined
+      ? []
+      : [
+          {
+            label: CHAT_THREAD_WORDS.REPLY,
+            symbol: GLYPH.REPLY_IN_THREAD,
+            onPress: () => open(thread.root),
+          },
+        ];
+
+  const message = (
+    <ChannelMessage sender={sender} faces={faces} opens={!item.joinsAbove} stamp={item.stamp}>
+      {/* Note that a message's pictures name who sent it and when in their viewer's bar, and each of them and its files leads its long press with Reply in thread, as Messages leads a photo's with Reply, so a message of files alone opens its thread too. */}
+      <HeldLeadProvider acts={threadAct}>
+        <PictureOriginProvider origin={{ by: sender.name, at: item.at }}>
+          <PictureSet
+            atEnd={false}
+            pictures={(item.pictures ?? []).map((picture) => ({
+              key: picture.key,
+              source: picture.url ?? saidSource(drawing, picture.pictureId),
+              alt: picture.name,
+              onRetry:
+                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+            }))}
+          />
+        </PictureOriginProvider>
+        {(item.files ?? []).map((file) => (
+          <FileChip
+            key={file.key}
+            atEnd={false}
+            held={file.base64 !== undefined}
+            name={file.name}
+            mediaType={file.mediaType}
+            source={sentFileSource(drawing, item.place.row, file)}
+            size={file.size}
+            onRetry={sentFileRetry(drawing, item.place.row, file)}
+          />
+        ))}
+      </HeldLeadProvider>
+      {/* Note that a message of files alone, or of what the Manager showed alone, draws no words under them. */}
+      {wordless ? null : (
+        <MessageMenu
+          words={item.words}
+          at={item.at}
+          // Note that the Manager's message offers no link or rewind, as the panel's offers none; every message leads with Reply in thread, then what the page offers every chat message, such as Reply and Edit.
+          link={sender.manager ? undefined : drawing.messageLink?.(item.place.row)}
+          more={[...threadAct, ...(drawing.messageMore?.(item) ?? [])]}
+          width={width}
+        >
+          <View>
+            {/* Note that Select text selects the words in the row itself (`MessageWords`). */}
+            <MessageWords>
+              <Markdown
+                words={item.words}
+                typed={!sender.manager}
+                repository={drawing.repository}
+                onOpenLink={drawing.onOpenLink}
+                width={width}
+                wordPictures={item.wordPictures}
+                wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
+              />
+            </MessageWords>
+          </View>
+        </MessageMenu>
+      )}
+      {thread === undefined || open === undefined ? null : (
+        <ThreadReplies thread={thread} faces={faces} onOpen={open} />
+      )}
+      <UndeliveredUnder line={drawing.undelivered?.(item.place.row)} />
+    </ChannelMessage>
+  );
+
+  // Note that a line of no words and nothing it carried, such as the Manager's message of what it showed alone, whose pictures stand as a row of their own under it, offers Reply in thread on a long press of its head, since it holds no words to hold.
+  const bare = wordless && (item.pictures ?? []).length + (item.files ?? []).length === 0;
 
   return (
-    <View style={styles.faced}>
-      <View style={styles.faceSeat}>
-        {shown ? (
-          <InlineHost style={{ width: CHAT_FACE.SIZE, height: CHAT_FACE.SIZE }}>
-            <ManagerFace face={face} size={CHAT_FACE.SIZE} working={working} />
-          </InlineHost>
-        ) : null}
-      </View>
-      <View style={styles.facedBubble}>{children}</View>
+    <View
+      style={[
+        styles.row,
+        { paddingTop: item.joinsAbove ? RUN_GAP : SPACE.ROW, paddingBottom: RUN_GAP },
+      ]}
+    >
+      {bare ? (
+        <HeldMenu acts={threadAct} width={rowWidth(drawing.column)}>
+          {message}
+        </HeldMenu>
+      ) : (
+        message
+      )}
     </View>
   );
 }
@@ -404,21 +480,24 @@ function CallGlyph({
 }: {
   readonly callKind: CallKind;
   readonly provider: IntegrationProvider | undefined;
-  /** The address its app's icon is drawn from, once read; none while it is on its way, where it could not be read, or where its app kept none, when its kind's glyph stands in. */
-  readonly icon: string | undefined;
+  /** What its app's icon is drawn from, once read; none while it is on its way, where it could not be read, or where its app kept none, when its kind's glyph stands in. */
+  readonly icon: PictureRef | undefined;
 }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
+  // Note that an icon kept by its id is read here, so its landing draws the glyph again and never its row.
+  const drawn = usePictureRef(icon) ?? undefined;
 
   // Note that an app's icon is its own picture, drawn at the glyph's size in its place, as the panel's row wears it; its row's words name the app, so it is hidden from VoiceOver.
-  if (icon !== undefined) {
+  if (drawn !== undefined) {
     return (
-      <AppIcon
-        source={{ uri: icon }}
-        style={{ width: size, height: size }}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      />
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <LoaderImage
+          source={drawn}
+          fit={PICTURE_FIT.CONTAIN}
+          style={{ width: size, height: size }}
+        />
+      </View>
     );
   }
 
@@ -707,9 +786,12 @@ function OriginBody({ body }: { readonly body: string }) {
 function FoldRow({
   item,
   onToggle,
+  inset: indent,
 }: {
   readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.FOLD }>;
   readonly onToggle: (item: TranscriptItem) => void;
+  /** How far in it stands. */
+  readonly inset: InsetResult;
 }) {
   const colors = useColors();
   const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
@@ -722,7 +804,7 @@ function FoldRow({
   ].filter((part) => part !== undefined);
 
   return (
-    <View style={[styles.row, inset(item.depth)]}>
+    <View style={[styles.row, indent]}>
       <Press
         onPress={() => onToggle(item)}
         accessibilityRole="button"
@@ -778,8 +860,8 @@ interface RowDrawing {
   readonly onOpenPage: (
     item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>,
   ) => void;
-  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way, and `null` where they could not be read. */
-  readonly mediaSource: (id: string) => string | null | undefined;
+  /** What a picture or a recording is drawn from, by its id: a picture the service's address and its read's headers, or a file; none while it is on its way, and `null` where it could not be read. */
+  readonly mediaSource: (id: string) => PictureRef | null | undefined;
   /** Reads a picture or a recording whose bytes could not be read again, by its id. */
   readonly onRetryMedia?: ((id: string) => void) | undefined;
   /** Where a file a sent line carried was written for its chip to open, by the line's message and the file's place on it; none while it is written, and `null` where it could not be. A file the line kept no bytes of is drawn by its name and kind alone. */
@@ -810,8 +892,10 @@ interface RowDrawing {
   readonly placeCall?: ((callId: string, row: HostInstance | null) => void) | undefined;
   /** That a line of the reader's did not go, by the id it is drawn under, with what mends it; none for a line that went. */
   readonly undelivered?: ((lineId: string) => UndeliveredLine | undefined) | undefined;
-  /** The face of the Manager whose chat this is, beside the last bubble of each run of its messages and its working line; none for any other agent, or a Manager a service older than faces answers. */
-  readonly managerFace?: ManagerFaceValue | undefined;
+  /** The faces of a Manager's chat, which draws as a channel, each message headed by its sender's face and name, where the transcript is one; none for any other agent. */
+  readonly channel?: ChannelFaces | undefined;
+  /** Opens a Manager chat message's thread, by the message it hangs on, from Reply in thread or the summary of its replies; none where the chat opens no thread, as on a thread's own page. */
+  readonly onOpenChatThread?: ((root: string) => void) | undefined;
 }
 
 /** A message whose acts the transcript draws: a sent line, held for its menu, and a finished turn's foot. */
@@ -824,7 +908,10 @@ export type MessageItem = Extract<
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
 /** What a picture a sent line kept by its id is drawn from, read as the agent's shown ones are; `null` for one the line names no way to, which stands as could not be read. */
-function saidSource(drawing: RowDrawing, pictureId: string | undefined): string | null | undefined {
+function saidSource(
+  drawing: RowDrawing,
+  pictureId: string | undefined,
+): PictureRef | null | undefined {
   return pictureId === undefined ? null : drawing.mediaSource(pictureId);
 }
 
@@ -876,10 +963,13 @@ function ShownMediaView({
   onRetry,
 }: {
   readonly shown: ShownMedia;
-  readonly source: string | null | undefined;
+  readonly source: PictureRef | null | undefined;
   readonly onOpenElsewhere: (() => void) | undefined;
   readonly onRetry: (() => void) | undefined;
 }) {
+  // Note that a clip plays from a file alone, so one held any other way stands as one that could not be read; a recording plays from its address too, as a picture draws from it.
+  const played = source == null || Predicate.isString(source) ? source : null;
+
   switch (shown.kind) {
     case SHOWN_MEDIA.VIDEO:
       return (
@@ -891,18 +981,15 @@ function ShownMediaView({
         />
       );
     case SHOWN_MEDIA.AUDIO:
-      return <AudioClip source={source} label={shown.label} onRetry={onRetry} />;
+      return <AudioClip source={played} label={shown.label} onRetry={onRetry} />;
     case SHOWN_MEDIA.PICTURE:
       return <Picture source={source} alt={shown.label} onRetry={onRetry} />;
   }
 }
 
-/** Show work, or Hide work while it stands open, where a Manager's message or its working line came of work (`workShown`); none where it came of none. */
+/** Show work, or Hide work while it stands open, where a Manager's working line's turn has done work (`workShown`); none where it has done none. A finished turn's work stands in its fold over its first message instead. */
 function workActs(
-  item: Extract<
-    TranscriptItem,
-    { kind: typeof TRANSCRIPT_ITEM.SAID | typeof TRANSCRIPT_ITEM.WORKING }
-  >,
+  item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.WORKING }>,
   drawing: RowDrawing,
 ): readonly HeldAct[] {
   if (item.workShown === undefined) return [];
@@ -932,9 +1019,17 @@ function TranscriptRow({
 
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID: {
-      // Note that a Manager's own bubbles stand past its face, as the panel's chat stands them.
-      const faced = item.manager === true ? drawing.managerFace : undefined;
-      const room = faced === undefined ? 0 : CHAT_FACE_ROOM;
+      // Note that a Manager's chat stands every message as a channel's row, whoever sent it, as the panel's chat does.
+      if (item.channel !== undefined && drawing.channel !== undefined) {
+        return (
+          <ChannelSaid
+            item={item}
+            sender={item.channel}
+            faces={drawing.channel}
+            drawing={drawing}
+          />
+        );
+      }
 
       return (
         <View
@@ -942,7 +1037,6 @@ function TranscriptRow({
             styles.row,
             styles.saidRow,
             item.received ? styles.received : null,
-            item.chat === true ? { paddingVertical: CHAT_RUN_GAP } : null,
             item.joinsAbove ? { paddingTop: RUN_GAP } : null,
             item.joinsBelow ? { paddingBottom: RUN_GAP } : null,
           ]}
@@ -993,37 +1087,34 @@ function TranscriptRow({
           {/* Note that a line of files alone draws no empty bubble under them. */}
           {item.words.trim() === "" &&
           (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
-            <ChatFaced face={faced} shown={!item.joinsBelow}>
-              <MessageMenu
-                words={item.words}
-                at={item.at}
-                // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id; a Manager's message offers no link or rewind, as the panel's offers none, since one after its turn's first stands under its call's id, which names no message.
-                link={item.manager === true ? undefined : drawing.messageLink?.(item.place.row)}
-                more={item.manager === true ? workActs(item, drawing) : drawing.messageMore?.(item)}
-                width={rowWidth(drawing.column) - room}
-              >
-                <View style={[styles.saidHeld, item.received ? styles.received : null]}>
-                  <ChatBubble
-                    side={item.received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
-                    run={chatRunOf(item.joinsAbove, item.joinsBelow)}
-                    accent={item.chat === true}
-                  >
-                    {/* Note that Select text selects the words in the bubble itself, as Messages does (`MessageWords`). */}
-                    <MessageWords>
-                      <Markdown
-                        words={item.words}
-                        typed={item.manager !== true}
-                        repository={drawing.repository}
-                        onOpenLink={drawing.onOpenLink}
-                        width={bubbleWordsWidth(drawing.column, room)}
-                        wordPictures={item.wordPictures}
-                        wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
-                      />
-                    </MessageWords>
-                  </ChatBubble>
-                </View>
-              </MessageMenu>
-            </ChatFaced>
+            <MessageMenu
+              words={item.words}
+              at={item.at}
+              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id.
+              link={drawing.messageLink?.(item.place.row)}
+              more={drawing.messageMore?.(item)}
+              width={rowWidth(drawing.column)}
+            >
+              <View style={[styles.saidHeld, item.received ? styles.received : null]}>
+                <ChatBubble
+                  side={item.received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
+                  run={chatRunOf(item.joinsAbove, item.joinsBelow)}
+                >
+                  {/* Note that Select text selects the words in the bubble itself, as Messages does (`MessageWords`). */}
+                  <MessageWords>
+                    <Markdown
+                      words={item.words}
+                      typed
+                      repository={drawing.repository}
+                      onOpenLink={drawing.onOpenLink}
+                      width={bubbleWordsWidth(drawing.column)}
+                      wordPictures={item.wordPictures}
+                      wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
+                    />
+                  </MessageWords>
+                </ChatBubble>
+              </View>
+            </MessageMenu>
           )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
           <UndeliveredUnder line={drawing.undelivered?.(item.place.row)} />
@@ -1049,26 +1140,24 @@ function TranscriptRow({
       );
     case TRANSCRIPT_ITEM.WORKING:
       // Note that a Manager's chat says it works in a bubble of the Manager's, as Messages shows the other side typing, and as the panel's chat draws its working line.
-      if (item.chat === true) {
+      if (item.chat === true && item.sender !== undefined && drawing.channel !== undefined) {
         return (
-          <View style={[styles.row, styles.received, { paddingVertical: CHAT_RUN_GAP * 2 }]}>
-            {/* Note that a long press offers the turn under way's work, as the press beside the panel's working line does. */}
-            <ChatFaced face={drawing.managerFace} shown working>
+          <View style={[styles.row, { paddingVertical: SPACE.ROW }]}>
+            <ChannelMessage sender={item.sender} faces={drawing.channel} opens working>
+              {/* Note that a long press offers the turn under way's work, as the press beside the panel's working line does. */}
               <HeldMenu acts={workActs(item, drawing)}>
                 <View>
-                  <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
-                    <Text
-                      style={{
-                        fontSize: PROSE_SIZE,
-                        color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
-                      }}
-                    >
-                      {item.words}
-                    </Text>
-                  </ChatBubble>
+                  <Text
+                    style={{
+                      fontSize: PROSE_SIZE,
+                      color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
+                    }}
+                  >
+                    {item.words}
+                  </Text>
                 </View>
               </HeldMenu>
-            </ChatFaced>
+            </ChannelMessage>
           </View>
         );
       }
@@ -1084,6 +1173,12 @@ function TranscriptRow({
           >
             {item.words}
           </Text>
+        </View>
+      );
+    case TRANSCRIPT_ITEM.RULE:
+      return (
+        <View style={[styles.row, { paddingVertical: SPACE.ROW }]}>
+          <ThreadRule words={item.words} />
         </View>
       );
     case TRANSCRIPT_ITEM.WORDS:
@@ -1116,13 +1211,35 @@ function TranscriptRow({
         />
       );
     case TRANSCRIPT_ITEM.FOLD:
-      return <FoldRow item={item} onToggle={drawing.onToggle} />;
+      // Note that a Manager's turn's work folded over the message that opens its run stands under the Manager's head, its words then going on the run under it, as the panel stands the fold under the name.
+      if (item.channel !== undefined && drawing.channel !== undefined && item.depth === 0) {
+        return (
+          <View style={[styles.row, { paddingTop: SPACE.ROW, paddingBottom: 0 }]}>
+            <ChannelMessage sender={item.channel} faces={drawing.channel} opens stamp={item.stamp}>
+              <FoldRow item={item} onToggle={drawing.onToggle} inset={FOLD_IN_CHANNEL} />
+            </ChannelMessage>
+          </View>
+        );
+      }
+
+      // Note that a Manager's turn's work folded over a message further on its run stands past the seat, in line with its words, as its pictures stand.
+      return (
+        <FoldRow
+          item={item}
+          onToggle={drawing.onToggle}
+          inset={
+            drawing.channel === undefined || item.depth > 0
+              ? inset(item.depth)
+              : { paddingLeft: SPACE.EDGE + CHANNEL_SEAT }
+          }
+        />
+      );
     case TRANSCRIPT_ITEM.MEDIA: {
       // Note that what a Manager shows in its chat stands past its face, in line with its bubbles.
       const mediaInset =
-        drawing.managerFace === undefined || item.depth > 0
+        drawing.channel === undefined || item.depth > 0
           ? inset(item.depth)
-          : { paddingLeft: SPACE.EDGE + CHAT_FACE_ROOM };
+          : { paddingLeft: SPACE.EDGE + CHANNEL_SEAT };
 
       // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
       if (

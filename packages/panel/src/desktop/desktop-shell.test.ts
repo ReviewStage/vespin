@@ -68,6 +68,7 @@ import {
   type TasksControlOverrides,
   tasksControl,
   waitingOf,
+  withNewTaskShown,
 } from "../testing/tasks-control.js";
 import { holdingInboxChoice, leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
@@ -223,7 +224,6 @@ function mount(
       newTask: {
         ...control.newTask,
         onOpen: () => setAsked(true),
-        open: asked,
         onClose: () => setAsked(false),
       },
       ...overrides,
@@ -231,7 +231,10 @@ function mount(
 
     return overListedTasks(
       tasks,
-      createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch)),
+      withNewTaskShown(
+        { open: asked },
+        createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch)),
+      ),
     );
   }
 
@@ -981,7 +984,7 @@ function barItem(page: HTMLElement, name: string): HTMLButtonElement {
   return item;
 }
 
-test("on a phone the Tasks page stands over a bar of the window's places, its own marked, the bar's Inbox opening the Inbox and its New task New task", async () => {
+test("on a phone the Tasks page stands over a bar of the window's places, its own marked, the bar's Inbox opening the Inbox, its Automations the Automations page, and its New task New task", async () => {
   const asked: string[] = [];
 
   const page = await mountNarrow({
@@ -991,12 +994,22 @@ test("on a phone the Tasks page stands over a bar of the window's places, its ow
     newTask: newTaskControl({ onOpen: () => asked.push("new task") }),
   });
 
-  assert.deepEqual(barItems(page).map(barName), ["Inbox", "Tasks", "Search", "New task"]);
+  assert.deepEqual(barItems(page).map(barName), [
+    "Inbox",
+    "Tasks",
+    "Automations",
+    "Search",
+    "New task",
+  ]);
   assert.equal(barItem(page, "Tasks").getAttribute("aria-current"), "page");
   assert.equal(barItem(page, "Inbox").getAttribute("aria-current"), null);
   act(() => barItem(page, "Inbox").click());
   await act(() => routed().settled());
   assert.equal(routed().router.history.location.pathname, SHELL_AT.INBOX);
+  act(() => barItem(page, "Automations").click());
+  await act(() => routed().settled());
+  assert.equal(routed().router.history.location.pathname, SHELL_AT.AUTOMATIONS);
+  assert.equal(barItem(page, "Automations").getAttribute("aria-current"), "page");
   act(() => barItem(page, "New task").click());
   assert.deepEqual(asked, ["new task"]);
 });
@@ -1026,7 +1039,13 @@ test("on a phone the places bar stands over the Tasks page though the task left 
     sidePanel: { ...tasksControl().sidePanel, open: true, fullScreen: true, fullScreenOnly: true },
   });
 
-  assert.deepEqual(barItems(page).map(barName), ["Inbox", "Tasks", "Search", "New task"]);
+  assert.deepEqual(barItems(page).map(barName), [
+    "Inbox",
+    "Tasks",
+    "Automations",
+    "Search",
+    "New task",
+  ]);
 });
 
 /** What a reader hears an item named: its words, less what is drawn for the eye alone. */
@@ -1088,31 +1107,40 @@ test("on a phone the bar's Inbox wears the count of what the Inbox's view lists,
   const none = await mountNarrow({ at: SHELL_AT.BOARD });
   assert.deepEqual(
     barItems(none)
-      .slice(0, 3)
+      .slice(0, 4)
       .map((item) => [spokenName(item), item.textContent]),
     [
       ["Inbox", "Inbox"],
       ["Tasks", "Tasks"],
+      ["Automations", "Automations"],
       ["Search", "Search"],
     ],
     "nothing waiting, nothing is drawn or said",
   );
 });
 
-test("on a phone the Inbox's head leads with the reader's face, whose menu holds their workspaces and their account", async () => {
+test("on a phone the Inbox's head leads with the workspace's tile, whose menu lists the workspaces, New workspace, Workspace settings, and Settings first, as the iOS app's does, then the account's items", async () => {
   const page = await mountNarrow({ at: SHELL_AT.INBOX, workspaces: [ACME], workspace: ACME });
 
-  const face =
-    page.querySelector<HTMLButtonElement>('.inbox-head button[aria-label="Account"]') ??
-    assert.fail("the face leads the Inbox's head");
+  const tile =
+    page.querySelector<HTMLButtonElement>(
+      `.inbox-head button[aria-label^="Workspace: ${ACME.name}"]`,
+    ) ?? assert.fail("the tile leads the Inbox's head");
 
-  act(() => face.click());
+  act(() => tile.click());
 
   const labels = [...document.querySelectorAll('[role="menu"] .ui-menu-item-label')].map(
     (each) => each.textContent,
   );
 
-  for (const label of [ACME.name, "New workspace", "Settings", "Sign out"]) {
+  assert.deepEqual(labels.slice(0, 4), [
+    ACME.name,
+    "New workspace",
+    "Workspace settings",
+    "Settings",
+  ]);
+
+  for (const label of ["Send feedback", "Sign out"]) {
     assert.ok(labels.includes(label), `the menu offers ${label}`);
   }
 });

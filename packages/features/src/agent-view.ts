@@ -63,7 +63,12 @@ import {
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
 import { machineAskAnswerRequestSchema } from "./machine-ask-wire.js";
-import { memoryIdSchema, memorySaveRequestSchema } from "./memory-wire.js";
+import {
+  MEMORY_QUERY,
+  memoryIdSchema,
+  memoryManagerIdSchema,
+  memorySaveRequestSchema,
+} from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
@@ -615,15 +620,19 @@ export const memoriesAnswerViewSchema = answerView(accountContract.forgetMemory)
 
 export type MemoriesAnswerView = typeof memoriesAnswerViewSchema.Type;
 
-/** Holding a workspace's memories, or reading them again, as the window asks it: the workspace Settings shows. */
+/** Holding a workspace's memories, or reading them again, as the window asks it: the workspace Settings shows, and the Manager whose own memories it shows in the workspace's place, where it names one. */
 export const memoriesFollowParamsSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,
+  [MEMORY_QUERY.MANAGER_ID]: memoryManagerIdSchema,
 });
 
-/** Forgetting a memory, as the window asks it: its workspace and the memory's id. */
+export type MemoriesFollowParams = typeof memoriesFollowParamsSchema.Type;
+
+/** Forgetting a memory, as the window asks it: its workspace, the memory's id, and the Manager it was kept for alone, where it names one. */
 export const memoryForgetParamsSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,
   id: memoryIdSchema,
+  [MEMORY_QUERY.MANAGER_ID]: memoryManagerIdSchema,
 });
 
 export type MemoryForgetParams = typeof memoryForgetParamsSchema.Type;
@@ -807,7 +816,7 @@ export type ManagerChatRefusal = Extract<AgentChatSendAnswerView, { readonly fai
 /**
  * A person's message to a Manager's chat, as the host draws it on the chat
  * (`@repo/host`'s `manager-chat-follow.ts`) from the moment it is sent until
- * the chat's row for it lands, or, refused, until the person sends it again
+ * the chat's row written under its key lands, or, refused, until the person sends it again
  * under its key or lets it go: the one record every window draws the
  * message on its way from.
  */
@@ -819,10 +828,10 @@ export interface ManagerChatSending {
   readonly attachments?: AgentChatSendParams["attachments"];
   /** Epoch milliseconds it was sent, drawn under it at once. */
   readonly sentAt: number;
+  /** The root of the thread it replies in, where it does, which a page draws it on its way in; none for a message of the chat itself. */
+  readonly threadRoot?: string;
   /** The account that sent it, whose windows alone draw it; none for one sent while nobody was signed in. */
   readonly sentBy?: string;
-  /** The id the chat holds it under, once the service answered; its row landing under that id ends the send. */
-  readonly messageId?: string;
   /** Why the service did not take it, where it did not; none while it is on its way. */
   readonly refused?: ManagerChatRefusal;
 }

@@ -21,17 +21,14 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
  * opens downward over content, which a caller asks for by marking the root
  * `data-disclosure` (`disclosureMotion`) and its body
  * `.ui-disclosure-body`, the root's own child: `opening` unrolls
- * the body from its top edge as it fades in, `closing` fades it out where
- * it stands, and `folding` gives up its room at once and rolls it up as it
- * fades, for a fold whose list's motion closes what stands under it over
- * the room it gave up (`ListMotion`).
+ * the body from its top edge as it fades in, and `closing` fades it out
+ * where it stands.
  */
 
 /** The marks disclosure.css's motion layer reads from a root's `data-disclosure`. */
 const DISCLOSURE_MOTION = {
   OPENING: "opening",
   CLOSING: "closing",
-  FOLDING: "folding",
 } as const;
 
 export type DisclosureMotion = (typeof DISCLOSURE_MOTION)[keyof typeof DISCLOSURE_MOTION];
@@ -47,15 +44,10 @@ export interface Disclosure {
 
 /**
  * The mark for the disclosure layer: opening while it stands open from an
- * open that is to unroll, and while it leaves, folding where what stands
- * under it closes over it as it goes (`closedOver`), else closing.
+ * open that is to unroll, and closing while it leaves.
  */
-export function disclosureMotion(
-  opened: boolean,
-  leaving: boolean,
-  closedOver = false,
-): DisclosureMotion | undefined {
-  if (leaving) return closedOver ? DISCLOSURE_MOTION.FOLDING : DISCLOSURE_MOTION.CLOSING;
+export function disclosureMotion(opened: boolean, leaving: boolean): DisclosureMotion | undefined {
+  if (leaving) return DISCLOSURE_MOTION.CLOSING;
 
   return opened ? DISCLOSURE_MOTION.OPENING : undefined;
 }
