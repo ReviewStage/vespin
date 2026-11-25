@@ -289,16 +289,26 @@ function mount(
   };
 }
 
-test("on a phone Overview is headed by the way out of the task and one ⋯ of the task's own actions, naming the task in its description's heading alone", () => {
+test("on a phone Overview is headed by the way out of the task, New agent, and one ⋯ of the task's own actions, naming the task in its description's heading alone", () => {
   const page = mount(SHELL_ROOM.NARROW);
-  assert.deepEqual(page.head(), { buttons: ["Inbox", "Task actions"], title: undefined });
+  assert.deepEqual(page.head(), {
+    buttons: ["Inbox", "New agent", "Task actions"],
+    title: undefined,
+  });
   const menu = page.menu();
   assert.ok(menu.includes("Rename") && menu.includes("Permanently delete"), "the task's own");
   assert.equal(page.labeled("Title actions"), false, "the description's title draws no second ⋯");
   assert.equal(page.labeled(`${TASK.name} actions`), false, "the column draws no ⋯ of Overview's");
 
+  const newAgent = page.container.querySelector<HTMLButtonElement>(
+    '.task-head button[aria-label="New agent"]',
+  );
+  assert.ok(newAgent, "the row offers New agent before its ⋯");
+  act(() => newAgent.click());
+  assert.deepEqual(page.told, [`column ${JSON.stringify(DRAFT)}`], "New agent opens a draft");
+
   page.back();
-  assert.deepEqual(page.told, ["away"], "the way back goes where the shell says, pushing nothing");
+  assert.equal(page.told.at(-1), "away", "the way back goes where the shell says, pushing nothing");
 });
 
 test("on a phone an agent's screen goes back to its task's plan, named for the task, is titled by the agent, and its ⋯ is the agent's, Show browser beside Show terminal, unnamed under each item", () => {

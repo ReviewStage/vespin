@@ -17,6 +17,7 @@ import type {
 import { RENAME_FAILED_NOTE, TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
+import { taskKey } from "@repo/features/workspace-key";
 import { EXPERIMENT, INTRO } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -439,6 +440,28 @@ const PHONE_THING = {
   [TASK_PANE.AGENT]: "Agent",
   [TASK_PANE.PANEL]: "Tab",
 } as const satisfies Record<TaskPane, string>;
+
+/** What stands between the steps of a phone's task path ("ada/relay › AL-42"). */
+const PHONE_PATH_STEP = " › ";
+
+/**
+ * A task's path as a phone's head names it on Overview, as the description's
+ * own path over its title reads: its repository's `owner/name` and its key,
+ * each where it has one; none where it has neither.
+ */
+function phonePath(
+  task: { readonly repository?: string | null | undefined; readonly number?: number | undefined },
+  workspaceName: string,
+): string | undefined {
+  const key =
+    task.number === undefined || workspaceName === ""
+      ? undefined
+      : taskKey(workspaceName, task.number);
+
+  const steps = [task.repository ?? undefined, key].filter((step) => step !== undefined);
+
+  return steps.length === 0 ? undefined : steps.join(PHONE_PATH_STEP);
+}
 
 /** What a phone's header's ⋯ calls letting a draft go. */
 const DISCARD_DRAFT = "Discard draft";
@@ -1563,7 +1586,10 @@ function DescriptionDocument({
               ? columnLabel
               : undefined
       }
+      path={pane === TASK_PANE.OVERVIEW ? phonePath(listed, workspaceName) : undefined}
       pickUp={{ name: descriptionHeading.name, shown: descriptionHeading.away }}
+      // Note that New agent stands before the ⋯ on Overview alone, as the page's Agents "+" starts one; an agent's screen and a tab's offer their own menus.
+      newAgent={pane === TASK_PANE.OVERVIEW ? newAgentStarts(mainTabs, agents)[0] : undefined}
       rename={{
         editing: rename.editing,
         onEnd: (end) => {
