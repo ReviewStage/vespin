@@ -1,0 +1,13 @@
+pinned to ace7b3af65
+== bundle PJjn2a5 base ace7b3af65
+  built ace7b3af65 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2A-write-1x seed: rc 0
+n2A-write-1x fn2mark: 21 steps,  marked [Thread 218: decide how a partial cent rounds in the billing rounding] settled [Thread 197: decide how a partial cent rounds in the push tokens]
+  n2A search: s1 [Thread 218] 4 steps Tap on "Search inbox"... FAILED; s2 [Thread 197 on All] 4 steps Assert that "${SETTLED}" is visible... FAILED
+  n2A db after rows: at 1795630468716 file host/accounts/stub-account/collections.sqlite table ;Parse error in 2nd command line argument: no such table: ;
+  n2A written.json: NO status after 121 polls (257088 ms after the relaunch): {"5eed0004-0000-4000-8000-0000003d09d9":{"carried":true,"unread":true}}
+  n2A db at the end: at 1795630677518 file host/accounts/stub-account/collections.sqlite table ;Parse error in 2nd command line argument: no such table: ;
