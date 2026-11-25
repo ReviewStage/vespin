@@ -322,6 +322,28 @@ test("each message is a row under its sender's name where their run opens, a thr
   assert.deepEqual(threads, ["first"]);
 });
 
+test("a person's picture stands as its chip where their words name it, not as a marker over a copy of it, and each line they typed stays its own", async () => {
+  const { container } = await drawChat([
+    {
+      ...row("charles", 1, "This [Picture 1] reads wrong.\nTake it?", CHARLES),
+      attachments: [{ id: "picture-1", mediaType: "image/png", name: "Picture 1" }],
+    },
+  ]);
+
+  const words =
+    container.querySelector('[data-message-id="charles"] .ui-channel-message-words') ??
+    assert.fail("Charles's message is drawn");
+
+  assert.equal(words.querySelector('ul[aria-label="Attached files"]'), null);
+  // Note that the chip reads as a picture by its name, as a screen reader hears it.
+  assert.deepEqual(
+    [...words.querySelectorAll("p")].map(
+      (line) => line.innerHTML.includes("<br>") && line.textContent,
+    ),
+    ["This picture Picture 1 reads wrong.\nTake it?"],
+  );
+});
+
 test("a thread's reply the service refused stands marked in its thread, and Retry sends it again there under its own key, with its files", async () => {
   const { container, threads, keys, carried } = await drawChat(
     [
