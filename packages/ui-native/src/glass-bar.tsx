@@ -289,9 +289,23 @@ export function OfferPopover({
   const { width: window } = useWindowDimensions();
   // Note that the popover stands as wide as the composer it points at, as a column's composer stands in it.
   const wide = Math.min(window, READING_WIDTH) - BAR_MARGIN * 2;
+  // Whether the system let the popover go while something was still offered, as VoiceOver's escape does; it stays gone, its list unmounted so it no longer takes the field's keys, until the offer itself closes and opens again.
+  const [letGo, setLetGo] = useState(false);
+  const offered = offer !== undefined;
+
+  if (!offered && letGo) setLetGo(false);
+
+  const shown = offered && !letGo;
 
   return (
-    <Popover isPresented={offer !== undefined} attachmentAnchor="top" arrowEdge="bottom">
+    <Popover
+      isPresented={shown}
+      attachmentAnchor="top"
+      arrowEdge="bottom"
+      onIsPresentedChange={(presented) => {
+        if (!presented && offered) setLetGo(true);
+      }}
+    >
       <Popover.Trigger>{children}</Popover.Trigger>
       <Popover.Content>
         <VStack
@@ -302,7 +316,7 @@ export function OfferPopover({
             SwiftModifiers.presentationBackgroundInteraction("enabled"),
           ]}
         >
-          {offer ?? null}
+          {shown ? offer : null}
         </VStack>
       </Popover.Content>
     </Popover>
