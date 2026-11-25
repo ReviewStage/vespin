@@ -349,6 +349,10 @@
   --spacing-dialog-window-top: var(--ui-dialog-window-top, var(--ui-space-24));
   --spacing-card-inset-snug: var(--ui-card-inset-snug);
   --spacing-dialog-reach: var(--ui-space-12);
+  /* Where a page's sheet starts (`DIALOG_SIZE.PAGE_SHEET`): a strip of the
+     dimmed window under the phone's status bar, so it reads as a sheet over
+     the page rather than a page of its own. */
+  --spacing-dialog-page-sheet-top: calc(env(safe-area-inset-top, 0px) + var(--ui-space-12));
   --spacing-menu-inset: var(--ui-menu-inset);
   --spacing-block-gap: var(--ui-block-gap);
   --spacing-tight-gap: var(--ui-tight-gap);
@@ -453,6 +457,9 @@
   /* A phone's sheet rises and sinks on the pane's beat, so its scrim and its card fade on it too. */
   --animate-sheet-scrim: ui-dialog-fade var(--ui-duration-pane) var(--ui-motion-pane);
   --animate-sheet-leave: leave-fade var(--ui-duration-pane) var(--ui-motion-pane) forwards;
+  /* A page's sheet is its own card, so the card itself rises from the window's foot and sinks back to it. */
+  --animate-sheet-rise: ui-sheet-rise var(--ui-duration-pane) var(--ui-motion-pane);
+  --animate-sheet-sink: ui-sheet-sink var(--ui-duration-pane) var(--ui-motion-pane) forwards;
   --animate-dialog-in:
     ui-dialog-fade var(--ui-duration-quick) var(--ui-motion-exit),
     ui-dialog-rise var(--ui-duration-fast) var(--ui-spring-fast);
@@ -475,6 +482,18 @@
   @keyframes ui-dialog-fade {
     from {
       opacity: 0;
+    }
+  }
+
+  @keyframes ui-sheet-rise {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  @keyframes ui-sheet-sink {
+    to {
+      transform: translateY(100%);
     }
   }
 
