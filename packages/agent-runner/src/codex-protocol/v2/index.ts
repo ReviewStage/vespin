@@ -136,6 +136,7 @@ export type { ContextCompactedNotification } from "./ContextCompactedNotificatio
 export type { CreditsSnapshot } from "./CreditsSnapshot.js";
 export type { CustomGatewaySettingsParams } from "./CustomGatewaySettingsParams.js";
 export type { CyberAccessProgram } from "./CyberAccessProgram.js";
+export type { DaybreakAvailability } from "./DaybreakAvailability.js";
 export type { DeprecationNoticeNotification } from "./DeprecationNoticeNotification.js";
 export type { DesktopOnboardingEntrypoint } from "./DesktopOnboardingEntrypoint.js";
 export type { DynamicToolCallOutputContentItem } from "./DynamicToolCallOutputContentItem.js";
@@ -599,6 +600,7 @@ export type { ThreadRealtimeItemTranscriptDeltaNotification } from "./ThreadReal
 export type { ThreadRealtimeOrder } from "./ThreadRealtimeOrder.js";
 export type { ThreadRealtimeOutputAudioDeltaNotification } from "./ThreadRealtimeOutputAudioDeltaNotification.js";
 export type { ThreadRealtimeSdpNotification } from "./ThreadRealtimeSdpNotification.js";
+export type { ThreadRealtimeSessionInputReason } from "./ThreadRealtimeSessionInputReason.js";
 export type { ThreadRealtimeSessionOutcome } from "./ThreadRealtimeSessionOutcome.js";
 export type { ThreadRealtimeStartTransport } from "./ThreadRealtimeStartTransport.js";
 export type { ThreadRealtimeStartedNotification } from "./ThreadRealtimeStartedNotification.js";
