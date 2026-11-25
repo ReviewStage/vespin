@@ -44,8 +44,10 @@ export interface OpenedNow {
   readonly workspaceId: string | undefined;
   readonly taskId: string | undefined;
   readonly itemId: string | undefined;
-  /** The agent shown, on its own page or as its task's tab. */
-  readonly agentId: string | undefined;
+  /** The agent whose own page stands. */
+  readonly agentPageId: string | undefined;
+  /** The agent whose tab the open task's column has chosen, kept only while the task's page is on screen. */
+  readonly agentTabId: string | undefined;
 }
 
 /** What the window opened last, newest first, and the press that forgets it all. */
@@ -111,7 +113,13 @@ export function useSearchRecent(now: OpenedNow): SearchRecent {
     change,
   );
   useKeepOpened(SEARCH_FOUND_KIND.INBOX, now.itemId, now.workspaceId, change);
-  useKeepOpened(SEARCH_FOUND_KIND.AGENTS, now.agentId, now.workspaceId, change);
+  // Note that an agent's tab is kept only while its task's page is on screen, since the column keeps its tab chosen beneath the Inbox and every other place.
+  useKeepOpened(
+    SEARCH_FOUND_KIND.AGENTS,
+    now.agentPageId ?? (taskShown ? now.agentTabId : undefined),
+    now.workspaceId,
+    change,
+  );
 
   return { kept, onClear: forget };
 }

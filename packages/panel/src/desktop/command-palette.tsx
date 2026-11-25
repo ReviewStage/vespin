@@ -61,7 +61,7 @@
  * each row's words instead.
  */
 
-import type { ListedAgent } from "@repo/features/agent-wire";
+import { AGENT_KIND, type ListedAgent } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
 import { READING_AUTOMATIONS } from "@repo/features/automation-words";
@@ -1576,12 +1576,8 @@ function managerRows(
   });
 }
 
-/** The agent the window shows: its own page standing, or the open task's tab of it; none otherwise. */
-function shownAgentOf(tasks: Pick<TasksControl, "agentView" | "mainTabs">): string | undefined {
-  const tab = tasks.mainTabs.tab;
-
-  if (tasks.agentView.agentId !== undefined) return tasks.agentView.agentId;
-
+/** The agent whose tab the open task's column has chosen; none where it has chosen Overview, a draft, or nothing. */
+function tabAgentOf(tab: TasksControl["mainTabs"]["tab"]): string | undefined {
   return tab === undefined || isOverviewTab(tab) || tab.kind !== STRIP_TAB_KIND.AGENT
     ? undefined
     : tab.agent;
@@ -2309,7 +2305,8 @@ export function CommandPalette({
     workspaceId: tasks.workspace?.id,
     taskId: tasks.activeTaskId,
     itemId: inboxStanding.chosen?.itemId,
-    agentId: shownAgentOf(tasks),
+    agentPageId: tasks.agentView.agentId,
+    agentTabId: tabAgentOf(tasks.mainTabs.tab),
   });
 
   const collections = useTaskListCollections();
@@ -2787,7 +2784,14 @@ export function CommandPalette({
         task: (id) => tasksById.get(id),
         // Note that an account that turned its Inbox off is listed no thread it opened before, as no search lists one.
         thread: (id) => (inboxOn ? inboxById.get(id) : undefined),
-        agent: (id) => collections.agents.get(id) ?? managers?.find((manager) => manager.id === id),
+        // Note that a Manager is found only among the Managers listed, so one is listed under Recent only while its experiment is on.
+        agent: (id) => {
+          const listed = collections.agents.get(id);
+
+          return listed === undefined || listed.kind === AGENT_KIND.MANAGER
+            ? managers?.find((manager) => manager.id === id)
+            : listed;
+        },
       },
     ).map((each) =>
       each.kind === SEARCH_FOUND_KIND.AGENTS
