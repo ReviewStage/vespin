@@ -1816,6 +1816,8 @@ function AgentRow({
   const known = useKnownNames();
   const place = useAgentRowPlace();
   const savedAgent = useListedAgent(savedAgentId);
+  // Note that an agent the page was opened for, as a Manager's Settings opens it, is read by its id too, since none of the newest may be it.
+  const draftedAgent = useListedAgent(draft.agentId);
   // Note that the catalog this row read names the models, since the window's own may not hold it yet.
   const drawn = { ...place, models: models ?? place.models };
   const detail = draft.agentId === null ? FIRST_RUN_DETAIL : AGENT_DETAIL;
@@ -1879,7 +1881,10 @@ function AgentRow({
     offered.find((agent) => agent.id === draft.agentId) ??
     searched?.find((agent) => agent.id === draft.agentId) ??
     (picked?.id === draft.agentId ? picked : undefined) ??
-    (keptAgent?.id === draft.agentId ? keptAgent : undefined);
+    (keptAgent?.id === draft.agentId ? keptAgent : undefined) ??
+    (draftedAgent === undefined
+      ? undefined
+      : mentionableAgent(draftedAgent, known.tasks, drawn.models));
 
   const chosenRow = chosen === undefined ? undefined : agentMenuRow(chosen, drawn);
 
@@ -2503,7 +2508,9 @@ const EDITOR_SCREENS: NarrowColumns = {
 
 /**
  * One automation's page, or a new one's where none is given. A new one,
- * opened from a suggestion on the list, starts filled in from its preset;
+ * opened from a suggestion on the list, starts filled in from its preset,
+ * and one opened for an agent, as a Manager's Settings opens it, starts
+ * sending every run to that agent;
  * once made, it is handed to `onCreated`, which stands its own page where
  * this one stood. A deleted one is handed to `onDeleted`, which goes back
  * to the list.
@@ -2519,6 +2526,7 @@ const EDITOR_SCREENS: NarrowColumns = {
 export function AutomationEditor({
   automation,
   preset,
+  target,
   workspace,
   offersOwner,
   repositories,
@@ -2538,6 +2546,8 @@ export function AutomationEditor({
   automation: AutomationSummary | undefined;
   /** The preset a new automation starts filled in from, as the list's suggestion it was opened from names it; none for a blank one. */
   preset?: AutomationPresetName | undefined;
+  /** The agent a new automation sends every run to, as a Manager's Settings opened it for that Manager; none for one that starts a new agent each run. */
+  target?: string | undefined;
   workspace: Workspace | undefined;
   /** Whether the workspace is shared, so an automation in it may be the workspace's rather than its maker's. */
   offersOwner: boolean;
@@ -2585,6 +2595,11 @@ export function AutomationEditor({
       ...automationDraft(undefined, defaults),
       repository: repositories.recent[0] ?? null,
     };
+
+    // Note that an agent works in its own repository, which the page does not know, so one aimed at an agent starts in none.
+    if (target !== undefined) {
+      return { ...blank, repository: null, target: AUTOMATION_TARGET.SAME_AGENT, agentId: target };
+    }
 
     return preset === undefined ? blank : presetDraft(blank, automationPreset(preset), offersOwner);
   });

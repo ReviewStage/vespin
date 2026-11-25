@@ -900,6 +900,59 @@ function SuggestedAutomations({
   );
 }
 
+/**
+ * The automations `listed`, drawn as the list draws them: each owner's under
+ * its heading, the finished ones folded last, in `order`, a row's press
+ * opening the automation's page (`onOpen`), its switch, Take over and Delete
+ * written through `automations`, and its Delete's question asked over the
+ * rows, `onDeleted` hearing which went. The Automations page draws its list
+ * with it, and a Manager's Settings the automations aimed at that Manager.
+ */
+export function AutomationRows({
+  listed,
+  order,
+  workspace,
+  narrow,
+  automations,
+  onOpen,
+  onDeleted,
+}: {
+  listed: readonly AutomationSummary[];
+  order: AutomationsOrder;
+  workspace: Workspace | undefined;
+  narrow: boolean;
+  automations: Pick<ReturnType<typeof useAutomations>, "toggle" | "change">;
+  onOpen: (automation: AutomationSummary) => void;
+  onDeleted: (automationId: string) => void;
+}): React.JSX.Element {
+  const now = useMinute();
+  const { toggle, change } = automations;
+  const deletion = useRowDeletion(listed, onDeleted);
+
+  return (
+    <>
+      <AutomationList
+        groups={automationGroups(listed, order)}
+        finished={finishedAutomations(listed, order)}
+        workspace={workspace}
+        now={now}
+        narrow={narrow}
+        onOpen={onOpen}
+        onToggle={(automation, enabled) => toggle(automation.id, enabled)}
+        onTakeOver={(automation) =>
+          change({ automationId: automation.id, change: { takeOver: true } })
+        }
+        onDelete={deletion.ask}
+      />
+      <ConfirmDialog
+        open
+        confirm={deletion.confirm}
+        question={automationDeleteQuestion(deletion.asked?.name)}
+      />
+    </>
+  );
+}
+
 /** The list's page: the listed workspace's automations, a new one a press away, and the automations suggested under them. */
 function ListPage({
   tasks,
@@ -911,20 +964,13 @@ function ListPage({
   room: ShellRoom;
 }): React.JSX.Element {
   const door = useAutomationsDoor(tasks);
-  const now = useMinute();
   const workspace = tasks.workspace;
   const workspacesRead = useWorkspacesRead();
-  const { read, reload, toggle, change } = automations;
+  const { read, reload } = automations;
   const listed = read !== undefined && "automations" in read ? read.automations : [];
   const [order, onOrder] = useKept(KEPT_ORDER, DEFAULT_AUTOMATIONS_ORDER);
-  const groups = automationGroups(listed, order);
-  const finished = finishedAutomations(listed, order);
 
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
-
-  const deletion = useRowDeletion(listed, (automationId) =>
-    door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId }),
-  );
 
   return (
     <ReplayUnmask>
@@ -962,31 +1008,21 @@ function ListPage({
             <EmptyState icon={<ZapIcon />}>No automations yet.</EmptyState>
             <SuggestedAutomations tasks={tasks} listed={listed} />
           </div>
-        ) : (
-          <>
-            <AutomationList
-              groups={groups}
-              finished={finished}
-              workspace={workspace}
-              now={now}
-              narrow={room === SHELL_ROOM.NARROW}
-              onOpen={(automation) =>
-                door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
-              }
-              onToggle={(automation, enabled) => toggle(automation.id, enabled)}
-              onTakeOver={(automation) =>
-                change({ automationId: automation.id, change: { takeOver: true } })
-              }
-              onDelete={deletion.ask}
-            />
-            <SuggestedAutomations tasks={tasks} listed={listed} />
-          </>
-        )}
-        <ConfirmDialog
-          open
-          confirm={deletion.confirm}
-          question={automationDeleteQuestion(deletion.asked?.name)}
+        ) : null}
+        <AutomationRows
+          listed={listed}
+          order={order}
+          workspace={workspace}
+          narrow={room === SHELL_ROOM.NARROW}
+          automations={automations}
+          onOpen={(automation) =>
+            door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
+          }
+          onDeleted={(automationId) =>
+            door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId })
+          }
         />
+        {listed.length === 0 ? null : <SuggestedAutomations tasks={tasks} listed={listed} />}
       </CollectionPage>
     </ReplayUnmask>
   );
@@ -1394,6 +1430,7 @@ function AutomationsPages({
       key={editing}
       automation={opened}
       preset={preset}
+      target={place.kind === AUTOMATIONS_PAGE.NEW ? place.target : undefined}
       workspace={workspace}
       offersOwner={offersOwner}
       repositories={tasks.newTask.repositoriesIn(workspace?.id)}

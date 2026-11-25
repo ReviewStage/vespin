@@ -2,7 +2,8 @@
  * manager-settings-dialog.tsx -- a Manager's Settings: the sectioned settings dialog its Settings button and its menu's Settings… open, its General section changing the Manager as it stands, each row saving itself.
  *
  * The dialog is `@repo/ui`'s `SettingsDialog`, named by the Manager and
- * listing its sections down its start; General alone stands so far. General
+ * listing its sections down its start: General, and Automations, the
+ * automations that send it work (`AutomationsSection`). General
  * reads as the rest of Settings does, each row saving itself, so the card has
  * no Save. It opens as workspace Settings opens on its workspace: one row
  * leading with the Manager's face, picked from the face itself
@@ -25,6 +26,10 @@
  */
 
 import type { AgentSummary } from "@repo/features/agent-wire";
+import { DEFAULT_AUTOMATIONS_ORDER } from "@repo/features/automation-list-model";
+import { AUTOMATION_TARGET, type AutomationSummary } from "@repo/features/automation-wire";
+import { READING_AUTOMATIONS } from "@repo/features/automation-words";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
@@ -32,38 +37,55 @@ import {
   Button,
   CHIP_LOOK,
   CHIP_WIDTH,
+  EmptyState,
+  ErrorState,
   RenamableName,
   SETTINGS_ROW_LEAD,
+  SETTINGS_SECTION_FRAME,
   SettingsDialog,
   type SettingsDialogSection,
   SettingsRow,
   SettingsRowValue,
   SettingsSection,
+  Spinner,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
+import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { refusedShown } from "../failure-report.js";
+import { useAutomationsOpen } from "../automations-route.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
+import { refusedShown, unreadShown } from "../failure-report.js";
 import { renameWrite } from "../rename-write.js";
 import { replayMaskedError } from "../settings/marks.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { type AgentBox, useAgentBox } from "../tasks/agent-box.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
+import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import type { MenuAction } from "./action-menu.js";
+import { AutomationRows } from "./automations-page.js";
+import { useAutomations } from "./use-automations.js";
 
 /** The sections a Manager's Settings list. */
 const SECTION = {
   GENERAL: "general",
+  AUTOMATIONS: "automations",
 } as const;
 
 type Section = (typeof SECTION)[keyof typeof SECTION];
 
 const SECTIONS: readonly SettingsDialogSection<Section>[] = [
   { id: SECTION.GENERAL, title: "General", icon: <GLYPH.SETTINGS /> },
+  {
+    id: SECTION.AUTOMATIONS,
+    title: "Automations",
+    icon: <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />,
+  },
 ];
 
 /** What the dialog is named for a Manager drawn with no name. */
@@ -83,6 +105,11 @@ const WORDS = {
   DELETE: "Delete",
   DELETE_ROW: "Permanently delete",
   DELETE_LINE: "It and its conversation go for good.",
+  AIMED: "Sent to this Manager",
+  AIMED_CAPTION: "Every run of these is sent to it as a message, whoever made them.",
+  ADD_AUTOMATION: "Add automation",
+  NO_AUTOMATIONS: "No automations send it work yet.",
+  AUTOMATIONS_UNREAD: "The automations could not be read.",
 } as const;
 
 /** What a Manager's Settings reads of it. */
@@ -266,6 +293,91 @@ function GeneralSection({
   );
 }
 
+/** Whether an automation sends every run to the agent `agentId`. */
+function aimedAt(automation: AutomationSummary, agentId: string): boolean {
+  const { target } = automation;
+
+  return target?.kind === AUTOMATION_TARGET.SAME_AGENT && target.agentId === agentId;
+}
+
+/**
+ * Automations: the workspace's automations that send every run to this
+ * Manager, whoever made them, drawn by the Automations page's own rows
+ * (`AutomationRows`), each opening its page there, and Add automation, which
+ * opens a new automation's page aimed at the Manager; each puts the dialog
+ * away as it opens the page. Note that the list is the reader's, as the
+ * Automations page's is, so a teammate's own automation stands only for a
+ * reader who may read it there.
+ */
+function AutomationsSection({
+  agent,
+  onClose,
+}: {
+  agent: ManagerSettingsSubject;
+  onClose: () => void;
+}): React.JSX.Element {
+  const automations = useAutomations(agent.workspaceId);
+  // Note that the rows answer the room as the Automations page's do, the dialog then taking the phone's whole width.
+  const phone = usePhoneRoom();
+  const { onOpen } = useAutomationsOpen();
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const workspace = workspaces?.find((each) => each.id === agent.workspaceId);
+  const { read, reload } = automations;
+  const listed = read !== undefined && "automations" in read ? read.automations : [];
+  const aimed = listed.filter((automation) => aimedAt(automation, agent.id));
+
+  // Opens one of the workspace's Automations pages, putting the dialog away, since the page stands where the Manager's did.
+  const open = (place: AutomationsPlace) => {
+    if (workspace === undefined) return;
+    onClose();
+    onOpen(place, workspace.slug ?? workspace.id);
+  };
+
+  const add = (
+    <Button
+      variant={BUTTON_VARIANT.OUTLINE}
+      icon={<PlusIcon />}
+      disabled={workspace === undefined}
+      onClick={() => open({ kind: AUTOMATIONS_PAGE.NEW, target: agent.id })}
+    >
+      {WORDS.ADD_AUTOMATION}
+    </Button>
+  );
+
+  return (
+    <SettingsSection
+      title={WORDS.AIMED}
+      caption={WORDS.AIMED_CAPTION}
+      action={add}
+      frame={SETTINGS_SECTION_FRAME.NONE}
+    >
+      {read === undefined ? (
+        <Spinner delay label={READING_AUTOMATIONS} />
+      ) : "failure" in read ? (
+        <ErrorState failure={unreadShown(FAILURE_SURFACE.AUTOMATIONS_READ)} onRetry={reload}>
+          {WORDS.AUTOMATIONS_UNREAD}
+        </ErrorState>
+      ) : aimed.length === 0 ? (
+        <EmptyState icon={<EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />}>
+          {WORDS.NO_AUTOMATIONS}
+        </EmptyState>
+      ) : (
+        <AutomationRows
+          listed={aimed}
+          order={DEFAULT_AUTOMATIONS_ORDER}
+          workspace={workspace}
+          narrow={phone}
+          automations={automations}
+          onOpen={(automation) =>
+            open({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
+          }
+          onDeleted={() => undefined}
+        />
+      )}
+    </SettingsSection>
+  );
+}
+
 /** The Settings dialog for `agent`, a Manager, saved through `agents` and archived or deleted through `acts`; it stands only while `shown`. */
 export function useManagerSettingsDialog(
   agent: ManagerSettingsSubject,
@@ -289,6 +401,9 @@ export function useManagerSettingsDialog(
     >
       {section === SECTION.GENERAL ? (
         <GeneralSection agent={agent} agents={agents} acts={acts} onClose={close} />
+      ) : null}
+      {section === SECTION.AUTOMATIONS ? (
+        <AutomationsSection agent={agent} onClose={close} />
       ) : null}
     </SettingsDialog>
   );
