@@ -929,6 +929,74 @@ it.effect(
 );
 
 it.effect(
+  "the tasks the Inbox names outside the list draw once the last is read, and one a window opens meanwhile draws at once",
+  () =>
+    Effect.gen(function* () {
+      const done = (id: string, name: string, number: number) => ({
+        ...task(id, name, `# ${name}`, number),
+        status: TASK_STATUS.DONE,
+      });
+
+      const billing = task(BILLING, "Billing export", "# Billing export", 20);
+      const ledger = "2f6e8a1c-5b3d-4e7f-9a2c-6d8b0e4f1a37";
+      const digest = "5a1c3e7b-9d2f-4b6a-8e0c-1f3d5b7a9c24";
+
+      const service = fakeService([
+        billing,
+        done(INVITES, "Teammate invitations", 10),
+        done(ledger, "Ledger rounding", 30),
+        done(digest, "Weekly digest", 40),
+      ]);
+
+      // The ledger's and the digest's reads are held out, so the Inbox's pass stands open while the invitations' read has landed.
+      const ledgerAnswered = yield* Deferred.make<void>();
+      const digestAnswered = yield* Deferred.make<void>();
+      service.taskRowsAnswered.set(ledger, Deferred.await(ledgerAnswered));
+      service.taskRowsAnswered.set(digest, Deferred.await(digestAnswered));
+      const { tasks, call, last, settled, openTask } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { tasks: [rowOfTask(billing)], agents: [], issues: [] });
+      yield* settled;
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted();
+
+      const reads = (id: string) => service.reads.filter((read) => read === `task-rows:${id}`);
+
+      yield* tasks.inboxNamed([INVITES, ledger, digest]);
+      yield* settled;
+      assert.deepEqual(listed(), [BILLING], "a task read while the pass is out waits for the pass");
+
+      yield* openTask(INVITES);
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES].toSorted(),
+        "a task the pass holds read is drawn at once as a window opens it",
+      );
+      assert.equal(reads(INVITES).length, 1, "and is not read again");
+
+      yield* openTask(ledger);
+      yield* Deferred.succeed(ledgerAnswered, undefined);
+      yield* settled;
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES, ledger].toSorted(),
+        "a task a window opened while its read was out is drawn as the read lands, the pass still out",
+      );
+
+      yield* Deferred.succeed(digestAnswered, undefined);
+      yield* settled;
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES, ledger, digest].toSorted(),
+        "the rest are drawn as the pass ends",
+      );
+    }),
+);
+
+it.effect(
   "a search draws the tasks it finds outside the list beside it, and each it holds once",
   () =>
     Effect.gen(function* () {
