@@ -1,0 +1,15 @@
+pinned to dc31b0b99e
+== bundle PJjonebar base dc31b0b99e
+  built dc31b0b99e base app Vob.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+hdr portrait: fails 0 shots 1 
+  portrait chrome rows: [('RNSSplitScreen', [0, 32, 340, 86]), ('RNSScreen', [341, 32, 834, 86])] labeled items in the chrome: [('Show Sidebar', [14, 36, 50, 72]), ('New task', [355, 36, 391, 72]), ('More', [626, 38, 658, 70]), ('More', [635, 52, 649, 55]), ('Resolve', [676, 36, 714, 72]), ('Remind me', [732, 38, 764, 70]), ('Remind me', [739, 45, 756, 62]), ('Mark as unread', [782, 36, 820, 72])] sidebar toggles: 1 [('Show Sidebar', [14, 36, 50, 72])] 
+secondary (swipe the list off): fails 0 shots 1 
+  after swipe chrome rows: [('RNSSplitScreen', [0, 32, 340, 86]), ('RNSScreen', [341, 32, 834, 86])] labeled items in the chrome: [('Show Sidebar', [14, 36, 50, 72]), ('New task', [355, 36, 391, 72]), ('More', [626, 38, 658, 70]), ('More', [635, 52, 649, 55]), ('Resolve', [676, 36, 714, 72]), ('Remind me', [732, 38, 764, 70]), ('Remind me', [739, 45, 756, 62]), ('Mark as unread', [782, 36, 820, 72])] sidebar toggles: 1 [('Show Sidebar', [14, 36, 50, 72])] 
+secondary (tap the page): fails 0 shots 1 
+  after tap chrome rows: [('RNSSplitScreen', [0, 32, 340, 86]), ('RNSScreen', [341, 32, 834, 86])] labeled items in the chrome: [('Show Sidebar', [14, 36, 50, 72]), ('New task', [355, 36, 391, 72]), ('More', [626, 38, 658, 70]), ('More', [635, 52, 649, 55]), ('Resolve', [676, 36, 714, 72]), ('Remind me', [732, 38, 764, 70]), ('Remind me', [739, 45, 756, 62]), ('Mark as unread', [782, 36, 820, 72])] sidebar toggles: 1 [('Show Sidebar', [14, 36, 50, 72])] 
+hdr landscape: fails 0 shots 1 
+  landscape chrome rows: [('RNSSplitScreen', [0, 32, 320, 86]), ('RNSSplitScreen', [0, 32, 660, 86]), ('RNSScreen', [661, 32, 1210, 86])] labeled items in the chrome: [('Hide Sidebar', [270, 36, 306, 72]), ('New task', [675, 36, 711, 72]), ('More', [1002, 38, 1034, 70]), ('More', [1011, 52, 1025, 55]), ('Resolve', [1052, 36, 1090, 72]), ('Remind me', [1108, 38, 1140, 70]), ('Remind me', [1115, 45, 1132, 62]), ('Mark as unread', [1158, 36, 1196, 72]), ('10:05 AM', [809, 25, 826, 86])] sidebar toggles: 2 [('Sidebar', [0, 0, 320, 834]), ('Hide Sidebar', [270, 36, 306, 72])] 
