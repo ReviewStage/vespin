@@ -1,0 +1,18 @@
+pinned to 2b8d19eeb2
+== bundle PJjn2b6 base 2b8d19eeb2
+  built 2b8d19eeb2 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2reqlog.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2B-write-1x seed: rc 0
+  n2B timed kill: tap done 1795637529819, outbox read 1795637529980 (+161 ms), kill 1795637530359 (+540 ms); outbox before the kill: 
+n2B-write-1x fn2mark: 17 steps,  marked [Thread 2: decide how a partial cent rounds in the billing rounding] settled [Thread 2: decide how a partial cent rounds in the billing rounding]
+  n2B search: s1 [Thread 2] 11 steps ; s2 [Thread 2 on All] 6 steps 
+  n2B db after rows: at 1795637584392 file ;tables: ;registry:;Parse error in 3rd command line argument: no such table: collection_registry;outbox (local.sqlite):;Parse error in 3rd command line argument: no such table: outbox;
+  n2B written.json: NO status after 121 polls (229612 ms after the relaunch): {"5eed0004-0000-4000-8000-0000003d0907":{"carried":true,"unread":true}}
+  n2B times: second_launch_T=1795637466074 resolve_tap_done_T=1795637529819 outbox_read_T=1795637529980 kill_T=1795637530359 kill_after_tap_ms=540 terminate_T=1795637533275 mark_end_T=1795637533594 relaunch_T=1795637533664 s1_end_T=1795637572054 s2_end_T=1795637616690 written_status_T=1795637763276 tries=121 
+  n2B tap/kill times: 
+  n2B db at the end: at 1795637763958 file ;tables: ;registry:;Parse error in 3rd command line argument: no such table: collection_registry;outbox (local.sqlite):;Parse error in 3rd command line argument: no such table: outbox;
+  n2B requests (inbox and writes): 216 lines; PUT /api/account/time-zone passed to the plain stub at 1795637260599 (-273065 ms vs relaunch) took 0;POST /api/events passed to the plain stub at 1795637320098 (-213566 ms vs relaunch) took 0;POST /api/events passed to the plain stub at 1795637441264 (-92400 ms vs relaunch) took 1;PUT /api/account/time-zone passed to the plain stub at 1795637474083 (-59581 ms vs relaunch) took 0;DELETE /api/inbox/5eed0004-0000-4000-8000-0000003d0907/read 200 at 1795637489977 (-43687 ms vs relaunch) took 1;PUT /api/account/time-zone passed to the plain stub at 1795637540595 (+6931 ms vs relaunch) took 0;POST /api/events passed to the plain stub at 1795637600017 (+66353 ms vs relaunch) took 0;POST /api/events 
