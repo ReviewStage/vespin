@@ -3,6 +3,7 @@
   "git": {
     "deploymentEnabled": {
       "main": true,
+      "prototype/manager-one-thread-kind": true,
       "**": false
     }
   },
