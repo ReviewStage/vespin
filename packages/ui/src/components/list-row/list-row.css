@@ -18,7 +18,9 @@
    they take, and every reveal, through the parts the row says it draws
    (`data-opens`, `data-acts`, `data-more`, `data-fold`, `data-end`,
    `data-attachments`), the
-   pointer's media, and custom properties set on the row. Note that what
+   pointer's media, and custom properties set on the row. What the keyboard
+   holds is read the same way, from the root's own modality (`data-keyboard`,
+   `keyboard-modality.ts`) and `:focus-within`, never `:has(:focus-visible)`. Note that what
    the row draws is read off those, not off its children through `:has()`,
    because a `:has()` is checked again on every change under the row, and
    a window of rows made every task's opening restyle them all. */
@@ -424,7 +426,10 @@
       transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
     }
 
-    .ui-list-row[data-latent="true"]:is(:hover, :has(:focus-visible)) {
+    .ui-list-row[data-latent="true"]:is(
+        :hover,
+        :is(:where(:root[data-keyboard="true"]) :focus-within)
+      ) {
       opacity: 1;
     }
   }
@@ -662,7 +667,8 @@
   /* The ⋯ shows while the row holds the keyboard or its menu is open, and
      while the pointer rests on it where there is a hover; a screen with no
      hover shows it always, since nothing there would reveal it. */
-  .ui-list-row:is(:has(:focus-visible), [data-menu-open="true"]) .ui-list-row-more {
+  .ui-list-row:is(:is(:where(:root[data-keyboard="true"]) :focus-within), [data-menu-open="true"])
+  .ui-list-row-more {
     opacity: 1;
   }
 
@@ -701,7 +707,8 @@
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
 
-  .ui-list-row:is(:has(:focus-visible), [data-current="true"]) .ui-list-row-chevron {
+  .ui-list-row:is(:is(:where(:root[data-keyboard="true"]) :focus-within), [data-current="true"])
+    .ui-list-row-chevron {
     opacity: 1;
   }
 
@@ -783,7 +790,10 @@
     transition: visibility 0s;
   }
 
-  .ui-list-row[data-actions="hover"]:is(:has(:focus-visible), [data-menu-open="true"])
+  .ui-list-row[data-actions="hover"]:is(
+      :is(:where(:root[data-keyboard="true"]) :focus-within),
+      [data-menu-open="true"]
+    )
     .ui-list-row-actions {
     opacity: 1;
     pointer-events: auto;
@@ -793,7 +803,7 @@
   /* Note that a row offering no acts keeps its end, since nothing steps in
      for it. */
   .ui-list-row[data-actions="hover"][data-acts="true"]:is(
-    :has(:focus-visible),
+    :is(:where(:root[data-keyboard="true"]) :focus-within),
     [data-menu-open="true"]
   ) .ui-list-row-end {
     opacity: 0;
@@ -801,7 +811,7 @@
   }
 
   .ui-list-row[data-actions="hover"][data-acts="true"]:is(
-      :has(:focus-visible),
+      :is(:where(:root[data-keyboard="true"]) :focus-within),
       [data-menu-open="true"]
     )
     .ui-list-row-meta {
@@ -821,7 +831,11 @@
        end's place (below). */
     .ui-list-row[data-actions="hover"]:is(
         [data-acts="true"]:hover,
-        [data-more="true"]:is(:hover, :has(:focus-visible), [data-menu-open="true"])
+        [data-more="true"]:is(
+          :hover,
+          :is(:where(:root[data-keyboard="true"]) :focus-within),
+          [data-menu-open="true"]
+        )
       ) .ui-list-row-end {
       opacity: 0;
       transform: translateX(calc(-1 * var(--ui-list-row-step)));
@@ -829,7 +843,11 @@
 
     .ui-list-row[data-actions="hover"]:is(
         [data-acts="true"]:hover,
-        [data-more="true"]:is(:hover, :has(:focus-visible), [data-menu-open="true"])
+        [data-more="true"]:is(
+          :hover,
+          :is(:where(:root[data-keyboard="true"]) :focus-within),
+          [data-menu-open="true"]
+        )
       )
       .ui-list-row-meta {
       visibility: hidden;
@@ -897,7 +915,11 @@
       margin-inline-end: var(--ui-list-row-acts-clear);
     }
 
-    .ui-list-row[data-actions="hover"]:not(:hover, :has(:focus-visible), [data-menu-open="true"])
+    .ui-list-row[data-actions="hover"]:not(
+        :hover,
+        :is(:where(:root[data-keyboard="true"]) :focus-within),
+        [data-menu-open="true"]
+      )
       .ui-list-row-actions {
       position: absolute;
     }
@@ -916,7 +938,7 @@
 
     .ui-list-row[data-actions="hover"]:not([data-acts="true"], [data-end="true"]):is(
         :hover,
-        :has(:focus-visible),
+        :is(:where(:root[data-keyboard="true"]) :focus-within),
         [data-menu-open="true"]
       )
       .ui-list-row-more {
@@ -948,7 +970,7 @@
   /* Note that the row holding the keyboard stands over its neighbors,
      because its ring reaches past the list's gap and the next row's fill
      would otherwise paint over the ring's foot. */
-  .ui-list-row:has(:focus-visible) {
+  .ui-list-row:is(:where(:root[data-keyboard="true"]) :focus-within) {
     position: relative;
     z-index: 1;
   }
@@ -982,12 +1004,11 @@
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
 
-  .ui-list-row:is(:hover, :has(> .ui-list-row-fold:focus-visible)) .ui-list-row-fold {
+  .ui-list-row:is(:hover, [data-fold-held="true"]) .ui-list-row-fold {
     opacity: 1;
   }
 
-  .ui-list-row[data-fold="true"]:is(:hover, :has(> .ui-list-row-fold:focus-visible))
-    .ui-list-row-leading {
+  .ui-list-row[data-fold="true"]:is(:hover, [data-fold-held="true"]) .ui-list-row-leading {
     opacity: 0;
   }
 
