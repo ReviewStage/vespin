@@ -333,7 +333,9 @@ error's own words can quote what an agent was working on. The Mac app also sends
 Sentry diagnostic data about its resource use, such as processor usage. The
 Service and the Mac app's windows send processor profiles of the traces Sentry
 keeps: which of their own functions ran and for how long, never the values
-they handled. The Mac app and the web app send none of this while "Share
+they handled. The Mac app's windows also say, of a slow click, keystroke, or
+screen they timed, which of their own functions held the window and for how
+long. The Mac app and the web app send none of this while "Share
 usage data" is off. A report made as the app starts, before it has read that
 setting, waits on your device until it has, and is then sent or deleted.
 

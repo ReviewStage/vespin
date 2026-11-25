@@ -12,6 +12,12 @@ import {
   withoutAccessTokens,
 } from "@repo/features/sentry-breadcrumbs";
 import {
+  interactionLongFrames,
+  type LongFrame,
+  type LongFrameAttributes,
+  longFrameHistory,
+} from "@repo/features/sentry-long-frames";
+import {
   SENTRY_PROFILING,
   sentryTracesRequest,
   sentryTracesSampler,
@@ -19,19 +25,23 @@ import {
 import { sendShownFailure } from "@repo/features/shown-failure";
 import { sentrySendTracer } from "@repo/panel/send-traces";
 import {
+  browserApiErrorsIntegration,
   browserProfilingIntegration,
   browserTracingIntegration,
   captureException,
   getActiveSpan,
+  getClient,
   getCurrentScope,
   getTraceData,
   init,
   logger,
+  spanToJSON,
   startInactiveSpan,
   startNewTrace,
   startSpan,
   withStreamedSpan,
 } from "@sentry/electron/renderer";
+import { Predicate } from "effect";
 import { BLANK_WINDOW, type BlankWindow, type DesktopSentry } from "./desktop-sentry";
 
 /** The mechanism each blank window's report names, so Sentry's issue says which path caught it. */
@@ -42,6 +52,159 @@ const BLANK_WINDOW_MECHANISM = {
 
 /** The op every span the panel timed is listed under. */
 const PANEL_SPAN_OP = "ui.panel";
+
+/**
+ * How long a span or an interaction waits to be summed, so the browser has
+ * reported the frame it ended in: Chromium reports a long frame a little
+ * after the task that follows it, so a summing at once missed that frame.
+ */
+const FRAME_REPORTED_MS = 50;
+
+/**
+ * The callbacks Sentry's browser SDK leaves as the panel registered them.
+ * Note that it wraps every event listener and timer in a function of its own
+ * by default, to catch what one throws, so a long frame named that wrapper
+ * as the script that held it rather than the panel's own function; what a
+ * callback throws reaches Sentry through the window's own error handler
+ * without it, with its whole stack, since every script is the app's own.
+ */
+const UNWRAPPED_CALLBACKS = {
+  eventTarget: false,
+  requestAnimationFrame: false,
+  setInterval: false,
+  setTimeout: false,
+} as const;
+
+/** The op every interaction's span (INP) opens with: `ui.interaction.click`, `.press`, `.hover`, `.drag`. */
+const INTERACTION_OP_PREFIX = "ui.interaction.";
+
+/** The attribute a span's op is kept under, by Sentry's own name. */
+const SENTRY_OP_ATTRIBUTE = "sentry.op";
+
+/** The performance entry type of a long animation frame, as the browser names it. */
+const LONG_ANIMATION_FRAME = "long-animation-frame";
+
+/**
+ * The interactions whose long frames are summed as they happen: those as
+ * slow as the least INP the SDK reports, as Web Vitals observes them. Note
+ * that TypeScript's DOM types do not yet name Event Timing's threshold, so
+ * the shape says it.
+ */
+const SLOW_INTERACTIONS: PerformanceObserverInit & { readonly durationThreshold: number } = {
+  type: "event",
+  durationThreshold: 40,
+  buffered: true,
+};
+
+/** What a span reads of the long frames it overlapped, from its start and end in the epoch's milliseconds. */
+interface LongFrames {
+  /** What a span that just ended overlapped. */
+  readonly of: (startedAt: number, endedAt: number) => LongFrameAttributes;
+  /** What the slow interaction a span names overlapped, as it happened; what is kept now where it was not kept then. */
+  readonly ofInteraction: (startedAt: number, endedAt: number) => LongFrameAttributes;
+  /** Runs `then` once the frame now drawing has been reported: at once where no frame is. */
+  readonly afterReported: (then: () => void) => void;
+}
+
+/** Whether a performance entry is a long animation frame, which the DOM's types do not name yet. */
+function isLongFrame(entry: PerformanceEntry): entry is PerformanceEntry & LongFrame {
+  return entry.entryType === LONG_ANIMATION_FRAME && "scripts" in entry;
+}
+
+/** Whether a performance entry is an event a person did, as one an `event` observer hears may be. */
+function isInteraction(entry: PerformanceEntry): entry is PerformanceEventTiming {
+  return (
+    "interactionId" in entry && Predicate.isNumber(entry.interactionId) && entry.interactionId > 0
+  );
+}
+
+/**
+ * The epoch's time the page's clock reads 0 at, by the wall's clock now.
+ * Note that this is read now rather than taken from `performance.timeOrigin`,
+ * because the page's clock stops while the Mac sleeps and the wall's does
+ * not, so after a sleep the origin the page started with is off by the
+ * sleep's length.
+ */
+function wallOrigin(): number {
+  return Date.now() - performance.now();
+}
+
+/**
+ * Keeps the long animation frames this window reports, from its start
+ * (`buffered`), and sums each slow interaction's as it happens. Note that it
+ * takes what the browser has queued and not yet handed over before it reads,
+ * because a frame is reported a task after it ends, and the span that waited
+ * on it often ends first; an interaction is summed a little after the
+ * browser reports it for the same reason (`FRAME_REPORTED_MS`). A browser
+ * that reports no long frame answers none.
+ */
+function observeLongFrames(): LongFrames {
+  if (!PerformanceObserver.supportedEntryTypes.includes(LONG_ANIMATION_FRAME)) {
+    return { of: () => ({}), ofInteraction: () => ({}), afterReported: (then) => then() };
+  }
+
+  const history = longFrameHistory();
+  const interactions = interactionLongFrames(history);
+
+  const frames = new PerformanceObserver((list) =>
+    history.add(list.getEntries().filter(isLongFrame)),
+  );
+
+  const caughtUp = () => history.add(frames.takeRecords().filter(isLongFrame));
+
+  const events = new PerformanceObserver((list) => {
+    const origin = wallOrigin();
+    const slow = list.getEntries().filter(isInteraction);
+
+    if (slow.length === 0) return;
+
+    setTimeout(() => {
+      caughtUp();
+
+      for (const { interactionId, startTime, duration } of slow) {
+        interactions.note({ interactionId, startTime, duration, origin });
+      }
+    }, FRAME_REPORTED_MS);
+  });
+
+  frames.observe({ type: LONG_ANIMATION_FRAME, buffered: true });
+  events.observe(SLOW_INTERACTIONS);
+
+  const of = (startedAt: number, endedAt: number) => {
+    caughtUp();
+
+    const origin = wallOrigin();
+
+    return history.attributesFor(startedAt - origin, endedAt - origin);
+  };
+
+  return {
+    of,
+    ofInteraction: (startedAt, endedAt) => interactions.of(startedAt) ?? of(startedAt, endedAt),
+    afterReported: (then) => {
+      setTimeout(then, FRAME_REPORTED_MS);
+    },
+  };
+}
+
+/**
+ * Sums onto each interaction's span (INP) as it ends the long frames it
+ * overlapped, before the SDK sends it. Note that browser tracing records a
+ * long frame only under the span active as it is reported, which after the
+ * page load is none, so an interaction carried none of its own.
+ */
+function followInteractionsWithLongFrames(longFrames: LongFrames): void {
+  getClient()?.on("spanEnd", (span) => {
+    const { attributes, start_timestamp, end_timestamp } = spanToJSON(span);
+    const op = attributes[SENTRY_OP_ATTRIBUTE];
+
+    if (!Predicate.isString(op) || !op.startsWith(INTERACTION_OP_PREFIX)) return;
+
+    if (end_timestamp === undefined) return;
+
+    span.setAttributes(longFrames.ofInteraction(start_timestamp * 1000, end_timestamp * 1000));
+  });
+}
 
 /**
  * Starts the window's SDK with its default data collection and the
@@ -70,6 +233,12 @@ const PANEL_SPAN_OP = "ui.panel";
  * (`@repo/panel/send-traces`), because main's own fetch tracing would carry
  * main's trace rather than the press's.
  *
+ * A slow interaction's span (INP) and each span the panel timed carry the
+ * long animation frames they overlapped, summed as their attributes
+ * (`@repo/features/sentry-long-frames`): how long the frames blocked, how the
+ * longest split between script and render, and the script that ran longest,
+ * by its invoker, function name, and bundle path.
+ *
  * The window profiles while a kept trace's root span is open
  * (`SENTRY_PROFILING`): a page load, a send pressed, and whatever else
  * `sentryTracesSampler` keeps, as main serves every document with the
@@ -84,6 +253,7 @@ export function initDesktopSentry(): DesktopSentry {
         enableLongAnimationFrame: true,
       }),
       browserProfilingIntegration(),
+      browserApiErrorsIntegration(UNWRAPPED_CALLBACKS),
     ],
     tracesSampler: sentryTracesSampler,
     ...SENTRY_PROFILING,
@@ -93,6 +263,9 @@ export function initDesktopSentry(): DesktopSentry {
     beforeSendSpan: withStreamedSpan(spanWithoutAccessTokens),
   });
 
+  const longFrames = observeLongFrames();
+  followInteractionsWithLongFrames(longFrames);
+
   return {
     reportBlankWindow: (error, why) => {
       captureException(error, { mechanism: BLANK_WINDOW_MECHANISM[why] });
@@ -100,18 +273,28 @@ export function initDesktopSentry(): DesktopSentry {
     // A trace of its own rather than a child of whatever is active, so each
     // is sampled at the window's rate on its own, whatever page load or
     // navigation stands; its attributes are read only where it is kept. Its
-    // times go as dates, so the SDK never has to guess a number's unit.
+    // times go as dates, so the SDK never has to guess a number's unit. It
+    // is recorded once the frame it ended in has been reported, since a span
+    // often ends in the frame that drew what it waited on.
     recordSpan: (span) => {
-      startNewTrace(() => {
-        const recorded = startInactiveSpan({
-          name: span.name,
-          op: PANEL_SPAN_OP,
-          startTime: new Date(span.startedAt),
-          parentSpan: null,
-        });
+      longFrames.afterReported(() => {
+        startNewTrace(() => {
+          const recorded = startInactiveSpan({
+            name: span.name,
+            op: PANEL_SPAN_OP,
+            startTime: new Date(span.startedAt),
+            parentSpan: null,
+          });
 
-        if (recorded.isRecording()) recorded.setAttributes(span.attributes());
-        recorded.end(new Date(span.endedAt));
+          if (recorded.isRecording()) {
+            recorded.setAttributes({
+              ...span.attributes(),
+              ...longFrames.of(span.startedAt, span.endedAt),
+            });
+          }
+
+          recorded.end(new Date(span.endedAt));
+        });
       });
     },
     // A send pressed, a span of its own whose trace its act carries to main and on to the service.
