@@ -1,4 +1,4 @@
-// rig-busy-render.ts -- the rig's stand-in for a page whose every render is slow, as a Manager's page at work is: a fixture run's agent page held for the time `-busyRender <ms>` names on each render, so a flow can type and press while JavaScript is behind the field.
+// rig-busy-render.ts -- the rig's stand-in for a page whose every render is slow, as a Manager's page at work is: a fixture run's agent page held for the time `-busyRender <ms>` names on each render while its composer holds words, so a flow can type and press while JavaScript is behind the field.
 
 import { launchBusyRender } from "./host/launch-arguments.js";
 
@@ -7,13 +7,16 @@ const BUSY_MS = launchBusyRender();
 
 /**
  * Holds the JavaScript thread for the rig's render time, as a heavy render
- * holds it, so the field's keys and the presses after them wait for one
- * batch, as they do on a phone whose page is busy. Note that it holds the
- * thread rather than waiting on a timer, because only a held thread keeps
- * the native events queued; nothing runs it outside the rig.
+ * holds it, while the composer holds words (`writing`), so the field's keys
+ * and the presses after them wait for one batch, as they do on a phone whose
+ * page is busy. Note that it holds the thread rather than waiting on a
+ * timer, because only a held thread keeps the native events queued, and
+ * only while words are written, so the page opens and a sent message lands
+ * at their own pace and one held render spans every key and press a flow
+ * makes after its first word; nothing runs it outside the rig.
  */
-export function rigBusyRender(): void {
-  if (BUSY_MS === undefined) return;
+export function rigBusyRender(writing: boolean): void {
+  if (BUSY_MS === undefined || !writing) return;
   const until = performance.now() + BUSY_MS;
 
   while (performance.now() < until) {

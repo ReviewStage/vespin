@@ -2,11 +2,11 @@
 #
 # It lives under maestro/rig/ rather than maestro/, so the screenshot run,
 # which runs every flow at maestro/'s top, never runs it. `-busyRender`
-# holds each render of the agent's page for six seconds (`rig-busy-render.ts`),
-# as a Manager's page at work holds JavaScript, so every key typed and both
-# presses after the first key land while JavaScript is still drawing it, and
-# reach it in one batch, as Charles's "What abo" did, posted twice and cut
-# off. The press is Send's own, found by its name, and every wait is on what
+# holds each render of the agent's page for twenty seconds while its composer
+# holds words (`rig-busy-render.ts`), as a Manager's page at work holds
+# JavaScript, so every key typed and both presses after the first key land
+# while JavaScript is still drawing that key, and reach it in one batch, as
+# Charles's "What abo" did, posted twice and cut off. The press is Send's own, found by its name, and every wait is on what
 # the screen shows.
 appId: dev.vespin.ios
 ---
@@ -18,7 +18,7 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 81e2a425-6d3f-4a07-92df-9eafb0c1d2e8
-      busyRender: "6000"
+      busyRender: "20000"
 - extendedWaitUntil:
     visible: "Left before it ships.*"
     timeout: 60000
@@ -36,7 +36,7 @@ appId: dev.vespin.ios
     visible:
       text: "Send"
       enabled: true
-    timeout: 60000
+    timeout: 120000
 # The rest is typed and Send pressed twice while the page draws the first of
 # those keys, so the keys and both presses reach JavaScript together.
 - inputText: "ut the release"
@@ -46,7 +46,7 @@ appId: dev.vespin.ios
 # stands empty.
 - extendedWaitUntil:
     visible: "What about the release"
-    timeout: 60000
+    timeout: 120000
 # Note that the field's own label is its placeholder, so any of the typed
 # words standing in it, whole or a part left behind, is found by its value.
 - assertNotVisible:
