@@ -15,9 +15,9 @@
  *
  * The transcript is the work under the chat, read beside it only for what
  * a chat shows of it: whether a turn is under way, which the working line
- * says, and each turn's work, which stands folded over the Manager's first
- * message of the turn, as a chat app stands what it thought over its answer,
- * and which the working line opens for the turn under way. A call the Manager holds for the reader's answer stands at the chat's
+ * says, and each turn's work, which Show work opens under the Manager's
+ * first message of the turn, among its actions and in its menu, and which
+ * the working line opens for the turn under way. A call the Manager holds for the reader's answer stands at the chat's
  * foot, its answers under it, since the work it stands in is a press away. A
  * message the reader sends goes to the chat (`agents.chat.send`) and stands
  * drawn at its end from the moment it is sent, as the host draws it on its
@@ -47,27 +47,15 @@ import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features
 import {
   CHAT_RUN_ALONE,
   type ChatRunPlace,
-  chatWorkWords,
   type ManagerChatLine,
   managerChatView,
 } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MessageFileChip } from "@repo/features/message-files";
-import { WORKED_WORDS, workingTime } from "@repo/features/time-format";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
-import {
-  ChannelMessage,
-  Disclosure,
-  DisclosureBody,
-  DisclosureSummary,
-  EmptyState,
-  GlyphSlot,
-  ThreadRule,
-  TIME_LOOK,
-  Time,
-} from "@repo/ui";
+import { ChannelMessage, EmptyState, GlyphSlot, ThreadRule, TIME_LOOK, Time } from "@repo/ui";
 import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
@@ -123,7 +111,7 @@ import { LOG_ROW_CLASS, ToolCallView, TurnWorkRows } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ReplyMessageAction, useChatMessageMenu } from "./chat-reply.js";
-import { type ChatWorkToggle, WorkingWorkAction } from "./chat-work.js";
+import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { EditComposer } from "./edit-composer.js";
 import { useManagerChatLooks } from "./manager-chat-looks.js";
@@ -287,30 +275,13 @@ function ManagerGreeting({
   );
 }
 
-/** A turn's work as its fold draws it: what its line says, and the work's rows. */
-interface TurnWork {
-  readonly summary: string;
-  readonly rows: ReactNode;
-}
-
-/** What a turn's fold says: how long the turn worked, where its journal says when it began and ended, as the transcript's last line of a turn says it; Show work otherwise. */
-function turnWorkSummary(turn: AgentTranscriptMessage | undefined): string {
-  const startedAt = turn?.startedAt;
-  const finishedAt = turn?.finishedAt;
-
-  if (startedAt === undefined || finishedAt === undefined || finishedAt < startedAt) {
-    return chatWorkWords(false);
-  }
-
-  return `${WORKED_WORDS}${workingTime(finishedAt - startedAt)}`;
-}
-
 /**
  * One of the Manager's messages: its words in a bubble at the column's left,
  * under its name where it opens its run, beside its face, with Copy and
- * Reply beside it; the work of its turn folded over it where it is the
- * first the Manager sent in a turn that did work; its files over the words;
- * when it was sent under the run's last.
+ * Reply beside it and in its menu; Show work there too where it is the
+ * first the Manager sent in a turn that did work, which opens the turn's
+ * work under it; its files over the words; when it was sent under the run's
+ * last.
  */
 function ManagerMessage({
   line,
@@ -319,11 +290,14 @@ function ManagerMessage({
 }: {
   line: ManagerChatLine;
   doors: ChatDoors;
-  work: TurnWork | null;
+  work: ReactNode | null;
 }): ReactNode {
   const { message, place } = line;
   const thread = threadOf(message, doors);
-  const menu = useChatMessageMenu(message.text, thread.onOpen);
+  const toggle = useWorkToggle();
+  const workToggle = work === null ? undefined : toggle;
+  const menu = useChatMessageMenu(message.text, thread.onOpen, workToggle);
+  const workAction = workToggle === undefined ? null : <WorkMessageAction toggle={workToggle} />;
   // Note that the Manager's pictures kept with their size stand as the set it showed, as the transcript draws a shown set.
   const shown = shownOf(message);
   const files = fileChipsOf(message, shown);
@@ -338,9 +312,12 @@ function ManagerMessage({
         continues={!place.opens}
         contextMenu={menu.contextMenu}
         actions={
-          // Note that a message of files alone has no words to copy or quote, so it offers its thread alone.
+          // Note that a message of files alone has no words to copy or quote, so it offers its thread and its work alone.
           message.text === "" ? (
-            thread.action
+            <>
+              {thread.action}
+              {workAction}
+            </>
           ) : (
             <CopyMessageAction
               words={message.text}
@@ -351,6 +328,7 @@ function ManagerMessage({
                 <>
                   {thread.action}
                   <ReplyMessageAction words={message.text} />
+                  {workAction}
                 </>
               }
             />
@@ -364,19 +342,12 @@ function ManagerMessage({
                 {files.length === 0 ? null : <KeptFileChips files={files} />}
               </div>
             )}
+            {/* Note that the turn's work opens under its first message, in the order it was done, as the working line opens the turn's under way. */}
+            {workToggle?.shown === true ? <div data-turn-work="">{work}</div> : null}
             {thread.summary}
           </>
         }
       >
-        {work === null ? null : (
-          // Note that the turn's work stands folded over its first message, in the order it was done.
-          <Disclosure data-turn-work="">
-            <DisclosureSummary>
-              <span>{work.summary}</span>
-            </DisclosureSummary>
-            <DisclosureBody>{work.rows}</DisclosureBody>
-          </Disclosure>
-        )}
         {message.text === "" ? null : <TranscriptWords text={message.text} />}
       </ChannelMessage>
       {menu.menu}
@@ -407,7 +378,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const editor = useMessageEdit(lineId ?? "");
   // Note that any message of the chat is answered as the Manager's is: Reply quotes it whole into the box, beside its Copy and in its menu.
   const thread = threadOf(message, doors);
-  const menu = useChatMessageMenu(message.text, thread.onOpen);
+  const menu = useChatMessageMenu(message.text, thread.onOpen, undefined);
 
   if (ownLine !== undefined && editor !== undefined) {
     return <EditComposer message={ownLine} words={message.text} edit={editor} />;
@@ -894,20 +865,11 @@ function useManagerChatBox({
     [manager, control.me, delegation, lines],
   );
 
-  /** The rows of one turn's work, by the transcript line that opened it, folded over the Manager's first message of the turn. */
-  const workOf = (line: ManagerChatLine): TurnWork | null =>
-    line.work === undefined
-      ? null
-      : {
-          summary: turnWorkSummary(lines.get(line.work)),
-          rows: (
-            <TurnWorkRows
-              parts={view.work.get(line.work) ?? []}
-              moving={false}
-              delegation={delegation}
-            />
-          ),
-        };
+  /** The rows of one turn's work, by the transcript line that opened it, which Show work opens under the Manager's first message of the turn. */
+  const workOf = (line: ManagerChatLine): ReactNode | null =>
+    line.work === undefined ? null : (
+      <TurnWorkRows parts={view.work.get(line.work) ?? []} moving={false} delegation={delegation} />
+    );
 
   /** One message of the chat, as its sender draws it, reading `drawn`'s doors: the chat's, or a thread's tab's. */
   const drawLine = (line: ManagerChatLine, drawn: ChatDoors): ReactNode =>

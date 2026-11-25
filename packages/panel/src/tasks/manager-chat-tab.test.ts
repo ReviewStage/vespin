@@ -460,7 +460,7 @@ test("a thread whose message is gone from the chat, its start read, says so rath
   assert.match(thread.textContent ?? "", /This thread is no longer in the chat\./u);
 });
 
-test("an ended turn's work stands folded over the Manager's first message of the turn, saying how long the turn worked, and opens onto its calls", async () => {
+test("an ended turn's work is offered as Show work beside the Manager's first message of the turn and in its menu, which opens it under the message and folds it again", async () => {
   const { container } = await drawChat(
     [
       row("ask", 1, "What first?", DEAN),
@@ -492,24 +492,49 @@ test("an ended turn's work stands folded over the Manager's first message of the
   const first =
     container.querySelector('[data-message-id="told"]') ?? assert.fail("the turn's first message");
 
-  const words = first.textContent ?? "";
-  const fold = words.indexOf("Worked for 1m 18s");
-  assert.ok(
-    fold >= 0 && fold < words.indexOf("The invite flow."),
-    "the fold stands over the words",
-  );
-  assert.equal(
-    container.querySelector('[data-message-id="then"]')?.textContent?.includes("Worked for"),
-    false,
-    "and over the turn's first message alone",
-  );
-  assert.equal(first.querySelector('[data-call-id="list-1"]'), null, "folded");
+  const then =
+    container.querySelector('[data-message-id="then"]') ?? assert.fail("the turn's next message");
 
-  const line = first.querySelector("summary") ?? assert.fail("the fold's line");
-  await act(async () => line.click());
+  assert.equal(first.querySelector('[data-call-id="list-1"]'), null, "closed until asked");
+
+  pointerCross(document.body, then);
+  assert.equal(
+    then.querySelector('button[aria-label="Show work"]'),
+    null,
+    "only the turn's first message offers its work",
+  );
+
+  pointerCross(then, first);
+
+  const show =
+    first.querySelector<HTMLButtonElement>('button[aria-label="Show work"]') ??
+    assert.fail("Show work stands beside the message");
+
+  await act(async () => show.click());
   await settleQueries();
 
-  assert.ok(first.querySelector('[data-call-id="list-1"]'), "the fold opens onto the turn's call");
+  const bubble =
+    [...first.querySelectorAll(".ui-channel-message-words")].find(
+      (each) => each.textContent === "The invite flow.",
+    ) ?? assert.fail("the message's words");
+
+  const call =
+    first.querySelector('[data-call-id="list-1"]') ?? assert.fail("the turn's call opens");
+
+  assert.ok(
+    bubble.compareDocumentPosition(call) & Node.DOCUMENT_POSITION_FOLLOWING,
+    "under the message's words",
+  );
+
+  act(() => {
+    bubble.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+    );
+  });
+  await act(async () => menuItem("Hide work").click());
+  await settleQueries();
+
+  assert.equal(first.querySelector('[data-call-id="list-1"]'), null, "the menu folds it away");
 });
 
 test.each([
