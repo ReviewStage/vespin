@@ -564,13 +564,18 @@ function hasArguments(selector: string): readonly string[] {
 /** A `:has()` reading what the keyboard holds, the one kind no attribute can say: its subject's or a child's `:focus-visible`. */
 const READS_KEYBOARD = /^\s*(?:>\s*)?[^\s,>+~]*:focus-visible\s*$/u;
 
-/** Whether a block's selector holds a `:has()` that reads what a component draws or holds, rather than what the keyboard holds. */
+/** Whether a block's selector holds a `:has()` that reads what a component draws or holds, rather than what the keyboard holds; an at-rule's prelude (`@supports selector(:has(…))`) holds none. */
 function readsDrawnThrough(block: CssBlock): boolean {
-  return hasArguments(selectorOf(block)).some((held) => !READS_KEYBOARD.test(held));
+  const selector = selectorOf(block);
+
+  return (
+    !selector.trimStart().startsWith("@") &&
+    hasArguments(selector).some((held) => !READS_KEYBOARD.test(held))
+  );
 }
 
-/** Tailwind's `:has()` variants (`has-[…]:`, `group-has-*:`, `peer-has-*:`), but the one reading what the keyboard holds. */
-const HAS_VARIANT = /(?:^|:)(?:group-|peer-|in-)?has-(?!focus-visible:)[^:]*:/u;
+/** Tailwind's `:has()` variants (`has-[…]:`, `group-has-*:`, `peer-has-*:`), but the one reading what the keyboard holds, a named group's or peer's (`group-has-focus-visible/row:`) among them. */
+const HAS_VARIANT = /(?:^|:)(?:group-|peer-|in-)?has-(?!focus-visible(?:\/[\w-]+)?:)[^:]*:/u;
 
 /** Whether a block's selector draws a path's crumb: a list item, in its last compound, of a path. */
 function isCrumbBox(block: CssBlock): boolean {
@@ -1180,7 +1185,8 @@ export function styleViolations(
           excerpt: selectorOf(block),
         });
       }
-      if (block.declarations.length > 0 && readsDrawnThrough(block)) {
+      // Note that a block holding only nested rules is read too, because what it reads under `:has()` styles every rule nested in it.
+      if (readsDrawnThrough(block)) {
         violations.push({ rule: STYLE_RULE.HAS, line: block.line, excerpt: selectorOf(block) });
       }
       const edge = edgeClipBlock(block);
