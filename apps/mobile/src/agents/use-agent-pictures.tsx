@@ -1,5 +1,5 @@
 /**
- * use-agent-pictures.tsx -- what each picture an agent showed is drawn from: the service's address and the header its read carries, asked of the host through TanStack Query where the picture is drawn, and handed to expo-image, which downloads, caches, and decodes it itself; read ahead for the rows about to scroll in, and tried once more under a renewed header where the service refused it.
+ * use-agent-pictures.tsx -- what each picture and recording an agent showed is drawn or played from: the service's address and the header its read carries, asked of the host through TanStack Query where it is drawn, and handed to expo-image, which downloads, caches, and decodes a picture itself, or to expo-video, which plays and caches a recording as its MP4 copy; pictures read ahead for the rows about to scroll in, and each tried once more under a renewed header where the service refused it.
  *
  * Each picture reads its own query where it is drawn (`useAgentPictureById`,
  * handed to `@repo/ui-native` through `PictureByIdProvider`), so a picture
@@ -35,6 +35,7 @@ import {
 import { type QueryClient, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from "react";
+import { cachedPlayed } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { pictureFile } from "../picture-files.js";
@@ -42,6 +43,12 @@ import { usePictureShownCount } from "../picture-shown.js";
 
 /** The key a picture's source is held under, by the account, the agent, and the picture. */
 const AGENT_PICTURE_QUERY = "agent-picture-source";
+
+/** The prefix a recording answered as its bytes is written under in the app's caches. */
+const PLAYED_PREFIX = "agent-played";
+
+/** What a `data:` address of a recording or a clip opens with, which the system's player cannot read. */
+const PLAYED_DATA = /^data:((?:video|audio)\/[^;,]+);base64,/u;
 
 /** A source the loader could not read even under a renewed header, which stands failed until Try again. */
 const UNREAD: PictureSourceView = { failure: PICTURE_SOURCE_FAILURE.UNOFFERED };
@@ -65,7 +72,25 @@ function drawnFrom(
   return view.headers === undefined ? view.uri : view;
 }
 
-/** One picture's source as a query, renewed first where `renew`. */
+/**
+ * A source answered as its bytes, as a fixture run's is, written to a file
+ * where it is a recording, since the system's player reads no `data:`
+ * address; a picture's stands as it is, which the loader draws.
+ */
+async function playableView(
+  view: PictureSourceView,
+  pictureId: string,
+): Promise<PictureSourceView> {
+  if ("failure" in view) return view;
+  const played = PLAYED_DATA.exec(view.uri);
+
+  if (played?.[1] === undefined) return view;
+  const base64 = view.uri.slice(played[0].length);
+
+  return { uri: await cachedPlayed(PLAYED_PREFIX, pictureId, played[1], base64) };
+}
+
+/** One picture's or recording's source as a query, renewed first where `renew`. */
 function sourceQuery(
   acts: ReturnType<typeof useHostActs>,
   accountId: string | undefined,
@@ -81,7 +106,7 @@ function sourceQuery(
         agentId,
         pictureId,
         ...(renew ? { renew: true } : undefined),
-      }),
+      }).then((view) => playableView(view, pictureId)),
     staleTime: Number.POSITIVE_INFINITY,
   };
 }

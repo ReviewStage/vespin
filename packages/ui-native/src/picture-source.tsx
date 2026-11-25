@@ -60,7 +60,7 @@ export function PictureEventsProvider({
 }
 
 /** The page's ears for the picture drawn here; none where nothing listens. */
-function usePictureEvents(): PictureEvents | undefined {
+export function usePictureEvents(): PictureEvents | undefined {
   return useContext(PictureEventsDoor);
 }
 

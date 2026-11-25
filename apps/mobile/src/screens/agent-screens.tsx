@@ -102,6 +102,7 @@ import {
   shownFiles,
   shownMediaIds,
   shownPictureIds,
+  shownRecordingIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptReveal,
@@ -995,11 +996,16 @@ const AgentConversation = memo(function AgentConversation({
   const pictureIds = useMemo(() => shownPictureIds(near), [near]);
   const dockIds = useMemo(() => appsDockMediaIds(inUse), [inUse]);
 
-  const mediaIds = useMemo(() => {
-    const pictures = new Set(pictureIds);
+  // Note that every picture and recording of the transcript is handed to its row by its id, which it reads where it is drawn, so one landing draws that piece alone and never this page, whose rows may hold an open long-press menu; a sound clip alone is read here, as the file it plays from.
+  const addressed = useMemo(
+    () => new Set([...shownPictureIds(items), ...shownRecordingIds(items)]),
+    [items],
+  );
 
-    return shownMediaIds(near).filter((each) => !pictures.has(each));
-  }, [near, pictureIds]);
+  const mediaIds = useMemo(
+    () => shownMediaIds(near).filter((each) => !addressed.has(each)),
+    [near, addressed],
+  );
 
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
@@ -1082,8 +1088,6 @@ const AgentConversation = memo(function AgentConversation({
   const media = useAgentMedia(id, mediaIds);
   const dockFiles = useAgentPictureFiles(id, dockIds);
   const pictures = useAgentPictures(id, pictureIds);
-  // Note that every picture of the transcript is handed to its row by its id, which it reads where it is drawn, so one landing draws that picture alone and never this page, whose rows may hold an open long-press menu.
-  const pictureSet = useMemo(() => new Set(shownPictureIds(items)), [items]);
 
   // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
   const title =
@@ -1324,12 +1328,12 @@ const AgentConversation = memo(function AgentConversation({
         onToggle={(item) => setToggles((held) => toggledAt(held, item))}
         onOpenPage={openPage}
         mediaSource={(mediaId) =>
-          pictureSet.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
+          addressed.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
         }
         fileSource={sentFiles.source}
         onRetryFile={sentFiles.retry}
         onRetryMedia={(mediaId) =>
-          pictureSet.has(mediaId) ? pictures.retry(mediaId) : media.retry(mediaId)
+          addressed.has(mediaId) ? pictures.retry(mediaId) : media.retry(mediaId)
         }
         onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
         onOpenAddress={openInSafari}

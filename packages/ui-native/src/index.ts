@@ -536,6 +536,7 @@ export {
   shownFiles,
   shownMediaIds,
   shownPictureIds,
+  shownRecordingIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptToggles,

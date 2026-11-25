@@ -1660,6 +1660,18 @@ export function shownPictureIds(items: readonly TranscriptItem[]): readonly stri
   });
 }
 
+/** The ids of the recordings alone among those the items show (`shownMediaIds`), each a shown piece or one a call answered. */
+export function shownRecordingIds(items: readonly TranscriptItem[]): readonly string[] {
+  const recordings = (media: readonly ShownMedia[]) =>
+    media.flatMap(({ id, kind }) => (kind === SHOWN_MEDIA.VIDEO ? [id] : []));
+
+  return items.flatMap((item) => {
+    if (item.kind === TRANSCRIPT_ITEM.MEDIA) return recordings(item.media);
+
+    return item.kind === TRANSCRIPT_ITEM.CALL ? recordings(item.answered) : [];
+  });
+}
+
 /** The ids of every picture and recording the items show, an open call's body's among them, which the list reads the bytes of. */
 export function shownMediaIds(items: readonly TranscriptItem[]): readonly string[] {
   return items.flatMap((item) => {

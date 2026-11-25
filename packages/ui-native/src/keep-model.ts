@@ -6,11 +6,13 @@
  * drawn from an address, and this holds the same: a picture is kept only
  * from its `data:` address or the file the app wrote it to under its caches,
  * named by its type's extension, and a recording or a file only from the
- * file the app wrote. Photos takes a picture the system decodes and an
+ * file the app wrote, a recording drawn from the service's address
+ * downloaded to one as it is kept. Photos takes a picture the system decodes and an
  * MP4, never a WebM or an SVG, and the pasteboard takes a picture the system
  * decodes or a text file's words, never a sound clip; anything may be shared.
  */
 
+import { Predicate } from "effect";
 import { GLYPH, type Glyph } from "./glyph.js";
 
 /** What is kept: a picture, a recording, a sound clip, or any other file a message carried. */
@@ -43,9 +45,11 @@ export type Kept =
     }
   | {
       readonly kind: typeof KEPT_KIND.VIDEO;
-      /** The file the app wrote it to, named by its type's extension (`cachedPlayed`). */
-      readonly source: string;
+      /** The file the app wrote it to, named by its type's extension (`cachedPlayed`), or the service's address with the header its read carries, which the app downloads as it is kept and lets go of after. */
+      readonly source: string | RemoteVideo;
       readonly name: string;
+      /** Whether the system's player can play one held by its address, so it is an MP4, which Photos takes. */
+      readonly plays?: boolean;
     }
   | {
       readonly kind: typeof KEPT_KIND.SOUND;
@@ -60,6 +64,12 @@ export type Kept =
       readonly name: string;
       readonly mediaType: string;
     };
+
+/** A recording held by the service's address, with the header its read carries, which is never logged or kept. */
+export interface RemoteVideo {
+  readonly uri: string;
+  readonly headers?: Readonly<Record<string, string>> | undefined;
+}
 
 /** A picture's bytes as its `data:` address holds them. */
 export interface HeldPicture {
@@ -180,7 +190,11 @@ export function keepActs(kept: Kept): readonly KeepAct[] {
     case KEPT_KIND.PICTURE:
       return pictureActs(kept.source);
     case KEPT_KIND.VIDEO:
-      return kept.source.toLowerCase().endsWith(PHOTOS_VIDEO_EXTENSION)
+      return (
+        Predicate.isString(kept.source)
+          ? kept.source.toLowerCase().endsWith(PHOTOS_VIDEO_EXTENSION)
+          : kept.plays === true
+      )
         ? [KEEP_ACT.SAVE_TO_PHOTOS, KEEP_ACT.SHARE]
         : [KEEP_ACT.SHARE];
     // Note that a clip is only shared, since neither Photos nor the pasteboard holds one.

@@ -3502,8 +3502,9 @@ const DICTATED_WORDS = "Run the invite tests again.";
 /** A picture's bytes as this fixture answers them, by whose it is: an agent's, an Inbox item's, or a description's or a comment's. */
 function fixturePictureRead(picture: PictureSourceParams) {
   switch (picture.owner) {
+    // Note that the phone asks for a recording's MP4 copy, as its header to the service does.
     case PICTURE_OWNER.AGENT:
-      return fixtureAgentPicture(picture.pictureId, undefined);
+      return fixtureAgentPicture(picture.pictureId, MP4_TYPE);
     case PICTURE_OWNER.INBOX:
       return ANSWERS[ACT_KIND.AGENTS_INBOX_ATTACHMENT]?.({
         itemId: picture.itemId,
