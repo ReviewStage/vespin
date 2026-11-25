@@ -143,6 +143,8 @@ export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-m
 
 export { releaseFields } from "./field-focus.js";
 
+export { type FiringLook, firingLook } from "./firing-look.js";
+
 export {
   AttachRow,
   DATE_PICK_PART,

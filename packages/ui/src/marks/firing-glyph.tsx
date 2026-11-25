@@ -1,9 +1,5 @@
-import {
-  AUTOMATION_FIRING,
-  type AutomationFiring,
-  type AutomationTrigger,
-} from "@repo/features/automation-wire";
-import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { FIRING_MARK, firingMark } from "@repo/features/automation-firing-mark";
+import type { AutomationFiring, AutomationTrigger } from "@repo/features/automation-wire";
 import React from "react";
 import { ClockIcon, PlayIcon, WebhookIcon } from "../icons/icons.js";
 import { ProviderMark } from "./provider-mark.js";
@@ -21,22 +17,22 @@ void React;
  * with it.
  */
 
-/** What fires an automation or fired a run, as its glyph. */
+/** What fires an automation or fired a run, as its glyph: the mark `firingMark` names, drawn from the panel's icons. */
 export function FiringGlyph({
   of,
 }: {
   of: AutomationFiring | AutomationTrigger;
 }): React.JSX.Element {
-  switch (of.kind) {
-    case AUTOMATION_FIRING.GITHUB:
-      return <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} />;
-    case AUTOMATION_FIRING.WEBHOOK:
+  const mark = firingMark(of);
+
+  switch (mark.kind) {
+    case FIRING_MARK.PROVIDER:
+      return <ProviderMark provider={mark.provider} />;
+    case FIRING_MARK.WEBHOOK:
       return <WebhookIcon />;
-    case AUTOMATION_FIRING.MANUAL:
+    case FIRING_MARK.MANUAL:
       return <PlayIcon />;
-    case AUTOMATION_FIRING.SCHEDULE:
+    case FIRING_MARK.SCHEDULE:
       return <ClockIcon />;
-    case AUTOMATION_FIRING.INTEGRATION:
-      return <ProviderMark provider={of.provider} />;
   }
 }
