@@ -50,6 +50,8 @@ fi
 udid=$1
 output=$2
 mkdir -p "$output"
+# Note that an earlier run's count is let go first, so a run that writes none never leaves an older one standing as its own.
+rm -f "$output/launch-load.json"
 seed=$(mktemp -d)
 trap 'rm -rf "$seed"' EXIT
 
@@ -79,12 +81,18 @@ echo "launching cold as the busy account for ${seconds}s"
 launched=$(xcrun simctl launch "$udid" "$BUNDLE_ID" -authServer stub -busyAccount true)
 pid=${launched##*: }
 date +%s >"$output/launched-at"
+recorder=
 if ((trace)); then
     xcrun xctrace record --template 'Time Profiler' --device "$udid" --attach "$pid" \
         --time-limit "${seconds}s" --output "$output/launch.trace" >"$output/xctrace.log" 2>&1 &
+    recorder=$!
 fi
 sleep "$seconds"
-wait || true
+traced=0
+if [[ -n "$recorder" ]] && ! wait "$recorder"; then
+    echo "error: the Time Profiler recording failed; see $output/xctrace.log" >&2
+    traced=1
+fi
 
 if [[ -f "$host/busy-account/launch-load.json" ]]; then
     cp "$host/busy-account/launch-load.json" "$output/launch-load.json"
@@ -92,3 +100,4 @@ if [[ -f "$host/busy-account/launch-load.json" ]]; then
 else
     echo "warning: the launch wrote no launch:load; was it sent to the background, or begun there?" >&2
 fi
+exit "$traced"

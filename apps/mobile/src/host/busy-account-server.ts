@@ -170,7 +170,14 @@ async function inboxAnswer(sync: string | null, askedAt: number): Promise<Respon
     queries: {
       stamps: movedPart(
         "stamps",
-        [{ ...move.stamp, updatedAt: at, messages: Number(move.stamp.messages) + 1 + n }],
+        [
+          {
+            ...move.stamp,
+            updatedAt: at,
+            // Note that a thread takes one message a move, and the moves come round to it again once a pass through them is done, so its count is its seed's, this move's, and one for each pass before.
+            messages: Number(move.stamp.messages) + 1 + Math.floor(n / moves.length),
+          },
+        ],
         past,
       ),
       items: movedPart("items", [{ ...move.item, updatedAt: at }], past),
