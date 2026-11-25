@@ -330,7 +330,9 @@ token-shaped parts of addresses. The Mac app's and the web app's reports do not
 name your account; the Service's name it by its id only. The
 Service does not send Sentry what was sent to or returned by a model, though an
 error's own words can quote what an agent was working on. The Mac app also sends
-Sentry diagnostic data about its resource use, such as processor usage. The
+Sentry diagnostic data about its resource use, such as processor usage, and
+how long its main process stopped answering whenever it did, with the stack of
+its own functions it stood still in, never the values they held. The
 Service sends processor profiles of the traces Sentry keeps, and the Mac
 app's windows of the time they are in use, from a click, keystroke, or scroll
 until ten seconds without one: which of their own functions ran and for how
