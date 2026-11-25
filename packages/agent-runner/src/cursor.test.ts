@@ -25,6 +25,7 @@ import { afterEach, vi } from "vitest";
 import { EventsUndelivered } from "./events.js";
 import {
   CURSOR_SIGNED_OUT_DETAIL,
+  CURSOR_SILENT_DETAIL,
   type CursorConfig,
   IMAGE_MEDIA_TYPE,
   INPUT_LINE,
@@ -898,6 +899,39 @@ it.effect(
         cursor.sent.map(({ message: sent }) => sent.text),
         ["<coder_instructions>\nYou are a Vespin coding agent.\n</coder_instructions>\n\nGo on."],
       );
+    }),
+);
+
+it.effect(
+  "ends the launch failed with words the member reads where Cursor never starts a summary within its silence limit",
+  () =>
+    Effect.gen(function* () {
+      fakeTranscripts(TWO_TURNS_HELD);
+      const service = fakeService(LINE_AFTER_REWIND);
+      const { cursor, write, run } = yield* launch([{ messages: [], stalled: true }], service);
+
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE_AFTER_REWIND,
+        content: [],
+        compact: true,
+      });
+      yield* service.seen;
+
+      for (let step = 0; step < 500 && cursor.summaries.length === 0; step += 1) {
+        yield* Effect.yieldNow;
+      }
+
+      yield* TestClock.adjust(RUNNER_UNANSWERED.SILENCE_MS);
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      vi.restoreAllMocks();
+      assert.deepEqual(messagesOf(service.applied).at(-1), {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: CURSOR_SILENT_DETAIL,
+      });
     }),
 );
 

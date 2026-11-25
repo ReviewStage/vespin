@@ -28,7 +28,8 @@
  * a turn Cursor stopped answering ends rather than holding until a Stop or
  * the service's progress deadline (`watchSilence`). A call the model wrote
  * past no longer counts as running, since Cursor can leave one it gave up on
- * running for good.
+ * running for good. A run the SDK never starts within that limit, a
+ * summary's or a message's, ends the launch the same way (`runStarted`).
  * Cursor keeps no goal, so a line marked `goal` goes as words, as it does to
  * a runner from before the mark.
  *
@@ -175,6 +176,12 @@ const STORE_RETRY_DELAY = Duration.seconds(1);
 
 /** What a launch with no key to run Cursor on ends with. */
 const NO_KEY = "no Cursor API key was handed to the launch";
+
+/** The runs the log names where the SDK never starts one. */
+const RUN_STARTED = {
+  MESSAGE: "message's run",
+  SUMMARY: "summary",
+} as const;
 
 /** Why the SDK refused a step of the launch, which ends it. */
 class CursorFailed extends Data.TaggedError("CursorFailed")<{ readonly detail: string }> {}
@@ -468,6 +475,31 @@ function sendOptionsOf(launch: CursorLaunch): SendOptions {
   };
 }
 
+/**
+ * The run the SDK starts, asked for by `start`, `what` naming it in the log.
+ * Note that the start is bounded by `RUNNER_UNANSWERED.SILENCE_MS`, as a run
+ * that streams nothing is, because the silence watch begins only once a run
+ * is in hand and the controller waits on the start meanwhile.
+ */
+const runStarted = Effect.fn("agent-runner/cursor/runStarted")(function* (
+  what: string,
+  start: () => Promise<CursorRun>,
+) {
+  return yield* Effect.tryPromise({
+    try: start,
+    catch: (cause) => new CursorFailed({ detail: detailOf(cause) }),
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: Duration.millis(RUNNER_UNANSWERED.SILENCE_MS),
+      orElse: () =>
+        Effect.andThen(
+          Effect.logWarning(`agent-runner: Cursor never started the ${what}`),
+          Effect.fail(new CursorFailed({ detail: CURSOR_SILENT_DETAIL })),
+        ),
+    }),
+  );
+});
+
 /** Sends the messages given, merged, as the agent's next run. */
 const sendRun = Effect.fn("agent-runner/cursor/sendRun")(function* (
   launch: CursorLaunch,
@@ -491,10 +523,9 @@ const sendRun = Effect.fn("agent-runner/cursor/sendRun")(function* (
   // The checkpoint the agent stands at is where a rewind or a fork before this line resumes it.
   if (first !== undefined) launch.store.markCut(launch.session, first);
 
-  const run = yield* Effect.tryPromise({
-    try: () => launch.agent.send(message, sendOptionsOf(launch)),
-    catch: (cause) => new CursorFailed({ detail: detailOf(cause) }),
-  });
+  const run = yield* runStarted(RUN_STARTED.MESSAGE, () =>
+    launch.agent.send(message, sendOptionsOf(launch)),
+  );
 
   launch.store.dueInstructions(launch.session, false);
   launch.state = { kind: LAUNCH_STATE.RUN, run, summary: false, stopping: false };
@@ -516,10 +547,7 @@ const startSummary = Effect.fn("agent-runner/cursor/startSummary")(function* (
 
   if (!launch.store.conversed(launch.session)) return yield* turnOver(launch);
 
-  const run = yield* Effect.tryPromise({
-    try: () => launch.agent.summarize(),
-    catch: (cause) => new CursorFailed({ detail: detailOf(cause) }),
-  });
+  const run = yield* runStarted(RUN_STARTED.SUMMARY, () => launch.agent.summarize());
 
   launch.state = { kind: LAUNCH_STATE.RUN, run, summary: true, stopping: false };
   yield* follow(launch, run);
