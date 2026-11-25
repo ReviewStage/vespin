@@ -784,17 +784,17 @@ function unadopted<Row extends object, Change>(
   }
 }
 
-/** The rows `next` holds taken as the synced ones, answering the keys it wrote, and every read showing one, but `except`, drawn again. */
-function takenAndDrawn<Row extends object, Change>(
+/** `upserted` taken as synced rows and `deleted` let go, every other row left as it is, answering the keys it wrote, and every read showing one drawn again. */
+function patchedAndDrawn<Row extends object, Change>(
   rows: KindRows<Row, Change>,
-  next: ReadonlyMap<string, Row>,
-  except?: Holding<Row, Change>,
+  upserted: ReadonlyMap<string, Row>,
+  deleted: readonly string[],
 ): Effect.Effect<readonly string[]> {
   return Effect.suspend(() => {
-    const written = rows.synced.take(next);
+    const written = rows.synced.patch(upserted, deleted);
     unreported(rows, written);
 
-    return Effect.as(redrawn(holdersOf(rows.reads, written, except), written), written);
+    return Effect.as(redrawn(holdersOf(rows.reads, written), written), written);
   });
 }
 
@@ -1258,23 +1258,35 @@ function takenInPlace<Row extends object, Change>(
   taken: Change,
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
-    const next = new Map(rows.synced.held());
+    const held = rows.synced.held();
+    const upserted = new Map<string, Row>();
+    const deleted = new Set<string>();
     const beside: Holding<Row, Change>[] = [];
+
+    // Note that a row a launch only loaded from disk was never taken here, so the change is drawn over it as the collection holds it, and its delete is written by key.
+    const current = (key: string): Row | undefined =>
+      deleted.has(key) ? undefined : (upserted.get(key) ?? held.get(key) ?? loadedRow(rows, key));
+
+    const taking = (key: string): boolean =>
+      upserted.has(key) || (held.has(key) && !deleted.has(key));
 
     for (const holding of holdings) {
       if (keys.some((key) => holding.read.beside?.shows(key) === true)) beside.push(holding);
 
       for (const key of keys) {
         if (!holding.showsAll && !holding.held.has(key) && !holding.adopted.has(key)) continue;
-        // Note that a row a launch only loaded from disk was never taken here, so the change is drawn over it as the collection holds it.
-        const drawn = rows.kind.drawn(taken, next.get(key) ?? loadedRow(rows, key));
+        const drawn = rows.kind.drawn(taken, current(key));
 
         if (drawn === ROW_GONE) {
-          next.delete(key);
+          upserted.delete(key);
+          deleted.add(key);
           rows.takenAt.delete(key);
-        } else if (drawn !== undefined) next.set(key, drawn);
+        } else if (drawn !== undefined) {
+          deleted.delete(key);
+          upserted.set(key, drawn);
+        }
 
-        if (holding.held.has(key) || !next.has(key)) continue;
+        if (holding.held.has(key) || !taking(key)) continue;
         holding.held.add(key);
         holding.unreported.add(key);
       }
@@ -1282,7 +1294,7 @@ function takenInPlace<Row extends object, Change>(
 
     for (const holding of beside) holding.read.beside?.take(taken);
 
-    return Effect.andThen(redrawn(beside, keys), takenAndDrawn(rows, next));
+    return Effect.andThen(redrawn(beside, keys), patchedAndDrawn(rows, upserted, [...deleted]));
   });
 }
 

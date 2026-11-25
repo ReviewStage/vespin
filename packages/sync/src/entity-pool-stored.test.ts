@@ -1,6 +1,6 @@
 // entity-pool-stored.test.ts -- a kind kept on disk whole: its rows and a kept read's cursor outlast the pool, only the read that answers every row removes one, and one account's database never shows another's rows. Kept apart from `entity-pool.test.ts` because each case opens TanStack DB's own persistence over a SQLite file.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
@@ -21,6 +21,7 @@ import {
   fieldKind,
   type HeldRows,
   type PoolRead,
+  ROW_GONE,
   type RowKind,
   type WriteDeclaration,
 } from "./entity-pool.js";
@@ -326,18 +327,24 @@ function keptRows(pool: EntityPool) {
   );
 }
 
-/** A rename of the row it names, carried by a service that answers the transaction `txid` names, or none. */
-function renamed(txid: string | undefined): WriteDeclaration<Row, FieldChange<Row>, string, void> {
+/** A write of `change` over the row it names, carried by a service that answers the transaction `txid` names, or none. */
+function writing(
+  change: FieldChange<Row>,
+  txid: string | undefined,
+): WriteDeclaration<Row, FieldChange<Row>, string, void> {
   return {
     kind: STORED,
     keys: (id) => [id],
-    change: () => () => ({ name: "Renamed" }),
+    change: () => change,
     send: () => Effect.succeed({ answer: undefined, txid }),
   };
 }
 
+const RENAMED: FieldChange<Row> = () => ({ name: "Renamed" });
+const REMOVED: FieldChange<Row> = () => ROW_GONE;
+
 it.effect(
-  "a write over a row a launch only loaded from disk stands until the read that answers every row carries it, and lands there where the service names no transaction",
+  "a write over a row a launch only loaded from disk stands until the read that answers every row carries it, and lands there, a removal included, where the service names no transaction",
   () =>
     Effect.gen(function* () {
       const file = join(yield* folder, "account.sqlite");
@@ -345,7 +352,7 @@ it.effect(
       yield* launch(file, (pool) =>
         Effect.gen(function* () {
           const owner = yield* standing(pool, { owns: true, kept: KEPT });
-          yield* owner.rows.answer([ADA, BO], { cursor: { at: "1" } });
+          yield* owner.rows.answer([ADA, BO, CY], { cursor: { at: "1" } });
         }),
       );
 
@@ -361,7 +368,7 @@ it.effect(
 
           // Note that the row is loaded from disk by a live query alone, as a screen loads it; no answer of this launch carries it.
           yield* keptRows(pool);
-          yield* pool.write(renamed("tx-1"), "a");
+          yield* pool.write(writing(RENAMED, "tx-1"), "a");
           yield* Effect.repeat(Effect.yieldNow, { times: 20 });
           const shown = pool.row(STORED, "a")?.name;
           yield* Deferred.succeed(confirmed, undefined);
@@ -374,7 +381,8 @@ it.effect(
         Effect.gen(function* () {
           yield* standing(pool, { owns: true, kept: KEPT });
           yield* keptRows(pool);
-          yield* pool.write(renamed(undefined), "b");
+          yield* pool.write(writing(RENAMED, undefined), "b");
+          yield* pool.write(writing(REMOVED, undefined), "c");
           yield* Effect.repeat(Effect.yieldNow, { times: 20 });
         }),
       );
@@ -386,5 +394,28 @@ it.effect(
         ["a", "Ada"],
         ["b", "Renamed"],
       ]);
+    }),
+);
+
+it.effect(
+  "a stored kind whose database fails as it starts ends the read's wait with that failure",
+  () =>
+    Effect.gen(function* () {
+      const file = join(yield* folder, "account.sqlite");
+      // Note that the file holds no database, so the persistence's first read of it fails after it was handed the collection.
+      writeFileSync(file, "not a database, only words long enough to stand where a header would");
+      const database = yield* opened(file);
+
+      const exit = yield* Effect.exit(
+        Effect.scoped(
+          Effect.flatMap(
+            poolOver(() => database.collections),
+            (pool) => pool.collection(STORED),
+          ),
+        ),
+      );
+
+      yield* database.close;
+      assert.equal(Exit.hasDies(exit), true);
     }),
 );

@@ -222,7 +222,19 @@ export function syncedCollection<Row extends object, Key extends string>(
     );
 
     // Note that a kept collection's persistence hands it its sync only once its database answered, so no row is taken before it can be written.
-    yield* Deferred.await(handedSync);
+    // A database that fails as it starts never hands it, so the failure ends the wait as a defect: the store opened that database, and nothing here goes on without it.
+    const failed = (): void => {
+      if (collection.status !== "error" && collection.status !== "crashed") return;
+      const cause = collection.health.error;
+      Deferred.doneUnsafe(
+        handedSync,
+        Effect.die(new Error("the kept collection failed as it started", { cause })),
+      );
+    };
+
+    const unwatch = collection.on("status:change", failed);
+    failed();
+    yield* Effect.ensuring(Deferred.await(handedSync), Effect.sync(unwatch));
 
     /** Writes `changes` in one sync transaction, after a truncate where `truncated`, with `mark`, answering their keys; none where the collection is not synced or nothing moves. */
     const written = (
