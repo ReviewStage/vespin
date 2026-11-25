@@ -38,6 +38,7 @@ import {
 import type { AccountInboxEntry, AccountInboxTask } from "@repo/features/account-inbox-wire";
 import { AGENT_MACHINE, type AgentAttachment } from "@repo/features/agent-wire";
 import type { ConversationMediaType } from "@repo/features/conversation-picture-wire";
+import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import {
   INBOX_PICTURE_IN_WORDS,
   type InboxItemPlace,
@@ -778,6 +779,19 @@ const MessageFileWriteSchema = Schema.Struct({
   id: Schema.optionalKey(Schema.String),
 });
 
+/**
+ * The size a picture states in its header, kept beside it so a reader can
+ * stand it at its shape before its bytes arrive; none for any other file, or
+ * a picture whose header states none. Note that only a write fills it, so a
+ * file written before stands with none.
+ */
+function pictureSizeOf(bytes: Uint8Array): { width: number | null; height: number | null } {
+  const type = sniffImageType(bytes);
+  const size = type === undefined ? undefined : imageDimensions(bytes, type);
+
+  return { width: size?.width ?? null, height: size?.height ?? null };
+}
+
 const insertMessageFiles = SqlSchema.void({
   Request: Schema.Array(MessageFileWriteSchema),
   execute: (files) =>
@@ -785,6 +799,7 @@ const insertMessageFiles = SqlSchema.void({
       db.insert(attachment).values(
         files.map(({ now, itemId, messageId, mp4Bytes, ...file }) => ({
           ...file,
+          ...pictureSizeOf(file.bytes),
           mp4Bytes: mp4Bytes ?? null,
           inboxItemId: itemId,
           inboxMessageId: messageId,

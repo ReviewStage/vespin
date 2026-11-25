@@ -228,6 +228,11 @@ const attached = (
 
 const TRACE = new TextEncoder().encode("TypeError: invite is undefined\n");
 const SHOT = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+// A PNG whose header states it 3 pixels wide and 2 high.
+const SIZED_SHOT = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 3,
+  0, 0, 0, 2, 8, 6, 0, 0, 0,
+]);
 
 /** A workspace automation of the account's on a task of the workspace, which its runs start agents beside. */
 const openAutomation = (userId: string, workspaceId: string) =>
@@ -819,6 +824,36 @@ it.layer(getTestDB())("the inbox store", (it) => {
         assert.ok(Option.isSome(yield* answerDone(agent.userId, withdrawn)));
         const askedAgain = yield* post(agent);
         assert.equal(askedAgain.answeredBy, undefined);
+      }),
+  );
+
+  it.effect(
+    "a picture a message carries is kept with the size its header states, and any other file with none",
+    () =>
+      Effect.gen(function* () {
+        const { agent, workspaceId } = yield* openAgentIn;
+        const teammate = yield* openUser;
+        yield* joinWorkspace(workspaceId, teammate);
+        const posted = yield* post(agent);
+
+        const files = [
+          attached("trace.txt", AGENT_ATTACHMENT_TYPE.TEXT, TRACE),
+          attached("after.png", AGENT_ATTACHMENT_TYPE.PNG, SIZED_SHOT),
+        ];
+
+        const answered = Option.getOrThrow(
+          yield* answerDone(teammate, posted, randomUUID(), files),
+        );
+
+        const ids = (answeringOf(answered)?.files ?? []).map((file) => file.attachmentId);
+        const sql = yield* SqlClient.SqlClient;
+
+        const rows = yield* sql<{ id: string; width: number | null; height: number | null }>`
+          select id, width, height from attachment where id in ${sql.in(ids)}`;
+
+        const sizeOf = (id: string | undefined) => rows.find((row) => row.id === id);
+        assert.deepEqual(sizeOf(ids[0]), { id: ids[0], width: null, height: null });
+        assert.deepEqual(sizeOf(ids[1]), { id: ids[1], width: 3, height: 2 });
       }),
   );
 
