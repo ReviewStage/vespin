@@ -58,6 +58,7 @@ import {
   type FollowedAgent,
   selectInboxReader,
   selectWorkspaces,
+  shareAppState,
 } from "@repo/host/app-state-reads";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -115,6 +116,7 @@ import {
   type UndeliveredLine,
   useAnnounced,
   useColors,
+  useKept,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
   withSending,
@@ -281,9 +283,15 @@ function useMessageLink(
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const step = linkWorkspaceStep(workspaceId, workspaces);
 
-  if (step === undefined) return undefined;
-
-  return (messageId) => linkOf({ kind: LINK_DESTINATION.MESSAGE, agentId, messageId }, step);
+  // Note that the link is made once a step, so the rows that copy it are drawn again only as it moves.
+  return useMemo(
+    () =>
+      step === undefined
+        ? undefined
+        : (messageId: string) =>
+            linkOf({ kind: LINK_DESTINATION.MESSAGE, agentId, messageId }, step),
+    [agentId, step],
+  );
 }
 
 /** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
@@ -984,7 +992,8 @@ const AgentConversation = memo(function AgentConversation({
     ],
   );
 
-  const items = chatItems ?? transcriptRows ?? NONE_SHOWN;
+  // Note that the rows are built afresh on each move of the document, a working agent's several times a second, so each is kept as the row it stood as where it is built the same, and every read of the rows, and every row the list draws, moves only where the turn moved.
+  const items = useKept(chatItems ?? transcriptRows ?? NONE_SHOWN, shareAppState);
 
   // A call opened on an answer its page carried cut reads it whole.
   const cuts = useMemo(() => openCuts(items), [items]);
@@ -1278,6 +1287,24 @@ const AgentConversation = memo(function AgentConversation({
   const continueAgent = () =>
     router.push({ pathname: "/start-agent", params: { task: taskId, continueOf: id } });
 
+  // Note that what a row reads is made once for as long as what it reads stands, so a move of the turn draws only the rows it moved (`AgentTranscript`).
+  const mediaSource = useCallback(
+    (mediaId: string) =>
+      addressed.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId),
+    [addressed, pictures.refOf, media.sources],
+  );
+
+  const pullRequestActs = useCallback(
+    (item: { readonly url: string }) => {
+      const key = keyOf(item.url);
+
+      return key === undefined || cardMergeOf(offers(key)) === undefined
+        ? []
+        : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
+    },
+    [keyOf, offers],
+  );
+
   const composerBar = archived ? (
     <ArchivedBar unarchiving={actions.unarchiving} note={note} onUnarchive={actions.unarchive} />
   ) : (
@@ -1339,9 +1366,7 @@ const AgentConversation = memo(function AgentConversation({
         onOpenLink={openLink}
         onToggle={(item) => setToggles((held) => toggledAt(held, item))}
         onOpenPage={openPage}
-        mediaSource={(mediaId) =>
-          addressed.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
-        }
+        mediaSource={mediaSource}
         fileSource={sentFiles.source}
         onRetryFile={sentFiles.retry}
         onRetryMedia={(mediaId) =>
@@ -1356,13 +1381,7 @@ const AgentConversation = memo(function AgentConversation({
         onOpenThread={openThread}
         undelivered={undelivered}
         onOpenPullRequest={(item) => openPullRequest(item.url)}
-        pullRequestActs={(item) => {
-          const key = keyOf(item.url);
-
-          return key === undefined || cardMergeOf(offers(key)) === undefined
-            ? []
-            : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
-        }}
+        pullRequestActs={pullRequestActs}
       />
     </PicturesProvider>
   );

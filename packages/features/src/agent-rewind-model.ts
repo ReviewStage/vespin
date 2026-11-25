@@ -245,3 +245,25 @@ export function editsInPlace(message: AgentTranscriptMessage, shown: string): bo
     spokenLineOf(message) === undefined
   );
 }
+
+/** Whether two sets hold the same members. */
+function sameMembers(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  return a.size === b.size && [...a].every((member) => b.has(member));
+}
+
+/** Whether two maps hold the same entries. */
+function sameEntries(a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean {
+  return a.size === b.size && [...a].every(([key, value]) => b.get(key) === value);
+}
+
+/** Whether two readings of a transcript's rewinds land in the same places, so a reader built on one stands for the other, as a turn that moves without a line or a reply landing leaves them. */
+export function sameRewindPoints(a: RewindPoints, b: RewindPoints): boolean {
+  return (
+    sameMembers(a.editable, b.editable) &&
+    sameEntries(a.revertsAt, b.revertsAt) &&
+    sameMembers(a.followed, b.followed) &&
+    sameEntries(a.revertTakes, b.revertTakes) &&
+    sameEntries(a.editTakes, b.editTakes) &&
+    sameMembers(a.restorable, b.restorable)
+  );
+}

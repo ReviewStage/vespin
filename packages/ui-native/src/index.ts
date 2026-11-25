@@ -208,6 +208,8 @@ export {
   pictureExtension,
 } from "./keep-model.js";
 
+export { useKept } from "./kept.js";
+
 export {
   NO_WRITES,
   newestValue,
