@@ -4,6 +4,7 @@ import {
   holderName,
   INBOX_NOT_READ,
   INBOX_RUN,
+  INBOX_RUN_LABEL,
   INBOX_SCOPES,
   INBOX_SHOW,
   INBOX_SHOW_EMPTY,
@@ -1534,12 +1535,6 @@ function InboxRows({
   );
 }
 
-/** What each run's heading is called, Pinned as the sidebar calls the pinned. */
-const RUN_WORDS = {
-  [INBOX_RUN.PINNED]: "Pinned",
-  [INBOX_RUN.REST]: "Everything else",
-} as const satisfies Record<InboxRun, string>;
-
 /** The one run a list stands its items in where nothing pinned heads them: Everything else, under no heading (`InboxRuns`). */
 function oneRun(view: InboxListView<InboxAnyHolder>): readonly InboxPinnedRun<InboxAnyHolder>[] {
   return [{ run: INBOX_RUN.REST, items: view.items, count: view.items.length, folded: false }];
@@ -1582,7 +1577,7 @@ function InboxRuns({
             look={GROUP_LOOK.SECTION}
             heading={GROUP_HEADING.NONE}
             head={headed ? GROUP_HEAD.STICKS : GROUP_HEAD.NONE}
-            label={RUN_WORDS[run]}
+            label={INBOX_RUN_LABEL[run]}
             count={{ ...groupCount(count, TERM.INBOX_ITEM), shown: NAV_COUNT_SHOWN.ALWAYS }}
             fold={
               onFold === undefined || !headed
