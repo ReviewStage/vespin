@@ -15,6 +15,8 @@
  * - `busy-account/`: the stub's answers. `inbox-whole.json`, the Inbox read
  *   whole; `inbox-pages/<n>.json`, the same read in pages, as a build that
  *   reads pages is answered it; `tasks-delta.json`, the task list past its kept id;
+ *   `tasks-whole.json` and `tasks-pages/<n>.json`, the task list read
+ *   whole, in one answer and in pages, for a launch from an empty store;
  *   `what-waits.json`, every task holding a thread; `task-rows/<id>.json`,
  *   each old task read alone; `moving-agents.json` and `inbox-moves.json`,
  *   the rows the stub moves one a second and one every five.
@@ -714,6 +716,88 @@ function inboxMovesBody(inboxBody: string): string {
   return JSON.stringify(moves);
 }
 
+/** How many plans a page of the task list's whole answer carries, as the service pages it (`packages/service/src/live/reads/tasks.ts`'s `TASKS_A_PAGE`). */
+const TASK_PLANS_A_PAGE = 80;
+
+/** The task list read answering `plans` and `agents` at the kept sync id, checked as the app reads it: every row of every part decodes. */
+function tasksBody(plans: readonly PlanRow[], agents: readonly AgentRow[]): string {
+  const sync = { next: String(BUSY_SYNC.TASKS_KEPT) };
+
+  const answer = {
+    url: LIVE_POLL_URL,
+    queries: {
+      tasks: sealedPart("tasks", plans, sync),
+      agents: sealedPart("agents", agents, sync),
+      issues: sealedPart("issues", [], sync),
+    },
+    taskWorkspaces: [WORKSPACE_TEAM, WORKSPACE_OWN],
+  };
+
+  // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
+  const body = Schema.encodeSync(TASK_LIST_READ.answer)(answer as never) as object;
+
+  // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
+  const back = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(body) as {
+    queries: Record<string, { rows: readonly unknown[] }>;
+  };
+
+  // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
+  const rows = Schema.decodeUnknownSync(TASK_LIST_READ.rows)(
+    Object.fromEntries(Object.entries(back.queries).map(([part, query]) => [part, query.rows])),
+  ) as { tasks: readonly unknown[]; agents: readonly unknown[] };
+
+  if (rows.tasks.length !== plans.length || rows.agents.length !== agents.length) {
+    throw new Error(
+      `busy account: the task list answer lost rows: ${rows.tasks.length}/${plans.length} tasks, ${rows.agents.length}/${agents.length} agents`,
+    );
+  }
+
+  return JSON.stringify(body);
+}
+
+/**
+ * The task list's whole answer in pages, as the service answers a build
+ * that reads pages: `TASK_PLANS_A_PAGE` plans a page, the newest first,
+ * each with every agent of it, the agents on no plan on the first page,
+ * each page naming the next by its number and every page the kept sync id,
+ * and the last carrying the snapshot that shows every write below it,
+ * written onto the encoded body as the Inbox's pages are.
+ */
+function tasksPageBodies(
+  plans: readonly PlanRow[],
+  agents: readonly AgentRow[],
+): readonly string[] {
+  const newestFirst = plans.toSorted(
+    (one, other) => other.createdAt - one.createdAt || (other.id < one.id ? -1 : 1),
+  );
+
+  const count = Math.ceil(newestFirst.length / TASK_PLANS_A_PAGE);
+  const next = String(BUSY_SYNC.TASKS_KEPT);
+
+  return Array.from({ length: count }, (_, n) => {
+    const page = newestFirst.slice(n * TASK_PLANS_A_PAGE, (n + 1) * TASK_PLANS_A_PAGE);
+    const ids = new Set(page.map((plan) => plan.id));
+
+    const ofPage = agents.filter((agent) =>
+      agent.taskId === null ? n === 0 : ids.has(agent.taskId),
+    );
+
+    // SAFETY: the body is the one `tasksBody` encoded through the build's own answer schema, whose parts each carry `sync`.
+    const body = JSON.parse(tasksBody(page, ofPage)) as {
+      queries: Record<string, { sync: Record<string, string>; snapshot?: string }>;
+    };
+
+    const last = n === count - 1;
+
+    for (const part of Object.values(body.queries)) {
+      if (last) part.snapshot = `${next}:${next}:`;
+      else part.sync.page = String(n + 1);
+    }
+
+    return JSON.stringify(body);
+  });
+}
+
 /** The task list read past its kept sync id: the five newest agents moved, as a busy account's list moves between launches. */
 function tasksDeltaBody(agents: readonly AgentRow[]): string {
   const sync = { past: String(BUSY_SYNC.TASKS_KEPT), next: String(BUSY_SYNC.TASKS_KEPT + 1) };
@@ -877,6 +961,13 @@ const seed = Effect.gen(function* () {
   }
 
   writeFileSync(`${answers}/tasks-delta.json`, tasksDeltaBody(agents));
+  writeFileSync(`${answers}/tasks-whole.json`, tasksBody(plans, agents));
+  mkdirSync(`${answers}/tasks-pages`, { recursive: true });
+
+  for (const [n, page] of tasksPageBodies(plans, agents).entries()) {
+    writeFileSync(`${answers}/tasks-pages/${n}.json`, page);
+  }
+
   writeFileSync(`${answers}/what-waits.json`, whatWaitsBody(inbox));
   writeFileSync(`${answers}/moving-agents.json`, movingAgentsBody(agents));
   writeFileSync(`${answers}/inbox-moves.json`, inboxMovesBody(inboxBody));

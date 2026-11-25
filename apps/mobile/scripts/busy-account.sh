@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # busy-account.sh -- one cold launch of the installed app on a simulator as a busy account after a gap, and what its first minutes held: the launch's own `launch:load` rungs, and an Instruments trace where asked.
 #
-# Usage: scripts/busy-account.sh [--scale <n>] [--seconds <s>] [--trace] <simulator udid> <output directory>
+# Usage: scripts/busy-account.sh [--scale <n>] [--seconds <s>] [--trace] [--empty] <simulator udid> <output directory>
 #
 # The app must already be installed on the booted simulator, built from the
 # same commit as this tree, since the seed's local copy is written through
@@ -12,7 +12,9 @@
 #   2. signs the stub's account in once from a clean install
 #      (maestro/rig/busy-account-sign-in.yaml), and stops the app;
 #   3. lays the seed's database over the signed-in account's own under the
-#      app's Documents/host/, as a phone that was away keeps it;
+#      app's Documents/host/, as a phone that was away keeps it, or with
+#      --empty removes the account's database, as a store reset leaves it,
+#      so the launch reads the task list and the Inbox whole;
 #   4. launches the app cold with `-authServer stub -busyAccount true`, and
 #      with --trace records Instruments' Time Profiler on every thread for
 #      the window, attached to the app's process;
@@ -25,7 +27,7 @@ set -euo pipefail
 
 APP_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 REPOSITORY=$(CDPATH= cd -- "$APP_DIRECTORY/../.." && pwd)
-USAGE="usage: $0 [--scale <n>] [--seconds <s>] [--trace] <simulator udid> <output directory>"
+USAGE="usage: $0 [--scale <n>] [--seconds <s>] [--trace] [--empty] <simulator udid> <output directory>"
 BUNDLE_ID=dev.vespin.ios
 # The stub's account, whose folder the host opens once the stub signs it in (`src/host/stub-auth-server.ts`'s `STUB_ACCOUNT.sub`).
 ACCOUNT=stub-account
@@ -33,11 +35,13 @@ ACCOUNT=stub-account
 scale=1
 seconds=190
 trace=0
+empty=0
 while (($# > 0)); do
     case "$1" in
     --scale) scale=$2; shift 2 ;;
     --seconds) seconds=$2; shift 2 ;;
     --trace) trace=1; shift ;;
+    --empty) empty=1; shift ;;
     --) shift; break ;;
     -*) echo "$USAGE" >&2; exit 2 ;;
     *) break ;;
@@ -73,7 +77,11 @@ database="$host/accounts/$ACCOUNT/local.sqlite"
     exit 1
 }
 rm -f "$database-wal" "$database-shm"
-cp "$seed/accounts/$ACCOUNT/local.sqlite" "$database"
+if ((empty)); then
+    rm -f "$database"
+else
+    cp "$seed/accounts/$ACCOUNT/local.sqlite" "$database"
+fi
 rm -rf "$host/busy-account"
 cp -R "$seed/busy-account" "$host/busy-account"
 
