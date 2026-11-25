@@ -92,25 +92,45 @@ function placeholderOf(event: ReviewEvent): string {
     : "Leave a summary comment (optional)";
 }
 
+/** The review being written: what it says and its words, held by the tab (`useReviewDraft`). */
+export interface ReviewDraft {
+  readonly event: ReviewEvent;
+  readonly setEvent: (event: ReviewEvent) => void;
+  readonly body: string;
+  readonly setBody: (body: string) => void;
+}
+
 /**
- * The tabs' row's Review press and the panel it opens, holding the review being
- * written for as long as the tab stands, so a panel closed by a stray
- * click opens again on the same words.
+ * The review being written, held by the tab for as long as it stands rather
+ * than by the press, so a press drawn elsewhere, beside the title as the
+ * room narrows to a phone's, opens on the same words.
+ */
+export function useReviewDraft(): ReviewDraft {
+  const [event, setEvent] = useState<ReviewEvent>(REVIEW_EVENT.COMMENT);
+  const [body, setBody] = useState("");
+
+  return { event, setEvent, body, setBody };
+}
+
+/**
+ * The tabs' row's Review press and the panel it opens, on the review being
+ * written as the tab holds it (`useReviewDraft`), so a panel closed by a
+ * stray click opens again on the same words.
  */
 export function PullRequestReview({
   writes,
+  draft: { event, setEvent, body, setBody },
   pending,
   pendingItems,
 }: {
   writes: PullRequestWrites;
+  draft: ReviewDraft;
   /** The member's own pending review, which the panel publishes or discards. */
   pending: PendingReview;
   /** Its comments as the panel lists them, under the line counting them; none lists none. */
   pendingItems?: readonly PendingItem[] | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const [event, setEvent] = useState<ReviewEvent>(REVIEW_EVENT.COMMENT);
-  const [body, setBody] = useState("");
 
   // Note that the question stands, busy, until GitHub answers the discard, says its refusal in GitHub's words, and holds the panel open meanwhile as a review on its way does.
   const discarding = useConfirmDialog(

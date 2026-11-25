@@ -274,7 +274,7 @@ import {
   usePictureDrawer,
 } from "./pull-request-pictures.js";
 import { Reactions } from "./pull-request-reactions.js";
-import { PullRequestReview } from "./pull-request-review.js";
+import { PullRequestReview, useReviewDraft } from "./pull-request-review.js";
 import {
   type PullRequestSource,
   PullRequestSourceProvider,
@@ -3580,6 +3580,8 @@ function PullRequestTabBody({
   const written = refresh;
   const writes = usePullRequestWrites(written);
   const review = usePullRequestWrites(written);
+  // The review being written, held here so Review drawn beside the title on a phone and at the tabs' end elsewhere writes the same one.
+  const reviewDraft = useReviewDraft();
   // The member's own pending review, read beside the conversation, which names what Review and a comment on lines offer.
   const pendingReview = landed(parts.conversation)?.pendingReview;
   const picture = usePictureDrawer(pictures);
@@ -3656,6 +3658,7 @@ function PullRequestTabBody({
   const reviewPress = reviewable ? (
     <PullRequestReview
       writes={review}
+      draft={reviewDraft}
       pending={pendingReview}
       pendingItems={drafts?.map((draft) => ({
         key: draft.id,

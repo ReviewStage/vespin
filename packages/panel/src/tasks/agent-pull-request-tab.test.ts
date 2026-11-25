@@ -40,9 +40,11 @@ import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { Clock, Context, Effect } from "effect";
 import { TestClock } from "effect/testing";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { onTestFinished, test, vi } from "vitest";
 import { installShownFailureReporter } from "../failure-report.js";
+import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { ShellRoomContext } from "../stage-room.js";
 import {
   AGENT,
   answerQuestion,
@@ -2665,6 +2667,36 @@ test("Review opens a panel whose choice and words are submitted for the agent as
     true,
     "a fresh review says Comment",
   );
+});
+
+test("a review left unsent keeps its words as the room narrows to a phone's, where Review stands beside the title rather than at the tabs' end", async () => {
+  // Narrows the room the tab stands in, as a window resized past the breakpoint does.
+  let narrowTo: (next: ShellRoom) => void = () => undefined;
+
+  function Roomed() {
+    const [held, setHeld] = useState<ShellRoom>(SHELL_ROOM.WIDE);
+    narrowTo = setHeld;
+
+    return createElement(
+      ShellRoomContext.Provider,
+      { value: held },
+      createElement(Switching, {
+        control: controlAnswering(),
+        first: PULL_REQUEST_VIEW.CONVERSATION,
+      }),
+    );
+  }
+
+  const tab = await drawn(createElement(Roomed));
+  const panel = openReview(tab);
+  writeReview(panel, "Half a thought");
+  pressInBox(panel, { key: "Escape" }, "Review comment");
+  await settle();
+
+  act(() => narrowTo(SHELL_ROOM.NARROW));
+  await settle();
+
+  assert.equal(boxWords(openReview(tab), "Review comment"), "Half a thought");
 });
 
 test("Escape in the review's words closes the panel and hands the focus back to Review, its words kept", async () => {
