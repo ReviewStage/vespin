@@ -445,6 +445,7 @@ test("a Manager's Inbox tab lists its threads as the window's Inbox's view choos
 
   act(() => inboxTab.click());
   await settleQueries();
+
   const threads =
     container.querySelector<HTMLElement>(".agent-threads") ??
     assert.fail("the Inbox tab draws the Manager's threads");
