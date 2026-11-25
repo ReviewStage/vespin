@@ -1,0 +1,45 @@
+pinned to 44996ca3ff
+== bundle PJj4208 base 44996ca3ff
+  built 44996ca3ff base app Vmain14.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(342,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(346,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(366,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(399,185): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(488,29): error TS18048: 'raw.items' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(489,18): error TS18048: 'raw.items' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(490,18): error TS18048: 'raw.messages' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(494,14): error TS18048: 'raw.stamps' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(528,1): error TS2349: This expression is not callable.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+seed 1x: db 28024 KB, probe-answers 424 files (7296 KB), task-rows 419
+== bundle PJj4208B base 0568dd825f
+  built 0568dd825f base app Vmain14.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/host/src/zz-probe-seed.test.ts(342,15): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(346,21): error TS18048: 'thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(366,5): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(399,185): error TS18048: 'item.thread' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(488,29): error TS18048: 'raw.items' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(489,18): error TS18048: 'raw.items' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(490,18): error TS18048: 'raw.messages' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(494,14): error TS18048: 'raw.stamps' is possibly 'undefined'.
+    packages/host/src/zz-probe-seed.test.ts(528,1): error TS2349: This expression is not callable.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 0 (simulator-bundle.sh)
+  signed 0
+B built: /Users/deanstratakos/vespin-ipad-agent/Vjr3PJj4208B.app
+created iPhone 17 Pro 053AEA87-F464-4BF7-A8AB-FA2D7BD3C243; sign-in: fails 0 shots 3 
+A1: installed Vjr3PJj4208.app
+A1 (1x -probeMoving true): pid 30667, trace 9280 KB, probe ok, files 7/7, maestro ok, actions 38, moved 18/18
+B1: installed Vjr3PJj4208B.app
+B1 (1x -probeMoving true): pid 32167, trace 8256 KB, probe ok, files 7/7, maestro ok, actions 38, moved 13/18
+A2: installed Vjr3PJj4208.app
+A2 (1x -probeMoving true): pid 33701, trace 9280 KB, probe ok, files 7/7, maestro ok, actions 38, moved 18/18
+B2: installed Vjr3PJj4208B.app
+B2 (1x -probeMoving true): pid 35566, trace 10304 KB, probe ok, files 7/7, maestro ok, actions 38, moved 18/18
+kept /Users/deanstratakos/vespin-ipad-agent/keep-4208 (579M)
