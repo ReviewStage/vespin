@@ -27,6 +27,7 @@ interface DesktopLaunch {
 export interface DesktopConfig {
   /** The app's own application-state root: the directory Electron's userData was moved to. */
   readonly stateRoot: string;
+  readonly hasExistingLocalStorage: boolean;
   /**
    * The named development instance this run is (`run.sh --instance`), absent
    * for the plain one and always for a packaged build.

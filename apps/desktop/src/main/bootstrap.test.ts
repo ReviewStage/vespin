@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { appLinkInbox } from "@repo/features/app-links";
 import { test } from "vitest";
@@ -116,4 +118,32 @@ test("a named development instance keeps its state apart, and a packaged build h
   const packaged = launch(true, { APP_INSTANCE: "preview" });
   assert.equal(packaged.instance, undefined);
   assert.equal(packaged.stateRoot, launch(true, {}).stateRoot);
+});
+
+test("the storage migration sees whether the profile held storage before startup", () => {
+  const stateRoot = mkdtempSync(path.join(tmpdir(), "vespin-bootstrap-"));
+
+  const launch = () =>
+    bootstrapDesktop({
+      app: recordingApp([], true),
+      argv: [],
+      environment: { APP_STATE_ROOT: stateRoot },
+      resourceDirectory: "/tmp/resources",
+      report: () => undefined,
+      openExternal: async () => undefined,
+      quit: () => undefined,
+      showMenuBar: () => undefined,
+      initializeCrashReporting: () => {
+        mkdirSync(path.join(stateRoot, "Local Storage"), { recursive: true });
+      },
+      appLinks: appLinkInbox(),
+      endToEndBuild: true,
+    });
+
+  try {
+    assert.equal(launch().hasExistingLocalStorage, false);
+    assert.equal(launch().hasExistingLocalStorage, true);
+  } finally {
+    rmSync(stateRoot, { recursive: true, force: true });
+  }
 });

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import type { AppLinkInbox } from "@repo/features/app-links";
 import { LINK_ORIGIN } from "@repo/features/link-home";
@@ -151,6 +152,9 @@ export function bootstrapDesktop(dependencies: BootstrapDependencies): DesktopCo
   app.setName(appName);
   const overrides = endToEndOverrides(app.isPackaged, dependencies.endToEndBuild, environment);
   const stateRoot = overrides.stateRoot ?? path.join(app.getPath("appData"), appName);
+  // Note that opening Electron's session creates this directory even for a fresh profile.
+  const hasExistingLocalStorage = existsSync(path.join(stateRoot, "Local Storage"));
+
   app.setPath("userData", stateRoot);
   app.setPath("sessionData", stateRoot);
 
@@ -171,6 +175,7 @@ export function bootstrapDesktop(dependencies: BootstrapDependencies): DesktopCo
 
   return {
     stateRoot,
+    hasExistingLocalStorage,
     ...(instance === undefined ? undefined : { instance }),
     runMode,
     appVersion: app.getVersion(),
