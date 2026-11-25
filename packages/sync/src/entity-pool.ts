@@ -351,6 +351,8 @@ export interface HeldRows<Row extends object, Change = unknown> {
   readonly stored: unknown;
   /** Whether the store held the kept read as it stood, rows or none, so the read draws what it held before the service answers. */
   readonly loaded: boolean;
+  /** Whether the kind's rows are kept on disk whole, in the account's database, so the read holds in memory only what it answered since it stood. */
+  readonly onDisk: boolean;
 }
 
 /**
@@ -502,6 +504,12 @@ export interface PoolOptions {
   readonly store?: PoolStore | undefined;
 }
 
+/** A kind's rows as they stand: the collection of its synced rows, and the rows the writes standing over it draw. */
+export interface StandingRows<Row extends object> {
+  readonly collection: RowCollection<Row, string>;
+  readonly pending: ReadonlyMap<string, Row | typeof ROW_GONE>;
+}
+
 /** Every row the reads hold, and the writes drawn over them. */
 export interface EntityPool {
   /** Stands `read` on `kind`'s rows for the caller's scope, holding none until it answers. */
@@ -528,6 +536,19 @@ export interface EntityPool {
   readonly collection: <Row extends object, Change>(
     kind: RowKind<Row, Change>,
   ) => Effect.Effect<RowCollection<Row, string>>;
+  /**
+   * `kind`'s rows as they stand now where any read or write made them: the
+   * collection its synced rows stand in, and each key a write stands over
+   * with the row the writes draw, or `ROW_GONE` where they take it away;
+   * a key whose synced row the pool does not hold in memory, as one kept on
+   * disk alone, is left out, since nothing can be drawn over it. None
+   * before any read or write made them.
+   */
+  readonly standing: <Row extends object, Change>(
+    kind: RowKind<Row, Change>,
+  ) => StandingRows<Row> | undefined;
+  /** Hears each moving of a kind's collection, of the writes standing over its rows, or of a row they draw; answers how to stop hearing. */
+  readonly watch: (heard: () => void) => () => void;
   /** The row `key` names of `kind`, as the reads show it with every write standing drawn over it; none where no read holds it. */
   readonly row: <Row extends object, Change>(
     kind: RowKind<Row, Change>,
@@ -634,6 +655,8 @@ interface KindRows<Row extends object, Change> {
   readonly lastWrites: Map<string, Turn>;
   /** The sync id each key's row was taken at, where an answer named one. */
   readonly takenAt: Map<string, bigint>;
+  /** Tells the pool's watchers that the writes standing over the kind, or the rows they draw, moved. */
+  readonly heard: () => void;
 }
 
 /** The row `key` names as the reads show it: the synced one with every write standing on it drawn over it, in order; none where none shows. */
@@ -721,15 +744,23 @@ function movedBy<Row extends object, Change>(
   );
 
   if (moved.length === 0) return Effect.void;
+  rows.heard();
 
   return redrawn([...new Set([...showing, ...holdersOf(rows.reads, moved)])], moved);
 }
 
-/** Marks `keys`, whose synced rows moved, as unreported on every kept read of `rows`, so the next answer of each tells its store of them. */
+/**
+ * Marks `keys`, whose synced rows moved, as unreported on every kept read of
+ * `rows`, so the next answer of each tells its store of them; and tells the
+ * pool's watchers where a write stands over any, since the row it draws
+ * moved with it.
+ */
 function unreported<Row extends object, Change>(
   rows: KindRows<Row, Change>,
   keys: readonly string[],
 ): void {
+  if (keys.some((key) => standingOver(rows, key))) rows.heard();
+
   for (const holding of rows.reads) {
     if (holding.read.kept === undefined || holding.reportsWhole) continue;
 
@@ -1219,6 +1250,7 @@ function stood<Row extends object, Change>(
         standing: () => rows.standing.map((write) => write.change),
         stored,
         loaded: rows.synced.kept ? marked !== undefined : load !== undefined,
+        onDisk: rows.synced.kept,
       };
     },
   );
@@ -1605,6 +1637,13 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
       waiting: [],
     };
 
+    /** Whoever watches the pool's kinds and the writes standing over them. */
+    const watchers = new Set<() => void>();
+
+    const heard = () => {
+      for (const watcher of watchers) watcher();
+    };
+
     /** Each kind's rows held in memory alone, by the kind's own declaration. */
     const memoryKinds = new Map<object, unknown>();
     /** Each stored kind's rows kept in an account's database, by the database and then the kind's own declaration, so a database closed takes its kinds with it. */
@@ -1648,9 +1687,11 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
               standing: [],
               lastWrites: new Map(),
               takenAt: new Map(),
+              heard,
             };
 
             kinds.set(kind, fresh);
+            heard();
 
             return fresh;
           },
@@ -1665,6 +1706,29 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
           written(rows, queue, declaration, input),
         ),
       collection: (kind) => Effect.map(rowsOf(kind), (rows) => rows.synced.collection),
+      standing: <Row extends object, Change>(kind: RowKind<Row, Change>) => {
+        // SAFETY: the map is keyed by the kind itself, so what it holds for `kind` is of `kind`'s row and change.
+        const rows = placeOf(kind.stored).kinds.get(kind) as KindRows<Row, Change> | undefined;
+
+        if (rows === undefined) return undefined;
+        const pending = new Map<string, Row | typeof ROW_GONE>();
+
+        for (const key of new Set(rows.standing.flatMap((write) => write.keys))) {
+          const drawn = drawnRow(rows, key);
+
+          if (drawn !== undefined) pending.set(key, drawn);
+          else if (rows.synced.collection.has(key)) pending.set(key, ROW_GONE);
+        }
+
+        return { collection: rows.synced.collection, pending };
+      },
+      watch: (watcher) => {
+        watchers.add(watcher);
+
+        return () => {
+          watchers.delete(watcher);
+        };
+      },
       row: <Row extends object, Change>(kind: RowKind<Row, Change>, key: string) => {
         // SAFETY: the map is keyed by the kind itself, so what it holds for `kind` is of `kind`'s row and change.
         const rows = placeOf(kind.stored).kinds.get(kind) as KindRows<Row, Change> | undefined;

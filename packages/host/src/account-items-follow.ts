@@ -11,6 +11,7 @@ import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
 import { Clock, Effect, Option, Schema } from "effect";
+import { followStoredItems } from "./account-items-stored.js";
 import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import {
   type AccountWideReads,
@@ -446,6 +447,7 @@ export function followAccountItems(
             return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
           },
           kept: { ...KEPT_LIST.INBOX, bound: KEPT_INBOX_BOUND },
+          owns: true,
         },
       );
 
@@ -457,6 +459,35 @@ export function followAccountItems(
 
         return row === undefined ? undefined : itemOf(row);
       };
+
+      // Note that where the account's database keeps the Inbox kind whole, the follow writes each answer there and tells no item on the document (`account-items-stored.ts`).
+      if (items.onDisk) {
+        const read = yield* followStoredItems({
+          seal: (sync) => dependencies.seal(userId, sync),
+          pool: dependencies.pool,
+          items,
+          resumes,
+          tasksListed: dependencies.tasksListed ?? noneListed,
+          onTxWait: (handed) => {
+            wait = handed;
+          },
+          decoded: (rows, read) => {
+            for (const [part, count] of droppedParts(ACCOUNT_ITEMS_PARTS, read, rows)) {
+              dependencies.dropped?.(part, count);
+            }
+          },
+          tell: (told) =>
+            Effect.suspend(() => {
+              answered = true;
+
+              return tell(told);
+            }),
+        });
+
+        if (!read && !answered) yield* tell({ failed: true });
+
+        return true;
+      }
 
       /** The items `after` holds taken in place of those `was` held, `sent` the ones that came with it, read where `standing` says, and told. */
       const taken = (
