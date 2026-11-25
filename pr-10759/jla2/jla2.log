@@ -1,0 +1,82 @@
+10759 pinned to 1254497ccb (wanted 1254497ccb)
+built main 1fb25c01ac + #10759 1254497ccb as 0068335af3
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 02:23:02 36370 MB
+curve 02:23:32 36265 MB
+curve 02:24:02 34371 MB
+curve 02:24:32 34077 MB
+curve 02:25:03 33901 MB
+curve 02:25:33 33818 MB
+curve 02:26:03 33811 MB
+curve 02:26:33 33613 MB
+curve 02:27:03 33280 MB
+curve 02:27:33 33787 MB
+curve 02:28:03 33747 MB
+curve 02:28:34 33584 MB
+curve 02:29:04 33529 MB
+curve 02:29:34 33157 MB
+curve 02:30:04 33184 MB
+curve 02:30:34 32905 MB
+curve 02:31:05 32798 MB
+curve 02:31:35 32565 MB
+curve 02:32:05 32760 MB
+curve 02:32:35 32560 MB
+curve 02:33:05 32758 MB
+curve 02:33:35 32746 MB
+curve 02:34:06 32731 MB
+curve 02:34:36 32702 MB
+curve 02:35:06 32691 MB
+curve 02:35:36 32736 MB
+curve 02:36:07 32712 MB
+curve 02:36:37 32704 MB
+curve 02:37:07 32625 MB
+curve 02:37:37 32510 MB
+curve 02:38:07 32492 MB
+curve 02:38:38 32467 MB
+curve 02:39:08 32459 MB
+curve 02:39:38 32428 MB
+curve 02:40:08 32381 MB
+curve 02:40:39 32349 MB
+curve 02:41:09 32244 MB
+curve 02:41:39 32214 MB
+curve 02:42:09 32178 MB
+curve 02:42:39 32121 MB
+curve 02:43:09 32012 MB
+curve 02:43:40 31452 MB
+curve 02:44:10 31244 MB
+curve 02:44:40 31161 MB
+curve 02:45:10 31123 MB
+curve 02:45:40 31045 MB
+curve 02:46:11 30851 MB
+curve 02:46:41 30751 MB
+curve 02:47:11 30662 MB
+curve 02:47:41 30591 MB
+curve 02:48:11 30572 MB
+curve 02:48:41 30497 MB
+curve 02:49:12 30476 MB
+curve 02:49:42 30377 MB
+curve 02:50:12 30360 MB
+curve 02:50:42 30314 MB
+curve 02:51:12 30288 MB
+curve 02:51:42 30295 MB
+curve 02:52:12 30287 MB
+curve 02:52:42 30261 MB
+curve 02:53:13 30229 MB
+curve 02:53:43 30115 MB
+curve 02:54:13 30114 MB
+curve 02:54:43 30113 MB
+curve 02:55:13 30112 MB
+curve 02:55:43 30077 MB
+BUILD EXIT 0 02:56:13
+sizes: Assets.car 24800680 bytes (main Vmain14.app 24800088), .app 127196 KB (main 126488 KB), zipped .app 47903330 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImage.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageAVIFCoder.framework SDWebImageSVGCoder.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework libavif.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjla2.app: replacing existing signature
+p10759-start: fails 0 shots 4 
+rec a-lockscreen-notification-center: 214916 bytes
+rec b-compact-island: 317575 bytes
+rec c-expanded-island: 227576 bytes
