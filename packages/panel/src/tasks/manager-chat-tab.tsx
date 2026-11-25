@@ -443,7 +443,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   );
 }
 
-/** One of the reader's messages on its way to the chat, or refused: their row under their name, its files over its words, and Sending… under it, or its mark where it did not go. */
+/** One of the reader's messages on its way to the chat, or refused: their row under their name, its files over its words, standing as it will once sent, or with its mark where it did not go. */
 function SendingLine({
   line,
   readerId,
@@ -484,11 +484,7 @@ function SendingLine({
             </span>
           ) : refused ? (
             <UndeliveredMark messageId={line.id} />
-          ) : (
-            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-              {SENDING_WORDS}
-            </Text>
-          )
+          ) : undefined
         }
       >
         {files.length === 0 ? null : <KeptFileChips files={files} sending={!refused} />}
@@ -637,9 +633,6 @@ const NONE_SHOWN: readonly ShownPicture[] = [];
 
 /** No message on its way. */
 const NONE_SENDING: readonly ManagerChatSending[] = [];
-
-/** What stands under one of the reader's messages on its way. */
-const SENDING_WORDS = "Sending…";
 
 /** What a refused thread reply says, and its presses. */
 const NOT_SENT_WORDS = "Not sent.";
