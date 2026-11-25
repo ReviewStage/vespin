@@ -135,6 +135,12 @@ export const AGENT_BOUNDS = {
   MAX_TEXT_BYTES: MAX_REQUEST_FILES_BYTES,
   /** The most bytes a text file is inlined whole for the model at: about 25,000 tokens of code. A larger one is written into the agent's machine, its first lines inlined (`isInlinedText`). */
   MAX_INLINED_TEXT_BYTES: 100_000,
+  /**
+   * The most bytes one file of any other kind may hold (`AGENT_ATTACHMENT_TYPE.OTHER`): as many as
+   * the message's files together, as a PDF's, since a message's files ride base64 inside its request,
+   * whose body a function bounds (`request-body-limit.ts`), and one archive or document may be all it carries.
+   */
+  MAX_FILE_BYTES: MAX_REQUEST_FILES_BYTES,
   /** The most bytes every file of one message holds together, which base64 grows by a third and which stays under a function's request body limit (`request-body-limit.ts`). */
   MAX_ATTACHMENTS_BYTES: MAX_REQUEST_FILES_BYTES,
 } as const;
@@ -557,10 +563,12 @@ export type AgentTurn = typeof agentTurnSchema.Type;
 
 /**
  * The files a message may carry, by the media type each travels as: an
- * image or a PDF, which the model reads as a file, or a text file of any
+ * image or a PDF, which the model reads as a file; a text file of any
  * extension, which travels as its UTF-8 bytes and is inlined for the model
  * as fenced text under its name, or written into its machine where it is
- * too large to inline (`isInlinedText`).
+ * too large to inline (`isInlinedText`); or any other file, which is never
+ * handed to the model but written into its machine, and named by its path
+ * for the agent to open with its own tools.
  */
 export const AGENT_ATTACHMENT_TYPE = {
   PNG: "image/png",
@@ -576,6 +584,16 @@ export const AGENT_ATTACHMENT_TYPE = {
   GIF: "image/gif",
   PDF: "application/pdf",
   TEXT: "text/plain",
+  /**
+   * Any other file, a document, a spreadsheet, an archive, or a binary,
+   * whatever type its machine gave it, since its name says what it is and a
+   * file is served back under the type it travels as, which this one names
+   * no reader to run. Note that no client sends one yet, but refuses it as
+   * it always has, because a message box's file may be kept and served back
+   * as its type (a comment's, an Inbox reply's, a queued message's), which a
+   * client released before this reads under types without it.
+   */
+  OTHER: "application/octet-stream",
 } as const;
 
 export type AgentAttachmentType =
@@ -596,6 +614,7 @@ const AGENT_ATTACHMENT_BYTES = {
   [AGENT_ATTACHMENT_TYPE.GIF]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
   [AGENT_ATTACHMENT_TYPE.PDF]: AGENT_BOUNDS.MAX_PDF_BYTES,
   [AGENT_ATTACHMENT_TYPE.TEXT]: AGENT_BOUNDS.MAX_TEXT_BYTES,
+  [AGENT_ATTACHMENT_TYPE.OTHER]: AGENT_BOUNDS.MAX_FILE_BYTES,
 } as const satisfies Record<AgentAttachmentType, number>;
 
 /** The characters base64 spells a count of bytes in, padded, as an attachment's data carries them. */

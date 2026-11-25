@@ -38,11 +38,13 @@ import { Effect, Option } from "effect";
  * by its name and fenced, since no provider path takes a text file as a
  * file, then each image and PDF as a file part over a `data:` URL, which
  * the runner hands on as an image block or writes into the agent's machine
- * (`coder-host/runner-sessions.ts`). A text file too large to inline
- * (`isInlinedText`) goes as a PDF does, a file part written into the
- * machine, and the line naming its path inlines its first lines
- * (`writtenTextLine`), so the model knows what it holds and reads the rest
- * with its own tools. The journal keeps the words
+ * (`coder-host/runner-sessions.ts`). A file of any other kind
+ * (`AGENT_ATTACHMENT_TYPE.OTHER`) goes as a PDF does, a file part the
+ * runner writes into the machine and names by its type, size, and path
+ * (`writtenFileLine`), and never reaches the model as a file. A text file
+ * too large to inline (`isInlinedText`) goes the same way, and the line
+ * naming its path inlines its first lines (`writtenTextLine`), so the model
+ * knows what it holds and reads the rest with its own tools. The journal keeps the words
  * as the row's first part, empty where there are none, and every file
  * after it as the SDK's file part over the same `data:` URL, a text file
  * under `text/plain`, so the transcript draws a thumbnail or a name for
@@ -214,6 +216,27 @@ function headOf(text: string): string {
   return head;
 }
 
+/** A written file's size as its line says it, in bytes, so the agent knows what it holds before it opens it. */
+function sizeWords(bytes: Uint8Array): string {
+  return `${bytes.byteLength.toLocaleString("en-US")} bytes`;
+}
+
+/**
+ * The line a session is handed for a file written into the agent's machine
+ * that is not a text file: a PDF, or a file of any other kind
+ * (`AGENT_ATTACHMENT_TYPE.OTHER`), which no model is handed. It names the
+ * file, the type it traveled as, its size, and the path it was written to,
+ * from which the agent opens it with its own tools.
+ */
+export function writtenFileLine(
+  name: string,
+  mediaType: string,
+  path: string,
+  bytes: Uint8Array,
+): string {
+  return `[${name} (${mediaType}, ${sizeWords(bytes)}) was attached: it is at ${path}, read it from there with your own tools]`;
+}
+
 /**
  * The line a session is handed for a text file written into the agent's
  * machine, too large to inline (`isInlinedText`): its name, its size, the
@@ -225,7 +248,7 @@ export function writtenTextLine(name: string, path: string, bytes: Uint8Array): 
   const head = headOf(text);
   const lines = lineCount(text);
   const shown = lineCount(head);
-  const size = `${bytes.byteLength.toLocaleString("en-US")} bytes, ${lines.toLocaleString("en-US")} lines`;
+  const size = `${sizeWords(bytes)}, ${lines.toLocaleString("en-US")} lines`;
   const intro = `[${name} (${AGENT_ATTACHMENT_TYPE.TEXT}, ${size}) was attached: it is at ${path}, too large to inline, so read it from there. Its first ${shown === 1 ? "line" : `${shown} lines`}:]`;
 
   return `${intro}\n${inlinedFile(name, head)}`;
