@@ -24,6 +24,7 @@ import { MemberDirectory } from "../member-directory.js";
 import { FAKE_ANSWER, fakeActs } from "../testing/app-bridge.js";
 import { handMembers, handState } from "../testing/app-state.js";
 import {
+  composerWords,
   editorBundleLanded,
   installEditorLayout,
   pressInComposer,
@@ -447,6 +448,35 @@ test.each([
     ]);
   },
 );
+
+test("Reply on a message in a thread quotes it into the thread's box, and the chat's own box holds nothing of it", async () => {
+  const { container } = await drawChat(
+    [
+      row("first", 1, "On it."),
+      { ...row("asked", 2, "Which repo?", CHARLES), threadRoot: "first" },
+    ],
+    { opened: "first" },
+  );
+
+  const thread =
+    container.querySelector("[data-thread-tab]") ?? assert.fail("the thread's tab stands");
+
+  const message =
+    thread.querySelector('[data-message-id="asked"]') ?? assert.fail("the reply is drawn");
+
+  pointerCross(document.body, message);
+
+  const reply =
+    message.querySelector<HTMLButtonElement>('button[aria-label="Reply"]') ??
+    assert.fail("Reply stands beside the reply");
+
+  act(() => reply.click());
+  await settleQueries();
+
+  const chat = container.querySelector(".agent-tab") ?? assert.fail("the chat stands");
+  assert.equal(composerWords(thread).trim(), "Which repo?");
+  assert.equal(composerWords(chat), "");
+});
 
 test("a call the Manager holds for an answer stands at the chat's foot, whose Allow sends the answer", async () => {
   const { container, answered } = await drawChat([row("told", 1, "Running the invite tests.")], {
