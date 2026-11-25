@@ -1,0 +1,10 @@
+pinned to 418fbc771f
+== bundle PJjsend1c base 418fbc771f
+  built 418fbc771f base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+EXCEPTION (the Manager 22:23 UTC Nov 25): JS 418fbc771f over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 app.config.ts, neither on the composer path; base in use: Vmain14.app
+flow: rig/manager-send-once.yaml from 7f1816cc29 (fcd0f29d 23:05), JS 418fbc771f
+iphone-light-manager-send-once-before: fails 0 shots 1 

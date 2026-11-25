@@ -1,0 +1,22 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow .kbd-manager-send-once
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=81e2a425-6d3f-4a07-92df-9eafb0c1d2e8, busyRender=6000})... COMPLETED
+Assert that "Left before it ships.*" is visible... COMPLETED
+Assert that id: composer-field is visible... COMPLETED
+Tap on id: composer-field... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text What abo... COMPLETED
+Assert that "Send", enabled is visible... COMPLETED
+Input text ut the release... COMPLETED
+Tap on "Send"... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "What about the release" is visible... COMPLETED
+Assert that ".*(What|abou?|release).*", id: composer-field is not visible... COMPLETED
+Assert that "What abou?" is not visible... COMPLETED
+Assert that "What about the release", Index: 1 is not visible... COMPLETED
+Take screenshot manager-send-once... COMPLETED
