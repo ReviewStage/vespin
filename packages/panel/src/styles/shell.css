@@ -495,6 +495,16 @@
   pointer-events: none;
 }
 
+/* A list with no bar of its own, under a tab row that names it (`InboxListHead.bare`), is parted from its item from that row's rule down. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task
+  .inbox-view[data-columns="both"]
+  .inbox-tasks[data-bare]::after {
+  top: 0;
+}
+
 /* The list's search, or the window's Inbox's head row holding it, the
    first thing in the sheet under its head on the frame, stands a row's
    inset in from the sheet's top as from its rows. */

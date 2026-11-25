@@ -1898,6 +1898,7 @@ export function InboxList({
       ref={rowFocus.ref}
       className="inbox-tasks relative flex min-h-0 min-w-0 flex-col border-r border-border"
       aria-label={regionLabel(head)}
+      data-bare={head.bare === true ? "" : undefined}
       hidden={columns === INBOX_COLUMNS.ITEM}
       onFocus={rowFocus.onFocus}
       onBlur={rowFocus.onBlur}
