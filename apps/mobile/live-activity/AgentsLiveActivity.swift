@@ -5,14 +5,15 @@
 // how many are working. The expanded one and the Lock Screen list up to
 // three, each with its title, a timer from its turn's start, and Stop
 // (`StopAgentIntent`). The count stands by the panel's working mark while
-// agents work, and by its done mark once none does, in the working blue or
-// the done green, and copper (`Attention`) marks only what wants the member:
-// the asks waiting, the compact presentation's Inbox glyph, and the keyline
-// while one waits. Nothing in it is a link, so no row or region opens a page
-// of the app: a person swipes it away more often than they open it, and a
-// swipe the system read as a tap opened an agent. A tap still opens the app,
-// as iOS opens it on any activity. The colors are the brand's, written into
-// this target's asset catalog by `app.config.ts`. Every presentation has a
+// agents work, and by its done mark once none does, centered then, since
+// nothing stands beside it, in the working blue or the done green, and
+// copper (`Attention`) marks only what wants the member: the asks waiting,
+// the compact presentation's Inbox glyph, and the keyline while one waits.
+// Nothing in it is a link, so no row or region opens a page of the app: a
+// person swipes it away more often than they open it, and a swipe the
+// system read as a tap opened an agent. A tap still opens the app, as iOS
+// opens it on any activity. The colors are the brand's, written into this
+// target's asset catalog by `app.config.ts`. Every presentation has a
 // preview at the end of the file.
 
 import ActivityKit
@@ -38,11 +39,21 @@ struct AgentsLiveActivity: Widget {
       let state = context.state
       return DynamicIsland {
         // Note that the header stands in from the island's sides as far as the rows do, so its ends line up with the rows' titles and Stop.
+        // Note that once none works the header has no rows under it, so it stands in the island's center region instead of its leading one.
         DynamicIslandExpandedRegion(.leading) {
-          CountLabel(state: state).padding(.leading, ExpandedInset.side)
+          if state.running > 0 {
+            CountLabel(state: state).padding(.leading, ExpandedInset.side)
+          }
         }
         DynamicIslandExpandedRegion(.trailing) {
-          WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
+          if state.running > 0 {
+            WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
+          }
+        }
+        DynamicIslandExpandedRegion(.center) {
+          if state.running == 0 {
+            DoneHeader(state: state)
+          }
         }
         DynamicIslandExpandedRegion(.bottom) {
           // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
@@ -82,15 +93,21 @@ struct ActivityContentView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(8)
     default:
-      VStack(alignment: .leading, spacing: 10) {
-        HStack {
-          CountLabel(state: state)
-          Spacer()
-          WaitingLabel(state: state)
+      if state.running > 0 {
+        VStack(alignment: .leading, spacing: 10) {
+          HStack {
+            CountLabel(state: state)
+            Spacer()
+            WaitingLabel(state: state)
+          }
+          AgentList(state: state)
         }
-        AgentList(state: state)
+        .padding(16)
+      } else {
+        DoneHeader(state: state)
+          .frame(maxWidth: .infinity, alignment: .center)
+          .padding(16)
       }
-      .padding(16)
     }
   }
 }
@@ -109,6 +126,18 @@ struct CountLabel: View {
     .monospacedDigit()
     .foregroundStyle(state.tone)
     .lineLimit(1)
+  }
+}
+
+/// The header once none works: the done mark and its words, with any ask still waiting beside them, centered, since no rows stand under it.
+struct DoneHeader: View {
+  let state: AgentsActivityAttributes.ContentState
+
+  var body: some View {
+    HStack(spacing: 12) {
+      CountLabel(state: state)
+      WaitingLabel(state: state)
+    }
   }
 }
 
@@ -352,4 +381,5 @@ extension AgentsActivityAttributes.ContentState {
 } contentStates: {
   AgentsActivityAttributes.ContentState.working
   AgentsActivityAttributes.ContentState.waitingOnYou
+  AgentsActivityAttributes.ContentState.done
 }

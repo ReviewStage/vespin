@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity, `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-setupOwed true`, which stands a fixture run's account as one owed setup, `-inboxOff true`, which stands a fixture run's account with its Inbox turned off, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, `-pillField true`, which opens on the pill field's scratch page, and `-sentryTest <js|native>`, which sends a test crash report.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity (`-liveActivity done` starts it as it stands once none works), `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-setupOwed true`, which stands a fixture run's account as one owed setup, `-inboxOff true`, which stands a fixture run's account with its Inbox turned off, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, `-pillField true`, which opens on the pill field's scratch page, and `-sentryTest <js|native>`, which sends a test crash report.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -35,6 +35,14 @@ export const LAUNCH_SENTRY_TEST = {
   JS: "js",
   NATIVE: "native",
 } as const;
+
+/** The fixture Live Activities `-liveActivity` may start: agents working (`true`), or none working any more (`done`). */
+export const LAUNCH_LIVE_ACTIVITY = {
+  WORKING: "working",
+  DONE: "done",
+} as const;
+
+export type LaunchLiveActivity = (typeof LAUNCH_LIVE_ACTIVITY)[keyof typeof LAUNCH_LIVE_ACTIVITY];
 
 export type LaunchSentryTest = (typeof LAUNCH_SENTRY_TEST)[keyof typeof LAUNCH_SENTRY_TEST];
 
@@ -84,9 +92,12 @@ function launchSaysTrue(key: string): boolean {
   return named === true || named === "true" || named === 1;
 }
 
-/** Whether this launch starts a fixture run's own Live Activity, as `-liveActivity true` asks (`maestro/live-activity.yaml`). */
-export function launchLiveActivity(): boolean {
-  return launchSaysTrue(LAUNCH_ARGUMENT.LIVE_ACTIVITY);
+/** The fixture run's own Live Activity this launch starts, as `-liveActivity true` (`maestro/live-activity.yaml`) or `-liveActivity done` asks; none without either. */
+export function launchLiveActivity(): LaunchLiveActivity | undefined {
+  if (Settings.get(LAUNCH_ARGUMENT.LIVE_ACTIVITY) === LAUNCH_LIVE_ACTIVITY.DONE)
+    return LAUNCH_LIVE_ACTIVITY.DONE;
+
+  return launchSaysTrue(LAUNCH_ARGUMENT.LIVE_ACTIVITY) ? LAUNCH_LIVE_ACTIVITY.WORKING : undefined;
 }
 
 /** Whether this launch's fixture run holds an ask of Ada's MacBook for an agent's command, as `-machineAsk true` asks (`maestro/machine-ask.yaml`). */
