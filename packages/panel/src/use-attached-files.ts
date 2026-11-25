@@ -11,7 +11,6 @@ import {
   writableName,
   writtenMarkers,
 } from "@repo/features/file-marker";
-import { isStillGif } from "@repo/features/gif-frames";
 import { pastedFile } from "@repo/features/long-paste";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useRef, useState } from "react";
@@ -39,10 +38,9 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  *
  * Only a file the developer handed the box is read, and only its bytes and
  * its own name: never a path, never a file beside it. An image is kept as
- * it is while it is PNG, JPEG, WebP, or a GIF of one frame, and small
- * enough, and re-encoded smaller as WebP otherwise, as a feedback
- * screenshot is (`./feedback-images.ts`), an animated GIF as its first
- * frame, since no model takes an animation (`@repo/features/gif-frames`); a PDF is kept as it is; anything else comes
+ * it is while it is PNG, JPEG, or WebP and small enough, and re-encoded
+ * smaller as WebP otherwise, as a feedback screenshot is
+ * (`./feedback-images.ts`); a PDF is kept as it is; anything else comes
  * as a text file where its bytes spell UTF-8 with no NUL in them, whatever
  * its extension, since code arrives under every extension there is. Each
  * is held to its type's bound, a message to ten files and to 3 MB
@@ -93,28 +91,10 @@ function spellsText(bytes: Uint8Array): boolean {
 /** One file read: what the message carries of it, or why it cannot come. */
 type FileRead = { readonly attachment: AgentAttachment } | { readonly refusal: string };
 
-/** A GIF's bytes in base64 where it is a still within an image's bound; none for an animation, a larger one, or a file that could not be read, which is re-encoded instead. */
-async function stillGifOf(file: File): Promise<string | undefined> {
-  if (file.type !== AGENT_ATTACHMENT_TYPE.GIF || file.size > AGENT_BOUNDS.MAX_IMAGE_BYTES) {
-    return undefined;
-  }
-
-  const bytes = await file.arrayBuffer().then(
-    (buffer) => new Uint8Array(buffer),
-    () => undefined,
-  );
-
-  return bytes !== undefined && isStillGif(bytes) ? base64Of(bytes) : undefined;
-}
-
 /** One file read into what a message carries, or why it cannot come. */
 async function attachmentOf(file: File): Promise<FileRead> {
   // Note that the name needs no bound of its own here, because macOS bounds a file's name inside the wire's.
   const { name } = file;
-  const gif = await stillGifOf(file);
-
-  if (gif !== undefined)
-    return { attachment: { name, mediaType: AGENT_ATTACHMENT_TYPE.GIF, data: gif } };
 
   if (isPictureFile(file)) {
     const read = await encodeImage(file, AGENT_BOUNDS.MAX_IMAGE_BYTES);

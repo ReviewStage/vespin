@@ -4,9 +4,8 @@
  * A message may carry a GIF (`AGENT_ATTACHMENT_TYPE.GIF`), handed to each
  * harness as an image block as it came. Claude reads an animation's first
  * frame, and OpenAI's models, which Codex and some of Cursor's run, take a
- * GIF only where it is no animation, so a message carries a still GIF alone:
- * the panel draws an animation's first frame before it sends
- * (`use-attached-files.ts`), and the wire refuses one that comes otherwise.
+ * GIF only where it is no animation, so a message carries a still GIF alone,
+ * and the wire refuses an animation.
  * The frames are counted by walking the file's blocks, never by a decoder,
  * so the wire reads it alike in a window and in the service. Kept free of
  * every other import, because `agent-wire.ts` reads it.
