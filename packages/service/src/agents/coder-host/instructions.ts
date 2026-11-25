@@ -290,6 +290,7 @@ function namingLines(
     `Name what the developer can open as a mention, \`[@name](target)\`, which ${PRODUCT_NAME} draws as a chip:${things}.`,
     `Name a thing of ours by the id a tool answered, under \`${home}\`: \`/agent/<agent-id>\`, \`/task/<task-id>\`, \`/automation/<automation-id>\`, \`/person/<user-id>\`,${item} or \`/task/<task-id>/page/<page-id>\`.`,
     "Tag a person by their mention link, never a bare `@Name`.",
+    "Write a date or time to people as a date chip, `[@<label>](mention://date/<ISO>)`, with its offset for a time (`mention://date/2026-11-24T20:49-05:00`) and a range as `<start>/<end>`, never as typed UTC.",
   ];
 }
 
