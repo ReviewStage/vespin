@@ -1,0 +1,10 @@
+pinned to d7da544023
+== bundle PJjbusy base d7da544023
+  built d7da544023 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+created iPhone 17 Pro 72465C3B-0860-41BC-BF25-9D56A0BFA429; tree /Users/deanstratakos/vespin-ipad-agent/jj3PJjbusy
+busy 1x: script rc 1, launch-load MISSING, app-ready , trace MISSING, stills 0/2; last: 
+busy 3x: script rc 1, launch-load MISSING, app-ready , trace MISSING, stills 0/2; last: 
