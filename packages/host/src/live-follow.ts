@@ -455,6 +455,38 @@ interface LiveAnswer<Part extends string> {
   readonly past: boolean;
 }
 
+/** An answer handed on, and its text once a later answer was compared with it. */
+interface HandedAnswer<Part extends string> {
+  readonly answer: LiveAnswer<Part>;
+  said?: string;
+}
+
+/** The answer's text, written the first time it is asked for. */
+function saidOf<Part extends string>(handed: HandedAnswer<Part>): string {
+  handed.said ??= JSON.stringify(handed.answer);
+
+  return handed.said;
+}
+
+/** Whether two answers say the same: compared by text only where each part carries as many rows in both, and both are past the cursor or neither. */
+function sameAnswer<Part extends string>(
+  one: HandedAnswer<Part>,
+  other: HandedAnswer<Part>,
+): boolean {
+  if (one.answer.past !== other.answer.past) return false;
+  const parts = Object.keys(one.answer.rows);
+
+  // SAFETY: both answers carry the read's own parts, which `parts` names.
+  const counted = (handed: HandedAnswer<Part>, part: string) =>
+    handed.answer.rows[part as Part]?.length;
+
+  if (parts.length !== Object.keys(other.answer.rows).length) return false;
+
+  if (parts.some((part) => counted(one, part) !== counted(other, part))) return false;
+
+  return saidOf(one) === saidOf(other);
+}
+
 /**
  * Every answer's rows, undecoded, each time they change, for as long as the
  * caller reads: the first answer's, then each poll's that moved (see the
@@ -472,13 +504,14 @@ function liveAnswers<Part extends string>(
 
   return Stream.callback<LiveAnswer<Part>, LiveBroken>((queue) =>
     Effect.gen(function* () {
-      let last: string | undefined;
+      // Note that the last answer's text is written only once an answer could repeat it, because the first is a whole account's rows, megabytes to stringify, that nothing before it can equal.
+      let last: HandedAnswer<Part> | undefined;
 
       const emit = (answer: LiveAnswer<Part>) => {
-        const said = JSON.stringify(answer);
+        const next: HandedAnswer<Part> = { answer };
 
-        if (said === last) return;
-        last = said;
+        if (last !== undefined && sameAnswer(last, next)) return;
+        last = next;
         Queue.offerUnsafe(queue, answer);
       };
 
