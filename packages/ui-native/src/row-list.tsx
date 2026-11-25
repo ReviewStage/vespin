@@ -671,6 +671,7 @@ export function SectionFooter({
   readonly tone: FooterTone;
   readonly link?: FooterLink | undefined;
 }) {
+  const colors = useColors();
   const failure = tone === FOOTER_TONE.FAILURE;
   useAnnounced(failure ? words : undefined, true);
 
@@ -678,9 +679,9 @@ export function SectionFooter({
 
   if (link === undefined) return <Text>{words}</Text>;
 
-  // Note that only the link is read as Markdown, so the note's own words stand as written; SwiftUI draws it in the tint and opens it with the system's `openURL`, as a Settings footer's link opens.
+  // Note that only the link is read as Markdown, so the note's own words stand as written; SwiftUI draws it in the tint, the accent here since the app's own tint is the text's ink, and opens it with the system's `openURL`, as a Settings footer's link opens.
   return (
-    <Text>
+    <Text modifiers={[tint(colors.ACCENT)]}>
       {`${words} `}
       <Text markdownEnabled>{`[${link.label}](${link.address})`}</Text>
     </Text>
