@@ -13,10 +13,19 @@ import { useEffect } from "react";
 import { AppState } from "react-native";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostCount } from "./host/host-provider.js";
+import { sinceLaunch } from "./launch-phases.js";
 import { launchBeganAway } from "./launch-state.js";
 
-/** How long after the runtime's start a launch's load is counted over, on the performance clock: past the first minutes in which a catch-up was seen to hold every touch. */
+/** How long after the runtime's start a launch's load is counted over: past the first minutes in which a catch-up was seen to hold every touch. */
 const LOAD_WINDOW_MS = 180_000;
+
+/**
+ * When the window ends, on the performance clock, which counts from the
+ * device's start rather than the runtime's, so the window is laid from React
+ * Native's own mark of the runtime's start (`sinceLaunch`), or from this
+ * module's first run where the runtime keeps none.
+ */
+const WINDOW_END = performance.now() + LOAD_WINDOW_MS - (sinceLaunch() ?? 0);
 
 /** The build number this build was released as (`CFBundleVersion`), which a launch is read beside; none where the build names none. */
 const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
@@ -30,7 +39,7 @@ let counted = false;
 // Note that the long tasks are heard from the bundle's start, buffered, so those before the screens mount, the host's standing among them, are counted too. React Native reports one for each stretch over 50 ms that held the JS thread.
 const longTaskWatch = new PerformanceObserver((list) => {
   for (const entry of list.getEntries()) {
-    if (entry.startTime >= LOAD_WINDOW_MS) continue;
+    if (entry.startTime >= WINDOW_END) continue;
     held.count += 1;
     held.ms += entry.duration;
   }
@@ -74,7 +83,7 @@ export function useLaunchLoadCount(): void {
 
     const over = setTimeout(
       () => finish(PRODUCT_LOAD_WINDOW.WHOLE),
-      Math.max(0, LOAD_WINDOW_MS - performance.now()),
+      Math.max(0, WINDOW_END - performance.now()),
     );
 
     return () => {
