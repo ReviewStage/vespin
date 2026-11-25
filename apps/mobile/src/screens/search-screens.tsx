@@ -1,5 +1,9 @@
-// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, then the places it goes to under Commands as "Go to …", as ⌘K finds them, and the row that starts a task on what was typed; or, before anything is typed, those last opened, the workspace's Managers, and those places, each row drawn by its own list's row.
+// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, agents, people, and automations it finds, scoped as ⌘K's filters scope them (All, Tasks, Inbox, People, Automations; agents under All alone, as ⌘K has no Agents filter), then the places it goes to under Commands as "Go to …", as ⌘K finds them, and the row that starts a task on what was typed; or, before anything is typed, those last opened, the workspace's Managers, and those places, each row drawn by its own list's row.
 
+import { firingMark } from "@repo/features/automation-firing-mark";
+import { automationRunStanding, automationTriggerText } from "@repo/features/automation-list-model";
+import type { AutomationSummary } from "@repo/features/automation-wire";
+import { automationLastRunWords } from "@repo/features/automation-words";
 import {
   holderTask,
   type InboxAnyHolder,
@@ -14,11 +18,13 @@ import {
   SEARCH_FOUND_TITLE,
   SEARCH_SCOPE,
   SEARCH_SCOPE_TITLE,
-  type SearchFoundKind,
+  SEARCH_SECTION,
   type SearchScope,
+  type SearchSection,
   SHOW_ALL,
   scopedFound,
   searchPlaceholder,
+  sectionScope,
   showAllHeard,
   shownOfWords,
 } from "@repo/features/search-found-model";
@@ -34,8 +40,13 @@ import {
 import { RECENT_WORDS } from "@repo/features/search-recent-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { NO_RESULTS_HINT, noResultsForWords, readingWords } from "@repo/features/words";
+import { MEMBER_WORDS } from "@repo/features/workspace-settings-words";
+import type { WorkspaceMember } from "@repo/features/workspace-wire";
 import {
+  AUTOMATION_ROW_LOOK,
+  AutomationRow,
   EmptyState,
+  firingLook,
   GLYPH,
   type Glyph,
   glyphSymbol,
@@ -43,6 +54,8 @@ import {
   LinkRow,
   type ListScopes,
   ListSection,
+  MEMBER_ROW_LOOK,
+  MemberRow,
   RowForEach,
   RowList,
   type RowSubmenu,
@@ -53,7 +66,7 @@ import {
 import { Stack, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useWorkspaceManagers } from "../agents/use-managers.js";
-import { AUTOMATIONS_ROUTE } from "../automations/automation-routes.js";
+import { AUTOMATIONS_ROUTE, automationRoute } from "../automations/automation-routes.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
@@ -88,8 +101,14 @@ import {
 /** The Search tab's name, at its head. */
 const SEARCH_TITLE = "Search";
 
-/** What a search under Tasks or Agents says while the task list is still being read. */
+/** What a search under Tasks says while the task list is still being read. */
 const READING_TASKS = `${readingWords("your tasks")}…`;
+
+/** What a search under People says while the workspace's members are still being read. */
+const READING_PEOPLE = `${readingWords("the members")}…`;
+
+/** What a search under Automations says while the workspace's automations are still being read. */
+const READING_AUTOMATIONS = `${readingWords("the automations")}…`;
 
 /** What the scopes choose, heard by VoiceOver before the scope chosen. */
 const SCOPE_LABEL = "Show";
@@ -130,12 +149,22 @@ function threadRoute({ holder, item }: InboxListed<InboxAnyHolder>): string | un
   });
 }
 
-/** The screen each row found opens, by the row's id: a task's Overview, an item's thread, an agent's page, each in its own tab. */
+/** The screen each row found opens, by the row's id: a task's Overview, an item's thread, an agent's page, a person's page, an automation's page, each in its own tab. */
 function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined> {
   return new Map([
     ...found.tasks.map((task) => [task.id, taskRoute(task)] as const),
     ...found.inbox.map((listed) => [listed.item.id, threadRoute(listed)] as const),
     ...found.agents.map(({ agent }) => [agent.id, iosAgentRoute(agent.id)] as const),
+    ...found.people.map(
+      (member) =>
+        [
+          member.userId,
+          iosAppRouteOf({ kind: LINK_DESTINATION.PERSON, userId: member.userId }),
+        ] as const,
+    ),
+    ...found.automations.map(
+      (automation) => [automation.id, automationRoute(automation.id)] as const,
+    ),
   ]);
 }
 
@@ -281,16 +310,71 @@ function StartTaskSection({ query }: { readonly query: string }) {
 /**
  * What a scope's rows are still being read from, as the words its wait
  * says, so it never says it found nothing before the lists it searches have
- * answered: Inbox waits on the Inbox's first read, Tasks and Agents on the
- * task list, which holds both, and All on either; none once they answered.
+ * answered: Inbox waits on the Inbox's first read, Tasks on the task list,
+ * which holds the agents too, People on the members, Automations on the
+ * automations, and All on the Inbox or the task list; none once they
+ * answered.
  */
 function scopeReading(found: SearchFound, scope: SearchScope): string | undefined {
-  const inbox = scope !== SEARCH_SCOPE.TASKS && scope !== SEARCH_SCOPE.AGENTS;
-  const tasks = scope !== SEARCH_SCOPE.INBOX;
+  switch (scope) {
+    case SEARCH_SCOPE.PEOPLE:
+      return found.peopleReading ? READING_PEOPLE : undefined;
+    case SEARCH_SCOPE.AUTOMATIONS:
+      return found.automationsReading ? READING_AUTOMATIONS : undefined;
+    case SEARCH_SCOPE.INBOX:
+      return found.inboxReading ? READING_INBOX : undefined;
+    case SEARCH_SCOPE.TASKS:
+      return found.tasksReading ? READING_TASKS : undefined;
+    case SEARCH_SCOPE.ALL:
+      return found.inboxReading ? READING_INBOX : found.tasksReading ? READING_TASKS : undefined;
+  }
+}
 
-  if (inbox && found.inboxReading) return READING_INBOX;
+/**
+ * An automation found, as the Automations tab lists it: what fires it and
+ * how its newest run went, faded while it is off, a press opening its page.
+ * Its acts stay on the Automations tab, as ⌘K's row only opens it.
+ */
+function FoundAutomationRow({
+  automation,
+  onOpen,
+}: {
+  readonly automation: AutomationSummary;
+  readonly onOpen: () => void;
+}) {
+  return (
+    <AutomationRow
+      look={AUTOMATION_ROW_LOOK.LIST}
+      title={automation.name}
+      line={automationTriggerText(automation.trigger, automation.repositories ?? [])}
+      standing={automationRunStanding(automation.lastRun)}
+      standingWords={automationLastRunWords(automation)}
+      {...firingLook(firingMark(automation.trigger))}
+      faded={!automation.enabled}
+      onPress={onOpen}
+    />
+  );
+}
 
-  return tasks && found.tasksReading ? READING_TASKS : undefined;
+/** A person found, as ⌘K's People lists them: their face, their name, and You or their address, a press opening their page. */
+function FoundPersonRow({
+  member,
+  readerId,
+  onOpen,
+}: {
+  readonly member: WorkspaceMember;
+  readonly readerId: string | undefined;
+  readonly onOpen: () => void;
+}) {
+  return (
+    <MemberRow
+      look={MEMBER_ROW_LOOK.LIST}
+      name={member.name}
+      line={member.userId === readerId ? MEMBER_WORDS.YOU : member.email}
+      picture={member.pictureUrl}
+      onOpen={onOpen}
+    />
+  );
 }
 
 /** The query and the scope, and how to change them, held by the tab's root screen above its two layouts. */
@@ -303,9 +387,9 @@ type SearchWords = {
 
 /**
  * What the query found, as its scope lists it: under All a section per kind
- * that found any, Tasks, Inbox, then Agents, each its best few under a
- * heading counting all it found; under a kind's scope that kind alone, with
- * no heading. Each row is drawn as its own list draws it, and a pull reads
+ * that found any, Tasks, Inbox, Agents, People, then Automations, each its
+ * best few under a heading counting all it found; under a kind's scope that
+ * kind alone, with no heading. Each row is drawn as its own list draws it, and a pull reads
  * the Inbox and the task list again.
  */
 function FoundList({
@@ -347,16 +431,17 @@ function FoundList({
   // Note that a heading names a kind only among the others, so a kind's own scope lists its rows under none.
   const titled = scope === SEARCH_SCOPE.ALL;
 
-  // Note that a kind cut short under All ends its header in Show all, which narrows to the kind, and one cut short under its own scope says so under its rows, so no cut is silent.
-  const cut = (kind: SearchFoundKind) => {
+  // Note that a kind cut short under All ends its header in Show all, which narrows to the kind, and one cut short under its own scope, or under All where no scope narrows to it, as the agents, says so under its rows, so no cut is silent.
+  const cut = (kind: SearchSection) => {
     const total = found[kind].length;
     const listed = shown[kind].length;
+    const own = sectionScope(kind);
 
     if (listed >= total) return {};
 
-    if (titled) {
+    if (titled && own !== undefined) {
       return {
-        more: { label: SHOW_ALL, heard: showAllHeard(kind, total), onPress: () => setScope(kind) },
+        more: { label: SHOW_ALL, heard: showAllHeard(kind, total), onPress: () => setScope(own) },
       };
     }
 
@@ -378,7 +463,7 @@ function FoundList({
         <ListSection
           title={titled ? SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.TASKS] : undefined}
           count={found.tasks.length}
-          {...cut(SEARCH_FOUND_KIND.TASKS)}
+          {...cut(SEARCH_SECTION.TASKS)}
         >
           <TaskRows tasks={shown.tasks} listing={listing} />
         </ListSection>
@@ -387,7 +472,7 @@ function FoundList({
         <ListSection
           title={titled ? SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.INBOX] : undefined}
           count={found.inbox.length}
-          {...cut(SEARCH_FOUND_KIND.INBOX)}
+          {...cut(SEARCH_SECTION.INBOX)}
         >
           <InboxItemRows
             listed={shown.inbox}
@@ -403,7 +488,7 @@ function FoundList({
         <ListSection
           title={titled ? SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.AGENTS] : undefined}
           count={found.agents.length}
-          {...cut(SEARCH_FOUND_KIND.AGENTS)}
+          {...cut(SEARCH_SECTION.AGENTS)}
         >
           {shown.agents.map((line) => (
             <TaskAgentRow
@@ -412,6 +497,37 @@ function FoundList({
               task={line.agent.taskId === null ? undefined : found.tasksById.get(line.agent.taskId)}
               named
               asking={asking}
+            />
+          ))}
+        </ListSection>
+      )}
+      {shown.people.length === 0 ? null : (
+        <ListSection
+          title={titled ? SEARCH_FOUND_TITLE[SEARCH_SECTION.PEOPLE] : undefined}
+          count={found.people.length}
+          {...cut(SEARCH_SECTION.PEOPLE)}
+        >
+          {shown.people.map((member) => (
+            <FoundPersonRow
+              key={member.userId}
+              member={member}
+              readerId={found.readerId}
+              onOpen={() => onOpen(member.userId)}
+            />
+          ))}
+        </ListSection>
+      )}
+      {shown.automations.length === 0 ? null : (
+        <ListSection
+          title={titled ? SEARCH_FOUND_TITLE[SEARCH_SECTION.AUTOMATIONS] : undefined}
+          count={found.automations.length}
+          {...cut(SEARCH_SECTION.AUTOMATIONS)}
+        >
+          {shown.automations.map((automation) => (
+            <FoundAutomationRow
+              key={automation.id}
+              automation={automation}
+              onOpen={() => onOpen(automation.id)}
             />
           ))}
         </ListSection>
@@ -566,8 +682,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   const shown = scopedFound(found, scope);
   const reading = scopeReading(found, scope);
   // Note that a place found is a result too, as a command found is in ⌘K, so a query that finds only Settings never says it found nothing.
-  const listed = shown.tasks.length + shown.inbox.length + shown.agents.length + places.length;
-  const none = listed === 0;
+  const none = places.length === 0 && Object.values(shown).every((rows) => rows.length === 0);
 
   const scopes = (inboxShown ? SCOPES : SCOPES_WITHOUT_INBOX).map((each) => ({
     label: SEARCH_SCOPE_TITLE[each],

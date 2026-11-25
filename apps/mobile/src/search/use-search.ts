@@ -1,21 +1,26 @@
 /**
- * use-search.ts -- the Search tab as its screen reads it: the tasks, Inbox items, and agents a query finds, each kind best first, and before anything is typed, those last opened.
+ * use-search.ts -- the Search tab as its screen reads it: the tasks, Inbox items, agents, people, and automations a query finds, each kind best first, and before anything is typed, those last opened.
  *
  * Each kind is found by its own list's search over the host's document, so
  * a row found here is one its own tab would find: the Tasks tab's
  * (`useTasksListing`, every task of the workspace whatever its status), the
  * Inbox's under All (`useInboxListing`), and the agents the task list holds,
- * the workspace's Managers among them where it lists them (`use-managers.ts`).
+ * the workspace's Managers among them where it lists them (`use-managers.ts`),
+ * the workspace's members, and its automations, as ⌘K's People and
+ * Automations find them.
  * Each is then ranked by what its row says (`@repo/features/search-found-model`),
  * as ⌘K ranks its rows. The Tasks listing also asks the service for the
  * tasks the query finds past the list the host holds, which the host draws
  * into that list, so a finished or older task is found here too.
  */
 
+import type { AutomationSummary } from "@repo/features/automation-wire";
 import { INBOX_SHOW, type InboxAnyHolder, type InboxListed } from "@repo/features/inbox-list-model";
 import {
   agentSearchSubject,
+  automationSearchSubject,
   inboxSearchSubject,
+  memberSearchSubject,
   rankedBySearch,
   taskSearchSubject,
 } from "@repo/features/search-found-model";
@@ -23,11 +28,13 @@ import { type RecentRow, recentRows } from "@repo/features/search-recent-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { isManager } from "@repo/features/workspace-managers-model";
+import type { WorkspaceMember } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { INBOX_FEED } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useMemo } from "react";
 import { useManagersListed } from "../agents/use-managers.js";
+import { useWorkspaceAutomations } from "../automations/use-automations.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useListedAgents,
@@ -38,6 +45,7 @@ import {
 } from "../host/host-provider.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxListing } from "../inbox/use-inbox.js";
+import { useHeldMembers } from "../member-pictures.js";
 import {
   agentLine,
   type ReadListing,
@@ -63,6 +71,8 @@ export interface SearchFound {
   readonly tasks: readonly TaskSummary[];
   readonly inbox: readonly InboxListed<InboxAnyHolder>[];
   readonly agents: readonly TaskAgentLine[];
+  readonly people: readonly WorkspaceMember[];
+  readonly automations: readonly AutomationSummary[];
   readonly listing: ReadListing;
   readonly readerId: string | undefined;
   /** Whether the rows were found for what is typed now, the deferred finding caught up. */
@@ -73,10 +83,14 @@ export interface SearchFound {
   readonly tasksReading: boolean;
   /** Every task the list holds, by its id, which an agent found is named by. */
   readonly tasksById: ReadonlyMap<string, TaskSummary>;
+  /** Whether the workspace's members are not yet read, so a person it would find may not be held yet. */
+  readonly peopleReading: boolean;
+  /** Whether the workspace's automations are not yet read, so one it would find may not be held yet. */
+  readonly automationsReading: boolean;
 }
 
 /**
- * The tasks, Inbox items, and agents of the chosen workspace that `typed`
+ * The tasks, Inbox items, agents, people, and automations of the chosen workspace that `typed`
  * finds; none of any while nothing is typed, and no Inbox item while the
  * member turned the Inbox off. Note that they are found for a
  * deferred copy of what is typed, as ⌘K ranks its rows, so a key typed
@@ -96,6 +110,8 @@ export function useSearchFound(typed: string): SearchFound {
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
   const managersListed = useManagersListed(workspace?.id);
+  const members = useHeldMembers(workspace?.id);
+  const automations = useWorkspaceAutomations(workspace?.id);
 
   const ranked = useMemo(() => {
     const tasksById = new Map(listedTasks.map((task) => [task.id, task]));
@@ -122,6 +138,8 @@ export function useSearchFound(typed: string): SearchFound {
           agent.taskId === null ? undefined : tasksById.get(agent.taskId)?.name,
         ),
       ).map((agent) => agentLine(agent, waiting.byAgent, pullRequests)),
+      people: rankedBySearch(members.members ?? [], query, memberSearchSubject),
+      automations: rankedBySearch(automations.rows ?? [], query, automationSearchSubject),
       tasksById,
     };
   }, [
@@ -133,12 +151,16 @@ export function useSearchFound(typed: string): SearchFound {
     listedAgents,
     managersListed,
     pullRequests,
+    members.members,
+    automations.rows,
     workspace,
     waiting,
     query,
   ]);
 
   const inboxReading = inboxShown && inbox.feed === INBOX_FEED.READING;
+  const peopleReading = members.members === undefined && !members.failed;
+  const automationsReading = automations.rows === undefined && !automations.failed;
 
   // Note that a task or agent found past the list held comes only with the service's search, and one on a list not yet read with its first read.
   const tasksReading =
@@ -155,9 +177,21 @@ export function useSearchFound(typed: string): SearchFound {
       readerId: inbox.readerId,
       inboxReading,
       tasksReading,
+      peopleReading,
+      automationsReading,
       current: query === typed,
     }),
-    [ranked, listing, inbox.readerId, inboxReading, tasksReading, query, typed],
+    [
+      ranked,
+      listing,
+      inbox.readerId,
+      inboxReading,
+      tasksReading,
+      peopleReading,
+      automationsReading,
+      query,
+      typed,
+    ],
   );
 }
 

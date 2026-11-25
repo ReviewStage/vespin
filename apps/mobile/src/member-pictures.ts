@@ -3,6 +3,7 @@
 import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { readerFirst } from "@repo/features/member-order";
+import type { WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -56,6 +57,39 @@ function useMembers(workspaceId: string | undefined) {
 
   return members;
 }
+
+/** The members of a workspace as the host holds them, and whether their read failed; none while unread. */
+export interface HeldMembers {
+  readonly members: readonly WorkspaceMember[] | undefined;
+  readonly failed: boolean;
+}
+
+/**
+ * The members of the workspace `workspaceId` names, as a search reads them:
+ * the rows the host holds, and whether their read failed, so a search under
+ * People says it reads them, or that it could not, rather than that it
+ * found no one. Note that it holds no follow of its own, since the tabs
+ * hold the chosen workspace's members followed (`useMemberPicturesFollow`).
+ */
+export function useHeldMembers(workspaceId: string | undefined): HeldMembers {
+  const { data } = useQuery({
+    ...appStateQuery,
+    select: useCallback(
+      (state: AppStateSnapshot) => {
+        const held =
+          workspaceId === undefined ? undefined : state[LIVE_READ.WORKSPACE_MEMBERS][workspaceId];
+
+        return { members: held?.rows?.members, failed: held?.failed === true };
+      },
+      [workspaceId],
+    ),
+  });
+
+  return data ?? NO_HELD_MEMBERS;
+}
+
+/** No members held, as before the document is read. */
+const NO_HELD_MEMBERS: HeldMembers = { members: undefined, failed: false };
 
 /**
  * Each member's name and picture by their id, of the workspace
