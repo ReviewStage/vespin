@@ -202,11 +202,10 @@ What it reports:
   and the two together.
 - **first whole answer:** one answer of the follow's whole rows with no kept
   list, as a desktop's or the web's first draw.
-- **first whole answer in pages:** the same rows a page at a time, as a
-  build that reads pages takes them: 80 plans a page, the newest first, each
-  with its agents, each page joined on and drawn once the draw tick passes.
-  Reported as every page together and as the longest page, the longest
-  stretch a page holds the main process.
+- **first whole answer in pages:** the same rows as a build that reads
+  pages takes them: its first page (80 plans, the newest, with their agents)
+  joined on at once, then every other page together with the last, each
+  drawn once the draw tick passes. Reported as each of the two.
 - **per moved live agent:** an answer past a sync id that moves one live
   agent's row, a turn starting and then ending in turn through the 440, and
   the draw tick passing. The median and p95 of the steps after the first 20.

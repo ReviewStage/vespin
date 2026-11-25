@@ -62,9 +62,9 @@ import {
  * reader, or whole where it is too far behind (`SyncStanding`); an id that
  * stalls is answered around (`SYNC_STALL`). A whole answer may come in
  * pages, each naming the next (`LIVE_POLL.PAGE`), which is asked at once,
- * and a failed one again; a read whose rows the caller takes hands each page
- * on as rows joined onto those held and the last as the one that lets go
- * every row no page carried (`followTakingRows`).
+ * and a failed one again; a read whose rows the caller takes hands the
+ * first page on at once, as rows joined onto those held, and the rest with
+ * the last, which lets go every row no page carried (`followTakingRows`).
  */
 
 /**
@@ -220,12 +220,13 @@ export type TxWait = (txid: string, timeout: Duration.Duration) => Effect.Effect
  * were read past, none where they are whole; the id to read past next; and
  * the ids of the rows that stand no longer for the reader, every part's.
  *
- * A page of a whole answer is taken as rows joined onto those held, as a
- * delta's are, past `""`, letting none go; one before the last names no id
- * to read past (`""`), since the reader holds every row at the answer's
- * only once the last is joined on, and the last names it, with every row's
- * key the pages carried (`carried`), and the reader lets go each row it
- * holds that is not among them (`followTakingRows`). Every page says it is
+ * The pages of a whole answer are taken twice, each time as rows joined
+ * onto those held, as a delta's are, past `""`, letting none go: the first
+ * page, which names no id to read past (`""`), since the reader holds every
+ * row at the answer's only once the last is joined on, and then every other
+ * page with the last, which names it, with every row's key the pages
+ * carried (`carried`), and the reader lets go each row it holds that is not
+ * among them (`followTakingRows`). Every page says it is
  * one (`paged`), for a reader that keeps its rows where it cannot list them
  * and lets go those an older whole answer stamped instead.
  */
@@ -262,6 +263,12 @@ function pageOf<Part extends string>(read: SealedRead<Part>): string | undefined
 /** The sync id an answer was read at, as the host compares one, from the decimal it spells; none where it spells none. */
 export function syncIdOf(standing: SyncStanding | undefined): bigint | undefined {
   return standing !== undefined && /^\d+$/.test(standing.next) ? BigInt(standing.next) : undefined;
+}
+
+/** How a read whose whole answer may come in pages takes them: the key of every row an answer carries, so the last page lets go each row held that no page carried, and two pages' rows as one. */
+export interface PagedRows<Rows> {
+  keysOf(rows: Rows): Iterable<string>;
+  join(held: Rows, page: Rows): Rows;
 }
 
 /** A read answered for following: the address it was answered at, and each part's answer. */
@@ -727,8 +734,8 @@ export function followTakingRows<
       sync?: string,
       page?: string,
     ) => Effect.Effect<Read | LiveFailure>;
-    /** The key of every row an answer carries, of a read whose whole answer may come in pages, so its last page lets go each row held that no page carried. */
-    readonly keysOf?: (rows: Rows) => Iterable<string>;
+    /** How a read whose whole answer may come in pages takes them (`PagedRows`). */
+    readonly pages?: PagedRows<Rows>;
   },
   first: Read,
   schema: Schema.Decoder<Rows>,
@@ -736,23 +743,52 @@ export function followTakingRows<
 ): Effect.Effect<void, LiveBroken> {
   const decode = Schema.decodeUnknownOption(schema);
   const parts = Object.keys(first.queries).filter((part): part is Part => part in first.queries);
-  /** The keys of the rows the pages of a whole answer carried so far; none between whole answers in pages. */
-  let paging: Set<string> | undefined;
+  /** The pages of a whole answer read so far: every row key they carried, and the rows of those after the first, held for the last; none between whole answers in pages. */
+  let paging: { readonly carried: Set<string>; held: Rows | undefined } | undefined;
 
-  /** Where an answer stands for its taker: as it says, or, for a page of a whole answer, joined on, the last with every row's key the pages carried (`SyncStanding`). */
-  const standingOf = (read: Read, rows: Rows): SyncStanding | undefined => {
+  /**
+   * Hands an answer's rows on (`take`): as it stands, or, for a page of a
+   * whole answer, the first at once, joined onto the rows held, so its
+   * newest rows draw, the rest held, and the last joined on with every page
+   * after the first and every row key the pages carried (`SyncStanding`).
+   * Note that the pages between are held rather than taken, because a
+   * taker that draws every row it holds would draw the whole list again
+   * for each of them, which pages would make worse than one whole answer.
+   */
+  const handed = (read: Read, rows: Rows): Effect.Effect<void> => {
     const said = syncStandingOf(read);
     const page = pageOf(read);
 
-    if (said === undefined || (page === undefined && paging === undefined)) return said;
-    const carried = paging ?? new Set<string>();
+    if (said === undefined || (page === undefined && paging === undefined)) {
+      return take(rows, said, read);
+    }
 
-    for (const key of dependencies.keysOf?.(rows) ?? []) carried.add(key);
-    paging = page === undefined ? undefined : carried;
+    const firstPage = paging === undefined;
+    const pages = paging ?? { carried: new Set<string>(), held: undefined };
+    const join = dependencies.pages?.join;
 
-    return page === undefined
-      ? { past: "", next: said.next, gone: [], paged: true, carried }
-      : { past: "", next: "", gone: [], paged: true };
+    for (const key of dependencies.pages?.keysOf(rows) ?? []) pages.carried.add(key);
+    const joined = pages.held === undefined || join === undefined ? rows : join(pages.held, rows);
+
+    if (page !== undefined) {
+      paging = pages;
+
+      if (firstPage) return take(rows, { past: "", next: "", gone: [], paged: true }, read);
+      pages.held = joined;
+
+      return Effect.void;
+    }
+
+    paging = undefined;
+    const standing: SyncStanding = {
+      past: "",
+      next: said.next,
+      gone: [],
+      paged: true,
+      carried: pages.carried,
+    };
+
+    return take(joined, standing, read);
   };
 
   /** Takes the answer's rows where it carries them, answering whether they decoded. */
@@ -763,7 +799,7 @@ export function followTakingRows<
 
     return Option.match(decode(carried), {
       onNone: () => Effect.succeed(false),
-      onSome: (rows) => Effect.as(take(rows, standingOf(read, rows), read), true),
+      onSome: (rows) => Effect.as(handed(read, rows), true),
     });
   };
 

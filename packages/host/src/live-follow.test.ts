@@ -511,7 +511,7 @@ const PageRows = Schema.Struct({
 });
 
 it.effect(
-  "a whole answer in pages is asked a page after another at once, again where one fails however long it takes, each taken as rows joined on, the last with every key the pages carried and the id to read past next",
+  "a whole answer in pages is asked a page after another at once, again where one fails however long it takes, its first page taken at once as rows joined on and the rest with its last, which names every key the pages carried and the id to read past next",
   () =>
     Effect.gen(function* () {
       const asked: (readonly [string | undefined, string | undefined])[] = [];
@@ -535,10 +535,17 @@ it.effect(
 
       const following = yield* Effect.forkChild(
         followTakingRows<Part, typeof PageRows.Type>(
-          { poll, keysOf: (rows) => rows.left.map((row) => row.id) },
+          {
+            poll,
+            pages: {
+              keysOf: (rows) => rows.left.map((row) => row.id),
+              join: (held, page) => ({ left: [...held.left, ...page.left], right: page.right }),
+            },
+          },
           pageRead(["a"], "p2"),
           PageRows,
-          (_rows, standing) => Effect.sync(() => void taken.push(standing)),
+          (rows, standing) =>
+            Effect.sync(() => void taken.push([rows.left.map((row) => row.id), standing])),
         ),
       );
 
@@ -560,11 +567,13 @@ it.effect(
       );
       assert.deepEqual(asked[lastPage + 1], ["50", undefined]);
 
-      assert.deepEqual(taken.slice(0, 4), [
-        { past: "", next: "", gone: [], paged: true },
-        { past: "", next: "", gone: [], paged: true },
-        { past: "", next: "50", gone: [], paged: true, carried: new Set(["a", "b", "c"]) },
-        { past: undefined, next: "50", gone: [] },
+      assert.deepEqual(taken.slice(0, 3), [
+        [["a"], { past: "", next: "", gone: [], paged: true }],
+        [
+          ["b", "c"],
+          { past: "", next: "50", gone: [], paged: true, carried: new Set(["a", "b", "c"]) },
+        ],
+        [[], { past: undefined, next: "50", gone: [] }],
       ]);
       yield* Fiber.interrupt(following);
     }),
