@@ -51,7 +51,7 @@ udid=$1
 output=$2
 mkdir -p "$output"
 # Note that an earlier run's count is let go first, so a run that writes none never leaves an older one standing as its own.
-rm -f "$output/launch-load.json"
+rm -f "$output/launch-load.json" "$output/app-ready.json"
 seed=$(mktemp -d)
 trap 'rm -rf "$seed"' EXIT
 
@@ -94,6 +94,10 @@ if [[ -n "$recorder" ]] && ! wait "$recorder"; then
     traced=1
 fi
 
+if [[ -f "$host/busy-account/app-ready.json" ]]; then
+    cp "$host/busy-account/app-ready.json" "$output/app-ready.json"
+    echo "app:ready $(cat "$output/app-ready.json")"
+fi
 if [[ -f "$host/busy-account/launch-load.json" ]]; then
     cp "$host/busy-account/launch-load.json" "$output/launch-load.json"
     echo "launch:load $(cat "$output/launch-load.json")"
