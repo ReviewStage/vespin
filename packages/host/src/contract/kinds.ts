@@ -1011,11 +1011,6 @@ export const WINDOW_SURFACE_ACT_KIND = {
   WINDOW_COPY_RICH: "window.copyRich",
   WINDOW_SAVE_FILE: "window.saveFile",
   /**
-   * A downscaled still of part of the asking panel, as ⌃Tab's card previews a
-   * tab it left: answered to that panel alone and kept nowhere else.
-   */
-  WINDOW_CAPTURE: "window.capture",
-  /**
    * Whether the asking panel holds work it has not saved, told each time
    * that changes, so a quit, a restart to update, and a sign-out ask first
    * while it does.
@@ -1413,7 +1408,6 @@ export const PORT_ACT_USE = {
   WINDOW_COPY_IMAGE: ACT_USE.WRITE,
   WINDOW_COPY_RICH: ACT_USE.WRITE,
   WINDOW_SAVE_FILE: ACT_USE.WRITE,
-  WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
   WINDOW_MENU_OFFERS: ACT_USE.WRITE,
   WINDOW_HANDOFF: ACT_USE.WRITE,
