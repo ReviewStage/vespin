@@ -110,4 +110,8 @@ test("a message carries a still GIF and refuses an animated one, which no model 
 
   assert.equal(decode([gifAttachment(1)])._tag, "Some");
   assert.equal(decode([gifAttachment(2)])._tag, "None");
+
+  // A GIF cut off inside its one frame is no still a model can read.
+  const cut = btoa(String.fromCharCode(...GIF_HEAD, 0x2c));
+  assert.equal(decode([{ name: "cut.gif", mediaType: "image/gif", data: cut }])._tag, "None");
 });

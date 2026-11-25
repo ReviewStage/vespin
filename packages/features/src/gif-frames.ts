@@ -59,7 +59,9 @@ export function isGif(bytes: Uint8Array): boolean {
 /**
  * How many frames a GIF holds, counted by its image descriptors, stopping
  * at a second since only one or more matters; nothing where the bytes are
- * no GIF or a block is no GIF's.
+ * no GIF, a block is no GIF's, or the file is cut short before its trailer
+ * with fewer than two frames, since a model refuses a picture it cannot
+ * read whole.
  */
 function framesUpToTwo(bytes: Uint8Array): number | undefined {
   if (!isGif(bytes) || bytes.length < SCREEN_END) return undefined;
@@ -69,7 +71,7 @@ function framesUpToTwo(bytes: Uint8Array): number | undefined {
   while (at < bytes.length && frames < 2) {
     const block = bytes[at];
 
-    if (block === BLOCK.TRAILER) break;
+    if (block === BLOCK.TRAILER) return frames;
 
     if (block === BLOCK.EXTENSION) {
       // Note that an extension's label byte comes before its sub-blocks.
@@ -78,13 +80,15 @@ function framesUpToTwo(bytes: Uint8Array): number | undefined {
     }
 
     if (block !== BLOCK.IMAGE) return undefined;
-    frames += 1;
     const packed = bytes[at + IMAGE_DESCRIPTOR_BYTES] ?? 0;
     // Note that the image's LZW code size byte comes before its sub-blocks.
     at = pastSubBlocks(bytes, at + 1 + IMAGE_DESCRIPTOR_BYTES + colorTableBytes(packed) + 1);
+
+    if (at > bytes.length) return undefined;
+    frames += 1;
   }
 
-  return frames;
+  return frames < 2 ? undefined : frames;
 }
 
 /** Whether the bytes are a GIF of one frame; an animation, a GIF with none, and any other bytes are not. */
