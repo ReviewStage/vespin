@@ -1624,6 +1624,9 @@ function repositoryActionGroups(
   return [[top, github], ...read];
 }
 
+/** What the Tasks head's long press menu is called, a phone's, in the app's own words. */
+const TASKS_HEAD_ACTIONS = "Tasks actions";
+
 /** Pinned holds tabs as well as tasks, so its count is read as pins. */
 const PIN_NOUN: CountNoun = { one: "pin", many: "pins" };
 
@@ -3377,8 +3380,10 @@ function SidebarColumn({
                       </nav>
                     </GroupHeader>
                     {headMenu.drawn === undefined ? null : (
+                      // Note that the head's words, which may name a member, are the menu's subject, which a screen recording keeps masked, and its label the app's own.
                       <ActionMenu
-                        label={`${tasksHead} actions`}
+                        label={TASKS_HEAD_ACTIONS}
+                        subject={{ name: tasksHead }}
                         replayUnmasked
                         menu={headMenu.drawn}
                         groups={headGroups}

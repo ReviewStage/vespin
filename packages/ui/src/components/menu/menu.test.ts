@@ -1563,6 +1563,35 @@ test("a page opens in a sheet's place and its own submenu in its place in turn, 
   expect(sheet()).toBeNull();
 });
 
+/** The way a test takes the page out of `PagedHarness`'s menu, as its owner drawing the menu anew without it does. */
+let dropPage: () => void = () => undefined;
+
+/** A ⋯ whose menu holds `pageGroups`, until the page is dropped and Order by stands among the menu's own rows. */
+function PagedHarness({ chosen }: { chosen: Chosen }): React.JSX.Element {
+  const [paged, setPaged] = useState(true);
+  dropPage = () => setPaged(false);
+
+  return createElement(Harness, {
+    groups: paged
+      ? pageGroups(chosen)
+      : [[action("Rename", chosen)], [{ label: "Order by", items: [action("Name", chosen)] }]],
+  });
+}
+
+test("a sheet standing on a page its menu no longer offers goes back to the menu's own rows, and a submenu opened there opens", () => {
+  vi.stubGlobal("ResizeObserver", StandInResizeObserver);
+  inPhoneLayout();
+  const chosen: Chosen = [];
+  mount(createElement(PagedHarness, { chosen }));
+  press(button("More"));
+  press(button("Others"));
+  expect(openMenu("Others")).not.toBeNull();
+  act(() => dropPage());
+  expect(openMenu()).not.toBeNull();
+  press(button("Order by"));
+  expect(openMenu("Order by")).not.toBeNull();
+});
+
 test("Escape or a press on the dimmed window puts a sheet away and hands focus back to what opened it", () => {
   inPhoneLayout();
   mount(createElement(Harness, { groups: taskGroups([]) }));

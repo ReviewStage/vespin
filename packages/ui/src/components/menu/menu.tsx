@@ -2387,11 +2387,12 @@ function openedOn(openOn: string | undefined): readonly string[] {
   return openOn === undefined ? [] : [openOn];
 }
 
-/** What a sheet draws on the pages standing: the last that opens (none on the menu's own rows), its rows, and the name of the page it goes back to, none where that is the menu's own. */
+/** What a sheet draws on the pages standing: the last that opens (none on the menu's own rows), its rows, the name of the page it goes back to (none where that is the menu's own), and how many of the names standing its groups still offer. */
 interface SheetPage {
   readonly page: MenuSubmenu | MenuPanel | MenuPage | undefined;
   readonly rows: readonly (readonly MenuEntry[])[];
   readonly above: string | undefined;
+  readonly walked: number;
 }
 
 /**
@@ -2404,7 +2405,7 @@ function sheetPage(
   groups: readonly (readonly MenuEntry[])[],
   opened: readonly string[],
 ): SheetPage {
-  let standing: SheetPage = { page: undefined, rows: groups, above: undefined };
+  let standing: SheetPage = { page: undefined, rows: groups, above: undefined, walked: 0 };
 
   for (const label of opened) {
     const { page, rows } = standing;
@@ -2420,7 +2421,7 @@ function sheetPage(
 
     if (next === undefined) break;
     const nextRows = isPanel(next) ? [] : isPage(next) ? next.groups : [next.items];
-    standing = { page: next, rows: nextRows, above: page?.label };
+    standing = { page: next, rows: nextRows, above: page?.label, walked: standing.walked + 1 };
   }
 
   return standing;
@@ -2458,7 +2459,10 @@ function MenuSheet({
   const { id, opener, leaving, ref: hold } = menu;
   // Note that the pages standing are held by their names and read from `groups` each render, so a value that stays reads and toggles as its owner now draws it.
   const [opened, setOpened] = useState<readonly string[]>(openedOn(openOn));
-  const { page, rows, above } = sheetPage(groups, opened);
+  const { page, rows, above, walked } = sheetPage(groups, opened);
+
+  // Note that the pages standing are cut back to those the menu still offers, as when its owner draws it anew without one, so a page opened next opens from where the sheet stands.
+  if (walked < opened.length) setOpened(opened.slice(0, walked));
 
   // The submenu just left, whose row takes focus back.
   const backTo = useRef<string | undefined>(undefined);
