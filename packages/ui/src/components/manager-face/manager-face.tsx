@@ -5,9 +5,19 @@ import {
   type ManagerFaceColor,
   type ManagerFace as ManagerFaceValue,
 } from "@repo/features/manager-face";
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { Backpack, Cat, Ghost, type KawaiiProps, Mug, Planet, SpeechBubble } from "react-kawaii";
 import { WorkingMark } from "../working-mark/working-mark.js";
+import { FACE_DIRECTION, useFaceDirection } from "./prototype-face-direction.js";
+
+export {
+  FACE_DIRECTION,
+  FACE_DIRECTION_NAME,
+  type FaceDirection,
+  setFaceDirection,
+  setFacesWorking,
+  useFaceDirection,
+} from "./prototype-face-direction.js";
 
 /**
  * manager-face.tsx -- the friendly face a Manager wears: a React Kawaii character in a soft color, livelier and wearing the working mark while it works.
@@ -64,15 +74,42 @@ const CHARACTER = {
   { Drawing: React.FunctionComponent<KawaiiProps>; viewBox: string }
 >;
 
-/** Each color's fill, which the character's body reads as `currentColor`. */
-const FILL_CLASS = {
-  [MANAGER_FACE_COLOR.YELLOW]: "text-manager-face-yellow",
-  [MANAGER_FACE_COLOR.GREEN]: "text-manager-face-green",
-  [MANAGER_FACE_COLOR.BLUE]: "text-manager-face-blue",
-  [MANAGER_FACE_COLOR.PINK]: "text-manager-face-pink",
-  [MANAGER_FACE_COLOR.PURPLE]: "text-manager-face-purple",
-  [MANAGER_FACE_COLOR.PEACH]: "text-manager-face-peach",
+/** PROTOTYPE: each color's fill in light and dark, which the character's body reads as `currentColor` and an emoji's disc as its ground. */
+export const FACE_FILL = {
+  [MANAGER_FACE_COLOR.CORAL]: "light-dark(#ff8a80, #ffa49c)",
+  [MANAGER_FACE_COLOR.PEACH]: "light-dark(#ff9a6c, #ffb08a)",
+  [MANAGER_FACE_COLOR.TANGERINE]: "light-dark(#ffb347, #ffc46e)",
+  [MANAGER_FACE_COLOR.YELLOW]: "light-dark(#f9c74f, #ffd882)",
+  [MANAGER_FACE_COLOR.LEMON]: "light-dark(#fbe36b, #fff09a)",
+  [MANAGER_FACE_COLOR.LIME]: "light-dark(#c3e36a, #d4ef8a)",
+  [MANAGER_FACE_COLOR.GREEN]: "light-dark(#8fd47a, #a6e191)",
+  [MANAGER_FACE_COLOR.MINT]: "light-dark(#7edcc0, #99e9d1)",
+  [MANAGER_FACE_COLOR.TEAL]: "light-dark(#5cc6c6, #7ad6d6)",
+  [MANAGER_FACE_COLOR.BLUE]: "light-dark(#6cc4f5, #83d1fb)",
+  [MANAGER_FACE_COLOR.PERIWINKLE]: "light-dark(#8fa6ff, #a9bcff)",
+  [MANAGER_FACE_COLOR.PURPLE]: "light-dark(#b08cff, #c5a6ff)",
+  [MANAGER_FACE_COLOR.LAVENDER]: "light-dark(#d3b8ff, #dfcaff)",
+  [MANAGER_FACE_COLOR.PINK]: "light-dark(#f78fcb, #fda7dc)",
+  [MANAGER_FACE_COLOR.ROSE]: "light-dark(#ff7aa2, #ff97b8)",
+  [MANAGER_FACE_COLOR.SAND]: "light-dark(#e6c798, #f0d6ae)",
+  [MANAGER_FACE_COLOR.COCOA]: "light-dark(#c39a7a, #d4ae91)",
+  [MANAGER_FACE_COLOR.CLOUD]: "light-dark(#c9ced6, #d6dae0)",
 } as const satisfies Record<ManagerFaceColor, string>;
+
+/** PROTOTYPE: the colors in the order a picker offers them, round the wheel and then the quiet ones. */
+export const FACE_COLORS: readonly ManagerFaceColor[] = Object.keys(
+  FACE_FILL,
+) as ManagerFaceColor[];
+
+/** PROTOTYPE: the emoji each character stands for where a face has none of its own and the direction draws emoji. */
+export const CHARACTER_EMOJI = {
+  [MANAGER_FACE_CHARACTER.GHOST]: "👻",
+  [MANAGER_FACE_CHARACTER.PLANET]: "🪐",
+  [MANAGER_FACE_CHARACTER.CAT]: "🐱",
+  [MANAGER_FACE_CHARACTER.BACKPACK]: "🎒",
+  [MANAGER_FACE_CHARACTER.MUG]: "☕",
+  [MANAGER_FACE_CHARACTER.SPEECH_BUBBLE]: "💬",
+} as const satisfies Record<ManagerFaceCharacter, string>;
 
 /** Each seat's box. */
 const SEAT_CLASS = {
@@ -90,7 +127,53 @@ const BADGE_CLASS = {
   [MANAGER_FACE_SIZE.WORDS]: undefined,
 } as const satisfies Record<ManagerFaceSize, string | undefined>;
 
-/** A Manager's face in its seat, livelier and wearing the working mark while `working`. */
+/** PROTOTYPE: a Kawaii mood the Lively direction's face wears now: a blink now and then at rest, hearts while hovered. */
+function useLivelyMood(
+  lively: boolean,
+  working: boolean,
+): {
+  mood: NonNullable<KawaiiProps["mood"]>;
+  onHover: (hovered: boolean) => void;
+} {
+  const [blink, setBlink] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  useEffect(() => {
+    if (!lively) return undefined;
+    let timer: ReturnType<typeof setTimeout>;
+    const next = () => {
+      timer = setTimeout(
+        () => {
+          setBlink(true);
+          timer = setTimeout(() => {
+            setBlink(false);
+            next();
+          }, 170);
+        },
+        2200 + Math.random() * 3800,
+      );
+    };
+    next();
+
+    return () => clearTimeout(timer);
+  }, [lively]);
+
+  const mood = !lively
+    ? working
+      ? MOOD.WORKING
+      : MOOD.RESTING
+    : hovered
+      ? "lovestruck"
+      : blink
+        ? "blissful"
+        : working
+          ? MOOD.WORKING
+          : MOOD.RESTING;
+
+  return { mood, onHover: setHovered };
+}
+
+/** A Manager's face in its seat, livelier and wearing the working mark while `working`; PROTOTYPE: drawn in the direction the switcher names. */
 export function ManagerFace({
   face,
   size,
@@ -105,31 +188,64 @@ export function ManagerFace({
 }): React.JSX.Element {
   // Note that Kawaii names its face's mask by this, so many faces on one page never share a mask; it keeps only an id's safe characters.
   const maskId = useId().replace(/[^\w-]/g, "");
+  const { direction, working: everyWorking } = useFaceDirection();
+  const atWork = working || everyWorking;
+  const lively = direction === FACE_DIRECTION.LIVELY;
+  const { mood, onHover } = useLivelyMood(lively, atWork);
   const { Drawing, viewBox } = CHARACTER[face.character];
-  const badge = BADGE_CLASS[size];
+  const fill = FACE_FILL[face.color] ?? FACE_FILL[MANAGER_FACE_COLOR.YELLOW];
+  const emoji =
+    direction === FACE_DIRECTION.EMOJI
+      ? (face.emoji ?? CHARACTER_EMOJI[face.character])
+      : direction === FACE_DIRECTION.MIXED
+        ? face.emoji
+        : undefined;
+  // Note that the Emoji and Mixed directions say work by their ring and halo, so only Palette and Lively wear the corner mark.
+  const badge = direction === FACE_DIRECTION.PALETTE ? BADGE_CLASS[size] : undefined;
 
   return (
     <span
       className={`ui-manager-face relative inline-flex flex-none ${SEAT_CLASS[size]}`}
-      data-working={working ? "true" : undefined}
+      data-working={atWork ? "true" : undefined}
+      data-direction={direction}
+      data-emoji={emoji === undefined ? undefined : "true"}
+      style={{ "--ui-manager-face-fill": fill } as React.CSSProperties}
+      onMouseEnter={lively ? () => onHover(true) : undefined}
+      onMouseLeave={lively ? () => onHover(false) : undefined}
       aria-hidden="true"
     >
-      <Drawing
-        className={`ui-manager-face-body block size-full ${FILL_CLASS[face.color]}`}
-        mood={working ? MOOD.WORKING : MOOD.RESTING}
-        color="currentColor"
-        size="100%"
-        viewBox={viewBox}
-        uniqueId={maskId}
-        focusable="false"
-      />
-      {working && badge !== undefined ? (
+      {emoji === undefined ? (
+        <Drawing
+          className="ui-manager-face-body block size-full"
+          mood={mood}
+          color="currentColor"
+          size="100%"
+          viewBox={viewBox}
+          uniqueId={maskId}
+          focusable="false"
+          style={{ color: fill }}
+        />
+      ) : (
+        <span className="ui-manager-face-disc">
+          <span className="ui-manager-face-body ui-manager-face-emoji">{emoji}</span>
+        </span>
+      )}
+      {atWork && badge !== undefined ? (
         <span
           className={`pointer-events-none absolute -right-ui-2 -bottom-ui-2 inline-grid place-items-center rounded-disc bg-ground text-muted-foreground ${badge}`}
         >
           <WorkingMark />
         </span>
       ) : null}
+      {atWork && lively && size !== MANAGER_FACE_SIZE.WORDS ? (
+        <span className="ui-manager-face-typing" data-size={size}>
+          <span />
+          <span />
+          <span />
+        </span>
+      ) : null}
     </span>
   );
 }
+
+export { FaceDirectionSwitcher } from "./prototype-face-switcher.js";

@@ -52,6 +52,7 @@ import {
   useMenu,
 } from "@repo/ui";
 import { ArrowUpDownIcon, GLYPH, SlidersHorizontalIcon } from "@repo/ui/icons";
+import { FaceDirectionSwitcher } from "@repo/ui/manager-face";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
@@ -409,6 +410,8 @@ export function SidebarManagers({
         {listedManagers.length === 0 ? null : rows(listedManagers)}
       </GroupHeader>
       <NewManagerCard tasks={tasks} asking={askNewManager} onOpen={onOpen} />
+      {/* PROTOTYPE: the faces' design direction, switched from anywhere. */}
+      {staged ? <FaceDirectionSwitcher /> : null}
     </nav>
   );
 }

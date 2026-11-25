@@ -24,7 +24,7 @@ const FIXTURE_PARAMETER = "fixture";
  * with no change in this file.
  */
 export function developmentFixtureProfile(search: string): RunProfile | undefined {
-  if (!import.meta.env.DEV) return undefined;
+  // PROTOTYPE: the prototype branch's Preview reads the switch too, so a reviewer can click through the fixture there.
   const named = new URLSearchParams(search).get(FIXTURE_PARAMETER);
 
   return Object.values(RUN_PROFILE).find((profile) => profile === named);

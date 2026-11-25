@@ -18,3 +18,189 @@
     }
   }
 }
+
+/* PROTOTYPE: the Emoji and Mixed directions' disc, and how each direction says work. */
+@layer components {
+  .ui-manager-face-disc {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: 9999px;
+    container-type: size;
+    background: color-mix(in oklab, currentColor 9%, transparent);
+  }
+
+  .ui-manager-face[data-direction="mixed"] .ui-manager-face-disc {
+    background: var(--ui-manager-face-fill);
+  }
+
+  .ui-manager-face-emoji {
+    display: block;
+    font-size: 76cqh;
+    line-height: 1;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  }
+
+  .ui-manager-face[data-direction="mixed"] .ui-manager-face-emoji {
+    font-size: 68cqh;
+  }
+
+  /* B · Emoji: the emoji hops, and an arc runs round its disc. */
+  .ui-manager-face[data-direction="emoji"][data-working] .ui-manager-face-body {
+    animation: ui-manager-face-hop 0.8s cubic-bezier(0.3, 0, 0.3, 1) infinite;
+    animation-play-state: var(--ui-loop-motion);
+  }
+
+  .ui-manager-face[data-direction="emoji"][data-working]::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 9999px;
+    background: conic-gradient(from 0deg, transparent 0 55%, var(--ui-color-accent, #6c8cff) 100%);
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+    animation: ui-manager-face-spin 1.2s linear infinite;
+    animation-play-state: var(--ui-loop-motion);
+    pointer-events: none;
+  }
+
+  /* C · Mixed: a halo in the face's own color breathes round it. */
+  .ui-manager-face[data-direction="mixed"][data-working]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: var(--ui-manager-face-fill);
+    animation: ui-manager-face-halo 1.6s ease-out infinite;
+    animation-play-state: var(--ui-loop-motion);
+    pointer-events: none;
+  }
+
+  .ui-manager-face[data-direction="mixed"][data-working] .ui-manager-face-body {
+    animation: ui-manager-face-bob 0.8s ease-in-out infinite alternate;
+    animation-play-state: var(--ui-loop-motion);
+  }
+
+  @keyframes ui-manager-face-hop {
+    0%,
+    100% {
+      translate: 0 0;
+      scale: 1 1;
+    }
+    15% {
+      scale: 1.1 0.88;
+    }
+    45% {
+      translate: 0 -16%;
+      scale: 0.94 1.06;
+    }
+    75% {
+      translate: 0 0;
+      scale: 1.06 0.94;
+    }
+  }
+
+  @keyframes ui-manager-face-spin {
+    to {
+      rotate: 1turn;
+    }
+  }
+
+  @keyframes ui-manager-face-halo {
+    0% {
+      opacity: 0.7;
+      scale: 1;
+    }
+    100% {
+      opacity: 0;
+      scale: 1.7;
+    }
+  }
+}
+
+/* PROTOTYPE: D · Lively: at work the face wiggles and a typing bubble hangs at its corner. */
+@layer components {
+  .ui-manager-face[data-direction="lively"][data-working] .ui-manager-face-body {
+    animation: ui-manager-face-wiggle 1.6s ease-in-out infinite;
+    animation-play-state: var(--ui-loop-motion);
+    transform-origin: 50% 90%;
+  }
+
+  .ui-manager-face-typing {
+    position: absolute;
+    right: -7px;
+    top: -5px;
+    display: inline-flex;
+    gap: 1.5px;
+    align-items: center;
+    padding: 2px 3px;
+    border-radius: 9999px 9999px 9999px 2px;
+    background: var(--ui-color-ground, Canvas);
+    box-shadow: 0 0 0 1px color-mix(in oklab, currentColor 18%, transparent);
+    color: var(--ui-color-foreground, CanvasText);
+    pointer-events: none;
+  }
+
+  .ui-manager-face-typing[data-size="message"] {
+    right: -9px;
+    top: -6px;
+    gap: 2px;
+    padding: 3px 4px;
+  }
+
+  .ui-manager-face-typing > span {
+    inline-size: 2.5px;
+    block-size: 2.5px;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.35;
+    animation: ui-manager-face-dot 1.2s ease-in-out infinite;
+    animation-play-state: var(--ui-loop-motion);
+  }
+
+  .ui-manager-face-typing[data-size="message"] > span {
+    inline-size: 3.5px;
+    block-size: 3.5px;
+  }
+
+  .ui-manager-face-typing > span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .ui-manager-face-typing > span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes ui-manager-face-dot {
+    0%,
+    60%,
+    100% {
+      opacity: 0.35;
+      translate: 0 0;
+    }
+    30% {
+      opacity: 1;
+      translate: 0 -1.5px;
+    }
+  }
+
+  @keyframes ui-manager-face-wiggle {
+    0%,
+    100% {
+      rotate: 0deg;
+    }
+    20% {
+      rotate: -9deg;
+    }
+    40% {
+      rotate: 7deg;
+    }
+    60% {
+      rotate: -4deg;
+    }
+    80% {
+      rotate: 0deg;
+    }
+  }
+}

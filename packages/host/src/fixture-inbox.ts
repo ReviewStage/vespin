@@ -1035,6 +1035,50 @@ const MANAGER: AgentSummary = {
   saidAt: MANAGER_STARTED + 4 * MINUTE,
 };
 
+/** PROTOTYPE: more Managers beside the release one, so the sidebar shows several faces, one of them at work. */
+const MORE_MANAGERS: readonly AgentSummary[] = [
+  {
+    ...agentOn(fixtureId(401), "", "Design crit", AGENT_STATUS.RUNNING, 3 * HOUR),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: {
+      character: MANAGER_FACE_CHARACTER.CAT,
+      color: MANAGER_FACE_COLOR.LAVENDER,
+      emoji: "🎨",
+    },
+    readThrough: MANAGER_STARTED,
+    saidAt: MANAGER_STARTED - HOUR,
+  },
+  {
+    ...agentOn(fixtureId(402), "", "On-call", AGENT_STATUS.COMPLETED, 4 * HOUR),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: { character: MANAGER_FACE_CHARACTER.GHOST, color: MANAGER_FACE_COLOR.MINT },
+    readThrough: MANAGER_STARTED,
+    saidAt: MANAGER_STARTED - 2 * HOUR,
+  },
+  {
+    ...agentOn(fixtureId(403), "", "Docs gardener", AGENT_STATUS.COMPLETED, 5 * HOUR),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: { character: MANAGER_FACE_CHARACTER.MUG, color: MANAGER_FACE_COLOR.SAND },
+    readThrough: MANAGER_STARTED,
+    saidAt: MANAGER_STARTED - 3 * HOUR,
+  },
+  {
+    ...agentOn(fixtureId(404), "", "Growth", AGENT_STATUS.COMPLETED, 6 * HOUR),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: {
+      character: MANAGER_FACE_CHARACTER.BACKPACK,
+      color: MANAGER_FACE_COLOR.CORAL,
+      emoji: "📈",
+    },
+    readThrough: MANAGER_STARTED,
+    saidAt: MANAGER_STARTED - 4 * HOUR,
+  },
+];
+
 /** A task's agents as its row in the list counts them. */
 function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
   const agent = AGENTS.get(taskId);
@@ -1818,10 +1862,19 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     listStatus: TASKS_READ.READY,
     taskAgents: [
       ...(list.taskAgents ?? []).filter(
-        (agent) => agent.id !== manager.id && !followed.some(({ id }) => id === agent.id),
+        (agent) =>
+          agent.id !== manager.id &&
+          !MORE_MANAGERS.some(({ id }) => id === agent.id) &&
+          !followed.some(({ id }) => id === agent.id),
       ),
       ...followed,
       manager,
+      ...MORE_MANAGERS.map((each) => ({
+        ...each,
+        workspaceId: FIXTURE_IDS.WORKSPACE,
+        repository: null,
+        ...(each.status === AGENT_STATUS.RUNNING ? undefined : { settledAt: each.createdAt }),
+      })),
     ],
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
@@ -3333,7 +3386,7 @@ function stagedItem(itemId: string): InboxItem | undefined {
 
 /** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, ...MORE_MANAGERS].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */

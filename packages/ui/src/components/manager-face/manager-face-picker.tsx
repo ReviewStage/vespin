@@ -1,8 +1,8 @@
 import {
   MANAGER_FACE_CHARACTER,
-  MANAGER_FACE_CHARACTER_NAME,
   MANAGER_FACE_COLOR,
-  MANAGER_FACES,
+  type ManagerFaceCharacter,
+  type ManagerFaceColor,
   type ManagerFace as ManagerFaceValue,
   managerFaceName,
   managerFacesFound,
@@ -11,10 +11,17 @@ import { type RefObject, useRef, useState } from "react";
 import { SmilePlusIcon } from "../../icons/icons.js";
 import { ReplayUnmask } from "../../session-replay-marks.js";
 import { BUTTON_SIZE } from "../button/button.js";
+import { CHOICE_BAR_LOOK, ChoiceBar } from "../choice-bar/choice-bar.js";
 import { IconPicker, IconPickerChoice, IconPickerGroup } from "../icon-picker/icon-picker.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
 import { PopoverIconButton } from "../popover-icon-button/popover-icon-button.js";
-import { MANAGER_FACE_SIZE, ManagerFace } from "./manager-face.js";
+import {
+  FACE_COLORS,
+  FACE_DIRECTION,
+  MANAGER_FACE_SIZE,
+  ManagerFace,
+  useFaceDirection,
+} from "./manager-face.js";
 
 /**
  * manager-face-picker.tsx -- where a Manager's face is picked: the app's one icon picker (`IconPicker`), as a section's icon is picked, listing every face, one group to each character in each of the colors.
@@ -38,7 +45,6 @@ import { MANAGER_FACE_SIZE, ManagerFace } from "./manager-face.js";
  */
 
 const CHARACTERS = Object.values(MANAGER_FACE_CHARACTER);
-const COLORS = Object.values(MANAGER_FACE_COLOR);
 
 /** What the search asks for. */
 const SEARCH_FACES = "Search faces";
@@ -56,12 +62,129 @@ const MANAGER_FACE = "Manager face";
 const MENU_PANEL =
   "ui-manager-face-menu-panel rounded-menu border border-border-strong bg-popover text-popover-foreground shadow-menu animate-menu-in";
 
+/** PROTOTYPE: the emoji a face may wear, by group, each with the words a search finds it by. */
+const EMOJI_GROUPS: readonly {
+  readonly name: string;
+  readonly emoji: readonly (readonly [string, string])[];
+}[] = [
+  {
+    name: "Animals",
+    emoji: [
+      ["🐶", "dog"],
+      ["🐱", "cat"],
+      ["🦊", "fox"],
+      ["🐻", "bear"],
+      ["🐼", "panda"],
+      ["🐨", "koala"],
+      ["🐯", "tiger"],
+      ["🦁", "lion"],
+      ["🐸", "frog"],
+      ["🐵", "monkey"],
+      ["🐧", "penguin"],
+      ["🦉", "owl"],
+      ["🐙", "octopus"],
+      ["🦄", "unicorn"],
+      ["🐝", "bee"],
+      ["🐢", "turtle"],
+      ["🦖", "dinosaur"],
+      ["🐳", "whale"],
+      ["🦔", "hedgehog"],
+      ["🦦", "otter"],
+    ],
+  },
+  {
+    name: "Friends",
+    emoji: [
+      ["🤖", "robot"],
+      ["👾", "alien monster"],
+      ["👻", "ghost"],
+      ["🪐", "planet"],
+      ["😎", "cool sunglasses"],
+      ["🤓", "nerd"],
+      ["🧐", "monocle"],
+      ["🥳", "party"],
+      ["🤠", "cowboy"],
+      ["🫡", "salute"],
+    ],
+  },
+  {
+    name: "Nature",
+    emoji: [
+      ["🌱", "seedling"],
+      ["🌵", "cactus"],
+      ["🌻", "sunflower"],
+      ["🍄", "mushroom"],
+      ["🌈", "rainbow"],
+      ["⭐", "star"],
+      ["🌙", "moon"],
+      ["☀️", "sun"],
+      ["⚡", "lightning zap"],
+      ["🔥", "fire"],
+    ],
+  },
+  {
+    name: "Food",
+    emoji: [
+      ["☕", "coffee mug"],
+      ["🍵", "tea"],
+      ["🍩", "donut"],
+      ["🍕", "pizza"],
+      ["🌮", "taco"],
+      ["🍣", "sushi"],
+      ["🥑", "avocado"],
+      ["🍋", "lemon"],
+      ["🍓", "strawberry"],
+      ["🧁", "cupcake"],
+    ],
+  },
+  {
+    name: "Work",
+    emoji: [
+      ["🚀", "rocket release"],
+      ["🛠️", "tools"],
+      ["🧪", "test tube"],
+      ["🔭", "telescope"],
+      ["📦", "package"],
+      ["📈", "chart growth"],
+      ["🧭", "compass"],
+      ["🎯", "target"],
+      ["🎨", "palette design"],
+      ["📚", "books docs"],
+      ["✏️", "pencil"],
+      ["🔍", "magnifier search"],
+      ["💡", "bulb idea"],
+      ["🔔", "bell"],
+      ["🛟", "ring buoy oncall"],
+      ["🧹", "broom cleanup"],
+      ["🎒", "backpack"],
+      ["💬", "speech bubble"],
+      ["🗺️", "map"],
+      ["🧲", "magnet"],
+    ],
+  },
+];
+
+/** PROTOTYPE: the picker's two kinds in the Mixed direction. */
+const FACE_KIND = {
+  CHARACTERS: "characters",
+  EMOJI: "emoji",
+} as const;
+
+type FaceKind = (typeof FACE_KIND)[keyof typeof FACE_KIND];
+
 /** Whether two faces are one. */
 function sameFace(one: ManagerFaceValue | undefined, other: ManagerFaceValue): boolean {
-  return one?.character === other.character && one.color === other.color;
+  return (
+    one?.character === other.character && one.color === other.color && one.emoji === other.emoji
+  );
 }
 
-/** The picker; see the module's head. A pick hands the face to `onChange`. */
+/** A face as a character in a color, wearing no emoji. */
+function characterFace(character: ManagerFaceCharacter, color: ManagerFaceColor): ManagerFaceValue {
+  return { character, color };
+}
+
+/** The picker; see the module's head. A pick hands the face to `onChange`. PROTOTYPE: laid out as the direction the switcher names. */
 export function ManagerFacePicker({
   face,
   search,
@@ -73,20 +196,95 @@ export function ManagerFacePicker({
   search?: RefObject<HTMLInputElement | null> | undefined;
   onChange: (next: ManagerFaceValue) => void;
 }): React.JSX.Element {
+  const { direction } = useFaceDirection();
   const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<FaceKind>(
+    face?.emoji === undefined ? FACE_KIND.CHARACTERS : FACE_KIND.EMOJI,
+  );
   const searching = query.trim() !== "";
-  const found = searching ? managerFacesFound(query) : MANAGER_FACES;
-  const stop = found.find((one) => sameFace(face, one)) ?? found[0];
+  const words = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word !== "");
+  const color = face?.color ?? MANAGER_FACE_COLOR.YELLOW;
+  const character = face?.character ?? MANAGER_FACE_CHARACTER.GHOST;
+  let stopTaken = false;
 
-  const choice = (one: ManagerFaceValue) => (
-    <IconPickerChoice
-      key={`${one.character}:${one.color}`}
-      label={managerFaceName(one)}
-      pressed={sameFace(face, one)}
-      stop={stop !== undefined && sameFace(stop, one)}
-      face={<ManagerFace face={one} size={MANAGER_FACE_SIZE.ROW} />}
-      onPress={() => onChange(one)}
-    />
+  // Note that the first choice drawn pressed, or else the first drawn, is the grid's one tab stop.
+  const choice = (one: ManagerFaceValue, label = managerFaceName(one)) => {
+    const pressed = sameFace(face, one);
+    const stop = !stopTaken && (pressed || face === undefined);
+
+    if (stop) stopTaken = true;
+
+    return (
+      <IconPickerChoice
+        key={`${one.character}:${one.color}:${one.emoji ?? ""}`}
+        label={label}
+        pressed={pressed}
+        stop={stop}
+        face={<ManagerFace face={one} size={MANAGER_FACE_SIZE.ROW} />}
+        onPress={() => onChange(one)}
+      />
+    );
+  };
+
+  const emojiFound = EMOJI_GROUPS.flatMap((group) =>
+    group.emoji.filter(([, name]) => words.every((word) => name.includes(word))),
+  );
+
+  const characterGroups = (
+    <>
+      <IconPickerGroup name="Character">
+        {CHARACTERS.map((each) => choice(characterFace(each, color)))}
+      </IconPickerGroup>
+      <IconPickerGroup name="Color">
+        {FACE_COLORS.map((each) =>
+          choice(
+            face?.emoji !== undefined && direction === FACE_DIRECTION.MIXED
+              ? { character, color: each, emoji: face.emoji }
+              : characterFace(character, each),
+          ),
+        )}
+      </IconPickerGroup>
+    </>
+  );
+
+  const emojiGroups = (tinted: boolean) => (
+    <>
+      {tinted ? (
+        <IconPickerGroup name="Color">
+          {FACE_COLORS.map((each) =>
+            choice({ character, color: each, emoji: face?.emoji ?? "🤖" }),
+          )}
+        </IconPickerGroup>
+      ) : null}
+      {EMOJI_GROUPS.map((group) => (
+        <IconPickerGroup key={group.name} name={group.name}>
+          {group.emoji.map(([emoji, name]) => choice({ character, color, emoji }, name))}
+        </IconPickerGroup>
+      ))}
+    </>
+  );
+
+  const found =
+    direction === FACE_DIRECTION.EMOJI ||
+    (direction === FACE_DIRECTION.MIXED && kind === FACE_KIND.EMOJI)
+      ? emojiFound.map(([emoji, name]) => choice({ character, color, emoji }, name))
+      : managerFacesFound(query).map((one) => choice(one));
+
+  const body = searching ? (
+    found.length === 0 ? (
+      <NoteLine look={NOTE_LINE_LOOK.LIST}>{NO_FACE_MATCHES}</NoteLine>
+    ) : (
+      <IconPickerGroup name={FOUND_FACES}>{found}</IconPickerGroup>
+    )
+  ) : direction === FACE_DIRECTION.EMOJI ? (
+    emojiGroups(false)
+  ) : direction === FACE_DIRECTION.MIXED && kind === FACE_KIND.EMOJI ? (
+    emojiGroups(true)
+  ) : (
+    characterGroups
   );
 
   return (
@@ -97,20 +295,24 @@ export function ManagerFacePicker({
         query={query}
         onQuery={setQuery}
         legend={FOUND_FACES}
+        bar={
+          <>
+            {direction === FACE_DIRECTION.MIXED ? (
+              <ChoiceBar<FaceKind>
+                label="Face kind"
+                items={[
+                  { value: FACE_KIND.CHARACTERS, label: "Characters" },
+                  { value: FACE_KIND.EMOJI, label: "Emoji" },
+                ]}
+                value={kind}
+                onChange={setKind}
+                look={CHOICE_BAR_LOOK.SEGMENTED}
+              />
+            ) : null}
+          </>
+        }
       >
-        {searching ? (
-          found.length === 0 ? (
-            <NoteLine look={NOTE_LINE_LOOK.LIST}>{NO_FACE_MATCHES}</NoteLine>
-          ) : (
-            <IconPickerGroup name={FOUND_FACES}>{found.map(choice)}</IconPickerGroup>
-          )
-        ) : (
-          CHARACTERS.map((character) => (
-            <IconPickerGroup key={character} name={MANAGER_FACE_CHARACTER_NAME[character]}>
-              {COLORS.map((color) => choice({ character, color }))}
-            </IconPickerGroup>
-          ))
-        )}
+        {body}
       </IconPicker>
     </ReplayUnmask>
   );

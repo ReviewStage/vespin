@@ -42,6 +42,19 @@ export const MANAGER_FACE_COLOR = {
   PINK: "pink",
   PURPLE: "purple",
   PEACH: "peach",
+  // PROTOTYPE: a wider palette, twelve more soft colors that still hold Kawaii's near-black features.
+  CORAL: "coral",
+  TANGERINE: "tangerine",
+  LEMON: "lemon",
+  LIME: "lime",
+  MINT: "mint",
+  TEAL: "teal",
+  PERIWINKLE: "periwinkle",
+  LAVENDER: "lavender",
+  ROSE: "rose",
+  SAND: "sand",
+  COCOA: "cocoa",
+  CLOUD: "cloud",
 } as const;
 
 export type ManagerFaceColor = (typeof MANAGER_FACE_COLOR)[keyof typeof MANAGER_FACE_COLOR];
@@ -64,12 +77,26 @@ export const MANAGER_FACE_COLOR_NAME = {
   [MANAGER_FACE_COLOR.PINK]: "Pink",
   [MANAGER_FACE_COLOR.PURPLE]: "Purple",
   [MANAGER_FACE_COLOR.PEACH]: "Peach",
+  [MANAGER_FACE_COLOR.CORAL]: "Coral",
+  [MANAGER_FACE_COLOR.TANGERINE]: "Tangerine",
+  [MANAGER_FACE_COLOR.LEMON]: "Lemon",
+  [MANAGER_FACE_COLOR.LIME]: "Lime",
+  [MANAGER_FACE_COLOR.MINT]: "Mint",
+  [MANAGER_FACE_COLOR.TEAL]: "Teal",
+  [MANAGER_FACE_COLOR.PERIWINKLE]: "Periwinkle",
+  [MANAGER_FACE_COLOR.LAVENDER]: "Lavender",
+  [MANAGER_FACE_COLOR.ROSE]: "Rose",
+  [MANAGER_FACE_COLOR.SAND]: "Sand",
+  [MANAGER_FACE_COLOR.COCOA]: "Cocoa",
+  [MANAGER_FACE_COLOR.CLOUD]: "Cloud",
 } as const satisfies Record<ManagerFaceColor, string>;
 
 /** A Manager's face: its character and the color it is drawn in. */
 export interface ManagerFace {
   readonly character: ManagerFaceCharacter;
   readonly color: ManagerFaceColor;
+  /** PROTOTYPE: an emoji the face wears in its character's place, where the direction draws one. */
+  readonly emoji?: string | undefined;
 }
 
 /** A Manager's face as the agent's row keeps it and every read carries it. */
@@ -79,16 +106,19 @@ export const managerFaceSchema = EffectSchema.Struct({
     MANAGER_FACE_CHARACTER.GHOST,
   ),
   color: literalsReadingUnknown(Object.values(MANAGER_FACE_COLOR), MANAGER_FACE_COLOR.YELLOW),
+  emoji: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 /** A face a member picks, at New Manager or in a Manager's Settings: a character and a color this build names, refused otherwise. */
 export const managerFacePickSchema = EffectSchema.Struct({
   character: EffectSchema.Literals(Object.values(MANAGER_FACE_CHARACTER)),
   color: EffectSchema.Literals(Object.values(MANAGER_FACE_COLOR)),
+  emoji: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 /** What a face is called, its color then its character, "Purple cat", as every picker names it, since a face says nothing to a reader who cannot see it. */
 export function managerFaceName(face: ManagerFace): string {
+  if (face.emoji !== undefined) return `${MANAGER_FACE_COLOR_NAME[face.color]} ${face.emoji}`;
   return `${MANAGER_FACE_COLOR_NAME[face.color]} ${MANAGER_FACE_CHARACTER_NAME[face.character].toLowerCase()}`;
 }
 

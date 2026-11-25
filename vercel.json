@@ -3,6 +3,7 @@
   "git": {
     "deploymentEnabled": {
       "main": true,
+      "prototype/manager-faces-more": true,
       "**": false
     }
   },
