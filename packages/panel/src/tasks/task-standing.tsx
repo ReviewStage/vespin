@@ -235,6 +235,8 @@ export interface TaskStandingDoor {
   readonly relations?: TaskRelationsDoor | undefined;
   /** Whether the description is in sight, which S's ask waits on, so it never opens a menu behind another tab; in sight where unsaid. */
   readonly inSight?: boolean | undefined;
+  /** Whether the path over the title is left out, as on a phone, whose bar names the path and whose ⋯ offers its repository and its parent; drawn where unsaid. */
+  readonly pathless?: boolean | undefined;
 }
 
 /**
@@ -289,7 +291,10 @@ const PATH_LABEL = "Task path";
  * plan's; none for a task at the top, or one whose parent the list does not
  * hold yet.
  */
-function parentOf(task: TaskSummary, tasks: readonly TaskSummary[]): TaskSummary | undefined {
+export function parentOf(
+  task: TaskSummary,
+  tasks: readonly TaskSummary[],
+): TaskSummary | undefined {
   const parentId = tasks.find((each) => each.id === task.id)?.parentTaskId ?? task.parentTaskId;
 
   return parentId === undefined ? undefined : tasks.find((each) => each.id === parentId);
@@ -398,7 +403,8 @@ function RepositoryPath({
 /**
  * The task's path over its title: its repository's crumb where the page
  * hands the repository's doors, its parent's where it has one, and its own
- * key, current; nothing where none of them stands.
+ * key, current; nothing where none of them stands, or where the page says
+ * it is `pathless`.
  */
 export function TaskPath({
   task,
@@ -414,6 +420,8 @@ export function TaskPath({
   );
 
   const rest = [parent, keyCrumb(task, door.workspaceName)];
+
+  if (door.pathless === true) return null;
 
   return door.repository === undefined ? (
     <PathLine crumbs={rest} />
