@@ -531,7 +531,7 @@ interface PaletteRow {
   command?: KeyedCommand | undefined;
   /** The short words the search scores, the name first. */
   terms: readonly string[];
-  /** A task's key, as `ACME-42`, which leads its row as it leads the Tasks list's, and which typed whole finds the task first. */
+  /** A task's key, as `ACME-42`, which stands first at its row's end as on the Tasks list's row, and which typed whole finds the task first. */
   taskKey?: { readonly workspaceName: string; readonly number: number } | undefined;
   /** Longer words the row is found by as the settings search finds it, every word of the query somewhere in them. */
   keywords?: readonly string[] | undefined;
@@ -889,17 +889,17 @@ function taskDetail(
 }
 
 /**
- * Every task, as the sidebar lists them (`task-list-model.ts`'s rows): the
- * pinned first, then the rest by their last activity (`taskTime`), each in
- * its tab's look. Within each, the
- * listed workspace's come first and every other workspace's tasks after
- * them, naming its workspace and found by its name, since opening one
- * switches the window to it. A task wears at its end who is on it and its
- * row's mark, as its sidebar row does (`assigneeFace`, `TaskRowStatus`),
- * leads with its key and says its repository by its name, as the Tasks
- * list's row does, and is found by its key, its assignee's name, and its
- * creator's, a key typed whole listing its task first. An agent's line on a task's card opens the task on its
- * tab through `showAgent`, which leaves the palette as a row does.
+ * Every task, each in its tab's look: the listed workspace's first and every
+ * other workspace's after them, naming its workspace and found by its name,
+ * since opening one switches the window to it. Within each, the pinned stand
+ * first and the rest by their last activity (`taskTime`), as the sidebar
+ * lists them (`task-list-model.ts`'s rows). A task wears at its end its key,
+ * who is on it, and its row's mark, as its sidebar row does (`assigneeFace`,
+ * `TaskRowStatus`), says its repository by its name, as the Tasks list's row
+ * does, and is found by its key, its assignee's name, and its creator's, a
+ * key typed whole listing its task first. An agent's line on a task's card
+ * opens the task on its tab through `showAgent`, which leaves the palette as
+ * a row does.
  */
 function taskRows(
   tasks: TasksControl,
