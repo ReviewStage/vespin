@@ -92,14 +92,21 @@ import type { RunMode } from "./run-mode.js";
  * window asks again each minute an agent is on screen, beside the warm call
  * that wakes its sandbox (`@repo/panel`'s `use-warm-agent.ts`), so the mirror
  * follows the agent being looked at, its worktree usually made by the time
- * its Local tab opens; the next manifest brings it back in step. Every
- * mirror on disk is tried once from the host's start, which is how one whose
- * agent is gone is found. A mirror is taken away, its worktree removed from the shared
- * clone and its folder deleted, when the task list shows its agent archived,
- * or when the tunnel closes as gone: the agent archived, or no agent this
- * account reaches, which is how the first try after the host's start finds
- * a mirror whose agent is gone. Only a cloud agent has a mirror, and only the
- * desktop runs this concern. A file's name, bytes, and hash are the agent's
+ * its Local tab opens; the next manifest brings it back in step. While the
+ * task list says the agent's sandbox is not open, an ask waits for it to open
+ * rather than opening a tunnel the service would close as not running, and
+ * gives up once `SANDBOX_WAIT` passes, for the next ask. Only one mirror
+ * matches its files at a time, because a match reads and hashes every file
+ * of the checkout, which holds the main process for seconds. A mirror is
+ * taken away, its worktree removed from the shared clone and its folder
+ * deleted, when the task list shows its agent archived, or when the tunnel
+ * closes as gone: the agent archived, or no agent this account reaches.
+ * Nothing is tried as the host starts, because every mirror on disk tried at
+ * once held a launch for seconds. A mirror whose agent the list does not hold
+ * at all, its agent deleted, or whose agent was archived while no ask kept it,
+ * is found by one quiet pass `LEFTOVERS.AFTER` into a run and at most once
+ * each `LEFTOVERS.EVERY`, one mirror at a time. Only a cloud agent has
+ * a mirror, and only the desktop runs this concern. A file's name, bytes, and hash are the agent's
  * and are never logged, traced, or counted.
  *
  * Each attempt is a span of the tracer the platform hands (main's Sentry on
@@ -121,6 +128,22 @@ import type { RunMode } from "./run-mode.js";
 const SCRIPT_WITHIN = {
   WORKTREE: Duration.minutes(25),
   LIST: Duration.minutes(2),
+} as const;
+
+/** How long an ask waits for the task list to say the agent's sandbox is open before it gives up, for the next ask to try again. */
+const SANDBOX_WAIT = Duration.minutes(1);
+
+/**
+ * The quiet pass that finds mirrors whose agent is gone: how long into a run
+ * it waits, so it never weighs on a launch; how long since the last pass,
+ * kept in `MARKER` beside the mirrors, before another; and how long it waits
+ * on one mirror's attempt before it tries the next.
+ */
+const LEFTOVERS = {
+  AFTER: Duration.minutes(10),
+  EVERY: Duration.days(1),
+  STEP_WAIT: Duration.seconds(30),
+  MARKER: ".leftovers-checked",
 } as const;
 
 /** How many attempts of a mirror's in one run are traced; the rest run untraced. */
@@ -197,6 +220,8 @@ const decoder = new TextDecoder();
 interface MirroredAgent {
   readonly repository: string | null;
   readonly archivedAt?: number | undefined;
+  /** Whether the service holds the agent's sandbox session; false where it holds none, so a tunnel would close as not running. */
+  readonly sandboxOpen?: boolean | undefined;
   /** Set only for a local agent on its starter's device, which has no mirror. */
   readonly machine?: string | undefined;
 }
@@ -210,7 +235,9 @@ export interface MirrorsDependencies {
   platform: MirrorPlatformSeam;
   /** The agent as the task list holds it now; none where it lists no such agent. */
   agentListed: (agentId: string) => MirroredAgent | undefined;
-  /** The task list as each drawing of it stands, from the caller's listening until its scope closes, which archives are read again on. */
+  /** Whether the task list has drawn, so `agentListed` answers for every agent it holds. */
+  listDrawn: () => boolean;
+  /** The task list as each drawing of it stands, from the caller's listening until its scope closes, which archives and sandboxes are read again on. */
   listings: Effect.Effect<Stream.Stream<unknown>, never, Scope.Scope>;
   recordProductEvent: RecordProductEvent;
 }
@@ -362,7 +389,8 @@ export function composeMirrors(
   Scope.Scope | FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
 > {
   return Effect.gen(function* () {
-    const { kernel, account, openSocket, platform, agentListed, recordProductEvent } = dependencies;
+    const { kernel, account, openSocket, platform, agentListed, listDrawn, recordProductEvent } =
+      dependencies;
 
     const context = yield* Effect.context<
       FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
@@ -374,6 +402,8 @@ export function composeMirrors(
     const mirrors = new Map<string, Mirror>();
     // Note that starts run one at a time, because a start yields between finding no mirror and keeping its own, and an ensure and the task list may start one agent at once.
     const starting = yield* Semaphore.make(1);
+    // Note that one mirror matches at a time, because a match reads and hashes the whole checkout.
+    const matching = yield* Semaphore.make(1);
     const socketOrigin = webSocketOrigin(kernel.hostedServiceBaseUrl);
 
     const folderOf = (agentId: string) => path.join(platform.folder, agentId);
@@ -472,35 +502,37 @@ export function composeMirrors(
         return worktree;
       });
 
-    /** A manifest matched against the mirror, what differs asked for in requests of at most `REQUEST_PATHS`. */
+    /** A manifest matched against the mirror, what differs asked for in requests of at most `REQUEST_PATHS`, one mirror at a time. */
     const matched = (
       agentId: string,
       socket: TerminalSocket,
       files: Extract<MirrorFrame, { readonly type: "manifest" }>["files"],
     ) =>
-      Effect.gen(function* () {
-        const worktree = worktreeOf(agentId);
+      matching.withPermit(
+        Effect.gen(function* () {
+          const worktree = worktreeOf(agentId);
 
-        const listing = yield* stepped(
-          agentId,
-          MIRROR_STEP.LIST,
-          scripted(MIRROR_STEP.LIST, platform.listScript(worktree), SCRIPT_WITHIN.LIST),
-        );
+          const listing = yield* stepped(
+            agentId,
+            MIRROR_STEP.LIST,
+            scripted(MIRROR_STEP.LIST, platform.listScript(worktree), SCRIPT_WITHIN.LIST),
+          );
 
-        const listed = listing.split("\0").filter((file) => file !== "");
-        yield* stepped(
-          agentId,
-          MIRROR_STEP.MATCH,
-          Effect.gen(function* () {
-            const asked = yield* mirrorMatched(worktree, listed, files);
+          const listed = listing.split("\0").filter((file) => file !== "");
+          yield* stepped(
+            agentId,
+            MIRROR_STEP.MATCH,
+            Effect.gen(function* () {
+              const asked = yield* mirrorMatched(worktree, listed, files);
 
-            for (let at = 0; at < asked.length; at += MIRROR_BOUNDS.REQUEST_PATHS) {
-              const paths = asked.slice(at, at + MIRROR_BOUNDS.REQUEST_PATHS);
-              yield* socket.send({ text: requestFrame({ type: MIRROR_FRAME.REQUEST, paths }) });
-            }
-          }),
-        );
-      });
+              for (let at = 0; at < asked.length; at += MIRROR_BOUNDS.REQUEST_PATHS) {
+                const paths = asked.slice(at, at + MIRROR_BOUNDS.REQUEST_PATHS);
+                yield* socket.send({ text: requestFrame({ type: MIRROR_FRAME.REQUEST, paths }) });
+              }
+            }),
+          );
+        }),
+      );
 
     /** One mirror message applied, in the order the bridge sent it. */
     const applied = (
@@ -707,11 +739,49 @@ export function composeMirrors(
         ),
       );
 
-    /** One attempt at the mirror, its prefetch run beside it while no worktree stands; a gone agent's mirror taken away, and any other ending leaving the mirror for the next ask, its worktree's waiters refused where it never stood. */
+    /** Whether the task list says the agent's sandbox is closed. Note that an agent it does not list, or lists without saying, is not closed, since the tunnel is what finds a gone agent. */
+    const sandboxClosed = (agentId: string) => agentListed(agentId)?.sandboxOpen === false;
+
+    /** Waits until the task list no longer says the agent's sandbox is closed, at most `SANDBOX_WAIT`, answering whether it opened. */
+    const sandboxOpened = (agentId: string) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          // Note that each drawing of the list is listened to before the list is read, so one drawn between the two is not missed.
+          const drawings = yield* dependencies.listings;
+
+          if (!sandboxClosed(agentId)) return true;
+
+          const opened = yield* Effect.timeoutOption(
+            Stream.runHead(Stream.filter(drawings, () => !sandboxClosed(agentId))),
+            SANDBOX_WAIT,
+          );
+
+          return Option.isSome(opened);
+        }),
+      );
+
+    /** One attempt at the mirror once its sandbox is open, its prefetch run beside it while no worktree stands; a gone agent's mirror taken away, and any other ending leaving the mirror for the next ask, its worktree's waiters refused where it never stood. */
     const kept = (agentId: string, mirror: Mirror) =>
       Effect.gen(function* () {
         const prefetch = yield* Effect.forkChild(prefetched(agentId, mirror));
-        const ended = yield* Effect.exit(attempt(agentId, mirror));
+
+        // Note that a sandbox that never opened ends as the tunnel would have, not running, with no tunnel opened.
+        const notRunning = Effect.suspend(() => {
+          const dropped = new MirrorDropped({
+            step: MIRROR_STEP.HEADER,
+            failure: MIRROR_FAILURE.NOT_RUNNING,
+            code: TUNNEL_CLOSE.NOT_RUNNING,
+          });
+
+          return Effect.andThen(failed(mirror, dropped), Effect.fail(dropped));
+        });
+
+        const ended = yield* Effect.exit(
+          Effect.flatMap(sandboxOpened(agentId), (opened) =>
+            opened ? attempt(agentId, mirror) : notRunning,
+          ),
+        );
+
         yield* Fiber.interrupt(prefetch);
 
         if (Exit.isSuccess(ended) && ended.value === TUNNEL_ENDING.GONE)
@@ -775,6 +845,60 @@ export function composeMirrors(
       ),
     );
 
+    /** Whether the last quiet pass is younger than `LEFTOVERS.EVERY`, read from the time its marker holds; a marker missing or unreadable is none. */
+    const checkedLately = (marker: string, now: number) =>
+      Effect.map(
+        Effect.option(fileSystem.readFileString(marker)),
+        (text) =>
+          Option.isSome(text) && now - Number(text.value) < Duration.toMillis(LEFTOVERS.EVERY),
+      );
+
+    /**
+     * The quiet pass: once `LEFTOVERS.AFTER` into the run and the task list
+     * has drawn, where no pass ran within `LEFTOVERS.EVERY`, the mirrors on
+     * disk are looked at one at a time: one whose agent the list shows
+     * archived is taken away, and one whose agent it does not hold is tried,
+     * waited on at most `LEFTOVERS.STEP_WAIT`, for a tunnel that answers gone
+     * to take it away. One whose agent the list holds live is left to the
+     * asks.
+     */
+    const leftoversChecked = Effect.scoped(
+      Effect.gen(function* () {
+        yield* Effect.sleep(LEFTOVERS.AFTER);
+        // Note that each drawing of the list is listened to before the list is read, so one drawn between the two is not missed.
+        const drawings = yield* dependencies.listings;
+
+        if (!listDrawn()) yield* Stream.runHead(Stream.filter(drawings, listDrawn));
+        const marker = path.join(platform.folder, LEFTOVERS.MARKER);
+        const now = yield* Clock.currentTimeMillis;
+
+        if (yield* checkedLately(marker, now)) return;
+        yield* Effect.ignore(fileSystem.writeFileString(marker, String(now)));
+
+        const standing = yield* Effect.orElseSucceed(
+          fileSystem.readDirectory(platform.folder),
+          () => [],
+        );
+
+        for (const agentId of standing) {
+          if (Result.isFailure(readId(unparsedWire(agentId)))) continue;
+
+          const listed = agentListed(agentId);
+
+          if (listed?.archivedAt !== undefined) {
+            yield* Effect.provideContext(removed(agentId), context);
+            continue;
+          }
+
+          if (listed !== undefined) continue;
+          const mirror = yield* started(agentId);
+          yield* Effect.ignore(
+            Effect.timeoutOption(Deferred.await(mirror.made), LEFTOVERS.STEP_WAIT),
+          );
+        }
+      }),
+    );
+
     const methods: MirrorMethods = {
       [GATEWAY_METHOD.MIRRORS_ENSURE]: (params) =>
         Effect.gen(function* () {
@@ -811,17 +935,9 @@ export function composeMirrors(
     const lifetime = Effect.gen(function* () {
       if (!kernel.runMode.sendsNetwork) return;
 
-      const standing = yield* Effect.orElseSucceed(
-        fileSystem.readDirectory(platform.folder),
-        () => [],
-      );
-
-      for (const name of standing) {
-        if (Result.isSuccess(readId(unparsedWire(name)))) yield* started(name);
-      }
-
       const listings = yield* dependencies.listings;
       yield* Effect.forkScoped(Stream.runForEach(listings, () => archivedRemoved));
+      yield* Effect.forkScoped(leftoversChecked);
     });
 
     return { methods, lifetime };
