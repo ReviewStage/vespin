@@ -383,6 +383,41 @@ function sealedPart(name: string, rows: readonly unknown[], sync: { past?: strin
   };
 }
 
+/**
+ * Throws unless every part of `body`, an answer `read` encoded, decodes
+ * under the read's own rows schema with as many rows as `written` gave it,
+ * since a row that fails its own decode is dropped there rather than
+ * failing the answer, and a seed that lost one would measure a launch that
+ * never happens.
+ */
+function checkRows<Encoded>(
+  what: string,
+  read: {
+    readonly answer: Schema.Codec<unknown, Encoded>;
+    readonly rows: Schema.Codec<unknown, unknown>;
+  },
+  body: Encoded,
+  written: { readonly [part: string]: number },
+): void {
+  // SAFETY: an answer's decode holds each part's rows as an array, which the read's own answer schema confirms.
+  const back = Schema.decodeUnknownSync(read.answer)(body) as {
+    readonly queries: { readonly [part: string]: { readonly rows: readonly unknown[] } };
+  };
+
+  // SAFETY: a read's rows decode holds each part as an array of its rows, which the read's own rows schema confirms.
+  const rows = Schema.decodeUnknownSync(read.rows)(
+    Object.fromEntries(Object.entries(back.queries).map(([part, query]) => [part, query.rows])),
+  ) as { readonly [part: string]: readonly unknown[] };
+
+  for (const [part, count] of Object.entries(written)) {
+    const decoded = rows[part]?.length ?? 0;
+
+    if (decoded !== count) {
+      throw new Error(`busy account: ${what} lost rows of ${part}: ${decoded}/${count}`);
+    }
+  }
+}
+
 /** The Inbox items read answered whole, as the service answers a reader that kept only part of it. */
 function inboxWholeBody(inbox: readonly SeededThread[]): string {
   const sync = { next: String(BUSY_SYNC.INBOX) };
@@ -497,8 +532,15 @@ function oldPlanAt(k: number): PlanRow {
   const plan = planAt(SCALE.PLANS + k);
   const at = NOW - 45 * DAY - k * HOUR;
 
+  // Note that an old task takes a number past the list's own, each its own, since a number under one fails the row's decode and the task would read as gone.
   // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
-  return { ...plan, status: TASK_STATUS.DONE, completedAt: at, updatedAt: at } as PlanRow;
+  return {
+    ...plan,
+    number: SCALE.PLANS + k + 1,
+    status: TASK_STATUS.DONE,
+    completedAt: at,
+    updatedAt: at,
+  } as PlanRow;
 }
 
 /** The `k`th old task's one agent, archived with it. */
@@ -543,7 +585,7 @@ function whatWaitsBody(inbox: readonly SeededThread[]): string {
 
   // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
   const body = Schema.encodeSync(ACCOUNT_INBOX_READ.answer)(answer as never);
-  Schema.decodeUnknownSync(ACCOUNT_INBOX_READ.answer)(body);
+  checkRows("what waits", ACCOUNT_INBOX_READ, body, { tasks: tasks.length });
 
   return JSON.stringify(body);
 }
@@ -562,7 +604,7 @@ function taskRowsBody(k: number): string {
 
   // SAFETY: the seed's rows are built to the wire's shapes, and every one is decoded by the build's own schemas before it is written (`seed`'s checks), so the shape named here is the one the decode confirms.
   const body = Schema.encodeSync(TASK_ROWS_READ.answer)(answer as never);
-  Schema.decodeUnknownSync(TASK_ROWS_READ.answer)(body);
+  checkRows(`old task ${k}`, TASK_ROWS_READ, body, { tasks: 1, agents: 1 });
 
   return JSON.stringify(body);
 }
@@ -710,19 +752,32 @@ const seed = Effect.gen(function* () {
     Effect.gen(function* () {
       const rows = localRows(yield* openLocalDatabase(root, ARGS.account));
 
+      // Note that each write is read back and its rows counted, since the store's writer logs a failed transaction rather than failing, and a seed that kept part of a list would measure a launch that never happens.
       const write = (
         kept: { readonly name: string; readonly kind: string },
         keyed: readonly { readonly key: string; readonly row: unknown }[],
         cursor: Parameters<typeof rows.answered>[0]["cursor"],
       ) =>
-        rows.answered({
-          read: kept.name,
-          kind: kept.kind,
-          workspace: undefined,
-          upserted: keyed,
-          deleted: [],
-          held: { every: keyed.map(({ key }) => key) },
-          cursor,
+        Effect.gen(function* () {
+          const name = { read: kept.name, kind: kept.kind, workspace: undefined };
+
+          yield* rows.answered({
+            ...name,
+            upserted: keyed,
+            deleted: [],
+            held: { every: keyed.map(({ key }) => key) },
+            cursor,
+          });
+
+          const stored = yield* rows.loaded(name);
+
+          if (stored?.rows.length !== keyed.length) {
+            return yield* Effect.die(
+              new Error(
+                `busy account: the local copy kept ${stored?.rows.length ?? 0} of ${keyed.length} rows of ${kept.name}`,
+              ),
+            );
+          }
         });
 
       yield* write(
