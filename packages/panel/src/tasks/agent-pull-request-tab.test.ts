@@ -1613,7 +1613,8 @@ async function phoneTab(conversationRuns: number) {
   const { element, pushed } = phoneSwitching(controlAnswering());
   const tab = await drawn(element);
 
-  const header = tab.querySelector(".pull-request-header") ?? assert.fail("the header stands");
+  const header =
+    tab.querySelector<HTMLElement>(".pull-request-header") ?? assert.fail("the header stands");
 
   const line =
     tab.querySelector(".pull-request-compact") ?? assert.fail("the title's one line stands");
@@ -1670,18 +1671,20 @@ test("on a phone the header folds away as far as the view under it is scrolled, 
 
 test("on a phone the tabs are rows on the conversation's page, each pushing its view as a page the phone's header names, with no header of the pull request's over it, and Back returns to the page", async () => {
   const { tab, header, conversation, pushed } = await phoneTab(2000);
+  // Note that the page is read through a call, so an assertion on it narrows nothing after a press changes it.
+  const step = () => pushed.step;
   assert.equal(tab.querySelector('[role="tab"]'), null, "no tab stands");
-  assert.equal(pushed.step, undefined, "the page itself pushes nothing");
+  assert.equal(step(), undefined, "the page itself pushes nothing");
 
   await choose(tab, "Checks");
-  assert.equal(pushed.step?.title, "Checks");
-  assert.equal(pushed.step?.back, "Pull request");
+  assert.equal(step()?.title, "Checks");
+  assert.equal(step()?.back, "Pull request");
   assert.equal(header.hidden, true, "the pushed page stands alone");
   assert.equal(conversation.closest<HTMLElement>(".pull-request-view")?.hidden, true);
 
-  act(() => pushed.step?.onBack());
+  act(() => step()?.onBack());
   await settle();
-  assert.equal(pushed.step, undefined, "back on the page, the header heads the tab again");
+  assert.equal(step(), undefined, "back on the page, the header heads the tab again");
   assert.equal(header.hidden, false);
   assert.equal(conversation.closest<HTMLElement>(".pull-request-view")?.hidden, false);
 });
