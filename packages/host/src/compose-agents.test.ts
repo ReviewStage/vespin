@@ -1364,6 +1364,22 @@ it.effect(
 );
 
 it.effect(
+  "a live read refused as not found ends the follow at once, though the newest page beside it keeps getting no answer",
+  () =>
+    Effect.gen(function* () {
+      const { acts, held, sealTranscript, pageNewest } = yield* subject();
+      sealTranscript({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
+      pageNewest(OFFLINE);
+      yield* acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
+      yield* settled;
+      yield* TestClock.adjust("2 minutes");
+      yield* settled;
+
+      assert.equal(held().at(-1)?.failure?.failure, AGENT_CALL_FAILURE.NOT_FOUND);
+    }),
+);
+
+it.effect(
   "a poll refused as signed out while the account it was read for still stands is asked again, and the transcript reads on once the service answers",
   () =>
     Effect.gen(function* () {

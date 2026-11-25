@@ -708,278 +708,291 @@ export function followTranscript<Key>(
       const opening = Option.isSome(recalled) ? undefined : yield* Effect.forkScoped(readNewest);
       const sealing = yield* Effect.forkScoped(Effect.result(RcMap.get(follows, key)));
 
-      /** The live read's state once its first read stands; none where it was refused or never answered, which is told here and ends the follow. */
-      const standing = Effect.gen(function* () {
+      /**
+       * The live read refused or never answered, told as it comes, which ends
+       * the follow whatever page is being read meanwhile (`race` below);
+       * never where the live read stands.
+       */
+      const refusal = Effect.gen(function* () {
         const sealed = yield* Fiber.join(sealing);
 
         if (Result.isSuccess(sealed) && sealed.success.kind === LIVE_STATE.LIVE) {
-          return Option.some(sealed.success.state);
+          return yield* Effect.never;
         }
 
         if (opening !== undefined) yield* Fiber.interrupt(opening);
 
         if (Result.isFailure(sealed)) {
           yield* RcMap.invalidate(follows, key);
-          yield* tell(unansweredPage(sealFacts(sealed.failure)));
 
-          return Option.none();
+          return yield* tell(unansweredPage(sealFacts(sealed.failure)));
         }
 
         // Note that not found drops what was held of the transcript, so a follow after it reads anew.
         if (!toldNotFound) yield* tell({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
-
-        return Option.none();
       });
 
-      const opened =
-        opening === undefined
-          ? recalled
-          : yield* Effect.map(Fiber.join(opening), (newest) =>
-              "failure" in newest ? Option.none() : Option.some(newest),
-            );
+      /** The live read's state once its first read stands; a refused one is waited on for ever, since its refusal ends the follow. */
+      const standing = Effect.flatMap(Fiber.join(sealing), (sealed) =>
+        Result.isSuccess(sealed) && sealed.success.kind === LIVE_STATE.LIVE
+          ? Effect.succeed(sealed.success.state)
+          : Effect.never,
+      );
 
-      if (Option.isNone(opened)) {
-        yield* standing;
-
-        return;
-      }
-
-      /** What the window was told, as one newest page: its cursor is where the next read follows on from. */
-      let window = opened.value;
-      // Whether the next read is the first past a held cursor, which falls back to the newest page where it is refused.
-      let fromHeld = Option.isSome(recalled);
-
-      /**
-       * Each message told: as it was told, the journal revision that copy is
-       * known to stand at or past, none where unknown, and whether a page or
-       * the rows told it. Note that the journal revision is what orders a
-       * page against the rows, because a page and the rows beside it may
-       * each have read a message the other has not, and every change to a
-       * message past a revision counts the revision up: a page is at least as
-       * new as its cursor's revision, and the rows as the revision delivered
-       * beside them.
-       */
-      const told = new Map<
-        string,
-        { readonly said: string; readonly at: number | undefined; readonly paged: boolean }
-      >();
-
-      /** A page's messages to tell, read at its cursor's revision: every one but those the rows drew at a later revision. */
-      const heardPaged = (messages: readonly AgentTranscriptMessage[], cursor: string) => {
-        const at = Number(cursorParts(cursor).revision);
-
-        return messages.filter((message) => {
-          const was = told.get(message.id);
-
-          if (was !== undefined && !was.paged && was.at !== undefined && was.at > at) return false;
-          told.set(message.id, { said: canonical(message), at, paged: true });
-
-          return true;
-        });
-      };
-
-      /** The rows' messages to tell: every one drawn otherwise than it was told, but those a page told at the rows' revision or later. */
-      const heardDrawn = ({ messages, revision }: Drawn) =>
-        messages.filter((message) => {
-          const said = canonical(message);
-          const was = told.get(message.id);
-
-          if (was?.said === said) return false;
-
-          const pagedLater =
-            was?.paged === true &&
-            was.at !== undefined &&
-            revision !== undefined &&
-            was.at >= revision;
-
-          if (pagedLater) return false;
-          told.set(message.id, { said, at: revision, paged: false });
-
-          return true;
-        });
-
-      heardPaged(window.messages, window.cursor);
-
-      /** The rows' messages not yet told, beside what the last page said of the agent; the cursor moves past them where they follow on from it. */
-      const tellDrawn = (page: AgentTranscriptPage, state: TranscriptState) =>
-        Effect.gen(function* () {
-          if (state.kind !== LIVE_STATE.STANDING || "failure" in page) return;
-          const fresh = heardDrawn(state.drawn);
-
-          if (fresh.length === 0) return;
-          const { seq, revision } = cursorParts(window.cursor);
-
-          // Note that the cursor moves only where the window holds every message past it, so a read past it misses none.
-          const cursor =
-            state.drawn.lowest <= seq + 1 && state.drawn.highest > seq
-              ? `${state.drawn.highest}:${revision}`
-              : window.cursor;
-
-          // Note that a line of the developer's no turn has taken yet puts the agent to work, as the service reads
-          // it (`agentStatusAt`), so it is told running rather than under the last page's word for a turn
-          // it follows, which would draw that turn's end beneath it.
-          const opens = fresh.some((message) => state.drawn.awaiting.has(message.id));
-          yield* tell({
-            ...page,
-            ...(opens ? { status: AGENT_STATUS.RUNNING } : undefined),
-            messages: fresh,
-            cursor,
-            caughtUp: true,
-          });
-          window = { ...window, messages: applyMessagesPage(window.messages, fresh), cursor };
-        });
-
-      /** The live read's state, once its first read stands; none before. */
-      let live: SubscriptionRef.SubscriptionRef<TranscriptState> | undefined;
-
-      /** The live read's state, waited for where it does not stand yet, which a follow does before it waits on anything else; none where the live read was refused or never answered, which ends the follow. */
-      const liveRead = Effect.gen(function* () {
-        if (live !== undefined) return Option.some(live);
-        const stood = yield* standing;
-
-        if (Option.isSome(stood)) live = stood.value;
-
-        return stood;
-      });
-
-      // Note that the page past the window's cursor is read at once, beside the live read's first read rather than after it, so a window held or newly read is caught up a round trip sooner; once the live read stands, the page past the cursor is read again as its first rows land, which misses nothing written meanwhile.
-      let wake: Effect.Effect<unknown> = Effect.void;
-
-      /** The last page told, whose word on the agent the rows drawn beside the next read are told with; none before the first. */
-      let last: AgentTranscriptPage | undefined;
-      // Note that the wait before reading again after an unanswered page doubles while they go unanswered in a row, and counts from the first again once one is answered.
-      let unansweredInRow = 0;
-
-      const readAgain = () => {
-        unansweredInRow += 1;
-
-        return waitOrRegained(resealWait(unansweredInRow));
-      };
-
-      while (true) {
-        yield* wake;
-
-        const following = live;
-
-        const was: TranscriptState =
-          following === undefined
-            ? { kind: LIVE_STATE.WAITING }
-            : yield* SubscriptionRef.get(following);
-
-        if (was.kind === LIVE_STATE.BROKEN) {
-          yield* RcMap.invalidate(follows, key);
-
-          return yield* tell(unansweredPage(was.cause));
-        }
-
-        // Note that the rows drawn while the page is read go on being told beside it, because a
-        // turn that starts moves the turns and the reply's first words land with it; the page
-        // then tells only what it read at least as new as they drew (`heardPaged`).
-        const lastTold = last;
-
-        const besideRead =
-          lastTold === undefined || following === undefined
-            ? Effect.void
-            : SubscriptionRef.changes(following).pipe(
-                Stream.runForEach((now) => tellDrawn(lastTold, now)),
+      const following = Effect.gen(function* () {
+        const opened =
+          opening === undefined
+            ? recalled
+            : yield* Effect.map(Fiber.join(opening), (newest) =>
+                "failure" in newest ? Option.none() : Option.some(newest),
               );
 
-        const { answer, laid } = yield* Effect.scoped(
-          Effect.andThen(Effect.forkScoped(besideRead), timed(reads.after(window.cursor))),
-        );
+        // Note that a follow whose first page could not be read ends once the live read stands, or is refused.
+        if (Option.isNone(opened)) {
+          yield* standing;
 
-        // Note that a held cursor the service refuses, gone or stale, is let go untold, and the follow opens on the newest page as one holding nothing does; the window joins it or takes it in place of what it drew.
-        if (fromHeld && unanswered(answer)) {
-          yield* forgetCursor(held);
-          const newest = yield* readNewest;
+          return;
+        }
 
-          if ("failure" in newest) {
-            if (newest.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
+        /** What the window was told, as one newest page: its cursor is where the next read follows on from. */
+        let window = opened.value;
+        // Whether the next read is the first past a held cursor, which falls back to the newest page where it is refused.
+        let fromHeld = Option.isSome(recalled);
 
-            // Note that a service that answers neither read is down rather than refusing the cursor, so the follow stays and tries both again, as any page it did not answer is read again.
-            if (Option.isNone(yield* liveRead)) return;
-            wake = readAgain();
-            continue;
+        /**
+         * Each message told: as it was told, the journal revision that copy is
+         * known to stand at or past, none where unknown, and whether a page or
+         * the rows told it. Note that the journal revision is what orders a
+         * page against the rows, because a page and the rows beside it may
+         * each have read a message the other has not, and every change to a
+         * message past a revision counts the revision up: a page is at least as
+         * new as its cursor's revision, and the rows as the revision delivered
+         * beside them.
+         */
+        const told = new Map<
+          string,
+          { readonly said: string; readonly at: number | undefined; readonly paged: boolean }
+        >();
+
+        /** A page's messages to tell, read at its cursor's revision: every one but those the rows drew at a later revision. */
+        const heardPaged = (messages: readonly AgentTranscriptMessage[], cursor: string) => {
+          const at = Number(cursorParts(cursor).revision);
+
+          return messages.filter((message) => {
+            const was = told.get(message.id);
+
+            if (was !== undefined && !was.paged && was.at !== undefined && was.at > at)
+              return false;
+            told.set(message.id, { said: canonical(message), at, paged: true });
+
+            return true;
+          });
+        };
+
+        /** The rows' messages to tell: every one drawn otherwise than it was told, but those a page told at the rows' revision or later. */
+        const heardDrawn = ({ messages, revision }: Drawn) =>
+          messages.filter((message) => {
+            const said = canonical(message);
+            const was = told.get(message.id);
+
+            if (was?.said === said) return false;
+
+            const pagedLater =
+              was?.paged === true &&
+              was.at !== undefined &&
+              revision !== undefined &&
+              was.at >= revision;
+
+            if (pagedLater) return false;
+            told.set(message.id, { said, at: revision, paged: false });
+
+            return true;
+          });
+
+        heardPaged(window.messages, window.cursor);
+
+        /** The rows' messages not yet told, beside what the last page said of the agent; the cursor moves past them where they follow on from it. */
+        const tellDrawn = (page: AgentTranscriptPage, state: TranscriptState) =>
+          Effect.gen(function* () {
+            if (state.kind !== LIVE_STATE.STANDING || "failure" in page) return;
+            const fresh = heardDrawn(state.drawn);
+
+            if (fresh.length === 0) return;
+            const { seq, revision } = cursorParts(window.cursor);
+
+            // Note that the cursor moves only where the window holds every message past it, so a read past it misses none.
+            const cursor =
+              state.drawn.lowest <= seq + 1 && state.drawn.highest > seq
+                ? `${state.drawn.highest}:${revision}`
+                : window.cursor;
+
+            // Note that a line of the developer's no turn has taken yet puts the agent to work, as the service reads
+            // it (`agentStatusAt`), so it is told running rather than under the last page's word for a turn
+            // it follows, which would draw that turn's end beneath it.
+            const opens = fresh.some((message) => state.drawn.awaiting.has(message.id));
+            yield* tell({
+              ...page,
+              ...(opens ? { status: AGENT_STATUS.RUNNING } : undefined),
+              messages: fresh,
+              cursor,
+              caughtUp: true,
+            });
+            window = { ...window, messages: applyMessagesPage(window.messages, fresh), cursor };
+          });
+
+        /** The live read's state, once its first read stands; none before. */
+        let live: SubscriptionRef.SubscriptionRef<TranscriptState> | undefined;
+
+        /** The live read's state, waited for where it does not stand yet, which a follow does before it waits on anything else. */
+        const liveRead = Effect.gen(function* () {
+          if (live !== undefined) return live;
+          live = yield* standing;
+
+          return live;
+        });
+
+        // Note that the page past the window's cursor is read at once, beside the live read's first read rather than after it, so a window held or newly read is caught up a round trip sooner; once the live read stands, the page past the cursor is read again as its first rows land, which misses nothing written meanwhile.
+        let wake: Effect.Effect<unknown> = Effect.void;
+
+        /** The last page told, whose word on the agent the rows drawn beside the next read are told with; none before the first. */
+        let last: AgentTranscriptPage | undefined;
+        // Note that the wait before reading again after an unanswered page doubles while they go unanswered in a row, and counts from the first again once one is answered.
+        let unansweredInRow = 0;
+
+        const readAgain = () => {
+          unansweredInRow += 1;
+
+          return waitOrRegained(resealWait(unansweredInRow));
+        };
+
+        while (true) {
+          yield* wake;
+
+          const following = live;
+
+          const was: TranscriptState =
+            following === undefined
+              ? { kind: LIVE_STATE.WAITING }
+              : yield* SubscriptionRef.get(following);
+
+          if (was.kind === LIVE_STATE.BROKEN) {
+            yield* RcMap.invalidate(follows, key);
+
+            return yield* tell(unansweredPage(was.cause));
           }
 
-          fromHeld = false;
-          unansweredInRow = 0;
-          window = newest;
-          heardPaged(newest.messages, newest.cursor);
-          wake = Effect.void;
-          continue;
-        }
+          // Note that the rows drawn while the page is read go on being told beside it, because a
+          // turn that starts moves the turns and the reply's first words land with it; the page
+          // then tells only what it read at least as new as they drew (`heardPaged`).
+          const lastTold = last;
 
-        // Note that a page read at another rewind than the window's says messages the window holds were dropped, which a join would keep, so the newest page is read in its place.
-        if (!("failure" in answer) && (answer.rewound ?? 0) !== (window.rewound ?? 0)) {
-          fromHeld = false;
-          const newest = yield* readNewest;
+          const besideRead =
+            lastTold === undefined || following === undefined
+              ? Effect.void
+              : SubscriptionRef.changes(following).pipe(
+                  Stream.runForEach((now) => tellDrawn(lastTold, now)),
+                );
 
-          if ("failure" in newest) {
-            if (newest.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
-
-            if (Option.isNone(yield* liveRead)) return;
-            wake = readAgain();
-            continue;
-          }
-
-          unansweredInRow = 0;
-          window = newest;
-          told.clear();
-          heardPaged(newest.messages, newest.cursor);
-          wake = Effect.void;
-          continue;
-        }
-
-        fromHeld = false;
-        // Note that whether the page is caught up is the whole page's word, before what it read older than the rows is left out.
-        const whole = toldPage(answer);
-        const fresh = "failure" in answer ? [] : heardPaged(answer.messages, answer.cursor);
-        const shown = "failure" in answer ? answer : { ...answer, messages: fresh };
-        const page = "failure" in whole ? whole : { ...whole, messages: fresh };
-
-        if (was.kind === LIVE_STATE.STANDING) revision = was.drawn.queueRevision;
-        yield* tell(page, "failure" in page ? undefined : yield* laid);
-        last = page;
-
-        if ("failure" in answer) {
-          if (answer.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
-
-          if (Option.isNone(yield* liveRead)) return;
-          wake = readAgain();
-          continue;
-        }
-
-        unansweredInRow = 0;
-        window = joinedWindow(window, shown);
-
-        // Note that a full page is followed by the next at once, and a short one is caught up, with no empty page read to say so.
-        if (answer.messages.length >= AGENT_BOUNDS.MESSAGES_PAGE) {
-          wake = Effect.void;
-          continue;
-        }
-
-        // Note that a page read before the live read stood is read again once its first rows land, since what was written between the two is in neither.
-        if (following === undefined) {
-          const stood = yield* liveRead;
-
-          if (Option.isNone(stood)) return;
-          wake = SubscriptionRef.changes(stood.value).pipe(
-            Stream.filter(movedFrom({ kind: LIVE_STATE.WAITING })),
-            Stream.runHead,
+          const { answer, laid } = yield* Effect.scoped(
+            Effect.andThen(Effect.forkScoped(besideRead), timed(reads.after(window.cursor))),
           );
-          continue;
+
+          // Note that a held cursor the service refuses, gone or stale, is let go untold, and the follow opens on the newest page as one holding nothing does; the window joins it or takes it in place of what it drew.
+          if (fromHeld && unanswered(answer)) {
+            yield* forgetCursor(held);
+            const newest = yield* readNewest;
+
+            if ("failure" in newest) {
+              if (newest.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
+
+              // Note that a service that answers neither read is down rather than refusing the cursor, so the follow stays and tries both again, as any page it did not answer is read again.
+              yield* liveRead;
+              wake = readAgain();
+              continue;
+            }
+
+            fromHeld = false;
+            unansweredInRow = 0;
+            window = newest;
+            heardPaged(newest.messages, newest.cursor);
+            wake = Effect.void;
+            continue;
+          }
+
+          // Note that a page read at another rewind than the window's says messages the window holds were dropped, which a join would keep, so the newest page is read in its place.
+          if (!("failure" in answer) && (answer.rewound ?? 0) !== (window.rewound ?? 0)) {
+            fromHeld = false;
+            const newest = yield* readNewest;
+
+            if ("failure" in newest) {
+              if (newest.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
+
+              yield* liveRead;
+              wake = readAgain();
+              continue;
+            }
+
+            unansweredInRow = 0;
+            window = newest;
+            told.clear();
+            heardPaged(newest.messages, newest.cursor);
+            wake = Effect.void;
+            continue;
+          }
+
+          fromHeld = false;
+          // Note that whether the page is caught up is the whole page's word, before what it read older than the rows is left out.
+          const whole = toldPage(answer);
+          const fresh = "failure" in answer ? [] : heardPaged(answer.messages, answer.cursor);
+          const shown = "failure" in answer ? answer : { ...answer, messages: fresh };
+          const page = "failure" in whole ? whole : { ...whole, messages: fresh };
+
+          if (was.kind === LIVE_STATE.STANDING) revision = was.drawn.queueRevision;
+          yield* tell(page, "failure" in page ? undefined : yield* laid);
+          last = page;
+
+          if ("failure" in answer) {
+            if (answer.failure === AGENT_CALL_FAILURE.NOT_FOUND) return;
+
+            yield* liveRead;
+            wake = readAgain();
+            continue;
+          }
+
+          unansweredInRow = 0;
+          window = joinedWindow(window, shown);
+
+          // Note that a full page is followed by the next at once, and a short one is caught up, with no empty page read to say so.
+          if (answer.messages.length >= AGENT_BOUNDS.MESSAGES_PAGE) {
+            wake = Effect.void;
+            continue;
+          }
+
+          // Note that a page read before the live read stood is read again once its first rows land, since what was written between the two is in neither.
+          if (following === undefined) {
+            const stood = yield* liveRead;
+            wake = SubscriptionRef.changes(stood).pipe(
+              Stream.filter(movedFrom({ kind: LIVE_STATE.WAITING })),
+              Stream.runHead,
+            );
+            continue;
+          }
+
+          const moved = SubscriptionRef.changes(following).pipe(
+            Stream.takeUntil(movedFrom(was)),
+            Stream.runForEach((now) => tellDrawn(page, now)),
+          );
+
+          const wakeIn = "holds" in answer && answer.holds ? answer.wakeIn : undefined;
+          wake =
+            wakeIn === undefined
+              ? moved
+              : Effect.race(moved, Effect.sleep(Duration.millis(wakeIn)));
         }
+      });
 
-        const moved = SubscriptionRef.changes(following).pipe(
-          Stream.takeUntil(movedFrom(was)),
-          Stream.runForEach((now) => tellDrawn(page, now)),
-        );
-
-        const wakeIn = "holds" in answer && answer.holds ? answer.wakeIn : undefined;
-        wake =
-          wakeIn === undefined ? moved : Effect.race(moved, Effect.sleep(Duration.millis(wakeIn)));
-      }
+      // Note that the race is won by the first side to succeed, so a follow cut short as the refusal stops its newest page still lets the refusal be told.
+      return yield* Effect.race(following, refusal);
     }),
   );
 }
