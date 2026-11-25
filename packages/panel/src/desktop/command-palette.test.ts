@@ -829,41 +829,54 @@ test("on a phone the palette is Search's page: Go to before anything is typed, a
   assert.deepEqual(started, ["New task"]);
 });
 
-test("on a phone an agent whose page stood is listed under Recent, beside its task's name, and choosing it opens its tab on its task", () => {
-  const acme = { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null };
+/** A workspace, a task in it, and that task's agent, which a phone's Search lists under Recent once its page stands. */
+const RECENT_WORKSPACE = {
+  id: "workspace-acme",
+  name: "Acme",
+  role: WORKSPACE_ROLE.OWNER,
+  github: null,
+};
 
-  const plan = {
-    id: "plan-1",
-    workspaceId: acme.id,
-    name: "Billing usage alerts",
-    createdAt: 1,
-    updatedAt: 2,
-    repository: null,
-  };
+const RECENT_TASK = {
+  id: "plan-1",
+  workspaceId: RECENT_WORKSPACE.id,
+  name: "Billing usage alerts",
+  createdAt: 1,
+  updatedAt: 2,
+  repository: null,
+};
 
-  const agent: ListedAgent = {
-    id: "agent-7",
-    taskId: plan.id,
-    workspaceId: acme.id,
-    repository: null,
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    title: "Invoice export",
-    createdAt: 1,
-    status: AGENT_STATUS.COMPLETED,
-    turnId: null,
-  };
+const RECENT_AGENT: ListedAgent = {
+  id: "agent-7",
+  taskId: RECENT_TASK.id,
+  workspaceId: RECENT_WORKSPACE.id,
+  repository: null,
+  model: "anthropic/claude-opus-5.5",
+  effort: "high",
+  title: "Invoice export",
+  createdAt: 1,
+  status: AGENT_STATUS.COMPLETED,
+  turnId: null,
+};
 
-  const shown: [string, string][] = [];
+/** The agent's Recent row: its name, and its task's beside it. */
+const RECENT_AGENT_ROW = "Invoice export · Billing usage alerts";
 
+/** A phone's Search page over the workspace, signed in as `me`, the agent's page standing where `agentId` names it. */
+function openPhoneSearch(
+  me: string,
+  agentId: string | undefined,
+  onShowAgent: TasksControl["onShowAgent"] = () => undefined,
+): void {
   openPalette(
     tasksControl({
-      workspaces: [acme],
-      workspace: acme,
-      tasks: [plan],
-      listedAgents: [agent],
-      agentView: { agentId: agent.id, onOpen: () => undefined },
-      onShowAgent: (taskId, agentId) => shown.push([taskId, agentId]),
+      me,
+      workspaces: [RECENT_WORKSPACE],
+      workspace: RECENT_WORKSPACE,
+      tasks: [RECENT_TASK],
+      listedAgents: [RECENT_AGENT],
+      agentView: { agentId, onOpen: () => undefined },
+      onShowAgent,
     }),
     undefined,
     undefined,
@@ -873,12 +886,27 @@ test("on a phone an agent whose page stood is listed under Recent, beside its ta
     undefined,
     SHELL_ROOM.NARROW,
   );
+}
 
-  const row = "Invoice export · Billing usage alerts";
-  assert.ok(rows().includes(row), "the agent opened stands under Recent");
+test("on a phone an agent whose page stood is listed under Recent, beside its task's name, and choosing it opens its tab on its task", () => {
+  const shown: [string, string][] = [];
+  openPhoneSearch("user-ada", RECENT_AGENT.id, (taskId, agentId) => shown.push([taskId, agentId]));
 
-  press(row);
-  assert.deepEqual(shown, [[plan.id, agent.id]]);
+  assert.ok(rows().includes(RECENT_AGENT_ROW), "the agent opened stands under Recent");
+
+  press(RECENT_AGENT_ROW);
+  assert.deepEqual(shown, [[RECENT_TASK.id, RECENT_AGENT.id]]);
+});
+
+test("a phone's Recent is the account's: another account signed in on the window lists none of it", () => {
+  openPhoneSearch("user-ada", RECENT_AGENT.id);
+  assert.ok(rows().includes(RECENT_AGENT_ROW), "Ada's opening stands under her Recent");
+  act(() => {
+    for (const root of roots.splice(0)) root.unmount();
+  });
+
+  openPhoneSearch("user-grace", undefined);
+  assert.ok(!rows().includes(RECENT_AGENT_ROW), "Grace's Recent lists none of Ada's");
 });
 
 /** The window behind the palette, running the menu bar's commands, its Back and Forward recorded. */

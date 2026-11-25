@@ -2305,6 +2305,7 @@ export function CommandPalette({
   const rows = useTaskListRows(tasks.typedNames);
 
   const recent = useSearchRecent({
+    accountId: tasks.me,
     workspaceId: tasks.workspace?.id,
     taskId: tasks.activeTaskId,
     itemId: inboxStanding.chosen?.itemId,
