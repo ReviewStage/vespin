@@ -1,13 +1,11 @@
-import { namedServers } from "@repo/features/agent-servers-model";
+import { namedServers, serversChoiceWords } from "@repo/features/agent-servers-model";
 import { INTEGRATION_PROVIDER_LIST, INTEGRATION_STATUS } from "@repo/features/integration-wire";
 import type { FailureSurface } from "@repo/features/shown-failure";
-import { andList, MCP_SERVER_LABEL } from "@repo/features/words";
+import { MCP_SERVER_LABEL } from "@repo/features/words";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
   ChipName,
   ErrorState,
-  PROVIDER_MARK_SIZE,
-  ProviderMark,
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
   SettingsRow,
@@ -22,15 +20,14 @@ import { AgentServersButton } from "./agent-servers.js";
 /**
  * servers-row.tsx -- a settings row choosing which of the reader's connected MCP servers an agent is handed: an automation's run's, and every new agent's.
  *
- * The row names those switched off under its label and holds the marks of
- * those left on in a field chip like its neighbors', which opens the agent
- * box's own servers popover, whose switches, search, and way to Settings ›
- * Integrations are the ones a task's Start offers. Every server is on until
- * switched off, so a server connected later is on too.
+ * The row's field chip says what is chosen, "All", "None", or how many are
+ * on of how many ("3 of 21"), as the popover's Connected heading counts
+ * them, and opens the agent box's own servers popover, whose switches,
+ * search, and way to Settings › Integrations are the ones a task's Start
+ * offers. Under its label it names the few servers that differ from the
+ * rest, never the whole list (`serversChoiceWords`). Every server is on
+ * until switched off, so a server connected later is on too.
  */
-
-/** The most marks the servers chip holds before it counts the rest, so it stays a picker's width. */
-const SERVERS_CHIP_MARKS = 4;
 
 /**
  * The servers row while no read of the owner's connections has answered:
@@ -78,9 +75,9 @@ function ServersRowSkeleton(): React.JSX.Element {
 }
 
 /**
- * The servers row over the reader's own connections: those switched off
- * named under its label, and a field chip holding the marks of those left
- * on, which opens the agent box's own servers popover to switch them.
+ * The servers row over the reader's own connections: a field chip saying
+ * how many are on, which opens the agent box's own servers popover to
+ * switch them, and the few that differ named under its label.
  */
 export function OwnServersRow({
   disabled,
@@ -107,30 +104,27 @@ export function OwnServersRow({
     );
   }
 
-  // Note that each account at a provider is a server of its own, so one of two Notion accounts switched off leaves the other's mark on the chip.
+  // Note that each account at a provider is a server of its own, so one of two Notion accounts switched off leaves the other on.
   const connected = namedServers({
     statusOf: statuses.statusOf,
     accountsOf: statuses.accountsOf,
     standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
   });
 
-  const on = connected.filter((server) => !disabled.includes(server.connection));
-  const off = connected.filter((server) => disabled.includes(server.connection));
-  const shown = on.slice(0, SERVERS_CHIP_MARKS);
-
-  // Note that the chip's marks already say which are on, so the words name only what they cannot.
-  const note =
-    connected.length === 0
-      ? "None connected yet."
-      : off.length === 0
-        ? undefined
-        : `${andList(off.map((server) => server.name))} off.`;
+  const words = serversChoiceWords({
+    on: connected
+      .filter((server) => !disabled.includes(server.connection))
+      .map((server) => server.name),
+    off: connected
+      .filter((server) => disabled.includes(server.connection))
+      .map((server) => server.name),
+  });
 
   return (
     <SettingsRow
       label={<ReplayUnmask>{MCP_SERVER_LABEL.many}</ReplayUnmask>}
-      // Note that the words stay masked in a session replay, because they name the accounts switched off, which a member labels.
-      description={note}
+      // Note that the words stay masked in a session replay, because they name accounts, which a member labels.
+      description={words.note}
     >
       {() => (
         <AgentServersButton
@@ -141,24 +135,9 @@ export function OwnServersRow({
           }}
           statuses={statuses}
           face={
-            on.length === 0 ? (
-              <ChipName>
-                <ReplayUnmask>None</ReplayUnmask>
-              </ChipName>
-            ) : (
-              <span className="automation-servers inline-flex items-center gap-tight-gap">
-                {shown.map((server) => (
-                  <ProviderMark
-                    key={server.connection}
-                    provider={server.provider}
-                    size={PROVIDER_MARK_SIZE.ICON}
-                  />
-                ))}
-                {on.length > shown.length ? (
-                  <ChipName>{`+${on.length - shown.length}`}</ChipName>
-                ) : null}
-              </span>
-            )
+            <ChipName>
+              <ReplayUnmask>{words.face}</ReplayUnmask>
+            </ChipName>
           }
         />
       )}
