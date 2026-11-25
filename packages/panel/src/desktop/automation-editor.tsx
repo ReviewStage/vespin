@@ -161,7 +161,7 @@ import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
-import { Result } from "effect";
+import { Predicate, Result } from "effect";
 import { HistoryIcon, PlayIcon, SaveIcon, ZapIcon } from "lucide-react";
 import {
   type ReactNode,
@@ -319,9 +319,29 @@ export function AutomationSwitch({
   automation: AutomationSummary;
   write: (enabled: boolean) => Promise<AutomationWriteAnswer>;
 }): React.JSX.Element {
+  const turn = useAutomationTurn(automation, write);
+
+  return (
+    <Switch
+      checked={automation.enabled}
+      label={automation.enabled ? `Turn off ${automation.name}` : `Turn on ${automation.name}`}
+      onChange={turn}
+      {...NO_CONTEXT_MENU}
+    />
+  );
+}
+
+/**
+ * Turns `automation` on or off through `write`, a refusal said on a toast in
+ * red, as its switch and a phone's row menu turn it alike.
+ */
+export function useAutomationTurn(
+  automation: AutomationSummary,
+  write: (enabled: boolean) => Promise<AutomationWriteAnswer>,
+): (enabled: boolean) => void {
   const toast = useToast();
 
-  const turn = (enabled: boolean) => {
+  return (enabled: boolean) => {
     write(enabled).then((answer) => {
       const reason = automationToggleRefusal(answer, enabled);
 
@@ -339,15 +359,6 @@ export function AutomationSwitch({
       }
     });
   };
-
-  return (
-    <Switch
-      checked={automation.enabled}
-      label={automation.enabled ? `Turn off ${automation.name}` : `Turn on ${automation.name}`}
-      onChange={turn}
-      {...NO_CONTEXT_MENU}
-    />
-  );
 }
 
 /** What a time of day that cannot be read is told to be, under the time's row. */
@@ -947,25 +958,28 @@ export function runNowAction(running: boolean, onRunNow: () => void): MenuAction
 /**
  * An automation's own acts, as its row and its editor's ⋯ offer them alike:
  * Copy link, where the page hands down a workspace; Run now, where it can
- * run; Take over, where its creator left and the reader may take it; and
+ * run, and beside it Turn on or off on a phone's row; Take over, where its creator left and the reader may take it; and
  * Delete, red, which asks first, last and alone.
  */
 export function automationActionGroups({
   links,
   runNow,
+  turn,
   takeOver,
   onDelete,
 }: {
   /** Copy link and Open in new tab (`linkItems`); none where the page hands down no workspace. */
   links: readonly MenuAction[];
   runNow: MenuAction | undefined;
+  /** Turn on or Turn off, beside Run now, where a phone's row draws no switch; none elsewhere. */
+  turn?: MenuAction | undefined;
   /** Take over, offered an owner or an admin where the automation's creator left the workspace; none elsewhere. */
   takeOver?: MenuAction | undefined;
   onDelete: () => void;
 }): MenuAction[][] {
   return [
     [...links],
-    runNow === undefined ? [] : [runNow],
+    [runNow, turn].filter(Predicate.isNotUndefined),
     takeOver === undefined ? [] : [takeOver],
     [{ label: "Delete", icon: <GLYPH.DELETE />, onSelect: onDelete, danger: true }],
   ].filter((group) => group.length > 0);

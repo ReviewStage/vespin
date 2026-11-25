@@ -29,8 +29,11 @@ import { useInboxViewCount } from "./places-waiting.js";
  * as the sidebar's tree of tasks, the pinned and each section, standing in
  * place above the bar (`desktop-shell.tsx`), a list sized for a finger
  * rather than the page's list or board. Automations is the Automations
- * page, its list or its Runs tab. Search opens the command palette,
- * as the sidebar's Search does, and New task the New task dialog.
+ * page, its list or its Runs tab. Search opens the command palette, as the
+ * sidebar's Search does, which a phone draws as a page of its own over the
+ * place it was pressed on, this bar along its foot with Search the place
+ * current (`searching`), as the iOS app's Search tab stands; and New task
+ * the New task dialog.
  *
  * It stands only in a narrow room and only on a place's list, the Inbox's,
  * the Tasks page, Automations, or Home, so a task, an agent's page, or an
@@ -102,10 +105,13 @@ export function mobileBarShown(
 export function MobileBar({
   tasks,
   leave,
+  searching = false,
 }: {
   tasks: TasksControl;
-  /** Leaves what stands over the places (Settings) before a press opens one; none where the bar stands among them. */
+  /** Leaves what stands over the places (Settings, Search's page) before a press opens one; none where the bar stands among them. */
   leave?: (() => void) | undefined;
+  /** Whether the bar stands along Search's page, Search the place current, which a press on it leaves as it stands. */
+  searching?: boolean | undefined;
 }): React.JSX.Element {
   const board = useBoardDoor(tasks);
   const inbox = useInboxDoor(tasks);
@@ -156,11 +162,16 @@ export function MobileBar({
           </BarItem>
           <BarItem
             icon={<SearchIcon />}
-            onPress={go(() => {
-              // A tap opening Search brings the keyboard up with it, as a phone's own search does.
-              raiseKeyboard();
-              runAppCommand(APP_COMMAND.COMMAND_PALETTE);
-            })}
+            current={searching}
+            onPress={
+              searching
+                ? () => undefined
+                : go(() => {
+                    // A tap opening Search brings the keyboard up with it, as a phone's own search does.
+                    raiseKeyboard();
+                    runAppCommand(APP_COMMAND.COMMAND_PALETTE);
+                  })
+            }
           >
             Search
           </BarItem>

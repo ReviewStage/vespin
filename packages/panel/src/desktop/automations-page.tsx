@@ -1,6 +1,7 @@
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import {
   AUTOMATION_NEXT,
+  AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
   AUTOMATIONS_ORDER_WORDS,
   type AutomationGroup,
@@ -27,13 +28,15 @@ import {
   type AutomationSummary,
 } from "@repo/features/automation-wire";
 import {
+  AUTOMATION_PHONE_WORDS,
   AUTOMATION_RUN_REFUSAL_WORDS,
   AUTOMATION_SUGGESTION_WORDS,
   AUTOMATION_TAKE_OVER_WORDS,
-  automationNarrowLine,
+  automationLastRunWords,
   automationNextText,
   automationOwnerFor,
   automationOwnerName,
+  automationPhoneLine,
   READING_AUTOMATIONS,
 } from "@repo/features/automation-words";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
@@ -60,6 +63,8 @@ import {
   EmptyState,
   ERROR_STATE_PLACEMENT,
   ErrorState,
+  FailedMark,
+  FiringGlyph,
   GAP,
   type GroupFold,
   Inline,
@@ -91,6 +96,8 @@ import {
   CalendarPlusIcon,
   GLYPH,
   HistoryIcon,
+  PowerIcon,
+  PowerOffIcon,
   SlidersHorizontalIcon,
 } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -112,7 +119,7 @@ import { MemberDirectory, useCreator } from "../member-directory.js";
 import { PageIntro } from "../page-intro.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { stateEndMark } from "../state-glyph.js";
+import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { useTaskListCollections } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -129,6 +136,7 @@ import {
   automationActionGroups,
   runNowAction,
   type SentryOffer,
+  useAutomationTurn,
 } from "./automation-editor.js";
 import {
   AutomationGroupList,
@@ -402,6 +410,19 @@ function useTakeOver(
   };
 }
 
+/** What a row is handed, in either room. */
+interface AutomationRowProps {
+  automation: AutomationSummary;
+  workspace: Workspace | undefined;
+  now: number;
+  onOpen: () => void;
+  onToggle: (enabled: boolean) => Promise<AutomationWriteAnswer>;
+  /** Makes it the reader's, where its creator left. */
+  onTakeOver: () => Promise<AutomationWriteAnswer>;
+  /** Asks whether to delete it. */
+  onDelete: () => void;
+}
+
 /**
  * One automation's row: its tile, the glyph of what fires it wearing where its newest run
  * stands, its name over what fires it, who made it, when it runs next with a
@@ -412,32 +433,26 @@ function useTakeOver(
  * right-click, long press and menu key offer Copy link, then Delete in red,
  * which asks first, and
  * hands focus back to its press as the menu closes; a right-click on the switch is the switch's own and opens
- * nothing. A narrow room, a phone's, has no width for the two columns beside
- * the name, so the row keeps its name whole and says when it runs next in
- * the line under it, its maker said by its card's foot instead. A finger's
- * row draws its switch and no ⋯, so what fires it keeps the room.
+ * nothing. A narrow room, a phone's, draws it as the iOS app's row
+ * (`PhoneAutomationRow`).
  */
 function AutomationRow({
+  narrow,
+  ...row
+}: AutomationRowProps & { narrow: boolean }): React.JSX.Element {
+  return narrow ? <PhoneAutomationRow {...row} /> : <WideAutomationRow {...row} />;
+}
+
+/** A wide room's row: its tile, its name over what fires it, its maker's and its next run's columns, and its switch. */
+function WideAutomationRow({
   automation,
   workspace,
   now,
-  narrow,
   onOpen,
   onToggle,
   onTakeOver,
   onDelete,
-}: {
-  automation: AutomationSummary;
-  workspace: Workspace | undefined;
-  now: number;
-  narrow: boolean;
-  onOpen: () => void;
-  onToggle: (enabled: boolean) => Promise<AutomationWriteAnswer>;
-  /** Makes it the reader's, where its creator left. */
-  onTakeOver: () => Promise<AutomationWriteAnswer>;
-  /** Asks whether to delete it. */
-  onDelete: () => void;
-}): React.JSX.Element {
+}: AutomationRowProps): React.JSX.Element {
   const runNow = useRunNow(automation.id);
   const takeOver = useTakeOver(automation, workspace, onTakeOver);
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
@@ -465,41 +480,29 @@ function AutomationRow({
         title={<span className="automation-row-name">{automation.name}</span>}
         muted={!automation.enabled}
         titleReplayMasked
-        description={
-          narrow ? (
-            <>
-              {hiddenWorking}
-              {stateEndMark(state, true)}
-              {automationNarrowLine(automation, trigger, now)}
-            </>
-          ) : (
-            trigger
-          )
-        }
+        description={trigger}
         descriptionReplayMasked
         meta={
-          narrow ? undefined : (
-            <AutomationRowMeta
-              lead={hiddenWorking}
-              owner={<MakerCell automation={automation} workspace={workspace} />}
-              next={
-                <>
-                  {stateEndMark(state, true)}
-                  {next.kind === AUTOMATION_NEXT.AT ? (
-                    <OneLine className="automation-row-when" words={nextWords}>
-                      <ReplayUnmask>
-                        Next: <Time at={next.at} now={now} look={TIME_LOOK.SCHEDULED} hint />
-                      </ReplayUnmask>
-                    </OneLine>
-                  ) : nextWords === undefined ? null : (
-                    <OneLine className="automation-row-when" words={nextWords}>
-                      <ReplayUnmask>{nextWords}</ReplayUnmask>
-                    </OneLine>
-                  )}
-                </>
-              }
-            />
-          )
+          <AutomationRowMeta
+            lead={hiddenWorking}
+            owner={<MakerCell automation={automation} workspace={workspace} />}
+            next={
+              <>
+                {stateEndMark(state, true)}
+                {next.kind === AUTOMATION_NEXT.AT ? (
+                  <OneLine className="automation-row-when" words={nextWords}>
+                    <ReplayUnmask>
+                      Next: <Time at={next.at} now={now} look={TIME_LOOK.SCHEDULED} hint />
+                    </ReplayUnmask>
+                  </OneLine>
+                ) : nextWords === undefined ? null : (
+                  <OneLine className="automation-row-when" words={nextWords}>
+                    <ReplayUnmask>{nextWords}</ReplayUnmask>
+                  </OneLine>
+                )}
+              </>
+            }
+          />
         }
         actions={<AutomationSwitch automation={automation} write={onToggle} />}
         hint={{ Hint: RowHint, label: automation.name }}
@@ -510,6 +513,93 @@ function AutomationRow({
           automationActionGroups({
             links,
             runNow: runNowAction(runNow.running, runNow.run),
+            takeOver,
+            onDelete,
+          }),
+          undefined,
+          true,
+        )}
+        more={!coarse}
+      />
+    </RowHintOptions>
+  );
+}
+
+/** The mark a phone's row leads with: its newest run's while that works or failed, else the mark of what fires it (`FiringGlyph`). */
+function PhoneRowMark({ automation }: { automation: AutomationSummary }): React.JSX.Element {
+  const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
+
+  return (
+    <StateGlyph
+      state={state}
+      glyph={
+        state === GLYPH_STATE.FAILED ? <FailedMark /> : <FiringGlyph of={automation.trigger} />
+      }
+    />
+  );
+}
+
+/**
+ * A narrow room's row, a phone's, as the iOS app's list draws it: the mark of
+ * what fires it, which its newest run's mark takes the place of while that
+ * works or failed; its name; when it runs next and what fires it, or "Off"
+ * and what fires it; how its newest run went; and at its end when that run
+ * fired and a chevron, faded while it is off. It draws no switch: its menu,
+ * a long press or its ⋯, turns it on or off beside Run now, then Copy link,
+ * Take over where it may, and Delete.
+ */
+function PhoneAutomationRow({
+  automation,
+  workspace,
+  now,
+  onOpen,
+  onToggle,
+  onTakeOver,
+  onDelete,
+}: AutomationRowProps): React.JSX.Element {
+  const runNow = useRunNow(automation.id);
+  const takeOver = useTakeOver(automation, workspace, onTakeOver);
+  const turn = useAutomationTurn(automation, onToggle);
+  const links = useLinkItems()({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id });
+  const coarse = useCoarsePointer();
+  const run = automation.lastRun;
+  const working = run !== null && automationRunStanding(run) === AUTOMATION_RUN_STANDING.WORKING;
+
+  return (
+    <RowHintOptions
+      card={<AutomationCard automation={automation} workspaceName={workspace?.name} />}
+    >
+      <ListRow
+        leading={<PhoneRowMark automation={automation} />}
+        title={<span className="automation-row-name">{automation.name}</span>}
+        muted={!automation.enabled}
+        titleReplayMasked
+        description={automationPhoneLine(automation, now)}
+        descriptionReplayMasked
+        foot={<ReplayUnmask>{automationLastRunWords(automation)}</ReplayUnmask>}
+        // Note that a run at work says so by its mark, so it is timed only once it settled.
+        meta={
+          run === null || working ? undefined : (
+            <ReplayUnmask>
+              <Time at={run.firedAt} now={now} />
+            </ReplayUnmask>
+          )
+        }
+        chevron
+        hint={{ Hint: RowHint, label: automation.name }}
+        onPress={onOpen}
+        menu={rowMenu(
+          ROW_THING,
+          automationActionGroups({
+            links,
+            runNow: runNowAction(runNow.running, runNow.run),
+            turn: {
+              label: automation.enabled
+                ? AUTOMATION_PHONE_WORDS.TURN_OFF
+                : AUTOMATION_PHONE_WORDS.TURN_ON,
+              icon: automation.enabled ? <PowerOffIcon /> : <PowerIcon />,
+              onSelect: () => turn(!automation.enabled),
+            },
             takeOver,
             onDelete,
           }),
@@ -563,7 +653,7 @@ function AutomationGroupRows({
 /**
  * The list, each owner's automations in a list, under its own heading where
  * more than one list stands, or in a narrow room, whose rows name no owner,
- * and last the finished one-time automations, folded under Finished until
+ * each heading counting its rows there, and last the finished one-time automations, folded under Finished until
  * opened, since nothing more of them is due. Note that a lone owner's list
  * is still a region named by its owner, as a headed one is by its heading,
  * so a reader moving by landmark hears whose automations they are either way.
@@ -577,6 +667,8 @@ function AutomationList({
   finished: readonly AutomationSummary[];
 }): React.JSX.Element {
   const headed = groups.length + (finished.length === 0 ? 0 : 1) > 1 || shown.narrow;
+  // Note that a phone's headings count their rows, as the iOS app's sections do.
+  const counted = (rows: readonly AutomationSummary[]) => (shown.narrow ? rows.length : undefined);
 
   return (
     <>
@@ -594,13 +686,20 @@ function AutomationList({
             name={name}
             nameMasked={group.owner === AUTOMATION_SCOPE.WORKSPACE}
             headed={headed}
+            count={counted(group.automations)}
           >
             <AutomationGroupRows automations={group.automations} shown={shown} />
           </AutomationGroupList>
         );
       })}
       {finished.length === 0 ? null : (
-        <AutomationGroupList name={FINISHED} nameMasked={false} headed fold={FINISHED_FOLD}>
+        <AutomationGroupList
+          name={FINISHED}
+          nameMasked={false}
+          headed
+          fold={FINISHED_FOLD}
+          count={counted(finished)}
+        >
           <AutomationGroupRows automations={finished} shown={shown} />
         </AutomationGroupList>
       )}
