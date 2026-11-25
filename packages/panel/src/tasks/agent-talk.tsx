@@ -37,7 +37,7 @@ import {
   useConfirmDialog,
 } from "@repo/ui";
 import { neverBusyAct } from "@repo/ui/confirm-state";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { confirmFailure } from "../failure-report.js";
 import { useOpenAiKeyMissing, useOpenApiKeys } from "../openai-key.js";
 import { type CallWhenStarted, useVoiceCall } from "../voice-call.js";
@@ -49,6 +49,8 @@ const SWITCH_QUESTION = {
   body: "You are on a call with another agent. Talking to this one ends that call.",
   verb: "End and talk",
   running: "Ending the other call",
+  loss: CONFIRM_LOSS.IRREVERSIBLE,
+  replayUnmasked: true,
 } as const;
 
 /** The agent a box's Talk calls, and the task it works on, null for an agent on no task. */
@@ -103,6 +105,12 @@ export function useAgentTalk(
     confirmFailure(FAILURE_SURFACE.VOICE_CALL),
   );
 
+  // Note that the question is drawn anew only as its confirm changes, never on a word typed in the box.
+  const switchQuestion = useMemo(
+    () => <ConfirmDialog open confirm={switching} question={SWITCH_QUESTION} />,
+    [switching],
+  );
+
   if (into === undefined) return undefined;
 
   // Note that a key missing is the call's own to answer, which opens Settings › Agents, so it never asks to end another call first.
@@ -137,13 +145,7 @@ export function useAgentTalk(
   // Note that the question stands apart from Talk, since Talk leaves Send's place as words come.
   return {
     onCall: false,
-    press: (
-      <ConfirmDialog
-        open
-        confirm={switching}
-        question={{ ...SWITCH_QUESTION, loss: CONFIRM_LOSS.IRREVERSIBLE, replayUnmasked: true }}
-      />
-    ),
+    press: switchQuestion,
     talk: { keyMissing, disabled: "start" in into && into.starting, onPress: talk },
   };
 }

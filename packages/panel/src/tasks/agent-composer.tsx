@@ -227,6 +227,21 @@ export const BUTTON = {
   SAVE: "Save",
 } as const;
 
+/** No rows of the owner's own on the + menu. */
+const NO_PLUS: readonly MenuEntry[] = [];
+
+/**
+ * What Send says while a send goes other than steering: Save for an edit, and
+ * Queue or Steer as ⌘ turns it. Note that each glyph is drawn once, here, so
+ * Send is handed the same one on every key and draws again only as the way
+ * it sends changes.
+ */
+const SEND_WAY = {
+  SAVE: { label: BUTTON.SAVE, icon: <GLYPH.DONE /> },
+  QUEUE: { label: BUTTON.QUEUE, icon: <GLYPH.QUEUED /> },
+  STEER: { label: BUTTON.STEER, icon: <GLYPH.STEER /> },
+} as const;
+
 /**
  * The room the composer's card stands in, a note under it, on the
  * transcript's own inset so the card and the column line up, with none above
@@ -328,7 +343,7 @@ export function AgentComposer({
   payerSubscriptionId,
   owner,
   servers,
-  plus = [],
+  plus = NO_PLUS,
   context,
   brief,
   onStop,
@@ -813,11 +828,11 @@ export function AgentComposer({
   // Save for an edit, and Queue or Steer as ⌘ turns it.
   const sendWay =
     editingQueued && !modifierHeld
-      ? { label: BUTTON.SAVE, icon: <GLYPH.DONE /> }
+      ? SEND_WAY.SAVE
       : queuesNow
-        ? { label: BUTTON.QUEUE, icon: <GLYPH.QUEUED /> }
+        ? SEND_WAY.QUEUE
         : (queues || editingQueued) && modifierHeld
-          ? { label: BUTTON.STEER, icon: <GLYPH.STEER /> }
+          ? SEND_WAY.STEER
           : undefined;
 
   // Note that what the foot draws from the box's owner is drawn again only as the owner hands it anew, never on a word typed, since the words reach the box alone.
@@ -858,10 +873,10 @@ export function AgentComposer({
   );
 
   // What the + offers beside files, its menu's rows after Attachment: the servers' popover, where the box hands servers, then its owner's.
-  const plusRows: readonly MenuEntry[] = [
-    ...(servers === undefined ? [] : [serversMenuPanel(servers, statuses)]),
-    ...plus,
-  ];
+  const plusRows: readonly MenuEntry[] = useMemo(
+    () => [...(servers === undefined ? [] : [serversMenuPanel(servers, statuses)]), ...plus],
+    [servers, statuses, plus],
+  );
 
   return (
     <ComposerCard data-status={status} data-closed={closed ? "" : undefined} {...files.drop.target}>

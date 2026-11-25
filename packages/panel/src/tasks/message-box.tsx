@@ -43,7 +43,7 @@ import {
 import { ActionMenu, type MenuEntry } from "../desktop/action-menu.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import type { KeystrokeSpanName } from "../panel-spans.js";
-import { useSteadyDoor } from "../steady-door.js";
+import { useSteadyDoor, useSteadyDoors, useSteadyList } from "../steady-door.js";
 import {
   type AttachedFiles,
   type AttachedFilesOptions,
@@ -651,6 +651,21 @@ export function MessageBox({
   const openPicker = () => picker.current?.open();
   // Note that Dictate is handed a steady press, so a word typed never draws it again.
   const dictateStart = useSteadyDoor(dictation.start);
+  // Note that the send's place, Attach, and the file row are handed the same values while only the words change, so a word typed draws none of them again.
+  const steady = useSteadyDoors({ send, stop, talk });
+  const attach = useSteadyDoor(files.attach);
+  const beside = useSteadyList(inWords.beside);
+  const besideChips = useMemo(() => attachmentChips(beside), [beside]);
+
+  const removeBeside = useSteadyDoor(
+    held
+      ? undefined
+      : (index: number) => {
+          const file = beside[index];
+
+          if (file !== undefined) files.remove(files.attachments.indexOf(file));
+        },
+  );
 
   // Note that a + folded away hands the ⋯ its menu's rows, or its own press where it opens the picker itself.
   const offers: readonly OverflowOffer[] = [
@@ -705,18 +720,7 @@ export function MessageBox({
           takesFiles ? (
             <>
               {/* Note that the row holds only files the words do not name: one the words could not take, its editor not loaded or its bound reached, one whose marker stands in code, and a comment's own files sent before markers. */}
-              <AttachedFileChips
-                files={attachmentChips(inWords.beside)}
-                onRemove={
-                  held
-                    ? undefined
-                    : (index) => {
-                        const file = inWords.beside[index];
-
-                        if (file !== undefined) files.remove(files.attachments.indexOf(file));
-                      }
-                }
-              />
+              <AttachedFileChips files={besideChips} onRemove={removeBeside} />
               {inWords.viewer}
             </>
           ) : undefined
@@ -738,7 +742,7 @@ export function MessageBox({
                   label={plus.length === 0 ? ATTACH_FILES : BOX_WORDS.ADD}
                   disabled={held}
                   picker={picker}
-                  onFiles={files.attach}
+                  onFiles={attach}
                   more={plus}
                 />
               </ComposerAttach>
@@ -763,9 +767,9 @@ export function MessageBox({
           </ComposerActions>
         }
         strip={box.dictating ? <DictationStrip dictation={dictation} /> : undefined}
-        send={send}
-        stop={stop}
-        talk={talk}
+        send={steady.send}
+        stop={steady.stop}
+        talk={steady.talk}
         note={note ?? box.note?.note}
       />
     </PromptInput>
