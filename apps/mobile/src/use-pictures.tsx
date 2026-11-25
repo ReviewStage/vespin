@@ -1,7 +1,7 @@
 /**
- * use-agent-pictures.tsx -- what each picture and recording an agent showed is drawn or played from: the service's address and the header its read carries, asked of the host through TanStack Query where it is drawn, and handed to expo-image, which downloads, caches, and decodes a picture itself, or to expo-video, which plays and caches a recording as its MP4 copy; pictures read ahead for the rows about to scroll in, and each tried once more under a renewed header where the service refused it.
+ * use-pictures.tsx -- what each picture and recording an agent showed, a task's comment or description carried, or an Inbox thread holds, is drawn or played from: the service's address and the header its read carries, asked of the host through TanStack Query where it is drawn, and handed to expo-image, which downloads, caches, and decodes a picture itself, or to expo-video, which plays and caches a recording as its MP4 copy; pictures read ahead for the rows about to scroll in, and each tried once more under a renewed header where the service refused it.
  *
- * Each picture reads its own query where it is drawn (`useAgentPictureById`,
+ * Each picture reads its own query where it is drawn (`usePictureById`,
  * handed to `@repo/ui-native` through `PictureByIdProvider`), so a picture
  * landing draws that picture again and never the agent's page or its rows,
  * one of which may hold an open long-press menu. The page only reads ahead
@@ -16,10 +16,16 @@
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
+import {
+  PRODUCT_PICTURE_FROM,
+  PRODUCT_PICTURE_KIND,
+  type ProductPictureKind,
+} from "@repo/features/analytics";
 import {
   PICTURE_OWNER,
   PICTURE_SOURCE_FAILURE,
+  type PictureOwner,
+  type PictureSourceParams,
   type PictureSourceView,
 } from "@repo/features/picture-source-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -35,17 +41,17 @@ import {
 import { type QueryClient, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from "react";
-import { cachedPlayed } from "../cached-media.js";
-import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
-import { pictureFile } from "../picture-files.js";
-import { usePictureShownCount } from "../picture-shown.js";
+import { cachedPlayed } from "./cached-media.js";
+import { appStateQuery } from "./host/app-state-query.js";
+import { useHostActs } from "./host/host-provider.js";
+import { pictureFile } from "./picture-files.js";
+import { usePictureShownCount } from "./picture-shown.js";
 
-/** The key a picture's source is held under, by the account, the agent, and the picture. */
-const AGENT_PICTURE_QUERY = "agent-picture-source";
+/** The key a picture's source is held under, by the account, its owner, and the picture. */
+const PICTURE_QUERY = "picture-source";
 
 /** The prefix a recording answered as its bytes is written under in the app's caches. */
-const PLAYED_PREFIX = "agent-played";
+const PLAYED_PREFIX = "played";
 
 /** What a `data:` address of a recording or a clip opens with, which the system's player cannot read. */
 const PLAYED_DATA = /^data:((?:video|audio)\/[^;,]+);base64,/u;
@@ -90,21 +96,37 @@ async function playableView(
   return { uri: await cachedPlayed(PLAYED_PREFIX, pictureId, played[1], base64) };
 }
 
+/** Whose pictures a page draws: an agent's, a task's (its description's and its comments'), or an Inbox thread's, by that owner's id. */
+interface PictureScope {
+  readonly owner: PictureOwner;
+  readonly ownerId: string;
+}
+
+/** What the host is asked for one picture of `scope`. */
+function paramsOf(scope: PictureScope, id: string): PictureSourceParams {
+  switch (scope.owner) {
+    case PICTURE_OWNER.AGENT:
+      return { owner: scope.owner, agentId: scope.ownerId, pictureId: id };
+    case PICTURE_OWNER.TASK:
+      return { owner: scope.owner, taskId: scope.ownerId, attachmentId: id };
+    case PICTURE_OWNER.INBOX:
+      return { owner: scope.owner, itemId: scope.ownerId, attachmentId: id };
+  }
+}
+
 /** One picture's or recording's source as a query, renewed first where `renew`. */
 function sourceQuery(
   acts: ReturnType<typeof useHostActs>,
   accountId: string | undefined,
-  agentId: string,
+  scope: PictureScope,
   pictureId: string,
   renew = false,
 ) {
   return {
-    queryKey: [AGENT_PICTURE_QUERY, accountId, agentId, pictureId] as const,
+    queryKey: [PICTURE_QUERY, accountId, scope.owner, scope.ownerId, pictureId] as const,
     queryFn: () =>
       acts[ACT_KIND.ACCOUNT_PICTURE_SOURCE]({
-        owner: PICTURE_OWNER.AGENT,
-        agentId,
-        pictureId,
+        ...paramsOf(scope, pictureId),
         ...(renew ? { renew: true } : undefined),
       }).then((view) => playableView(view, pictureId)),
     staleTime: Number.POSITIVE_INFINITY,
@@ -117,17 +139,20 @@ function readAhead(view: PictureSourceView): void {
   void Image.prefetch([view.uri], { cachePolicy: "memory-disk", headers: { ...view.headers } });
 }
 
-/** What one agent's page holds of its pictures beside their queries: when each was first asked for, which were renewed and counted, and each by its address. */
+/** What one page holds of its pictures beside their queries: whose they are, when each was first asked for, which were renewed and counted, and each by its address. */
 interface PicturesHeld {
-  readonly agentId: string;
+  readonly scope: PictureScope;
   readonly askedAt: Map<string, number>;
   readonly renewed: Set<string>;
   readonly counted: Set<string>;
   readonly byUri: Map<string, string>;
 }
 
-/** The agent's page's pictures, for each picture drawn under it. */
-const AgentPicturesDoor = createContext<PicturesHeld | undefined>(undefined);
+/** No owner, for a picture drawn outside a page of pictures, whose query never runs. */
+const NO_SCOPE: PictureScope = { owner: PICTURE_OWNER.AGENT, ownerId: "" };
+
+/** The page's pictures, for each picture drawn under it. */
+const PicturesDoor = createContext<PicturesHeld | undefined>(undefined);
 
 /** The account signed in, as a picture's query is kept under it. */
 function useAccountId(): string | undefined {
@@ -135,17 +160,17 @@ function useAccountId(): string | undefined {
 }
 
 /**
- * What one picture of the agent's page is drawn from, read where it is drawn
- * so its landing draws it alone: none for no id, while it is asked for, and
- * outside an agent's page, and `null` where it could not be read.
+ * What one picture of the page is drawn from, read where it is drawn so its
+ * landing draws it alone: none for no id, while it is asked for, and outside
+ * a page of pictures, and `null` where it could not be read.
  */
-function useAgentPictureById(pictureId: string | undefined): PictureSource | null | undefined {
-  const held = useContext(AgentPicturesDoor);
+function usePictureById(pictureId: string | undefined): PictureSource | null | undefined {
+  const held = useContext(PicturesDoor);
   const acts = useHostActs();
   const accountId = useAccountId();
 
   const read = useQuery({
-    ...sourceQuery(acts, accountId, held?.agentId ?? "", pictureId ?? ""),
+    ...sourceQuery(acts, accountId, held?.scope ?? NO_SCOPE, pictureId ?? ""),
     enabled: held !== undefined && pictureId !== undefined && accountId !== undefined,
   });
 
@@ -163,32 +188,34 @@ function useAgentPictureById(pictureId: string | undefined): PictureSource | nul
 }
 
 /**
- * Hands the pictures drawn under it the agent's page: each reads its own
- * source where it is drawn (`useAgentPictureById`), and the loader's word
- * that one drew is counted once (`picture:shown`), and that one failed asks
- * for it once more under a renewed header, then stands it failed.
+ * Hands the pictures drawn under it their page's owner: each reads its own
+ * source where it is drawn (`usePictureById`), and the loader's word that
+ * one drew is counted once as `kind` (`picture:shown`), and that one failed
+ * asks for it once more under a renewed header, then stands it failed.
  */
-export function AgentPicturesProvider({
-  agentId,
+export function PicturesProvider({
+  owner,
+  ownerId,
+  kind,
   children,
-}: {
-  readonly agentId: string;
+}: PictureScope & {
+  readonly kind: ProductPictureKind;
   readonly children: ReactNode;
 }) {
   const acts = useHostActs();
   const client = useQueryClient();
-  const count = usePictureShownCount(PRODUCT_PICTURE_KIND.AGENT);
+  const count = usePictureShownCount(kind);
   const accountId = useAccountId();
 
   const held = useMemo<PicturesHeld>(
     () => ({
-      agentId,
+      scope: { owner, ownerId },
       askedAt: new Map(),
       renewed: new Set(),
       counted: new Set(),
       byUri: new Map(),
     }),
-    [agentId],
+    [owner, ownerId],
   );
 
   const events = useMemo<PictureEvents>(
@@ -214,7 +241,7 @@ export function AgentPicturesProvider({
         const pictureId = held.byUri.get(uri);
 
         if (pictureId === undefined) return;
-        const query = sourceQuery(acts, accountId, agentId, pictureId, true);
+        const query = sourceQuery(acts, accountId, held.scope, pictureId, true);
 
         if (held.renewed.has(pictureId)) {
           client.setQueryData(query.queryKey, UNREAD);
@@ -226,20 +253,20 @@ export function AgentPicturesProvider({
         void client.fetchQuery({ ...query, staleTime: 0 });
       },
     }),
-    [acts, accountId, agentId, client, count, held],
+    [acts, accountId, client, count, held],
   );
 
   return (
-    <AgentPicturesDoor.Provider value={held}>
-      <PictureByIdProvider use={useAgentPictureById}>
+    <PicturesDoor.Provider value={held}>
+      <PictureByIdProvider use={usePictureById}>
         <PictureEventsProvider events={events}>{children}</PictureEventsProvider>
       </PictureByIdProvider>
-    </AgentPicturesDoor.Provider>
+    </PicturesDoor.Provider>
   );
 }
 
-/** What an agent's page draws its pictures from and does with them, none of which listens to their sources. */
-interface AgentPictures {
+/** What a page draws its pictures from and does with them, none of which listens to their sources. */
+interface Pictures {
   /** A picture kept by its id, which it reads where it is drawn. */
   readonly refOf: (pictureId: string) => PictureById;
   /** Reads a picture whose read failed again. */
@@ -257,42 +284,47 @@ function peekOf(
 }
 
 /**
- * The agent's page's pictures among `ids`, the rows on screen and those
- * about to scroll in: each read ahead through the query it is drawn by
- * (`fetchQuery`) and by the loader (`Image.prefetch`), neither of which the
- * page listens to, so no picture landing draws the page again; and each
- * handed to its row by its id (`refOf`), which it reads where it is drawn.
+ * A page's pictures among `ids`, those on screen and those about to scroll
+ * in: each read ahead through the query it is drawn by (`fetchQuery`) and by
+ * the loader (`Image.prefetch`), neither of which the page listens to, so no
+ * picture landing draws the page again; and each handed to its row by its id
+ * (`refOf`), which it reads where it is drawn under `PicturesProvider`.
  */
-export function useAgentPictures(agentId: string, ids: readonly string[]): AgentPictures {
+export function usePictures(
+  owner: PictureOwner,
+  ownerId: string,
+  ids: readonly string[],
+): Pictures {
   const acts = useHostActs();
   const client = useQueryClient();
   const accountId = useAccountId();
+  const scope = useMemo<PictureScope>(() => ({ owner, ownerId }), [owner, ownerId]);
 
   useEffect(() => {
     if (accountId === undefined) return;
 
     for (const pictureId of ids) {
       void client
-        .fetchQuery(sourceQuery(acts, accountId, agentId, pictureId))
+        .fetchQuery(sourceQuery(acts, accountId, scope, pictureId))
         .then(readAhead, () => undefined);
     }
-  }, [acts, accountId, agentId, client, ids]);
+  }, [acts, accountId, client, ids, scope]);
 
   const refOf = useCallback(
     (pictureId: string): PictureById => ({
       pictureId,
-      peek: () => peekOf(client, sourceQuery(acts, accountId, agentId, pictureId).queryKey),
+      peek: () => peekOf(client, sourceQuery(acts, accountId, scope, pictureId).queryKey),
     }),
-    [acts, accountId, agentId, client],
+    [acts, accountId, client, scope],
   );
 
   const retry = useCallback(
     (pictureId: string) => {
       void client.resetQueries({
-        queryKey: sourceQuery(acts, accountId, agentId, pictureId).queryKey,
+        queryKey: sourceQuery(acts, accountId, scope, pictureId).queryKey,
       });
     },
-    [acts, accountId, agentId, client],
+    [acts, accountId, client, scope],
   );
 
   return { refOf, retry };

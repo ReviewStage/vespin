@@ -2,7 +2,9 @@
 
 import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_KIND } from "@repo/features/agent-wire";
+import { PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { CHAT_THREAD_WORDS, managerChatView } from "@repo/features/manager-chat-view";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { selectInboxReader } from "@repo/host/app-state-reads";
 import {
@@ -42,7 +44,6 @@ import {
   useWholeParts,
 } from "../agents/use-agent.js";
 import { useAgentComposer } from "../agents/use-agent-composer.js";
-import { AgentPicturesProvider, useAgentPictures } from "../agents/use-agent-pictures.js";
 import { useChatFaces } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -50,6 +51,7 @@ import { useNewestNote } from "../newest-note.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useDictation } from "../use-dictation.js";
+import { PicturesProvider, usePictures } from "../use-pictures.js";
 
 /** No row, while the thread is not read yet, the same array every render so nothing read off the rows reads again. */
 const NO_ROWS: readonly TranscriptItem[] = [];
@@ -203,7 +205,7 @@ export function ManagerThreadScreen() {
     [rows, pictureSet],
   );
 
-  const pictures = useAgentPictures(id, pictureIds);
+  const pictures = usePictures(PICTURE_OWNER.AGENT, id, pictureIds);
   const media = useAgentMedia(id, mediaIds);
   const sentFiles = useSentFiles(useMemo(() => shownFiles(rows), [rows]));
 
@@ -266,7 +268,11 @@ export function ManagerThreadScreen() {
         }}
       />
       <GlassDock bar={<ThreadComposer composer={composer} note={undefined} />}>
-        <AgentPicturesProvider agentId={id}>
+        <PicturesProvider
+          owner={PICTURE_OWNER.AGENT}
+          ownerId={id}
+          kind={PRODUCT_PICTURE_KIND.AGENT}
+        >
           <AgentTranscript
             items={rows}
             head={null}
@@ -294,7 +300,7 @@ export function ManagerThreadScreen() {
             channel={chatFaces?.faces}
             undelivered={undelivered}
           />
-        </AgentPicturesProvider>
+        </PicturesProvider>
       </GlassDock>
     </>
   );
