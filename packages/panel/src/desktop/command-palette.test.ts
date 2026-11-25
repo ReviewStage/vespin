@@ -2,7 +2,13 @@
 
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import { AGENT_STATUS, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import {
+  AGENT_KIND,
+  AGENT_STATUS,
+  CHECK_SUMMARY,
+  type ListedAgent,
+  PULL_REQUEST_STATE,
+} from "@repo/features/agent-wire";
 import { AUTOMATION_FOLLOW } from "@repo/features/automation-view";
 import {
   AUTOMATION_ACTION,
@@ -822,6 +828,111 @@ test("on a phone the palette is Search's page: Go to before anything is typed, a
   press("Start a task: “e”");
   await settle();
   assert.deepEqual(started, ["New task"]);
+});
+
+/** A workspace, a task in it, and that task's agent, which a phone's Search lists under Recent once its page stands. */
+const RECENT_WORKSPACE = {
+  id: "workspace-acme",
+  name: "Acme",
+  role: WORKSPACE_ROLE.OWNER,
+  github: null,
+};
+
+const RECENT_TASK = {
+  id: "plan-1",
+  workspaceId: RECENT_WORKSPACE.id,
+  name: "Billing usage alerts",
+  createdAt: 1,
+  updatedAt: 2,
+  repository: null,
+};
+
+const RECENT_AGENT: ListedAgent = {
+  id: "agent-7",
+  taskId: RECENT_TASK.id,
+  workspaceId: RECENT_WORKSPACE.id,
+  repository: null,
+  model: "anthropic/claude-opus-5.5",
+  effort: "high",
+  title: "Invoice export",
+  createdAt: 1,
+  status: AGENT_STATUS.COMPLETED,
+  turnId: null,
+};
+
+/** The agent's Recent row: its name, and its task's beside it. */
+const RECENT_AGENT_ROW = "Invoice export · Billing usage alerts";
+
+/** A phone's Search page over the workspace, signed in as `me`, the agent's page standing where `agentId` names it, and the window as `more` says. */
+function openPhoneSearch(
+  me: string,
+  agentId: string | undefined,
+  more: Parameters<typeof tasksControl>[0] = {},
+): void {
+  openPalette(
+    tasksControl({
+      me,
+      workspaces: [RECENT_WORKSPACE],
+      workspace: RECENT_WORKSPACE,
+      tasks: [RECENT_TASK],
+      listedAgents: [RECENT_AGENT],
+      agentView: { agentId, onOpen: () => undefined },
+      ...more,
+    }),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    SHELL_ROOM.NARROW,
+  );
+}
+
+test("on a phone an agent whose page stood is listed under Recent, beside its task's name, and choosing it opens its tab on its task", () => {
+  const shown: [string, string][] = [];
+  openPhoneSearch("user-ada", RECENT_AGENT.id, {
+    onShowAgent: (taskId, agentId) => shown.push([taskId, agentId]),
+  });
+
+  assert.ok(rows().includes(RECENT_AGENT_ROW), "the agent opened stands under Recent");
+
+  press(RECENT_AGENT_ROW);
+  assert.deepEqual(shown, [[RECENT_TASK.id, RECENT_AGENT.id]]);
+});
+
+test("a phone's Recent keeps an agent's tab only while its task's page stands, not the tab its column keeps chosen beneath another place", () => {
+  // Note that Lin signs in, so no Recent another case kept under Ada's account stands.
+  openPhoneSearch("user-lin", undefined, {
+    activeTaskId: RECENT_TASK.id,
+    mainTabs: { ...tasksControl().mainTabs, tab: agentTab(RECENT_AGENT.id) },
+  });
+
+  assert.ok(!rows().includes(RECENT_AGENT_ROW), "Home stands, so the agent's tab was not opened");
+});
+
+test("a phone's Recent lists a Manager opened only while its workspace's Managers are on", () => {
+  const manager: ListedAgent = {
+    ...RECENT_AGENT,
+    id: "manager-1",
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    title: "Relay Manager",
+  };
+
+  openPhoneSearch("user-ada", manager.id, { listedAgents: [RECENT_AGENT, manager] });
+  assert.ok(!rows().includes("Relay Manager"), "the Managers are off for the workspace");
+});
+
+test("a phone's Recent is the account's: another account signed in on the window lists none of it", () => {
+  openPhoneSearch("user-ada", RECENT_AGENT.id);
+  assert.ok(rows().includes(RECENT_AGENT_ROW), "Ada's opening stands under her Recent");
+  act(() => {
+    for (const root of roots.splice(0)) root.unmount();
+  });
+
+  openPhoneSearch("user-grace", undefined);
+  assert.ok(!rows().includes(RECENT_AGENT_ROW), "Grace's Recent lists none of Ada's");
 });
 
 /** The window behind the palette, running the menu bar's commands, its Back and Forward recorded. */
