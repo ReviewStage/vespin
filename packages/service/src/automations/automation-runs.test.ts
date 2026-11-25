@@ -673,14 +673,22 @@ it.layer(SUITE)("an automation's runs", (it) => {
         assert.equal(agentSessions.opened.length, 0, "no agent was started");
         assert.equal(agentSessions.sent.length, 1);
 
-        const kept = (yield* listAutomationRuns(owner, automation.id)).find(
-          (each) => each.id === run.id,
+        const [kept] = yield* Database.use((db) =>
+          db
+            .select({
+              status: automationRun.status,
+              agentId: automationRun.agentId,
+              taskId: automationRun.taskId,
+            })
+            .from(automationRun)
+            .where(eq(automationRun.id, run.id)),
         );
 
-        assert.deepEqual(
-          [kept?.status, kept?.agentId, kept?.taskId ?? null],
-          [AUTOMATION_RUN_STATUS.STARTED, manager.id, null],
-        );
+        assert.deepEqual(kept, {
+          status: AUTOMATION_RUN_STATUS.STARTED,
+          agentId: manager.id,
+          taskId: null,
+        });
       }),
   );
 
