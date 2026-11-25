@@ -8,8 +8,8 @@
  * commands go; the model chip at the row's end, whose choices hold the
  * model, its effort, Fast, and the permission mode, popping over the chip in
  * a regular window and rising as a sheet in a compact one; a cloud agent's
- * Ports beside the Machine chip, its plug alone, opening the sheet of its
- * listening ports, as the panel's plug stands beside where its agent runs
+ * Ports beside the Machine chip, its plug alone, lit while a port is shared,
+ * opening the sheet of its listening ports, as the panel's plug stands beside where its agent runs
  * (`agent-forward.tsx`); and the + menu's MCP servers. Note that a chip a later change gives an agent's composer
  * belongs here rather than at one screen's call, because each screen reading
  * the agent for itself is how the thread's composer fell behind the agent's.
@@ -41,7 +41,7 @@ import { type ReactNode, useState } from "react";
 import { type AgentMode, useAgentMode } from "./use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "./use-agent-model.js";
 import { useAgentPlaceGlyph } from "./use-agent-place.js";
-import { useAgentHasPorts } from "./use-agent-ports.js";
+import { useAgentHasPorts, useAgentSharedPort } from "./use-agent-ports.js";
 import { type AgentServers, useAgentServers } from "./use-agent-servers.js";
 import { type AgentCommandsPlace, useAgentCommandsPlace } from "./use-agent-tools.js";
 
@@ -233,6 +233,7 @@ export function useAgentBox(
   const servers = useAgentServers(id);
   const commands = useAgentCommandsPlace(id);
   const hasPorts = useAgentHasPorts(id);
+  const shared = useAgentSharedPort(id);
   const router = useRouter();
   const [shown, setShown] = useState(false);
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
@@ -251,6 +252,7 @@ export function useAgentBox(
             <ToolChip
               label={AGENT_PORTS_WORDS.PORTS}
               symbol={GLYPH.PLUG}
+              on={shared === undefined ? undefined : `${AGENT_PORTS_WORDS.SHARING} ${shared.port}`}
               onPress={() => router.push({ pathname: "/agent-ports", params: { agent: id } })}
               testId={PORTS_CHIP_ID}
             />

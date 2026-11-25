@@ -2139,6 +2139,14 @@ let runThreadWrites = 0;
 /** The number the next entry the run writes is given its id by, a kept reply or a resolve's or reopen's line, past every id the fixture stages, so each is keyed apart. */
 let nextReplyId = 1000;
 
+/** The port each agent's sandbox shares by link in this run, as a share sets it. */
+const sharedPorts = new Map<string, { readonly port: number; readonly url: string }>();
+
+/** The synthetic public link a port shared in the fixture stands at. */
+function fixtureShareLink(port: number): string {
+  return `https://sb-fixture-${port}.vercel.run`;
+}
+
 /** Keeps a thread the run wrote as it now stands, and answers it. */
 function keepRunThread(thread: DescriptionCommentThread): DescriptionCommentThread {
   RUN_THREADS.set(thread.id, thread);
@@ -3888,13 +3896,24 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.PULL_REQUESTS_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
   // The files the invitations agent's ready pull request changes, so Files changed lists them and opens their diffs.
   [ACT_KIND.PULL_REQUESTS_CHANGES]: ({ number }) => fixtureChanges(number),
-  // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
+  // An agent's sandbox listens on two ports, one served by Vite, and shares neither until one is shared, so its Ports sheet lists them and offers Share, and a share lights its plug.
   [ACT_KIND.AGENTS_PORTS]: () => ({
     running: true,
     ports: [3000, 5173],
     labels: [{ port: 5173, label: "vite" }],
   }),
-  [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: null }),
+  [ACT_KIND.AGENTS_PORT_SHARED]: ({ agentId }) => ({ shared: sharedPorts.get(agentId) ?? null }),
+  [ACT_KIND.AGENTS_PORT_SHARE]: ({ agentId, port }) => {
+    const url = fixtureShareLink(port);
+    sharedPorts.set(agentId, { port, url });
+
+    return { url };
+  },
+  [ACT_KIND.AGENTS_PORT_UNSHARE]: ({ agentId }) => {
+    sharedPorts.delete(agentId);
+
+    return { shared: null };
+  },
   [ACT_KIND.AGENTS_FOLLOWERS]: ({ agentId }) => followersMoved(agentId, (followers) => followers),
   [ACT_KIND.AGENTS_FOLLOW]: ({ agentId }) => followersMoved(agentId, followerAdded(ADA.userId)),
   [ACT_KIND.AGENTS_UNFOLLOW]: ({ agentId }) => followersMoved(agentId, followerRemoved(ADA.userId)),

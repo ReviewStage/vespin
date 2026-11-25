@@ -1,4 +1,4 @@
-# agent-ports.yaml -- a cloud agent's Ports sheet, opened from the plug in its composer's row beside where it runs, as the panel's box stands it: its sandbox's listening ports, what serves one beside it, and a port's press offering Share while none is shared.
+# agent-ports.yaml -- a cloud agent's Ports sheet, opened from the plug in its composer's row beside where it runs, as the panel's box stands it: its sandbox's listening ports, what serves one beside it, a port's press offering Share while none is shared, and the plug lit once one is.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -31,3 +31,15 @@ appId: dev.vespin.ios
 - tapOn: ":3000"
 - assertVisible: "Share"
 - takeScreenshot: agent-ports-menu
+# Share gives the port a link, and Done closes the sheet: the plug in the
+# composer's row then stands lit, as the panel's plug lights while a port is
+# shared, heard with what it shares.
+- tapOn: "Share"
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible:
+      id: "agent-ports-chip"
+    timeout: 5000
+- assertVisible: "Ports: Sharing 3000"
+- waitForAnimationToEnd
+- takeScreenshot: agent-ports-lit
