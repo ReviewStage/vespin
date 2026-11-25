@@ -25,7 +25,7 @@ env:
     env:
       LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128"
 - extendedWaitUntil:
-    visible: "Ready to merge"
+    visible: "Ready to merge.*"
     timeout: 30000
 # Its Files changed row, beside Checks under the description, pushes them.
 - runFlow:
