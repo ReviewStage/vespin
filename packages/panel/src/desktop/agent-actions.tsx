@@ -385,27 +385,7 @@ export function useAgentDraftDoors(
 
 /** One agent's actions, as every surface that draws it offers them. */
 export function useAgentActions(
-  agent: Pick<
-    AgentSummary,
-    | "id"
-    | "taskId"
-    | "status"
-    | "title"
-    | "automationName"
-    | "model"
-    | "archivedAt"
-    | "brief"
-    | "machine"
-    | "mac"
-    | "startedBy"
-    | "source"
-    | "kind"
-    | "effort"
-    | "contextWindow"
-    | "runtime"
-    | "face"
-  > &
-    Pick<ManagerSettingsSubject, "workspaceId" | "repository">,
+  agent: AgentSummary & Pick<ManagerSettingsSubject, "workspaceId" | "repository">,
   agents: AgentsControl,
   input: {
     /** The agent's name as the surface draws it, which a transcript copied is headed by. */
@@ -438,7 +418,18 @@ export function useAgentActions(
   // renamed then; an archived agent's tab on its task is renamed as a live one's is.
   const manager = agent.kind === AGENT_KIND.MANAGER;
   const renamable = agents.onUnarchive === undefined;
-  const settings = useManagerSettingsDialog(agent, agents, shown);
+
+  const settings = useManagerSettingsDialog(
+    agent,
+    agents,
+    {
+      archive: agent.archivedAt === undefined ? archive.action : unarchive,
+      archiving: archive.reading,
+      deletion: deletion.action,
+    },
+    shown,
+  );
+
   const toast = useToast();
   const { onOpenTerminal, onOpenLocal } = terminals;
 
