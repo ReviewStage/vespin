@@ -1,0 +1,23 @@
+pinned to d1f0be2a96
+== bundle PJjn2a2 base d1f0be2a96
+  built d1f0be2a96 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2A-inbox: fails 1 shots 9 Tap on "Remind me"... FAILED
+n2A-keep: fails 0 shots 3 
+n2A-navigation: fails 0 shots 3 
+n2A-new-task: fails 1 shots 11 Assert that "Describe the task" is visible... FAILED
+  n2A-busy-1x JS holds: JS thread: 12702 running samples in the first 180 s (from its first sample); holds over 50 ms: 49, total 6237 ms, longest 622 ms
+n2A-busy-1x: rc 0, trace ok, load {"long_tasks":30,"long_task_ms":5000,"cold_reads":300,"cold_read_ms":500,"load_window":"whole","app_build":"1"}, ready {"launch_ms":5207.177832126617,"local_ms":463.6114571094513,"started_ms":958.6915820837021,"screens_ms":1618.5898320674896,"inbox_ms":1345.5749571323395,"active_ms":332.1827070713043,"first_rows":"fee
+n2A-second-1x fn2mark: 0 steps,  
+  n2A-second-1x JS holds: JS thread: 13674 running samples in the first 180 s (from its first sample); holds over 50 ms: 56, total 7057 ms, longest 754 ms
+  n2A-second-1x JS holds, first 30 s: JS thread: 6318 running samples in the first 30 s (from its first sample); holds over 50 ms: 17, total 3105 ms, longest 754 ms
+n2A-second-1x: pid 63974, trace ok, load {"long_tasks":30,"long_task_ms":5000,"cold_reads":300,"cold_read_ms":500,"load_window":"whole","app_build":"1"}, ready {"launch_ms":1844.8968745470047,"local_ms":597.3093745708466,"started_ms":1081.1356246471405,"screens_ms":1657.400166630745,"inbox_ms":1463.897166609764,"active_ms":405.5167496204376,"first_rows":"kep
+  n2A-busy-3x JS holds: JS thread: 34118 running samples in the first 180 s (from its first sample); holds over 50 ms: 71, total 20282 ms, longest 3227 ms
+n2A-busy-3x: rc 0, trace ok, load {"long_tasks":30,"long_task_ms":10000,"cold_reads":300,"cold_read_ms":5000,"load_window":"whole","app_build":"1"}, ready {"launch_ms":8119.858416199684,"local_ms":453.2705411911011,"started_ms":1923.9036662578583,"screens_ms":3377.5571242570877,"inbox_ms":3032.0942912101746,"active_ms":322.4382492303848,"first_rows":"fe
+n2A-second-3x fn2mark: 0 steps,  
+  n2A-second-3x JS holds: JS thread: 31836 running samples in the first 180 s (from its first sample); holds over 50 ms: 74, total 18532 ms, longest 3164 ms
+  n2A-second-3x JS holds, first 30 s: JS thread: 8663 running samples in the first 30 s (from its first sample); holds over 50 ms: 28, total 4930 ms, longest 661 ms
+n2A-second-3x: pid 66411, trace ok, load {"long_tasks":30,"long_task_ms":10000,"cold_reads":300,"cold_read_ms":5000,"load_window":"whole","app_build":"1"}, ready {"launch_ms":3846.3631246089935,"local_ms":547.5217915773392,"started_ms":2009.2803745269775,"screens_ms":3273.1279575824738,"inbox_ms":3062.904874563217,"active_ms":388.2966665029526,"first_rows":"ke
