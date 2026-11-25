@@ -5,6 +5,6 @@ pinned to d7da544023
   typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
   export 0 (simulator-bundle.sh)
   signed 0
-created iPhone 17 Pro 72465C3B-0860-41BC-BF25-9D56A0BFA429; tree /Users/deanstratakos/vespin-ipad-agent/jj3PJjbusy
-busy 1x: script rc 1, launch-load MISSING, app-ready , trace MISSING, stills 0/2; last: 
-busy 3x: script rc 1, launch-load MISSING, app-ready , trace MISSING, stills 0/2; last: 
+created iPhone 17 Pro 09EF4768-F226-4439-905D-80855B3A5191; tree /Users/deanstratakos/vespin-ipad-agent/jj3PJjbusy
+busy 1x: script rc 0, launch-load 4 KB, app-ready {"launch_ms":1855.810916543007,"local_ms":496.6247915029526,"started_ms":1145.5646665096283,"inbox_ms":1669.7839164733887,"active_ms":336.8431245088577,"first_rows":"kept"}, trace ok, stills 2/2; last: app:ready {"launch_ms":1855.810916543007,"local_ms":496.6247915029526,"started_ms":1145.5646665096283,"inbox_ms":1669.7839164733887,"active_ms":336.8431245088577,"first_rows":"kept"} launch:load {"long_tasks":0,"long_tas
+busy 3x: script rc 0, launch-load 4 KB, app-ready {"launch_ms":3699.850457549095,"local_ms":454.39754152297974,"started_ms":1980.1003745794296,"inbox_ms":3530.5171245336533,"active_ms":317.5189995765686,"first_rows":"kept"}, trace ok, stills 2/2; last: app:ready {"launch_ms":3699.850457549095,"local_ms":454.39754152297974,"started_ms":1980.1003745794296,"inbox_ms":3530.5171245336533,"active_ms":317.5189995765686,"first_rows":"kept"} launch:load {"long_tasks":0,"long_ta
