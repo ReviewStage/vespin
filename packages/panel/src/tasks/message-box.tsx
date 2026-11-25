@@ -43,6 +43,7 @@ import {
 import { ActionMenu, type MenuEntry } from "../desktop/action-menu.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import type { KeystrokeSpanName } from "../panel-spans.js";
+import { useSteadyDoor } from "../steady-door.js";
 import {
   type AttachedFiles,
   type AttachedFilesOptions,
@@ -648,6 +649,8 @@ export function MessageBox({
   const held = options.held === true;
   const takesFiles = options.takesFiles !== false;
   const openPicker = () => picker.current?.open();
+  // Note that Dictate is handed a steady press, so a word typed never draws it again.
+  const dictateStart = useSteadyDoor(dictation.start);
 
   // Note that a + folded away hands the ⋯ its menu's rows, or its own press where it opens the picker itself.
   const offers: readonly OverflowOffer[] = [
@@ -748,7 +751,11 @@ export function MessageBox({
           <ComposerActions>
             {actions}
             {dictates ? (
-              <DictateButton dictation={dictation} disabled={held || module === undefined} />
+              <DictateButton
+                keyMissing={dictation.keyMissing}
+                onStart={dictateStart}
+                disabled={held || module === undefined}
+              />
             ) : null}
             {call}
             <BoxMore card={box.frame} offers={offers} />

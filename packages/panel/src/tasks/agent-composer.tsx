@@ -33,6 +33,7 @@ import {
   type ReactNode,
   type RefObject,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -819,6 +820,43 @@ export function AgentComposer({
           ? { label: BUTTON.STEER, icon: <GLYPH.STEER /> }
           : undefined;
 
+  // Note that what the foot draws from the box's owner is drawn again only as the owner hands it anew, never on a word typed, since the words reach the box alone.
+  const narrowTools = box.folds(FOLD_WIDTH.TOOLS);
+  const toolsDrawn = useMemo(() => tools?.(narrowTools), [tools, narrowTools]);
+  const narrowModel = box.folds(FOLD_WIDTH.MODEL);
+
+  const modelChip = useMemo(
+    () =>
+      model === undefined ? null : (
+        <AgentModelChip
+          model={model}
+          models={models}
+          modelsFailed={modelsFailed}
+          readModels={readModels}
+          usage={usage}
+          payer={payer}
+          payerSubscriptionId={payerSubscriptionId}
+          owner={owner}
+          narrow={narrowModel}
+          permissions={mode}
+          asked={modelAsk}
+        />
+      ),
+    [
+      model,
+      models,
+      modelsFailed,
+      readModels,
+      usage,
+      payer,
+      payerSubscriptionId,
+      owner,
+      narrowModel,
+      mode,
+      modelAsk,
+    ],
+  );
+
   // What the + offers beside files, its menu's rows after Attachment: the servers' popover, where the box hands servers, then its owner's.
   const plusRows: readonly MenuEntry[] = [
     ...(servers === undefined ? [] : [serversMenuPanel(servers, statuses)]),
@@ -840,28 +878,14 @@ export function AgentComposer({
           ) : undefined)
         }
         plus={plusRows}
-        tools={tools?.(box.folds(FOLD_WIDTH.TOOLS))}
+        tools={toolsDrawn}
         call={talk?.press}
         talk={talk?.talk}
         dictates={talk?.onCall !== true}
         actions={
           <>
             {actions?.(box.folds(FOLD_WIDTH.ACTIONS))}
-            {model === undefined ? null : (
-              <AgentModelChip
-                model={model}
-                models={models}
-                modelsFailed={modelsFailed}
-                readModels={readModels}
-                usage={usage}
-                payer={payer}
-                payerSubscriptionId={payerSubscriptionId}
-                owner={owner}
-                narrow={box.folds(FOLD_WIDTH.MODEL)}
-                permissions={mode}
-                asked={modelAsk}
-              />
-            )}
+            {modelChip}
             <AgentContextRing
               context={context}
               brief={brief}

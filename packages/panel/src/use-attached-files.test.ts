@@ -16,7 +16,7 @@ import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { installShownFailureReporter } from "./failure-report.js";
 import { AgentComposer } from "./tasks/agent-composer.js";
 import { AGENT_LEAD, AgentMessage } from "./tasks/agent-tab.js";
-import { useAgentComposer } from "./tasks/use-agent-composer.js";
+import { useAgentComposer, useHeldWords } from "./tasks/use-agent-composer.js";
 import { fakeActPort, fakeActPortCalls } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { attachmentChipName } from "./testing/attachment-chip.js";
@@ -50,28 +50,32 @@ const ignore = () => undefined;
 
 /** The agent's box on its own control, whose sends never answer. */
 function AgentBox({ agentId = "agent-1" }: { agentId?: string }): ReactNode {
-  const composer = useAgentComposer({
-    sending: useOutbox(agentId),
-    unsend: unsendOutbox,
-    agentId,
-    taskId: "plan-1",
-    messages: [],
-    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox(agentId),
+      unsend: unsendOutbox,
+      agentId,
+      taskId: "plan-1",
+      messages: [],
+      send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
+    }),
+  );
 
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined });
 }
 
 /** The agent's box while a turn runs, its Enter queueing, the queue taking its message as the queue does: out of the box. */
 function QueueingBox(): ReactNode {
-  const composer = useAgentComposer({
-    sending: useOutbox("agent-1"),
-    unsend: unsendOutbox,
-    agentId: "agent-1",
-    taskId: "plan-1",
-    messages: [],
-    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
+      agentId: "agent-1",
+      taskId: "plan-1",
+      messages: [],
+      send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
+    }),
+  );
 
   const queued = () => {
     composer.updateHeld(() => ({ text: "", attachments: [] }));
@@ -95,14 +99,16 @@ function QueueingBox(): ReactNode {
 
 /** The agent's box editing a queued message, whose Save the queue refuses, so its words stay standing. */
 function RefusedEditBox(): ReactNode {
-  const composer = useAgentComposer({
-    sending: useOutbox("agent-1"),
-    unsend: unsendOutbox,
-    agentId: "agent-1",
-    taskId: "plan-1",
-    messages: [],
-    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
+      agentId: "agent-1",
+      taskId: "plan-1",
+      messages: [],
+      send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
+    }),
+  );
 
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
@@ -122,14 +128,16 @@ function RefusedEditBox(): ReactNode {
 
 /** The agent's box opening on a draft kept with a picture its words name, as a draft kept from before, or a message opened for editing. */
 function KeptDraftBox(): ReactNode {
-  const composer = useAgentComposer({
-    sending: useOutbox("agent-1"),
-    unsend: unsendOutbox,
-    agentId: "agent-1",
-    taskId: "plan-1",
-    messages: [],
-    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
+      agentId: "agent-1",
+      taskId: "plan-1",
+      messages: [],
+      send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
+    }),
+  );
 
   const [kept, setKept] = useState(false);
   // Note that the draft is kept once, before the box first draws, since the control's doors are new on every render.
@@ -158,14 +166,16 @@ function HandedBox({
 }: {
   hand: (composer: ReturnType<typeof useAgentComposer>) => void;
 }): ReactNode {
-  const composer = useAgentComposer({
-    sending: useOutbox("agent-1"),
-    unsend: unsendOutbox,
-    agentId: "agent-1",
-    taskId: "plan-1",
-    messages: [],
-    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
+      agentId: "agent-1",
+      taskId: "plan-1",
+      messages: [],
+      send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
+    }),
+  );
 
   hand(composer);
 

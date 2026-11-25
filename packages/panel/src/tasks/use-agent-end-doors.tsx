@@ -123,12 +123,8 @@ export function useAgentEndDoors({
     onOpenAgent: openAgent,
   };
 
-  // The box's words and files, which a press carries into the continue where it takes the box's place.
-  const carry = {
-    words: composer.unsent.words,
-    attachments: composer.unsent.attachments,
-    taskId: agent.taskId,
-  };
+  // The box's words and files, which a press carries into the continue where it takes the box's place, read as it is pressed.
+  const carry = { now: composer.unsent, taskId: agent.taskId };
 
   // The failed end line holds the press, Continue again once another agent continued this one.
   const { status, failure } = tabTurnOf(agent, composer);
