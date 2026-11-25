@@ -25,8 +25,9 @@ env:
 # The keyboard is lowered by a drag on the page over the composer (`StartPage`).
 - runFlow:
     file: subflows/lower-keyboard.yaml
-# The repository's capsule, which says the one picked, opens a menu of what
-# the workspace's GitHub reaches.
+# The repository's capsule, which says the one picked in the row over the
+# composer, as the panel's head row stands it, opens a menu of what the
+# workspace's GitHub reaches.
 - tapOn: "ada/relay"
 - assertVisible: "ada/ledger"
 - waitForAnimationToEnd

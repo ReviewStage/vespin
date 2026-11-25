@@ -9,6 +9,7 @@ import {
   Picker,
   ScrollView,
   Section,
+  Spacer,
   Button as SwiftUIButton,
   Text,
   VStack,
@@ -114,7 +115,8 @@ type MenuChipProps = ChipLead & {
       }
     | {
         readonly look?: typeof MENU_CHIP_LOOK.PAGE | undefined;
-        readonly menu: ChipMenu;
+        /** What the capsule opens; none where what it says can't be changed here, drawn as the system draws a control it holds still. */
+        readonly menu?: ChipMenu | undefined;
         readonly onOpen?: undefined;
       }
   );
@@ -324,7 +326,9 @@ type StartPageProps = {
   /** What a start, the picker, or a read said, each its own line over the field. */
   readonly notes: readonly string[];
   readonly add: StartAdd;
-  /** The capsules after the + under the field, saying where the start runs, such as Repository and Machine. */
+  /** What stands in a row over the composer, on the page, such as the repository the task is about, as the panel stands it in a head row over its box; none where nothing does. */
+  readonly above?: ReactNode;
+  /** The capsules after the + under the field, saying where the start runs, such as Machine. */
   readonly chips: ReactNode;
   /** What stands at the end of the row under the field before Send, such as Model · Effort, as the desktop composer stands its model picker. */
   readonly trailing?: ReactNode;
@@ -386,7 +390,8 @@ function StartHead({ title, head }: Pick<StartPageProps, "title" | "head">) {
  * A page that starts work, as Messages, ChatGPT and Claude start a new
  * conversation: an empty page, what the start is about at its head, and the
  * agent page's own composer docked on the keyboard, the same glass with
- * Send, or Talk while it holds nothing, at its end. Under its field, inside
+ * Send, or Talk while it holds nothing, at its end, and what the start is in,
+ * such as its repository, in a row over it (`above`). Under its field, inside
  * the same glass, stand the + and the capsules saying where and how the work
  * starts (`MenuChip` in its composer look), so the keyboard, or the bar iOS
  * stands over it, never covers them. The skills a `/` offers, what an `@` offers, the pictures
@@ -444,6 +449,14 @@ export function StartPage(props: StartPageProps) {
           onDropPictures={props.onDropPictures}
           testIds={props.testIds}
           pills={props.pills}
+          above={
+            props.above === undefined ? undefined : (
+              <HStack spacing={SPACE.TIGHT * 2}>
+                {props.above}
+                <Spacer />
+              </HStack>
+            )
+          }
         />
       }
     >

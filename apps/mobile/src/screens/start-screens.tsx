@@ -448,8 +448,9 @@ function repositoryLead(
 }
 
 /**
- * The repository the task works in, as the panel's repository chip says it:
- * a capsule whose menu checks it among those the workspace's GitHub
+ * The repository the task works in, as the panel's repository chip says it,
+ * in the row over the composer where the panel's head row stands it:
+ * a bordered capsule whose menu checks it among those the workspace's GitHub
  * reaches; read-only where the task joins another's tree, which holds that
  * task's repository, or while the list is read and a start already names
  * one; and Try again where the list could not be read.
@@ -464,7 +465,7 @@ function RepositoryChip({
   if (tree !== undefined) {
     return (
       <MenuChip
-        look={MENU_CHIP_LOOK.COMPOSER}
+        look={MENU_CHIP_LOOK.PAGE}
         label={tree.repository ?? NO_REPOSITORY}
         {...repositoryLead(tree.repository ?? undefined)}
       />
@@ -474,7 +475,7 @@ function RepositoryChip({
   if (repository.options.length > 0) {
     return (
       <MenuChip
-        look={MENU_CHIP_LOOK.COMPOSER}
+        look={MENU_CHIP_LOOK.PAGE}
         label={labelOf(repository.options, repository.picked) ?? WORDS.REPOSITORY}
         {...repositoryLead(repository.picked)}
         menu={{
@@ -494,7 +495,7 @@ function RepositoryChip({
     <>
       {repository.picked === undefined ? null : (
         <MenuChip
-          look={MENU_CHIP_LOOK.COMPOSER}
+          look={MENU_CHIP_LOOK.PAGE}
           label={repository.picked}
           {...repositoryLead(repository.picked)}
         />
@@ -1418,12 +1419,8 @@ export function NewTaskScreen({
         testIds={{ field: TEST_IDS.NEW_TASK.WORDS, add: TEST_IDS.NEW_TASK.ATTACH }}
         pills={pillField.pills}
         trailing={<StartModelChip pick={pick} shown={modelsShown} onShown={setModelsShown} />}
-        chips={
-          <>
-            <RepositoryChip repository={repository} tree={tree} />
-            <RunsOnChip places={places} runsOn={runsOn} onRunsOn={setRunsOn} />
-          </>
-        }
+        above={<RepositoryChip repository={repository} tree={tree} />}
+        chips={<RunsOnChip places={places} runsOn={runsOn} onRunsOn={setRunsOn} />}
       />
     </>
   );
