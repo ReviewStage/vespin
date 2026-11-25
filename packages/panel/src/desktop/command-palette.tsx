@@ -76,7 +76,7 @@ import {
 import { formatCount } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { SHOW_ALL } from "@repo/features/search-found-model";
+import { SEARCH_FOUND_KIND, SHOW_ALL } from "@repo/features/search-found-model";
 import {
   GO_TO,
   GO_TO_TITLE,
@@ -180,7 +180,7 @@ import {
 } from "@repo/ui/command";
 import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
-import { changesTab, fileTab, inTaskOrder, tabKey } from "@repo/ui/tab-strip-model";
+import { changesTab, fileTab, inTaskOrder, STRIP_TAB_KIND, tabKey } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import {
@@ -245,6 +245,7 @@ import {
   type TaskListRows,
   useNamedTask,
   useNamedTasksAtRest,
+  useTaskListCollections,
   useTaskListRows,
 } from "../task-list-collections.js";
 import { agentSummaryEnd } from "../tasks/agent-menu-row.js";
@@ -271,6 +272,7 @@ import {
 import { anyChoiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
+import { isOverviewTab } from "../tasks/use-main-tabs.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { useServiceTaskSearch } from "../tasks/use-service-task-search.js";
 import { SIDE_PANEL_TAB_KIND, type SidePanelControl } from "../tasks/use-side-panel.js";
@@ -1574,6 +1576,53 @@ function managerRows(
   });
 }
 
+/** The agent the window shows: its own page standing, or the open task's tab of it; none otherwise. */
+function shownAgentOf(tasks: Pick<TasksControl, "agentView" | "mainTabs">): string | undefined {
+  const tab = tasks.mainTabs.tab;
+
+  if (tasks.agentView.agentId !== undefined) return tasks.agentView.agentId;
+
+  return tab === undefined || isOverviewTab(tab) || tab.kind !== STRIP_TAB_KIND.AGENT
+    ? undefined
+    : tab.agent;
+}
+
+/**
+ * An agent opened last, as a phone's Search page lists it under Recent: its
+ * tab's glyph and name, and its task's name beside it, as This task's rows
+ * name it. Choosing it opens it where it was opened, on its task's tab, or
+ * its own page where it has no task.
+ */
+function recentAgentRow(
+  agent: ListedAgent,
+  tasks: TasksControl,
+  rows: TaskListRows,
+  directory: EditReader,
+  show: (pick: () => void) => void,
+): PaletteRow {
+  const look = tabLook({
+    kind: TAB_KIND.AGENT,
+    name: agentName(agent, tasks.agents.models),
+    agent,
+  });
+
+  const taskName = agent.taskId === null ? undefined : rows.task(agent.taskId)?.name;
+
+  return {
+    ...look,
+    replayMasked: true,
+    detail: taskName,
+    endMark: agentSummaryEnd(agent, directory),
+    terms: [look.label, ...(taskName === undefined ? [] : [taskName])],
+    onChoose: () =>
+      show(() =>
+        agent.taskId === null
+          ? tasks.agentView.onOpen(agent.id)
+          : tasks.onShowAgent(agent.taskId, agent.id),
+      ),
+  };
+}
+
 /** The row that starts a task on what was typed, New task opening with it as the prompt, last on a phone's page; none while nothing is typed. */
 function startTaskRows(query: string, start: (prompt: string) => void): readonly PaletteRow[] {
   const label = startTaskLabel(query);
@@ -2259,7 +2308,10 @@ export function CommandPalette({
     workspaceId: tasks.workspace?.id,
     taskId: tasks.activeTaskId,
     itemId: inboxStanding.chosen?.itemId,
+    agentId: shownAgentOf(tasks),
   });
+
+  const collections = useTaskListCollections();
 
   const { placeLeave } = tasks;
 
@@ -2726,16 +2778,21 @@ export function CommandPalette({
     const tasksById = new Map(undrawnOf[PALETTE_FILTER.TASKS]().map((row) => [row.id, row]));
     const inboxById = new Map(undrawnOf[PALETTE_FILTER.INBOX]().map((row) => [row.id, row]));
 
-    const recentShown = recentRows<UndrawnRow, UndrawnRow, UndrawnRow>(
+    // Note that an agent is found among the listed tasks' agents, and a Manager, which has no task, among the Managers.
+    const recentShown = recentRows<UndrawnRow, UndrawnRow, ListedAgent>(
       recent.kept,
       tasks.workspace?.id,
       {
         task: (id) => tasksById.get(id),
         // Note that an account that turned its Inbox off is listed no thread it opened before, as no search lists one.
         thread: (id) => (inboxOn ? inboxById.get(id) : undefined),
-        agent: () => undefined,
+        agent: (id) => collections.agents.get(id) ?? managers?.find((manager) => manager.id === id),
       },
-    ).map((each) => each.row.draw());
+    ).map((each) =>
+      each.kind === SEARCH_FOUND_KIND.AGENTS
+        ? recentAgentRow(each.row, tasks, rows, directory, onTasks)
+        : each.row.draw(),
+    );
 
     return [
       {

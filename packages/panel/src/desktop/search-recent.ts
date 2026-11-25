@@ -1,12 +1,13 @@
 /**
- * search-recent.ts -- what a phone's Search page lists under Recent before anything is typed: the tasks and Inbox threads last opened in this window, newest first, as the iOS app's Search tab keeps them.
+ * search-recent.ts -- what a phone's Search page lists under Recent before anything is typed: the tasks, Inbox threads, and agents last opened in this window, newest first, as the iOS app's Search tab keeps them.
  *
  * The window keeps the list itself, as ids alone (`search-recent-model.ts`),
  * so nothing a row says is kept beside it: each row is drawn from the lists
  * the palette already reads, and an id they no longer hold draws nothing.
- * A task or a thread is kept as the window opens it, by whatever door, so a
- * task opened from the Tasks page stands in Recent as one picked from
- * Search does, and again each time its page comes back on screen. Clear forgets them all.
+ * A task, a thread, or an agent is kept as the window opens it, by whatever
+ * door, so a task opened from the Tasks page stands in Recent as one picked
+ * from Search does, and again each time its page comes back on screen, and an
+ * agent as its page or its task's tab stands. Clear forgets them all.
  */
 
 import { SEARCH_FOUND_KIND, type SearchFoundKind } from "@repo/features/search-found-model";
@@ -31,6 +32,8 @@ export interface OpenedNow {
   readonly workspaceId: string | undefined;
   readonly taskId: string | undefined;
   readonly itemId: string | undefined;
+  /** The agent shown, on its own page or as its task's tab. */
+  readonly agentId: string | undefined;
 }
 
 /** What the window opened last, newest first, and the press that forgets it all. */
@@ -52,7 +55,7 @@ function useKeepOpened(
   }, [kind, id, workspaceId, change]);
 }
 
-/** What the window opened last, kept as each task and thread opens (`now`). */
+/** What the window opened last, kept as each task, thread, and agent opens (`now`). */
 export function useSearchRecent(now: OpenedNow): SearchRecent {
   const [kept, keep, change] = useKept(KEPT_RECENT, NONE_OPENED);
   // Note that a task is kept as its page comes on screen, since the Inbox and the Tasks page keep the task they left bound, so a return to it is kept again.
@@ -64,6 +67,7 @@ export function useSearchRecent(now: OpenedNow): SearchRecent {
     change,
   );
   useKeepOpened(SEARCH_FOUND_KIND.INBOX, now.itemId, now.workspaceId, change);
+  useKeepOpened(SEARCH_FOUND_KIND.AGENTS, now.agentId, now.workspaceId, change);
 
   return { kept, onClear: () => keep(NONE_OPENED) };
 }

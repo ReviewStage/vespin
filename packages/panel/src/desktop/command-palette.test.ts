@@ -2,7 +2,12 @@
 
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import { AGENT_STATUS, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import {
+  AGENT_STATUS,
+  CHECK_SUMMARY,
+  type ListedAgent,
+  PULL_REQUEST_STATE,
+} from "@repo/features/agent-wire";
 import { AUTOMATION_FOLLOW } from "@repo/features/automation-view";
 import {
   AUTOMATION_ACTION,
@@ -822,6 +827,58 @@ test("on a phone the palette is Search's page: Go to before anything is typed, a
   press("Start a task: “e”");
   await settle();
   assert.deepEqual(started, ["New task"]);
+});
+
+test("on a phone an agent whose page stood is listed under Recent, beside its task's name, and choosing it opens its tab on its task", () => {
+  const acme = { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null };
+
+  const plan = {
+    id: "plan-1",
+    workspaceId: acme.id,
+    name: "Billing usage alerts",
+    createdAt: 1,
+    updatedAt: 2,
+    repository: null,
+  };
+
+  const agent: ListedAgent = {
+    id: "agent-7",
+    taskId: plan.id,
+    workspaceId: acme.id,
+    repository: null,
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    title: "Invoice export",
+    createdAt: 1,
+    status: AGENT_STATUS.COMPLETED,
+    turnId: null,
+  };
+
+  const shown: [string, string][] = [];
+
+  openPalette(
+    tasksControl({
+      workspaces: [acme],
+      workspace: acme,
+      tasks: [plan],
+      listedAgents: [agent],
+      agentView: { agentId: agent.id, onOpen: () => undefined },
+      onShowAgent: (taskId, agentId) => shown.push([taskId, agentId]),
+    }),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    SHELL_ROOM.NARROW,
+  );
+
+  const row = "Invoice export · Billing usage alerts";
+  assert.ok(rows().includes(row), "the agent opened stands under Recent");
+
+  press(row);
+  assert.deepEqual(shown, [[plan.id, agent.id]]);
 });
 
 /** The window behind the palette, running the menu bar's commands, its Back and Forward recorded. */
