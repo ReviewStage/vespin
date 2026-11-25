@@ -1,0 +1,12 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fmchat10609
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=81e2a425-6d3f-4a07-92df-9eafb0c1d2e8})... COMPLETED
+Assert that "Release manager" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot chat... COMPLETED
+Swipe from (50%, 30%) to (50%, 85%) in 1200 ms... COMPLETED
+Wait for animation to end within 4000 ms... COMPLETED
+Take screenshot chat-up... COMPLETED

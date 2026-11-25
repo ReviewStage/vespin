@@ -1,0 +1,38 @@
+pinned to 86ca54d93b
+== bundle PJjowed base 86ca54d93b
+  built 86ca54d93b base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+p10604-iphone-light: fails 0 shots 2 
+p10604-ipad27-port-light: fails 0 shots 2 
+p10604-iphone-dark: fails 0 shots 2 
+p10604-ipad27-port-dark: fails 0 shots 2 
+p10602-iphone-light-rows: fails 0 shots 1 
+  p10602-iphone-light-rows width 402; 
+p10602-ipad-portrait-light-rows: fails 0 shots 1 
+  p10602-ipad-portrait-light-rows width 834; 
+p10602-iphone-dark-rows: fails 0 shots 1 
+  p10602-iphone-dark-rows width 402; 
+p10602-ipad-portrait-dark-rows: fails 0 shots 1 
+  p10602-ipad-portrait-dark-rows width 834; 
+p10607-iphone-light-after: fails 0 shots 4 
+p10695-iphone-light-automations: fails 0 shots 12 
+p10695-ipad27-light-automations: fails 1 shots 11 Tap on "Runs"... FAILED
+p10695-iphone-light-editor: fails 1 shots 2 Tap on "Weekly digest"... FAILED
+p10695-ipad27-light-editor: fails 0 shots 1 
+p10695-iphone-dark-automations: fails 0 shots 12 
+p10695-ipad27-dark-automations: fails 1 shots 11 Tap on "Runs"... FAILED
+p10695-iphone-dark-editor: fails 1 shots 2 Tap on "Weekly digest"... FAILED
+p10695-ipad27-dark-editor: fails 0 shots 1 
+p10609-iphone-light: fails 0 shots 2 
+p10609-ipad27-port-light: fails 0 shots 2 
+pcomp-iphone-light: fails 0 shots 6 
+pcomp-ipad27-port-light: fails 0 shots 6 
+p10609-iphone-dark: fails 0 shots 2 
+p10609-ipad27-port-dark: fails 0 shots 2 
+pcomp-iphone-dark: fails 0 shots 6 
+pcomp-ipad27-port-dark: fails 0 shots 6 
+audit-iphone-light-manager-thread: fails 0 shots 5 
+audit-iphone-dark-manager-thread: fails 0 shots 5 

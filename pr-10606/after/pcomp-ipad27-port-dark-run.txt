@@ -1,0 +1,49 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow .kbd-composer-shots
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+      Repeat while "${ROW}" is not visible (up to 20 times)...
+      Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+      Assert that "${ROW}" is visible... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "The digest's subject line", Above id: search-tab is not visible and false is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot thread-empty... COMPLETED
+Tap on id: composer-field... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot thread-empty-keyboard... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text What shipped in Relay this week... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot thread-typed... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-empty-composer... COMPLETED
+Tap on id: composer-field... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot agent-empty-keyboard... COMPLETED
+Input text Add a test for the resend... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot agent-typed... COMPLETED
