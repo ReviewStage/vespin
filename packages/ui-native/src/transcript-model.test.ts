@@ -922,13 +922,14 @@ describe("managerChatItems", () => {
       ["Hi, I'm Pat.", "Pat", true, false],
       ["Fix the login.", "Pat", false, false],
       ["On it.", "Pat", true, false],
+      ["", "Pat", true, true],
       [TRANSCRIPT_ITEM.MEDIA, [["shot", "Picture"]]],
       ["And the signup.", "Grace", true, false],
       ["Thanks!", "Pat", false, false],
       ["One more thing.", "Ada", false, false],
       [TRANSCRIPT_ITEM.WORKING, "Pat"],
     ]);
-    expect(items[4]).toMatchObject({
+    expect(items[5]).toMatchObject({
       pictures: [{ name: "signup.png", pictureId: "kept-shot", url: undefined }],
       files: [{ name: "notes.txt", base64: "YQpi", size: "2 lines" }],
     });
@@ -950,6 +951,19 @@ describe("managerChatItems", () => {
         threadRoot: "q1",
       }),
       row("q1", 2, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, authorName: "Pat", text: "Shipped." }),
+      row("s1", 1, {
+        authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+        authorUserId: "u2",
+        authorName: "Grace",
+        text: "Looks right.",
+        threadRoot: "p1",
+      }),
+      row("p1", 0, {
+        authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+        authorName: "Pat",
+        text: "",
+        attachments: [{ id: "shot", mediaType: "image/png" }],
+      }),
     ];
 
     const sending = [
@@ -970,15 +984,17 @@ describe("managerChatItems", () => {
 
     const channel = managerChatItems(view, [], reading);
 
+    // Note that a message of what the Manager showed alone still stands as a line, which sums its thread's replies.
     expect(
       channel.map((item) => (item.kind === TRANSCRIPT_ITEM.SAID ? item.words : item.kind)),
-    ).toEqual(["Shipped."]);
-    expect(channel[0]).toMatchObject({
+    ).toEqual(["", TRANSCRIPT_ITEM.MEDIA, "Shipped."]);
+    expect(channel[0]).toMatchObject({ thread: { root: "p1", replies: 1, words: "1 reply" } });
+    expect(channel[2]).toMatchObject({
       thread: { root: "q1", replies: 2, words: "2 replies" },
     });
     expect(
-      channel[0]?.kind === TRANSCRIPT_ITEM.SAID
-        ? channel[0].thread?.repliers.map((sender) => sender.name)
+      channel[2]?.kind === TRANSCRIPT_ITEM.SAID
+        ? channel[2].thread?.repliers.map((sender) => sender.name)
         : undefined,
     ).toEqual(["Grace", "Pat"]);
 

@@ -16,10 +16,12 @@ import {
   MentionSuggestions,
   managerThreadItems,
   NO_TOGGLES,
+  openCuts,
   SkillSuggestions,
   shownFiles,
   shownMediaIds,
   shownPictureIds,
+  type TranscriptItem,
   type TranscriptToggles,
   toggledAt,
   type UndeliveredLine,
@@ -37,6 +39,7 @@ import {
   useOlderChatPages,
   useSentFiles,
   useShownAgent,
+  useWholeParts,
 } from "../agents/use-agent.js";
 import { useAgentComposer } from "../agents/use-agent-composer.js";
 import { AgentPicturesProvider, useAgentPictures } from "../agents/use-agent-pictures.js";
@@ -47,6 +50,9 @@ import { useNewestNote } from "../newest-note.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useDictation } from "../use-dictation.js";
+
+/** No row, while the thread is not read yet, the same array every render so nothing read off the rows reads again. */
+const NO_ROWS: readonly TranscriptItem[] = [];
 
 /** What the page says while it reads the chat, and where it could not. */
 const READ_WORDS = {
@@ -146,6 +152,7 @@ export function ManagerThreadScreen() {
   const running = writing ? (agent?.turnId ?? undefined) : undefined;
   const chatFaces = useChatFaces(shown, readerId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
+  const whole = useWholeParts(id);
   const openLink = useOpenLink(shown?.workspaceId);
   const retry = useManagerChatRetry(id);
   const older = useOlderChatPages(id, chatPage?.before);
@@ -168,12 +175,13 @@ export function ManagerThreadScreen() {
               toggles,
               now: Date.now(),
               pullRequests: [],
+              wholePart: whole.read,
               sending: chatPage.sending,
               managerName: chatFaces?.managerName,
               readerName: chatFaces?.readerName,
             },
           ),
-    [chatPage, messages, running, root, readerId, toggles, chatFaces],
+    [chatPage, messages, running, root, readerId, toggles, whole.read, chatFaces],
   );
 
   // Note that a root older than the pages read is read for, a page at a time, until it stands or the chat's start is read, as the panel's thread tab reads for it.
@@ -183,7 +191,10 @@ export function ManagerThreadScreen() {
     if (lacksRoot) readOlder?.();
   }, [lacksRoot, readOlder]);
 
-  const rows = items ?? [];
+  const rows = items ?? NO_ROWS;
+  // A call opened in a turn's work on an answer its page carried cut reads it whole, as the chat's page reads it.
+  const cuts = useMemo(() => openCuts(rows), [rows]);
+  useEffect(() => whole.ask(cuts), [whole, cuts]);
   const pictureIds = useMemo(() => shownPictureIds(rows), [rows]);
   const pictureSet = useMemo(() => new Set(pictureIds), [pictureIds]);
 

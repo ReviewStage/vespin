@@ -295,7 +295,7 @@ function ChannelSaid({
   const width = rowWidth(drawing.column) - CHANNEL_SEAT;
   const open = drawing.onOpenChatThread;
   const thread = open === undefined ? undefined : item.thread;
-  const carried = (item.pictures ?? []).length + (item.files ?? []).length > 0;
+  const wordless = item.words.trim() === "";
 
   const threadAct: readonly HeldAct[] =
     thread === undefined || open === undefined
@@ -308,6 +308,69 @@ function ChannelSaid({
           },
         ];
 
+  const message = (
+    <ChannelMessage sender={sender} faces={faces} opens={!item.joinsAbove} stamp={item.stamp}>
+      {/* Note that a message's pictures name who sent it and when in their viewer's bar. */}
+      <PictureOriginProvider origin={{ by: sender.name, at: item.at }}>
+        <PictureSet
+          atEnd={false}
+          pictures={(item.pictures ?? []).map((picture) => ({
+            key: picture.key,
+            source: picture.url ?? saidSource(drawing, picture.pictureId),
+            alt: picture.name,
+            onRetry:
+              picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+          }))}
+        />
+      </PictureOriginProvider>
+      {(item.files ?? []).map((file) => (
+        <FileChip
+          key={file.key}
+          atEnd={false}
+          held={file.base64 !== undefined}
+          name={file.name}
+          mediaType={file.mediaType}
+          source={sentFileSource(drawing, item.place.row, file)}
+          size={file.size}
+          onRetry={sentFileRetry(drawing, item.place.row, file)}
+        />
+      ))}
+      {/* Note that a message of files alone, or of what the Manager showed alone, draws no words under them. */}
+      {wordless ? null : (
+        <MessageMenu
+          words={item.words}
+          at={item.at}
+          // Note that the Manager's message offers no link or rewind, as the panel's offers none; every message leads with Reply in thread, then what the page offers every chat message, such as Reply and Edit.
+          link={sender.manager ? undefined : drawing.messageLink?.(item.place.row)}
+          more={[...threadAct, ...(drawing.messageMore?.(item) ?? [])]}
+          width={width}
+        >
+          <View>
+            {/* Note that Select text selects the words in the row itself (`MessageWords`). */}
+            <MessageWords>
+              <Markdown
+                words={item.words}
+                typed={!sender.manager}
+                repository={drawing.repository}
+                onOpenLink={drawing.onOpenLink}
+                width={width}
+                wordPictures={item.wordPictures}
+                wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
+              />
+            </MessageWords>
+          </View>
+        </MessageMenu>
+      )}
+      {thread === undefined || open === undefined ? null : (
+        <ThreadReplies thread={thread} faces={faces} onOpen={open} />
+      )}
+      <UndeliveredUnder line={drawing.undelivered?.(item.place.row)} />
+    </ChannelMessage>
+  );
+
+  // Note that a line of no words and nothing it carried, such as the Manager's message of what it showed alone, whose pictures stand as a row of their own under it, offers Reply in thread on a long press of its head, since it holds no words to hold.
+  const bare = wordless && (item.pictures ?? []).length + (item.files ?? []).length === 0;
+
   return (
     <View
       style={[
@@ -315,63 +378,13 @@ function ChannelSaid({
         { paddingTop: item.joinsAbove ? RUN_GAP : SPACE.ROW, paddingBottom: RUN_GAP },
       ]}
     >
-      <ChannelMessage sender={sender} faces={faces} opens={!item.joinsAbove} stamp={item.stamp}>
-        {/* Note that a message's pictures name who sent it and when in their viewer's bar. */}
-        <PictureOriginProvider origin={{ by: sender.name, at: item.at }}>
-          <PictureSet
-            atEnd={false}
-            pictures={(item.pictures ?? []).map((picture) => ({
-              key: picture.key,
-              source: picture.url ?? saidSource(drawing, picture.pictureId),
-              alt: picture.name,
-              onRetry:
-                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
-            }))}
-          />
-        </PictureOriginProvider>
-        {(item.files ?? []).map((file) => (
-          <FileChip
-            key={file.key}
-            atEnd={false}
-            held={file.base64 !== undefined}
-            name={file.name}
-            mediaType={file.mediaType}
-            source={sentFileSource(drawing, item.place.row, file)}
-            size={file.size}
-            onRetry={sentFileRetry(drawing, item.place.row, file)}
-          />
-        ))}
-        {/* Note that a message of files alone draws no words under them, and offers its thread from its summary alone. */}
-        {item.words.trim() === "" && carried ? null : (
-          <MessageMenu
-            words={item.words}
-            at={item.at}
-            // Note that the Manager's message offers no link or rewind, as the panel's offers none; every message leads with Reply in thread, then what the page offers every chat message, such as Reply and Edit.
-            link={sender.manager ? undefined : drawing.messageLink?.(item.place.row)}
-            more={[...threadAct, ...(drawing.messageMore?.(item) ?? [])]}
-            width={width}
-          >
-            <View>
-              {/* Note that Select text selects the words in the row itself (`MessageWords`). */}
-              <MessageWords>
-                <Markdown
-                  words={item.words}
-                  typed={!sender.manager}
-                  repository={drawing.repository}
-                  onOpenLink={drawing.onOpenLink}
-                  width={width}
-                  wordPictures={item.wordPictures}
-                  wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
-                />
-              </MessageWords>
-            </View>
-          </MessageMenu>
-        )}
-        {thread === undefined || open === undefined ? null : (
-          <ThreadReplies thread={thread} faces={faces} onOpen={open} />
-        )}
-        <UndeliveredUnder line={drawing.undelivered?.(item.place.row)} />
-      </ChannelMessage>
+      {bare ? (
+        <HeldMenu acts={threadAct} width={rowWidth(drawing.column)}>
+          {message}
+        </HeldMenu>
+      ) : (
+        message
+      )}
     </View>
   );
 }

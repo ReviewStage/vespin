@@ -1521,21 +1521,18 @@ function chatLineItems(
   // Note that what the Manager showed and kept stands as the set's pictures under its words, and any file it carried as its bytes stands on its bubble, as a person's would.
   const media = chatShownMedia(message.attachments.filter(keptChatFile));
   const carried = message.attachments.filter((file) => !keptChatFile(file));
-  const words = message.text.trim() === "" && carried.length === 0 ? [] : [message.text];
 
+  // Note that a message of what it showed alone still stands as a line of no words, since its line carries who sent it and the thread it stands in, so its thread opens as any message's does.
   return [
     ...fold,
-    ...words.map(
-      (text): TranscriptItem => ({
-        ...said,
-        ...chatSaidFiles(text, carried),
-        words: text,
-        sender: undefined,
-        received: true,
-        manager: true,
-        by: undefined,
-      }),
-    ),
+    {
+      ...said,
+      ...chatSaidFiles(message.text, carried),
+      sender: undefined,
+      received: true,
+      manager: true,
+      by: undefined,
+    },
     ...(media.length === 0
       ? []
       : [
