@@ -1,4 +1,4 @@
-// ask-card.tsx -- the card a do ask's steps and an answer ask's fields stand in, as a decide ask's options do: a bordered card on the surface, a row each, and the ask's acts under it.
+// ask-card.tsx -- the rows a do ask's steps and an answer ask's fields stand in, as a decide ask's options do, inside the composer over its field: a row each, a hairline between them, and the ask's acts under them.
 
 import {
   Divider,
@@ -20,7 +20,6 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
-  background,
   buttonStyle,
   font,
   foregroundStyle,
@@ -29,7 +28,6 @@ import {
   labelsHidden,
   padding,
   pickerStyle,
-  strokeBorder,
   tag,
   textFieldStyle,
   tint,
@@ -43,25 +41,22 @@ import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** How thick the card's edge is drawn: a hairline, as the decide card's is. */
 /** What a flow finds an ask's note by. */
 const ASK_NOTE_ID = "ask-note";
 
-const HAIRLINE = 0.5;
+/** A row's inner margins, as a decide option's: none at its sides, since the composer's head already stands its rows in as far as the field's words, so the two line up. */
+export const ASK_ROW_PADDING = { horizontal: 0, vertical: SPACE.ROW + 1 } as const;
 
-/** A row's inner margins, as a decide option's. */
-const ROW_PADDING = { horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 } as const;
-
-/** Where a row's words start in the card: past its margin, and past its leading mark where it has one, as a step's round check. */
+/** Where a row's words start among the ask's rows: past its margin, and past its leading mark where it has one, as a step's round check. */
 export const CARD_WORDS_INSET = {
-  BARE: ROW_PADDING.horizontal,
-  MARKED: ROW_PADDING.horizontal + MARK_SIZE.LEAD + SPACE.ROW,
+  BARE: ASK_ROW_PADDING.horizontal,
+  MARKED: ASK_ROW_PADDING.horizontal + MARK_SIZE.LEAD + SPACE.ROW,
 } as const;
 
-/** A hairline between a card's rows, starting where the words do, as iOS insets a list's separator past a row's leading mark. */
+/** A hairline between an ask's rows, starting where the words do, as iOS insets a list's separator past a row's leading mark. */
 export function CardDivider({ inset }: { readonly inset: number }) {
   return <Divider modifiers={[padding({ leading: inset })]} />;
 }
@@ -103,37 +98,27 @@ export type AskAct = {
   readonly onPress: () => void;
 };
 
-/** The bordered card on its own fill (`CARD`), set off from the page's ground, the rows standing in it, a hairline between each from where their words start. */
-function Card({
+/**
+ * An ask's rows, a hairline between each from where their words start,
+ * standing on the composer's glass with no card of their own, as the
+ * panel's box holds an ask's controls as its body with no card, border, or
+ * head of their own (`inbox-answer-box.tsx`).
+ */
+function AskRows({
   inset,
   children,
 }: {
   readonly inset: number;
   readonly children: readonly ReactNode[];
 }) {
-  const colors = useColors();
-
   return (
     <VStack
       alignment="leading"
       spacing={0}
-      modifiers={[
-        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-        background(
-          colors.CARD,
-          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
-        ),
-        strokeBorder({
-          content: colors.CHIP_EDGE,
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "roundedRectangle",
-          cornerRadius: RADIUS.CARD,
-          style: { lineWidth: HAIRLINE },
-        }),
-      ]}
+      modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}
     >
       {children.map((child, index) => (
-        // Note that the rows are keyed by their place, since they never reorder while the card stands.
+        // Note that the rows are keyed by their place, since they never reorder while the ask stands.
         <Fragment key={index}>
           {index === 0 ? null : <CardDivider inset={inset} />}
           {child}
@@ -206,7 +191,7 @@ function StepRow({
         spacing={SPACE.ROW}
         alignment="top"
         modifiers={[
-          padding(ROW_PADDING),
+          padding(ASK_ROW_PADDING),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
@@ -227,7 +212,7 @@ function StepRow({
   );
 }
 
-/** A do ask's steps as a card of checkbox rows, by their place from the first at 0, with its acts under it. */
+/** A do ask's steps as checkbox rows, by their place from the first at 0, with its acts under them. */
 export function StepList({
   steps,
   ticked,
@@ -243,7 +228,7 @@ export function StepList({
   return (
     <VStack alignment="leading" spacing={SPACE.ROW}>
       {steps.length === 0 ? null : (
-        <Card inset={CARD_WORDS_INSET.MARKED}>
+        <AskRows inset={CARD_WORDS_INSET.MARKED}>
           {steps.map((step, index) => (
             <StepRow
               key={step}
@@ -252,7 +237,7 @@ export function StepList({
               onPress={() => onToggle(index)}
             />
           ))}
-        </Card>
+        </AskRows>
       )}
       <AskActs acts={acts} />
     </VStack>
@@ -312,7 +297,7 @@ function TypedFieldRow({
   const fieldRef = useRef<TextFieldRef>(null);
 
   return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
+    <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ASK_ROW_PADDING)]}>
       <FieldWords
         label={field.label}
         optional={false}
@@ -358,7 +343,7 @@ function SelectRow({
   const colors = useColors();
 
   return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
+    <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ASK_ROW_PADDING)]}>
       <FieldWords
         label={field.label}
         optional={!field.required}
@@ -400,7 +385,7 @@ function BooleanRow({
     <Toggle
       isOn={field.value === true}
       onIsOnChange={onChange}
-      modifiers={[toggleStyle("switch"), tint(colors.ACCENT), padding(ROW_PADDING)]}
+      modifiers={[toggleStyle("switch"), tint(colors.ACCENT), padding(ASK_ROW_PADDING)]}
     >
       <FieldWords
         label={field.label}
@@ -413,11 +398,12 @@ function BooleanRow({
 }
 
 /**
- * An answer ask's fields as a card of the system's form controls, a row
+ * An answer ask's fields as rows of the system's form controls, a row
  * each: a text or number field under its label, a select's menu picker, a
- * boolean's toggle. Note that it is a card in the thread's scroll rather
- * than a SwiftUI `Form`, because a `Form` scrolls on its own and the thread
- * it stands in already does; its rows are the controls a `Form` holds.
+ * boolean's toggle. Note that they are rows in the composer's head rather
+ * than a SwiftUI `Form`, because a `Form` scrolls on its own and the head
+ * scrolls in place once tall (`BarHead`); its rows are the controls a `Form`
+ * holds.
  */
 export function AnswerFields({
   fields,
@@ -439,7 +425,7 @@ export function AnswerFields({
   };
 
   const card = (
-    <Card inset={CARD_WORDS_INSET.BARE}>
+    <AskRows inset={CARD_WORDS_INSET.BARE}>
       {fields.map((field) => {
         const change = (value: string | boolean) => onChange(field.label, value);
 
@@ -462,7 +448,7 @@ export function AnswerFields({
           <TypedFieldRow key={field.label} field={field} onChange={change} onFocused={onFocused} />
         );
       })}
-    </Card>
+    </AskRows>
   );
 
   // Note that a number pad has no return key, so a card holding a number field stands one Done over the keyboard, as Settings' and Contacts' number pads do, lowering whichever field is focused. It's the card's, mounted once for as long as the card holds a number field, because adding a toolbar item as a field takes focus changed the field's view and let the keyboard go.

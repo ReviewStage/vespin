@@ -152,7 +152,7 @@ import {
 } from "./app-sidebar.js";
 import {
   NO_THREAD_ACTS,
-  OpenAskCard,
+  type OptionMediaDoors,
   openAskFiles,
   ThreadComposer,
   threadActs,
@@ -725,11 +725,12 @@ type ThreadPlace =
 
 /**
  * A thread's page from its item: its path, its subject, each message with
- * its files as they are read, the open ask's card under them, and the box
- * at its foot that answers or replies, with Remind me and Resolve in its ⋯
- * menu. A compact window's pushed screen docks the box over the screen's
- * foot, above the keyboard, and holds the menu in the stack's bar; a split
- * view's detail stands both in its own column.
+ * its files as they are read, and the box at its foot that answers or
+ * replies, the open ask's controls standing in it over its field, as the
+ * panel's box holds them, with Remind me and Resolve in its ⋯ menu. A
+ * compact window's pushed screen docks the box over the screen's foot,
+ * above the keyboard, and holds the menu in the stack's bar; a split view's
+ * detail stands both in its own column.
  *
  * Note that a split view's detail draws no Remind me picker of its own, and
  * opens its screen's instead, because the column stacks whatever it is
@@ -1048,6 +1049,25 @@ function ThreadDetail({
     workspaces.find((each) => each.id === workspaceId),
   );
 
+  // What the open ask's option media is drawn from and opened by, in the box's head.
+  const askDoors: OptionMediaDoors = {
+    source: (attachmentId) => sources.get(attachmentId),
+    retry,
+    openPage: (page) =>
+      openLink(
+        linkOf(
+          {
+            kind: LINK_DESTINATION.PAGE,
+            taskId: page.place.taskId,
+            pageId: page.pageId,
+          },
+          workspaceStep,
+        ),
+      ),
+    openLink,
+    openVideoElsewhere: openOnWeb,
+  };
+
   const page = (
     <ThreadPage
       path={path}
@@ -1064,29 +1084,6 @@ function ThreadDetail({
       videoAt={videoAt}
       linkStanding={linkStanding}
       standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
-      ask={
-        <OpenAskCard
-          item={item}
-          answer={answer}
-          doors={{
-            source: (attachmentId) => sources.get(attachmentId),
-            retry,
-            openPage: (page) =>
-              openLink(
-                linkOf(
-                  {
-                    kind: LINK_DESTINATION.PAGE,
-                    taskId: page.place.taskId,
-                    pageId: page.pageId,
-                  },
-                  workspaceStep,
-                ),
-              ),
-            openLink,
-            openVideoElsewhere: openOnWeb,
-          }}
-        />
-      }
       {...(inStack
         ? {}
         : {
@@ -1099,6 +1096,7 @@ function ThreadDetail({
                 answer={answer}
                 agentName={agentName}
                 place={{ workspaceId, taskId: task?.id }}
+                doors={askDoors}
                 inColumn
               />
             ),
@@ -1143,6 +1141,7 @@ function ThreadDetail({
             answer={answer}
             agentName={agentName}
             place={{ workspaceId, taskId: task?.id }}
+            doors={askDoors}
           />
         }
       >

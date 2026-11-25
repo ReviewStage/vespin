@@ -1,4 +1,4 @@
-// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
+// inbox-ask.tsx -- the box under a thread, its open ask's controls standing inside it over the field, and the thread's ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
@@ -193,15 +193,14 @@ function controlsStand(item: InboxItem): boolean {
 }
 
 /**
- * The open ask's card under the thread, as the panel's box draws its
- * controls: a decide's options to pick, the recommended tagged; a do's steps
- * to tick, with Mark done and Couldn't do it, each sending at once with the
- * note typed; an answer's fields to fill. A notice asking nothing has no
- * card: its Got it is the box's empty Send (`ThreadComposer`), as the
- * panel's is. What the last send said where it did not go stands in the
- * box's head, beside the words it put back. None where nothing is asked.
+ * The open ask's controls, standing inside the box over its field, as the
+ * panel's box holds them as its body (`inbox-answer-box.tsx`): a decide's
+ * options to pick, the recommended tagged; a do's steps to tick, with Mark
+ * done and Couldn't do it, each sending at once with the note typed; an
+ * answer's fields to fill. A notice asking nothing has none: its Got it is
+ * the box's empty Send, as the panel's is. None where nothing is asked.
  */
-export function OpenAskCard({
+function AskControls({
   item,
   answer,
   doors,
@@ -210,9 +209,8 @@ export function OpenAskCard({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, send, asNew } = answer;
-  // Note that the ask's controls step aside while the box starts a new thread, since nothing picked there goes with it, and come back as they were.
-  const ask = asNew ? undefined : openAsk(item);
+  const { draft, onDraft, send } = answer;
+  const ask = openAsk(item);
 
   if (ask === undefined) return null;
 
@@ -225,7 +223,7 @@ export function OpenAskCard({
         recommended={recommendedLabels(ask)}
         picked={draft.choices}
         multiple={ask.multiple === true}
-        // Note that a pick of several says so over its card, in the panel's words, since its round marks read as a pick of one until something is picked.
+        // Note that a pick of several says so over its options, in the panel's words, since its round marks read as a pick of one until something is picked.
         title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
         onChange={(choices) => onDraft(withPicks(draft, choices))}
         none={
@@ -320,8 +318,13 @@ const GOT_IT_SEND = { label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK } as co
  * `@` offers what the thread's task can mention, a pick standing as its
  * pill (`usePillField`), and holds the panel's "Send as a new thread to" the
  * thread's agent, which turns the next send into a new thread's first
- * message, its line asking to start one. What the picker or a bound said
- * of the pictures stands in the field's head.
+ * message, its line asking to start one. Its head, inside the same glass
+ * over the field, holds the open ask's controls (`AskControls`), as the
+ * panel's box holds them as its body, stepping aside while an `@` offers its
+ * list so the list stands alone over the field, and under them what the
+ * last send, the picker, or a bound said, right over the words it is about.
+ * The head scrolls in place past a share of the window (`BarHead`), so a
+ * long ask leaves the thread over it in reach.
  */
 export function ThreadComposer({
   item,
@@ -329,8 +332,11 @@ export function ThreadComposer({
   agentName,
   inColumn,
   place,
+  doors,
 }: {
   readonly item: InboxItem;
+  /** What the open ask's option media is opened and drawn by. */
+  readonly doors: OptionMediaDoors;
   /** The workspace and task the thread stands in, whose agents, tasks, people and pages an `@` offers. */
   readonly place: { readonly workspaceId: string; readonly taskId: string | undefined };
   readonly answer: ThreadAnswer;
@@ -385,10 +391,15 @@ export function ThreadComposer({
   // Note that the thread's own agent, whom the reply goes to, is left out of what an `@` offers, as on its own page.
   const mentions = useMentionOffer({ ...place, agentId: item.agentId }, pillField.mentions);
 
-  // Note that the box's head holds what an `@` offers, then the newest refusal.
+  // Note that the ask's controls step aside while an `@` offers its list, so the list stands alone over the field, as the agent page's capsules do, and come back as they were once a pick closes it.
+  // Note that they step aside too while the box starts a new thread, since nothing picked there goes with it, and come back as they were.
+  const asks = mentions === undefined && controlsStand(item) && !asNew;
+
+  // Note that the box's head holds the open ask's controls or what an `@` offers, then the newest refusal, right over the field.
   const head =
-    mentions === undefined && said === undefined ? undefined : (
+    !asks && mentions === undefined && said === undefined ? undefined : (
       <>
+        {asks ? <AskControls item={item} answer={answer} doors={doors} /> : null}
         {mentions === undefined ? null : (
           <MentionSuggestions
             groups={mentions.groups}

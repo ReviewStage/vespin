@@ -1,11 +1,10 @@
-// choice-list.tsx -- a decide ask's options as a compact bordered card: one row each, checked at its end in copper once picked, as iOS's Settings checks a choice, the recommended one tagged, a detail line under its label, and the media it carries under it.
+// choice-list.tsx -- a decide ask's options as rows inside the composer over its field: one row each, checked at its end in copper once picked, as iOS's Settings checks a choice, the recommended one tagged, a detail line under its label, and the media it carries under it.
 
 import { Button, HStack, RNHostView, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityLabel,
-  background,
   buttonStyle,
   fixedSize,
   font,
@@ -18,7 +17,7 @@ import {
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { Fragment } from "react";
 import { useAccessibilitySize } from "./accessibility.js";
-import { CARD_WORDS_INSET, CardDivider } from "./ask-card.js";
+import { ASK_ROW_PADDING, CARD_WORDS_INSET, CardDivider } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { PickedCheck } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
@@ -51,14 +50,11 @@ type ChoiceListProps = {
   readonly multiple?: boolean | undefined;
   /** Called with the labels picked once a row is pressed. */
   readonly onChange: (picked: readonly string[]) => void;
-  /** Words over the card, small and muted. */
+  /** Words over the options, small and muted. */
   readonly title?: string | undefined;
   /** None of these, offered as a row after the options where their media asks a pick of them; none where it is not offered. */
   readonly none?: NoneChoice | undefined;
 };
-
-/** How thick the card's and the tag's edges are drawn. */
-const HAIRLINE = 0.5;
 
 /** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked; its one word on one line at every size, never broken inside the tag. */
 function RecommendedTag() {
@@ -136,7 +132,7 @@ function ChoiceRow({
       <HStack
         spacing={SPACE.ROW}
         modifiers={[
-          padding({ horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 }),
+          padding(ASK_ROW_PADDING),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
@@ -180,8 +176,9 @@ function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] })
 }
 
 /**
- * A decide ask's options as a compact card on the surface inside a hairline:
- * a row each, pressed to pick it, the recommended one tagged, with a hairline
+ * A decide ask's options as rows on the composer's glass, with no card of
+ * their own, as the panel's box holds an ask's controls as its body: a row
+ * each, pressed to pick it, the recommended one tagged, with a hairline
  * between the rows. Each pick is checked at its row's end in copper, as
  * `PickRows` and iOS's own Settings check a choice, with no mark leading an
  * unpicked row, whether one or several may be picked.
@@ -205,20 +202,7 @@ export function ChoiceList(props: ChoiceListProps) {
       <VStack
         alignment="leading"
         spacing={0}
-        modifiers={[
-          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-          background(
-            colors.CARD,
-            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
-          ),
-          strokeBorder({
-            content: colors.CHIP_EDGE,
-            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-            shape: "roundedRectangle",
-            cornerRadius: RADIUS.CARD,
-            style: { lineWidth: HAIRLINE },
-          }),
-        ]}
+        modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}
       >
         {choices.map((choice, index) => (
           <Fragment key={choice.label}>

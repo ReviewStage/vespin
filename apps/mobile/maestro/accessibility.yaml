@@ -1,4 +1,4 @@
-# accessibility.yaml -- the main screens at the largest accessibility text size (AX5, Accessibility XXXL): the Inbox, a thread, a decide's card with its Recommended tag, the Tasks tab, a task's page, an agent's page, a pull request's page, New task, Settings, and Settings' Workspace, Machines, and Integrations pages, each shot to check that words wrap rather than cut, rows grow and stack their ends under their titles, chips stand one to a line, and bars do not overflow.
+# accessibility.yaml -- the main screens at the largest accessibility text size (AX5, Accessibility XXXL): the Inbox, a thread, a decide's options in its thread's box with their Recommended tag, the Tasks tab, a task's page, an agent's page, a pull request's page, New task, Settings, and Settings' Workspace, Machines, and Integrations pages, each shot to check that words wrap rather than cut, rows grow and stack their ends under their titles, chips stand one to a line, and bars do not overflow.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -113,13 +113,12 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-pull-request
-# A decide's card: its Recommended tag on a line of its own under the
-# option's label, its word whole rather than broken inside the tag. Note
-# that the Inbox's row is scrolled to through `to-row.yaml`, because an
-# iPad's list is a column beside the page it opens, which a scroll at the
-# window's middle never moves; and that the tag is scrolled up to, because
-# a thread opens at its newest end, its decide's options running down past
-# the window at this size, the recommended one first.
+# A decide's options in the box under the thread: its Recommended tag on a
+# line of its own under the option's label, its word whole rather than
+# broken inside the tag. Note that the Inbox's row is scrolled to through
+# `to-row.yaml`, because an iPad's list is a column beside the page it
+# opens, which a scroll at the window's middle never moves; the recommended
+# option is the first, at the top of the box's head, which opens at its top.
 - launchApp:
     arguments:
       fixture: inbox

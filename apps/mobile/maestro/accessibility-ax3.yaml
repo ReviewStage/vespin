@@ -1,4 +1,4 @@
-# accessibility-ax3.yaml -- the iPhone's main reading screens at the third accessibility text size (AX3, Accessibility Extra Large), where a row's parts are wide enough to crowd but not yet the AX5 that `accessibility.yaml` shoots: the Inbox's rows, a do ask's Mark done and Couldn't do it one to a line, a task page's agent rows with their state and pull request one under another, an agent's page and its dock, a `/`'s skills wrapping and standing whole, and Settings' rows, each shot to check that words wrap and parts stack rather than cut or overlap, as Mail and Settings stand large text.
+# accessibility-ax3.yaml -- the iPhone's main reading screens at the third accessibility text size (AX3, Accessibility Extra Large), where a row's parts are wide enough to crowd but not yet the AX5 that `accessibility.yaml` shoots: the Inbox's rows, a do ask's Mark done and Couldn't do it one to a line in the box under its thread, a task page's agent rows with their state and pull request one under another, an agent's page and its dock, a `/`'s skills wrapping and standing whole, and Settings' rows, each shot to check that words wrap and parts stack rather than cut or overlap, as Mail and Settings stand large text.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -34,9 +34,20 @@ appId: dev.vespin.ios
           end: "15%, 40%"
 - assertVisible: "Verify the digest's sender domain"
 - tapOn: "Verify the digest's sender domain"
-- scrollUntilVisible:
-    element: "Mark done"
-    direction: DOWN
+# Note that the steps and their presses stand in the box's head, which scrolls in place once tall, so the head is dragged from a step until Mark done shows; a swipe at the window's middle would scroll the thread instead.
+- extendedWaitUntil:
+    visible: ".*relay\\.example\\.com.*"
+    timeout: 5000
+- repeat:
+    times: 3
+    while:
+      notVisible: "Mark done"
+    commands:
+      - swipe:
+          from:
+            text: ".*relay\\.example\\.com.*|.*registrar.*|.*spread.*"
+          direction: UP
+- assertVisible: "Mark done"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: ax3-thread-do
