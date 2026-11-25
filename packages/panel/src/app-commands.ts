@@ -35,15 +35,34 @@ import {
   shortcutSwitching,
 } from "@repo/settings/shortcuts";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef } from "react";
 import { appPlatform } from "./app-platform.js";
 import { appStateIn, selectCapability } from "./use-app-state.js";
 
-/** One offer: the latest `run` a press calls, and the latest `over`, which says at the press whether it answers over the offers that say nothing. */
+/** One offer: the latest `run` a press calls, the latest `over`, which says at the press whether it answers over the offers that say nothing, and whether the page it was made in is being left (`OffersLeft`). */
 type CommandRun = {
   current: () => void;
   over: { current: (() => boolean) | undefined };
+  left: () => boolean;
 };
+
+/** Never left: the offers of every place drawn for what the window stands on now. */
+const NEVER_LEFT = (): boolean => false;
+
+/**
+ * Whether the offers made under it are a page's the window is leaving, read
+ * at the press: a task's page still drawn for the task left while the next
+ * is drawn in the background (`desktop-shell.tsx`'s `StatePlace`). Note that
+ * such an offer stands aside, as if withdrawn, so a key never acts on the
+ * task left once another is chosen; it is a function read at the press
+ * rather than a value, so the page leaving draws nothing again for it.
+ */
+export const OffersLeft = createContext<() => boolean>(NEVER_LEFT);
+
+/** The offers of `command` that stand now: all but those of a page being left. */
+function standingOffers(command: AppCommand): readonly CommandRun[] {
+  return (offers.get(command) ?? []).filter((offer) => !offer.left());
+}
 
 /** The offers standing for each command, the latest last: a remount's offer replaces the one it follows. */
 const offers = new Map<AppCommand, CommandRun[]>();
@@ -80,7 +99,7 @@ function offersChanged(): void {
 
 /** The commands an offer stands for now, in one order, so an unchanged set reads the same. */
 function offeredCommands(): readonly AppCommand[] {
-  return [...offers.keys()].filter((command) => (offers.get(command)?.length ?? 0) > 0).toSorted();
+  return [...offers.keys()].filter((command) => standingOffers(command).length > 0).toSorted();
 }
 
 /** How many overlays holding the keyboard stand now that are no dialog: the command palette, while open. */
@@ -120,7 +139,7 @@ function typingInto(target: EventTarget | null): boolean {
  * rest at this moment, else the latest that claims nothing, else the latest.
  */
 function answeringOffer(command: AppCommand): CommandRun | undefined {
-  const held = offers.get(command) ?? [];
+  const held = standingOffers(command);
 
   return (
     held.findLast((offer) => offer.over.current?.() === true) ??
@@ -145,7 +164,7 @@ export function runAppCommand(command: AppCommand): boolean {
 
 /** Whether a command's offer stands now, so running it would do something: what the command palette lists. */
 export function appCommandOffered(command: AppCommand): boolean {
-  return (offers.get(command)?.length ?? 0) > 0;
+  return standingOffers(command).length > 0;
 }
 
 /** The `over` of an offer made only while its thing is focused, which answers over the open thing's for as long as it stands. */
@@ -165,6 +184,7 @@ export function useAppCommand(
 ): void {
   const latest = useRef(run);
   const latestOver = useRef(over);
+  const left = useContext(OffersLeft);
   useLayoutEffect(() => {
     latest.current = run;
     latestOver.current = over;
@@ -172,7 +192,7 @@ export function useAppCommand(
   const offered = run !== undefined;
   useEffect(() => {
     if (!offered) return;
-    const offer: CommandRun = { current: () => latest.current?.(), over: latestOver };
+    const offer: CommandRun = { current: () => latest.current?.(), over: latestOver, left };
     offers.set(command, [...(offers.get(command) ?? []), offer]);
     offersChanged();
 
@@ -183,7 +203,7 @@ export function useAppCommand(
       );
       offersChanged();
     };
-  }, [command, offered]);
+  }, [command, offered, left]);
 }
 
 /** Holds off the menu bar's Back and Forward while `standing`: an overlay's that is no dialog, for as long as it holds the keyboard. */
@@ -226,9 +246,13 @@ export function useAppKeymap(enabled: boolean): void {
       // what the press never asked for: a held ⌘W closing the tab, and then
       // the window behind it.
       // Note that a command the platform lacks has its repeats left alone, because the browser's own zoom keeps stepping while ⌘+ is held.
-      if (!event.repeat && !offers.get(command)?.length) return;
+      if (!event.repeat && standingOffers(command).length === 0) return;
 
-      if (event.repeat && !offers.get(command)?.length && !platformCarries(queryClient, command))
+      if (
+        event.repeat &&
+        standingOffers(command).length === 0 &&
+        !platformCarries(queryClient, command)
+      )
         return;
       event.preventDefault();
 

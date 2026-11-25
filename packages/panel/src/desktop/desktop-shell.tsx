@@ -39,6 +39,7 @@ import {
   Activity,
   createContext,
   type RefObject,
+  useCallback,
   useContext,
   useDeferredValue,
   useLayoutEffect,
@@ -50,7 +51,7 @@ import { ACTOR_SIZE, actorMarkWidth } from "../actor-ref.js";
 import { useAdminView } from "../admin/admin-route.js";
 import { AdminCollectionPage, AdminPlaceFrameProvider } from "../admin/chrome/page-header.js";
 import type { AdminView } from "../admin/routing.js";
-import { useAppCommand } from "../app-commands.js";
+import { OffersLeft, useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { CallAgentShown, CallCardDock } from "../call/standing-call.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
@@ -1343,14 +1344,30 @@ function phoneAway(room: ShellRoom, away: TaskHeadBack): TaskHeadBack | undefine
  * the background, is ready to show. Note that only the page waits: the
  * sidebar's row, the address, and every key read the tab itself, which moved
  * at once, so a press paints its row chosen in the next frame and Back and
- * the keys act on the task chosen while its page is still being drawn. A
- * page drawn for the same task, a message streaming into its transcript
- * among them, is drawn at once, as it always was.
+ * the keys act on the task chosen while its page is still being drawn; the
+ * page left offers no key meanwhile (`usePageLeft`). A page drawn for the
+ * same task, a message streaming into its transcript among them, is drawn
+ * at once, as it always was.
  */
 function usePageTasks(tasks: TasksControl): TasksControl {
   const drawn = useDeferredValue(tasks);
 
   return drawn.activeTaskId === tasks.activeTaskId ? tasks : drawn;
+}
+
+/**
+ * Whether the page drawn is the task's left while the next one's is drawn
+ * in the background, read at a key's press (`OffersLeft`), so its keys never
+ * act on the task left. Note that it is kept from the commit, never the
+ * render, because a render in the background may yet be thrown away.
+ */
+function usePageLeft(pageTaskId: string | undefined, taskId: string | undefined): () => boolean {
+  const left = useRef(false);
+  useLayoutEffect(() => {
+    left.current = pageTaskId !== taskId;
+  });
+
+  return useCallback(() => left.current, []);
 }
 
 /**
@@ -1362,8 +1379,13 @@ function usePageTasks(tasks: TasksControl): TasksControl {
 export function StatePlace(): React.JSX.Element {
   const { tasks, room, looks, away } = useShellPlaces();
   const pageTasks = usePageTasks(tasks);
+  const pageLeft = usePageLeft(pageTasks.activeTaskId, tasks.activeTaskId);
 
-  return <DesktopTasks tasks={pageTasks} looks={looks} room={room} away={phoneAway(room, away)} />;
+  return (
+    <OffersLeft value={pageLeft}>
+      <DesktopTasks tasks={pageTasks} looks={looks} room={room} away={phoneAway(room, away)} />
+    </OffersLeft>
+  );
 }
 
 /**
