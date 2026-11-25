@@ -26,6 +26,11 @@ function sheetRules(css: string, file = SHEET): readonly StyleRule[] {
   return styleViolations(file, css, NAMES).map((violation) => violation.rule);
 }
 
+/** The rules a stylesheet breaks beside `has-selector`, for a case whose `:has()` is there to try another rule. */
+function sheetRulesBesideHas(css: string, file = SHEET): readonly StyleRule[] {
+  return sheetRules(css, file).filter((rule) => rule !== STYLE_RULE.HAS);
+}
+
 /** The rules a module's class strings break, in order. */
 function classRules(source: string, file = MODULE): readonly StyleRule[] {
   return styleViolations(file, source, NAMES).map((violation) => violation.rule);
@@ -168,7 +173,7 @@ describe("a stylesheet", () => {
 
   it("refuses a :has() over a subject that is any element, and passes one over a named subject or as the subject", () => {
     expect(
-      sheetRules(`.a:has(> .b) > * { color: inherit; }
+      sheetRulesBesideHas(`.a:has(> .b) > * { color: inherit; }
         .a .b:has([aria-expanded="true"]) > * { opacity: 1; }
         .c:has(> .d) > :not(.d, .e) { opacity: 0.6; }
         .h:not(:has(> .i)) > * { opacity: 0; }`),
@@ -179,11 +184,30 @@ describe("a stylesheet", () => {
       STYLE_RULE.HAS_OVER_ANY,
     ]);
     expect(
-      sheetRules(`.a:has(> .b) { --x: 1; }
+      sheetRulesBesideHas(`.a:has(> .b) { --x: 1; }
         .a:has(> .b) > .c { color: inherit; }
         :root[data-p="d"]:has(.e) :is(body, #root) { height: 100%; }
         .f .g:not(:has(> svg))::before { content: ""; }`),
     ).toEqual([]);
+  });
+
+  it("refuses a :has() reading what a component draws, and passes one reading what the keyboard holds", () => {
+    expect(
+      sheetRules(`.a:has(> .b) > .c { color: inherit; }
+        .d:not(:has(.e)) { opacity: 0; }
+        .f:is(:has(:focus-visible), [data-g]) .h { opacity: 1; }`),
+    ).toEqual([STYLE_RULE.HAS, STYLE_RULE.HAS]);
+    expect(sheetRules(".e:has(> .f) { & > .g { opacity: 1; } }")).toEqual([STYLE_RULE.HAS]);
+    expect(
+      sheetRules(`.a:has(:focus-visible) { opacity: 1; }
+        .b:is(:hover, :has(> .c:focus-visible)) .d { opacity: 1; }
+        @supports selector(:has(a)) { .h { opacity: 1; } }`),
+    ).toEqual([]);
+    expect(
+      classRules(
+        `const a = <div className="has-[>.b]:p-row-inset group-has-[.c:hover]/d:invisible has-focus-visible:ring-2 group-has-focus-visible/row:opacity-100" />;`,
+      ),
+    ).toEqual([STYLE_RULE.HAS, STYLE_RULE.HAS]);
   });
 
   it("refuses a crumb drawn wider than its words, and passes a floor that is its basis under a cap", () => {
@@ -192,7 +216,7 @@ describe("a stylesheet", () => {
       .ui-breadcrumbs li:last-child { flex-grow: 9; }
       .ui-breadcrumbs li > button { min-width: 11em; }
       .ui-breadcrumbs, .list li { min-width: 11em; }`;
-    expect(sheetRules(floored)).toEqual([
+    expect(sheetRulesBesideHas(floored)).toEqual([
       STYLE_RULE.CRUMB_WIDTH,
       STYLE_RULE.CRUMB_WIDTH,
       STYLE_RULE.CRUMB_WIDTH,
@@ -201,14 +225,14 @@ describe("a stylesheet", () => {
         flex: 1 0 var(--floor); min-width: 0; max-width: max-content; }
       .ui-breadcrumbs li:last-child { flex-grow: 9; }
       .ui-breadcrumbs li[data-fixed="true"] { flex: none; }`;
-    expect(sheetRules(capped)).toEqual([]);
+    expect(sheetRulesBesideHas(capped)).toEqual([]);
   });
 
   it("refuses a page rounding its own bar, and passes the sheet's one rule and a bar's parts", () => {
     const pages = `.agent-page > .ui-pane-bar { border-radius: var(--sheet-radius) var(--sheet-radius) 0 0; }
       .side-panel-keeps > * > :is(.ui-pane-bar, .ui-toolbar):first-child { border-top-left-radius: var(--sheet-radius); }
       .inbox-view .ui-toolbar:not(.x) { border-top-right-radius: 0; }`;
-    expect(sheetRules(pages, SHELL_SHEET)).toEqual([
+    expect(sheetRulesBesideHas(pages, SHELL_SHEET)).toEqual([
       STYLE_RULE.BAR_CORNER,
       STYLE_RULE.BAR_CORNER,
       STYLE_RULE.BAR_CORNER,
@@ -217,9 +241,9 @@ describe("a stylesheet", () => {
         border-top-left-radius: var(--sheet-top-left-radius, var(--sheet-radius)); }
       .ui-toolbar-heading, .a:not(.ui-pane-bar), .b:has(> .ui-toolbar) { border-radius: var(--ui-radius-6); }
       .ui-pane-bar .ui-chip { border-radius: var(--ui-radius-6); }`;
-    expect(sheetRules(sheet, SHELL_SHEET)).toEqual([]);
+    expect(sheetRulesBesideHas(sheet, SHELL_SHEET)).toEqual([]);
     expect(
-      sheetRules(
+      sheetRulesBesideHas(
         ".a .ui-toolbar { border-top-left-radius: var(--sheet-top-left-radius, var(--sheet-radius)); }",
       ),
     ).toEqual([STYLE_RULE.BAR_CORNER]);
