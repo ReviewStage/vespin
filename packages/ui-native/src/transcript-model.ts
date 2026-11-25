@@ -340,6 +340,10 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly summary: string;
       readonly open: boolean;
       readonly running: boolean;
+      /** In a Manager's chat, the sender whose head stands over a turn's work folded over the message that opens their run, as the panel stands it under the name; none elsewhere. */
+      readonly channel?: ChatSender | undefined;
+      /** When that message was sent, beside the sender's name. */
+      readonly stamp?: string | undefined;
     }
   | { readonly kind: typeof TRANSCRIPT_ITEM.MEDIA; readonly media: readonly ShownMedia[] }
   | {
@@ -1156,17 +1160,23 @@ function inRuns(
 ): readonly TranscriptItem[] {
   let lastSent: number | undefined;
 
+  // The chat's messages whose head stands over the turn's work folded over them, which draw no head of their own.
+  const headed = new Set(
+    items.flatMap((item) =>
+      item.kind === TRANSCRIPT_ITEM.FOLD && item.channel !== undefined ? [item.place.message] : [],
+    ),
+  );
+
   const timed = items.map((item, index): TranscriptItem => {
     if (item.kind !== TRANSCRIPT_ITEM.SAID) return item;
 
     const before = items[index - 1];
 
-    // Note that a Manager's chat stands in the runs the panel groups it in, so a run reads the same on either.
+    // Note that a Manager's chat stands in the runs the panel groups it in, so a run reads the same on either, whatever its work or what it showed stands between two of its messages.
     const joinsAbove =
-      before?.kind === TRANSCRIPT_ITEM.SAID &&
-      (chatRuns === undefined
-        ? joinsRun(before, item)
-        : chatRuns.get(item.place.message)?.opens === false);
+      chatRuns === undefined
+        ? before?.kind === TRANSCRIPT_ITEM.SAID && joinsRun(before, item)
+        : chatRuns.get(item.place.message)?.opens === false || headed.has(item.place.message);
 
     const paused =
       item.at !== undefined && (lastSent === undefined || item.at - lastSent >= STAMP_PAUSE_MS);
@@ -1413,10 +1423,16 @@ function chatWorkFold(
   turns: ReadonlyMap<string, AgentTranscriptMessage>,
   reading: ItemsReading,
 ): readonly TranscriptItem[] {
+  const { message } = line;
+
+  // Note that the fold over a message that opens its sender's run stands under that sender's head, as the panel's fold stands under the name, so it never reads as the line above's.
+  const head = line.place.opens
+    ? { channel: chatSenderOf(message), stamp: callHeading(message.createdAt, reading.now) }
+    : undefined;
+
   const work = line.work === undefined ? [] : (view.work.get(line.work) ?? []);
 
   if (line.work === undefined || work.length === 0) return [];
-  const { message } = line;
   const place = { ...linePlace(message.id, message.id), work: CHAT_WORK_PLACE.MESSAGE };
   const open = foldTurned(reading.toggles, place);
   const turn = turns.get(line.work);
@@ -1427,7 +1443,7 @@ function chatWorkFold(
       : `${WORKED_WORDS}${workingTime(turn.finishedAt - turn.startedAt)}`;
 
   return [
-    { place, depth: 0, kind: TRANSCRIPT_ITEM.FOLD, summary, open, running: false },
+    { place, depth: 0, kind: TRANSCRIPT_ITEM.FOLD, summary, open, running: false, ...head },
     ...(open ? workItems(work, message.id, CHAT_WORK_PLACE.MESSAGE, false, reading) : []),
   ];
 }

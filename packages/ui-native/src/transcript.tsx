@@ -258,6 +258,9 @@ function useOwnSend(items: readonly TranscriptItem[], onSent: () => void): void 
 
 type InsetResult = { readonly paddingLeft: number };
 
+/** A fold standing inside a channel row's words, which sets it in already. */
+const FOLD_IN_CHANNEL: InsetResult = { paddingLeft: 0 };
+
 /** The step a row stands in by, for the folds that hold it. */
 function inset(depth: number): InsetResult {
   return { paddingLeft: SPACE.EDGE + depth * DEPTH_INSET };
@@ -1205,7 +1208,18 @@ function TranscriptRow({
         />
       );
     case TRANSCRIPT_ITEM.FOLD:
-      // Note that a Manager's turn's work folds over its message past its face, in line with its bubbles, as its pictures stand.
+      // Note that a Manager's turn's work folded over the message that opens its run stands under the Manager's head, its words then going on the run under it, as the panel stands the fold under the name.
+      if (item.channel !== undefined && drawing.channel !== undefined && item.depth === 0) {
+        return (
+          <View style={[styles.row, { paddingTop: SPACE.ROW, paddingBottom: 0 }]}>
+            <ChannelMessage sender={item.channel} faces={drawing.channel} opens stamp={item.stamp}>
+              <FoldRow item={item} onToggle={drawing.onToggle} inset={FOLD_IN_CHANNEL} />
+            </ChannelMessage>
+          </View>
+        );
+      }
+
+      // Note that a Manager's turn's work folded over a message further on its run stands past the seat, in line with its words, as its pictures stand.
       return (
         <FoldRow
           item={item}
