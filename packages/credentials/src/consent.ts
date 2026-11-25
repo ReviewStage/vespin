@@ -27,10 +27,8 @@ export type LoopbackConsentOutcome<Grant> =
   | Grant
   | { reason: string; failure?: SignInFailure | undefined };
 
-/** One landing card's words. The tone and the mark are the flow's own. */
+/** One landing card's words: its title and the line under it. The tone and the mark are the flow's own. */
 export interface LoopbackConsentCard {
-  /** The pill's one word or two: "Signed in", "Not connected". */
-  badge: string;
   title: string;
   body: string;
 }

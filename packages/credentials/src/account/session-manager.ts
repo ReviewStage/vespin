@@ -57,12 +57,10 @@ const SESSION_CALLBACK_PATH = "/session";
  */
 const SIGN_IN_PAGES = {
   granted: {
-    badge: "Signed in",
     title: `Signed in to ${PRODUCT_NAME}`,
     body: `You can close this tab and return to ${PRODUCT_NAME}.`,
   },
   notGranted: {
-    badge: "Not completed",
     title: "Sign-in was not completed",
     body: `Return to ${PRODUCT_NAME} and try again.`,
   },
@@ -77,7 +75,6 @@ const SIGN_IN_PAGES = {
 const SESSION_PAGES = {
   granted: SIGN_IN_PAGES.granted,
   notGranted: {
-    badge: "Not completed",
     title: "Workspace access was not completed",
     body: `You're signed in to ${PRODUCT_NAME}. To manage a workspace's members, return to ${PRODUCT_NAME} and try again.`,
   },
@@ -85,7 +82,7 @@ const SESSION_PAGES = {
 
 /**
  * Whose mark the landing card carries. Only the two identity providers have
- * one; anything else draws our own mark alone rather than a wrong badge.
+ * one; anything else draws our own mark alone rather than a wrong one.
  */
 function connectionSource(provider: AccountProvider): LoopbackConnectionSource | undefined {
   if (provider === LOOPBACK_CONNECTION_SOURCE.GOOGLE) return LOOPBACK_CONNECTION_SOURCE.GOOGLE;

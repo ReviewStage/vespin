@@ -179,6 +179,11 @@ pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-provider-marks.t
 # --check fails if one drifted.
 pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-manager-faces.ts --check
 
+# The loopback sign-in page the desktop and the CLI serve is @repo/ui's
+# AuthPage, rendered with its sheet, face, and favicon into
+# @repo/credentials' generated module; --check fails if it drifted.
+pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/loopback-page.ts --check
+
 # The constants clients build /api/ URLs from are the other half of that
 # table: a path constant can outlive its route and nothing fails until
 # production answers 404. Every /api/ literal and path builder under
