@@ -2,19 +2,22 @@
 //
 // One activity stands for every running agent of the member's
 // (`AgentsActivityAttributes`). The compact and minimal presentations say
-// how many are working. The expanded one and the Lock Screen list up to
-// three, each with its title, a timer from its turn's start, and Stop
+// how many are working, and the compact one's trailing side ticks the
+// newest turn's time while any works, which the system advances itself, so
+// the island shows work moving. The expanded one and the Lock Screen list
+// up to three, each with its title, a timer from its turn's start, and Stop
 // (`StopAgentIntent`). The count stands by the panel's working mark while
-// agents work, and by its done mark once none does, centered then, since
-// nothing stands beside it, in the working blue or the done green, and
-// copper (`Attention`) marks only what wants the member: the asks waiting,
-// the compact presentation's Inbox glyph, and the keyline while one waits.
-// Nothing in it is a link, so no row or region opens a page of the app: a
-// person swipes it away more often than they open it, and a swipe the
-// system read as a tap opened an agent. A tap still opens the app, as iOS
-// opens it on any activity. The colors are the brand's, written into this
-// target's asset catalog by `app.config.ts`. Every presentation has a
-// preview at the end of the file.
+// agents work, held still since a Live Activity runs no animation of its
+// own (`WorkingMark`), and by its done mark once none does, centered then,
+// since nothing stands beside it, in the working blue or the done green,
+// and copper (`Attention`) marks only what wants the member: the asks
+// waiting, the compact presentation's Inbox glyph, and the keyline while
+// one waits. Nothing in it is a link, so no row or region opens a page of
+// the app: a person swipes it away more often than they open it, and a
+// swipe the system read as a tap opened an agent. A tap still opens the
+// app, as iOS opens it on any activity. The colors are the brand's, written
+// into this target's asset catalog by `app.config.ts`. Every presentation
+// has a preview at the end of the file.
 
 import ActivityKit
 import AppIntents
@@ -62,7 +65,7 @@ struct AgentsLiveActivity: Widget {
       } compactLeading: {
         CompactMark(state: state)
       } compactTrailing: {
-        RunningCount(state: state)
+        CompactTrailing(state: state)
       } minimal: {
         RunningCount(state: state)
       }
@@ -187,6 +190,7 @@ struct AgentRow: View {
         Text(agent.title).font(.subheadline.weight(.medium)).lineLimit(1)
         Spacer(minLength: 4)
         Text(agent.turnStart, style: .timer)
+          .contentTransition(.numericText(countsDown: false))
           .font(.caption)
           .monospacedDigit()
           .foregroundStyle(.secondary)
@@ -303,7 +307,27 @@ struct WorkingMark: View {
   }
 }
 
-/// The count alone, as the compact island's trailing side and its minimal presentation stand it, rolling as it changes.
+/// The compact island's trailing side: while any agent works, the time the newest turn has run, which the system ticks every second, so the island always shows work moving; the count once none does. Note that the count still stands in the minimal presentation and in the expanded island and Lock Screen headers.
+struct CompactTrailing: View {
+  /// The timer's widest, in points, since timer text otherwise reserves room for its longest reading.
+  private static let width: CGFloat = 44
+
+  let state: AgentsActivityAttributes.ContentState
+
+  var body: some View {
+    if state.running > 0 {
+      Text(timerInterval: state.newestTurnStart...Date.distantFuture, countsDown: false)
+        .monospacedDigit()
+        .multilineTextAlignment(.trailing)
+        .foregroundStyle(state.tone)
+        .frame(maxWidth: Self.width, alignment: .trailing)
+    } else {
+      RunningCount(state: state)
+    }
+  }
+}
+
+/// The count alone, as the minimal presentation and the compact island once none works stand it, rolling as it changes.
 struct RunningCount: View {
   let state: AgentsActivityAttributes.ContentState
 
@@ -323,6 +347,9 @@ extension AgentsActivityAttributes.ContentState {
 
   /// How many asks need the member, in the panel's words (`NEEDS_YOU` in `@repo/features/inbox-list-model`): "1 needs you", "3 need you".
   var waitingText: String { "\(waiting) \(waiting == 1 ? "needs" : "need") you" }
+
+  /// When the newest running turn began, which the compact island's timer counts from; now where none is listed.
+  var newestTurnStart: Date { agents.first?.turnStart ?? .now }
 
   /// The count's tone: the working blue, or the done green once none works. Copper is left for what needs the member.
   var tone: Color { Color(running > 0 ? "Working" : "Complete") }
