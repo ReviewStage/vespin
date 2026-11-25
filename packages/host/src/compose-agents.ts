@@ -627,11 +627,15 @@ export function composeAgents(
       followAccountItems(
         {
           // Note that the items are always read polled, their rows inline, and past a sync id the service holds the read until something moves.
-          seal: (account, sync) =>
+          seal: (account, sync, page) =>
             asked(
               client.liveRead(
                 INBOX_ITEMS_READ,
-                { userId: account, ...(sync === undefined ? undefined : { sync }) },
+                {
+                  userId: account,
+                  ...(sync === undefined ? undefined : { sync }),
+                  ...(page === undefined ? undefined : { page }),
+                },
                 {},
               ),
             ),

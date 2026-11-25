@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 /** The two kinds of process a round runs per build, each a worker mode. */
-const MODE = { KEPT: "kept", ANSWER: "answer" } as const;
+const MODE = { KEPT: "kept", ANSWER: "answer", PAGED: "paged" } as const;
 
 /** A worktree to time, by its label. */
 interface Build {
@@ -42,6 +42,8 @@ interface Measured {
   readonly keptTasks?: number;
   readonly keptAgents?: number;
   readonly firstAnswer?: number;
+  readonly pagedTotal?: number;
+  readonly pagedLongest?: number;
   readonly agentStep?: StepSummary;
   readonly taskStep?: StepSummary;
 }
@@ -58,6 +60,16 @@ const FIGURES: readonly Figure[] = [
   { name: "kept draw, agents phase (ms)", mode: MODE.KEPT, of: (line) => line.keptAgents },
   { name: "kept draw, whole stand (ms)", mode: MODE.KEPT, of: (line) => line.keptDraw },
   { name: "first whole answer (ms)", mode: MODE.ANSWER, of: (line) => line.firstAnswer },
+  {
+    name: "first whole answer in pages, all (ms)",
+    mode: MODE.PAGED,
+    of: (line) => line.pagedTotal,
+  },
+  {
+    name: "first whole answer in pages, longest (ms)",
+    mode: MODE.PAGED,
+    of: (line) => line.pagedLongest,
+  },
   {
     name: "per moved live agent, median (ms)",
     mode: MODE.ANSWER,
@@ -107,7 +119,7 @@ if (values.help) {
   --agents        agents in the first-answer and moved-row runs (5400)
   --kept-agents   agents in the kept draw's local copy (4831, a phone's)
   --steps         moved agents, then moved tasks, per process (400)
-  --only          kept | answer: run one kind of process only
+  --only          kept | answer | paged: run one kind of process only
 
 See tools/bench/README.md.`);
   process.exit(0);
