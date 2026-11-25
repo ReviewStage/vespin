@@ -1,0 +1,48 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow automations
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run show-sidebar.yaml...
+      Run flow when ${FLOATING_TABS == 'true'} is true...
+        Assert that "(Show|Hide) Sidebar" is visible... COMPLETED
+      Run flow when true is true... COMPLETED
+      Run flow when "Show Sidebar" is visible...
+        Tap on "Show Sidebar"... COMPLETED
+        Wait for animation to end... COMPLETED
+      Run flow when "Show Sidebar" is visible... COMPLETED
+    Run show-sidebar.yaml... COMPLETED
+    Assert that "${TAB}", id: place-row is visible... COMPLETED
+    Tap on "${TAB}", id: place-row... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Weekly digest" is visible... COMPLETED
+Assert that "Fix failing checks" is visible... COMPLETED
+Assert that "Check each deploy" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automations-list... COMPLETED
+Tap on "View options"... COMPLETED
+Tap on "Order by"... FAILED
+
+Element not found: Text matching regex: Order by
+
+Element with Text matching regex: Order by not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjsplit4r/ipad27-light-automations/2026-11-25_134257

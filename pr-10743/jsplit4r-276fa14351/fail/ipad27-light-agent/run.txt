@@ -1,0 +1,33 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow .kbd-agent
+  > On Flow Complete
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Set orientation LANDSCAPE_LEFT... COMPLETED
+Run flow when true is true... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Assert that "expired-invites.csv.*3 lines" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-latest... COMPLETED
+Assert that "Waiting for approval" is visible... FAILED
+Set orientation PORTRAIT... COMPLETED
+
+Assertion is false: "Waiting for approval" is visible
+
+Assertion '"Waiting for approval" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjsplit4r/ipad27-light-agent/2026-11-25_133745
