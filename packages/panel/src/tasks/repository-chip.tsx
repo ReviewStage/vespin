@@ -794,7 +794,8 @@ export function CheckedRepositoryChip(props: {
  * repository; its hint names every pick while the menu is shut, and the
  * card the menu hangs then stands in the hint's place. Note that a held chip
  * is `aria-disabled` rather than disabled, because a disabled button hears
- * no pointer, and its hint says why, as its card does where it hangs one.
+ * no pointer, and its hint says why, as its card does where it hangs one,
+ * the hint then naming every pick after why.
  */
 function MenuChip(
   props: ChipStanding & {
@@ -804,10 +805,13 @@ function MenuChip(
   },
 ): React.JSX.Element {
   const { held, menu } = props;
+  const hint = menu.open ? undefined : menu.hint;
+  // Note that a held chip hanging a card says why and then every pick, since its words are what a reader hears in the card's place.
+  const label = held === undefined ? hint : menu.card === undefined ? held : `${held} ${hint}`;
 
   return (
     <div className="repository-chip relative min-w-0" data-place={props.place} ref={menu.room}>
-      <Tooltip label={held ?? (menu.open ? undefined : menu.hint)} card={menu.card}>
+      <Tooltip label={label} card={menu.card}>
         <Chip
           look={PLACE_LOOK[props.place]}
           width={props.width}
