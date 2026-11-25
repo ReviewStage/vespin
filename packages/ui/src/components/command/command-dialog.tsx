@@ -247,6 +247,26 @@ const CommandRow = memo(function CommandRow({
   );
 });
 
+/**
+ * Holds what a control inside the list's root presses with its keys, a
+ * heading's press or a page's head and foot, from the list's own keys, so
+ * Return or Space on a focused control presses it rather than choosing the
+ * row lit; every other key goes on as it would.
+ */
+function OwnKeys({ children }: { children: ReactNode }): React.JSX.Element {
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: it takes no key itself; it keeps a focused control's Return and Space from reaching the list's root, which would choose a row instead.
+    <span
+      className="contents"
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 /** A group's heading, ending in its press where it has one. */
 function GroupHeading({
   label,
@@ -269,17 +289,19 @@ function GroupHeading({
     <span className={HEADING_WITH_ACT}>
       {words}
       <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.GROUP}>
-        <ReplayWords unmasked={replayUnmasked}>
-          <TextButton
-            tone={TEXT_BUTTON_TONE.ACCENT}
-            lines={TEXT_BUTTON_LINES.WHOLE}
-            aria-label={act.heard}
-            keepFocus
-            onClick={act.onPress}
-          >
-            {act.label}
-          </TextButton>
-        </ReplayWords>
+        <OwnKeys>
+          <ReplayWords unmasked={replayUnmasked}>
+            <TextButton
+              tone={TEXT_BUTTON_TONE.ACCENT}
+              lines={TEXT_BUTTON_LINES.WHOLE}
+              aria-label={act.heard}
+              keepFocus
+              onClick={act.onPress}
+            >
+              {act.label}
+            </TextButton>
+          </ReplayWords>
+        </OwnKeys>
       </Text>
     </span>
   );
@@ -467,7 +489,11 @@ export function CommandDialog({
             onKeyDown?.(event);
           }}
         >
-          {page && head !== undefined ? <div className="flex-none">{head}</div> : null}
+          {page && head !== undefined ? (
+            <div className="flex-none">
+              <OwnKeys>{head}</OwnKeys>
+            </div>
+          ) : null}
           <div className={page ? PAGE_SEARCH : SEARCH}>
             <SearchIcon />
             <Command.Input
@@ -520,7 +546,9 @@ export function CommandDialog({
               ))}
             </ComboboxListBox>
           </Command.List>
-          {foot === undefined ? null : <div className={page ? PAGE_FOOT : FOOT}>{foot}</div>}
+          {foot === undefined ? null : (
+            <div className={page ? PAGE_FOOT : FOOT}>{page ? <OwnKeys>{foot}</OwnKeys> : foot}</div>
+          )}
         </Command>
       </DialogContent>
     </ShadcnDialog>

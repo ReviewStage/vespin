@@ -778,23 +778,22 @@ test("the field asks to search Vespin under All, and the kind under its filter",
   assert.equal(field().placeholder, "Search commands");
 });
 
-/** A window offering Automations and Settings, the places a phone's Search page goes to. */
-function OffersGoTo(): null {
+/** A window offering Automations and Settings, the places a phone's Search page goes to, and New task, its run recorded. */
+function OffersGoTo({ ran }: { ran: string[] }): null {
   useAppCommand(APP_COMMAND.AUTOMATIONS, () => undefined);
   useAppCommand(APP_COMMAND.SETTINGS, () => undefined);
+  useAppCommand(APP_COMMAND.NEW_TASK, () => ran.push("New task"));
 
   return null;
 }
 
-test("on a phone the palette is Search's page: Go to before anything is typed, a kind cut to its best few ends its heading in Show all, which chooses it, and the last row starts a task on the words", async () => {
+test("on a phone the palette is Search's page: Go to before anything is typed, a kind cut to its best few ends its heading in Show all, which chooses it, and the last row starts a task on the words through the window's New task", async () => {
+  const started: string[] = [];
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(OffersGoTo))));
-  const started: string[] = [];
-
-  const tasks = tasksControl({
-    newTask: newTaskControl({ onOpen: () => started.push("New task") }),
-  });
+  act(() => root.render(withQueryClient(createElement(OffersGoTo, { ran: started }))));
+  // Note that New task is the window's command, which leaves Settings first, never the Tasks tab's door alone.
+  const tasks = tasksControl({ newTask: newTaskControl({ onOpen: () => started.push("door") }) });
 
   openPalette(
     tasks,

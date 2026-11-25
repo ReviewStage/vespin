@@ -6,7 +6,7 @@
  * the palette already reads, and an id they no longer hold draws nothing.
  * A task or a thread is kept as the window opens it, by whatever door, so a
  * task opened from the Tasks page stands in Recent as one picked from
- * Search does. Clear forgets them all.
+ * Search does, and again each time its page comes back on screen. Clear forgets them all.
  */
 
 import { SEARCH_FOUND_KIND, type SearchFoundKind } from "@repo/features/search-found-model";
@@ -17,6 +17,7 @@ import {
 } from "@repo/features/search-recent-model";
 import { Schema } from "effect";
 import { useEffect } from "react";
+import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import { keptKey, useKept } from "../use-kept.js";
 
 /** Where the window keeps what it opened last. */
@@ -54,7 +55,14 @@ function useKeepOpened(
 /** What the window opened last, kept as each task and thread opens (`now`). */
 export function useSearchRecent(now: OpenedNow): SearchRecent {
   const [kept, keep, change] = useKept(KEPT_RECENT, NONE_OPENED);
-  useKeepOpened(SEARCH_FOUND_KIND.TASKS, now.taskId, now.workspaceId, change);
+  // Note that a task is kept as its page comes on screen, since the Inbox and the Tasks page keep the task they left bound, so a return to it is kept again.
+  const taskShown = useWindowPlace().place === ROUTED_PLACE.TASK;
+  useKeepOpened(
+    SEARCH_FOUND_KIND.TASKS,
+    taskShown ? now.taskId : undefined,
+    now.workspaceId,
+    change,
+  );
   useKeepOpened(SEARCH_FOUND_KIND.INBOX, now.itemId, now.workspaceId, change);
 
   return { kept, onClear: () => keep(NONE_OPENED) };

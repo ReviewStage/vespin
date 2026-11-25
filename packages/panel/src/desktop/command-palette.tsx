@@ -2485,7 +2485,9 @@ export function CommandPalette({
 
   // Note that the Inbox is read the first time it is searched, on the Files filter's terms.
   const inboxAsked =
-    open && tasks.signedIn && (filter === PALETTE_FILTER.INBOX || tokens.length > 0 || pageEmpty);
+    open &&
+    tasks.signedIn &&
+    (filter === PALETTE_FILTER.INBOX || tokens.length > 0 || (pageEmpty && inboxOn));
 
   const inboxSearch = useInboxSearch(tasks, inboxAsked);
 
@@ -2522,7 +2524,8 @@ export function CommandPalette({
         { kind: DRAFT_PLACE.NEW_TASK, workspaceId: tasks.newTask.workspaceId ?? null },
         (was) => ({ ...was, text: prompt }),
       );
-      tasks.newTask.onOpen();
+      // Note that it runs the window's New task, which leaves Settings first where Settings holds the window.
+      runAppCommand(APP_COMMAND.NEW_TASK);
     });
 
   // Note that the repository is read the first time its files are searched
@@ -2728,7 +2731,8 @@ export function CommandPalette({
       tasks.workspace?.id,
       {
         task: (id) => tasksById.get(id),
-        thread: (id) => inboxById.get(id),
+        // Note that an account that turned its Inbox off is listed no thread it opened before, as no search lists one.
+        thread: (id) => (inboxOn ? inboxById.get(id) : undefined),
         agent: () => undefined,
       },
     ).map((each) => each.row.draw());
