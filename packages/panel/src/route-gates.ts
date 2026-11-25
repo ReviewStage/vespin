@@ -106,6 +106,24 @@ function selectWorkspaces(state: AppStateSnapshot): readonly GateWorkspace[] {
 }
 
 /**
+ * What the gates read of main's document, all but the listed workspace,
+ * which the window keeps itself (`useKeptChoice`). Note that it is one read
+ * rather than one per field, because the route hooks the window's root runs
+ * each read the access, so a read per field made dozens of the document's
+ * observers answer again on every draw of the window; Query's structural
+ * sharing hands the answer back as the same object while nothing in it moved.
+ */
+function selectRouteAccess(state: AppStateSnapshot): Omit<RouteAccess, "listed"> {
+  return {
+    admin: selectAdminStands(state),
+    experiments: selectStoredExperimentChoices(state),
+    experimentsRead: selectSettingsHeld(state),
+    workspaces: selectWorkspaces(state),
+    inbox: selectInboxOn(state),
+  };
+}
+
+/**
  * The window's access as it draws, for the router's context and the
  * window's Back and Forward alike. Note that the workspaces stand as the
  * same object while a read names the same ones, by Query's structural
@@ -113,28 +131,13 @@ function selectWorkspaces(state: AppStateSnapshot): readonly GateWorkspace[] {
  * moves, and each new access asks the routes standing again.
  */
 export function useRouteAccess(): RouteAccess {
-  // Note that Admin stands before the document is read, as a reloaded Admin address waits on the access.
-  const admin = useQuery({ ...appStateQuery, select: selectAdminStands }).data ?? true;
+  // Note that before the document is read Admin stands, as a reloaded Admin address waits on the access, and so does the Inbox.
+  const read =
+    useQuery({ ...appStateQuery, select: selectRouteAccess }).data ?? UNREAD_ROUTE_ACCESS;
 
-  const experiments =
-    useQuery({ ...appStateQuery, select: selectStoredExperimentChoices }).data ?? NO_EXPERIMENTS;
+  const listed = stepOf(useKeptChoice(read.workspaces));
 
-  const experimentsRead = useQuery({ ...appStateQuery, select: selectSettingsHeld }).data === true;
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
-  const listed = stepOf(useKeptChoice(workspaces));
-  const inbox = useQuery({ ...appStateQuery, select: selectInboxOn }).data ?? true;
-
-  return useMemo(
-    (): RouteAccess => ({
-      admin,
-      experiments,
-      experimentsRead,
-      workspaces,
-      listed,
-      inbox,
-    }),
-    [admin, experiments, experimentsRead, workspaces, listed, inbox],
-  );
+  return useMemo((): RouteAccess => ({ ...read, listed }), [read, listed]);
 }
 
 /** Whether a workspace's place stands at an address whose first step is `workspace`: one of the reader's, or any while their workspaces are not yet read. */
