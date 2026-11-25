@@ -29,7 +29,8 @@ import { CatalogSection } from "../section";
  * answered, a long one, a wide note that grows with its words and rings
  * while a file is dragged over the window, a tool at its foot's start, a
  * composer's card as New task's stands, which on a phone's screen gives its
- * words the room the desktop's margins would spend, and a picture shown edge
+ * words the room the desktop's margins would spend, the same asked on a
+ * phone's sheet the window's whole height, and a picture shown edge
  * to edge under its own bar, each opened from its button and
  * put away by its answers, Escape, or a press on the dimmed window, fading
  * out as it goes; the
@@ -197,6 +198,33 @@ function ComposerDialog({ open, onClose }: DialogBody): React.JSX.Element {
   );
 }
 
+/** A task's first words on a phone's sheet, the window's whole height, its close at its head's start and its field at its foot. */
+function PageSheetDialog({ open, onClose }: DialogBody): React.JSX.Element {
+  const [words, setWords] = useState("");
+  const field = useRef<HTMLTextAreaElement | null>(null);
+
+  return (
+    <Dialog
+      open={open}
+      size={DIALOG_SIZE.PAGE_SHEET}
+      title="New task"
+      closeLabel="Close"
+      initialFocus={field}
+      onDismiss={onClose}
+    >
+      <TextArea
+        ref={field}
+        label="Task"
+        placeholder="Describe the task"
+        value={words}
+        onChange={setWords}
+        rows={3}
+        grow
+      />
+    </Dialog>
+  );
+}
+
 /** A picture opened over the window, the card fitted to it under a bar naming it. */
 function PictureDialog({ open, onClose }: DialogBody): React.JSX.Element {
   const titleId = useId();
@@ -271,6 +299,7 @@ function Dialogs(): React.JSX.Element {
         <Opener label="Delete task" Body={DeleteDialog} />
         <Opener label="Send feedback…" Body={NoteDialog} />
         <Opener label="New task…" Body={ComposerDialog} />
+        <Opener label="New task as a sheet…" Body={PageSheetDialog} />
         <Opener label="Open picture…" Body={PictureDialog} />
         <Opener label="Open picture large…" Body={WindowPictureDialog} />
       </Inline>
