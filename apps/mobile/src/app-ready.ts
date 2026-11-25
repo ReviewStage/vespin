@@ -59,6 +59,17 @@ let stopWatching: () => void = () => undefined;
 /** Where a busy-account launch also writes its `app:ready` rungs, beside the answers it was served, for the rig to read. */
 const RIG_READY_FILE = `file://${hostStateRootIn(Paths.document.uri)}/busy-account/app-ready.json`;
 
+/** Where a busy-account launch writes when the Inbox and the task list first showed the service's answer, beside its `app:ready` rungs, for the rig to time a whole read by (`scripts/busy-account.sh`). */
+const RIG_ANSWERS_FILE = `file://${hostStateRootIn(Paths.document.uri)}/busy-account/first-answers.json`;
+
+/** How long after the launch's start the Inbox and the task list first showed the service's answer, read at the first commit that showed each; none before. */
+interface FirstAnswered {
+  inbox_ms?: number | undefined;
+  tasks_ms?: number | undefined;
+}
+
+const firstAnswered: FirstAnswered = {};
+
 /** The build number this build was released as (`CFBundleVersion`), which a rung of the launch is read beside; none where the build names none. */
 const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
 
@@ -121,6 +132,39 @@ export function noteSignedIn(): void {
 }
 
 /**
+ * For a busy-account launch, notes when the Inbox and the task list first
+ * showed the service's answer rather than the phone's kept rows, at the
+ * first commit that showed each, and writes both for the rig, which times a
+ * whole read by them (`RIG_ANSWERS_FILE`). Any other launch notes nothing.
+ */
+function useRigFirstAnswers(): void {
+  const { data: inboxAnswered = false } = useQuery({
+    ...appStateQuery,
+    select: (state) => inboxReadOf(state) === PRODUCT_READ_STATE.ANSWERED,
+  });
+
+  const { data: tasksAnswered = false } = useQuery({
+    ...appStateQuery,
+    select: (state) => tasksReadOf(state) === PRODUCT_READ_STATE.ANSWERED,
+  });
+
+  useEffect(() => {
+    if (!launchBusyAccount()) return;
+    const before = { ...firstAnswered };
+
+    if (inboxAnswered) firstAnswered.inbox_ms ??= sinceLaunch();
+
+    if (tasksAnswered) firstAnswered.tasks_ms ??= sinceLaunch();
+
+    if (before.inbox_ms === firstAnswered.inbox_ms && before.tasks_ms === firstAnswered.tasks_ms) {
+      return;
+    }
+
+    new File(RIG_ANSWERS_FILE).writeSync(JSON.stringify(firstAnswered));
+  }, [inboxAnswered, tasksAnswered]);
+}
+
+/**
  * Counts, once a launch, the time from React Native's start to the first
  * commit in which the Inbox shows the feed's answer, its rows or that it
  * holds none, as `app:ready` with that time on a rung of
@@ -144,6 +188,8 @@ export function noteSignedIn(): void {
  */
 export function useAppReadyCount(shown: boolean): void {
   const count = useHostCount();
+
+  useRigFirstAnswers();
 
   // Note that the Inbox's rows are read as the phone's kept ones while the host marks them so, until the service's first answer takes their place.
   const { data: keptRows = false } = useQuery({

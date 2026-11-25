@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # busy-account.sh -- one cold launch of the installed app on a simulator as a busy account after a gap, and what its first minutes held: the launch's own `launch:load` rungs, and an Instruments trace where asked.
 #
-# Usage: scripts/busy-account.sh [--scale <n>] [--seconds <s>] [--trace] [--empty] <simulator udid> <output directory>
+# Usage: scripts/busy-account.sh [--scale <n>] [--seconds <s>] [--trace] [--empty] [--hermes-profile] <simulator udid> <output directory>
 #
 # The app must already be installed on the booted simulator, built from the
 # same commit as this tree, since the seed's local copy is written through
@@ -17,7 +17,9 @@
 #      so the launch reads the task list and the Inbox whole;
 #   4. launches the app cold with `-authServer stub -busyAccount true`, and
 #      with --trace records Instruments' Time Profiler on every thread for
-#      the window, attached to the app's process;
+#      the window, attached to the app's process, and with --hermes-profile
+#      has a build carrying modules/rig-hermes-profile sample its JS thread
+#      for the window as Hermes sees it;
 #   5. waits out the window, --seconds (190 unless named), and copies the
 #      launch's `launch:load` rungs (`src/launch-load.ts`) and the trace to
 #      the output directory.
@@ -27,7 +29,7 @@ set -euo pipefail
 
 APP_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 REPOSITORY=$(CDPATH= cd -- "$APP_DIRECTORY/../.." && pwd)
-USAGE="usage: $0 [--scale <n>] [--seconds <s>] [--trace] [--empty] <simulator udid> <output directory>"
+USAGE="usage: $0 [--scale <n>] [--seconds <s>] [--trace] [--empty] [--hermes-profile] <simulator udid> <output directory>"
 BUNDLE_ID=dev.vespin.ios
 # The stub's account, whose folder the host opens once the stub signs it in (`src/host/stub-auth-server.ts`'s `STUB_ACCOUNT.sub`).
 ACCOUNT=stub-account
@@ -35,12 +37,14 @@ ACCOUNT=stub-account
 scale=1
 seconds=190
 trace=0
+hermes_profile=0
 empty=0
 while (($# > 0)); do
     case "$1" in
     --scale) scale=$2; shift 2 ;;
     --seconds) seconds=$2; shift 2 ;;
     --trace) trace=1; shift ;;
+    --hermes-profile) hermes_profile=1; shift ;;
     --empty) empty=1; shift ;;
     --) shift; break ;;
     -*) echo "$USAGE" >&2; exit 2 ;;
@@ -55,7 +59,7 @@ udid=$1
 output=$2
 mkdir -p "$output"
 # Note that an earlier run's count and trace are let go first, so a run that writes none never leaves an older one standing as its own, and xctrace, which refuses to record over a trace, records afresh.
-rm -f "$output/launch-load.json" "$output/app-ready.json" "$output/xctrace.log"
+rm -f "$output/launch-load.json" "$output/app-ready.json" "$output/first-answers.json" "$output/catch-up.json" "$output/hermes-profile.json" "$output/xctrace.log"
 rm -rf "$output/launch.trace"
 seed=$(mktemp -d)
 trap 'rm -rf "$seed"' EXIT
@@ -87,7 +91,12 @@ rm -rf "$host/busy-account"
 cp -R "$seed/busy-account" "$host/busy-account"
 
 echo "launching cold as the busy account for ${seconds}s"
-launched=$(xcrun simctl launch "$udid" "$BUNDLE_ID" -authServer stub -busyAccount true)
+# Note that a build with the rig's profiler module (`modules/rig-hermes-profile/`) samples the JS thread for the window and writes the profile beside the answers; any other build ignores the argument.
+profile_args=()
+if ((hermes_profile)); then
+    profile_args=(-hermesProfileSeconds "$seconds")
+fi
+launched=$(xcrun simctl launch "$udid" "$BUNDLE_ID" -authServer stub -busyAccount true ${profile_args[@]+"${profile_args[@]}"})
 pid=${launched##*: }
 date +%s >"$output/launched-at"
 recorder=
@@ -106,6 +115,26 @@ fi
 if [[ -f "$host/busy-account/app-ready.json" ]]; then
     cp "$host/busy-account/app-ready.json" "$output/app-ready.json"
     echo "app:ready $(cat "$output/app-ready.json")"
+fi
+if [[ -f "$host/busy-account/catch-up.json" ]]; then
+    cp "$host/busy-account/catch-up.json" "$output/catch-up.json"
+    echo "catch-up $(cat "$output/catch-up.json")"
+fi
+if [[ -f "$host/busy-account/first-answers.json" ]]; then
+    cp "$host/busy-account/first-answers.json" "$output/first-answers.json"
+    echo "first answers $(cat "$output/first-answers.json")"
+fi
+if ((hermes_profile)); then
+    # Note that the profile is written once the window passes, on a queue of its own, so it is waited for a little.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        [[ -f "$host/busy-account/hermes-profile.json" ]] && break
+        sleep 3
+    done
+    if [[ -f "$host/busy-account/hermes-profile.json" ]]; then
+        cp "$host/busy-account/hermes-profile.json" "$output/hermes-profile.json"
+    else
+        echo "warning: the launch wrote no Hermes profile; was the build made with modules/rig-hermes-profile?" >&2
+    fi
 fi
 if [[ -f "$host/busy-account/launch-load.json" ]]; then
     cp "$host/busy-account/launch-load.json" "$output/launch-load.json"
