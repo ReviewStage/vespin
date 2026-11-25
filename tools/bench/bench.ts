@@ -48,6 +48,8 @@ interface Scene {
   readonly setup: string | undefined;
   /** The elements a press scene presses in turn, by a CSS selector; none for a scene the stage steps. */
   readonly press: string | undefined;
+  /** The elements pressed in turn after each press, untimed, to stand the window back where the next press does something; none to press straight on. */
+  readonly back: string | undefined;
 }
 
 /** A build to time: its label and the base it is served at. */
@@ -62,6 +64,8 @@ interface PressTiming {
   readonly inputDelayMs: number;
   readonly processingMs: number;
   readonly presentationMs: number;
+  /** When the press began, on the page's clock: its earliest entry's start. */
+  readonly startedAt: number;
 }
 
 /** What one step cost. */
@@ -76,6 +80,8 @@ interface StepCost {
   readonly namedAgain: ReadonlyMap<string, number>;
   /** The press's timing in a press scene; none in a scene the stage steps, or for a press painted within 16 ms, which the browser does not report. */
   readonly press: PressTiming | undefined;
+  /** From the press to the step's last commit, when what the press opened stands drawn; none but for a timed press that committed. */
+  readonly settledMs: number | undefined;
 }
 
 /** The little of Playwright this script drives. */
@@ -124,7 +130,7 @@ const PRESS_WAIT_MS = 5000;
 const RENDER_SHIM = `(() => {
   const COMPONENT_TAGS = new Set([0, 1, 11, 14, 15]);
   const PERFORMED_WORK = 1;
-  const tally = { commits: 0, components: 0, again: 0, named: {}, namedAgain: {} };
+  const tally = { commits: 0, components: 0, again: 0, named: {}, namedAgain: {}, lastCommitAt: undefined };
   window.__benchRenders = tally;
   const nameOf = (fiber) => {
     const type = fiber.type && fiber.type.type ? fiber.type.type : fiber.type;
@@ -156,6 +162,7 @@ const RENDER_SHIM = `(() => {
     onPostCommitFiberRoot() {},
     onCommitFiberRoot(_id, root) {
       tally.commits += 1;
+      tally.lastCommitAt = performance.now();
       const current = root.current;
       const previous = current.alternate;
       if (previous !== null && previous.child === current.child) return;
@@ -201,6 +208,7 @@ const TAKE_PRESS = `(() => {
     inputDelayMs: longest.processingStart - longest.startTime,
     processingMs: longest.processingEnd - longest.processingStart,
     presentationMs: longest.startTime + longest.duration - longest.processingEnd,
+    startedAt: Math.min(...presses.map((press) => press.startTime)),
   };
 })()`;
 
@@ -215,7 +223,7 @@ const PRESS_REPORTED = "window.__benchPresses.length > 0";
 function pressPlace(selector: string, at: number): string {
   return `(() => {
   const matched = [...document.querySelectorAll(${JSON.stringify(selector)})];
-  if (matched.length === 0) throw new Error("--press matches nothing: " + ${JSON.stringify(selector)});
+  if (matched.length === 0) throw new Error("matches nothing: " + ${JSON.stringify(selector)});
   const element = matched[${at} % matched.length];
   element.scrollIntoView({ block: "nearest" });
   const box = element.getBoundingClientRect();
@@ -228,9 +236,10 @@ const TAKE_RENDERS = `(() => {
   const tally = window.__benchRenders;
   const taken = {
     commits: tally.commits, components: tally.components, again: tally.again,
-    named: tally.named, namedAgain: tally.namedAgain,
+    named: tally.named, namedAgain: tally.namedAgain, lastCommitAt: tally.lastCommitAt ?? null,
   };
   tally.commits = 0; tally.components = 0; tally.again = 0; tally.named = {}; tally.namedAgain = {};
+  tally.lastCommitAt = undefined;
   return taken;
 })()`;
 
@@ -275,6 +284,17 @@ function labeled(flag: string, what: string): LabeledFlag {
   return { label: flag.slice(0, at), value: flag.slice(at + 1) };
 }
 
+/** The `label=value` flags named `what`, by label. */
+function byLabel(flags: readonly string[] | undefined, what: string): Map<string, string> {
+  return new Map(
+    (flags ?? []).map((flag) => {
+      const { label, value } = labeled(flag, what);
+
+      return [label, value] as const;
+    }),
+  );
+}
+
 /** The median of `values`. */
 function median(values: readonly number[]): number {
   const sorted = values.toSorted((one, other) => one - other);
@@ -299,6 +319,8 @@ interface Renders {
   readonly again: number;
   readonly named: Record<string, number>;
   readonly namedAgain: Record<string, number>;
+  /** When the step's last commit landed, on the page's clock; none where it made none. */
+  readonly lastCommitAt: number | null;
 }
 
 /** Takes one step on the page, the stage's own or a press on the scene's next row, and what it cost. */
@@ -333,6 +355,13 @@ async function takeStep(
   const press = place === undefined ? null : await page.evaluate<PressTiming | null>(TAKE_PRESS);
   const renders = await page.evaluate<Renders>(TAKE_RENDERS);
 
+  if (scene.back !== undefined) {
+    const back = await page.evaluate<{ x: number; y: number }>(pressPlace(scene.back, step));
+
+    await page.mouse.click(back.x, back.y);
+    await page.waitForTimeout(settle);
+  }
+
   return {
     scriptMs: after - before,
     components: renders.components,
@@ -341,6 +370,10 @@ async function takeStep(
     named: new Map(Object.entries(renders.named)),
     namedAgain: new Map(Object.entries(renders.namedAgain)),
     press: press ?? undefined,
+    settledMs:
+      press === null || renders.lastCommitAt === null
+        ? undefined
+        : renders.lastCommitAt - press.startedAt,
   };
 }
 
@@ -439,6 +472,7 @@ function printScene(
       timed((timing) => timing.presentationMs),
       0,
     );
+    row("press → last commit ms", (cost) => cost.settledMs ?? 0, 0);
   }
 
   row("script ms", (cost) => cost.scriptMs, 1);
@@ -484,6 +518,7 @@ const { values } = parseArgs({
     scene: { type: "string", multiple: true },
     setup: { type: "string", multiple: true },
     press: { type: "string", multiple: true },
+    back: { type: "string", multiple: true },
     rounds: { type: "string", default: "3" },
     steps: { type: "string", default: "20" },
     warm: { type: "string", default: "3" },
@@ -501,6 +536,7 @@ if (values.help || values.build === undefined || values.scene === undefined) {
   --scene    an address under each build: open=/app?fixture=tasks-open&scale=large&move=task&every=0
   --setup    label=<script> run on that scene's page once it stands, a step to another place say
   --press    label=<selector> steps that scene by clicking the elements it matches in turn, timing each press to its paint
+  --back     label=<selector> clicks the elements it matches in turn after each press, untimed, to stand the window back
   --rounds   interleaved rounds (3)      --steps   steps timed per page (20)
   --warm     steps taken first, uncounted (3)
   --settle   milliseconds waited after each step for the window to draw (150)
@@ -517,26 +553,20 @@ const builds = values.build.map((flag) => {
   return { label, base: value };
 });
 
-const setups = new Map(
-  (values.setup ?? []).map((flag) => {
-    const { label, value } = labeled(flag, "setup");
-
-    return [label, value] as const;
-  }),
-);
-
-const presses = new Map(
-  (values.press ?? []).map((flag) => {
-    const { label, value } = labeled(flag, "press");
-
-    return [label, value] as const;
-  }),
-);
+const setups = byLabel(values.setup, "setup");
+const presses = byLabel(values.press, "press");
+const backs = byLabel(values.back, "back");
 
 const scenes: Scene[] = values.scene.map((flag) => {
   const { label, value } = labeled(flag, "scene");
 
-  return { label, address: value, setup: setups.get(label), press: presses.get(label) };
+  return {
+    label,
+    address: value,
+    setup: setups.get(label),
+    press: presses.get(label),
+    back: backs.get(label),
+  };
 });
 
 const options = {
