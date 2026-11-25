@@ -106,7 +106,10 @@ function useListedManagers(tasks: SidebarTasksControl): ReturnType<typeof useWor
   readonly listed: boolean;
 } {
   const workspaceId = tasks.workspace?.id;
-  const listed = useWorkspaceExperiment(workspaceId, EXPERIMENT.MANAGERS) && tasks.signedIn;
+  // PROTOTYPE: a staged fixture lists its Managers too, so the prototype's Manager is a press away.
+  const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+  const listed =
+    (useWorkspaceExperiment(workspaceId, EXPERIMENT.MANAGERS) || staged) && tasks.signedIn;
 
   return {
     listed,
