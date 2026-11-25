@@ -673,6 +673,9 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             // Note that the pull request's chip leads its own line too, so `pr-chip-preview.yaml` holds it near the line's start; GitHub's answer for it is staged (`INVITES_LINK_STANDING`), so its hold lifts its preview.
             "[@#128 Invite a teammate by email](https://github.com/ada/relay/pull/128) is ready for review.",
             "",
+            // Note that this one's GitHub answer is never staged and no agent of the fixture opened it, so its preview stands on its link's own words alone, as an outside pull request's does before GitHub answers.
+            "[@#131 Let an owner resend an expired invite](https://github.com/ada/relay/pull/131) follows it.",
+            "",
             // Note that each person's chip leads its own line, so `person.yaml` taps it near the line's start, since a chip mid-line has no element of its own.
             "[@Grace Hopper](https://vespin.dev/personal/person/user-grace) reviewed the flow.",
             "",

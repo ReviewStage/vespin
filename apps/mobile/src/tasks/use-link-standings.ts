@@ -6,11 +6,14 @@
  * another workspace's connection is never drawn in this one, and a chip in a
  * workspace without the App asks nothing. Until the host answers, or where it
  * never does, a chip says what its link says. A pull request one of the
- * member's agents opened carries how its checks went too, from the task
- * list's read of it, since GitHub's answer for a link carries none.
+ * member's agents opened stands at once on the task list's synced read of
+ * it, before GitHub answers or where it never does, and carries how its
+ * checks went, which GitHub's answer for a link carries none of, so its
+ * chip and its preview never wait on the network.
  */
 
-import type { CheckSummary } from "@repo/features/agent-wire";
+import { type AgentPullRequest, pullRequestAuthorOf } from "@repo/features/agent-wire";
+import type { GitHubRepositoryPullRequestAnswer } from "@repo/features/github-repositories-wire";
 import {
   githubPageAsked,
   type LinkStanding,
@@ -31,15 +34,32 @@ import { useLiveFollows } from "../host/live-follow.js";
 /** No pages to follow. */
 const NO_PAGES: readonly string[] = [];
 
-/** How each pull request the member's agents opened stands on its checks, by its page on GitHub, from the task list's read of it. */
-function useChecksByPage(): ReadonlyMap<string, CheckSummary> {
+/** Each pull request the member's agents opened, by its page on GitHub, as the task list synced it. */
+function useSyncedByPage(): ReadonlyMap<string, AgentPullRequest> {
   const collections = useTaskListCollections();
   const rows = useLiveQuery((q) => q.from({ pullRequest: collections.agentPullRequests })).data;
 
   return useMemo(
-    () => new Map((rows ?? []).map(({ pullRequest }) => [pullRequest.url, pullRequest.checks])),
+    () => new Map((rows ?? []).map(({ pullRequest }) => [pullRequest.url, pullRequest])),
     [rows],
   );
+}
+
+/** A synced pull request read as GitHub's answer for its link would say it: what the task list holds of it, with no branches, labels, or times, which it never syncs. */
+function syncedAnswer(synced: AgentPullRequest): GitHubRepositoryPullRequestAnswer {
+  return {
+    pullRequest: {
+      number: synced.number,
+      title: synced.title,
+      url: synced.url,
+      state: synced.state,
+      additions: synced.additions,
+      deletions: synced.deletions,
+      changedFiles: synced.changedFiles,
+      ...pullRequestAuthorOf(synced),
+      ...(synced.queued === true ? { queued: true } : undefined),
+    },
+  };
 }
 
 /**
@@ -82,22 +102,22 @@ export function useLinkStandings(
       workspaceId === undefined ? undefined : state[LIVE_READ.LINK_STANDINGS][workspaceId],
   });
 
-  const checksByPage = useChecksByPage();
+  const syncedByPage = useSyncedByPage();
 
   return useCallback(
     (page: string) => {
       const asked = githubPageAsked(page);
-      const rows = held?.[page]?.rows;
+      const synced = syncedByPage.get(page);
+      // Note that GitHub's answer wins where it is held, as the fuller read, and the synced row stands in until it lands.
+      const rows = held?.[page]?.rows ?? (synced === undefined ? undefined : syncedAnswer(synced));
 
       const standing =
         asked === undefined || rows === undefined ? undefined : linkStandingOf(asked, rows);
 
-      const checks = checksByPage.get(page);
-
-      return standing?.pullRequest === undefined || checks === undefined
+      return standing?.pullRequest === undefined || synced === undefined
         ? standing
-        : { ...standing, pullRequest: { ...standing.pullRequest, checks } };
+        : { ...standing, pullRequest: { ...standing.pullRequest, checks: synced.checks } };
     },
-    [held, checksByPage],
+    [held, syncedByPage],
   );
 }

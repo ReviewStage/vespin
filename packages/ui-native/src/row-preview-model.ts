@@ -242,7 +242,8 @@ type PullRequestPreviewFacts = {
   readonly key: string;
   readonly number: number;
   readonly title: string;
-  readonly state: PullRequestState;
+  /** Where it stands; none where the phone holds no read of it yet, whose path then names it alone. */
+  readonly state?: PullRequestState | undefined;
   readonly queued?: true | undefined;
   /** How its checks went; none where the app holds no read of them, as GitHub's answer for a link carries none. */
   readonly checks?: CheckSummary | undefined;
@@ -274,7 +275,7 @@ export function agentPreview(facts: AgentPreviewFacts): RowPreview {
   return { kind: ROW_PREVIEW.AGENT, ...facts };
 }
 
-/** A pull request's preview, as a link held in Safari lifts its page: its repository, number and state over its title, then how its checks went, the lines it adds and removes in green and red with how many files, who opened it, and its branches. */
+/** A pull request's preview, as a link held in Safari lifts its page: its repository, number and state over its title, then how its checks went, the lines it adds and removes in green and red with how many files, who opened it, and its branches, each only where the phone already holds it. */
 export function pullRequestPreview(facts: PullRequestPreviewFacts): RowPreview {
   return { kind: ROW_PREVIEW.PULL_REQUEST, ...facts };
 }
@@ -698,21 +699,32 @@ function linesNodes(
   ];
 }
 
-/** A pull request's preview's nodes. */
+/** A pull request's mark where the phone holds no read of where it stands: GitHub's glyph, quiet, so no color says a state it doesn't know. */
+const UNREAD_PULL_REQUEST_LOOK = { symbol: GLYPH.PULL_REQUEST, tone: STATUS_TONE.NEUTRAL } as const;
+
+/** A pull request's preview's nodes: only what the phone holds, each row left out until its answer lands, so the preview never waits on the network. */
 function pullRequestNodes(
   facts: PullRequestPreviewFacts,
   look: PreviewLook,
 ): readonly (PreviewNode | undefined)[] {
-  const mark = PULL_REQUEST_LOOK[pullRequestMarkState(facts)];
+  const { state } = facts;
+
+  const mark =
+    state === undefined
+      ? UNREAD_PULL_REQUEST_LOOK
+      : PULL_REQUEST_LOOK[pullRequestMarkState({ state, queued: facts.queued })];
+
   const checks = facts.checks === undefined ? undefined : CHECK_SUMMARY_LOOK[facts.checks];
 
-  const settled =
-    facts.state === PULL_REQUEST_STATE.MERGED || facts.state === PULL_REQUEST_STATE.CLOSED;
+  const settled = state === PULL_REQUEST_STATE.MERGED || state === PULL_REQUEST_STATE.CLOSED;
 
   return [
     path(
       toneGlyph(mark.symbol, mark.tone, TYPE_ROLE.ROW_LINE, look),
-      lineOf([facts.key, pullRequestMarkLabel(facts)]),
+      lineOf([
+        facts.key,
+        state === undefined ? undefined : pullRequestMarkLabel({ state, queued: facts.queued }),
+      ]),
       look,
     ),
     heading(facts.title, look),

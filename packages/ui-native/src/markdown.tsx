@@ -2,11 +2,13 @@
 
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, entityWordHeard } from "@repo/features/entity-kind";
+import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
+import { repositoryParts } from "@repo/features/task-list-model";
 import { SymbolView } from "expo-symbols";
 import { type ComponentRef, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -329,19 +331,34 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
+/** The number a pull request's written name leads with, "#131 ", which its preview's path says already. */
+const NUMBER_LEAD = /^#\d+\s+/;
+
 /**
  * What a chip of a pull request lifts over its menu, as Safari lifts a held
- * link's page: its key and state over its title, how its checks went where
- * the app holds them, the lines it adds and removes with how many files,
- * who opened it, and its branches, each as GitHub answered for the link;
- * none for any other chip, or before GitHub has answered, where the chip
- * itself lifts under its name.
+ * link's page, drawn at once from what the phone already holds and never
+ * waiting on the network: its key and state over its title, how its checks
+ * went, the lines it adds and removes with how many files, who opened it,
+ * and its branches, as GitHub answered for the link or the task list synced
+ * it (`linkStanding`); before either holds it, its key and its title as the
+ * link was written, each other row left out until an answer lands, which
+ * the next hold lifts. None for any other chip.
  */
 function chipPreview(chip: MarkdownChip, drawing: Drawing): RowPreview | undefined {
-  const standing = chip.github === undefined ? undefined : drawing.linkStanding(chip.github);
+  const address = chip.github === undefined ? undefined : pullRequestAddressOf(chip.github);
+
+  if (chip.github === undefined || address === undefined) return undefined;
+
+  const key = `${repositoryParts(address.repository).name}#${address.number}`;
+  const standing = drawing.linkStanding(chip.github);
   const pullRequest = standing?.pullRequest;
 
-  if (standing === undefined || pullRequest === undefined) return undefined;
+  if (standing === undefined || pullRequest === undefined)
+    return pullRequestPreview({
+      key,
+      number: address.number,
+      title: chip.name.replace(NUMBER_LEAD, ""),
+    });
 
   return pullRequestPreview({
     key: standing.key,

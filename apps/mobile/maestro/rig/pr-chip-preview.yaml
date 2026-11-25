@@ -1,4 +1,4 @@
-# pr-chip-preview.yaml -- a rig flow, never in the screenshot run: a pull request's chip held inside a message lifts its own preview and menu and never the message's; the message held elsewhere opens the message's menu alone; a tap on the chip opens the pull request; and the task page's agent row ends its pull request's mark with +N −M.
+# pr-chip-preview.yaml -- a rig flow, never in the screenshot run: a pull request's chip held inside a message lifts its own preview and menu and never the message's, at once from what the phone holds, an outside one's with only its key and title; the message held elsewhere opens the message's menu alone; a tap on the chip opens the pull request; and the task page's agent row ends its pull request's mark with +N −M.
 #
 # Launched on the Inbox fixture, whose "Recorded the invite flow" message
 # holds the #128 chip on a line of its own, GitHub's answer for it staged
@@ -43,6 +43,28 @@ appId: dev.vespin.ios
 - assertNotVisible: "Copy link"
 - assertNotVisible: "Checks passing"
 - assertVisible: ".*is ready for review.*"
+# 1b. An outside pull request the phone holds nothing of (#131, GitHub's
+# answer never staged, no agent of the fixture opened it): its preview
+# still lifts at once, its key and its title as the link wrote them, with no
+# state, checks, or lines rows.
+- runFlow:
+    file: ../subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*follows it.*"
+- longPressOn:
+    text: ".*follows it.*"
+    point: "6%, 50%"
+- extendedWaitUntil:
+    visible: "Let an owner resend an expired invite"
+    timeout: 2000
+- assertVisible: "Open link"
+- assertNotVisible: "Checks.*"
+- assertNotVisible: "Copy message"
+- waitForAnimationToEnd
+- takeScreenshot: pr-chip-preview-unheld
+- tapOn: "Copy link"
+- waitForAnimationToEnd
+- assertNotVisible: "Copy link"
 # 2. The message held on plain words beside it: the message's own menu, with
 # no chip preview.
 - runFlow:
