@@ -2,7 +2,7 @@
 
 import { Screen, SplitView } from "@repo/ui-native";
 import { Stack } from "expo-router";
-import type { ComponentProps } from "react";
+import { type ComponentProps, createContext, useContext, useState } from "react";
 import { Dimensions } from "react-native";
 import type { SplitHostCommands } from "react-native-screens/experimental";
 import { APP_SIDEBAR } from "./sidebar-shown.js";
@@ -29,6 +29,49 @@ export function showPickedPage(): void {
   if (!APP_SIDEBAR || width >= height) return;
 
   splitHost?.show("secondary");
+}
+
+/** The system split view's display modes that stand its sidebar, beside the list or over it (UISplitViewController.DisplayMode). */
+const SIDEBAR_MODES: ReadonlySet<string> = new Set([
+  "twoBesideSecondary",
+  "twoOverSecondary",
+  "twoDisplaceSecondary",
+]);
+
+/** Whether the root split view's sidebar stands, for a page column's bar to leave out what the sidebar already holds (`useSplitSidebar`). */
+export const SidebarStandsContext = createContext(false);
+
+/** The display mode a split view held upright or wide opens in, which no event reports: the sidebar beside a wide window's list, and folded in an upright one's. */
+function openingMode(): string {
+  const { width, height } = Dimensions.get("window");
+
+  return width >= height ? "twoBesideSecondary" : "oneBesideSecondary";
+}
+
+/**
+ * Whether the root split view's sidebar stands, read from the system's own
+ * display mode as it changes (the toggle, the swipe, a turn of the iPad) and
+ * from its collapse to one column, where no sidebar stands beside the page,
+ * as the split view's props to hand it and its context's value.
+ */
+export function useSplitSidebar() {
+  const [mode, setMode] = useState(openingMode);
+  const [collapsed, setCollapsed] = useState(false);
+
+  return {
+    stands: !collapsed && SIDEBAR_MODES.has(mode),
+    props: {
+      onDisplayModeWillChange: (event: { nativeEvent: { nextDisplayMode: string } }) =>
+        setMode(event.nativeEvent.nextDisplayMode),
+      onCollapse: () => setCollapsed(true),
+      onExpand: () => setCollapsed(false),
+    },
+  };
+}
+
+/** Whether the root split view's sidebar stands beside the page; false wherever no system split view stands. */
+export function useSidebarStands(): boolean {
+  return useContext(SidebarStandsContext);
 }
 
 /** A list that keeps no say over whether it stands, such as one only an iPad draws, which always stands. */

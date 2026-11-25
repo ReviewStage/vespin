@@ -24,7 +24,7 @@ import { PlaceListColumn, PlacesHeldProvider } from "../screens/place-columns.js
 import { SidebarTasksProvider } from "../screens/task-screens.js";
 import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { holdSplash } from "../splash.js";
-import { keepSplitHost } from "../split-columns.js";
+import { keepSplitHost, SidebarStandsContext, useSplitSidebar } from "../split-columns.js";
 import { useChipMarks } from "../tasks/chip-marks.js";
 import { VoiceCallProvider } from "../voice-call.js";
 
@@ -80,23 +80,28 @@ function AppFrame() {
     select: (state) => state.account.status === ACCOUNT_STATUS.SIGNED_IN,
   });
 
+  const sidebar = useSplitSidebar();
+
   if (!APP_SIDEBAR) return <Slot />;
 
   return (
     <SidebarTasksProvider>
       <PlacesHeldProvider>
-        <SplitView
-          ref={keepSplitHost}
-          primaryBackgroundStyle="sidebar"
-          displayModeButtonVisibility="automatic"
-          presentsWithGesture
-          topColumnForCollapsing="secondary"
-          columnMetrics={COLUMN_WIDTHS}
-          {...(signedIn ? {} : { preferredDisplayMode: "secondaryOnly" as const })}
-        >
-          <SplitView.Column>{signedIn ? <AppSidebarPane /> : null}</SplitView.Column>
-          <SplitView.Column>{signedIn ? <PlaceListColumn /> : null}</SplitView.Column>
-        </SplitView>
+        <SidebarStandsContext value={sidebar.stands}>
+          <SplitView
+            ref={keepSplitHost}
+            {...sidebar.props}
+            primaryBackgroundStyle="sidebar"
+            displayModeButtonVisibility="automatic"
+            presentsWithGesture
+            topColumnForCollapsing="secondary"
+            columnMetrics={COLUMN_WIDTHS}
+            {...(signedIn ? {} : { preferredDisplayMode: "secondaryOnly" as const })}
+          >
+            <SplitView.Column>{signedIn ? <AppSidebarPane /> : null}</SplitView.Column>
+            <SplitView.Column>{signedIn ? <PlaceListColumn /> : null}</SplitView.Column>
+          </SplitView>
+        </SidebarStandsContext>
       </PlacesHeldProvider>
     </SidebarTasksProvider>
   );

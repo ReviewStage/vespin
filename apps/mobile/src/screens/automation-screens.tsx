@@ -86,7 +86,7 @@ import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { TabColumns } from "../split-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { useComposeAction, useSplitBuild } from "./app-sidebar.js";
+import { useComposeAction, useDetailColumnBar, useSplitBuild } from "./app-sidebar.js";
 
 /** What the list's field says before anything is typed. */
 const SEARCH_AUTOMATIONS = "Search automations";
@@ -192,7 +192,7 @@ export function AutomationsScreen() {
  * stands in the middle column (`AutomationsListColumn`).
  */
 function AutomationsPageScreen() {
-  const compose = useComposeAction();
+  const detailBar = useDetailColumnBar(undefined);
   const build = useSplitBuild();
 
   return (
@@ -201,7 +201,7 @@ function AutomationsPageScreen() {
         build={build}
         sidebar={null}
         detail={<NoSelection title={NO_AUTOMATION_SELECTED} />}
-        detailBar={{ lead: [compose] }}
+        detailBar={detailBar}
       />
     </>
   );

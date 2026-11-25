@@ -26,6 +26,7 @@ import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-o
 import { useSettingsAccount } from "../settings-button.js";
 import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
 import { useSidebarTasks } from "../sidebar-tasks.js";
+import { useSidebarStands } from "../split-columns.js";
 import { SPLIT_TAB, usePickInPlace, useSplitPicked } from "../split-route.js";
 import { tabGroupOf, useOnTab } from "../tab-route.js";
 import { useStandingCallCard } from "../voice-call.js";
@@ -238,12 +239,15 @@ export function useComposeAction(): BarAction {
 
 /**
  * The detail's bar beside a regular window's list column, led by New task's
- * compose, as Mail's stands over its message.
+ * compose, as Mail's stands over its message. Note that on an iPad it leads
+ * only while the sidebar is folded, since the sidebar's workspace row ends
+ * in New task's glyph while it stands, and one window offers it once.
  */
 export function useDetailColumnBar(bar: ColumnBar | undefined): ColumnBar {
   const compose = useComposeAction();
+  const sidebarStands = useSidebarStands();
 
-  return { ...bar, lead: [compose] };
+  return { ...bar, lead: sidebarStands ? [] : [compose] };
 }
 
 /**

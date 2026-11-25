@@ -72,7 +72,7 @@ import { TabColumns } from "../split-columns.js";
 import { tabGroupOf, useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { useComposeAction, useSplitBuild } from "./app-sidebar.js";
+import { useComposeAction, useDetailColumnBar, useSplitBuild } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRow, InboxItemRows } from "./inbox-screens.js";
 import {
@@ -726,12 +726,12 @@ function SearchColumnRows(words: SearchWords) {
 
 /** Search's page on an iPad, beside its list in the middle column: nothing picked, New task leading its bar. */
 function SearchPageScreen() {
-  const compose = useComposeAction();
+  const detailBar = useDetailColumnBar(undefined);
   const build = useSplitBuild();
 
   return (
     <>
-      <TabColumns build={build} sidebar={null} detail={null} detailBar={{ lead: [compose] }} />
+      <TabColumns build={build} sidebar={null} detail={null} detailBar={detailBar} />
     </>
   );
 }
