@@ -858,7 +858,7 @@ export function composeMirrors(
      * has drawn, where no pass ran within `LEFTOVERS.EVERY`, the mirrors on
      * disk are looked at one at a time: one whose agent the list shows
      * archived is taken away, and one whose agent it does not hold is tried,
-     * waited on at most `LEFTOVERS.STEP_WAIT`, for a tunnel that answers gone
+     * its attempt waited on at most `LEFTOVERS.STEP_WAIT`, for a tunnel that answers gone
      * to take it away. One whose agent the list holds live is left to the
      * asks.
      */
@@ -891,10 +891,15 @@ export function composeMirrors(
           }
 
           if (listed !== undefined) continue;
-          const mirror = yield* started(agentId);
-          yield* Effect.ignore(
-            Effect.timeoutOption(Deferred.await(mirror.made), LEFTOVERS.STEP_WAIT),
-          );
+          yield* started(agentId);
+          // Note that the attempt itself is waited on, not the worktree, because a worktree that already stands is made at once.
+          const attempt = yield* FiberMap.get(fibers, agentId);
+
+          if (Option.isSome(attempt)) {
+            yield* Effect.ignore(
+              Effect.timeoutOption(Fiber.await(attempt.value), LEFTOVERS.STEP_WAIT),
+            );
+          }
         }
       }),
     );

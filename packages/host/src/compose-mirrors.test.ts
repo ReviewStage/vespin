@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { NodeChildProcessSpawner, NodeFileSystem, NodePath } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
-import type { TerminalSocketOpening } from "@repo/features/relay-socket";
 import { SANDBOX_TUNNEL } from "@repo/features/sandbox-tunnel-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { Effect, Layer, Path, PubSub, Queue, Stream } from "effect";
@@ -14,14 +13,12 @@ const NODE = NodeChildProcessSpawner.layer.pipe(
   Layer.provideMerge(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
 );
 
-/** The status the fake relay refuses every tunnel with, so each attempt ends at once. */
-const REFUSED = 403;
-
-/** Three agents with a mirror on disk: one the task list holds live, one it shows archived, and one it does not hold, its agent deleted. */
+/** Agents with a mirror on disk: one the task list holds live, one it shows archived, and two it does not hold, their agents deleted, whose worktrees stand. */
 const AGENT = {
   LIVE: "0b1e2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d",
   ARCHIVED: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
   GONE: "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a",
+  ALSO_GONE: "3e4f5a6b-7c8d-4e9f-8a0b-2c3d4e5f6a7b",
 } as const;
 
 /** The task list as the test draws it: the live agent and the archived one. */
@@ -43,6 +40,12 @@ describe("composeMirrors", () => {
           yield* fileSystem.makeDirectory(path.join(folder, agentId));
         }
 
+        for (const agentId of [AGENT.GONE, AGENT.ALSO_GONE]) {
+          yield* fileSystem.makeDirectory(path.join(folder, agentId, "repository", ".git"), {
+            recursive: true,
+          });
+        }
+
         const opened = yield* Queue.unbounded<string>();
         const drawings = yield* PubSub.unbounded<unknown>();
 
@@ -55,13 +58,14 @@ describe("composeMirrors", () => {
               runMode: { sendsNetwork: true },
             },
             account: { credential: {} },
+            // Note that every tunnel hangs once asked, as a relay slow to answer does, so only the pass's own wait moves it on.
             openSocket: (url) =>
-              Effect.as(
+              Effect.andThen(
                 Queue.offer(
                   opened,
                   new URL(url).searchParams.get(SANDBOX_TUNNEL.QUERY.AGENT) ?? url,
                 ),
-                { refused: REFUSED } satisfies TerminalSocketOpening,
+                Effect.never,
               ),
             platform: {
               folder,
@@ -88,7 +92,16 @@ describe("composeMirrors", () => {
         );
 
         yield* TestClock.adjust("2 minutes");
-        assert.equal(yield* Queue.take(opened), AGENT.GONE);
+        const first = yield* Queue.take(opened);
+        yield* TestClock.adjust("10 seconds");
+        assert.equal(
+          yield* Queue.size(opened),
+          0,
+          "a second leftover opened while the first's waited",
+        );
+        yield* TestClock.adjust("30 seconds");
+        const second = yield* Queue.take(opened);
+        assert.deepEqual(new Set([first, second]), new Set([AGENT.GONE, AGENT.ALSO_GONE]));
 
         while (yield* fileSystem.exists(path.join(folder, AGENT.ARCHIVED))) {
           yield* Effect.yieldNow;
