@@ -733,27 +733,29 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
   /**
    * Takes the words out of the field for a send, in one step on the main
    * thread, where every key lands: answers their Markdown as the field holds
-   * it, and the count of changes the emptying stands at, so JavaScript hears
-   * the emptying in order with what was typed. Note that a second send finds
-   * the field empty, so one press, or two that reach JavaScript together,
-   * sends the words once, and a handing made before the take, which has not
-   * heard it, is refused rather than laying the words back.
+   * it, and the count of changes the emptying stands at. Note that a second
+   * send finds the field empty, so one press, or two that reach JavaScript
+   * together, sends the words once, and a handing made before the take,
+   * which has not heard it, is refused rather than laying the words back.
+   * The emptying is told to JavaScript only through the answer, never as the
+   * field's own telling, so JavaScript hears it once the send has taken the
+   * words, and never where they go back (`putBack`), which would let go of
+   * the files their markers hold.
    */
   func takeWords() -> [String: Any] {
+    quiet = true
+
     // Note that words being composed, as dictation or a keyboard of marks holds them, are committed first, so they go with the rest.
-    if textView.markedTextRange != nil {
-      quiet = true
-      textView.unmarkText()
-      quiet = false
-    }
+    if textView.markedTextRange != nil { textView.unmarkText() }
 
     let markdown = markdown(of: heldRuns())
 
     if !markdown.isEmpty {
       redraw([], force: false)
-      changed()
+      changes += 1
     }
 
+    quiet = false
     return ["markdown": markdown, "changes": changes]
   }
 

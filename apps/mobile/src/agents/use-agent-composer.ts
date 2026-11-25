@@ -348,8 +348,8 @@ export function useAgentComposer(
   const [editing, setEditing] = useState<EditStash | undefined>(undefined);
   // The sent line whose words the field holds to send in its place, and what it held before; none while it holds its own.
   const [rewriting, setRewriting] = useState<Rewriting | undefined>(undefined);
-  // The words of a line written again whose send asks first, taken out of the field while it asks; none while none asks.
-  const [askingEdit, setAskingEdit] = useState<string | undefined>(undefined);
+  // Whether the send of a line written again asks first.
+  const [askingEdit, setAskingEdit] = useState(false);
   const [focusAsk, setFocusAsk] = useState(0);
   // Note that the field's own words are kept while it holds a queued message's or a sent line's, so a page drawn anew opens on the member's draft, not the message.
   const ownWords = editing?.words ?? rewriting?.words ?? words;
@@ -459,14 +459,15 @@ export function useAgentComposer(
     // Note that a send while the field holds a queued message's words saves them back in its place, as Save does.
     if (editing !== undefined) return sendEdit(QUEUE_EDIT_SEND.SAVE, typed);
 
-    // Note that a line written again asks first where anything follows it, since its send drops that for good, holding the words while it asks.
+    // Note that a line written again asks first where anything follows it, since its send drops that for good, its words and pictures left in the field while it asks, and taken out of it again once it is answered.
     if (rewriting !== undefined) {
-      if (typed.trim() === "") return false;
+      if (rewriting.line.cuts && typed.trim() !== "") {
+        setAskingEdit(true);
 
-      if (rewriting.line.cuts) setAskingEdit(typed);
-      else sendRewritten(rewriting, typed);
+        return false;
+      }
 
-      return true;
+      return sendRewritten(rewriting, typed);
     }
 
     // Note that the field holds each picked mention as its link already, so its words go as they stand.
@@ -598,10 +599,10 @@ export function useAgentComposer(
    * given back what it held, and the words handed back where it was refused.
    * Note that it stops the turn under way rather than steering it.
    */
-  const sendRewritten = (stash: Rewriting, typed: string) => {
+  const sendRewritten = (stash: Rewriting, typed: string): boolean => {
     const text = typed.trim();
 
-    if (text === "") return;
+    if (text === "") return false;
 
     // Note that pictures attached while the line was written again go with it, as the panel's Edit takes files.
     const held = pictures.take();
@@ -625,7 +626,7 @@ export function useAgentComposer(
         done: () => sendChat(sent, attachments?.attachments),
       });
 
-      return;
+      return true;
     }
 
     heldSends.set(sentLineId(sent.id), sent);
@@ -652,6 +653,8 @@ export function useAgentComposer(
         unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
       },
     );
+
+    return true;
   };
 
   /** The line of the member's under `lineId` the service refused; none for any other. */
@@ -952,7 +955,11 @@ export function useAgentComposer(
       // Note that only the edit that sent it closes, so a Save landing after its edit was given up and the message opened again leaves the new edit standing.
       const now = editingNow.current;
 
-      if (went && now?.session === stash.session) giveBack(now);
+      if (now?.session !== stash.session) return;
+
+      // Note that words a Save or Steer refused took out of the field go back in it, ahead of anything typed since, as the edit still stands.
+      if (went) giveBack(now);
+      else setWords((typedSince) => wordsHandedBack(typed, typedSince));
     });
 
     return true;
@@ -1033,19 +1040,19 @@ export function useAgentComposer(
       title: editAsk.title,
       message: editAsk.body,
       act: editAsk.verb,
-      presented: askingEdit !== undefined && rewriting !== undefined,
+      presented: askingEdit && rewriting !== undefined,
+      // Note that the words go as the field holds them once the question is answered, taken out of it as Send takes them.
       onAct: () => {
-        setAskingEdit(undefined);
+        setAskingEdit(false);
+        const field = pillField.pills.field.current;
 
-        if (rewriting !== undefined && askingEdit !== undefined)
-          sendRewritten(rewriting, askingEdit);
+        if (rewriting === undefined || field === null) return;
+        const stash = rewriting;
+        void field.take().then((taken) => {
+          if (!sendRewritten(stash, taken.words)) taken.giveBack();
+        });
       },
-      // Note that the words held while it asked go back in the field, ahead of anything typed since, to write on.
-      onDismiss: () => {
-        setAskingEdit(undefined);
-
-        if (askingEdit !== undefined) setWords((typed) => wordsHandedBack(askingEdit, typed));
-      },
+      onDismiss: () => setAskingEdit(false),
     },
     focusAsk,
     undelivered: { retry: retryLine, edit: editLine, drop: dropLine },

@@ -59,14 +59,25 @@ function thumbnailOf(pill: Pill, thumbnails: ReadonlyMap<string, string>): strin
  * the word again by its words where it moved since it was told, so a pick
  * made while words are still being typed lands rather than being dropped.
  */
+/**
+ * Words a send took out of the field, its holder already told the field
+ * stands empty: the Markdown, and `giveBack`, which lays them back where the
+ * send did not take them, ahead of anything typed since. Note that the
+ * holder is told the words are back in the same turn it was told the field
+ * emptied, so no render ever stands between with a held file's marker gone,
+ * which would let go of its file.
+ */
+export interface TakenWords {
+  readonly words: string;
+  readonly giveBack: () => void;
+}
+
 export interface PillFieldHandle {
   readonly pick: (pill: Pill) => void;
   readonly rewrite: (words: string) => void;
   readonly place: (pills: readonly Pill[]) => void;
-  /** The words the field holds as the Markdown the wire carries, taken out of it in one step where every key lands, so a send carries what the field shows however far behind JavaScript's copy is, and a second send finds it empty. */
-  readonly take: () => Promise<string>;
-  /** Lays words a send did not take back in the field, ahead of anything typed since. */
-  readonly putBack: (markdown: string) => void;
+  /** The words the field holds as the Markdown the wire carries, taken out of it in one step where every key lands, so a send carries what the field shows however far behind JavaScript's copy is, and a second send finds it empty (`TakenWords`). */
+  readonly take: () => Promise<TakenWords>;
   readonly focus: () => void;
   readonly blur: () => void;
 }
@@ -209,18 +220,25 @@ export function PillField({
           undefined,
         );
       },
-      // Note that the emptying is heard here, with the words taken, rather than waiting on the field's own telling, so the holder's copy is emptied in the same turn its send reads the words.
+      // Note that the emptying is heard with the words taken, before the send reads them, so whatever the send sets its holder to stands over it.
       take: async () => {
-        const taken = await native.current?.take();
+        const field = native.current;
+        const taken = await field?.take();
 
-        if (taken === undefined) return "";
+        if (field === null || field === undefined || taken === undefined) {
+          return { words: "", giveBack: () => undefined };
+        }
+
         heard({ ...EMPTIED, changes: taken.changes });
 
-        return taken.markdown;
-      },
-      putBack: (markdown) => {
-        if (markdown === "") return;
-        void native.current?.putBack(runsOf(markdown));
+        return {
+          words: taken.markdown,
+          giveBack: () => {
+            if (taken.markdown === "") return;
+            heard({ ...EMPTIED, markdown: taken.markdown, changes: taken.changes });
+            void field.putBack(runsOf(taken.markdown));
+          },
+        };
       },
       focus: () => void native.current?.focus(),
       blur: () => void native.current?.blur(),

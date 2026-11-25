@@ -694,7 +694,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
 
     if (field === null) return;
     void field.take().then((taken) => {
-      if (!act(taken)) field.putBack(taken);
+      if (!act(taken.words)) taken.giveBack();
     });
   };
 
