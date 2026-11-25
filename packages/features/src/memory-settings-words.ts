@@ -32,7 +32,7 @@ export type MemoryScopeKind = (typeof MEMORY_SCOPE)[keyof typeof MEMORY_SCOPE];
 
 /** What a Manager's Settings › Memory says over its memories, and where it holds none. */
 export const MANAGER_MEMORY_WORDS = {
-  CAPTION: "Only this Manager recalls these. A memory you add here is kept for it alone.",
+  CAPTION: "Only this Manager recalls these, including any you add here.",
   EMPTY: "This Manager hasn't remembered anything yet.",
 } as const;
 
