@@ -148,16 +148,18 @@ function threadReachWords(slackOn: boolean): string {
 
 /**
  * What a Manager posts a thread for, the one rule its prompt, `inbox_post`,
- * and `chat_send` all state (Dean, Nov 23, 2026): an ask its chat cannot
- * hold, and nothing else, so its pull requests, its pages, and its reports
- * stand in its chat.
+ * and `chat_send` all state: anything it needs from a person, so a question
+ * never waits in its chat, while its pull requests, its pages, and its
+ * reports stand there (Dean, Nov 23, 2026; Charles widened it from a pick
+ * between options to every ask, Nov 25, 2026).
  */
-export const MANAGER_THREAD_ASKS = "a decision between options or a to-do only they can do";
+export const MANAGER_THREAD_ASKS =
+  "anything you need a person to decide, answer, approve, or do: a pick between options, a yes or no, a go-ahead, a question only they can answer, or a to-do only they can do";
 
 /** When an agent posts a thread, by whether it is a Manager, whose chat holds all but `MANAGER_THREAD_ASKS`. */
 function postThreadWhen(manager: boolean): string {
   return manager
-    ? `Use it only for ${MANAGER_THREAD_ASKS}, and say everything else with ${AGENT_TOOL.SEND_TO_USER}, your pull requests and pages included; when someone writes to you on an Inbox thread, reply on that same Inbox thread. `
+    ? `Use it for ${MANAGER_THREAD_ASKS}, even a small question or one you could guess the answer to. Say everything else with ${AGENT_TOOL.SEND_TO_USER}: answers, reports, and status, your pull requests and pages included. When someone writes to you on an Inbox thread, reply on that same Inbox thread. `
     : "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. ";
 }
 

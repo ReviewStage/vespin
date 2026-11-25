@@ -85,13 +85,13 @@ const SEND_TO_USER_WORDS =
 /** `chat_send` as a Manager is offered it: its name, its words, and its input. */
 export const SEND_TO_USER_TOOL = {
   name: AGENT_TOOL.SEND_TO_USER,
-  description: `${SEND_TO_USER_WORDS} For ${MANAGER_THREAD_ASKS}, post an Inbox thread instead.`,
+  description: `${SEND_TO_USER_WORDS} Don't ask people things here: for ${MANAGER_THREAD_ASKS}, post an Inbox thread with an ask instead, and say here in one line that it's in their Inbox.`,
   inputSchema: SEND_TO_USER_INPUT,
 } as const;
 
 /**
  * `chat_send` in the words of the Manager's standing: the thread it
- * hands a decision or a to-do named only where the member its threads would
+ * hands every ask named only where the member its threads would
  * land with keeps an Inbox, which offers it `inbox_post`, so a Manager with
  * none is told of no thread.
  */

@@ -65,14 +65,14 @@ const UNCLEAR_LINE =
  * is a `chat_send` call, so its plain text and its other calls are never
  * shown, and it writes there as a coworker on Slack, in several short
  * messages, replying in the thread of the message it answers; and, where it
- * posts Inbox threads, that an Inbox thread is kept for the asks a chat
- * cannot hold, since every post is a notification.
+ * posts Inbox threads, that its chat is for answers and reports and every
+ * ask goes in an Inbox thread, since a question in chat is easy to miss.
  */
 function chatLine(posts: boolean): string {
-  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there, as a coworker would on Slack. Reply in the thread of the message you're answering or following up on, with \`thread_ts\`, and start a new message only for something new. Write several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
+  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. ${posts ? "Answer and report there" : "Answer, report, and ask there"}, as a coworker would on Slack. Reply in the thread of the message you're answering or following up on, with \`thread_ts\`, and start a new message only for something new. Write several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
 
   return posts
-    ? `${chat} Post an Inbox thread with \`${INBOX_TOOLS.POST.name}\` only for ${MANAGER_THREAD_ASKS}, since every post reaches people as a notification: your pull requests and pages are named in your chat once ready, and a go-ahead you want on one is a decision.`
+    ? `${chat} Don't ask people things in chat. Post an Inbox thread with \`${INBOX_TOOLS.POST.name}\` and an ask for ${MANAGER_THREAD_ASKS}, even a small one or one you could guess, then say in one line in chat that it's in their Inbox. Your pull requests and pages are named in your chat once ready, and a go-ahead you want on one goes in a thread too.`
     : chat;
 }
 
@@ -458,10 +458,11 @@ export function managerInstructions(place: ManagerPlace, posts: boolean): string
     `Relay what people tell you, in your chat${posts ? " or on a thread" : ""}, to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
     ...(posts
       ? [
+          `Some calls are a person's to make, not yours: a product or wording choice, a privacy or scope trade-off, or anything an agent of yours says is for someone to decide. When you or one of your agents reach one, don't settle it yourself. Post it in an Inbox thread to that person, with the options and your recommendation, and tell the agent to wait, or to go on with your recommendation until they answer.`,
           `A thread you post carries everything its reader needs to answer: the pictures, the facts, and the choice, never a pointer to another task, agent, or description. To show an agent's pictures, ask it for the ids \`${AGENT_TOOL.SHOW_MEDIA}\` answered and draw each in the body as \`![alt](<id> "caption")\`, and a description's picture by the address \`${AGENT_TOOL.READ_TASK}\` writes it at.`,
         ]
       : []),
-    `Only message me when it's worth my time. Tell me when you've got a plan for something I asked, when something I can actually use is done, or when something goes wrong or changes. I don't need play-by-plays of PRs, CI, or what your agents are up to, and don't remind me about stuff that's already in my inbox. Tell me what changed for me, not how you did it. If there's nothing worth saying, don't say anything.`,
+    `Only message me when it's worth my time. Tell me when you've got a plan for something I asked, when something I can actually use is done, or when something goes wrong or changes. I don't need play-by-plays of PRs, CI, or what your agents are up to, and don't remind me about stuff that's already in my inbox. Tell me what changed for me, not how you did it. If there's nothing worth saying, don't say anything.${posts ? " That's about reports: anything you need me to decide or answer always goes in an Inbox thread." : ""}`,
     `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers, but never start another Manager.`,
     `Keep a memory for yourself alone (\`scope: "manager"\`) when it bears only on how you work or on the people you manage; keep it for the workspace when any agent would need it.`,
   ].join("\n");
