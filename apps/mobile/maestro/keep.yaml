@@ -1,4 +1,4 @@
-# keep.yaml -- what a long press offers on a thread's picture and its message, and the full-screen viewer's share button: the picture's Copy, Save to Photos, and Share…, and the message's Copy message.
+# keep.yaml -- what a long press offers on a thread's picture, its message, and a task's chip in its words, and the full-screen viewer's share button: the picture's Copy, Save to Photos, and Share…, the message's Copy message, the chip's own Open link and Copy link, which open nothing until pressed, and the chip's plain tap, which opens its task.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -6,8 +6,10 @@ appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture, as `inbox.yaml` is, so the thread and
 # its picture's bytes are the fixture's (`@repo/host/fixture-inbox`) and no
-# server is reached. Nothing here presses an act, so no pasteboard, Photos, or
-# share sheet is reached either; the menus are shot and closed.
+# server is reached. Nothing here presses an act but the chip's Copy link,
+# which closes its menu by its own item and writes only the simulator's
+# pasteboard, so no Photos or share sheet is reached; the menus are shot and
+# closed.
 - launchApp:
     clearState: true
     arguments:
@@ -41,7 +43,7 @@ appId: dev.vespin.ios
 - assertVisible: "The invite page"
 # The message's own menu, opened on its words. Note that the long press lands
 # on a paragraph of plain words, never one holding a mention's chip, whose own
-# hold opens the link's sheet first; and that the words are scrolled to the
+# hold opens the chip's menu instead; and that the words are scrolled to the
 # window's middle first, since the picture's menu closing left them under the
 # bar, where the long press landed on it instead.
 - runFlow:
@@ -60,8 +62,38 @@ appId: dev.vespin.ios
       POINT: "94%, 60%"
 - assertNotVisible: "Copy message"
 - assertVisible: "The recording is under this.*"
+# The task's chip held, leading its own line in the same message: its own
+# menu, UIKit's, never the message's beside it, as a link held in a Messages
+# bubble opens its own. Note that the chip stands in its line's words, where
+# it is no element of its own, so it is held a little in from the line's
+# leading edge, as `person.yaml` holds a person's; and that its menu is put
+# away by its own Copy link, which copies the chip's address alone.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*holds the rest of the work.*"
+- longPressOn:
+    text: ".*holds the rest of the work.*"
+    point: "6%, 50%"
+- assertVisible: "Copy link"
+- assertNotVisible: "Copy message"
+- waitForAnimationToEnd
+- takeScreenshot: keep-chip-menu
+- tapOn: "Copy link"
+- waitForAnimationToEnd
+# The hold opened no link as the finger lifted: the thread still stands in
+# front, with no task page over it and no browser.
+- assertNotVisible: "Copy link"
+- assertVisible: ".*holds the rest of the work.*"
+- assertNotVisible: "Agents"
 # The picture opens full screen in the app's viewer, whose share sheet copies
-# and saves it as the system's own wording names those acts.
+# and saves it as the system's own wording names those acts. Note that it is
+# scrolled back to first, since the chip's line stood under it.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The invite page"
+      DIRECTION: UP
 - tapOn: "The invite page"
 - assertVisible:
     id: "picture-viewer-close"
@@ -86,3 +118,28 @@ appId: dev.vespin.ios
     id: "picture-viewer-close"
 - tapOn:
     id: "picture-viewer-close"
+- waitForAnimationToEnd
+# The chip pressed: a plain tap opens its task's page, on the Inbox's own
+# stack in a compact window, from which Back lands on the thread again; a
+# regular window selects the task on Tasks beside its list instead
+# (`related.yaml`).
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*holds the rest of the work.*"
+- tapOn:
+    text: ".*holds the rest of the work.*"
+    point: "6%, 50%"
+- extendedWaitUntil:
+    visible: "Agents"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: keep-chip-opened
+- runFlow:
+    when:
+      visible:
+        id: "BackButton"
+    commands:
+      - tapOn:
+          id: "BackButton"
+      - assertVisible: ".*holds the rest of the work.*"

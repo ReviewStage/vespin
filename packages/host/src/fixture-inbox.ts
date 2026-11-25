@@ -660,11 +660,14 @@ const INVITES_ITEMS: readonly InboxItem[] = [
           114,
           25 * MINUTE,
           [
-            "I walked the invite flow in the preview, from [@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60) to the accepted page:",
+            "I walked the invite flow in the preview, through to the accepted page:",
             "",
             `![The invite page](${RECORDED_PICTURE_ADDRESS})`,
             "",
             "The recording is under this. The expired page is still the placeholder.",
+            "",
+            // Note that the task's chip leads its own line, so `keep.yaml` holds it near the line's start, and a hold on the message's other lines lands on no chip.
+            "[@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60) holds the rest of the work.",
             "",
             // Note that each person's chip leads its own line, so `person.yaml` taps it near the line's start, since a chip mid-line has no element of its own.
             "[@Grace Hopper](https://vespin.dev/personal/person/user-grace) reviewed the flow.",

@@ -124,10 +124,10 @@ builds a control of its own.
   offers (`TurnActs`), since a phone has no hover to show the panel's; the
   app answers them through `KeepingProvider`. A
   mention's chip, which stands inside a line of words where no SwiftUI menu
-  can wrap it, is held for the system's sheet of Open link and Copy link
-  instead, as the panel's link menu offers them, a popover from the chip in
-  a regular window, its hold a little shorter than the system's so it wins
-  over a message's own. An agent's transcript is `AgentTranscript`, the app's one React
+  can wrap it, opens UIKit's own context menu instead (`ContextMenu`, from
+  the same tree), Open link and Copy link, as the panel's link menu offers
+  them; UIKit gives a hold to the innermost menu, so the chip's wins over
+  the message's own, as a link held in a Messages bubble does. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (FlashList's chat list, drawn newest last, opening at its
   newest row and keeping it in view as rows land, its `maintainVisibleContentPosition`
   rather than timers of ours, with

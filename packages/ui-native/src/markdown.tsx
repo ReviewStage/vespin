@@ -8,22 +8,10 @@ import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
-import {
-  type ComponentRef,
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type ComponentRef, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
-  ActionSheetIOS,
-  type ActionSheetIOSOptions,
   ActivityIndicator,
-  findNodeHandle,
-  type HostInstance,
   ScrollView,
   type ScrollViewInstance,
   StyleSheet,
@@ -37,6 +25,7 @@ import {
 import { AudioClip } from "./audio-clip.js";
 import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
 import type { ChipMarkOf } from "./chip-mark-model.js";
+import { ContextMenu } from "./context-menu.js";
 import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
 import { ENTITY_GLYPH } from "./entity-glyph.js";
@@ -78,6 +67,7 @@ import {
   usePictureRef,
 } from "./picture-source.js";
 import { Press } from "./press.js";
+import { type LongPressGroup, ROW_ACTION_TONE } from "./row-menu-model.js";
 import {
   SUGGESTION_LOOK,
   SUGGESTION_SENT_WORDS,
@@ -293,53 +283,39 @@ function chipHeard(chip: MarkdownChip, drawing: Drawing): string {
   return standingLook(chip, drawing)?.heard ?? chip.heard;
 }
 
-/** How long a finger rests on a chip before its menu opens, a little short of the system's own hold, so a chip held in a message opens its own menu rather than the message's. */
-const CHIP_HOLD_MS = 350;
-
-/** The chip menu's buttons, in the order the system's sheet stands them. */
-const CHIP_MENU_BUTTON = { OPEN: 0, COPY: 1, CANCEL: 2 } as const;
-
-/** What closes the chip's menu with nothing done, as every system sheet names it. */
-const CHIP_MENU_CANCEL = "Cancel";
-
 /**
- * A chip's long press, as the panel's right-click on a link offers it
+ * A chip's long press menu, as the panel's right-click on a link offers it
  * (`link-menu.tsx`): Open link, where a press on it would open it, and Copy
- * link, its address as written, in the system's own sheet under the chip's
- * name, a popover from the chip in a regular window. None for a chip that
- * goes nowhere, or where no app copies.
+ * link, its address as written, in the system's own menu under the chip's
+ * name (`ContextMenu`). None for a chip that goes nowhere, or where no app
+ * copies.
  */
-function useChipHold(
-  name: string,
+function useChipMenu(
   target: LinkTarget,
   onOpen: (() => void) | undefined,
-  anchor: RefObject<HostInstance | null>,
-): (() => void) | undefined {
+): readonly LongPressGroup[] {
   const keeping = useKeeping();
 
-  if (target.kind === LINK_TARGET.NONE || onOpen === undefined || keeping === undefined) {
-    return undefined;
-  }
+  if (target.kind === LINK_TARGET.NONE || onOpen === undefined || keeping === undefined) return [];
 
   const { href } = target;
 
-  return () => {
-    const sheet: ActionSheetIOSOptions = {
-      title: name,
-      options: [LINK_MENU_WORDS.OPEN, LINK_MENU_WORDS.COPY, CHIP_MENU_CANCEL],
-      cancelButtonIndex: CHIP_MENU_BUTTON.CANCEL,
-    };
-
-    // Note that a regular window's sheet stands as a popover from the chip, which it is anchored to once laid out.
-    const node = anchor.current === null ? null : findNodeHandle(anchor.current);
-    const anchored: ActionSheetIOSOptions = node === null ? sheet : { ...sheet, anchor: node };
-
-    ActionSheetIOS.showActionSheetWithOptions(anchored, (index) => {
-      if (index === CHIP_MENU_BUTTON.OPEN) onOpen();
-
-      if (index === CHIP_MENU_BUTTON.COPY) keeping.copyWords(href);
-    });
-  };
+  return [
+    [
+      {
+        label: LINK_MENU_WORDS.OPEN,
+        symbol: GLYPH.OPEN_EXTERNALLY,
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: onOpen,
+      },
+      {
+        label: LINK_MENU_WORDS.COPY,
+        symbol: GLYPH.LINK,
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: () => keeping.copyWords(href),
+      },
+    ],
+  ];
 }
 
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
@@ -352,7 +328,7 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
-/** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere, and held for Open link and Copy link (`useChipHold`). */
+/** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere, and held for Open link and Copy link (`useChipMenu`). */
 function MentionChip({
   chip,
   drawing,
@@ -366,8 +342,7 @@ function MentionChip({
   const standing = standingLook(chip, drawing);
   const heard = standing?.heard ?? chip.heard;
   const name = standing?.name ?? chip.name;
-  const anchor = useRef<HostInstance | null>(null);
-  const onHold = useChipHold(name, chip.target, onPress, anchor);
+  const menu = useChipMenu(chip.target, onPress);
 
   // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
   const mark =
@@ -377,38 +352,37 @@ function MentionChip({
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
-      <Press
-        ref={anchor}
-        onPress={onPress}
-        onLongPress={onHold}
-        delayLongPress={CHIP_HOLD_MS}
-        disabled={onPress === undefined}
-        accessibilityRole={onPress === undefined ? "text" : "link"}
-        accessibilityLabel={heard}
-        style={[
-          styles.chip,
-          {
-            maxWidth: drawing.lineWidth,
-            backgroundColor: colors.FILL_STRONG,
-          },
-        ]}
-      >
-        {mark === undefined ? (
-          <ChipSymbol
-            glyph={standing?.glyph ?? ENTITY_GLYPH[chip.entity]}
-            size={markSize}
-            color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
-          />
-        ) : (
-          <ChipMarkView mark={mark} size={markSize} colors={colors} />
-        )}
-        <Text
-          numberOfLines={1}
-          style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
+      <ContextMenu groups={menu} title={name}>
+        <Press
+          onPress={onPress}
+          disabled={onPress === undefined}
+          accessibilityRole={onPress === undefined ? "text" : "link"}
+          accessibilityLabel={heard}
+          style={[
+            styles.chip,
+            {
+              maxWidth: drawing.lineWidth,
+              backgroundColor: colors.FILL_STRONG,
+            },
+          ]}
         >
-          {name}
-        </Text>
-      </Press>
+          {mark === undefined ? (
+            <ChipSymbol
+              glyph={standing?.glyph ?? ENTITY_GLYPH[chip.entity]}
+              size={markSize}
+              color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
+            />
+          ) : (
+            <ChipMarkView mark={mark} size={markSize} colors={colors} />
+          )}
+          <Text
+            numberOfLines={1}
+            style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
+          >
+            {name}
+          </Text>
+        </Press>
+      </ContextMenu>
     </View>
   );
 }

@@ -494,6 +494,21 @@ export function rowPlacement(
   ];
 }
 
+/** A long press menu's tree as the native module reads it, SwiftUI's menu (`rowMenu`) and UIKit's (`ContextMenu`) alike: its groups (`menuTree`) in the menu's muted ink, headed by `title` where it has one. */
+export function longPressTree(
+  groups: readonly LongPressGroup[],
+  title: string | undefined,
+  colors: BrandColors,
+): string {
+  return JSON.stringify({
+    title,
+    groups: menuTree(groups, {
+      act: colors.TEXT_MUTED,
+      tone: (tone) => toneColor(colors, tone),
+    }),
+  });
+}
+
 /**
  * The one long press menu the app opens on anything held, as the panel opens
  * its right-click menu on the same things: SwiftUI's own menu, its groups in
@@ -519,13 +534,7 @@ export function LongPressMenu({
 
   if (filledGroups(groups).length === 0) return children;
 
-  const tree = JSON.stringify({
-    title,
-    groups: menuTree(groups, {
-      act: colors.TEXT_MUTED,
-      tone: (tone) => toneColor(colors, tone),
-    }),
-  });
+  const tree = longPressTree(groups, title, colors);
 
   return (
     <HStack modifiers={[rowMenu(tree, false, (path) => menuPressAt(groups, path)?.())]}>
