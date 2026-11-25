@@ -1,13 +1,8 @@
--- The migrator is transactional; on large live messages and runner_line tables, prebuild outside it with exactly:
--- CREATE INDEX CONCURRENTLY "messages_user_id" ON "messages" ("user_id");
--- CREATE INDEX CONCURRENTLY "messages_sender_user_id" ON "messages" ("sender_user_id");
--- CREATE INDEX CONCURRENTLY "runner_line_user_id" ON "runner_line" ("user_id");
--- Confirm all three exist, pg_index.indisvalid is true and definitions match before deploying;
--- IF NOT EXISTS adopts any index with these names without validating its definition.
--- SELECT indexrelid::regclass, indisvalid, pg_get_indexdef(indexrelid) FROM pg_index
--- WHERE indexrelid IN ('public.messages_user_id'::regclass, 'public.messages_sender_user_id'::regclass,
---                      'public.runner_line_user_id'::regclass);
--- If a build failed, DROP INDEX CONCURRENTLY "<failed_index_name>"; and retry that prebuild.
+-- The migrator runs every folder inside one transaction, so CONCURRENTLY is unavailable here.
+-- Estimated from production's pg_class on 2026-11-25 21:10 UTC: messages 193k rows (177 MB),
+-- native_call_key 83k, runner_line 60k, inbox_message 21k, every other table under 15k. A build
+-- over 1M rows took under a second locally, so each table's write lock is held well under a
+-- second until the transaction commits, and the deploy needs no online step before it.
 CREATE INDEX IF NOT EXISTS "attachment_organization_id" ON "attachment" ("organization_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "attachment_user_id" ON "attachment" ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "automation_run_user_id" ON "automation_run" ("user_id");--> statement-breakpoint

@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "8e2ae95c-8c93-403d-8ac5-29fbd23ac0e7",
-  "prevIds": ["bfe81340-cea1-4636-bfb0-3f9840bab412"],
+  "id": "a01b7c86-a608-4741-92a3-f832f8bad6f8",
+  "prevIds": ["0ea7db80-1623-40e3-959e-96a1322bdc5e"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -66,6 +66,12 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "agent_follower",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "agent_pin",
       "entityType": "tables",
       "schema": "public"
@@ -85,6 +91,12 @@
     {
       "isRlsEnabled": false,
       "name": "queued_message",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "agent_read",
       "entityType": "tables",
       "schema": "public"
     },
@@ -450,6 +462,12 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "manager_chat_message",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "memory",
       "entityType": "tables",
       "schema": "public"
@@ -631,6 +649,12 @@
     {
       "isRlsEnabled": false,
       "name": "task_read",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "agent_section_entry",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1428,7 +1452,7 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": true,
+      "notNull": false,
       "dimensions": 0,
       "default": null,
       "generated": null,
@@ -1707,6 +1731,32 @@
       "generated": null,
       "identity": null,
       "name": "published_read",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "said_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "face",
       "entityType": "columns",
       "schema": "public",
       "table": "agent"
@@ -2427,6 +2477,58 @@
       "table": "agent_browser_tab"
     },
     {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_follower"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_follower"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "machines",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_follower"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_follower"
+    },
+    {
       "type": "text",
       "typeSchema": null,
       "notNull": true,
@@ -2779,6 +2881,45 @@
       "entityType": "columns",
       "schema": "public",
       "table": "queued_message"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_read"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_read"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "read_through",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_read"
     },
     {
       "type": "uuid",
@@ -6904,12 +7045,51 @@
     {
       "type": "text",
       "typeSchema": null,
-      "notNull": true,
+      "notNull": false,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
       "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "connected_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "network",
       "entityType": "columns",
       "schema": "public",
       "table": "device"
@@ -8473,6 +8653,19 @@
     {
       "type": "text",
       "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "machine_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "host_pairing"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -8642,7 +8835,7 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": true,
+      "notNull": false,
       "dimensions": 0,
       "default": null,
       "generated": null,
@@ -10100,6 +10293,210 @@
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": {
+        "type": "always",
+        "name": "manager_chat_message_seq_seq",
+        "increment": "1",
+        "startWith": "1",
+        "minValue": "1",
+        "maxValue": "9223372036854775807",
+        "cache": 1,
+        "cycle": false
+      },
+      "name": "seq",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "author_kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "author_user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "author_name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "text",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'[]'",
+      "generated": null,
+      "identity": null,
+      "name": "attachments",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "thread_root",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "broadcast",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "line_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "client_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "edited_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
       "default": "gen_random_uuid()",
       "generated": null,
       "identity": null,
@@ -10169,6 +10566,19 @@
       "generated": null,
       "identity": null,
       "name": "message_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memory"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "manager_id",
       "entityType": "columns",
       "schema": "public",
       "table": "memory"
@@ -10585,6 +10995,19 @@
       "generated": null,
       "identity": null,
       "name": "github_wakes_off",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_preference"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "new_agent_servers_off",
       "entityType": "columns",
       "schema": "public",
       "table": "account_preference"
@@ -13793,6 +14216,71 @@
       "table": "task_read"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "section_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "position",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "added_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -15602,6 +16090,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "agent_follower_user",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "agent_follower"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "agent_id",
           "isExpression": false,
           "asc": true,
@@ -15730,6 +16239,27 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "queued_message"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "agent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "agent_read_agent",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "agent_read"
     },
     {
       "nameExplicit": true,
@@ -17163,6 +17693,48 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"organization_id\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "device_workspace",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "connected_by",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"connected_by\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "device_connected_by",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "secret_hash",
           "isExpression": false,
           "asc": true,
@@ -18101,6 +18673,118 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "agent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "client_key",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "manager_chat_message_client_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "agent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "seq",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "manager_chat_message_agent_seq",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "agent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "thread_root",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "seq",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"thread_root\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "manager_chat_message_thread_seq",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "turn_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"turn_id\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "manager_chat_message_turn",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "organization_id",
           "isExpression": false,
           "asc": true,
@@ -18142,6 +18826,27 @@
       "method": "btree",
       "concurrently": false,
       "name": "memory_agent",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "memory"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "manager_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"manager_id\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "memory_manager",
       "entityType": "indexes",
       "schema": "public",
       "table": "memory"
@@ -19242,6 +19947,48 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "agent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "agent_section_entry_agent",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "section_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "agent_section_entry_section",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "user_id",
           "isExpression": false,
           "asc": true,
@@ -19955,6 +20702,32 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "agent_follower_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "agent_follower"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "agent_follower_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "agent_follower"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["user_id"],
       "schemaTo": "public",
       "tableTo": "user",
@@ -20030,6 +20803,32 @@
       "entityType": "fks",
       "schema": "public",
       "table": "queued_message"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "agent_read_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "agent_read"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "agent_read_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "agent_read"
     },
     {
       "nameExplicit": false,
@@ -20722,6 +21521,32 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["organization_id"],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "device_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["connected_by"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "device_connected_by_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["user_id"],
       "schemaTo": "public",
       "tableTo": "user",
@@ -21398,6 +22223,58 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "manager_chat_message_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["author_user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "manager_chat_message_author_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["turn_id"],
+      "schemaTo": "public",
+      "tableTo": "turns",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "manager_chat_message_turn_id_turns_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "nameExplicit": true,
+      "columns": ["agent_id", "thread_root"],
+      "schemaTo": "public",
+      "tableTo": "manager_chat_message",
+      "columnsTo": ["agent_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "manager_chat_message_thread_root",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["organization_id"],
       "schemaTo": "public",
       "tableTo": "organization",
@@ -21431,6 +22308,19 @@
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "memory_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "memory"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["manager_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "memory_manager_id_agent_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "memory"
@@ -22184,6 +23074,45 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
+      "name": "agent_section_entry_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "agent_section_entry_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["section_id"],
+      "schemaTo": "public",
+      "tableTo": "task_section",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "agent_section_entry_section_id_task_section_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "agent_section_entry"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "task_section_user_id_user_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -22523,6 +23452,14 @@
       "table": "account_sound_choice"
     },
     {
+      "columns": ["agent_id", "user_id"],
+      "nameExplicit": false,
+      "name": "agent_follower_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "agent_follower"
+    },
+    {
       "columns": ["user_id", "agent_id"],
       "nameExplicit": false,
       "name": "agent_pin_pkey",
@@ -22537,6 +23474,14 @@
       "entityType": "pks",
       "schema": "public",
       "table": "agent_pull_request"
+    },
+    {
+      "columns": ["user_id", "agent_id"],
+      "nameExplicit": false,
+      "name": "agent_read_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "agent_read"
     },
     {
       "columns": ["agent_id", "position"],
@@ -22617,6 +23562,14 @@
       "entityType": "pks",
       "schema": "public",
       "table": "integration_installation"
+    },
+    {
+      "columns": ["agent_id", "id"],
+      "nameExplicit": false,
+      "name": "manager_chat_message_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "manager_chat_message"
     },
     {
       "columns": ["user_id", "conversation_id", "digest"],
@@ -22705,6 +23658,14 @@
       "entityType": "pks",
       "schema": "public",
       "table": "task_read"
+    },
+    {
+      "columns": ["user_id", "agent_id"],
+      "nameExplicit": false,
+      "name": "agent_section_entry_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "agent_section_entry"
     },
     {
       "columns": ["user_id", "task_id"],
@@ -23676,13 +24637,6 @@
       "table": "attachment"
     },
     {
-      "value": "\"inbox_item_id\" is null or \"task_id\" is not null",
-      "name": "attachment_inbox_file_task",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "attachment"
-    },
-    {
       "value": "\"mp4_bytes\" is null or (\"content_type\" in ('video/webm', 'audio/ogg') and octet_length(\"mp4_bytes\") <= 4000000)",
       "name": "attachment_phone_copy",
       "entityType": "checks",
@@ -23709,6 +24663,20 @@
       "entityType": "checks",
       "schema": "public",
       "table": "description_comment_thread"
+    },
+    {
+      "value": "num_nonnulls(\"user_id\", \"organization_id\") = 1",
+      "name": "device_one_owner",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "value": "(\"organization_id\" is null) = (\"network\" is null) and (\"organization_id\" is not null or \"connected_by\" is null)",
+      "name": "device_workspace_fields",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "device"
     },
     {
       "value": "(\"inbox_item_id\" is not null) <> (\"agent_id\" is not null and \"turn_id\" is not null)",
@@ -23751,6 +24719,20 @@
       "entityType": "checks",
       "schema": "public",
       "table": "machine_command"
+    },
+    {
+      "value": "\"author_kind\" in ('person', 'agent') and (\"author_kind\" = 'person' or \"author_user_id\" is null)",
+      "name": "manager_chat_message_author",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "manager_chat_message"
+    },
+    {
+      "value": "(\"thread_root\" is null or \"thread_root\" <> \"id\") and (\"broadcast\" = false or \"thread_root\" is not null)",
+      "name": "manager_chat_message_thread",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "manager_chat_message"
     },
     {
       "value": "num_nonnulls(\"bot_key_version\", \"bot_sealed_data_key\", \"bot_sealed_token\", \"bot_user_id\", \"bot_scopes\", \"bot_id\", \"app_id\") in (0, 7)",
