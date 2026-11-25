@@ -22,6 +22,14 @@ export const MAIN_STALL = {
   STALL_MS: 150,
   /** How often the worker looks for main's next tick once it has stalled. */
   POLL_MS: 25,
+  /**
+   * The least time between two stalls main is paused for its stack; every
+   * other stall is only timed. Note that the pause holds main while the
+   * inspector writes out its frames, 2–3 ms for a stack 30 deep and 7–12 ms
+   * for one 150 deep, measured in Electron 43, so a struggling main that
+   * stalls every few seconds is held at most once a minute.
+   */
+  STACK_GAP_MS: 60_000,
 } as const;
 
 /** The most frames a stall's stack keeps, the innermost first to stay. */

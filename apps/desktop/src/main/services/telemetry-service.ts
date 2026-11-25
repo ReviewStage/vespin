@@ -47,17 +47,6 @@ declare const PACKAGED_SENTRY_DSN: string;
 declare const STALL_WATCH_WORKER: string;
 
 /**
- * The least time between two stalls main reports with their stacks; every
- * stall is still counted (`desktop.main.stall`). Note that a stall of 0.4 s
- * to 1.2 s may come every few seconds while main is struggling, and one
- * stack a minute names what holds it without filling the project.
- */
-const STALL_REPORT_GAP_MS = 60_000;
-
-/** When main last reported a stall with its stack. */
-let stallReportedAt = Number.NEGATIVE_INFINITY;
-
-/**
  * `<name>@X.Y.Z`, the release `build.mjs` uploads this bundle's source maps
  * under, baked from that same string. Note that the SDK's own default is the
  * app's name, which is `<name> Dev` or `<name> Test` outside a Developer ID
@@ -335,8 +324,8 @@ function reportCpuSummary(summary: CpuSummary, appVersion: string): void {
 /**
  * One stall of main: counted every time as a Sentry metric distribution,
  * tagged as the CPU summaries are, and reported as a warning with the stack
- * it was caught in, at most once a `STALL_REPORT_GAP_MS`, grouped by that
- * stack. A stall caught in main's own tick names nothing that held main, so
+ * it was caught in where the watch paused main for one, which it does at most
+ * once a `MAIN_STALL.STACK_GAP_MS`, grouped by that stack. A stall caught in main's own tick names nothing that held main, so
  * it is counted and never reported; and the stall is counted here rather
  * than beside each span, which carries the longest within it already
  * (`main.loop_stall_ms`), so how often main stalls is read across every
@@ -353,13 +342,9 @@ function reportMainStall(stall: MainStall, appVersion: string, workingAgents: nu
   });
 
   const frames = stall.frames ?? [];
-  const now = Date.now();
 
   if (frames.length === 0 || frames.some((frame) => frame.function === mainLoopTick.name)) return;
 
-  if (now - stallReportedAt < STALL_REPORT_GAP_MS) return;
-
-  stallReportedAt = now;
   Sentry.captureEvent({
     level: "warning",
     exception: {

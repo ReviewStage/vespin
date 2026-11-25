@@ -6,7 +6,8 @@
  * one to at every tick (`main-loop-stalls.ts`'s `mainTicks`). The worker
  * sleeps on that count (`Atomics.wait`) rather than on a timer of its own,
  * so it wakes only as main ticks, ten times a second, or once a tick is
- * `MAIN_STALL.STALL_MS` late, which is the stall.
+ * `MAIN_STALL.STALL_MS` late, which is the stall. Every stall is timed, and
+ * main is paused for the stack of one at most once a `MAIN_STALL.STACK_GAP_MS`.
  *
  * Note that main's inspector is reached in process (`connectToMainThread`),
  * which opens no port and needs none of the Node switches the packaged app
@@ -50,6 +51,9 @@ let stalled: { readonly since: number; readonly count: number } | undefined;
 /** The stack the stall standing was caught in, once a pause has landed during it. */
 let caught: readonly StallFrame[] | undefined;
 
+/** When main was last paused for its stack, by this thread's clock. */
+let pausedAt = Number.NEGATIVE_INFINITY;
+
 /** Sleeps on main's count until a tick comes late, then pauses main and waits for it to tick again. */
 function waitForStall(): void {
   let ticked = Date.now();
@@ -64,7 +68,13 @@ function waitForStall(): void {
 
   stalled = { since: ticked, count: Atomics.load(ticks, 0) };
   caught = undefined;
-  session.post("Debugger.pause");
+
+  // Main is held while its frames are written out, so it is paused for them at most once a `STACK_GAP_MS`.
+  if (Date.now() - pausedAt >= MAIN_STALL.STACK_GAP_MS) {
+    pausedAt = Date.now();
+    session.post("Debugger.pause");
+  }
+
   waitForTick();
 }
 
