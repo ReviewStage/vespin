@@ -771,11 +771,15 @@ test("a file refused as too large is counted once, by its kind and its size on a
   await drop(container, [
     of("secret-plan.pdf", AGENT_ATTACHMENT_TYPE.PDF, 30_000_000),
     of("secret-log.txt", AGENT_ATTACHMENT_TYPE.TEXT, 300_000_000),
+    of("clip.mp4", "video/mp4", 5_000_000),
+    of("bundle.zip", "application/zip", 8_000_000),
   ]);
 
   assert.deepEqual(counted, [
     ["attachment:too_large", { kind: "pdf", size_bucket: "25_to_100mb" }],
     ["attachment:too_large", { kind: "text", size_bucket: "over_250mb" }],
+    ["attachment:too_large", { kind: "video", size_bucket: "3_to_7mb" }],
+    ["attachment:too_large", { kind: "other", size_bucket: "7_to_25mb" }],
   ]);
 });
 
