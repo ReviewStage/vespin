@@ -1,12 +1,13 @@
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { machineName } from "@repo/features/machine-name";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DefaultMachine, WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
+  Badge,
   GAP,
   Inline,
+  type MenuLastLine,
   type MenuRow,
   STATUS_TONE,
   SUBMENU_WIDTH,
@@ -36,36 +37,37 @@ import { showToast } from "../toast.js";
 import { MachineGlyph } from "./workspace-machines.js";
 
 /**
- * agent-machines.tsx -- the machine an agent's terminal commands and computer use go to: its Default machine row in its place chip's popover, and the machine a call still unanswered names.
+ * agent-machines.tsx -- the machines an agent may run terminal commands and computer use on: their list in its place chip's popover, and the machine a call still unanswered names.
  *
  * The agent's tools as the service answers them (`LIVE_READ.WORKSPACE_TOOLS`)
  * say where a call naming no machine would go now (`runOnMac.machine`), and
- * the machines its default may be set to: those of the people who let the
- * task's agents use theirs, online or not. The Default machine row names
- * the machine a call would go to as its submenu draws it, its glyph's dot
- * green while it listened lately and gray while it did not, so a default
- * that went offline stays the default and says so; a call to it is refused
- * with the reason. Its submenu, under the one heading that says what it is
- * for, lists each machine with the same dot and its owner's face, an offline one
- * still picked, since it may come back, and a pick sets the agent's default
- * on the service, which answers the agent's tools as they then stand. A
- * local agent with no default reads None, since a call naming no machine
- * would go to the one it runs on, whose own shell runs it. An agent
- * offered no `run_on_mac` has no such row.
+ * the machines a call may name: those of the people who let the task's
+ * agents use theirs, online or not. Note that the agent itself runs
+ * elsewhere, in its sandbox or on its own device, and reaches these only
+ * for a call, so the popover lists them apart from where it runs, under
+ * "It can also run commands on", rather than as a second place, and names
+ * the default as the machine a call naming none goes to, not the only one.
+ * A default that went offline stays the default and says so; a call to it
+ * is refused with the reason. A pick sets the agent's default on the
+ * service, which answers the agent's tools as they then stand. A local
+ * agent with no default marks none, since a call naming no machine would go
+ * to the one it runs on, whose own shell runs it. An agent offered no
+ * `run_on_mac` lists none.
  */
 
-/** The Default machine row's id, which no place's id is. */
-const DEFAULT_MACHINE_ROW = "default-machine";
+/** The All row's id, which no machine's id is. */
+const ALL_MACHINES_ROW = "all-machines";
 
-/** What the Default machine row and its submenu say. */
-const DEFAULT_MACHINE_WORDS = {
-  LABEL: "Commands run on",
-  /** What the row says under its label of a cloud agent's Mac, whose app runs computer use too. */
-  RUNS_MAC: `${PRODUCT_NAME} there runs its terminal commands and computer use.`,
-  /** What the row says under its label of a cloud agent's other machine, or one an older service names no platform of, since only a Mac's app ships the computer-use helper. */
-  RUNS_OTHER: `${PRODUCT_NAME} there runs its terminal commands.`,
-  HEADING: "Commands run here",
-  NONE: "None",
+/** What the machine list says: its heading, each machine's uses and end, the All row, and the line under the list. */
+const MACHINE_LIST_WORDS = {
+  HEADING: "It can also run commands on",
+  USES_MAC: "Terminal · Computer use",
+  USES_OTHER: "Terminal",
+  DEFAULT: "Default",
+  OFFLINE: "Offline",
+  all: (count: number) => `All ${count} machines`,
+  more: (count: number) => `${count} more`,
+  NOTE: "It chooses a machine per command. Pick a machine to make it the default.",
   REFUSED: "The default machine could not be changed.",
 } as const;
 
@@ -120,7 +122,7 @@ function defaultMachineMutation(agentId: string) {
       if (!("failure" in answer)) return;
       showToast({
         replayUnmasked: true,
-        words: DEFAULT_MACHINE_WORDS.REFUSED,
+        words: MACHINE_LIST_WORDS.REFUSED,
         tone: STATUS_TONE.DANGER,
         failure: { surface: FAILURE_SURFACE.ACT, cause: answer, about: { agentId } },
       });
@@ -176,17 +178,17 @@ function usePickedMachine(agentId: string): string | undefined {
   return newest?.out === true ? newest.pick?.machineId : undefined;
 }
 
-/** The value a row of the place popover ends in, muted: a teammate's face where the machine is theirs, then its name; or None, for the Default machine row with none. */
+/** The value a row of the place popover ends in, muted: a teammate's face where the machine is theirs, then its name. */
 export function MachineValue({
   name,
   face,
 }: {
-  name: string | undefined;
+  name: string;
   face: React.ReactNode;
 }): React.JSX.Element {
   const words = (
     <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-      {name === undefined ? DEFAULT_MACHINE_WORDS.NONE : <ReplayWords masked>{name}</ReplayWords>}
+      <ReplayWords masked>{name}</ReplayWords>
     </Text>
   );
 
@@ -200,52 +202,59 @@ export function MachineValue({
   );
 }
 
-/** The Default machine row of the agent's place popover, and whether it names a machine rather than None. */
-export interface DefaultMachineRow {
-  readonly row: MenuRow;
-  readonly named: boolean;
+/** How many machines the popover lists before the rest fold into the All row, which it draws only where it would fold two or more, since a row folding one is no shorter than that one. */
+const MACHINES_LISTED = 3;
+
+/** What the agent may do on a machine, by its platform: computer use only on a Mac, since only the desktop app ships its helper, and terminal commands alone where an older service names no platform. */
+function machineUses(machine: DefaultMachine): string {
+  return machine.platform === DEVICE_PLATFORM.DARWIN
+    ? MACHINE_LIST_WORDS.USES_MAC
+    : MACHINE_LIST_WORDS.USES_OTHER;
+}
+
+/** The machines the popover lists first: the default, then those online now, each kept in the order the service answers them, the one that listened last first. */
+function machinesFirst(
+  machines: readonly DefaultMachine[],
+  chosenId: string | undefined,
+): readonly DefaultMachine[] {
+  const rank = (machine: DefaultMachine) => (machine.id === chosenId ? 0 : machine.online ? 1 : 2);
+
+  return [...machines].sort((one, other) => rank(one) - rank(other));
+}
+
+/** The machines an agent may run commands on, as its place popover lists them: the rows under their heading, what a pick does, and the line that says so. */
+export interface ReachableMachines {
+  readonly rows: readonly MenuRow[];
+  readonly onPick: (id: string) => void;
+  readonly lastLine: MenuLastLine;
 }
 
 /**
- * The Default machine row of the agent's place popover, as the module
- * says; none for an agent offered no `run_on_mac`, or before its tools are
- * read. For an agent that runs apart from the machine, as a cloud agent
- * does, the row says under its label that the app there runs its commands,
- * and its computer use where the machine is a Mac. A pick is drawn as the default from the press, while the service
- * has yet to answer (`usePickedMachine`). Note that a machine none of the list names, as
- * the owner's from before machines were named, is named as the answer
- * names it.
+ * The machines an agent may run commands on, as its place popover lists
+ * them under "It can also run commands on"; none for an agent offered no
+ * `run_on_mac`, before its tools are read, or where it may reach no machine.
+ * Each row names the machine with its glyph and dot, a teammate's face
+ * before it, what the agent may do there under it, and at its end Default
+ * where a call naming no machine goes there, else Offline where it did not
+ * listen lately. The first few stand in the popover (`machinesFirst`), and
+ * the rest fold into an All row whose submenu lists every one, the default
+ * checked. A pick of a machine, in either, sets the agent's default, drawn
+ * from the press while the service has yet to answer (`usePickedMachine`).
  */
-export function useDefaultMachineRow(
-  agentId: string,
-  /** Whether the agent runs apart from the machine its commands go to, as a cloud agent does. */
-  apart = false,
-): DefaultMachineRow | undefined {
+export function useReachableMachines(agentId: string): ReachableMachines | undefined {
   const tools = useAgentTools(agentId);
   const { mutate: setDefault } = useMutation(defaultMachineMutation(agentId));
   const pickedId = usePickedMachine(agentId);
   const thisMac = useThisMac();
   const { members, readerId, former } = useMemberDirectory();
-  const standing = tools?.runOnMac;
-
-  if (standing === undefined) return undefined;
   const machines: readonly DefaultMachine[] = tools?.machines ?? [];
+
+  if (tools?.runOnMac === undefined || machines.length === 0) return undefined;
+  const chosenId = pickedId ?? tools.runOnMac.machine?.id;
   const listed = machines.map((machine) => ({ deviceId: machine.id, name: machine.name }));
 
-  const nameOf = (machine: { readonly id: string; readonly name: string }) =>
+  const nameOf = (machine: DefaultMachine) =>
     machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac);
-
-  const picked = machines.find((machine) => machine.id === pickedId);
-
-  const chosen = picked ?? standing.machine;
-  const owner = picked?.owner ?? standing.owner;
-  const chosenListed = machines.find((machine) => machine.id === chosen?.id);
-  const online = chosenListed?.online ?? standing.on;
-
-  const runs =
-    chosenListed?.platform === DEVICE_PLATFORM.DARWIN
-      ? DEFAULT_MACHINE_WORDS.RUNS_MAC
-      : DEFAULT_MACHINE_WORDS.RUNS_OTHER;
 
   // Note that only a teammate's machine wears its owner's face, since the reader's own needs no saying whose it is.
   const faceOf = (owner: DefaultMachine["owner"]) =>
@@ -253,45 +262,72 @@ export function useDefaultMachineRow(
       <ActorMark actor={personActor(owner, members, readerId, former)} size={ACTOR_SIZE.INLINE} />
     );
 
-  const row: MenuRow = {
-    id: DEFAULT_MACHINE_ROW,
-    label: DEFAULT_MACHINE_WORDS.LABEL,
-    icon:
-      chosen === undefined ? (
-        <GLYPH.DESKTOP aria-hidden="true" />
-      ) : (
-        <MachineGlyph machine={chosenListed ?? { online }} />
-      ),
-    end: (
-      <MachineValue
-        name={chosen === undefined ? undefined : nameOf(chosen)}
-        face={chosen === undefined ? undefined : faceOf(owner)}
-      />
-    ),
-    detail: apart && chosen !== undefined ? runs : undefined,
-    detailUnder: true,
-    submenu:
-      machines.length === 0
-        ? undefined
-        : {
-            label: DEFAULT_MACHINE_WORDS.HEADING,
-            heading: DEFAULT_MACHINE_WORDS.HEADING,
-            rows: machines.map(
-              (machine): MenuRow => ({
-                id: machine.id,
-                label: nameOf(machine),
-                icon: <MachineGlyph machine={machine} />,
-                before: faceOf(machine.owner),
-                replayMasked: true,
-              }),
-            ),
-            value: chosen?.id,
-            width: SUBMENU_WIDTH.WIDE,
-            onPick: (machineId) => {
-              if (machineId !== chosen?.id) setDefault({ agentId, machineId });
-            },
-          },
+  const endOf = (machine: DefaultMachine) => {
+    if (machine.id === chosenId) return <Badge>{MACHINE_LIST_WORDS.DEFAULT}</Badge>;
+
+    return machine.online ? undefined : (
+      <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+        {MACHINE_LIST_WORDS.OFFLINE}
+      </Text>
+    );
   };
 
-  return { row, named: chosen !== undefined };
+  const rowOf = (machine: DefaultMachine): MenuRow => ({
+    id: machine.id,
+    label: nameOf(machine),
+    icon: <MachineGlyph machine={machine} />,
+    before: faceOf(machine.owner),
+    detail: machineUses(machine),
+    detailUnder: true,
+    end: endOf(machine),
+    section: MACHINE_LIST_WORDS.HEADING,
+    replayMasked: true,
+  });
+
+  const pick = (machineId: string) => {
+    if (machineId !== chosenId) setDefault({ agentId, machineId });
+  };
+
+  const ordered = machinesFirst(machines, chosenId);
+  const listing = ordered.length <= MACHINES_LISTED + 1 ? ordered.length : MACHINES_LISTED;
+  const shown = ordered.slice(0, listing).map(rowOf);
+  const folded = ordered.length - listing;
+
+  const all: readonly MenuRow[] =
+    folded <= 0
+      ? []
+      : [
+          {
+            id: ALL_MACHINES_ROW,
+            label: MACHINE_LIST_WORDS.all(ordered.length),
+            icon: <GLYPH.MORE aria-hidden="true" />,
+            end: (
+              <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+                {MACHINE_LIST_WORDS.more(folded)}
+              </Text>
+            ),
+            section: MACHINE_LIST_WORDS.HEADING,
+            submenu: {
+              label: MACHINE_LIST_WORDS.HEADING,
+              heading: MACHINE_LIST_WORDS.HEADING,
+              rows: ordered.map((machine) => ({
+                ...rowOf(machine),
+                end: undefined,
+                section: undefined,
+              })),
+              value: chosenId,
+              width: SUBMENU_WIDTH.WIDE,
+              onPick: pick,
+            },
+          },
+        ];
+
+  return {
+    rows: [...shown, ...all],
+    onPick: (id) => {
+      // Note that a press on the All row opens its submenu rather than picking, so only a machine's id sets the default.
+      if (machines.some((machine) => machine.id === id)) pick(id);
+    },
+    lastLine: { words: MACHINE_LIST_WORDS.NOTE },
+  };
 }
