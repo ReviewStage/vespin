@@ -26,13 +26,21 @@
  */
 
 import { failureKind, reportUnexpected } from "@repo/runtime/effect";
-import type { KeptAnswer, OutboxStore, PoolStore, QueuedEntry, RowsStore } from "@repo/sync";
+import type {
+  CollectionsStore,
+  KeptAnswer,
+  OutboxStore,
+  PoolStore,
+  QueuedEntry,
+  RowsStore,
+} from "@repo/sync";
 import { Effect, Exit, type Path, Result, Scope, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import {
   forgetLocalDatabase,
   type LocalDatabaseDriver,
   type LocalDatabaseFailed,
+  openKeptCollections,
   openLocalDatabase,
 } from "./local-database.js";
 import {
@@ -46,6 +54,7 @@ import { localRows } from "./local-rows.js";
 /** What Sentry is told of a local database that would not open, read a queue back, or be deleted. */
 const LOCAL_DATABASE_REPORT = {
   OPEN_FAILED: "host.localDatabase.openFailed",
+  COLLECTIONS_FAILED: "host.localDatabase.collectionsFailed",
   OUTBOX_UNREAD: "host.localDatabase.outboxUnread",
   REFUSED_UNREAD: "host.localDatabase.refusedUnread",
   FORGET_FAILED: "host.localDatabase.forgetFailed",
@@ -84,6 +93,8 @@ export interface LocalCopy {
 interface Opened {
   readonly rows: RowsStore;
   readonly outbox: OutboxStore;
+  /** The database the stored kinds' collections are kept in beside it, where the platform keeps one and it opened. */
+  readonly collections: CollectionsStore | undefined;
   readonly scope: Scope.Closeable;
 }
 
@@ -123,6 +134,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
       answered: (answer: KeptAnswer) => opened?.rows.answered(answer) ?? Effect.void,
       loaded: (name) => opened?.rows.loaded(name) ?? Effect.undefined,
     },
+    collections: () => opened?.collections,
   };
 
   const open = (accountId: string, refused: RefusedMessages) =>
@@ -163,7 +175,22 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
 
       yield* refusedOpened(localRefused(connection.success), scope);
       const outbox = localOutbox(connection.success);
-      opened = { rows: localRows(connection.success), outbox, scope };
+
+      // Note that a database of kept collections that will not open leaves each stored kind in memory for that sign-in, as it is where the platform keeps none.
+      const kept = yield* Effect.result(
+        openKeptCollections(stateRoot, accountId).pipe(Scope.provide(scope)),
+      );
+
+      if (Result.isFailure(kept))
+        yield* reported(LOCAL_DATABASE_REPORT.COLLECTIONS_FAILED, kept.failure);
+      const keep = Result.isSuccess(kept) ? kept.success : undefined;
+
+      opened = {
+        rows: localRows(connection.success),
+        outbox,
+        collections: keep === undefined ? undefined : { keep, scope },
+        scope,
+      };
 
       // Note that an outbox that will not read back leaves its writes on disk for the next launch.
       const restored = yield* Effect.result(outbox.restored);

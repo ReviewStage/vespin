@@ -4,6 +4,7 @@ import type { ListedAgent } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import type { AppBridge } from "@repo/host/bridge";
 import type { ActPortClient } from "@repo/host/contract";
+import type { InboxRowsSource } from "@repo/host/inbox-rows";
 import type { TaskListCollections } from "@repo/host/task-list-following";
 import { listenToRow } from "@repo/host/task-list-row-readers";
 import { type Collection, useLiveQuery } from "@tanstack/react-db";
@@ -71,6 +72,7 @@ type Standing =
       readonly acts: ActPortClient;
       readonly follow: HostFollow;
       readonly count: HostCount;
+      readonly inboxRows: InboxRowsSource;
     }
   | { readonly failed: true };
 
@@ -85,6 +87,18 @@ const HostCounts = createContext<HostCount | undefined>(undefined);
 
 /** The task list's collections, fed from the document the client holds, once the host stands. */
 const TaskListCollectionsContext = createContext<TaskListCollections | undefined>(undefined);
+
+/** The pool's Inbox kind, which the screens read where its items are kept on disk, once the host stands. */
+const InboxRowsContext = createContext<InboxRowsSource | undefined>(undefined);
+
+/** The pool's Inbox kind, for a live query over its kept items, for a screen drawn under `HostProvider`. */
+export function useInboxRowsSource(): InboxRowsSource {
+  const source = useContext(InboxRowsContext);
+
+  if (source === undefined) throw new Error("A screen read the Inbox outside the host's provider.");
+
+  return source;
+}
 
 /** The host's act port, for a screen drawn under `HostProvider`. */
 export function useHostActs(): ActPortClient {
@@ -374,6 +388,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
             acts: host.acts,
             follow: host.follow,
             count: host.bridge.recordSurfaceEvent,
+            inboxRows: host.inboxRows,
           });
         } else void host.close();
       },
@@ -406,7 +421,9 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         <HostFollows.Provider value={standing.follow}>
           <HostCounts.Provider value={standing.count}>
             <TaskListCollectionsContext.Provider value={standing.taskList}>
-              {children}
+              <InboxRowsContext.Provider value={standing.inboxRows}>
+                {children}
+              </InboxRowsContext.Provider>
             </TaskListCollectionsContext.Provider>
           </HostCounts.Provider>
         </HostFollows.Provider>

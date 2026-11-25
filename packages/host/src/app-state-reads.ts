@@ -625,6 +625,8 @@ export interface InboxHoldings {
   readonly tasks: readonly { readonly taskId: string }[];
   readonly keptHolders: readonly TaskSummary[];
   readonly agents: Readonly<Record<string, readonly InboxItem[]>>;
+  /** That the feed's items are kept on disk and read through live queries (`AppInboxRead`'s `stored`), so `read` and `agents` hold none of them. */
+  readonly stored?: true;
 }
 
 /** No agent on no task holding items: the feed before it first answers, and a service's from before it carried them. */
@@ -673,6 +675,7 @@ export const selectInboxHoldings = memoizedSelect(
         ? (feed.keptHolders ?? NO_KEPT_HOLDERS)
         : NO_KEPT_HOLDERS,
       agents: feed.rows?.agents ?? NO_AGENT_ITEMS,
+      ...(feed.stored === true ? { stored: true } : undefined),
     };
   },
 );
