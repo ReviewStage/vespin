@@ -2288,6 +2288,11 @@ function mergeCases() {
         "A required review is missing, so it can't be merged yet",
       ),
     ],
+    [
+      "review required, which the member may bypass, its press saying why",
+      merging(MERGE_STATE.BLOCKED, { review: REVIEW_DECISION.REVIEW_REQUIRED }, true),
+      { ...none, press: "Bypass rules and merge", look: "outline", chevron: true },
+    ],
     ["checks failing", merging(MERGE_STATE.BLOCKED, { checks: CHECK_SUMMARY.FAILING }), undefined],
     [
       "checks failing and a review required",
