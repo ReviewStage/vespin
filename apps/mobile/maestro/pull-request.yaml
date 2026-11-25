@@ -1,4 +1,4 @@
-# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, its title edited from a tap on it, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, its review opened whole in its conversation and reacted to from its long press, its thread replied to on its own screen and resolved and reopened from its long press, a new comment's field opened, turned to a draft and back from its state chip, then closed from its ⋯, with Undo reopening it; and one in the merge queue, its long description folded behind Show more, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
+# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, its title edited from a tap on it, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, its review opened whole in its conversation and reacted to from its long press, its thread replied to on its own screen and resolved and reopened from its long press, a new comment's field opened, turned to a draft and back from its state chip, then closed from its ⋯, with Undo reopening it; its Description and Conversation folded under their headings and opened again; and one in the merge queue, its long description folded behind Show more, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -78,6 +78,18 @@ env:
 - assertVisible: "Adds Invite by email.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
+# The Description folds under its heading, as the panel's does: a tap on
+# the heading folds it away, its chevron turning, and a second opens it.
+- tapOn: "Description"
+- extendedWaitUntil:
+    notVisible: "Adds Invite by email.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-description-section-folded
+- tapOn: "Description"
+- extendedWaitUntil:
+    visible: "Adds Invite by email.*"
+    timeout: 10000
 # Its title is edited where it stands: a tap on it opens the system's name
 # alert, as a task is renamed, and Save keeps the words, which the heading
 # draws at once and keeps once GitHub took them.
@@ -272,6 +284,18 @@ env:
     direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-conversation
+# The Conversation folds under its heading too, its count standing, and a
+# second tap opens it again.
+- tapOn: "Conversation.*"
+- extendedWaitUntil:
+    notVisible: "src/invites/expiry.ts.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-conversation-folded
+- tapOn: "Conversation.*"
+- extendedWaitUntil:
+    visible: "src/invites/expiry.ts.*"
+    timeout: 10000
 - tapOn:
     text: "grace"
     below: "Conversation.*"
