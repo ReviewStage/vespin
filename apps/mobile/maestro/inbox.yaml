@@ -99,7 +99,9 @@ env:
 # close button closes it. Note that the button is found by Quick Look's own
 # id, since it reads "Done" on an iPhone and "close" on an iPad, and that an
 # iPad's Quick Look hides its bar a moment after it opens, so a tap on the
-# page brings the bar back first where the button no longer stands.
+# page brings the bar back first where the button no longer stands. The page
+# is found by Quick Look's own id for its view, since PDFKit hands none of
+# the PDF's words to the accessibility tree.
 - extendedWaitUntil:
     visible:
       id: "QLOverlayDoneButtonAccessibilityIdentifier"
@@ -112,7 +114,7 @@ env:
         id: "QLOverlayDoneButtonAccessibilityIdentifier"
     commands:
       - tapOn:
-          point: "50%, 50%"
+          id: "QLPreviewControllerView"
       - extendedWaitUntil:
           visible:
             id: "QLOverlayDoneButtonAccessibilityIdentifier"
@@ -135,10 +137,20 @@ env:
 - assertVisible: "Pick a date and time…"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-thread-remind
-- tapOn:
-    point: "50%, 90%"
-- waitForAnimationToEnd
+# Note that the menu is put away by a tap off it at a point, through the
+# flows' own `dismiss.yaml`, as keep.yaml puts its menus away, because iOS
+# takes everything under an open menu out of the accessibility tree, so no
+# named control exists to tap. The point is the window's trailing margin
+# beside the thread's files, where nothing presses even with no menu
+# standing, and the flow then asserts the menu gone and the thread as it
+# stood, its PDF's chip still there, so a tap that ever lands on something
+# fails here.
+- runFlow:
+    file: subflows/dismiss.yaml
+    env:
+      POINT: "94%, 60%"
 - assertNotVisible: "Pick a date and time…"
+- assertVisible: "invite-test-plan.pdf, PDF.*"
 # Back on the list, from the thread.
 - runFlow:
     file: subflows/tab.yaml
@@ -179,9 +191,16 @@ env:
       - waitForAnimationToEnd
       - assertVisible: "Resolve"
       - takeScreenshot: inbox-swipe-trailing
-      - tapOn:
-          point: "10%, 27%"
+      # Note that the tap is on the row itself, its words drawn across from
+      # its actions, and that the flow then asserts the actions gone and the
+      # list still standing, no thread opened, so a tap that ever presses the
+      # row fails here.
+      - tapOn: "Recorded the invite flow"
       - waitForAnimationToEnd
+      - assertNotVisible: "Resolve"
+      - assertVisible: "Recorded the invite flow"
+      - assertNotVisible:
+          id: "composer-field"
 # A long press lifts the thread's preview, its newest messages under its
 # task and title, over the row's menu, which leads with Open, since a tap on
 # the preview only closes it.
