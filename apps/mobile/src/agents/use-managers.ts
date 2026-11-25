@@ -8,26 +8,30 @@
  * desktop's sidebar lists them. It stands only where the workspace has the
  * Managers experiment on, as the sidebar's does, and moves as the live read
  * hears a Manager made, renamed, archived, or at work. New Manager makes one
- * (`useCreateManager`), as the desktop's card does.
+ * (`useCreateManager`), as the desktop's card does. Its chat heads each
+ * message with its sender's face and name (`useChatFaces`).
  */
 
 import { managerCreateRefusalWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_KIND, type AgentRunsOnRequest, type ListedAgent } from "@repo/features/agent-wire";
 import type { ManagerFace } from "@repo/features/manager-face";
+import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
 import { placeIdOf } from "@repo/features/runs-on-places";
 import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
+import { type FollowedAgent, selectWorkspaceExperiment } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
+import type { ChannelFaces } from "@repo/ui-native";
 import { and, eq, isNull, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useEffect, useMemo, useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
+import { useMemberFaces } from "../member-pictures.js";
 import { startRefusalWords } from "../tasks/use-start.js";
 
 /** No Manager, the same array every render. */
@@ -196,4 +200,42 @@ export function useCreateManager(
 
     return { agentId: answer.agent.id };
   };
+}
+
+/** What a Manager's chat heads its messages with: its faces, and the names of the Manager and the reader, whose messages on their way carry none of their own yet. */
+export interface ChatFaces {
+  readonly faces: ChannelFaces;
+  readonly managerName: string;
+  readonly readerName: string | undefined;
+}
+
+/**
+ * The faces and names a Manager's chat (`manager`) heads its messages
+ * with, as the panel's channel heads them: the Manager's face, and each
+ * person's picture as the members of its workspace hold it; none for an
+ * agent that is no Manager.
+ */
+export function useChatFaces(
+  manager: FollowedAgent | undefined,
+  readerId: string | undefined,
+): ChatFaces | undefined {
+  const memberOf = useMemberFaces(manager?.workspaceId);
+  const face = manager?.face;
+  const managerName = manager === undefined ? undefined : agentName(manager);
+  const readerName = readerId === undefined ? undefined : memberOf(readerId)?.name;
+
+  return useMemo(
+    () =>
+      managerName === undefined
+        ? undefined
+        : {
+            faces: {
+              manager: face,
+              picture: (userId) => (userId === undefined ? undefined : memberOf(userId)?.picture),
+            },
+            managerName,
+            readerName,
+          },
+    [face, managerName, readerName, memberOf],
+  );
 }

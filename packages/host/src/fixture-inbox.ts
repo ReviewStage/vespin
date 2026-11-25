@@ -2210,13 +2210,52 @@ const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Relea
 /** The release Manager's turn, which its two messages were sent in (`fixtureManagerTranscript`). */
 const MANAGER_TURN = "fixture-manager-turn";
 
+/** The release Manager's message the account answered in its thread, which the chat's thread opens on. */
+const MANAGER_THREAD_ROOT = "7b2d40e8";
+
 /**
  * The release Manager's chat as its rows stand, newest first as the host
  * holds them: the account's ask, then the two messages its turn sent the
- * account, a minute apart, so they stand in one run under the ask.
+ * account, a minute apart, so they stand in one run under the ask; in
+ * the thread of the first of them, the account's question and the
+ * Manager's answer, which the chat sums as "2 replies" under it. First
+ * of all stands a picture the account sent with no words with its ask,
+ * whose own long press opens its thread.
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
+    {
+      id: "c81f0b37",
+      clientKey: "fixture-manager-chat-c81f0b37",
+      seq: 5,
+      authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+      authorUserId: null,
+      authorName: "Release manager",
+      text: "#128, Invite a teammate by email. Its checks pass, and it waits on your review.",
+      attachments: [],
+      threadRoot: MANAGER_THREAD_ROOT,
+      broadcast: false,
+      turnId: MANAGER_TURN,
+      lineId: null,
+      createdAt: MANAGER_STARTED + 5 * MINUTE,
+      editedAt: null,
+    },
+    {
+      id: "5d9e2a70",
+      clientKey: "fixture-manager-chat-5d9e2a70",
+      seq: 4,
+      authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+      authorUserId: ADA.userId,
+      authorName: ADA.name,
+      text: "Which pull request is it?",
+      attachments: [],
+      threadRoot: MANAGER_THREAD_ROOT,
+      broadcast: false,
+      turnId: null,
+      lineId: null,
+      createdAt: MANAGER_STARTED + 4 * MINUTE,
+      editedAt: null,
+    },
     {
       id: "a3c9e1f4",
       clientKey: "fixture-manager-chat-a3c9e1f4",
@@ -2234,7 +2273,7 @@ const MANAGER_CHAT: AppManagerChat = {
       editedAt: null,
     },
     {
-      id: "7b2d40e8",
+      id: MANAGER_THREAD_ROOT,
       clientKey: "fixture-manager-chat-7b2d40e8",
       seq: 2,
       authorKind: MANAGER_CHAT_AUTHOR.AGENT,
@@ -2262,6 +2301,28 @@ const MANAGER_CHAT: AppManagerChat = {
       broadcast: false,
       turnId: MANAGER_TURN,
       lineId: "fixture-manager-ask",
+      createdAt: MANAGER_STARTED,
+      editedAt: null,
+    },
+    {
+      id: "9a41c6d2",
+      clientKey: "fixture-manager-chat-9a41c6d2",
+      seq: 0,
+      authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+      authorUserId: ADA.userId,
+      authorName: ADA.name,
+      text: "",
+      attachments: [
+        {
+          name: "invite-preview.png",
+          mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+          url: `data:image/png;base64,${FIXTURE_PICTURE_PNG}`,
+        },
+      ],
+      threadRoot: null,
+      broadcast: false,
+      turnId: null,
+      lineId: null,
       createdAt: MANAGER_STARTED,
       editedAt: null,
     },
@@ -3808,6 +3869,14 @@ const ANSWERS: StagedAnswers = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
     return { agent: { ...held, status: AGENT_STATUS.RUNNING } };
+  },
+  // Note that a message to a Manager's chat, or a reply in one of its threads, is taken as the service takes one, under the key it went under; the iOS run lays it over the chat as the row it lands as (`chatSentAppState`).
+  [ACT_KIND.AGENTS_CHAT_SEND]: ({ agentId, clientKey }) => {
+    const held = stagedAgent(agentId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    return { agent: held, messageId: clientKey };
   },
   [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
     if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };

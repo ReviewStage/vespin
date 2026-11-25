@@ -33,6 +33,7 @@ import { isChatSendTool } from "./agent-tools.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "./manager-chat-live.js";
 import { isAgentTurn } from "./voice-call-lines.js";
+import { countWords } from "./words.js";
 
 /** The longest pause, in milliseconds, between two messages of one sender that still stand in one run. */
 const CHAT_RUN_GAP_MS = 10 * 60 * 1000;
@@ -42,6 +43,19 @@ const CHAT_WORK_WORDS = {
   SHOW: "Show work",
   HIDE: "Hide work",
 } as const;
+
+/** The words of a thread's presses, its box, and its page, on every client: Reply in thread on a message, the box that answers in it, and the page it stands on. */
+export const CHAT_THREAD_WORDS = {
+  REPLY: "Reply in thread",
+  BOX: "Reply…",
+  /** What a thread's own page is called. */
+  TITLE: "Thread",
+  /** What a thread's page says once the message it hung on is gone from the chat, as a rewind drops it. */
+  GONE: "This thread is no longer in the chat.",
+} as const;
+
+/** What a thread's replies are counted in. */
+const REPLY_NOUN = { one: "reply", many: "replies" } as const;
 
 /** Where a message stands in its sender's run: whether it opens it, under its sender's name where one is drawn, and whether it closes it, over the run's one time. */
 export interface ChatRunPlace {
@@ -159,6 +173,11 @@ function turnWork(
   }
 
   return { work, live };
+}
+
+/** How a thread's replies are counted: "1 reply", "3 replies". */
+export function repliesWords(count: number): string {
+  return countWords(count, REPLY_NOUN);
 }
 
 /** What the press that opens a message's work under it, or folds it away, says, by whether it stands open. */

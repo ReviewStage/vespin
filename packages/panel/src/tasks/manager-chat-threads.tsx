@@ -15,7 +15,7 @@
  */
 
 import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
-import type { ManagerChatLine } from "@repo/features/manager-chat-view";
+import { CHAT_THREAD_WORDS, type ManagerChatLine } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { ThreadReplies } from "@repo/ui";
 import { MessageSquareReplyIcon } from "@repo/ui/icons";
@@ -25,11 +25,8 @@ import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { MessageAction } from "../ai-elements/message.js";
 import { usePerson } from "../member-directory.js";
 
-/** The words of a thread's presses and its box. */
-export const THREAD_WORDS = {
-  REPLY: "Reply in thread",
-  BOX: "Reply…",
-} as const;
+/** The words of a thread's presses and its box, as every client says them. */
+export const THREAD_WORDS = CHAT_THREAD_WORDS;
 
 /** Reply in thread beside a message's Copy, which opens its thread (`onOpen`). */
 export function ThreadReplyAction({ onOpen }: { onOpen: () => void }): ReactNode {
