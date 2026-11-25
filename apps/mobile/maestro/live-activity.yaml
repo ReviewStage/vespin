@@ -7,8 +7,9 @@
 # (`live-activity/AgentsLiveActivity.swift`). An iPad has no Live
 # Activities, so its shots show the Home Screen and it asserts none of the
 # activity's words; on an iPhone each presentation's words are required, each
-# where that presentation draws them: the rows on the Lock Screen, the count
-# alone on the compact island, and "3 working" with the rows once expanded.
+# where that presentation draws them: the rows on the Lock Screen, the Inbox
+# glyph and a timer on the compact island, and "3 working" with the rows
+# once expanded.
 appId: dev.vespin.ios
 ---
 - launchApp:
@@ -31,6 +32,11 @@ appId: dev.vespin.ios
 - tapOn:
     text: "Allow"
     optional: true
+# Note that iOS may ask again later whether to continue to allow them,
+# drawn over the activity, which only "Always Allow" clears.
+- tapOn:
+    text: "Always Allow"
+    optional: true
 - runFlow:
     when:
       true: ${FLOATING_TABS != 'true'}
@@ -43,8 +49,8 @@ appId: dev.vespin.ios
 - takeScreenshot: live-activity-lock-screen
 - pressKey: Home
 # The island draws the app's activity once the app is in the background,
-# after its own animation in. Note that the compact island says the count
-# alone, with no words to wait on, so it waits for the island to settle.
+# after its own animation in. Note that the compact island says no words
+# to wait on, only a glyph and a timer, so it waits for the island to settle.
 - waitForAnimationToEnd
 - takeScreenshot: live-activity-compact
 # A long press on the island expands it.
