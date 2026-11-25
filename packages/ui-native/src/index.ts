@@ -161,6 +161,7 @@ export { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 export {
   GLYPH,
   type Glyph,
+  glyphIcon,
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,

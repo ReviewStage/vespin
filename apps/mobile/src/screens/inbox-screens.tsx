@@ -74,6 +74,7 @@ import {
   EmptyState,
   GLYPH,
   GlassDock,
+  glyphIcon,
   glyphSymbol,
   isBarMenu,
   LIST_LOOK,
@@ -1357,10 +1358,10 @@ function InboxStackList(held: InboxHeld) {
           {/* Note that the acts stand side by side between two flexible spaces, so iOS 26 draws them in one glass capsule centered over the foot, as Files and Mail group their edit bar's acts, never a glass circle each spread across it. */}
           <Stack.Toolbar.Spacer />
           {choosing.acts.map((act) =>
-            // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass. A menu that would act on nothing, such as Remind me with no thread chosen, stands as a dimmed button, because the bar's menu draws its `disabled` live on iOS.
+            // Note that a glyph is named by `glyphIcon`, an SF Symbol as one and a Lucide glyph as an asset, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass. A menu that would act on nothing, such as Remind me with no thread chosen, stands as a dimmed button, because the bar's menu draws its `disabled` live on iOS.
             isBarMenu(act) && act.disabled !== true ? (
               <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
-                <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
+                <Stack.Toolbar.Icon {...glyphIcon(act.symbol)} />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
             ) : (
@@ -1371,7 +1372,7 @@ function InboxStackList(held: InboxHeld) {
                 onPress={isBarMenu(act) ? doNothing : act.onPress}
               >
                 {act.symbol === undefined ? null : (
-                  <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
+                  <Stack.Toolbar.Icon {...glyphIcon(act.symbol)} />
                 )}
               </Stack.Toolbar.Button>
             ),
