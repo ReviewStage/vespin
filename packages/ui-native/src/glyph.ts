@@ -98,8 +98,12 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  */
 export const GLYPH = {
   // Places.
-  INBOX: lucide(LUCIDE_SYMBOL.INBOX),
+  /** The Inbox, its tab and every place it is named, as Mail draws its Inbox. */
+  INBOX: system("tray"),
   TASK: lucide(LUCIDE_SYMBOL.LIST_TODO),
+  // The Tasks and Automations tabs, as the system's tab bar draws a place: Reminders' checklist, and the bolt Lucide's Zap draws, which a task's and an automation's own rows keep.
+  TASKS_TAB: system("checklist"),
+  AUTOMATIONS_TAB: system("bolt"),
   SEARCH: lucide(LUCIDE_SYMBOL.SEARCH),
   NEW_TASK: lucide(LUCIDE_SYMBOL.SQUARE_PEN),
   SETTINGS: lucide(LUCIDE_SYMBOL.SETTINGS),

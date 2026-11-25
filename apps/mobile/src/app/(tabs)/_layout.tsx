@@ -9,6 +9,7 @@ import {
 import {
   CallAccessory,
   GLYPH,
+  glyphSymbol,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -155,7 +156,7 @@ export default function TabsLayout() {
         accessibilityLabel="Inbox"
         testID="inbox-tab"
       >
-        <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
+        <NativeTabs.Trigger.Icon sf={glyphSymbol(GLYPH.INBOX)} />
         <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
         {waiting === 0 ? null : (
@@ -163,7 +164,7 @@ export default function TabsLayout() {
         )}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(tasks)" accessibilityLabel="Tasks" testID="tasks-tab">
-        <NativeTabs.Trigger.Icon xcasset={GLYPH.TASK} />
+        <NativeTabs.Trigger.Icon sf={glyphSymbol(GLYPH.TASKS_TAB)} />
         <NativeTabs.Trigger.Label>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger
@@ -171,7 +172,7 @@ export default function TabsLayout() {
         accessibilityLabel="Automations"
         testID="automations-tab"
       >
-        <NativeTabs.Trigger.Icon xcasset={GLYPH.AUTOMATION} />
+        <NativeTabs.Trigger.Icon sf={glyphSymbol(GLYPH.AUTOMATIONS_TAB)} />
         <NativeTabs.Trigger.Label>Automations</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger
@@ -180,7 +181,6 @@ export default function TabsLayout() {
         accessibilityLabel="Search"
         testID="search-tab"
       >
-        {/* Note that Search keeps the system's magnifier, since a search tab is iOS's own chrome. */}
         <NativeTabs.Trigger.Icon sf="magnifyingglass" />
         <NativeTabs.Trigger.Label>Search</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
