@@ -1,0 +1,10 @@
+pinned to 6013c0ee8c
+== bundle PJjkeep10756d base 6013c0ee8c
+  built 6013c0ee8c base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+keep.yaml from #10756 afc32999fd
+iphone-light-keep-10756: fails 0 shots 3 
+  keep-10756 hierarchy after the run: 'Recorded the invite flow' 3 hits; menu items 0
