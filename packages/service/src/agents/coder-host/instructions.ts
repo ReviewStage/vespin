@@ -23,7 +23,7 @@ import { writtenMention } from "../written-mentions.js";
 import { CODER } from "./bounds.js";
 import { COMMIT_BY, type CommitAuthorship } from "./checkout.js";
 import { EDIT_DESCRIPTION_TOOL } from "./description-edit.js";
-import { INBOX_TOOLS, MANAGER_THREAD_ASKS } from "./inbox.js";
+import { INBOX_TOOLS } from "./inbox.js";
 
 /**
  * instructions.ts -- what a coding agent's session runs under, appended to its harness's own prompt.
@@ -65,15 +65,11 @@ const UNCLEAR_LINE =
  * is a `chat_send` call, so its plain text and its other calls are never
  * shown, and it writes there as a coworker on Slack, in several short
  * messages, replying in the thread of the message it answers; and, where it
- * posts Inbox threads, that an Inbox thread is kept for the asks a chat
- * cannot hold, since every post is a notification.
+ * posts Inbox threads, that its chat is for answers and reports and every
+ * ask goes to the Inbox.
  */
 function chatLine(posts: boolean): string {
-  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there, as a coworker would on Slack. Reply in the thread of the message you're answering or following up on, with \`thread_ts\`, and start a new message only for something new. Write several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
-
-  return posts
-    ? `${chat} Post an Inbox thread with \`${INBOX_TOOLS.POST.name}\` only for ${MANAGER_THREAD_ASKS}, since every post reaches people as a notification: your pull requests and pages are named in your chat once ready, and a go-ahead you want on one is a decision.`
-    : chat;
+  return `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. ${posts ? `Use chat to answer and report. Don't ask people things in chat. If you need someone to decide, answer, approve, or do something, post it to the Inbox with \`${INBOX_TOOLS.POST.name}\`, even if it's a small question, and mention in chat that it's there.` : "Answer, report, and ask there, as a coworker would on Slack."} Reply in the thread of the message you're answering or following up on, with \`thread_ts\`, and start a new message only for something new. Write several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
 }
 
 export const CODER_HARNESS = {
@@ -458,6 +454,7 @@ export function managerInstructions(place: ManagerPlace, posts: boolean): string
     `Relay what people tell you, in your chat${posts ? " or on a thread" : ""}, to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
     ...(posts
       ? [
+          "If one of your agents says something is for a person to decide, post it to the Inbox instead of deciding it yourself.",
           `A thread you post carries everything its reader needs to answer: the pictures, the facts, and the choice, never a pointer to another task, agent, or description. To show an agent's pictures, ask it for the ids \`${AGENT_TOOL.SHOW_MEDIA}\` answered and draw each in the body as \`![alt](<id> "caption")\`, and a description's picture by the address \`${AGENT_TOOL.READ_TASK}\` writes it at.`,
         ]
       : []),
