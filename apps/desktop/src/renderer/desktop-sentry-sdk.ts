@@ -101,6 +101,15 @@ const SLOW_INTERACTIONS: PerformanceObserverInit & { readonly durationThreshold:
 /** How long a window goes without input before its profiler stops, in milliseconds. */
 const PROFILE_IDLE_MS = 10_000;
 
+/**
+ * How long one profile runs while the window stays in use before a new one
+ * starts, in milliseconds. Note that Sentry's browser profiler keeps 30 s of
+ * samples (3,000 at 10 ms) but starts a new chunk only every 60 s, so a
+ * window typed in for longer than 30 s at a stretch lost the stacks of
+ * everything after; a new one starts well inside the 30 s instead.
+ */
+const PROFILE_ROTATE_MS = 25_000;
+
 /** The input that says a window is in use. */
 const IN_USE_EVENTS = ["pointerdown", "keydown", "wheel"] as const;
 
@@ -217,24 +226,36 @@ function profilerIdNow(): string | undefined {
  * has run. Note that its listener runs before any of the panel's, in the
  * window's capture, so an interaction's own handlers are profiled, and that
  * it only notes the time, one timer standing at most however fast input
- * comes. A window Sentry does not profile starts nothing.
+ * comes, which also starts a new profile every `PROFILE_ROTATE_MS`. A
+ * window Sentry does not profile starts nothing.
  */
 function profileWhileInUse(): () => string | undefined {
   let lastInput = 0;
+  let startedAt = 0;
   let profiling = false;
   let profilerId: string | undefined;
 
-  const stopOnceIdle = () => {
-    const idleFor = performance.now() - lastInput;
+  // Stops once the window has gone idle, and starts a new chunk before the profiler's buffer fills.
+  const check = () => {
+    const now = performance.now();
 
-    if (idleFor < PROFILE_IDLE_MS) {
-      setTimeout(stopOnceIdle, PROFILE_IDLE_MS - idleFor);
+    if (now - lastInput >= PROFILE_IDLE_MS) {
+      profiling = false;
+      uiProfiler.stopProfiler();
 
       return;
     }
 
-    profiling = false;
-    uiProfiler.stopProfiler();
+    if (now - startedAt >= PROFILE_ROTATE_MS) {
+      uiProfiler.stopProfiler();
+      uiProfiler.startProfiler();
+      startedAt = now;
+    }
+
+    const untilIdle = PROFILE_IDLE_MS - (now - lastInput);
+    const untilRotate = PROFILE_ROTATE_MS - (now - startedAt);
+
+    setTimeout(check, Math.min(untilIdle, untilRotate));
   };
 
   const inUse = () => {
@@ -243,9 +264,10 @@ function profileWhileInUse(): () => string | undefined {
     if (profiling) return;
 
     profiling = true;
+    startedAt = lastInput;
     uiProfiler.startProfiler();
     profilerId ??= profilerIdNow();
-    setTimeout(stopOnceIdle, PROFILE_IDLE_MS);
+    setTimeout(check, PROFILE_IDLE_MS);
   };
 
   for (const type of IN_USE_EVENTS) {
