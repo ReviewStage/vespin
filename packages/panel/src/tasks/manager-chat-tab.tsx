@@ -601,7 +601,7 @@ function messageRowOf(line: ManagerChatLine): ChatRow {
   return { kind: CHAT_ROW.MESSAGE, key: line.message.clientKey, line };
 }
 
-/** The reader's messages on their way as rows, each under the key it went under, in the run the view placed it in (`ManagerChatView.sending`). */
+/** The reader's messages on their way as rows, each under the key it went under, in the run the channel's view placed it in (`ChatSendingPlaces.channel`). */
 function sendingRowsOf(
   sent: readonly SentLine[],
   places: ReadonlyMap<string, ChatRunPlace>,
@@ -1082,7 +1082,7 @@ export function ManagerChatTab({
       chatRowsOf(
         before === undefined ? managerGreeting(agent.title) : undefined,
         view.top,
-        sendingRowsOf(composer.sent, view.sending),
+        sendingRowsOf(composer.sent, view.sending.channel),
       ),
     [before, agent.title, view.top, composer.sent, view.sending],
   );
@@ -1333,7 +1333,7 @@ export function ManagerThreadTab({
             // Note that the root stands alone in the tab, under its sender's name.
             { ...rootLine, place: CHAT_RUN_ALONE },
             view.threads.get(root) ?? NO_LINES,
-            sendingRowsOf(composer.sent, view.sending),
+            sendingRowsOf(composer.sent, view.sending.channel),
           ),
     [rootLine, view.threads, root, composer.sent, view.sending],
   );

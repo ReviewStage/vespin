@@ -1,6 +1,7 @@
 import { agentParts, WHOLE_PART } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
+import { managerChatView } from "@repo/features/manager-chat-view";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
@@ -861,71 +862,50 @@ describe("managerChatItems", () => {
 
   const run = (opens: boolean, closes: boolean) => ({ opens, closes });
 
-  it("draws the chat's rows as bubbles: its greeting first, the reader's own trailing and a teammate's named with the picture it kept and the file it carried, the Manager's received in the runs placed, a set it showed as its pictures, a message on its way joining the reader's run, and its working line a bubble", () => {
-    const lines = [
-      {
-        message: row("a1", 1, {
-          authorKind: MANAGER_CHAT_AUTHOR.PERSON,
-          authorUserId: "u1",
-          text: "Fix the login.",
-        }),
-        place: run(true, true),
-      },
-      {
-        message: row("m1", 2, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "On it." }),
-        place: run(true, false),
-      },
-      {
-        message: row("m2", 3, {
-          authorKind: MANAGER_CHAT_AUTHOR.AGENT,
-          text: "",
-          attachments: [{ id: "shot", mediaType: "image/png" }],
-        }),
-        place: run(false, true),
-      },
-      {
-        message: row("g1", 4, {
-          authorKind: MANAGER_CHAT_AUTHOR.PERSON,
-          authorUserId: "u2",
-          authorName: "Grace",
-          text: "And the signup.",
-          attachments: [
-            { id: "kept-shot", mediaType: "image/png", name: "signup.png" },
-            { name: "notes.txt", mediaType: "text/plain", url: "data:text/plain;base64,YQpi" },
-          ],
-        }),
-        place: run(true, true),
-      },
-      {
-        message: row("a2", 5, {
-          authorKind: MANAGER_CHAT_AUTHOR.PERSON,
-          authorUserId: "u1",
-          text: "Thanks!",
-        }),
-        place: run(true, true),
-      },
+  it("draws the chat's rows as bubbles: its greeting first, the reader's own trailing and a teammate's named with the picture it kept and the file it carried, the Manager's received in the runs placed, a set it showed as its pictures, a message on its way opening a run of its own after a pause past ten minutes, and its working line a bubble", () => {
+    // Note that the chat's rows stand newest first, as the slice holds them.
+    const rows = [
+      row("a2", 5, {
+        authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+        authorUserId: "u1",
+        text: "Thanks!",
+      }),
+      row("g1", 4, {
+        authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+        authorUserId: "u2",
+        authorName: "Grace",
+        text: "And the signup.",
+        attachments: [
+          { id: "kept-shot", mediaType: "image/png", name: "signup.png" },
+          { name: "notes.txt", mediaType: "text/plain", url: "data:text/plain;base64,YQpi" },
+        ],
+      }),
+      row("m2", 3, {
+        authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+        text: "",
+        attachments: [{ id: "shot", mediaType: "image/png" }],
+      }),
+      row("m1", 2, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "On it." }),
+      row("a1", 1, {
+        authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+        authorUserId: "u1",
+        text: "Fix the login.",
+      }),
     ];
 
-    const items = managerChatItems(
-      {
-        messages: lines,
-        top: lines,
-        threads: new Map(),
-        sending: new Map(),
-        work: new Map(),
-        live: [],
-      },
-      [],
-      {
-        writing: true,
-        readerId: "u1",
-        toggles: NO_TOGGLES,
-        now: 6 * minute,
-        pullRequests: [],
-        greeting: "Hi, I'm Pat.",
-        sending: [{ clientKey: "k1", text: "One more thing.", sentAt: 6 * minute }],
-      },
-    );
+    const sending = [
+      { clientKey: "k1", text: "One more thing.", sentAt: 16 * minute, sentBy: "u1" },
+    ];
+
+    const items = managerChatItems(managerChatView(rows, [], { running: undefined, sending }), [], {
+      writing: true,
+      readerId: "u1",
+      toggles: NO_TOGGLES,
+      now: 16 * minute,
+      pullRequests: [],
+      greeting: "Hi, I'm Pat.",
+      sending,
+    });
 
     expect(
       items.map((item) =>
@@ -942,7 +922,7 @@ describe("managerChatItems", () => {
       [TRANSCRIPT_ITEM.MEDIA, [["shot", "Picture"]]],
       ["And the signup.", "Grace", true, false],
       ["Thanks!", undefined, false, false],
-      ["One more thing.", undefined, false, true],
+      ["One more thing.", undefined, false, false],
       [TRANSCRIPT_ITEM.WORKING, true],
     ]);
     expect(items[4]).toMatchObject({
@@ -980,7 +960,7 @@ describe("managerChatItems", () => {
           messages: [{ message: said, place: run(true, true), work: "turn" }],
           top: [{ message: said, place: run(true, true), work: "turn" }],
           threads: new Map(),
-          sending: new Map(),
+          sending: { messages: new Map(), channel: new Map() },
           work: new Map([["turn", agentParts(turn)]]),
           live: [],
         },
