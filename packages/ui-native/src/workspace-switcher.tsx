@@ -60,8 +60,8 @@ const SWITCHER_ID = "workspace-switcher";
 export type SwitcherAccount = {
   /** The account's name, or its address where it has none. */
   readonly name: string;
-  /** The address the account is signed in with, which heads its row, as the panel's account menu names who is signed in; none where it is not read. */
-  readonly address?: string | undefined;
+  /** Who is signed in, as their row's section heads it, such as "Ada Lovelace · ada@example.com", as the panel's account menu names them; none where it is not read. */
+  readonly signedInAs?: string | undefined;
   /** The account's sign-in picture, which the landscape iPad's sidebar draws; its letters where it has none. */
   readonly picture?: string | undefined;
   /** That picture as a file on this device, which its row in the menu leads with; the gear while it has none. */
@@ -170,7 +170,7 @@ function SwitcherFace({
  * chosen one checked; then the acts, New workspace and Workspace settings,
  * in the panel's words and order; and last, where a
  * caller hands one, the row into Settings, led by the account's photo, in
- * a section the address signed in heads, as the panel's account menu names
+ * a section who is signed in heads, their name and address on one line, as the panel's account menu names
  * who is signed in over its items, so every row stands on one line at the
  * default text size. A menu runs a
  * row's act once it has closed, so a screen it opens is never presented
@@ -224,7 +224,7 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
         </Section>
       )}
       {account === undefined ? null : (
-        <Section {...(account.address === undefined ? {} : { title: account.address })}>
+        <Section {...(account.signedInAs === undefined ? {} : { title: account.signedInAs })}>
           <SwiftUIButton
             {...menuActContent(SETTINGS, GLYPH.SETTINGS, undefined, undefined, account.menuPhoto)}
             onPress={account.onPress}

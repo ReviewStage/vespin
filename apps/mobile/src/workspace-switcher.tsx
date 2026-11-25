@@ -24,6 +24,9 @@ import { type MenuPictures, menuAddress, useMenuPictures } from "./menu-photos.j
 import { openInSafari } from "./open-link.js";
 import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
 
+/** What parts the account's name from its address in the line that heads its row. */
+const SIGNED_IN_PART = " · ";
+
 /** No workspaces read yet, one list for every render. */
 const NO_WORKSPACES: readonly Workspace[] = [];
 
@@ -105,11 +108,15 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
 
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const admin = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
-  // Note that the address signed in heads the account's row, as the panel's account menu names who is signed in.
+  // Note that who is signed in heads the account's row, their name and address on one line, as the panel's account menu names them.
   const { data: signedInAccount } = useQuery({ ...appStateQuery, select: selectAccount });
 
-  const address =
-    signedInAccount?.status === ACCOUNT_STATUS.SIGNED_IN ? signedInAccount.email : undefined;
+  const signedInAs =
+    signedInAccount?.status !== ACCOUNT_STATUS.SIGNED_IN
+      ? undefined
+      : signedInAccount.name === undefined
+        ? signedInAccount.email
+        : `${signedInAccount.name}${SIGNED_IN_PART}${signedInAccount.email}`;
 
   const { chosen, choose } = useChosenWorkspace(workspaces);
   const signedIn = account !== undefined;
@@ -148,7 +155,7 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
       account: signedIn
         ? {
             name: accountName ?? "",
-            address,
+            signedInAs,
             picture: accountPicture,
             menuPhoto: accountMenuPhoto,
             onPress: () => openSettings(),
@@ -179,6 +186,6 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     pictures,
     accountMenuPhoto,
     admin,
-    address,
+    signedInAs,
   ]);
 }
