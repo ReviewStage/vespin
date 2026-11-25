@@ -1360,6 +1360,12 @@ function AutomationsPages({
   const offered = useOfferedPresets(workspace?.id);
   // The automation the new page made, whose page is that same editor still, so what was typed while it was made stands.
   const [made, setMade] = useState<string | undefined>(undefined);
+
+  // The agent the last new page was opened for, as its address's `target` named it.
+  const [newTarget, setNewTarget] = useState<string | undefined>(
+    standing.place.kind === AUTOMATIONS_PAGE.NEW ? standing.place.target : undefined,
+  );
+
   // Note that a phone's ‹ and a bar's ‹ are the window's Back (`door.back`), while a wide editor's crumb opens the list.
   const back = door.back;
   const crumbBack = room === SHELL_ROOM.NARROW ? door.back : () => door.open();
@@ -1425,33 +1431,42 @@ function AutomationsPages({
       ? place.preset
       : undefined;
 
+  // The agent the new page standing was opened for, kept while the automation it made takes its place, so that page's draft stands.
+  const asked = place.kind === AUTOMATIONS_PAGE.NEW ? place.target : newTarget;
+
+  if (asked !== newTarget) setNewTarget(asked);
+  const target = editing === AUTOMATIONS_PAGE.NEW ? asked : undefined;
+
   const editor = (sentry: SentryOffer, slackBot: boolean) => (
-    <AutomationEditor
-      key={editing}
-      automation={opened}
-      preset={preset}
-      target={place.kind === AUTOMATIONS_PAGE.NEW ? place.target : undefined}
-      workspace={workspace}
-      offersOwner={offersOwner}
-      repositories={tasks.newTask.repositoriesIn(workspace?.id)}
-      writes={automations}
-      onBack={crumbBack}
-      onOpenAgent={(agentId) => openRunAgent(tasks, collections, agentId)}
-      linked={place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined}
-      placeLeave={tasks.placeLeave}
-      room={room}
-      runsShown={standing.runs}
-      onRuns={tasks.onAutomationRuns}
-      sentry={sentry}
-      slackBot={slackBot}
-      onDeleted={(automationId) =>
-        door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId })
-      }
-      onCreated={(automationId) => {
-        setMade(automationId);
-        door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId, created: true });
-      }}
-    />
+    // Keyed by the agent a new page is for, then by what it edits, so a new page opened for another agent starts its own draft.
+    <Fragment key={target}>
+      <AutomationEditor
+        key={editing}
+        automation={opened}
+        preset={preset}
+        target={target}
+        workspace={workspace}
+        offersOwner={offersOwner}
+        repositories={tasks.newTask.repositoriesIn(workspace?.id)}
+        writes={automations}
+        onBack={crumbBack}
+        onOpenAgent={(agentId) => openRunAgent(tasks, collections, agentId)}
+        linked={place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined}
+        placeLeave={tasks.placeLeave}
+        room={room}
+        runsShown={standing.runs}
+        onRuns={tasks.onAutomationRuns}
+        sentry={sentry}
+        slackBot={slackBot}
+        onDeleted={(automationId) =>
+          door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId })
+        }
+        onCreated={(automationId) => {
+          setMade(automationId);
+          door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId, created: true });
+        }}
+      />
+    </Fragment>
   );
 
   return (

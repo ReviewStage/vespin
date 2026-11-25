@@ -1329,9 +1329,11 @@ test("Memory digest is suggested no more once the list holds the reader's own or
   }
 });
 
-test("a new automation opened for an agent, as a Manager's Settings opens it, is made sending every run to that agent, in no repository", async () => {
+test("a new automation opened for an agent, as a Manager's Settings opens it, even over a new page already standing, is made sending every run to that agent, in no repository", async () => {
   const managerId = "5b8c1d2e-3f4a-4b5c-8d6e-7f8091a2b3c4";
-  const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW, target: managerId });
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
+  await settle();
+  act(() => world.sendTo({ kind: AUTOMATIONS_PAGE.NEW, target: managerId }));
   await settle();
 
   type(page.querySelector("input[aria-label='Automation name']"), "Morning release check");

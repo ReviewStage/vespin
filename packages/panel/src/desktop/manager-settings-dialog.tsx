@@ -357,22 +357,26 @@ function AutomationsSection({
         <ErrorState failure={unreadShown(FAILURE_SURFACE.AUTOMATIONS_READ)} onRetry={reload}>
           {WORDS.AUTOMATIONS_UNREAD}
         </ErrorState>
-      ) : aimed.length === 0 ? (
-        <EmptyState icon={<EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />}>
-          {WORDS.NO_AUTOMATIONS}
-        </EmptyState>
       ) : (
-        <AutomationRows
-          listed={aimed}
-          order={DEFAULT_AUTOMATIONS_ORDER}
-          workspace={workspace}
-          narrow={phone}
-          automations={automations}
-          onOpen={(automation) =>
-            open({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
-          }
-          onDeleted={() => undefined}
-        />
+        <>
+          {aimed.length === 0 ? (
+            <EmptyState icon={<EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />}>
+              {WORDS.NO_AUTOMATIONS}
+            </EmptyState>
+          ) : null}
+          {/* Note that the rows stand while none is listed, since a deletion's question and its refusal are theirs. */}
+          <AutomationRows
+            listed={aimed}
+            order={DEFAULT_AUTOMATIONS_ORDER}
+            workspace={workspace}
+            narrow={phone}
+            automations={automations}
+            onOpen={(automation) =>
+              open({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
+            }
+            onDeleted={() => undefined}
+          />
+        </>
       )}
     </SettingsSection>
   );
