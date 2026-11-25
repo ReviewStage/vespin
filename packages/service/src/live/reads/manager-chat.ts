@@ -6,11 +6,13 @@
  * (`agentReachableBy`), newest first, before the `seq` the read names where
  * it names one. The account's membership of the Manager's workspace is
  * joined, so a member taken out of the workspace stops hearing the chat at
- * once rather than at the next seal. It reads no clock, as a live read
- * must (`live-statement.ts`).
+ * once rather than at the next seal. Each message carries its reactions,
+ * a count of each kind given, in `MANAGER_CHAT_REACTION`'s order, and
+ * whether the account gave it. It reads no clock, as a live read must
+ * (`live-statement.ts`).
  *
- * It is woken by a message written, edited, or deleted, and by the
- * Manager's own row, all of which name the agent, and by the account's
+ * It is woken by a message written, edited, or deleted, a reaction given
+ * or taken off, and by the Manager's own row, all of which name the agent, and by the account's
  * membership, which names the account.
  */
 
@@ -20,19 +22,23 @@ import { agentReachableBy } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { member } from "@repo/database/schemas/auth";
 import { managerChatMessage } from "@repo/database/schemas/manager-chat-message";
+import { managerChatReaction } from "@repo/database/schemas/manager-chat-reaction";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
   agentSync,
   githubPersonalTokenSync,
   githubRepositoryReadSync,
   managerChatMessageSync,
+  managerChatReactionSync,
   memberSync,
 } from "@repo/database/sync/tables";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   MANAGER_CHAT_PAGE,
+  MANAGER_CHAT_REACTION,
   MANAGER_CHAT_READ,
   type ManagerChatAttachment,
+  type ManagerChatReactionCount,
 } from "@repo/features/manager-chat-live";
 import { and, desc, eq, lt, type SQL, sql } from "drizzle-orm";
 import { Effect, Option } from "effect";
@@ -49,7 +55,33 @@ function beforeOf(before: string): SQL | undefined {
   return SEQ.test(before) ? lt(managerChatMessage.seq, Number(before)) : sql`false`;
 }
 
-/** The page's messages, one past the page, as `readManagerChatPage` reads them. */
+/** The kinds of reaction in the order a message carries them, written into the statement as SQL, which an order takes no array parameter for. */
+const REACTION_ORDER = sql`array[${sql.join(
+  Object.values(MANAGER_CHAT_REACTION).map((kind) => sql.raw(`'${kind}'`)),
+  sql`, `,
+)}]`;
+
+/** The message's reactions: each kind given, how many gave it, and whether the account did, in `REACTION_ORDER`; none given is an empty list. */
+function reactionsOf(userId: string) {
+  return sql<readonly ManagerChatReactionCount[]>`coalesce((
+    select jsonb_agg(
+      jsonb_build_object('kind', given.kind, 'count', given.count, 'reacted', given.reacted)
+      order by array_position(${REACTION_ORDER}, given.kind)
+    )
+    from (
+      select
+        ${managerChatReaction.kind} as kind,
+        count(*)::int as count,
+        coalesce(bool_or(${managerChatReaction.reactorUserId} = ${userId}), false) as reacted
+      from ${managerChatReaction}
+      where ${managerChatReaction.agentId} = ${managerChatMessage.agentId}
+        and ${managerChatReaction.messageId} = ${managerChatMessage.id}
+      group by ${managerChatReaction.kind}
+    ) as given
+  ), '[]'::jsonb)`;
+}
+
+/** The page's messages, one past the page, as `readManagerChatPage` reads them, each with its reactions. */
 function messagesStatement(userId: string, agentId: string, before: string) {
   return liveRowsStatement(
     MANAGER_CHAT_READ.parts.messages,
@@ -68,6 +100,7 @@ function messagesStatement(userId: string, agentId: string, before: string) {
         broadcast: managerChatMessage.broadcast,
         turnId: sql<string | null>`${managerChatMessage.turnId}`,
         lineId: sql<string | null>`${managerChatMessage.lineId}`,
+        reactions: reactionsOf(userId),
       },
       instants: { createdAt: managerChatMessage.createdAt, editedAt: managerChatMessage.editedAt },
     },
@@ -99,6 +132,7 @@ function messagesStatement(userId: string, agentId: string, before: string) {
 export const managerChatRead = bindLiveRead(MANAGER_CHAT_READ, {
   reads: [
     managerChatMessageSync,
+    managerChatReactionSync,
     agentSync,
     memberSync,
     githubPersonalTokenSync,

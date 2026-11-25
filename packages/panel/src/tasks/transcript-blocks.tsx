@@ -1297,6 +1297,7 @@ const CALL_ICON = {
   [CALL_KIND.CHAT_READ]: ScrollTextIcon,
   [CALL_KIND.CHAT_THREAD_READ]: ScrollTextIcon,
   [CALL_KIND.CHAT_SEARCH]: SearchIcon,
+  [CALL_KIND.CHAT_REACT]: SmilePlusIcon,
   [CALL_KIND.LIST_TASKS]: () => <EntityGlyph kind={ENTITY_KIND.PLAN} />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,

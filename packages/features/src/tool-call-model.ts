@@ -1741,6 +1741,8 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.CHAT_THREAD_READ, input, output, undefined),
   [AGENT_TOOL.SEARCH_CHAT]: ({ input, output }) =>
     namedCall(CALL_KIND.CHAT_SEARCH, input, output, "keywords"),
+  [AGENT_TOOL.REACT_CHAT]: ({ input, output }) =>
+    namedCall(CALL_KIND.CHAT_REACT, input, output, "name"),
 } as const satisfies Record<AgentTool, ToolReader>;
 
 /**

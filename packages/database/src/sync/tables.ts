@@ -55,6 +55,7 @@ import { integrationInstallation } from "../schemas/integration-installation.js"
 import { machineCommand } from "../schemas/machine-command.js";
 import { machineCommandAsk } from "../schemas/machine-command-ask.js";
 import { managerChatMessage } from "../schemas/manager-chat-message.js";
+import { managerChatReaction } from "../schemas/manager-chat-reaction.js";
 import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
@@ -268,6 +269,14 @@ export const voiceCallSync = defineSyncTable(voiceCallTable, {
  */
 export const managerChatMessageSync = defineSyncTable(managerChatMessage, {
   topics: [{ kind: TOPIC.AGENT, column: managerChatMessage.agentId }],
+});
+
+/**
+ * A reaction given a message of a Manager's chat, on the Manager's topic,
+ * so the chat's live read (`managerChat`) hears one given or taken off.
+ */
+export const managerChatReactionSync = defineSyncTable(managerChatReaction, {
+  topics: [{ kind: TOPIC.AGENT, column: managerChatReaction.agentId }],
 });
 
 /** An account's membership of a workspace, on the workspace's topic and the account's. */
@@ -992,6 +1001,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentBootSync,
   voiceCallSync,
   managerChatMessageSync,
+  managerChatReactionSync,
   agentFollowerSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
