@@ -164,13 +164,22 @@ let written: Map<string, Written> | undefined;
 /** The file the writes are kept in, beside the answers. */
 const WRITTEN_FILE = `file://${ANSWERS}/written.json`;
 
+/** What `file` kept of the writes: none where it holds none, or holds what no longer reads, as one cut short by a quit mid-write. */
+function keptWrites(file: File): Record<string, Written> {
+  if (!file.exists) return {};
+
+  try {
+    // SAFETY: the file is this module's own, written by `keepWritten` as this shape.
+    return JSON.parse(file.textSync()) as Record<string, Written>;
+  } catch {
+    return {};
+  }
+}
+
 /** The threads written, read from their file the first time they are asked for this launch. */
 function writtenNow(): Map<string, Written> {
   if (written !== undefined) return written;
-  const file = new File(WRITTEN_FILE);
-  // SAFETY: the file is this module's own, written by `keepWritten` as this shape.
-  const kept = file.exists ? (JSON.parse(file.textSync()) as Record<string, Written>) : {};
-  written = new Map(Object.entries(kept));
+  written = new Map(Object.entries(keptWrites(new File(WRITTEN_FILE))));
 
   return written;
 }
@@ -189,6 +198,10 @@ function overWritten(row: WireRecord): WireRecord {
   return {
     ...row,
     ...(write.unread === undefined ? undefined : { unread: write.unread }),
+    // Note that an item's row carries the reader's own mark beside the read state, which a mark unread sets too, so a thread closed and marked unread stays in Open.
+    ...(write.unread === undefined || !("settledAt" in row)
+      ? undefined
+      : { markedUnread: write.unread }),
     ...(write.status === undefined ? undefined : { status: write.status }),
     ...(write.revision === undefined ? undefined : { revision: write.revision }),
     ...(write.updatedAt === undefined ? undefined : { updatedAt: write.updatedAt }),
@@ -198,20 +211,56 @@ function overWritten(row: WireRecord): WireRecord {
   };
 }
 
-/** The whole Inbox answer's rows of each part, as the seed wrote them, parsed once for the launch. */
-async function wholeRows(): Promise<Readonly<Record<string, readonly WireRecord[]>>> {
-  // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build.
-  const body = (await answerOnce("inbox-whole.json")) as {
-    readonly queries: Readonly<Record<string, { readonly rows: string }>>;
-  };
+/** The whole Inbox answer as the seed wrote it, its parts' rows each a JSON array. */
+type WholeBody = {
+  readonly queries: Readonly<Record<string, WireRecord & { readonly rows: string }>>;
+};
 
-  return Object.fromEntries(
-    // SAFETY: the seed writes each part's rows as the wire does, a JSON array of rows.
+/** The whole Inbox answer's rows of each part, as the seed wrote them, parsed once for the launch. */
+let wholeParsed: Promise<Readonly<Record<string, readonly WireRecord[]>>> | undefined;
+
+/** The whole Inbox answer's rows of each part, as the seed wrote them. */
+function wholeRows(): Promise<Readonly<Record<string, readonly WireRecord[]>>> {
+  wholeParsed ??= answerOnce("inbox-whole.json").then((body) =>
+    Object.fromEntries(
+      // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build, each part's rows a JSON array of rows as the wire writes them.
+      Object.entries((body as WholeBody).queries).map(([part, query]) => [
+        part,
+        JSON.parse(query.rows) as WireRecord[],
+      ]),
+    ),
+  );
+
+  return wholeParsed;
+}
+
+/**
+ * The whole Inbox answer, no sooner than `ms` after `askedAt`: the seed's
+ * file as it stands where nothing was written, and otherwise its stamps and
+ * items with each write laid over them, every write then carried.
+ */
+async function wholeAnswer(askedAt: number, ms: number): Promise<Response> {
+  const writes = writtenNow();
+
+  if (writes.size === 0) return answered("inbox-whole.json", askedAt, ms);
+  // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build.
+  const body = (await answerOnce("inbox-whole.json")) as WholeBody;
+  const rows = await wholeRows();
+
+  const queries = Object.fromEntries(
     Object.entries(body.queries).map(([part, query]) => [
       part,
-      JSON.parse(query.rows) as WireRecord[],
+      part === "stamps" || part === "items"
+        ? { ...query, rows: JSON.stringify((rows[part] ?? []).map(overWritten)) }
+        : query,
     ]),
   );
+
+  for (const [threadId, write] of writes) writes.set(threadId, { ...write, carried: true });
+  keepWritten(writes);
+  await wait(ms - (performance.now() - askedAt));
+
+  return json({ ...body, queries });
 }
 
 /** The rows of every part the whole answer holds for the thread `id`, each with what was written on it laid over it. */
@@ -352,7 +401,7 @@ async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
   // Note that a build reads pages from the version it is built at, so the stub of a build that reads none answers it in one.
   if (whole && READS_PAGES) return pageAnswer("inbox-pages", page, askedAt);
 
-  if (whole) return answered("inbox-whole.json", askedAt, BUSY_WAIT.INBOX_WHOLE);
+  if (whole) return wholeAnswer(askedAt, BUSY_WAIT.INBOX_WHOLE);
 
   await wait(BUSY_WAIT.INBOX_EVERY);
   // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build, and each row in it was decoded by the build's own schemas as it was written.
