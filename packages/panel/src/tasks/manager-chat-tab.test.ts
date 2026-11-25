@@ -467,6 +467,16 @@ test.each([
   },
 );
 
+test("a chat longer than its first page asks once for the page before it as it opens, and one that did not answer offers Retry", async () => {
+  const { container, older } = await drawChat([row("later", 7, "Shipped.")], { before: 7 });
+
+  assert.deepEqual(older, [7]);
+  assert.ok(
+    [...container.querySelectorAll("button")].some((button) => button.textContent === "Retry"),
+    "the page that did not answer offers Retry",
+  );
+});
+
 test("a thread whose message is older than the pages read asks for the page it may stand in, and one that did not answer says so with Retry, which asks again", async () => {
   // Note that the thread stands beside the Manager's Overview, so no chat beside it reads older pages of its own.
   const { container, older } = await drawChat([row("later", 7, "Shipped.")], {

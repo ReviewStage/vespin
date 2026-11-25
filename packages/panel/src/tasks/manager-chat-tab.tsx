@@ -951,9 +951,11 @@ export function ManagerChatTab({
   const { marks, standing, manager, name, view, delegation, drawLine } = chatBox;
   const { mutate: retryChat } = useMutation(managerChatRetryMutation());
 
-  const { mutate: readOlder, isError: olderFailed } = useMutation(
-    actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_OLDER),
-  );
+  const {
+    mutate: readOlder,
+    isError: olderFailed,
+    variables: olderAsked,
+  } = useMutation(actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_OLDER));
 
   const queue = useAgentQueue(agent.id, transcript.queue);
   const queueEditing = useQueueEditing(composer, queue, pictures);
@@ -1022,7 +1024,12 @@ export function ManagerChatTab({
       : endLineParts(standing.status, standing.failure, starter, continuable, transcript.hostLost);
 
   const before = chat?.before;
+  /** Reads the page before the oldest message read, as the reader nears the top or presses Retry. */
   const onOlder = before === undefined ? undefined : () => readOlder({ agentId: agent.id, before });
+  // Note that the page before a cursor is read once, as the reader nears the top: an ask for it out,
+  // answered, or refused stands until the cursor moves past it or Retry asks again, so nearing the top
+  // again while it is out asks nothing more.
+  const onNearTop = olderAsked?.before === before ? undefined : onOlder;
 
   const rows = useMemo(
     () =>
@@ -1124,7 +1131,7 @@ export function ManagerChatTab({
     if (chat === undefined) return <TranscriptSkeleton />;
 
     return (
-      <Conversation list={list} onNearTop={onOlder}>
+      <Conversation list={list} onNearTop={onNearTop}>
         {olderFailed && onOlder !== undefined ? <OlderReadFailed onRetry={onOlder} /> : null}
         <ConversationContent>
           <ConversationRows
