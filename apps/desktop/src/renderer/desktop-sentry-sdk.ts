@@ -102,6 +102,8 @@ interface LongFrames {
   readonly of: (startedAt: number, endedAt: number) => LongFrameAttributes;
   /** What the slow interaction a span names overlapped, as it happened; what is kept now where it was not kept then. */
   readonly ofInteraction: (startedAt: number, endedAt: number) => LongFrameAttributes;
+  /** Runs `then` once the frame now drawing has been reported: at once where no frame is. */
+  readonly afterReported: (then: () => void) => void;
 }
 
 /** Whether a performance entry is a long animation frame, which the DOM's types do not name yet. */
@@ -127,7 +129,7 @@ function isInteraction(entry: PerformanceEntry): boolean {
  */
 function observeLongFrames(): LongFrames {
   if (!PerformanceObserver.supportedEntryTypes.includes(LONG_ANIMATION_FRAME)) {
-    return { of: () => ({}), ofInteraction: () => ({}) };
+    return { of: () => ({}), ofInteraction: () => ({}), afterReported: (then) => then() };
   }
 
   const history = longFrameHistory();
@@ -166,6 +168,9 @@ function observeLongFrames(): LongFrames {
     of,
     ofInteraction: (startedAt, endedAt) =>
       interactions.of(startedAt - performance.timeOrigin) ?? of(startedAt, endedAt),
+    afterReported: (then) => {
+      setTimeout(then, FRAME_REPORTED_MS);
+    },
   };
 }
 
@@ -259,7 +264,7 @@ export function initDesktopSentry(): DesktopSentry {
     // is recorded once the frame it ended in has been reported, since a span
     // often ends in the frame that drew what it waited on.
     recordSpan: (span) => {
-      setTimeout(() => {
+      longFrames.afterReported(() => {
         startNewTrace(() => {
           const recorded = startInactiveSpan({
             name: span.name,
@@ -277,7 +282,7 @@ export function initDesktopSentry(): DesktopSentry {
 
           recorded.end(new Date(span.endedAt));
         });
-      }, FRAME_REPORTED_MS);
+      });
     },
     // A send pressed, a span of its own whose trace its act carries to main and on to the service.
     traceSend: sentrySendTracer({ startNewTrace, startSpan, getTraceData }),

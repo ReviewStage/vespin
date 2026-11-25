@@ -94,17 +94,33 @@ const LONG_FRAMES_KEPT = 200;
  */
 const INTERACTIONS_KEPT = 50;
 
-/** An element invoker's bracketed part, as in `IMG[src=…].onload`, which may carry an address. */
-const BRACKETED = /\[[^\]]*\]/g;
-
 /** Where a frame ends on the page's clock. */
 function endOf(frame: LongFrame): number {
   return frame.startTime + frame.duration;
 }
 
+/**
+ * Text with every bracketed part left out, as an element invoker's
+ * `IMG[src=…].onload`, which may carry an address; an unclosed bracket leaves
+ * out the rest. Note that this is one pass rather than a pattern, because a
+ * pattern over brackets backtracks on a long run of them.
+ */
+function withoutBrackets(text: string): string {
+  let kept = "";
+  let inside = false;
+
+  for (const character of text) {
+    if (character === "[") inside = true;
+    else if (inside) inside = character !== "]";
+    else kept += character;
+  }
+
+  return kept;
+}
+
 /** An invoker as it may be sent: no bracketed part, and an address scrubbed. */
 function sentInvoker(invoker: string): string {
-  const bare = invoker.replace(BRACKETED, "");
+  const bare = withoutBrackets(invoker);
 
   return bare.includes("://") ? scrubbedUrl(bare) : bare;
 }
