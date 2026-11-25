@@ -223,6 +223,8 @@ import {
 import { FIXTURE_PULL_REQUEST, fixtureChanges } from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
+export { FIXTURE_RECORDING_ID } from "./fixture-agent-transcript.js";
+
 export {
   FIXTURE_PULL_REQUEST,
   PULL_REQUEST_MOVE,

@@ -184,6 +184,8 @@ export interface MobileHostOptions {
   readonly fixtureInboxOff?: boolean | undefined;
   /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
+  /** Where a fixture run's agent recording is served over HTTP on the rig (`-mediaOrigin`), so its player takes the remote path a device's does; never in a live run. */
+  readonly fixtureMediaOrigin?: string | undefined;
   /** This build's version, as the app's config names it. */
   readonly appVersion: string;
   /** Where the host keeps its files: the app's own folder, or a temporary one in a test. */
@@ -563,6 +565,7 @@ export function composeMobile(
                   fixture,
                   mobile.state,
                   options.fixtureRefusesWrites === true,
+                  options.fixtureMediaOrigin,
                 ),
         }),
         effectServiceLayer(mobile.operator, report),
