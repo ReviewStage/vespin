@@ -222,7 +222,7 @@ import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
 import { useInboxViewCount } from "./places-waiting.js";
 import { ProductIdentity } from "./product-identity.js";
-import { RowPlaced, useRowMoveKeys } from "./row-moves.js";
+import { RowPlaced, useRowMoveKeys, useRowPlaces } from "./row-moves.js";
 import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-collapse.js";
 import { ownOf, SIDEBAR_ENTRY, type SidebarEntry, SidebarEntryRow } from "./sidebar-entries.js";
 import { type CountNoun, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
@@ -1238,12 +1238,17 @@ function PinnedRows({
   const moveKeys = useRowMoveKeys(move);
   const pinPlaces = new Map(rows.map((row, at) => [pinnedRowKey(row), at]));
 
+  const keptPlace = useRowPlaces();
+
   const placeOf = (key: string) => {
     const at = pinPlaces.get(key);
 
-    return movePin === undefined || at === undefined
-      ? undefined
-      : { at, count: rows.length, onMove: movePin };
+    return keptPlace(
+      key,
+      movePin === undefined || at === undefined
+        ? undefined
+        : { at, count: rows.length, onMove: movePin },
+    );
   };
 
   const nests = nestsOf(depths);

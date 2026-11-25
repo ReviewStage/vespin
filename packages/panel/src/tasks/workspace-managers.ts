@@ -101,7 +101,45 @@ export function useWorkspaceManagers(
   return { managers };
 }
 
-/** The agents control a Manager's row acts through, over `control`, the window's agents control. */
+/** What the window's agents control holds of the open task alone, which a Manager, on no task, acts through none of. */
+const OPEN_TASK_AGENTS: ReadonlySet<keyof TaskAgentsControl> = new Set([
+  "rows",
+  "rowNow",
+  "pullRequestNow",
+  "archivedIds",
+  "workingIds",
+  "agentIds",
+  "heldIds",
+  "draft",
+  "keywords",
+  "readSkills",
+] as const);
+
+/** No words a dictation is likely to say, a Manager's row taking no dictation. */
+const NO_KEYWORDS: readonly string[] = [];
+
+/**
+ * Whether a Manager's row acts through `now` as it acted through `was`:
+ * all but the open task's own fields the same. Note that the control moves
+ * as a task opens, and a Manager's row read it whole, so every Manager's row
+ * drew again on every open though none of what it acts through moved.
+ */
+export function sameForManagers(was: TaskAgentsControl, now: TaskAgentsControl): boolean {
+  // SAFETY: the keys of a control are its own fields, each named in `TaskAgentsControl`.
+  const keys = Object.keys(now) as (keyof TaskAgentsControl)[];
+
+  return (
+    keys.length === Object.keys(was).length &&
+    keys.every((key) => OPEN_TASK_AGENTS.has(key) || was[key] === now[key])
+  );
+}
+
+/**
+ * The agents control a Manager's row acts through, over `control`, the
+ * window's agents control: none of the open task's own fields, so a row
+ * holding a control from before a task opened (`sameForManagers`) acts
+ * through what it would act through now.
+ */
 export function useManagerAgents(control: TaskAgentsControl): AgentsControl {
   const queryClient = useQueryClient();
 
@@ -109,6 +147,11 @@ export function useManagerAgents(control: TaskAgentsControl): AgentsControl {
   return useMemo(
     (): AgentsControl => ({
       ...placeAgents(control),
+      agentIds: undefined,
+      heldIds: undefined,
+      draft: undefined,
+      keywords: NO_KEYWORDS,
+      readSkills: undefined,
       readAgent: (agentId: string) => readAgentById(queryClient, agentId),
     }),
     [control, queryClient],
