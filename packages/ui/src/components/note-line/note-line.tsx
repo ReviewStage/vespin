@@ -16,12 +16,12 @@ import { GlyphSlot } from "../glyph-slot/glyph-slot.js";
  * at the rows' inset by a margin of their own (`ROWS`, a list's "No tasks
  * yet." among a sidebar's rows), and fills the room a column leaves it
  * where `fill` says so. A trail (`TRAIL`) is the one note led by a glyph:
- * what followed from a message, its glyph in a row's 16px seat and the
- * chips it names after its words, wrapping as one row at the caption's
- * size in the leading of the line that holds it (a transcript's "Forked
- * to" and "Continued in"). A step (`STEP`) is a trail that stands among
- * a transcript's rows at a row's height and in a row's columns, its glyph
- * and words where a call's row sets them, so it keeps their rhythm (where
+ * what followed from a message, its glyph in a row's 16px seat and its
+ * glyph and words where a call's row sets them, the chips it names after
+ * its words, wrapping as one row at the caption's size in the leading of
+ * the line that holds it (a transcript's "Forked to" and "Continued in").
+ * A step (`STEP`) is a trail that stands among a transcript's rows at a
+ * row's height, so it keeps their rhythm (where
  * a coding agent's session was compacted, cleared, or moved). A line a reader should hear arrive is a
  * `status`; one a reader may select, as a transcript's words are in a
  * window that holds its other words still, is `selectable`.
