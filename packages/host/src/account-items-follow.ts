@@ -16,6 +16,7 @@ import {
   type AccountWideReads,
   INBOX_ITEM,
   type InboxChange,
+  itemOf,
   type PlacedInboxItem,
   placedItem,
 } from "./inbox-collections.js";
@@ -429,7 +430,7 @@ export function followAccountItems(
       const drawn = (ids: readonly string[]) =>
         Effect.suspend(() => {
           if (held !== undefined) {
-            told = inboxItemsPatched(told, ids, held, held, items.row);
+            told = inboxItemsPatched(told, ids, held, held, toldRow);
           }
 
           return toldNow;
@@ -450,6 +451,13 @@ export function followAccountItems(
 
       yield* dependencies.accountWide.stand(() => wait);
 
+      /** The item `id` names as a window is told it, a write standing over it drawn, without the task the pool holds it on. */
+      const toldRow = (id: string) => {
+        const row = items.row(id);
+
+        return row === undefined ? undefined : itemOf(row);
+      };
+
       /** The items `after` holds taken in place of those `was` held, `sent` the ones that came with it, read where `standing` says, and told. */
       const taken = (
         was: Held,
@@ -469,7 +477,7 @@ export function followAccountItems(
             cursor: keptOf(after, standing, dependencies.tasksListed ?? noneListed, keptHolders),
           });
 
-          told = inboxItemsPatched(told, [...moved, ...placed], was, after, items.row);
+          told = inboxItemsPatched(told, [...moved, ...placed], was, after, toldRow);
           yield* toldNow;
         });
 
@@ -479,11 +487,11 @@ export function followAccountItems(
 
       if (kept !== undefined) {
         keptHolders = keptHoldersOf(kept);
-        const fromStore = heldOfKept(stored, kept);
+        const fromStore = heldOfKept(stored.map(itemOf), kept);
         withinWindow(fromStore, yield* Clock.currentTimeMillis);
         held = fromStore;
         drawnFromStore = true;
-        told = inboxItemsPatched(told, fromStore.keys(), new Map(), fromStore, items.row);
+        told = inboxItemsPatched(told, fromStore.keys(), new Map(), fromStore, toldRow);
         yield* toldNow;
       }
 

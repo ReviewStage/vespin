@@ -13,6 +13,7 @@ import { type AppHolderInboxes, NO_HOLDER_INBOXES } from "./app-state.js";
 import {
   INBOX_ITEM,
   type InboxChange,
+  itemOf,
   type PlacedInboxItem,
   placedItem,
 } from "./inbox-collections.js";
@@ -118,7 +119,7 @@ export function scopeInboxes(
           answered
             ? SubscriptionRef.set(inbox, {
                 kind: LIVE_STATE.STANDING,
-                inbox: { items: inboxInOrder(items.rows()) },
+                inbox: { items: inboxInOrder(items.rows().map(itemOf)) },
               })
             : Effect.void,
         );

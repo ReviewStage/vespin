@@ -161,6 +161,25 @@ export function placedItem(item: InboxItem, taskId: string | null): PlacedInboxI
   return { ...item, taskId };
 }
 
+/** Each item as `itemOf` last read it out, by the row it read, so a row that did not move reads out as the very item. */
+const itemsOf = new WeakMap<PlacedInboxItem, InboxItem>();
+
+/**
+ * The item a row holds without the task it stands on, as a window is told
+ * it: the document groups items by task itself, so it never carries the
+ * pool's own field. A row read again while it stands reads out as the very
+ * item read before.
+ */
+export function itemOf(row: PlacedInboxItem): InboxItem {
+  const read = itemsOf.get(row);
+
+  if (read !== undefined) return read;
+  const { taskId: _placed, ...item } = row;
+  itemsOf.set(row, item);
+
+  return item;
+}
+
 /** An inbox item as the pool holds it, by its id, every write to it a change the item's reads draw over it, on the task it stood on. */
 export const INBOX_ITEM: RowKind<PlacedInboxItem, InboxChange> = {
   key: (item) => item.id,
