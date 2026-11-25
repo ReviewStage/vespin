@@ -666,7 +666,8 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             "",
             "The recording is under this. The expired page is still the placeholder.",
             "",
-            // Note that the task's chip leads its own line, so `keep.yaml` holds it near the line's start, and a hold on the message's other lines lands on no chip.
+            // Note that the task's chip leads its own line, so `keep.yaml` holds it near the line's start, and a hold on the message's other lines lands on no chip. It is still a view laid inline in the line's words inside a held message, so its menu is held as a chip mid-line is.
+            // A chip mid-line has no element of its own until React Native's paragraph lists its inline views as accessibility elements, the follow-up to #10919, which moves it back mid-line and holds it by its element.
             "[@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60) holds the rest of the work.",
             "",
             // Note that each person's chip leads its own line, so `person.yaml` taps it near the line's start, since a chip mid-line has no element of its own.
