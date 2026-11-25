@@ -21,7 +21,6 @@ import {
   LIST_ROW_LEAD,
   LIST_ROW_META,
   List,
-  ListMotion,
   ListRow,
   RESIZE_EDGE_SIDE,
   ResizeEdge,
@@ -277,8 +276,7 @@ interface RunsShown {
  * The runs under their heading, or none where the screen is headed Runs
  * already, scrolling by themselves: quiet blocks in
  * their place while they are first read, or that there are none yet, or
- * that they could not be read. A run that starts stands at the top, and
- * the runs under it glide down (`ListMotion`).
+ * that they could not be read. A run that starts stands at the top.
  */
 function RunsBody({
   headed,
@@ -292,14 +290,10 @@ function RunsBody({
   onOpenSetup,
 }: RunsShown & { headed: boolean }): React.JSX.Element {
   const now = useMinute();
-  const body = useRef<HTMLDivElement | null>(null);
 
   return (
     <ScrollArea fade={SCROLL_FADE.START}>
-      <div
-        ref={body}
-        className="automation-runs-body flex min-h-full flex-col gap-control-gap p-ui-16"
-      >
+      <div className="automation-runs-body flex min-h-full flex-col gap-control-gap p-ui-16">
         {headed ? (
           <div className="automation-runs-head px-ui-2">
             <Text variant={TEXT_VARIANT.SECTION} tone={TEXT_TONE.MUTED} as={TEXT_ELEMENT.H2}>
@@ -322,22 +316,20 @@ function RunsBody({
         ) : runs.runs.length === 0 ? (
           <EmptyState icon={<ClockIcon />}>{NO_RUNS_LINE}</EmptyState>
         ) : (
-          <ListMotion root={body}>
-            <List label="Runs" moves>
-              {runs.runs.map((run) => (
-                <RunRow
-                  key={run.id}
-                  run={run}
-                  keyHolder={mine ? undefined : CREATOR}
-                  automationId={automationId}
-                  linked={run.id === linkedRun}
-                  now={now}
-                  onOpenAgent={onOpenAgent}
-                  onOpenAutomation={onOpenSetup}
-                />
-              ))}
-            </List>
-          </ListMotion>
+          <List label="Runs">
+            {runs.runs.map((run) => (
+              <RunRow
+                key={run.id}
+                run={run}
+                keyHolder={mine ? undefined : CREATOR}
+                automationId={automationId}
+                linked={run.id === linkedRun}
+                now={now}
+                onOpenAgent={onOpenAgent}
+                onOpenAutomation={onOpenSetup}
+              />
+            ))}
+          </List>
         )}
       </div>
     </ScrollArea>

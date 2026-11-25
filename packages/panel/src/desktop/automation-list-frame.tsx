@@ -3,7 +3,6 @@ import {
   type GroupFold,
   GroupHeader,
   List,
-  ListMotion,
   ListRow,
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
@@ -12,7 +11,7 @@ import {
   Toolbar,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { type ReactNode, useCallback, useRef } from "react";
+import type { ReactNode } from "react";
 
 /**
  * automation-list-frame.tsx -- the Automations list's boxes, which the list and its placeholders both draw.
@@ -76,8 +75,8 @@ export function AutomationsActsSkeleton(): React.JSX.Element {
  * list's and the Inbox's are, so a row's hover, focus, and open menu draw
  * as theirs do. A lone owner's list is still a region named by its owner, as a
  * headed one is by its heading, so a reader moving by landmark hears whose
- * automations they are either way. Its rows move (`ListMotion`): one made
- * or deleted stands or goes at once, and the rows under it glide.
+ * automations they are either way. A row made or deleted stands or goes
+ * at once.
  */
 export function AutomationGroupList({
   name,
@@ -94,42 +93,21 @@ export function AutomationGroupList({
   fold?: GroupFold | undefined;
   children: ReactNode;
 }): React.JSX.Element {
-  const root = useRef<HTMLElement | null>(null);
-
-  // Note that the group is a div or a section by whether it is headed, so the motion's root is held by a callback either takes.
-  const hold = useCallback((node: HTMLElement | null) => {
-    root.current = node;
-  }, []);
-
-  const rows = (
-    <List label={name} moves>
-      {children}
-    </List>
-  );
-
-  const list = (
-    <ListMotion root={root}>
-      {headed ? (
-        <GroupHeader
-          heading={GROUP_HEADING.H2}
-          label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
-          fold={fold}
-        >
-          {rows}
-        </GroupHeader>
-      ) : (
-        rows
-      )}
-    </ListMotion>
-  );
+  const rows = <List label={name}>{children}</List>;
 
   return headed ? (
-    <div ref={hold} className={AUTOMATION_GROUP}>
-      {list}
+    <div className={AUTOMATION_GROUP}>
+      <GroupHeader
+        heading={GROUP_HEADING.H2}
+        label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
+        fold={fold}
+      >
+        {rows}
+      </GroupHeader>
     </div>
   ) : (
-    <section ref={hold} className={AUTOMATION_GROUP} aria-label={name}>
-      {list}
+    <section className={AUTOMATION_GROUP} aria-label={name}>
+      {rows}
     </section>
   );
 }

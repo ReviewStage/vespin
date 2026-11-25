@@ -18,14 +18,12 @@ import {
   GAP,
   IconButton,
   Inline,
-  ListMotion,
   Tooltip,
-  useLeaving,
   useMenu,
 } from "@repo/ui";
 import { ACTOR_KIND, type Actor, actorName } from "@repo/ui/actor-model";
 import { GLYPH, ListFilterIcon } from "@repo/ui/icons";
-import { type ReactNode, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { PEOPLE_FILTER_WORDS } from "../member-rows.js";
@@ -141,46 +139,28 @@ export function PeopleFilter({
   );
 }
 
-/** The person a chip stands for, by which its chip leaves. */
-const personChipKey = (person: FilterPerson): string => person.key;
-
-/** The filter's chips and Clear, a chip lifted scaling out where it stood. */
-function PeopleFilterLine({
-  line,
+/** What the filter keeps, a chip for each person, its × lifting them, and Clear. */
+export function PeopleFilterChips({
   field,
   people,
   kept,
   onKept,
-}: PeopleFilterProps & { line: React.RefObject<HTMLElement | null> }): React.JSX.Element | null {
-  // Note that the people are read again on every render, so the list the chips leave by is kept until another person is kept.
+}: PeopleFilterProps): React.JSX.Element | null {
   const listed = people.filter((person) => kept.has(person.key));
-  const [stable, setStable] = useState(listed);
 
-  const same =
-    stable.length === listed.length &&
-    stable.every(
-      (person, at) => person.key === listed[at]?.key && person.label === listed[at]?.label,
-    );
-
-  if (!same) setStable(listed);
-  const drawn = useLeaving(same ? stable : listed, personChipKey);
-
-  if (drawn.length === 0) return null;
+  if (listed.length === 0) return null;
 
   return (
-    <Inline gap={GAP.TIGHT} ref={line} moves>
-      {drawn.map(({ key, value: person, leaving }) => {
+    <Inline gap={GAP.TIGHT}>
+      {listed.map((person) => {
         const name = `${field} ${person.label === PEOPLE_FILTER_WORDS.ME ? "me" : person.label}`;
 
         return (
           <Chip
-            key={key}
+            key={person.key}
             look={CHIP_LOOK.FILTER}
-            motionKey={key}
             removeLabel={`Remove filter: ${name}`}
-            onRemove={() => {
-              if (!leaving) onKept(toggled(kept, person.key));
-            }}
+            onRemove={() => onKept(toggled(kept, person.key))}
           >
             {person.face}
             <ChipName>{name}</ChipName>
@@ -193,16 +173,5 @@ function PeopleFilterLine({
         </Button>
       )}
     </Inline>
-  );
-}
-
-/** What the filter keeps, a chip for each person, its × lifting them, and Clear, under a motion that scales a chip in and out (`ListMotion`). */
-export function PeopleFilterChips(props: PeopleFilterProps): React.JSX.Element {
-  const line = useRef<HTMLElement | null>(null);
-
-  return (
-    <ListMotion root={line}>
-      <PeopleFilterLine line={line} {...props} />
-    </ListMotion>
   );
 }

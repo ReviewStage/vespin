@@ -181,13 +181,7 @@ export function AgentQueueDock({
         </Banner>
       )}
       <div className="agent-queue-rows">
-        <List
-          label={QUEUE_WORDS.LIST}
-          variant={LIST_VARIANT.CARD}
-          fingerTall
-          moves
-          onPointerDown={drag}
-        >
+        <List label={QUEUE_WORDS.LIST} variant={LIST_VARIANT.CARD} fingerTall onPointerDown={drag}>
           {messages.map((message) => {
             const edited = message.id === editing || message.editing === true;
             const queuer = queuerOf(message, directory);

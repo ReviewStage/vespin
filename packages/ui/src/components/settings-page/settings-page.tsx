@@ -3,7 +3,6 @@ import { said } from "../../said.js";
 import { type PageScroll, PageScrollContext } from "../page-frame/page-scroll.js";
 import { useHeadingAway } from "../page-header/heading-away.js";
 import { PAGE_HEADER_END, PAGE_HEADER_LOOK, PageHeader } from "../page-header/page-header.js";
-import { RevealArea, revealArea } from "../reveal/reveal.js";
 import {
   type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
@@ -23,9 +22,7 @@ import { TOOLBAR_INSET, TOOLBAR_LOOK, Toolbar, type ToolbarLook } from "../toolb
  * edges and its sections: the inset around the column, which narrows when the page
  * does, the measure the column reads at, the title's place and size, the
  * room under the head, and the room between one section (`SettingsSection`)
- * and the next. Its column of sections is a reveal area (`RevealArea`), so
- * as a setting's rows unroll in (`Reveal`), the sections under them glide
- * down with the rows. A section owns its heading and card, and a row its padding,
+ * and the next. A section owns its heading and card, and a row its padding,
  * so a caller sets no length anywhere on a settings page. The page heads
  * itself with a document's header (`PageHeader`): the title is the page's
  * `h1`, which each section's `h2` heads a part of. What acts on the whole
@@ -95,8 +92,7 @@ export type SettingsPageWidth = (typeof SETTINGS_PAGE_WIDTH)[keyof typeof SETTIN
  * dissolves rows scrolled up into its top edge, at the page's inset, around
  * a column at the page's measure holding the head (the title, its line
  * under it, and what acts on the whole page at the title's end) over the
- * sections a page's gap apart, a reveal area whose sections glide as rows
- * unroll in, handing its sections the page's scroller (`usePageScroll`). A
+ * sections a page's gap apart, handing its sections the page's scroller (`usePageScroll`). A
  * page whose title a phone's bar draws (`titled`) opens on its line alone,
  * under the bar. `SettingsPage` stands it under the window's bar, and a
  * settings dialog (`SettingsDialog`) beside its section list, so a section
@@ -186,15 +182,12 @@ export function SettingsPageColumn({
             />
           </div>
         )}
-        <RevealArea root={sections}>
-          <div
-            ref={sections}
-            className="ui-settings-page-sections flex min-w-0 flex-col gap-page-section-gap"
-            {...revealArea()}
-          >
-            <PageScrollContext value={scroll}>{children}</PageScrollContext>
-          </div>
-        </RevealArea>
+        <div
+          ref={sections}
+          className="ui-settings-page-sections flex min-w-0 flex-col gap-page-section-gap"
+        >
+          <PageScrollContext value={scroll}>{children}</PageScrollContext>
+        </div>
       </div>
     </div>
   );

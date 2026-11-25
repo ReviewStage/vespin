@@ -43,11 +43,8 @@ import {
   ChipName,
   CornerDot,
   IconButton,
-  ListMotion,
   MENU_DETAIL,
   MENU_ITEM_MARK,
-  motionKey,
-  motionRows,
   NoRepositoryGlyph,
   RepositoryPicture,
   ShowMoreRow,
@@ -55,7 +52,6 @@ import {
   TaskStatusMark,
   TextButton,
   Tooltip,
-  useLeaving,
   useMenu,
 } from "@repo/ui";
 import {
@@ -84,7 +80,7 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowMeasurements } from "@repo/ui/virtual-rows";
 import type { Store } from "@tanstack/react-store";
-import { Fragment, type ReactNode, type RefObject, useMemo, useRef } from "react";
+import { Fragment, type ReactNode, useMemo } from "react";
 import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.js";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
@@ -625,68 +621,10 @@ function filterLineEntries(
   return [...chips, { key: FILTER_LINE.CLEAR }];
 }
 
-/** What a press on a leaving chip or Clear does, out of reach as it is: nothing. */
-function stays(): void {}
-
-/**
- * The filter line's chips and Clear. Note that it is its own component
- * under the line's `ListMotion`, because `useLeaving` finds the motion
- * through the context the motion provides.
- */
-function FilterLine({
-  line,
-  tasks,
-  filter,
-  onFilter,
-}: {
-  line: RefObject<HTMLDivElement | null>;
-  tasks: readonly TaskSummary[];
-  filter: TasksFilter;
-  onFilter: (filter: TasksFilter) => void;
-}): React.JSX.Element {
-  const reader = useMemberDirectory();
-  // Note that the entries are made once for what they are made from, because `useLeaving` reads a new list as a change.
-  const listed = useMemo(() => filterLineEntries(tasks, filter, reader), [tasks, filter, reader]);
-  const drawn = useLeaving(listed, (entry) => entry.key);
-
-  return (
-    <div
-      ref={line}
-      className="tasks-filter-line flex min-w-0 flex-wrap items-center gap-control-gap [&[hidden]]:hidden"
-      hidden={drawn.length === 0}
-      {...motionRows()}
-    >
-      {drawn.map(({ key, value, leaving }) =>
-        value.key === FILTER_LINE.CLEAR ? (
-          <span key={key} className="tasks-filter-clear inline-flex" {...motionKey(key)}>
-            <TextButton onClick={leaving ? stays : () => onFilter({})}>Clear</TextButton>
-          </span>
-        ) : (
-          <Chip
-            key={key}
-            motionKey={key}
-            look={CHIP_LOOK.FILTER}
-            removeLabel={`Clear the ${FIELD_WORDS[value.key].toLowerCase()} filter`}
-            onRemove={leaving ? stays : () => onFilter(clearedField(filter, value.key))}
-          >
-            {FIELD_ICON[value.key]}
-            <ChipName>
-              {`${FIELD_WORDS[value.key]}: `}
-              <ChipValues values={value.values} />
-            </ChipName>
-          </Chip>
-        ),
-      )}
-    </div>
-  );
-}
-
 /**
  * The chips on the page's filter line, a field a chip, its values named,
- * its × lifting it, and Clear lifting them all. The line stands, hidden,
- * while the filter keeps nothing, so the chips a field's chip moves as it
- * is filtered or lifted glide, the last one's too, under the line's
- * `ListMotion`; Clear comes and goes with the first chip and the last.
+ * its × lifting it, and Clear lifting them all; the line stands, hidden,
+ * while the filter keeps nothing.
  */
 export function TasksFilterChips({
   tasks,
@@ -697,12 +635,35 @@ export function TasksFilterChips({
   filter: TasksFilter;
   onFilter: (filter: TasksFilter) => void;
 }): React.JSX.Element {
-  const line = useRef<HTMLDivElement | null>(null);
+  const reader = useMemberDirectory();
+  const listed = useMemo(() => filterLineEntries(tasks, filter, reader), [tasks, filter, reader]);
 
   return (
-    <ListMotion root={line}>
-      <FilterLine line={line} tasks={tasks} filter={filter} onFilter={onFilter} />
-    </ListMotion>
+    <div
+      className="tasks-filter-line flex min-w-0 flex-wrap items-center gap-control-gap [&[hidden]]:hidden"
+      hidden={listed.length === 0}
+    >
+      {listed.map((entry) =>
+        entry.key === FILTER_LINE.CLEAR ? (
+          <span key={entry.key} className="tasks-filter-clear inline-flex">
+            <TextButton onClick={() => onFilter({})}>Clear</TextButton>
+          </span>
+        ) : (
+          <Chip
+            key={entry.key}
+            look={CHIP_LOOK.FILTER}
+            removeLabel={`Clear the ${FIELD_WORDS[entry.key].toLowerCase()} filter`}
+            onRemove={() => onFilter(clearedField(filter, entry.key))}
+          >
+            {FIELD_ICON[entry.key]}
+            <ChipName>
+              {`${FIELD_WORDS[entry.key]}: `}
+              <ChipValues values={entry.values} />
+            </ChipName>
+          </Chip>
+        ),
+      )}
+    </div>
   );
 }
 

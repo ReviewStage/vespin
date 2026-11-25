@@ -220,8 +220,6 @@ export * from "./components/line-button/line-button.js";
 
 export * from "./components/link-field/link-field.js";
 
-export * from "./components/list-motion/list-motion.js";
-
 export * from "./components/list-row/list-row.js";
 
 export * from "./components/list-row/list-row-hint.js";

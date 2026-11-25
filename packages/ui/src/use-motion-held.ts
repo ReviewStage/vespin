@@ -14,7 +14,7 @@ const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
  * to stop. Note that a document with no media queries, as a test's is, has
  * no setting to follow.
  */
-export function listenToMotionSetting(heard: () => void): () => void {
+function listenToMotionSetting(heard: () => void): () => void {
   if (typeof window === "undefined" || !Predicate.isFunction(window.matchMedia)) {
     return () => undefined;
   }

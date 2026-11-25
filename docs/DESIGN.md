@@ -83,19 +83,12 @@ a component tells the stylesheet a measured distance.
 A gesture that moves several elements gives each the same duration and
 spring and staggers only the delay, so the whole reads as one object.
 
-Something that opens or closes in place, a fold (`disclosure.css`) or a
-setting's revealed rows (`reveal.tsx`), is one gesture with what stands under
-it, whatever its size: opening, its body unrolls from its top edge on the
-spring what stands under it glides down on, so the clip's foot and the block
-below travel as one edge and nothing is seen through a block still sliding
-off it; closing, it gives up its room at once and rolls up on
-`--ui-duration-exit` as what stands under it closes over it on the same
-tokens, never fading to an empty gap a block then travels the spring across.
-A card drawn around it carries its edge on that same beat (`motionFrame`,
-`list-motion.tsx`): its box lands at once, as every box does, and its foot is
-clipped back to where it stood and unrolled or rolled up with the rows, so
-the card's ground never stands empty under rows still on their way, and rows
-closing over a fold are never drawn outside the card they belong to.
+Something that opens or closes in place, a fold (`disclosure.css`), is one
+gesture whatever its size: opening, its body unrolls from its top edge on the
+spring; closing, it fades on `--ui-duration-exit` and the layout lands once it
+has. What stands under it, and a list's rows as they arrive, leave, or change
+places, a setting's revealed rows (`reveal.tsx`) among them, move at once:
+nothing measures rows to replay where they were.
 A tall section and a one-row group then move alike, and no surface times its
 own fold (`style-guard/fold-motion`).
 

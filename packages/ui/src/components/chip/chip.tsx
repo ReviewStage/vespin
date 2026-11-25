@@ -3,7 +3,6 @@ import { ChevronDownIcon, RemoveIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
 import { PRESS_FACE, PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import type { StatusTone } from "../../status-tone.js";
-import { motionKey as motionKeyAttribute } from "../list-motion/list-motion.js";
 import { TEXT_ELEMENT, TEXT_FONT, TEXT_VARIANT, Text } from "../text/text.js";
 import { Tooltip } from "../tooltip/hint.js";
 import type { VisuallyHiddenUnder } from "../visually-hidden/visually-hidden.js";
@@ -51,9 +50,7 @@ import type { VisuallyHiddenUnder } from "../visually-hidden/visually-hidden.js"
  * on its words too, which opens it, the × its sibling rather than inside it,
  * since a button holds no button, and whose words may carry a hint
  * (`hint`), said on a rest, under a finger, and to a reader, as why an
- * address is wrong. It springs in as
- * it arrives, unless a `ListMotion` follows it by its `motionKey`, under
- * which it stands and goes at once as its list's rows do.
+ * address is wrong. It stands and goes at once.
  *
  * A chip comes at the control's size, or compact (`size`), a caption
  * line's pill, where it is one of a row of small counts (a pull request's
@@ -167,7 +164,6 @@ type ButtonChipProps = ChipFace & {
   /** Whether a change it made is out, which it says, and pulses, until answered. */
   busy?: boolean | undefined;
   onRemove?: never;
-  motionKey?: never;
   href?: never;
 } & Omit<ComponentPropsWithRef<"button">, "type" | "style" | "className" | "aria-busy">;
 
@@ -179,7 +175,6 @@ type LinkChipProps = ChipFace & {
   chevron?: never;
   busy?: never;
   onRemove?: never;
-  motionKey?: never;
 } & Omit<ComponentPropsWithRef<"a">, "style" | "className" | "href" | "onClick">;
 
 /** A chip naming what stands, ended by the × that lifts it. */
@@ -190,8 +185,6 @@ type RemovableChipProps = ChipFace & {
   removeLabel: string;
   /** Opens what the chip names, a press on its words; without it the words take no press. */
   onOpen?: (() => void) | undefined;
-  /** The key a `ListMotion` around its row follows it by, which glides it where its row moves it. */
-  motionKey?: string | undefined;
   /** What the chip's words say on a rest, under a finger's long press or tap, and to a reader as their description (`Tooltip`). */
   hint?: string | undefined;
   href?: never;
@@ -385,7 +378,6 @@ function RemovableChip({
   onRemove,
   removeLabel,
   onOpen,
-  motionKey,
   hint,
   children,
   ...face
@@ -409,7 +401,6 @@ function RemovableChip({
       className={chipClasses(face, true, false)}
       data-removable="true"
       {...faceAttributes(face)}
-      {...(motionKey === undefined ? {} : motionKeyAttribute(motionKey))}
     >
       {hint === undefined ? words : <Tooltip label={hint}>{words}</Tooltip>}
       <button

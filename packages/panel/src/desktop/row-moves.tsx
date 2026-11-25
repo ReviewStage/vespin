@@ -125,8 +125,8 @@ export function withRowMoves(
 /** What a list that moves its rows wears, so a row's focus is read by the list it stands directly in and not one of the lists nested in its rows. */
 const MOVE_LIST = "data-row-moves";
 
-/** A list's rows that move; one on its way out (`ListMotion`) is no longer one of them, as `use-row-drag.ts` counts them. */
-const MOVING_ROW = ":scope > li:not([data-leaving])";
+/** A list's rows that move, as `use-row-drag.ts` counts them. */
+const MOVING_ROW = ":scope > li";
 
 /** What a row wears in a list drawing only the rows near the view, its place among them all (`VirtualRows`). */
 const ROW_INDEX = "data-index";

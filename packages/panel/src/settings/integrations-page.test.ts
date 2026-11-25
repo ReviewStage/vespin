@@ -46,7 +46,6 @@ import {
   signedInAs,
 } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { playListMotions } from "../testing/pane-motion.js";
 import { IntegrationsSection } from "./integrations-page.js";
 
 /**
@@ -1488,62 +1487,4 @@ test("Reopen on an added account still waiting on its first sign-in reopens that
       .map((request) => request.payload),
     [{ provider: notion, connection: "notion-3" }],
   );
-});
-
-/** How tall a row is drawn, in the layout given. */
-const ROW = 40;
-
-/** Each row standing under the rows before it on the page, as a layout would; jsdom lays nothing out. */
-function layRowsInOrder(page: HTMLElement): void {
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    const rows = [...page.querySelectorAll("[data-motion-key]")];
-    const at = rows.indexOf(this);
-    const top = Math.max(at, 0) * ROW;
-
-    // SAFETY: the list reads only a row's top, bottom, and height.
-    return { top, bottom: top + ROW, left: 0, right: 0, width: 0, height: ROW } as DOMRect;
-  });
-}
-
-/** Granola, Linear, and Mercury offered, none of them connected. */
-function offerThree(): void {
-  const offered: readonly IntegrationProvider[] = [
-    GRANOLA,
-    INTEGRATION_PROVIDER.LINEAR,
-    INTEGRATION_PROVIDER.MERCURY,
-  ];
-
-  withheld = INTEGRATION_PROVIDER_LIST.filter((provider) => !offered.includes(provider));
-}
-
-test("with motion held still, an integration that connects takes its place and nothing plays", async () => {
-  const motions = playListMotions();
-
-  try {
-    for (const name of ["--ui-duration-exit", "--ui-duration-shape"]) {
-      document.documentElement.style.setProperty(name, "0ms");
-    }
-
-    offerThree();
-    const page = await mount();
-    layRowsInOrder(page);
-
-    touched.set(INTEGRATION_PROVIDER.MERCURY, INTEGRATION_STATUS.CONNECTED);
-    await readMoves();
-
-    await vi.waitFor(() =>
-      assert.deepEqual(sections(page), [
-        ["Connected", ["Mercury"]],
-        ["Not connected", ["Granola", "Linear"]],
-      ]),
-    );
-    assert.deepEqual(
-      motions.played.map((each) => each.keyframes),
-      [],
-    );
-  } finally {
-    motions.remove();
-  }
 });

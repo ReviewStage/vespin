@@ -5,9 +5,9 @@
  * sections alike, draws its rows through `drawnTaskRows`, each child task
  * first moved into the list holding its parent (`homedTaskRows`), so it
  * stands under its parent wherever that stands. The rows a list draws are
- * handed to `useLeaving`, which takes a list handed anew as a list changed,
- * so they are handed back as the same list for as long as each row stands
- * where it stood, at the same depth and fold.
+ * handed back as the same list for as long as each row stands where it
+ * stood, at the same depth and fold, so what draws them draws again only
+ * as they change.
  *
  * A list whose rows the reader orders, an account's section, keeps them in
  * an order of its own, which nesting redraws: a child stands under its
@@ -90,23 +90,6 @@ export function nestsOf(nested: readonly Depth[]): (ListRowNest | undefined)[] {
     position: positions[at] ?? 1,
     size: sizes.get(parent) ?? 1,
   }));
-}
-
-/**
- * Where a row moved from the slot `from` to the slot `to` among the rows a
- * run draws, rows on their way out (`useLeaving`) among them, lands among
- * the rows still listed: how many of those stand before it once it is
- * moved, a row on its way out counting for none, so a move read against
- * the rows listed (`movedBeside`) goes where it was carried.
- */
-export function listedSlot(
-  drawn: readonly { readonly leaving: boolean }[],
-  from: number,
-  to: number,
-): number {
-  const before = to > from ? drawn.slice(0, to + 1) : drawn.slice(0, to);
-
-  return before.filter((entry, at) => !entry.leaving && at !== from).length;
 }
 
 /**

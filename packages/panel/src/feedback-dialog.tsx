@@ -65,19 +65,17 @@ import {
   GAP,
   Inline,
   LAYOUT_ELEMENT,
-  ListMotion,
   TEXT_AREA_LOOK,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
   TextArea,
-  useLeaving,
 } from "@repo/ui";
 import { UNREPORTED } from "@repo/ui/reported-failure";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
 import { useMutation } from "@tanstack/react-query";
-import { type RefObject, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { actMutation } from "./act-mutations.js";
 import { enterKeyHint, enterSubmitKey } from "./enter-sends.js";
 import { failureShown } from "./failure-report.js";
@@ -121,14 +119,12 @@ function feedbackImageUrl(image: FeedbackImage): string {
   return `data:${image.mediaType};base64,${image.base64}`;
 }
 
-/** The screenshots' row, each by a key minted for its image, a screenshot taken off scaling out where it stood. */
-function FeedbackImageRow({
-  row,
+/** The screenshots' row, each by a key minted for its image, so one taken off leaves the others standing as they were. */
+function FeedbackImages({
   images,
   busy,
   onRemove,
 }: {
-  row: RefObject<HTMLUListElement | null>;
   images: readonly FeedbackImage[];
   busy: boolean;
   onRemove: (image: FeedbackImage) => void;
@@ -147,54 +143,30 @@ function FeedbackImageRow({
     return id;
   };
 
-  const drawn = useLeaving(images, idOf);
-
-  if (drawn.length === 0) return null;
+  if (images.length === 0) return null;
 
   return (
     <Inline
       as={LAYOUT_ELEMENT.UL}
       gap={GAP.CONTROL}
       align={ALIGN.STRETCH}
-      ref={row}
       className="feedback-dialog-images"
       aria-label="Screenshots"
-      moves
     >
-      {drawn.map(({ key, value: image, leaving }) => (
+      {images.map((image) => (
         <AttachmentChip
-          key={key}
-          motionKey={key}
+          key={idOf(image)}
           name={image.name}
           image={feedbackImageUrl(image)}
           // Note that the screenshots go up inside the one request the report is sent in, so each is drawn going up while it is out.
           state={busy ? ATTACHMENT_CHIP_STATE.UPLOADING : ATTACHMENT_CHIP_STATE.READY}
           // Note that a refused report leaves its screenshots standing, so none takes a check as the send ends.
           lands={false}
-          removeDisabled={busy || leaving}
+          removeDisabled={busy}
           onRemove={() => onRemove(image)}
         />
       ))}
     </Inline>
-  );
-}
-
-/** The screenshots attached to the kind's draft, under a motion that scales one in and out (`ListMotion`); another kind's draft is another scene, which stands at once. */
-function FeedbackImages({
-  kind,
-  ...props
-}: {
-  kind: FeedbackKind;
-  images: readonly FeedbackImage[];
-  busy: boolean;
-  onRemove: (image: FeedbackImage) => void;
-}): React.JSX.Element {
-  const row = useRef<HTMLUListElement | null>(null);
-
-  return (
-    <ListMotion root={row} scene={kind}>
-      <FeedbackImageRow row={row} {...props} />
-    </ListMotion>
   );
 }
 
@@ -458,7 +430,6 @@ export function FeedbackDialog({
           <ComposerBody
             files={
               <FeedbackImages
-                kind={shown.kind}
                 images={shown.draft.images}
                 busy={busy}
                 onRemove={(image) =>

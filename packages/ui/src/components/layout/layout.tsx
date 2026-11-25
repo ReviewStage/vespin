@@ -7,7 +7,6 @@ import {
   type SyntheticEvent,
 } from "react";
 import { cn } from "../../cn.js";
-import { motionRows } from "../list-motion/list-motion.js";
 
 /**
  * layout.tsx -- the two arrangements every container is built from: a Stack sets what it holds one under another, an Inline one beside another.
@@ -19,9 +18,8 @@ import { motionRows } from "../list-motion/list-motion.js";
  * either way an item may shrink, so a long label gives way before the row
  * overflows its container.
  *
- * An arrangement that is a list (`as` a `ul` or `ol`) may move its rows as
- * they arrive, leave, and change places (`moves`, under a `ListMotion`), and
- * take the press that starts a drag of one of them (`onPointerDown`). The
+ * An arrangement that is a list (`as` a `ul` or `ol`) may take the press
+ * that starts a drag of one of its rows (`onPointerDown`). The
  * room inside its edge is a named place too (`INSET`), for a list whose
  * rows stand in a scroller or a column rather than against its edge.
  *
@@ -183,8 +181,6 @@ interface LayoutProps {
   onSubmit?: (event: SyntheticEvent) => void;
   /** The owner's own class, which names it for what it holds and sets nothing of its arrangement. */
   className?: string | undefined;
-  /** Whether a list's rows move as they arrive, leave, and change places, under a `ListMotion` (`motionRows`). */
-  moves?: boolean | undefined;
   /** A press on a list, where a press on a row's handle starts a drag that reorders its rows. */
   onPointerDown?: PointerEventHandler<HTMLElement> | undefined;
   /** Whether it stands out of the layout and out of reach, as a list with nothing in it yet does. */
@@ -222,7 +218,6 @@ export function Stack({
   inset = INSET.NONE,
   as: Element = LAYOUT_ELEMENT.DIV,
   className,
-  moves = false,
   children,
   ...named
 }: LayoutProps): React.JSX.Element {
@@ -235,7 +230,6 @@ export function Stack({
       className: layoutClass("ui-stack flex-col", gap, align, justify, inset, className),
       role: listRole(Element),
       noValidate: browserUnchecked(Element),
-      ...(moves && motionRows()),
       "data-gap": gap,
       "data-align": align,
       "data-justify": justify,
@@ -256,7 +250,6 @@ export function Inline({
   inset = INSET.NONE,
   as: Element = LAYOUT_ELEMENT.DIV,
   className,
-  moves = false,
   children,
   ...named
 }: LayoutProps & {
@@ -281,7 +274,6 @@ export function Inline({
       ),
       role: listRole(Element),
       noValidate: browserUnchecked(Element),
-      ...(moves && motionRows()),
       "data-gap": gap,
       "data-align": align,
       "data-justify": justify,

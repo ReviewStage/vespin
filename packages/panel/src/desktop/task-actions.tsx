@@ -1373,7 +1373,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
       <RowHintOptions card={card}>
         <ListRow
           ref={hold}
-          motionKey={task.id}
           density={LIST_DENSITY.DENSE}
           ink={LIST_ROW_INK.SIDEBAR}
           leading={<PlanGlyph status={task.status} />}

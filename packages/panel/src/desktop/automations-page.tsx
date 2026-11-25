@@ -82,7 +82,6 @@ import {
   Toolbar,
   type ToolbarProps,
   Tooltip,
-  useLeaving,
   useMinute,
   VisuallyHidden,
 } from "@repo/ui";
@@ -519,7 +518,6 @@ function AutomationRow({
           true,
         )}
         more={!coarse}
-        motionKey={automation.id}
       />
     </RowHintOptions>
   );
@@ -536,12 +534,7 @@ interface AutomationRowsShown {
   onDelete: (automation: AutomationSummary) => void;
 }
 
-/** An automation's key, by which its row leaves the list (`ListMotion`). */
-function automationKey({ id }: AutomationSummary): string {
-  return id;
-}
-
-/** One owner's rows, a row no longer listed drawn on until its exit has played (`useLeaving`). */
+/** One owner's rows. */
 function AutomationGroupRows({
   automations,
   shown,
@@ -549,13 +542,11 @@ function AutomationGroupRows({
   automations: readonly AutomationSummary[];
   shown: AutomationRowsShown;
 }): React.JSX.Element {
-  const drawn = useLeaving(automations, automationKey);
-
   return (
     <>
-      {drawn.map(({ key, value: automation }) => (
+      {automations.map((automation) => (
         <AutomationRow
-          key={key}
+          key={automation.id}
           automation={automation}
           workspace={shown.workspace}
           now={shown.now}

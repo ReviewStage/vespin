@@ -288,7 +288,7 @@ function ManagerAgents({
       noun={TERM.AGENT}
     >
       <ReplayMask>
-        <TaskRows label={OVERVIEW_WORDS.AGENTS} cells={AGENT_ROW_CELLS} more={more} moves>
+        <TaskRows label={OVERVIEW_WORDS.AGENTS} cells={AGENT_ROW_CELLS} more={more}>
           {shown.map((each) => (
             <ManagerAgentRow
               key={each.agent.id}
@@ -352,7 +352,6 @@ function ManagerPullRequests({
           cells={PULL_REQUEST_ROW_CELLS}
           more={false}
           edges={TASK_ROW_EDGES.UNCHOSEN}
-          moves
         >
           {shown.map(({ pullRequest, task }) => (
             <TaskRow

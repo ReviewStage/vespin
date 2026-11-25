@@ -27,7 +27,6 @@ import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
-import { motionKey, motionRows } from "../list-motion/list-motion.js";
 import { withContextMenu } from "../menu/context-menu.js";
 import { useLinkAddress } from "../menu/link-address.js";
 import { rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
@@ -305,7 +304,7 @@ type NestedItemResult = {
  * What a reader hears of a row's nesting, spread on its item: its level, 1
  * at the top, and its place among its siblings, in a list that nests rows;
  * nothing for a row at the top of a list that nests none. Note that the
- * rows stand flat in one list, as their motion, their drag, and a grid's
+ * rows stand flat in one list, as their drag and a grid's
  * columns need, so the place is said rather than left to the list to count.
  */
 export function nestedItem(depth: number, nest: ListRowNest | undefined): NestedItemResult {
@@ -543,7 +542,6 @@ export function List({
   density = LIST_DENSITY.REGULAR,
   inset = LIST_INSET.LIST,
   fingerTall = false,
-  moves = false,
   joinsWalk = false,
   selection,
   onPointerDown,
@@ -559,8 +557,6 @@ export function List({
   inset?: ListInset;
   /** Whether each row stands a finger's press tall on a coarse pointer. */
   fingerTall?: boolean | undefined;
-  /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion` (`motionRows`). */
-  moves?: boolean;
   /** Whether its rows join the walk of a `useRovingKeys` box around it, with the rows of the lists beside it, rather than walk alone. */
   joinsWalk?: boolean;
   /** Which rows are chosen and what hears the next set, where the list chooses rows at all. */
@@ -614,7 +610,6 @@ export function List({
           overscan={run.overscan}
           anchor={VIRTUAL_ROWS_ANCHOR.START}
           listItems
-          moves={moves}
           holdsFocus
           className={LIST_CLASS}
           aria-label={label}
@@ -651,7 +646,6 @@ export function List({
       data-finger-tall={fingerTall ? "true" : undefined}
       aria-label={label}
       onPointerDown={onPointerDown}
-      {...(moves ? motionRows() : {})}
     >
       {contexts(children)}
     </ul>,
@@ -697,7 +691,6 @@ export function ListRow({
   id,
   selectKey,
   selectBox = false,
-  motionKey: followedBy,
   ref,
   onKeyDown,
   menu,
@@ -786,8 +779,6 @@ export function ListRow({
   selectKey?: string | undefined;
   /** Whether the row draws the box the pointer chooses it by over its unread gutter (`SELECT_BOX_PLACE.UNREAD_GUTTER`), where it can be chosen. */
   selectBox?: boolean | undefined;
-  /** The key a `ListMotion` follows the row by, out of one list and into another (`motionKey`). */
-  motionKey?: string | undefined;
   /** Handed the row's press, or its item where it opens nothing. A callback, so one list keeps each row's by its own key. */
   ref?: RefCallback<HTMLElement> | undefined;
   /** A key pressed on the row's press; a row that opens nothing hears none. */
@@ -1163,7 +1154,6 @@ export function ListRow({
     <>
       <li
         id={id}
-        {...(followedBy === undefined ? {} : motionKey(followedBy))}
         {...placed}
         {...nestedItem(depth, nest)}
         ref={place === undefined ? (onPress ? undefined : ref) : itemRef}
