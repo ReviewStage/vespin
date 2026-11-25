@@ -17,6 +17,7 @@ import { MENTION_KIND } from "@repo/features/mention-link";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { GITHUB_WAKE, type GitHubWake } from "@repo/settings";
 import { agentRunsOnOf } from "../agent-tools.js";
+import { senderLabel } from "../attached-files.js";
 import { offers } from "../tool-catalog/catalog.js";
 import type { AgentStanding } from "../tool-catalog/gates.js";
 import { writtenMention } from "../written-mentions.js";
@@ -129,9 +130,14 @@ function machineLines(machine: CoderMachine, repository: boolean): string[] {
  * it, its repository, and the branch it was cloned at; then the developer it
  * works for, by their id and mention link, as `list_agents`' `startedBy`,
  * `inbox_post`'s `to`, and a task's `assignee` take them, so it names them
- * without reading the workspace's members for a guess. Note that they sit in
- * the instructions, since none changes over a session, so the prompt cache
- * holds them; the branch it pushes to is its own to read with git.
+ * without reading the workspace's members for a guess. A Manager is a
+ * coworker several members talk to, so it is told instead that it works
+ * for them all, each line naming its sender by the label every member's
+ * line opens on (`../attached-files.ts`'s `senderLabel`), and that its
+ * starter set it up, named as a coder's developer is, for the same inputs.
+ * Note that they sit in the instructions, since none changes over a
+ * session, so the prompt cache holds them; the branch it pushes to is its
+ * own to read with git.
  */
 function ownLine(
   ownTask: OwnTask | undefined,
@@ -139,6 +145,7 @@ function ownLine(
   repository: string | null,
   startBranch: string | null,
   workspace: string,
+  manager: boolean,
 ): string {
   // Note that an agent on no task has no taskId of its own to name.
   const values = [
@@ -156,7 +163,13 @@ function ownLine(
       ? ""
       : `, mention \`${writtenMention({ kind: MENTION_KIND.PERSON, userId: developer.userId }, developer.name, workspace)}\``;
 
-  return `Your own values, for a tool input that asks for yours: ${values.join(", ")}. The developer you work for: userId \`${developer.userId}\`${mention}, as \`startedBy\`, \`to\`, and \`assignee\` take them.`;
+  const yours = `Your own values, for a tool input that asks for yours: ${values.join(", ")}.`;
+
+  if (!manager) {
+    return `${yours} The developer you work for: userId \`${developer.userId}\`${mention}, as \`startedBy\`, \`to\`, and \`assignee\` take them.`;
+  }
+
+  return `${yours} You work for the members of this workspace: each line a member sends you opens on \`${senderLabel("<their mention>")}\`, naming who sent it, so act for whoever asked. Your starter set you up, and your tools act as them: userId \`${developer.userId}\`${mention}, as \`startedBy\`, \`to\`, and \`assignee\` take a member.`;
 }
 
 /** Whose the agent's commits are, the developer's or the App's bot's, and the trailer naming the other as co-author where one is handed. */
@@ -337,7 +350,7 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
  * `edit_description`, a Manager's reply by
- * `chat_send`, which stands for its threads' and unclear request's lines
+ * `chat_send`, which stands for its threads', its unclear request's, and its own values' lines
  * too, and its threads by
  * `inbox_post`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
  * not named, since each harness loads its own.
@@ -373,7 +386,7 @@ export function coderInstructions(
     repository === null
       ? `You work in no repository. Your folder is \`${machine.checkoutPath}\`; ${shell} starts there.`
       : `The GitHub repository \`${repository}\` is checked out at \`${machine.checkoutPath}\`${branch}; ${shell} starts there.`,
-    ownLine(ownTask, own, repository, startBranch, workspace),
+    ownLine(ownTask, own, repository, startBranch, workspace, chats),
     ...machineLines(machine, repository !== null),
     ...(posts && !chats ? [UNCLEAR_LINE] : []),
     ...(publishes
