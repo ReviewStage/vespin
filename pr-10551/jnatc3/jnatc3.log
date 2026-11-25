@@ -1,0 +1,91 @@
+heads: #10551 1c40ab2b54 
+#10551 pinned to the stack top #10563 1c40ab2b54 (9f4a848d 09:38 UTC Nov 25)
+Auto-merging packages/features/src/ios-app-links.ts
+Auto-merging packages/features/src/pull-request-model.ts
+Auto-merging packages/panel/src/tasks/review-panel.tsx
+Auto-merging packages/ui-native/src/index.ts
+built main 86ca54d93b + #10551 1c40ab2b54 as ca2ed86c06
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 07:30:38 29054 MB
+curve 07:31:08 28849 MB
+curve 07:31:38 26887 MB
+curve 07:32:08 26629 MB
+curve 07:32:38 26449 MB
+curve 07:33:08 26230 MB
+curve 07:33:39 26179 MB
+curve 07:34:09 25931 MB
+curve 07:34:39 26047 MB
+curve 07:35:09 25686 MB
+curve 07:35:39 25475 MB
+curve 07:36:09 25465 MB
+curve 07:36:39 26009 MB
+curve 07:37:09 25933 MB
+curve 07:37:39 25902 MB
+curve 07:38:10 25802 MB
+curve 07:38:40 25680 MB
+curve 07:39:10 25556 MB
+curve 07:39:40 25401 MB
+curve 07:40:10 25356 MB
+curve 07:40:40 25121 MB
+curve 07:41:11 25329 MB
+curve 07:41:41 25293 MB
+curve 07:42:11 25070 MB
+curve 07:42:41 25202 MB
+curve 07:43:11 25173 MB
+curve 07:43:41 25148 MB
+curve 07:44:11 25041 MB
+curve 07:44:42 24881 MB
+curve 07:45:12 24840 MB
+curve 07:45:42 24806 MB
+curve 07:46:12 24735 MB
+curve 07:46:42 24696 MB
+curve 07:47:12 24659 MB
+curve 07:47:42 24491 MB
+curve 07:48:13 24411 MB
+curve 07:48:43 23966 MB
+curve 07:49:13 23675 MB
+curve 07:49:43 23562 MB
+curve 07:50:13 23527 MB
+curve 07:50:44 23509 MB
+curve 07:51:14 23426 MB
+curve 07:51:44 23272 MB
+curve 07:52:14 23135 MB
+curve 07:52:44 23046 MB
+curve 07:53:14 22951 MB
+curve 07:53:45 22945 MB
+curve 07:54:15 22913 MB
+curve 07:54:45 22850 MB
+curve 07:55:15 22819 MB
+curve 07:55:45 22712 MB
+curve 07:56:15 22705 MB
+curve 07:56:45 22622 MB
+curve 07:57:15 22595 MB
+curve 07:57:45 22573 MB
+curve 07:58:16 22629 MB
+curve 07:58:46 22605 MB
+curve 07:59:16 22586 MB
+curve 07:59:46 22603 MB
+curve 08:00:16 22474 MB
+curve 08:00:46 22465 MB
+curve 08:01:17 22464 MB
+curve 08:01:47 22427 MB
+curve 08:02:17 22429 MB
+BUILD EXIT 0 08:02:47
+sizes: Assets.car 24814936 bytes (main Vmain14.app 24800088), .app 139420 KB (main 126488 KB), zipped .app 49485803 bytes
+actool: 2 warnings or errors
+tree-sitter share: linked binary symbols: 24259523 bytes; tree-sitter + VespinDiffView: 11542281 bytes (11.01 MB, 47.6%)
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImage.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageAVIFCoder.framework SDWebImageSVGCoder.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework libavif.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnatc3.app: replacing existing signature
+app size: main base Vmain14.app 126488 KB; this build 138780 KB
+p10551-iphone-light-pull-request-files: fails 1 shots 1 Assert that "Ready to merge" is visible... FAILED
+p10551-iphone-light-pull-request-files diffview: 
+p10551-iphone-dark-pull-request-files: fails 1 shots 1 Assert that "Ready to merge" is visible... FAILED
+p10551-iphone-dark-pull-request-files diffview: 
+p10551-ipad27-light-pull-request-files: fails 1 shots 1 Assert that "Ready to merge" is visible... FAILED
+p10551-ipad27-light-pull-request-files diffview: 
+p10551-ipad27-dark-pull-request-files: fails 1 shots 1 Assert that "Ready to merge" is visible... FAILED
+p10551-ipad27-dark-pull-request-files diffview: 
