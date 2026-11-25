@@ -17,7 +17,6 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
-import { BAR_GLASS } from "./glass-bar.js";
 import { type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -169,15 +168,6 @@ export function DockChips({
         </ScrollView>
       )}
       {opened}
-    </VStack>
-  );
-}
-
-/** What a capsule opened in place stands in when it brings no glass of its own, such as a held call's banner: the bar's glass, its content inset from its edge. */
-export function DockPanel({ children }: { readonly children: ReactNode }) {
-  return (
-    <VStack modifiers={[padding({ horizontal: SPACE.ROW, vertical: SPACE.ROW }), ...BAR_GLASS]}>
-      {children}
     </VStack>
   );
 }

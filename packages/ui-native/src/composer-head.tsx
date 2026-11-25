@@ -1,4 +1,4 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place, and a note of what a send does, such as denying a call waiting.
 
 import { Button, HStack, Image, ScrollView, Spacer, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -523,6 +523,28 @@ export function SkillSuggestions({
     <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
       {rows}
     </ScrollView>
+  );
+}
+
+/**
+ * A note over the field of what a message sent now does, in the muted ink,
+ * as the panel's box says it in a line over its field: "Sending a message
+ * denies the waiting approval." Note that it is no refusal, so it is never
+ * drawn as a problem (`AskNote`), and VoiceOver reads it where it stands.
+ */
+export function HeadNote({ words }: { readonly words: string }) {
+  const colors = useColors();
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE }),
+        foregroundStyle(colors.TEXT_MUTED),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+      ]}
+    >
+      {words}
+    </Text>
   );
 }
 

@@ -85,9 +85,9 @@ builds a control of its own.
   developer's pick, Nov 21, 2026), each the system's glass button with a
   count and a noun, copper only on a count that waits on the reader: an
   agent's calls waiting ("Approval 1", which scrolls to the call's row, or
-  opens the `HeldCallBanner` of a call no row draws, such as a subagent's,
-  in a `DockPanel` under the row, VoiceOver hearing that a message sent now
-  denies them), its Inbox threads ("Inbox 7", the panel's threads dock,
+  folds away and back the `HeldCallBanner` of a call no row draws, such as
+  a subagent's, which stands in the composer's head, VoiceOver hearing that
+  a message sent now denies them), its Inbox threads ("Inbox 7", the panel's threads dock,
   opening the thread it names), its pull request ("#128", opening its
   page), and its queue ("2 queued", opening its `QueuedLines`, with Steer
   and Delete, under the row, held open while one is edited), the row
@@ -95,7 +95,11 @@ builds a control of its own.
   a `/` or an `@` offers its list; and its head, inside the same glass,
   holds a thread's open ask (its `ChoiceList`, `StepList`, or
   `AnswerFields`), as the panel's box holds an ask's controls as its body
-  over the field, stepping aside while an `@` offers its list, the
+  over the field, stepping aside while an `@` offers its list, an agent's
+  `HeldCallBanner` of a call no row draws, standing while it waits until its
+  capsule folds it, and a `HeadNote` ("Sending a message denies the waiting
+  approval.", as the panel's box says it over its field while a call waits),
+  each stepping aside while a `/` or an `@` offers its list, the
   `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
   offers (the panel's groups and words, each row led by the mark its pill
   wears, a bare `@` listing Suggested then Browse, a row per kind with

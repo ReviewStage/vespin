@@ -1,4 +1,4 @@
-// agent-dock.tsx -- what stands over an agent's composer as one row of capsules (an approval waiting, the apps it uses on the reader's Mac, its Inbox threads, its pull request, its queue), each opening what it holds on a press, as the agent page composes them.
+// agent-dock.tsx -- what stands over an agent's composer as one row of capsules (an approval waiting, the apps it uses on the reader's Mac, its Inbox threads, its pull request, its queue), each opening what it holds on a press, and the call waiting that no row draws, which stands inside the composer, as the agent page composes them.
 
 import type { ComputerApp } from "@repo/features/agent-parts";
 import type { AgentPullRequest } from "@repo/features/agent-wire";
@@ -7,7 +7,6 @@ import type { AgentThreadsLine } from "@repo/features/inbox-list-model";
 import {
   type DockChip,
   DockChips,
-  DockPanel,
   GLYPH,
   HeldCallBanner,
   pullRequestChipLook,
@@ -18,14 +17,6 @@ import { type ReactNode, useState } from "react";
 import type { AgentApprovals } from "./use-agent-approvals.js";
 import type { AgentComposer } from "./use-agent-composer.js";
 
-/** Which capsule of the row stands open in place. */
-const OPENS = {
-  APPROVAL: "approval",
-  QUEUE: "queue",
-} as const;
-
-type Opens = (typeof OPENS)[keyof typeof OPENS];
-
 /** The row's words, each a count and a noun, and what a press on each does, as VoiceOver hears it. */
 const DOCK_WORDS = {
   approvals: (count: number) => (count === 1 ? "Approval" : "Approvals"),
@@ -33,7 +24,7 @@ const DOCK_WORDS = {
   PAUSED: "Queue paused",
   INBOX: "Inbox",
   APPROVAL_SHOW_HINT: "Shows the call waiting",
-  APPROVAL_OPEN_HINT: "Shows or hides the call waiting",
+  APPROVAL_OPEN_HINT: "Shows or hides the call waiting in the box",
   DENIES: "Sending a message denies it",
   INBOX_HINT: "Opens the thread in the Inbox",
   PULL_REQUEST_HINT: "Opens the pull request",
@@ -130,11 +121,11 @@ function appChips(apps: AppsDock | undefined, view: PicturesView): readonly Dock
   });
 }
 
-/** The row's capsule for the calls waiting: it opens the banner where no row draws the oldest, and otherwise scrolls the transcript to its row. */
+/** The row's capsule for the calls waiting: it shows or folds the banner in the composer where no row draws the oldest, and otherwise scrolls the transcript to its row. */
 function approvalChip(
   { approvals, denies, onShowWaiting }: AgentDockReading,
-  open: Opens | undefined,
-  toggle: (opens: Opens) => void,
+  shown: boolean,
+  toggle: () => void,
 ): readonly DockChip[] {
   const { waiting, banner } = approvals;
 
@@ -145,14 +136,14 @@ function approvalChip(
 
   return [
     {
-      id: OPENS.APPROVAL,
+      id: "approval",
       glyph: GLYPH.ASK_FIRST,
       words: DOCK_WORDS.approvals(waiting.count),
       waiting: waiting.count,
       // Note that the capsule tells VoiceOver that a message sent now denies the calls, as the panel's composer says it in words over its field.
       hint: denies ? `${hint}. ${DOCK_WORDS.DENIES}` : hint,
-      open: opensInPlace ? open === OPENS.APPROVAL : undefined,
-      onPress: () => (opensInPlace ? toggle(OPENS.APPROVAL) : onShowWaiting?.()),
+      open: opensInPlace ? shown : undefined,
+      onPress: () => (opensInPlace ? toggle() : onShowWaiting?.()),
     },
   ];
 }
@@ -191,7 +182,7 @@ function placeChips({ threads, pullRequest, onOpenPullRequest }: AgentDockReadin
 function queueChip(
   { composer }: AgentDockReading,
   open: boolean,
-  toggle: (opens: Opens) => void,
+  toggle: () => void,
 ): readonly DockChip[] {
   const count = composer.queued.length;
 
@@ -199,42 +190,57 @@ function queueChip(
 
   return [
     {
-      id: OPENS.QUEUE,
+      id: "queue",
       glyph: GLYPH.QUEUED,
       words: count === 0 ? DOCK_WORDS.PAUSED : DOCK_WORDS.queued(count),
       hint: DOCK_WORDS.QUEUE_HINT,
       open,
-      onPress: () => toggle(OPENS.QUEUE),
+      onPress: toggle,
     },
   ];
+}
+
+/** What the agent page stands around its composer: the capsules over it, and the call waiting inside it. */
+export interface AgentDock {
+  /** The row of capsules over the composer, with the queue a press opened under it; none while nothing waits. */
+  readonly above: ReactNode;
+  /** The banner of a call waiting that no row draws, which stands in the composer's head over its field; none while none waits, the reader folded it, or a `/` or an `@` offers its list. */
+  readonly held: ReactNode;
 }
 
 /**
  * What stands over an agent's composer: one row of capsules, as the panel's
  * docks hold the same things, in the order they want the reader (the calls
  * waiting, the apps it uses on the reader's Mac, the agent's Inbox threads,
- * its pull request, its queue), and the
- * one a press opened in place standing under the row: the queue's messages
- * with Steer and Delete, or the banner of a call no row draws. A message
- * being edited holds the queue open, so its Cancel stays in reach. Note that
- * the row steps aside while a `/` or an `@` offers its list, so the list
- * stands alone over the field, and that nothing stands while nothing waits.
+ * its pull request, its queue), and the queue's messages with Steer and
+ * Delete under the row once its capsule is pressed; a message being edited
+ * holds the queue open, so its Cancel stays in reach. A call waiting that no
+ * row draws, such as a subagent's, stands inside the composer instead
+ * (`held`), as the panel stands such a call in its conversation rather than
+ * behind a press, while its capsule folds it away and back. Note that the
+ * row and the call step aside while a `/` or an `@` offers its list, so the
+ * list stands alone over the field, and that nothing stands while nothing
+ * waits.
  */
-export function useAgentDock(reading: AgentDockReading, picking: boolean): ReactNode {
-  const [open, setOpen] = useState<Opens | undefined>(undefined);
-  const toggle = (opens: Opens) => setOpen((was) => (was === opens ? undefined : opens));
+export function useAgentDock(reading: AgentDockReading, picking: boolean): AgentDock {
+  const [queueOpened, setQueueOpened] = useState(false);
+  const [heldFolded, setHeldFolded] = useState(false);
   const { composer, approvals } = reading;
   const editing = composer.queued.some((line) => line.editing === true);
   const queues = composer.queued.length > 0 || composer.paused !== undefined;
-  const queueOpen = (open === OPENS.QUEUE && queues) || editing;
-  const banner = open === OPENS.APPROVAL ? approvals.banner : undefined;
+  const queueOpen = (queueOpened && queues) || editing;
+
+  // Note that a fold lasts only while calls wait, so the next call that waits stands in the composer again rather than behind a press.
+  if (heldFolded && approvals.banner === undefined) setHeldFolded(false);
+
+  const heldShown = approvals.banner !== undefined && !heldFolded;
   const view = usePicturesView();
 
   const chips = [
-    ...approvalChip(reading, open, toggle),
+    ...approvalChip(reading, heldShown, () => setHeldFolded((was) => !was)),
     ...appChips(reading.apps, view),
     ...placeChips(reading),
-    ...queueChip(reading, queueOpen, toggle),
+    ...queueChip(reading, queueOpen, () => setQueueOpened((was) => !was)),
   ];
 
   const opened = queueOpen ? (
@@ -248,13 +254,14 @@ export function useAgentDock(reading: AgentDockReading, picking: boolean): React
       onEdit={composer.edit}
       onCancelEdit={composer.cancelEdit}
     />
-  ) : banner === undefined ? undefined : (
-    <DockPanel>
-      <HeldCallBanner {...banner} />
-    </DockPanel>
-  );
+  ) : undefined;
 
-  if (picking && opened === undefined) return undefined;
+  const held =
+    heldShown && !picking && approvals.banner !== undefined ? (
+      <HeldCallBanner {...approvals.banner} />
+    ) : undefined;
 
-  return <DockChips chips={picking ? [] : chips} opened={opened} />;
+  if (picking && opened === undefined) return { above: undefined, held };
+
+  return { above: <DockChips chips={picking ? [] : chips} opened={opened} />, held };
 }

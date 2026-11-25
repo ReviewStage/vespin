@@ -98,6 +98,7 @@ export {
   type AttachedPicture,
   AttachedPictures,
   EditingLine,
+  HeadNote,
   type MentionCrumb,
   type MentionSuggestion,
   type MentionSuggestionGroup,
@@ -113,7 +114,7 @@ export {
   ThreadRow,
 } from "./conversation-rows.js";
 
-export { type DockChip, DockChips, DockPanel } from "./dock-chips.js";
+export { type DockChip, DockChips } from "./dock-chips.js";
 
 export {
   DocumentField,

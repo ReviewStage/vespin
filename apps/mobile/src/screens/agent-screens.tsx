@@ -1,5 +1,6 @@
 // agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, or Unarchive in its place while it is archived, Continue in new agent over it where only a new agent goes on, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions, its Move to › and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
 
+import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import {
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,
@@ -85,6 +86,7 @@ import {
   GlassDock,
   type Glyph,
   glyphSymbol,
+  HeadNote,
   ListSection,
   MentionSuggestions,
   MenuRow,
@@ -398,7 +400,7 @@ function continueOffer(
   };
 }
 
-/** The agent's composer at the page's foot: that a message denies the call waiting, a call waiting that no row draws, the queue, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
+/** The agent's composer at the page's foot: a call waiting that no row draws and that a message denies the calls waiting, inside it over the field, as the panel's box says it, the queue over it, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
 function AgentComposerBar({
   composer,
   approvals,
@@ -465,18 +467,25 @@ function AgentComposerBar({
     picking,
   );
 
+  // Note that the panel's line saying a message denies the calls waiting stands over the field, stepping aside with the call's banner while a `/` or an `@` offers its list.
+  const deniesLine = denies && !picking;
+
   const head =
     composer.cancelMessageEdit === undefined &&
     composer.skills === undefined &&
     composer.mentions === undefined &&
     otherCall === undefined &&
     ending === undefined &&
+    dock.held === undefined &&
+    !deniesLine &&
     note === undefined ? undefined : (
       <>
         {ending}
         {otherCall === undefined ? null : (
           <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
         )}
+        {dock.held}
+        {deniesLine ? <HeadNote words={DENIES_WAITING} /> : null}
         {composer.skills === undefined ? null : (
           <SkillSuggestions
             skills={composer.skills.skills}
@@ -515,7 +524,7 @@ function AgentComposerBar({
     stopping: composer.stopping,
     call,
     head,
-    above: dock ?? undefined,
+    above: dock.above ?? undefined,
     saving: composer.saving,
     focusAsk: composer.focusAsk,
     pills: composer.pills,
