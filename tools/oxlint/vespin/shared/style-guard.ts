@@ -82,7 +82,7 @@ export const STYLE_RULES: Readonly<
   },
   [STYLE_RULE.HAS]: {
     refuses:
-      "a `:has()`, or Tailwind's `has-*` variant, that reads what a component draws or holds (its children, a descendant's class or attribute): the browser checks it again on every change under its subject, which made each task's opening restyle every row, so the component says it by an attribute it sets; only one reading what the keyboard holds (`:focus-visible`) passes",
+      "a `:has()`, or Tailwind's `has-*` variant, that reads what a component draws or holds, or what the keyboard holds (its children, a descendant's class, attribute, or focus): the browser checks it again on every change under its subject, which made each task's opening restyle every row, so the component says it by an attribute it sets, and what the keyboard holds is read from the root's `data-keyboard` under `:focus-within` (`keyboard-modality.ts`), never `:has(:focus-visible)`",
     backlog: true,
   },
   [STYLE_RULE.BAR_CORNER]: {
@@ -561,21 +561,15 @@ function hasArguments(selector: string): readonly string[] {
   return held;
 }
 
-/** A `:has()` reading what the keyboard holds, the one kind no attribute can say: its subject's or a child's `:focus-visible`. */
-const READS_KEYBOARD = /^\s*(?:>\s*)?[^\s,>+~]*:focus-visible\s*$/u;
-
-/** Whether a block's selector holds a `:has()` that reads what a component draws or holds, rather than what the keyboard holds; an at-rule's prelude (`@supports selector(:has(…))`) holds none. */
+/** Whether a block's selector holds a `:has()`, which reads what a component draws or holds or what the keyboard holds, none of it by an attribute the component sets; an at-rule's prelude (`@supports selector(:has(…))`) holds none. */
 function readsDrawnThrough(block: CssBlock): boolean {
   const selector = selectorOf(block);
 
-  return (
-    !selector.trimStart().startsWith("@") &&
-    hasArguments(selector).some((held) => !READS_KEYBOARD.test(held))
-  );
+  return !selector.trimStart().startsWith("@") && hasArguments(selector).length > 0;
 }
 
-/** Tailwind's `:has()` variants (`has-[…]:`, `group-has-*:`, `peer-has-*:`), but the one reading what the keyboard holds, a named group's or peer's (`group-has-focus-visible/row:`) among them. */
-const HAS_VARIANT = /(?:^|:)(?:group-|peer-|in-)?has-(?!focus-visible(?:\/[\w-]+)?:)[^:]*:/u;
+/** Tailwind's `:has()` variants (`has-[…]:`, `group-has-*:`, `peer-has-*:`). */
+const HAS_VARIANT = /(?:^|:)(?:group-|peer-|in-)?has-[^:]*:/u;
 
 /** Whether a block's selector draws a path's crumb: a list item, in its last compound, of a path. */
 function isCrumbBox(block: CssBlock): boolean {

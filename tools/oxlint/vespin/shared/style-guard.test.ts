@@ -191,23 +191,22 @@ describe("a stylesheet", () => {
     ).toEqual([]);
   });
 
-  it("refuses a :has() reading what a component draws, and passes one reading what the keyboard holds", () => {
+  it("refuses a :has() reading what a component draws or what the keyboard holds", () => {
     expect(
       sheetRules(`.a:has(> .b) > .c { color: inherit; }
         .d:not(:has(.e)) { opacity: 0; }
         .f:is(:has(:focus-visible), [data-g]) .h { opacity: 1; }`),
-    ).toEqual([STYLE_RULE.HAS, STYLE_RULE.HAS]);
+    ).toEqual([STYLE_RULE.HAS, STYLE_RULE.HAS, STYLE_RULE.HAS]);
     expect(sheetRules(".e:has(> .f) { & > .g { opacity: 1; } }")).toEqual([STYLE_RULE.HAS]);
     expect(
-      sheetRules(`.a:has(:focus-visible) { opacity: 1; }
-        .b:is(:hover, :has(> .c:focus-visible)) .d { opacity: 1; }
+      sheetRules(`.b:is(:hover, :has(> .c:focus-visible)) .d { opacity: 1; }
         @supports selector(:has(a)) { .h { opacity: 1; } }`),
-    ).toEqual([]);
+    ).toEqual([STYLE_RULE.HAS]);
     expect(
       classRules(
         `const a = <div className="has-[>.b]:p-row-inset group-has-[.c:hover]/d:invisible has-focus-visible:ring-2 group-has-focus-visible/row:opacity-100" />;`,
       ),
-    ).toEqual([STYLE_RULE.HAS, STYLE_RULE.HAS]);
+    ).toEqual([STYLE_RULE.HAS, STYLE_RULE.HAS, STYLE_RULE.HAS, STYLE_RULE.HAS]);
   });
 
   it("refuses a crumb drawn wider than its words, and passes a floor that is its basis under a cap", () => {
