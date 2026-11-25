@@ -840,6 +840,7 @@ it.effect("a task the list does not hold is read into it as it opens, and only o
       [`task-rows:${INVITES}`],
       "the task outside the list is read once, and the one in it never",
     );
+    assert.equal(last()?.coldReads?.count, 1, "the read is counted on the view once, as it drew");
   }),
 );
 

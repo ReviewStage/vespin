@@ -5,6 +5,7 @@ import {
   PRODUCT_EVENT_PROPERTY,
   PRODUCT_EXPERIMENT,
   PRODUCT_EXPERIMENT_SCOPE,
+  PRODUCT_LOAD_WINDOW,
   PRODUCT_OPEN_ORDER,
   PRODUCT_PAGE_DATA,
   PRODUCT_PAGE_VERSION,
@@ -18,6 +19,8 @@ import {
   productEventBuildFromWire,
   productEventFromWire,
   productLaunchSeconds,
+  productLoadCount,
+  productLoadMilliseconds,
   productOpenMilliseconds,
 } from "./product-events.js";
 
@@ -270,6 +273,49 @@ test("rows a read dropped travel as their kind and a count on a rung, never a ra
       name: PRODUCT_EVENT.ROWS_DROPPED,
       at: AT,
       properties: { ...dropped, [PRODUCT_EVENT_PROPERTY.ROW_KIND]: "agents of task-1" },
+    }),
+    undefined,
+  );
+});
+
+test("a launch's load travels its held thread and its one-by-one reads as counts and times on rungs, never raw, and nothing else", () => {
+  assert.equal(productLoadCount(0), 0);
+  assert.equal(productLoadCount(2), 1);
+  assert.equal(productLoadCount(419), 300);
+  assert.equal(productLoadMilliseconds(180), 0);
+  assert.equal(productLoadMilliseconds(4200), 2000);
+  assert.equal(productLoadMilliseconds(240_000), 120_000);
+
+  const load = {
+    [PRODUCT_EVENT_PROPERTY.LONG_TASKS]: 100,
+    [PRODUCT_EVENT_PROPERTY.LONG_TASK_MS]: 30_000,
+    [PRODUCT_EVENT_PROPERTY.COLD_READS]: 300,
+    [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: 10_000,
+    [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: PRODUCT_LOAD_WINDOW.WHOLE,
+    [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "82",
+  };
+
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.LAUNCH_LOAD,
+      at: AT,
+      properties: { ...load, taskId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d" },
+    }),
+    { name: PRODUCT_EVENT.LAUNCH_LOAD, at: AT, properties: load },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.LAUNCH_LOAD,
+      at: AT,
+      properties: { ...load, [PRODUCT_EVENT_PROPERTY.LONG_TASKS]: 137 },
+    }),
+    undefined,
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.LAUNCH_LOAD,
+      at: AT,
+      properties: { ...load, [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: 4321 },
     }),
     undefined,
   );
