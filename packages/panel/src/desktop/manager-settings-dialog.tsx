@@ -12,8 +12,10 @@
  * (`ManagerFaceWell`, saved through `AgentsControl.onFace`), and its name,
  * renamed by pressing it (`RenamableName`), as a workspace's name and a
  * machine's are, through the agent's own rename. Under it every row is what
- * a coding agent shows of the same thing: its repositories, named, since an
- * agent's repositories are fixed once it starts, whatever its kind; and,
+ * a coding agent shows of the same thing: its repositories, every one it
+ * works in, its checkout first, each named whole beside its owner's picture
+ * as the sidebar names one (`RepositoryName`), since an agent's repositories
+ * are fixed once it starts, whatever its kind; and,
  * read off its own message box (`useAgentBox`), so they cannot drift from
  * it, where it runs, the box's place chip, moving it where a coder's moves,
  * and its model, the box's model chip with its permission mode and the
@@ -48,13 +50,16 @@ import { MEMORY_SCOPE } from "@repo/features/memory-settings-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { EXPERIMENT } from "@repo/settings";
 import {
+  ALIGN,
   BUTTON_VARIANT,
   Button,
   CHIP_LOOK,
   CHIP_WIDTH,
   EmptyState,
   ErrorState,
+  GAP,
   RenamableName,
+  RepositoryName,
   SETTINGS_ROW_LEAD,
   SETTINGS_SECTION_FRAME,
   SettingsDialog,
@@ -63,6 +68,7 @@ import {
   SettingsRowValue,
   SettingsSection,
   Spinner,
+  Stack,
 } from "@repo/ui";
 import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
@@ -74,6 +80,7 @@ import { useAutomationsOpen } from "../automations-route.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { refusedShown, unreadShown } from "../failure-report.js";
 import { renameWrite } from "../rename-write.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
 import { replayMaskedError } from "../settings/marks.js";
 import { MemorySection } from "../settings/memory-page.js";
 import { usePhoneRoom } from "../stage-room.js";
@@ -149,10 +156,13 @@ export type ManagerSettingsSubject = AgentSummary & {
 /**
  * The Manager as every section reads it: what the surface handed, and the
  * workspace it stands in, read once by the dialog by the Manager's own read
- * by id; none until that read answers.
+ * by id, none until that read answers; and every repository it works in, its
+ * checkout first, which that read names whole and the surface only by its
+ * checkout until then.
  */
 type SettingsManager = ManagerSettingsSubject & {
   readonly workspaceId: string | undefined;
+  readonly repositories: readonly string[];
 };
 
 /** What a Manager's Settings saves through: the control its agent is listed in, as its box reads it. */
@@ -306,6 +316,38 @@ function ModelRow({
   );
 }
 
+/** The Repositories row: every repository the Manager works in, one under another, its checkout first; none for a Manager with none. */
+function RepositoriesRow({
+  repositories,
+}: {
+  repositories: readonly string[];
+}): React.JSX.Element | null {
+  const pictures = useRepositoryPictures();
+
+  if (repositories.length === 0) return null;
+
+  return (
+    <SettingsRow label={WORDS.REPOSITORIES}>
+      {() => (
+        <SettingsRowValue>
+          <ReplayMask>
+            <Stack gap={GAP.TIGHT} align={ALIGN.END}>
+              {repositories.map((repository) => (
+                <RepositoryName
+                  key={repository}
+                  repository={repository}
+                  label={repository}
+                  pictures={pictures}
+                />
+              ))}
+            </Stack>
+          </ReplayMask>
+        </SettingsRowValue>
+      )}
+    </SettingsRow>
+  );
+}
+
 /** General: the Manager's own rows, then its Archive and its Permanently delete. */
 function GeneralSection({
   agent,
@@ -326,15 +368,7 @@ function GeneralSection({
     <>
       <SettingsSection>
         <IdentityRow agent={agent} agents={agents} />
-        {agent.repository == null ? null : (
-          <SettingsRow label={WORDS.REPOSITORIES}>
-            {() => (
-              <SettingsRowValue>
-                <ReplayMask>{agent.repository}</ReplayMask>
-              </SettingsRowValue>
-            )}
-          </SettingsRow>
-        )}
+        <RepositoriesRow repositories={agent.repositories} />
         <SettingsRow label={WORDS.MACHINE}>{() => box.place(false)}</SettingsRow>
         <ModelRow agent={agent} me={agents.me} box={box} />
       </SettingsSection>
@@ -494,12 +528,17 @@ export function useManagerSettingsDialog(
   const read = useQuery({ ...agentPageQueryOptions(agent.id), enabled: open && shown });
   const answer = read.data;
 
-  const workspaceId =
-    answer === undefined || "failure" in answer ? undefined : answer.agent.workspaceId;
+  const page = answer === undefined || "failure" in answer ? undefined : answer.agent;
+  const workspaceId = page?.workspaceId;
+  // Note that a service before the page named them all names its checkout alone, as the surface does until the read answers.
+  const checkout = page === undefined ? agent.repository : page.repository;
+
+  const repositories =
+    page?.repositories ?? (checkout === null || checkout === undefined ? [] : [checkout]);
 
   const unread = read.isError || (answer !== undefined && "failure" in answer);
 
-  const manager: SettingsManager = { ...agent, workspaceId };
+  const manager: SettingsManager = { ...agent, workspaceId, repositories };
   // Memory stands only where the workspace has Memory on, as workspace Settings lists it.
   const memoryOn = useWorkspaceExperiment(workspaceId, EXPERIMENT.MEMORY);
   const sections = memoryOn ? SECTIONS : SECTIONS.filter((each) => each.id !== SECTION.MEMORY);

@@ -1668,6 +1668,8 @@ const agentPageSchema = EffectSchema.Struct({
   origin: EffectSchema.optionalKey(agentOriginSchema),
   workspaceId: EffectSchema.String,
   repository: EffectSchema.NullOr(EffectSchema.String),
+  /** Every repository it works in as `owner/name`, `repository` first and the rest it was started in after it; none for one with none, and absent from a service before it. */
+  repositories: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** The branch checked out in its sandbox as its last turn ended, pushed or not; absent before a turn ends, where the checkout stood detached, and from a service before it. */
   branch: EffectSchema.optionalKey(EffectSchema.String),
 });
@@ -1782,10 +1784,17 @@ export type ListedAgent = typeof listedAgentSchema.Type;
  * a surface that draws an agent the list doesn't hold, such as one a link
  * names, draws it as it draws a listed one. Note that a page names no
  * automation by null where the list leaves the key out, and carries the run
- * that started it and its branch, which the list's row doesn't.
+ * that started it, its branch, and every repository it works in, which the
+ * list's row doesn't.
  */
 export function listedAgentOfPage(page: AgentPage): ListedAgent {
-  const { automationId, origin: _origin, branch: _branch, ...agent } = page;
+  const {
+    automationId,
+    origin: _origin,
+    branch: _branch,
+    repositories: _repositories,
+    ...agent
+  } = page;
 
   return automationId === null ? agent : { ...agent, automationId };
 }
