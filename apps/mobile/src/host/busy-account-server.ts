@@ -527,6 +527,7 @@ async function notedInboxAnswer(url: URL, answer: Promise<Response>): Promise<Re
   if (inboxReadNoted) return answer;
   inboxReadNoted = true;
   const readMs = sinceLaunch();
+  const readAt = Date.now();
   const response = await answer;
   const bytes = (await response.clone().text()).length;
   const past = Number(url.searchParams.get(LIVE_POLL.SYNC));
@@ -535,6 +536,8 @@ async function notedInboxAnswer(url: URL, answer: Promise<Response>): Promise<Re
     JSON.stringify({
       inbox_read_ms: readMs,
       inbox_answer_ms: sinceLaunch(),
+      inbox_read_at: readAt,
+      inbox_answer_at: Date.now(),
       inbox_answer_bytes: bytes,
       inbox_whole: !Number.isInteger(past) || past < BUSY_SYNC.INBOX,
       inbox_status: response.status,

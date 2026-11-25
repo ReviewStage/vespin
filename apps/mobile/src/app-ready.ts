@@ -73,6 +73,8 @@ const RIG_ANSWERS_FILE = `file://${hostStateRootIn(Paths.document.uri)}/busy-acc
 interface FirstAnswered {
   inbox_ms?: number | undefined;
   tasks_ms?: number | undefined;
+  inbox_at?: number | undefined;
+  tasks_at?: number | undefined;
 }
 
 const firstAnswered: FirstAnswered = {};
@@ -159,9 +161,16 @@ function useRigFirstAnswers(): void {
     if (!launchBusyAccount()) return;
     const before = { ...firstAnswered };
 
-    if (inboxAnswered) firstAnswered.inbox_ms ??= sinceLaunch();
+    // Note that each is stamped on the wall clock too, so the rig places it on a trace exactly.
+    if (inboxAnswered && firstAnswered.inbox_ms === undefined) {
+      firstAnswered.inbox_ms = sinceLaunch();
+      firstAnswered.inbox_at = Date.now();
+    }
 
-    if (tasksAnswered) firstAnswered.tasks_ms ??= sinceLaunch();
+    if (tasksAnswered && firstAnswered.tasks_ms === undefined) {
+      firstAnswered.tasks_ms = sinceLaunch();
+      firstAnswered.tasks_at = Date.now();
+    }
 
     if (before.inbox_ms === firstAnswered.inbox_ms && before.tasks_ms === firstAnswered.tasks_ms) {
       return;
