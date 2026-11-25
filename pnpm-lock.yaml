@@ -1968,6 +1968,28 @@ importers:
 
   tools/bench: {}
 
+  tools/busy-account:
+    dependencies:
+      '@effect/platform-node':
+        specifier: 'catalog:'
+        version: 4.0.4(effect@4.0.4)(redis@6.2.1)
+      '@repo/features':
+        specifier: workspace:*
+        version: link:../../packages/features
+      '@repo/host':
+        specifier: workspace:*
+        version: link:../../packages/host
+      '@repo/wire':
+        specifier: workspace:*
+        version: link:../../packages/wire
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.4
+    devDependencies:
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.15
+
   tools/claude-code-probe:
     dependencies:
       '@effect/platform-node':

@@ -25,7 +25,7 @@ import { effectServices, useWait } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createStore, type Store, useSelector } from "@tanstack/react-store";
 import { Clock, Context, Duration, Effect } from "effect";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { actMutation } from "./act-mutations.js";
 import { integrationsQuery, integrationsRetryMutation } from "./live-reads.js";
 import { appStateQuery } from "./use-app-state.js";
@@ -225,7 +225,10 @@ export function useIntegrationStatuses(): IntegrationStatuses {
     if (deadline !== undefined) wait.start(untilDeadline(deadline, () => setPassed((n) => n + 1)));
   }, [deadline, wait]);
 
-  const standing = answer === undefined ? undefined : standingOfRead(answer);
+  const standing = useMemo(
+    () => (answer === undefined ? undefined : standingOfRead(answer)),
+    [answer],
+  );
 
   // Note that a connection that stands is not waited on, because the service
   // answers it connected throughout, so no read could say how the sign-in ended.
@@ -291,24 +294,38 @@ export function useIntegrationStatuses(): IntegrationStatuses {
     [cancelIntegration, book, change, ledger],
   );
 
-  const statusOf = (server: string) => serverStatus(standing, signIns, server);
   const accounts = answer?.accounts ?? NO_ACCOUNTS;
   const addable = answer?.addable ?? NO_PROVIDERS;
+  const readFailed = held.isError;
 
-  return {
-    statusOf,
-    listed: (server) => accounts.some((account) => account.connection === server),
-    accountsOf: (provider) => serverAccounts(provider, accounts, signIns, statusOf),
-    canAdd: (provider) => addable.includes(provider),
-    signInOf: (server) => signIns.get(server),
-    readFailed: held.isError,
-    // Note that a Try again the port refuses settles as one that landed, since the read's own failure is what the surface draws.
-    read: () =>
-      retryIntegrations().then(
-        () => undefined,
-        () => undefined,
-      ),
+  // Note that the statuses are the same object while nothing they read moves, so a surface keyed on them draws again only as a status does.
+  return useMemo((): IntegrationStatuses => {
+    const statusOf = (server: string) => serverStatus(standing, signIns, server);
+
+    return {
+      statusOf,
+      listed: (server) => accounts.some((account) => account.connection === server),
+      accountsOf: (provider) => serverAccounts(provider, accounts, signIns, statusOf),
+      canAdd: (provider) => addable.includes(provider),
+      signInOf: (server) => signIns.get(server),
+      readFailed,
+      // Note that a Try again the port refuses settles as one that landed, since the read's own failure is what the surface draws.
+      read: () =>
+        retryIntegrations().then(
+          () => undefined,
+          () => undefined,
+        ),
+      signInBegun,
+      cancelSignIn,
+    };
+  }, [
+    standing,
+    signIns,
+    accounts,
+    addable,
+    readFailed,
+    retryIntegrations,
     signInBegun,
     cancelSignIn,
-  };
+  ]);
 }

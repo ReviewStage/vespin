@@ -11,7 +11,7 @@ import { useKeptDraft } from "../composer-drafts.js";
 import { useConnected } from "../connection.js";
 import { failureShown } from "../failure-report.js";
 import { useToast } from "../toast.js";
-import { useAgentBox } from "./agent-box.js";
+import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer } from "./agent-composer.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
@@ -190,13 +190,13 @@ export interface AnswerNewThread {
   readonly onStart: (start: NewThreadStart) => Promise<string | undefined>;
 }
 
-/** One item's box, its editor, its lists, its dictation, and what its note says all its own. */
+/** One item's box, its editor, its lists, its dictation, and what its note says all its own, over what it reads off the item's agent (`agentBox`). */
 function AnswerCard({
   item,
   readerId,
   control,
   agent,
-  agents,
+  agentBox,
   thread,
   controls,
   skills,
@@ -206,7 +206,7 @@ function AnswerCard({
   onQuoted,
   onUnarchiveAgent,
   newThread,
-}: AnswerBoxProps): React.JSX.Element {
+}: Omit<AnswerBoxProps, "agents"> & { agentBox: AgentBox }): React.JSX.Element {
   const connected = useConnected();
   const toast = useToast();
   // Why the last thread start did not go, until the next send.
@@ -247,8 +247,6 @@ function AnswerCard({
       ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
       : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
 
-  // What the box reads off the item's agent, read as the agent's own tab reads it, so the two boxes stand alike.
-  const agentBox = useAgentBox({ agentId: item.agentId, agent, agents });
   const kept = control.notes.get(item.id);
   const noted = kept === undefined ? undefined : inboxNoteReading(kept, agent, connected);
 
@@ -406,5 +404,17 @@ function AnswerCard({
  * editor's undo never follow the developer to another item.
  */
 export function InboxAnswerBox(props: AnswerBoxProps): React.JSX.Element {
-  return <AnswerCard key={props.item.id} {...props} />;
+  return <ItemAnswerBox key={props.item.id} {...props} />;
+}
+
+/**
+ * One item's box over what it reads off the item's agent, read as the
+ * agent's own tab reads it, so the two boxes stand alike. Note that the
+ * agent is read here, around the card that reads the words, so a word typed
+ * hands the card's chips the very same agent and draws none of them again.
+ */
+function ItemAnswerBox({ agents, ...props }: AnswerBoxProps): React.JSX.Element {
+  const agentBox = useAgentBox({ agentId: props.item.agentId, agent: props.agent, agents });
+
+  return <AnswerCard {...props} agentBox={agentBox} />;
 }

@@ -77,7 +77,13 @@ import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
 import { NewTaskInButton } from "./new-task-button.js";
-import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-moves.js";
+import {
+  type RowPlace,
+  RowPlaced,
+  useRowMoveKeys,
+  useRowPlaces,
+  withRowMoves,
+} from "./row-moves.js";
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
 import { SIDEBAR_ENTRY, type SidebarEntry, SidebarEntryRow } from "./sidebar-entries.js";
 import { SIDEBAR_SECTION_SLOT, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
@@ -887,13 +893,15 @@ function SectionRows({
   const nests = nestsOf(depths);
   const rowsShown = context.tasks.shown && context.inSight;
 
+  const keptPlace = useRowPlaces();
+
   const placeOf = (key: string) => {
     const at = listedAt.get(key);
 
-    if (move === undefined || at === undefined) return undefined;
+    if (move === undefined || at === undefined) return keptPlace(key, undefined);
     const siblings = siblingsAt(depths, at);
 
-    return {
+    return keptPlace(key, {
       at: siblings.indexOf(at),
       count: siblings.length,
       onMove: (from: number, to: number) => {
@@ -901,7 +909,7 @@ function SectionRows({
 
         if (moved !== undefined) besideSibling(moved, siblings[to]);
       },
-    };
+    });
   };
 
   return (

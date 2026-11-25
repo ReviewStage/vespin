@@ -316,6 +316,10 @@ await Promise.all([
     format: "cjs",
     target: "node22",
     external: ["electron"],
+    // Note that main is minified as the renderer is, because V8 parses the
+    // whole bundle before main can answer anything, and a smaller one parses
+    // sooner; its frames read back through the maps the upload stamps.
+    minify: true,
     define: {
       PACKAGED_SENTRY_DSN: JSON.stringify(process.env.SENTRY_DSN ?? ""),
       PACKAGED_SENTRY_RELEASE: JSON.stringify(sentryRelease),
@@ -327,6 +331,20 @@ await Promise.all([
       // Whether this bundle is the nightly smoke's, which takes a loopback service and its own state root.
       ...e2eBuildDefine(process.env),
     },
+    sourcemap: "external",
+    logLevel: "info",
+  }),
+  // The mirror matching process main forks with `utilityProcess`
+  // (`src/main/services/mirror-matching.ts`), its own bundle so a mirror's
+  // match reads and hashes its checkout off main's event loop.
+  build({
+    entryPoints: [path.join(appRoot, "src/utility/mirror-match.ts")],
+    outfile: path.join(outputRoot, "mirror-match.js"),
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    target: "node22",
+    external: ["electron"],
     sourcemap: "external",
     logLevel: "info",
   }),

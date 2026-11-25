@@ -23,13 +23,19 @@ import {
 import type { DeviceLaunchStep, DeviceLaunchUnstarted } from "@repo/features/device-agent-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
-import { type AppTranscript, OWN_TRANSCRIPT } from "@repo/host/app-state";
+import { type AppTranscript, type AppTranscriptRead, OWN_TRANSCRIPT } from "@repo/host/app-state";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Schema } from "effect";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { askAct } from "../act.js";
 import { transcriptQuery, transcriptRetryMutation } from "../live-reads.js";
-import { jsonBytes, PANEL_SPAN, PANEL_SPAN_ATTRIBUTE, recordPanelSpan } from "../panel-spans.js";
+import {
+  jsonBytes,
+  PANEL_SPAN,
+  PANEL_SPAN_ATTRIBUTE,
+  type PanelSpanAttribute,
+  recordPanelSpan,
+} from "../panel-spans.js";
 import type { AgentRun } from "./agent-model.js";
 
 /**
@@ -51,7 +57,10 @@ import type { AgentRun } from "./agent-model.js";
  * which reads it anew; the messages held stand meanwhile. Each hold is
  * timed to its first page drawn and to the page that caught it up
  * (`panel-spans.ts`), each told whether the transcript already stood as the
- * hold was taken, which draws with no round trip.
+ * hold was taken, which draws with no round trip, and, where a page the host
+ * read during the hold ended it, where its time went: waiting on the host,
+ * the service, the host's lay, and the window, with the longest the host's
+ * process stood still meanwhile.
  */
 
 /** How the page below the oldest message held is read and laid: the transcript and where to read below, answered with whether it landed. */
@@ -162,20 +171,47 @@ interface HoldTiming {
   caughtUp: boolean;
 }
 
-/** Ends one of a hold's spans now, measured by the messages held and the transcript that ended it. */
+/**
+ * Where the time of a span ending at `endedAt` went, as the host read the
+ * page it ended on: waiting on the host, the service, the host's lay, and the
+ * window; none where no read of the hold's laid it, as a transcript that
+ * stood already, or one the live read's rows moved last.
+ */
+function readSpent(
+  read: AppTranscriptRead | undefined,
+  startedAt: number,
+  endedAt: number,
+): Partial<Record<PanelSpanAttribute, number>> {
+  if (read === undefined || read.askedAt < startedAt) return {};
+
+  return {
+    [PANEL_SPAN_ATTRIBUTE.HOST_WAIT]: read.askedAt - startedAt,
+    [PANEL_SPAN_ATTRIBUTE.REQUEST]: read.answeredAt - read.askedAt,
+    [PANEL_SPAN_ATTRIBUTE.LAY]: read.laidAt - read.answeredAt,
+    [PANEL_SPAN_ATTRIBUTE.WINDOW]: endedAt - read.laidAt,
+    ...(read.stalledMs === undefined
+      ? undefined
+      : { [PANEL_SPAN_ATTRIBUTE.HOST_STALL]: read.stalledMs }),
+  };
+}
+
+/** Ends one of a hold's spans now, measured by the messages held, the transcript that ended it, and how the host read it. */
 function endHoldSpan(
   name: typeof PANEL_SPAN.TRANSCRIPT_FIRST_PAINT | typeof PANEL_SPAN.TRANSCRIPT_CAUGHT_UP,
   timing: HoldTiming,
   held: AppTranscript,
 ): void {
+  const endedAt = Date.now();
+
   recordPanelSpan({
     name,
     startedAt: timing.startedAt,
-    endedAt: Date.now(),
+    endedAt,
     attributes: () => ({
       [PANEL_SPAN_ATTRIBUTE.MESSAGE_COUNT]: held.messages.length,
       [PANEL_SPAN_ATTRIBUTE.HELD_BYTES]: jsonBytes(held),
       [PANEL_SPAN_ATTRIBUTE.CACHE_HIT]: timing.held ? 1 : 0,
+      ...readSpent(held.read, timing.startedAt, endedAt),
     }),
   });
 }

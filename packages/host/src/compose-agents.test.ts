@@ -526,6 +526,9 @@ function pageNow(
   };
 }
 
+/** A page's read as the host times it while the test's clock stands at its start. */
+const UNMOVED_READ = { followedAt: 0, askedAt: 0, answeredAt: 0, laidAt: 0 };
+
 /** The newest page the service answers: one message, the cursor to follow on from, and where the older page is read below. */
 function newestPage(cursor: string, text: string, before?: string): AgentNewestAnswer {
   return {
@@ -571,6 +574,8 @@ it.effect(
           cursor: "1:0",
           word: { status: AGENT_STATUS.RUNNING, title: "Invites", caughtUp: false },
           pages: 1,
+          // The clock stands at the start, so every time of the read is its start; the fake service answers at once.
+          read: UNMOVED_READ,
         },
       ]);
       assert.deepEqual(asked.toSorted(), [
@@ -587,6 +592,7 @@ it.effect(
         cursor: "2:0",
         word: { status: AGENT_STATUS.RUNNING, title: "Invites", caughtUp: true },
         pages: 2,
+        read: UNMOVED_READ,
       });
       const reads = asked.filter((ask) => ask.startsWith("messages-"));
       assert.deepEqual(reads, [`messages-newest:${AGENT_ID}:cut`, `messages-now:${AGENT_ID}:1:0`]);

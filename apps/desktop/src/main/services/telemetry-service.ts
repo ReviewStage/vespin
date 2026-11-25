@@ -12,7 +12,7 @@ import {
   withoutAccessTokens,
 } from "@repo/features/sentry-breadcrumbs";
 import { type SentryCapture, sentryReporterLayer } from "@repo/features/sentry-reporting";
-import { sentryTracesSampler } from "@repo/features/sentry-tracing";
+import { sentryTracesSampler, spanWithLoopStall } from "@repo/features/sentry-tracing";
 import { usageDataTransportOptions } from "@repo/features/sentry-usage-data";
 import { type RunMode, sentryReportingEnabled } from "@repo/host";
 import { sharesUsageData } from "@repo/host/app-state";
@@ -31,6 +31,7 @@ import {
   type WorkingSetCrossing,
 } from "../window/renderer-health";
 import type { DesktopConfig } from "./desktop-config";
+import { mainLoopStalls, startMainLoopStalls } from "./main-loop-stalls";
 
 /** How long the quit waits for a queued crash report to leave; a flush must not hold a quit. */
 const CRASH_REPORT_FLUSH_MS = 2_000;
@@ -67,11 +68,11 @@ let usageData: boolean | undefined;
  * Main reports on behalf of every renderer, so what leaves goes through the
  * same token filters as the preload's and the renderers' own.
  *
- * Every window profiles while a kept trace's root span is open
- * (`SENTRY_PROFILING`), so a send and a page load carry the stack frames that
- * ran under them: main serves every document with
- * `Document-Policy: js-profiling`, which the browser's profiler needs
- * (`renderer/desktop-sentry-sdk.ts`). Main itself is not profiled, because
+ * Every window profiles while it is in use (`SENTRY_PROFILING`,
+ * `renderer/desktop-sentry-sdk.ts`), so the spans it times and its
+ * interactions carry the stack frames that ran under them: the SDK serves
+ * every document with `Document-Policy: js-profiling`, which the browser's
+ * profiler needs (`enableRendererProfiling`). Main itself is not profiled, because
  * Sentry ships its Node profiler's addon for Node's ABIs and not Electron's.
  *
  * Nothing leaves while the device does not share usage data: main's offline
@@ -79,8 +80,14 @@ let usageData: boolean | undefined;
  * minidumps as well as main's own, asks the switch before each one
  * (`@repo/features/sentry-usage-data`). A report made before the settings
  * are read is kept on disk until they are, then sent or dropped.
+ *
+ * Main's stalls are heard from here on (`main-loop-stalls.ts`), and each of
+ * main's requests says the longest one within it
+ * (`SENTRY_LOOP_STALL_ATTRIBUTE`), so a request the service answered at once
+ * but main read late reads as main's wait rather than the service's.
  */
 export function initializeCrashReporting(runMode: RunMode, environment: SentryEnvironment): void {
+  startMainLoopStalls();
   Sentry.init({
     dsn: PACKAGED_SENTRY_DSN,
     enabled: sentryReportingEnabled(runMode.sendsNetwork, PACKAGED_SENTRY_DSN),
@@ -92,7 +99,9 @@ export function initializeCrashReporting(runMode: RunMode, environment: SentryEn
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,
-    beforeSendSpan: Sentry.withStreamedSpan(spanWithoutAccessTokens),
+    beforeSendSpan: Sentry.withStreamedSpan((span) =>
+      spanWithoutAccessTokens(spanWithLoopStall(span, mainLoopStalls.worstWithin)),
+    ),
     transportOptions: usageDataTransportOptions(() => usageData),
   });
 }

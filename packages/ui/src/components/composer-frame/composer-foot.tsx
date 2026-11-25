@@ -1,5 +1,5 @@
 import type { ShortcutChord } from "@repo/settings/shortcuts";
-import { type ReactNode, useId } from "react";
+import { memo, type ReactNode, useId } from "react";
 import { inputProblem, type ReportedFailure, type Unreported } from "../../reported-failure.js";
 import {
   BUTTON_CORNERS,
@@ -327,8 +327,11 @@ export function ComposerFootNote({ note }: { note: ComposerNote }): React.JSX.El
 /**
  * What stands in the send's place: Stop while it is handed, then Talk while
  * the box holds nothing to send and no send of its is out, and else Send.
+ * Note that it draws again only as what it is handed changes, so a box that
+ * hands the same presses while its words change draws it once per change of
+ * what it says, never on each key.
  */
-function SendPlace({
+const SendPlace = memo(function SendPlace({
   send,
   stop,
   talk,
@@ -348,7 +351,7 @@ function SendPlace({
   }
 
   return <SendButton send={send} refusalId={refusalId} />;
-}
+});
 
 /** A message box's foot: a bar of `tools`, the counter, `actions` and the send, `stop`, or `talk`, or `strip` in the bar's place, and `note` under it. */
 export function ComposerFoot({

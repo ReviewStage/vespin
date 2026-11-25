@@ -704,6 +704,9 @@ function rowFollowerFields(followers: readonly RowFollower[]): Partial<PlanRow> 
  */
 const RESYNC_SETTLE = Duration.seconds(10);
 
+/** No task read outside the list yet: the tally a launch's count starts from. */
+const NO_COLD_READS = { count: 0, drawMs: 0 } as const;
+
 /** How many of the tasks the Inbox names are read outside the list at once (`inboxNamed`). */
 const INBOX_READS_AT_ONCE = 4;
 
@@ -1380,7 +1383,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         }
 
         coldRead.add(id);
+        // Note that the read is counted before it draws, so its own drawing tells it, and its drawing's time after, which the view's next telling carries, rather than telling the view again for a number (`launch:load`).
+        const before = view.coldReads ?? NO_COLD_READS;
+        view = { ...view, coldReads: { count: before.count + 1, drawMs: before.drawMs } };
+        const drawingFrom = yield* Clock.currentTimeMillis;
         yield* collections.cold(rows.value, mark);
+        const drawing = (yield* Clock.currentTimeMillis) - drawingFrom;
+        const after = view.coldReads ?? NO_COLD_READS;
+        view = { ...view, coldReads: { count: after.count, drawMs: after.drawMs + drawing } };
       });
 
       coldPending.add(id);
