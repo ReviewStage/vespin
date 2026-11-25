@@ -1,0 +1,17 @@
+pinned to d1f0be2a96
+== bundle PJjn2a2m base d1f0be2a96
+  built d1f0be2a96 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2A-inbox: fails 0 shots 16 
+n2A-keep: fails 0 shots 3 
+n2A-navigation: fails 0 shots 3 
+n2A-new-task: fails 0 shots 10 
+  n2A-busy-1x JS holds: JS thread: 11952 running samples in the first 180 s (from its first sample); holds over 50 ms: 29, total 4727 ms, longest 612 ms
+n2A-busy-1x: rc 0, trace ok, load {"long_tasks":30,"long_task_ms":5000,"cold_reads":300,"cold_read_ms":500,"load_window":"whole","app_build":"1"}, ready {"launch_ms":5148.011749267578,"local_ms":478.16229128837585,"started_ms":893.1042913198471,"screens_ms":1575.3145833015442,"inbox_ms":1297.9832082986832,"active_ms":327.5901243686676,"first_rows":"fe
+n2A-second-1x fn2mark: 14 steps, Assert that "${output.settled}" is not visible... FAILED fn2mark marked: ;fn2mark marked: Thread 218: decide how a partial cent rounds in the billing rounding;fn2mark marked: Thread 218: decide how a partial cent rounds in the billing rounding], insight=Ins
+  n2A-second-1x JS holds: JS thread: 11029 running samples in the first 180 s (from its first sample); holds over 50 ms: 31, total 5306 ms, longest 833 ms
+  n2A-second-1x JS holds, first 30 s: JS thread: 5316 running samples in the first 30 s (from its first sample); holds over 50 ms: 14, total 3087 ms, longest 833 ms
+n2A-second-1x: pid 29622, trace ok, load {"long_tasks":30,"long_task_ms":5000,"cold_reads":300,"cold_read_ms":500,"load_window":"whole","app_build":"1"}, ready {"launch_ms":1787.8308744430542,"local_ms":618.5047914981842,"started_ms":1003.4871665239334,"screens_ms":1606.9584164619446,"inbox_ms":1399.6054574251175,"active_ms":406.5159994363785,"first_rows":"k
