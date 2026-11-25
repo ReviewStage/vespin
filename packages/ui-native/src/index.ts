@@ -334,6 +334,7 @@ export {
   MergeActRow,
   type MergeMethodChoice,
   PullRequestHead,
+  type RowCount,
   WriteNoteRow,
 } from "./pull-request-page.js";
 
