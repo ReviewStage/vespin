@@ -179,9 +179,6 @@ const IOS = {
   REPOSITORY_FILES: byDesign(
     "iOS opens a repository's files on GitHub, as it does the diff; it has no File tab",
   ),
-  REPOSITORY_PINS: byDesign(
-    "iOS's Tasks lists sections, not repositories, so it has no repository list to pin in",
-  ),
   UPDATER: byDesign("The App Store updates the app"),
 } as const;
 
@@ -458,7 +455,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_RENAME]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PIN]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MARK_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.REPOSITORY_PINS),
+  [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_WRITE_SECTION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: EVERYWHERE,
