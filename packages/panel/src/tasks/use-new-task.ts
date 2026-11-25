@@ -35,7 +35,15 @@ import { APP_SETTING_DEFAULTS } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
 import { agentTab, draftTab } from "@repo/ui/tab-strip-model";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { sendMutation } from "../act-mutations.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { useToast } from "../toast.js";
@@ -52,7 +60,7 @@ import type { NewTaskRelation } from "./new-task-relation.js";
 import type { RepositoryChooser } from "./repository-chip.js";
 import { useRepositoriesIn } from "./task-repository-menus.js";
 import type { ComposerNote } from "./use-agent-composer.js";
-import type { AgentsControl, ModelsRead } from "./use-agents.js";
+import { type AgentsControl, MODELS_READ, type ModelsRead } from "./use-agents.js";
 import type { MainTab } from "./use-main-tabs.js";
 import { usePlaceInSection } from "./use-pin-writes.js";
 
@@ -261,14 +269,52 @@ export interface NewTaskStart {
 /** Adds a task named `name` to a Tasks page group with no agent, opening nothing; answers why it was not added, or nothing once the list carries it. */
 export type QuickAddStart = (name: string, into: QuickAddInto) => Promise<Failure | undefined>;
 
-/** New task as the window draws and presses it: the presses that open it, the dialog, Home's own composer's asks, and a start under way. */
-export interface NewTask {
+/**
+ * What of New task moves as the developer presses it: whether the dialog
+ * stands and what opened it, Home's composer's asks, a start under way, and
+ * the models' newest read. Note that it reaches its readers through a context
+ * of its own (`useNewTaskShown`), never the Tasks tab, because the tab is
+ * handed to most of the window and a dialog opening drew all of it again.
+ */
+export interface NewTaskShown {
   /**
    * Whether New task's agent start is under way, which the window draws as
    * a task's page in its shape until the start answers; false otherwise, or
    * once the developer went to another task or page meanwhile.
    */
-  starting: boolean;
+  readonly starting: boolean;
+  /** Whether the dialog stands. */
+  readonly open: boolean;
+  /** What the press that opened the dialog chose: a repository, where it chose one. */
+  readonly preset: NewTaskPreset | undefined;
+  /** How many times New task was pressed on Home, whose composer takes the caret at each press rather than a dialog opening over it. */
+  readonly homeAsks: number;
+  /** A start pressed on Home's own composer and refused while Home stood, which that composer opens again on rather than a dialog over it; none once the developer went elsewhere. */
+  readonly homeRefused: HomeRefusal | undefined;
+  /** Where the newest read of the models stands, at the generation it took, so the card can wait on a read made since it opened. */
+  readonly modelsRead: ModelsRead;
+}
+
+/** New task shown nowhere: no dialog, no start, and no read of the models, as a window drawing no Tasks tab stands. */
+export const NEW_TASK_UNSHOWN: NewTaskShown = {
+  starting: false,
+  open: false,
+  preset: undefined,
+  homeAsks: 0,
+  homeRefused: undefined,
+  modelsRead: { state: MODELS_READ.UNREAD, generation: 0 },
+};
+
+/** What of New task moves, as the window stands (`AppWindow` provides it). */
+export const NewTaskShownContext = createContext<NewTaskShown>(NEW_TASK_UNSHOWN);
+
+/** What of New task moves, read only where it is drawn, so a press draws its readers alone. */
+export function useNewTaskShown(): NewTaskShown {
+  return useContext(NewTaskShownContext);
+}
+
+/** New task as the window presses it: the presses that open it and its dialog's doors, and what the dialog lists; what moves as it is pressed is `NewTaskShown`'s. */
+export interface NewTask {
   /** Opens the New task dialog over whatever stands open, which it leaves standing; on Home, hands Home's own composer the caret instead (`homeAsks`). */
   onOpen: () => void;
   /** New task with a repository already chosen in the dialog: what a repository group's + asks. */
@@ -279,14 +325,6 @@ export interface NewTask {
   onOpenRelated: (taskId: string, kind: TaskCreateRelationKind) => void;
   /** New task's card for the agent that makes an automation: what the Automations page's Create with an agent asks. */
   onOpenForAutomation: () => void;
-  /** Whether the dialog stands. */
-  open: boolean;
-  /** What the press that opened the dialog chose: a repository, where it chose one. */
-  preset: NewTaskPreset | undefined;
-  /** How many times New task was pressed on Home, whose composer takes the caret at each press rather than a dialog opening over it. */
-  homeAsks: number;
-  /** A start pressed on Home's own composer and refused while Home stood, which that composer opens again on rather than a dialog over it; none once the developer went elsewhere. */
-  homeRefused: HomeRefusal | undefined;
   /** The workspaces a task may start in, the account's every one. */
   workspaces: readonly Workspace[];
   /** The workspace the dialog starts the task in until another is chosen: the one listed; none before the workspaces are read. */
@@ -314,8 +352,6 @@ export interface NewTask {
   devices: readonly MacOffer[] | undefined;
   /** Whether the last read of the models did not land. */
   modelsFailed: boolean;
-  /** Where the newest read of the models stands, at the generation it took, so the card can wait on a read made since it opened. */
-  modelsRead: ModelsRead;
   /** Asks the host for the models again, as the card opening and the chip's Retry ask. */
   readModels: () => void;
   /** Puts the dialog away with nothing started. */
@@ -360,14 +396,10 @@ export interface NewTaskDoors {
   readonly place: NewTaskPlaceDoors;
   readonly agents: Pick<
     AgentsControl,
-    | "onTaskStarted"
-    | "onHandDraft"
-    | "models"
-    | "macs"
-    | "modelsFailed"
-    | "modelsRead"
-    | "readModels"
+    "onTaskStarted" | "onHandDraft" | "models" | "macs" | "modelsFailed" | "readModels"
   >;
+  /** Where the newest read of the models stands (`NewTaskShown.modelsRead`). */
+  readonly modelsRead: ModelsRead;
   /** Shows a tab in a task's own column. */
   readonly showTab: (taskId: string, tab: MainTab) => void;
 }
@@ -410,8 +442,14 @@ export function useQuickAddStart(workspaceId: string | undefined): QuickAddStart
   );
 }
 
+/** New task's flow as the Tasks tab holds it: its doors, handed with the tab, and what moves as it is pressed, handed in a context of its own. */
+export interface NewTaskTab {
+  readonly newTask: NewTask;
+  readonly shown: NewTaskShown;
+}
+
 /** New task's flow, over the doors the Tasks tab hands it. */
-export function useNewTask(doors: NewTaskDoors): NewTask {
+export function useNewTask(doors: NewTaskDoors): NewTaskTab {
   const { shown, place, agents, showTab } = doors;
   const sendTaskStart = useTaskStartMutation();
   const toast = useToast();
@@ -721,13 +759,15 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   // Note that Home's refused start gives way the same, so Home opened again later opens on its draft alone.
   const homeRefused = homeRefusedUnder(page);
 
-  const homeRefusedNow =
-    homeRefused !== undefined && arrived <= homeRefused.arrivals
-      ? { opening: homeRefusals, refused: homeRefused.refused }
-      : undefined;
+  const refusedStands = homeRefused !== undefined && arrived <= homeRefused.arrivals;
+  const refusedNow = refusedStands ? homeRefused.refused : undefined;
 
-  return {
-    starting,
+  const homeRefusedNow = useMemo(
+    () => (refusedNow === undefined ? undefined : { opening: homeRefusals, refused: refusedNow }),
+    [refusedNow, homeRefusals],
+  );
+
+  const newTaskDoors: NewTask = {
     onOpen: newTask,
     onOpenIn: (repository) => newTaskWith({ repository }),
     onOpenInSection: (sectionId) => newTaskWith({ sectionId }),
@@ -738,10 +778,6 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
       newTaskWith({ relation: { kind, task } });
     },
     onOpenForAutomation: () => newTaskWith({ purpose: NEW_TASK_PURPOSE.AUTOMATION }),
-    open: newTaskAsk !== undefined,
-    preset: newTaskAsk?.preset,
-    homeAsks: homeNewTasks,
-    homeRefused: homeRefusedNow,
     workspaces,
     workspaceId: doors.workspaceId,
     repositoriesIn,
@@ -749,10 +785,28 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     models: agents.models,
     devices: agents.macs,
     modelsFailed: agents.modelsFailed,
-    modelsRead: agents.modelsRead,
     readModels: agents.readModels,
     onClose: () => setNewTaskAsk(undefined),
     typedNames: doors.typedNames,
     onShowMention: place.showMention,
   };
+
+  const preset = newTaskAsk?.preset;
+  const open = newTaskAsk !== undefined;
+  const { modelsRead } = doors;
+
+  // Note that what moves is held while it says the same, so a draw of the window that moved none of it draws none of its readers.
+  const newTaskShown = useMemo(
+    (): NewTaskShown => ({
+      starting,
+      open,
+      preset,
+      homeAsks: homeNewTasks,
+      homeRefused: homeRefusedNow,
+      modelsRead,
+    }),
+    [starting, open, preset, homeNewTasks, homeRefusedNow, modelsRead],
+  );
+
+  return { newTask: newTaskDoors, shown: newTaskShown };
 }

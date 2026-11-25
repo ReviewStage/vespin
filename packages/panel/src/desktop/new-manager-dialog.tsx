@@ -70,6 +70,7 @@ import {
   useNewTaskRunsOn,
   useOwnedMachines,
 } from "../tasks/runs-on.js";
+import { useNewTaskShown } from "../tasks/use-new-task.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { type FormDialog, useFormDialog } from "./use-form-dialog.js";
 
@@ -319,7 +320,8 @@ export function useNewManagerDialog({
   const device = deviceOfPlace(place);
   // Note that the card stays mounted between openings, so each waits on a devices' read made since it opened.
   const [openedOn, setOpenedOn] = useState<number | undefined>(undefined);
-  const devicesUnread = useDevicesRead(newTask.modelsRead, keptDevice, openedOn).unread;
+  const { modelsRead } = useNewTaskShown();
+  const devicesUnread = useDevicesRead(modelsRead, keptDevice, openedOn).unread;
   // Note that a model nothing of the account's pays for runs all the same on a picked device that runs its harness, on the device's own sign-in.
   const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
 
@@ -458,7 +460,7 @@ export function useNewManagerDialog({
     ask: () => {
       key.current = crypto.randomUUID();
       sentOn.current = undefined;
-      setOpenedOn(newTask.modelsRead.generation);
+      setOpenedOn(modelsRead.generation);
       setName("");
       setPicks(undefined);
       setPicked(undefined);
