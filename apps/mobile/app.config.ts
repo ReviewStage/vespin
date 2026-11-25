@@ -495,7 +495,10 @@ const colorSet = (role: keyof typeof BRAND_PALETTE.LIGHT) => {
 // (`modules/crash-reports/`). Note that it is the AppDelegate's, not the
 // module's, because Sentry's pod hands its framework search paths to the
 // app's target alone, so no other pod can import it. A build that names no
-// DSN gets no start at all.
+// DSN gets no start at all. Note that the crash-reports module is imported
+// `internal`, because Expo's generated ExpoModulesProvider imports every
+// local module that way, and Swift 6 refuses one module imported at two
+// access levels in a target (TestFlight 81's archive).
 const withCrashReportsLaunch = (config: ExpoConfig): ExpoConfig =>
   SENTRY.DSN === ""
     ? config
@@ -511,7 +514,7 @@ const withCrashReportsLaunch = (config: ExpoConfig): ExpoConfig =>
           throw new Error("The AppDelegate has no didFinishLaunching to start Sentry in.");
         modConfig.modResults.contents = started.replace(
           /(import \S+\n)/,
-          "$1import RNSentry\nimport VespinCrashReports\n",
+          "$1import RNSentry\ninternal import VespinCrashReports\n",
         );
 
         return modConfig;
