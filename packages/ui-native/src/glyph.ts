@@ -79,7 +79,7 @@ const unassignedMark = (name: (typeof UNASSIGNED_SYMBOL)[keyof typeof UNASSIGNED
 // SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
 const productMark = (name: typeof PRODUCT_MARK_SYMBOL): Glyph => name as Glyph;
 
-/** An SF Symbol, kept where iOS draws the thing its own way, or where the panel draws a mark of its own rather than a Lucide glyph. */
+/** An SF Symbol, where iOS has its own symbol for the job, or where the panel draws a mark of its own rather than a Lucide glyph. */
 // SAFETY: an SF Symbol's name is a glyph's name; this table is where glyphs are minted.
 const system = (name: SfSymbol): Glyph => name as Glyph;
 
@@ -89,8 +89,8 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  * mark read, archive, the composer's and a call's buttons) is the SF Symbol
  * Apple's own apps draw for the same job, so a bar, a menu, and a swipe
  * read as Mail's and Files' do (the developer, Nov 25, 2026, over the Nov 12
- * rule that the phone's icons are the desktop's). A Vespin thing no system
- * symbol names (an agent, a task, a pull request, a branch, an ask's kind,
+ * rule that the phone's icons are the desktop's). A thing of our own no
+ * system symbol names (an agent, a task, a pull request, a branch, an ask's kind,
  * a skill, a memory) is the Lucide glyph the panel draws in the same place,
  * written into the asset catalog as a custom symbol by `@repo/brand`, so it
  * sizes with Dynamic Type and weighs with its words as an SF Symbol does;
