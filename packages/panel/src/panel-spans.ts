@@ -20,6 +20,7 @@
  * row press's says how long it waited and nothing of the row.
  */
 
+import { SENTRY_LOOP_STALL_ATTRIBUTE } from "@repo/features/sentry-tracing";
 import { listenRowPresses } from "@repo/ui/list-row-presses";
 import { useCallback, useRef } from "react";
 
@@ -71,6 +72,16 @@ export const PANEL_SPAN_ATTRIBUTE = {
   HELD_BYTES: "transcript.held_bytes",
   /** Whether the transcript already stood on app state as its tab held it, 1, or was read from the service first, 0. */
   CACHE_HIT: "transcript.cache_hit",
+  /** From the hold to the host asking the service for the page that ended the span: the ask's way to the host, and for a span that waited on it, the live read's first read. */
+  HOST_WAIT: "transcript.host_wait_ms",
+  /** How long the service took to answer that page, as the host timed it. */
+  REQUEST: "transcript.request_ms",
+  /** From the service's answer to the host laying the page. */
+  LAY: "transcript.lay_ms",
+  /** From the host laying the page to the window drawing it: the push to the window and its draw. */
+  WINDOW: "transcript.window_ms",
+  /** The longest the host's process stood still from its follow's start to the lay (`SENTRY_LOOP_STALL_ATTRIBUTE`); said only where its platform hears that, as the desktop's main does. */
+  HOST_STALL: SENTRY_LOOP_STALL_ATTRIBUTE,
   /** The size of the description the task opened on, in characters. */
   DESCRIPTION_CHARS: "task.description_chars",
   /** How many tasks, of every workspace, the sidebar's first list read answered. */
@@ -91,7 +102,7 @@ export const PANEL_SPAN_ATTRIBUTE = {
   PRESS_PRESENTATION: "press.presentation_ms",
 } as const;
 
-type PanelSpanAttribute = (typeof PANEL_SPAN_ATTRIBUTE)[keyof typeof PANEL_SPAN_ATTRIBUTE];
+export type PanelSpanAttribute = (typeof PANEL_SPAN_ATTRIBUTE)[keyof typeof PANEL_SPAN_ATTRIBUTE];
 
 /** One timing, ended: when it started and ended, in the epoch's milliseconds, and what it measured, read only where it is kept. */
 export interface PanelSpan {

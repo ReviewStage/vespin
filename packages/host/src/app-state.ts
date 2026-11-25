@@ -360,6 +360,25 @@ export interface AppTranscript {
    * (`agent-queue-writes.ts`); none on a worker's transcript.
    */
   readonly sending?: readonly SendingMessage[];
+  /** How the host read the page it laid last, which the window's spans say beside their own times; none where what it laid last was no page read, as the live read's rows are. */
+  readonly read?: AppTranscriptRead;
+}
+
+/**
+ * How the host read one page of a transcript, in the epoch's milliseconds:
+ * when the follow that read it began, when it asked the service, when the
+ * service answered, and when the page was laid for the windows; and the
+ * longest the host's process stood still from the follow's start to the lay,
+ * where its platform hears that (`PlatformLoopStalls`). Note that a stall
+ * there holds the answer and the lay alike, however soon the service
+ * answered.
+ */
+export interface AppTranscriptRead {
+  readonly followedAt: number;
+  readonly askedAt: number;
+  readonly answeredAt: number;
+  readonly laidAt: number;
+  readonly stalledMs?: number;
 }
 
 /**

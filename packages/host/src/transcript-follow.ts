@@ -23,6 +23,7 @@ import { LIVE_SIGNED_OUT, type TranscriptNowAnswer } from "@repo/features/live-w
 import { joinedWindowRows, windowMessagesOf } from "@repo/features/transcript-window";
 import { MESSAGE_ROLE, type WireBoundaryInput } from "@repo/wire";
 import {
+  Clock,
   Data,
   Duration,
   Effect,
@@ -36,7 +37,8 @@ import {
   Stream,
   SubscriptionRef,
 } from "effect";
-import type { AppTranscript } from "./app-state.js";
+import type { AppTranscript, AppTranscriptRead } from "./app-state.js";
+import { PlatformLoopStalls } from "./effect/seams.js";
 import type { HeldAnswers } from "./live-collection.js";
 import {
   decodedLiveRows,
@@ -86,7 +88,10 @@ import {
  * connection is back, and otherwise up to `RESEALS` refusals, and then the
  * follow is told the transcript could not be read, which the window offers
  * to try again, as it is where the live read stops for good. One the
- * account does not reach is told not found.
+ * account does not reach is told not found. Each page read is laid with how
+ * it was read (`AppTranscriptRead`): when it was asked and answered, when it
+ * was laid, and the longest the process stood still meanwhile, which the
+ * window's spans say where the wait went.
  */
 
 /** How many transcripts no window holds any longer stay drawn at most, the least recently let go closed first. */
@@ -475,14 +480,16 @@ function meets(
 /**
  * A transcript as it stands once `page` is told on what was held: a
  * readable page's messages joined on by id, its cursor, and its word on the
- * agent with the queue revision it was read at, counted as a page; a page
- * that could not be read beside what was held, and one the account no
- * longer reaches in place of all of it.
+ * agent with the queue revision it was read at, counted as a page, and how
+ * it was read where a read of the service's laid it; a page that could not
+ * be read beside what was held, and one the account no longer reaches in
+ * place of all of it.
  */
 function toldTranscript(
   was: AppTranscript | undefined,
   page: AgentTranscriptPage,
   queueRevision: number | undefined,
+  read: AppTranscriptRead | undefined,
 ): AppTranscript {
   const pages = was?.pages ?? 0;
 
@@ -512,6 +519,7 @@ function toldTranscript(
     cursor,
     word: queueRevision === undefined ? said : { ...said, queueRevision },
     pages: pages + 1,
+    ...(read === undefined ? undefined : { read }),
   };
 }
 
@@ -629,22 +637,55 @@ export function followTranscript<Key>(
     Effect.gen(function* () {
       /** The queue revision the last page read past a cursor was read at, which its queue is at least as new as, and every page told after it carries. */
       let revision: number | undefined;
+      const followedAt = yield* Clock.currentTimeMillis;
+      const stalls = Option.getOrUndefined(yield* Effect.serviceOption(PlatformLoopStalls));
 
-      const tell = (page: AgentTranscriptPage) =>
-        Effect.suspend(() => held.answered(toldTranscript(held.rows(), page, revision)));
+      const tell = (page: AgentTranscriptPage, read?: AppTranscriptRead) =>
+        Effect.suspend(() => held.answered(toldTranscript(held.rows(), page, revision, read)));
+
+      /** A page read now: what the service answered, and the read's times as it is laid, with the longest the process stood still since the follow began, where its platform hears that. */
+      const timed = <Answer>(read: Effect.Effect<Answer>) =>
+        Effect.gen(function* () {
+          const askedAt = yield* Clock.currentTimeMillis;
+          const answer = yield* read;
+          const answeredAt = yield* Clock.currentTimeMillis;
+
+          const laid = Effect.map(Clock.currentTimeMillis, (laidAt): AppTranscriptRead => {
+            const stalledMs = stalls?.worstWithin(followedAt, laidAt);
+
+            return {
+              followedAt,
+              askedAt,
+              answeredAt,
+              laidAt,
+              ...(stalledMs === undefined ? undefined : { stalledMs }),
+            };
+          });
+
+          return { answer, laid };
+        });
 
       let toldNotFound = false;
 
       const readNewest = Effect.suspend(() => {
         const again = resealing();
 
-        return reads.newest().pipe(
-          Effect.tap((answer) => {
-            if (!("failure" in answer)) return tell({ ...answer, newest: true, caughtUp: false });
-            toldNotFound = answer.failure === AGENT_CALL_FAILURE.NOT_FOUND;
+        const once = Effect.gen(function* () {
+          const { answer, laid } = yield* timed(reads.newest());
 
-            return tell(answer);
-          }),
+          if (!("failure" in answer)) {
+            yield* tell({ ...answer, newest: true, caughtUp: false }, yield* laid);
+
+            return answer;
+          }
+
+          toldNotFound = answer.failure === AGENT_CALL_FAILURE.NOT_FOUND;
+          yield* tell(answer);
+
+          return answer;
+        });
+
+        return once.pipe(
           // Note that a newest page the service keeps not answering is asked for again as the live read is (`resealing`), and then ends the follow on the failure told, so the window offers Try again.
           Effect.repeat(
             Schedule.passthrough(
@@ -811,8 +852,8 @@ export function followTranscript<Key>(
                 Stream.runForEach((now) => tellDrawn(lastTold, now)),
               );
 
-        const answer = yield* Effect.scoped(
-          Effect.andThen(Effect.forkScoped(besideRead), reads.after(window.cursor)),
+        const { answer, laid } = yield* Effect.scoped(
+          Effect.andThen(Effect.forkScoped(besideRead), timed(reads.after(window.cursor))),
         );
 
         // Note that a held cursor the service refuses, gone or stale, is let go untold, and the follow opens on the newest page as one holding nothing does; the window joins it or takes it in place of what it drew.
@@ -862,7 +903,7 @@ export function followTranscript<Key>(
         const page = "failure" in whole ? whole : { ...whole, messages: fresh };
 
         if (was.kind === LIVE_STATE.STANDING) revision = was.drawn.queueRevision;
-        yield* tell(page);
+        yield* tell(page, "failure" in page ? undefined : yield* laid);
         last = page;
 
         if ("failure" in answer) {
