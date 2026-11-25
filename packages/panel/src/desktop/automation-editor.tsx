@@ -1,3 +1,4 @@
+import { switchedOffWords } from "@repo/features/agent-servers-model";
 import {
   type AutomationDraft,
   automationDraft,
@@ -582,13 +583,14 @@ function switchedOffName(connection: string): string {
 
 /**
  * Which of the owner's connected MCP servers a run's new agent is handed:
- * a field chip like its neighbors', holding the marks of those left on and
- * opening the agent box's own servers popover, whose switches, search, and
- * way to Settings › Integrations are the ones a task's Start offers, with the
- * row's words naming those switched off. Every server is on until switched
- * off. Note that a run starts on its creator's connections, so only its
- * creator is shown them to switch; anyone else reads which the creator
- * switched off, and why they cannot switch them.
+ * a field chip like its neighbors', saying how many are on and opening the
+ * agent box's own servers popover, whose switches, search, and way to
+ * Settings › Integrations are the ones a task's Start offers, with the row's
+ * words naming the few that differ (`../tasks/servers-row.tsx`). Every
+ * server is on until switched off. Note that a run starts on its
+ * creator's connections, so only its creator is shown them to switch;
+ * anyone else reads which the creator switched off, and why they cannot
+ * switch them.
  */
 function ServersRow({
   mine,
@@ -621,15 +623,8 @@ function ServersRow({
       >
         {() => (
           <SettingsRowValue>
-            <ReplayUnmask>
-              {disabled.length === 0 ? (
-                "All"
-              ) : (
-                <>
-                  All but <ReplayMask>{andList(disabled.map(switchedOffName))}</ReplayMask>
-                </>
-              )}
-            </ReplayUnmask>
+            {/* Note that the words stay masked in a session replay, because they may name accounts, which a member labels. */}
+            {switchedOffWords(disabled.map(switchedOffName))}
           </SettingsRowValue>
         )}
       </SettingsRow>
