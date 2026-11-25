@@ -225,7 +225,7 @@ describe("a stylesheet", () => {
     ).toEqual([STYLE_RULE.BAR_CORNER]);
   });
 
-  it("refuses a fold moved its own way outside the disclosure's sheet, and passes its other styles", () => {
+  it("refuses a fold that moves, the disclosure's own sheet included, and passes its other styles", () => {
     const sheet = `.chapter [data-disclosure="opening"] > .ui-disclosure-body { animation: none; }
       [data-todos-dock][data-disclosure="closing"] { animation: sink var(--ui-duration-pane) var(--ui-motion-pane); }
       .row .ui-disclosure-turn { transition: transform var(--ui-duration-exit) var(--ui-motion-exit); }
@@ -242,7 +242,12 @@ describe("a stylesheet", () => {
       STYLE_RULE.FOLD_MOTION,
       STYLE_RULE.FOLD_MOTION,
     ]);
-    expect(sheetRules(sheet, "packages/ui/src/components/disclosure/disclosure.css")).toEqual([]);
+    expect(
+      sheetRules(
+        ".ui-disclosure-turn { transition: transform var(--ui-duration-exit) var(--ui-motion-exit); }",
+        "packages/ui/src/components/disclosure/disclosure.css",
+      ),
+    ).toEqual([STYLE_RULE.FOLD_MOTION]);
   });
 
   it("refuses a box that rounds, draws a border, and clips, and passes one missing any of them", () => {

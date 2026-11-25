@@ -101,7 +101,7 @@ export const STYLE_RULES: Readonly<
   },
   [STYLE_RULE.FOLD_MOTION]: {
     refuses:
-      "a fold's motion moved off its beat: a transition or animation on a fold's body, root, or chevron (`.ui-disclosure-body`, `[data-disclosure]`, `.ui-disclosure-turn`) outside `disclosure.css`, which times every fold on the beats what stands under it glides on, so a surface's fold never opens or closes on a motion of its own",
+      "a fold that moves: a transition or animation on a fold's body, root, or chevron (`.ui-disclosure-body`, `[data-disclosure]`, `.ui-disclosure-turn`), since every fold opens and closes at once, its chevron turned with no turn between",
     backlog: true,
   },
 };
@@ -121,7 +121,6 @@ const TOOLING = [".agents/", ".claude/"];
  */
 const RULE_EXEMPT_FOLDERS: Readonly<Partial<Record<StyleRule, readonly string[]>>> = {
   [STYLE_RULE.PICKER_WIDTH]: ["packages/ui/", "apps/catalog/"],
-  [STYLE_RULE.FOLD_MOTION]: ["packages/ui/src/components/disclosure/"],
 };
 
 /**

@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 /**
  * fold.tsx -- the transcript's own skins of `@repo/ui`'s Disclosure: a tool call's line, a reasoning block, a plan card, the to-do dock, each drawing its summary and body in classes of its own.
  *
- * The state, the motion, and the find's reveal are the package's
+ * The state and the find's reveal are the package's
  * (`useDisclosureFold`); what is here is only where each part wears its
  * caller's classes; its summary, chevron, and body are the package's own
  * (`DisclosureSummary`'s transcript look, whose line the fold's classes
@@ -50,12 +50,12 @@ export function Fold({
   );
 }
 
-/** Note that the body's element is the fold's own, to wait on its fade, so it takes no ref. */
+/** Note that the body's element is the fold's own, so it takes no ref. */
 export type FoldBodyProps = Omit<ComponentProps<"div">, "ref">;
 
 /**
- * What the fold holds, drawn only while it is open, on its way out, or a
- * find is looking through it: the fold's own body, set bare, holding the
+ * What the fold holds, drawn only while it is open or a find is looking
+ * through it: the fold's own body, set bare, holding the
  * caller's skin.
  */
 export function FoldBody({ children, ...props }: FoldBodyProps): ReactNode {

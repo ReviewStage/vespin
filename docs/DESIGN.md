@@ -28,7 +28,7 @@ autosave's Saved stands). Never write a literal millisecond into a
 rule: reduced motion and capture runs zero the tokens, and a literal is a
 motion those runs cannot stop. Easings are tokens too, never `ease` or `ease-out`: a fade, a
 hover settle and a press ride `--ui-motion-exit`, a pane `--ui-motion-pane`,
-and a travel the spring, a fold's body among them, since what stands under it travels with it. A script that plays motion reads the same tokens through `tokenTiming`
+and a travel the spring. A script that plays motion reads the same tokens through `tokenTiming`
 (`@repo/ui`), and asks `motionHeld` rather than `matchMedia` whether to move at all. The one sanctioned exception is an endless loop
 (a spinner, a breathing idle) whose
 `animation-play-state` answers `--ui-loop-motion`: those runs
@@ -83,14 +83,11 @@ a component tells the stylesheet a measured distance.
 A gesture that moves several elements gives each the same duration and
 spring and staggers only the delay, so the whole reads as one object.
 
-Something that opens or closes in place, a fold (`disclosure.css`), is one
-gesture whatever its size: opening, its body unrolls from its top edge on the
-spring; closing, it fades on `--ui-duration-exit` and the layout lands once it
-has. What stands under it, and a list's rows as they arrive, leave, or change
-places, a setting's revealed rows (`reveal.tsx`) among them, move at once:
-nothing measures rows to replay where they were.
-A tall section and a one-row group then move alike, and no surface times its
-own fold (`style-guard/fold-motion`).
+Something that opens or closes in place, a fold (`disclosure.css`) or a
+setting's revealed rows (`reveal.tsx`), has no motion: its body stands or goes
+on the commit that opens or closes it, its chevron stands turned while open
+with no turn between, and what stands under it jumps to its new place. No
+surface gives a fold a motion of its own (`style-guard/fold-motion`).
 
 ## Proving it
 
