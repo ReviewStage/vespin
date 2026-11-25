@@ -319,6 +319,8 @@ const AGENT = {
   DIGEST: "6fc08203-4b7d-4e95-90bd-7c8d9eafb0c6",
   ROUNDING: "70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7",
   MANAGER: "81e2a425-6d3f-4a07-92df-9eafb0c1d2e8",
+  DOCS_MANAGER: "93f4b637-7e5a-4b19-a3c4-0f1e2d3c4b5a",
+  TRIAGE_MANAGER: "a4a5c748-8f6b-4c2a-b4d5-1a2b3c4d5e6f",
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
@@ -1042,6 +1044,31 @@ const MANAGER: AgentSummary = {
   saidAt: MANAGER_STARTED + 4 * MINUTE,
 };
 
+/**
+ * Two more Managers of the workspace, at rest and read, placed where the
+ * reader put them: the docs one pinned, so it stands under Pinned alone,
+ * and the triage one kept in the Experiments section, so it stands there
+ * alone, each out of the Managers group, as the panel's sidebar places a
+ * Manager pinned or put in a section.
+ */
+const PLACED_MANAGERS: readonly AgentSummary[] = [
+  {
+    ...agentOn(AGENT.DOCS_MANAGER, "", "Docs manager", AGENT_STATUS.COMPLETED, DAY),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: { character: MANAGER_FACE_CHARACTER.MUG, color: MANAGER_FACE_COLOR.GREEN },
+  },
+  {
+    ...agentOn(AGENT.TRIAGE_MANAGER, "", "Triage manager", AGENT_STATUS.COMPLETED, 2 * DAY),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: { character: MANAGER_FACE_CHARACTER.GHOST, color: MANAGER_FACE_COLOR.PURPLE },
+  },
+];
+
+/** The reader's pin of the docs Manager, which stands on no task. */
+const DOCS_MANAGER_PIN = { agentId: AGENT.DOCS_MANAGER, taskId: null, pinnedAt: LANDED - DAY };
+
 /** A task's agents as its row in the list counts them. */
 function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
   const agent = AGENTS.get(taskId);
@@ -1246,7 +1273,9 @@ const LISTED_SECTIONS: NonNullable<TasksView["taskSections"]> = {
     },
   ],
   entries: [{ taskId: LISTED.LAUNCH, sectionId: LISTED.SECTION, addedAt: LANDED - 8 * DAY }],
-  agentEntries: [],
+  agentEntries: [
+    { agentId: AGENT.TRIAGE_MANAGER, sectionId: LISTED.SECTION_GLYPH, addedAt: LANDED - DAY },
+  ],
 };
 
 /** The pull request the reference journey's agent opened, open with its checks passing. */
@@ -1783,6 +1812,13 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     settledAt: MANAGER.createdAt,
   };
 
+  const placedManagers = PLACED_MANAGERS.map((agent) => ({
+    ...agent,
+    workspaceId: FIXTURE_IDS.WORKSPACE,
+    repository: null,
+    settledAt: agent.createdAt,
+  }));
+
   const invitesAgent = AGENTS.get(TASK.INVITES);
 
   // Note that the staged list is the whole answer, so it stands read, because Search waits on a list still being read before it says nothing matched.
@@ -1793,10 +1829,18 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     listStatus: TASKS_READ.READY,
     taskAgents: [
       ...(list.taskAgents ?? []).filter(
-        (agent) => agent.id !== manager.id && !followed.some(({ id }) => id === agent.id),
+        (agent) =>
+          agent.id !== manager.id &&
+          !placedManagers.some(({ id }) => id === agent.id) &&
+          !followed.some(({ id }) => id === agent.id),
       ),
       ...followed,
       manager,
+      ...placedManagers,
+    ],
+    taskAgentPins: [
+      ...(list.taskAgentPins ?? []).filter((pin) => pin.agentId !== DOCS_MANAGER_PIN.agentId),
+      DOCS_MANAGER_PIN,
     ],
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
@@ -3340,9 +3384,9 @@ function stagedItem(itemId: string): InboxItem | undefined {
   return [...INBOXES.values()].flat().find((each) => each.id === itemId);
 }
 
-/** One staged agent by its id, on whichever task it works, or the Manager, on none. */
+/** One staged agent by its id, on whichever task it works, or a Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, ...PLACED_MANAGERS].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */
