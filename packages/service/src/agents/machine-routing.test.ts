@@ -403,6 +403,7 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
           platform,
           online,
         }));
+
         yield* setFollowerMachines(teammate, taskId, false);
         const switchedOff = (yield* defaultMachinesOf(target)).map(({ id }) => id);
 
