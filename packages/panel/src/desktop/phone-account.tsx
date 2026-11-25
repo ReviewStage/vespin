@@ -4,6 +4,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { dropBelowStart, IconButton, useMenu } from "@repo/ui";
 import { MessageSquareIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { ACTOR_SIZE } from "../actor-ref.js";
 import { runAppCommand } from "../app-commands.js";
 import { useAdminDoor } from "../places/routed-doors.js";
 import { ActionMenu, type MenuEntry } from "./action-menu.js";
@@ -53,7 +54,7 @@ export function PhoneAccount({
   const accountGroup: MenuEntry[] = [
     {
       label: "Settings",
-      icon: <AccountAvatar account={account} />,
+      icon: <AccountAvatar account={account} size={ACTOR_SIZE.INLINE} />,
       detail: signedIn?.email,
       detailMasked: true,
       onSelect: onSettings,
