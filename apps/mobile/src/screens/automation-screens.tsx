@@ -1,4 +1,4 @@
-// automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each under its owner's picture and folding with its count, each in the order View options chose, the one-time automations that ran folded under Finished, the latest first, each saying what its run started, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
+// automation-screens.tsx -- the Automations tab's root, under the system's segmented control moving between its automations and every run of them, as the desktop's Automations page stands its two tabs; the automations listed as the desktop lists them: the workspace's and then the reader's own, each under its owner's picture and folding with its count, each in the order View options chose, the one-time automations that ran folded under Finished, the latest first, each saying what its run started, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
@@ -7,7 +7,11 @@ import {
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
   AUTOMATIONS_ORDER_WORDS,
+  AUTOMATIONS_TAB,
+  AUTOMATIONS_TAB_WORDS,
+  AUTOMATIONS_TABS_HEARD,
   type AutomationsOrder,
+  type AutomationsTab,
   automationFoldsWith,
   automationGroups,
   automationManager,
@@ -15,6 +19,8 @@ import {
   automationTriggerText,
   DEFAULT_AUTOMATIONS_ORDER,
   finishedAutomations,
+  RUNS_SHOWN,
+  shownRuns,
 } from "@repo/features/automation-list-model";
 import { automationPreset } from "@repo/features/automation-presets";
 import {
@@ -57,6 +63,7 @@ import {
   glyphSymbol,
   LIST_LOOK,
   ListColumn,
+  type ListScopes,
   ListSection,
   NoSelection,
   ROW_ACTION_TONE,
@@ -80,11 +87,7 @@ import {
 } from "react";
 import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { newAutomationRoute } from "../automations/automation-editor-route.js";
-import {
-  AUTOMATION_RUNS_ROUTE,
-  automationRoute,
-  CREATE_WITH_AGENT_ROUTE,
-} from "../automations/automation-routes.js";
+import { automationRoute, CREATE_WITH_AGENT_ROUTE } from "../automations/automation-routes.js";
 import {
   AUTOMATION_SUGGESTIONS,
   type AutomationSuggestion,
@@ -100,6 +103,7 @@ import {
   useAutomationMaker,
   useWorkspaceAutomations,
   useWorkspaceIntegrations,
+  useWorkspaceRuns,
 } from "../automations/use-automations.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -111,6 +115,7 @@ import { useOnOwnTab } from "../tab-route.js";
 import { useViewChoice } from "../view-choices.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { useComposeAction, useDetailColumnBar, useSplitBuild } from "./app-sidebar.js";
+import { WorkspaceRunsList } from "./automation-page-screens.js";
 
 /** What the list's field says before anything is typed. */
 const SEARCH_AUTOMATIONS = "Search automations";
@@ -130,9 +135,6 @@ const NO_MATCH = "No automations match.";
 
 /** What the bar's + is called, as the desktop's page names its act. */
 const NEW_AUTOMATION = "New automation";
-
-/** What the workspace's runs are called, on the bar's button that opens them, as the desktop's tab names them. */
-const RUNS = "Runs";
 
 /** What an iPad's page column says before an automation is opened beside the list. */
 const NO_AUTOMATION_SELECTED = "No automation selected";
@@ -207,11 +209,31 @@ function found(automation: AutomationSummary, tokens: readonly string[]): boolea
   );
 }
 
+/** The tabs' scopes over either tab's list: Automations, then Runs, counting the runs still at work, as the desktop's bar counts them. */
+function automationsTabs(
+  tab: AutomationsTab,
+  working: number | undefined,
+  setTab: (next: AutomationsTab) => void,
+): ListScopes {
+  return {
+    label: AUTOMATIONS_TABS_HEARD.TABS,
+    scopes: Object.values(AUTOMATIONS_TAB).map((each) => ({
+      label: AUTOMATIONS_TAB_WORDS[each],
+      count: each === AUTOMATIONS_TAB.RUNS ? working : undefined,
+      selected: tab === each,
+      onPress: () => setTab(each),
+    })),
+  };
+}
+
 /**
- * The Automations tab's root: the workspace the app works in, its
- * automations listed under who owns them, its switcher leading the bar, View
- * options and search beside it. Note that it is drawn anew for each
- * workspace, so nothing of one workspace's list stands over another's.
+ * The Automations tab's root: the workspace the app works in, under the
+ * system's segmented control moving between its automations, listed under
+ * who owns them, and every run of them, as the desktop's page stands its
+ * Automations and Runs tabs at its top; its switcher leading the bar, View
+ * options on the automations alone, as the desktop offers it on its List
+ * tab, and search beside it. Note that it is drawn anew for each workspace,
+ * so nothing of one workspace's list stands over another's.
  */
 export function AutomationsScreen() {
   return APP_SIDEBAR ? <AutomationsPageScreen /> : <AutomationsStackScreen />;
@@ -253,40 +275,53 @@ export function AutomationsSearchProvider({ children }: { readonly children: Rea
 }
 
 /**
- * The automations in an iPad's middle column, beside the sidebar: the
- * workspace's automations under who owns them, under the column's title,
- * search, View options, Runs and New automation. Note that the sidebar
- * holds the workspace switcher, so the list's bar stands none.
+ * The automations in an iPad's middle column, beside the sidebar, under the
+ * system's segmented control moving between them and every run of them, as
+ * the iPhone's list stands them: the workspace's automations under who owns
+ * them, or its runs, under the column's title, search, View options (on the
+ * automations alone, as the desktop offers it on its List tab), and New
+ * automation. Note that the sidebar holds the workspace switcher, so the
+ * list's bar stands none.
  */
 export function AutomationsListColumn() {
   const held = useContext(AutomationsSearchContext);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
   const { order, setOrder } = useAutomationsOrder();
+  const [tab, setTab] = useState<AutomationsTab>(AUTOMATIONS_TAB.LIST);
   const router = useRouter();
-  const onOwnTab = useOnOwnTab();
+  const runs = useWorkspaceRuns(chosen?.id);
 
   if (held === undefined)
     throw new Error("An iPad's automations stand under AutomationsSearchProvider.");
 
   const { search, setSearch } = held;
 
+  const tabs = automationsTabs(
+    tab,
+    runs.rows === undefined ? undefined : shownRuns(runs.rows, RUNS_SHOWN.RUNNING).length,
+    setTab,
+  );
+
   return (
     <ListColumn
       view={
-        chosen === undefined ? null : (
-          <AutomationsList key={chosen.id} workspace={chosen} order={order} search={search} />
+        chosen === undefined ? null : tab === AUTOMATIONS_TAB.RUNS ? (
+          <WorkspaceRunsList key={chosen.id} read={runs} tabs={tabs} search={search} />
+        ) : (
+          <AutomationsList
+            key={chosen.id}
+            workspace={chosen}
+            order={order}
+            search={search}
+            tabs={tabs}
+          />
         )
       }
       bar={{
         title: AUTOMATION_PHONE_WORDS.TITLE,
-        menu: viewMenu(order, setOrder),
+        menu: tab === AUTOMATIONS_TAB.LIST ? viewMenu(order, setOrder) : undefined,
         acts: [
-          {
-            label: RUNS,
-            symbol: GLYPH.HISTORY,
-            onPress: () => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE)),
-          },
           {
             label: NEW_AUTOMATION,
             symbol: GLYPH.ADD,
@@ -305,13 +340,20 @@ function AutomationsStackScreen() {
   const { chosen } = useChosenWorkspace(workspaces);
   const switcher = useWorkspaceSwitcher();
   const { order, setOrder } = useAutomationsOrder();
+  const [tab, setTab] = useState<AutomationsTab>(AUTOMATIONS_TAB.LIST);
   const [search, setSearch] = useState("");
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
   const menu = viewMenu(order, setOrder);
   const router = useRouter();
-  const onOwnTab = useOnOwnTab();
   const compose = useComposeAction();
+  const runs = useWorkspaceRuns(chosen?.id);
+
+  const tabs = automationsTabs(
+    tab,
+    runs.rows === undefined ? undefined : shownRuns(runs.rows, RUNS_SHOWN.RUNNING).length,
+    setTab,
+  );
 
   return (
     <>
@@ -327,17 +369,11 @@ function AutomationsStackScreen() {
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.View>
-          <StackBarMenu menu={menu} />
-        </Stack.Toolbar.View>
-        {/* Note that Runs stands beside View options, as the desktop's page stands its Runs tab beside the list, since every run's agent is found there. */}
-        <Stack.Toolbar.Button
-          icon={glyphSymbol(GLYPH.HISTORY)}
-          accessibilityLabel={RUNS}
-          onPress={() => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE))}
-        >
-          {RUNS}
-        </Stack.Toolbar.Button>
+        {tab === AUTOMATIONS_TAB.LIST ? (
+          <Stack.Toolbar.View>
+            <StackBarMenu menu={menu} />
+          </Stack.Toolbar.View>
+        ) : null}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.ADD)}
           accessibilityLabel={NEW_AUTOMATION}
@@ -355,8 +391,16 @@ function AutomationsStackScreen() {
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
-        {chosen === undefined ? null : (
-          <AutomationsList key={chosen.id} workspace={chosen} order={order} search={search} />
+        {chosen === undefined ? null : tab === AUTOMATIONS_TAB.RUNS ? (
+          <WorkspaceRunsList key={chosen.id} read={runs} tabs={tabs} search={search} />
+        ) : (
+          <AutomationsList
+            key={chosen.id}
+            workspace={chosen}
+            order={order}
+            search={search}
+            tabs={tabs}
+          />
         )}
       </Screen>
     </>
@@ -367,10 +411,13 @@ function AutomationsList({
   workspace,
   order,
   search,
+  tabs,
 }: {
   readonly workspace: Workspace;
   readonly order: AutomationsOrder;
   readonly search: string;
+  /** The tabs' scopes, standing as the list's first row. */
+  readonly tabs: ListScopes;
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -457,6 +504,7 @@ function AutomationsList({
     <>
       <RowList
         look={LIST_LOOK.PLAIN}
+        scopes={tabs}
         searched={search}
         empty={offering && automations?.length === 0 ? undefined : empty}
       >

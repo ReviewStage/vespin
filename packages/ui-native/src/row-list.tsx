@@ -145,6 +145,8 @@ type RowListProps = {
   readonly lead?: ReactNode | undefined;
   /** The scopes it lists under, standing as its first row so they scroll away with the rows; none where it has none. */
   readonly scopes?: ListScopes | undefined;
+  /** A second row of scopes under its first, narrowing what the scope chosen there lists, as the panel's Automations page stands Runs shown beside its tabs; none where nothing narrows it. */
+  readonly narrowing?: ListScopes | undefined;
   /** What the list says while it holds no rows, such as an `EmptyState` saying why; none while it holds rows. */
   readonly empty?: ReactNode | undefined;
   /**
@@ -280,6 +282,7 @@ export function RowList({
   searched,
   lead,
   scopes,
+  narrowing,
   empty,
   onChooseStart,
   children,
@@ -377,6 +380,9 @@ export function RowList({
               {lead === undefined || choosing !== undefined ? null : lead}
               {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
               {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
+              {narrowing === undefined || choosing !== undefined ? null : (
+                <ScopeRow scopes={narrowing} />
+              )}
               <RowSearchedContext value={searchedWords}>
                 <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
               </RowSearchedContext>

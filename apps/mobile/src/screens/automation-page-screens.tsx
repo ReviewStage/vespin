@@ -2,6 +2,7 @@
 
 import { firingMark } from "@repo/features/automation-firing-mark";
 import {
+  AUTOMATIONS_TABS_HEARD,
   automationNextRuns,
   automationOwner,
   automationRunLine,
@@ -19,6 +20,7 @@ import {
   AUTOMATION_TRIGGER,
   type AutomationRunSummary,
   type AutomationSummary,
+  type AutomationWorkspaceRun,
 } from "@repo/features/automation-wire";
 import {
   AUTOMATION_DELETE_WORDS,
@@ -35,6 +37,7 @@ import { iosAgentRoute } from "@repo/features/ios-app-links";
 import { markdownPlainText } from "@repo/features/markdown-plain-text";
 import { effortLabel } from "@repo/features/model-effort";
 import { modelLabel } from "@repo/features/model-label";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { scheduledText, sinceText } from "@repo/features/time-format";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
@@ -50,6 +53,7 @@ import {
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
+  type ListScopes,
   ListSection,
   LoadingRow,
   NoteRow,
@@ -75,6 +79,7 @@ import { automationRoute, automationRunsRoute } from "../automations/automation-
 import {
   type AutomationActs,
   type AutomationMaker,
+  type AutomationsRead,
   copyAutomationLink,
   copyAutomationWebhookUrl,
   takesOver,
@@ -82,7 +87,6 @@ import {
   useAutomationMaker,
   useAutomationRuns,
   useWorkspaceAutomations,
-  useWorkspaceRuns,
 } from "../automations/use-automations.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -538,34 +542,36 @@ function runKey(run: AutomationRunSummary): string {
   return run.id;
 }
 
-/** What the workspace's runs are called, in the bar, as the desktop's tab names them. */
-const WORKSPACE_RUNS_TITLE = "Runs";
-
-/** What the runs' scopes are heard as. */
-const SHOW_RUNS = "Show";
-
 /**
  * Every run of the workspace's automations, newest first, as the desktop's
- * Runs tab lists them: All, Running, and Failed as the list's scopes, each
- * counting what it keeps, each run named by its automation over what fired
- * it and how it went, opening its agent, or its automation where it started
- * none. Note that the rows go through `RowForEach`, so a long history opens
- * at once.
+ * Runs tab lists them, under the Automations tab's own scopes (`tabs`): All,
+ * Running, and Failed as a second row of scopes under them, as the desktop
+ * stands Runs shown beside its tabs, each counting what it keeps, each run
+ * named by its automation over what fired it and how it went, opening its
+ * agent, or its automation where it started none; a search keeps the runs
+ * of the automations it finds. Note that the rows go through `RowForEach`,
+ * so a long history opens at once.
  */
-export function WorkspaceRunsScreen() {
-  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const { chosen } = useChosenWorkspace(workspaces);
-  const read = useWorkspaceRuns(chosen?.id);
+export function WorkspaceRunsList({
+  read,
+  tabs,
+  search,
+}: {
+  readonly read: AutomationsRead<readonly AutomationWorkspaceRun[]>;
+  readonly tabs: ListScopes;
+  readonly search: string;
+}) {
   const openAgent = useOpenRunAgent();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const now = useMinute();
   const [shown, setShown] = useState<RunsShown>(RUNS_SHOWN.ALL);
-  const runs = read.rows;
+  const tokens = searchTokens(search);
+  const runs = read.rows?.filter((run) => matchesTokens([run.automation.name], tokens));
   const kept = runs === undefined ? [] : shownRuns(runs, shown);
 
-  const scopes = {
-    label: SHOW_RUNS,
+  const narrowing = {
+    label: AUTOMATIONS_TABS_HEARD.RUNS_SHOWN,
     scopes: Object.values(RUNS_SHOWN).map((each) => ({
       label: RUNS_SHOWN_WORDS[each],
       count:
@@ -591,28 +597,28 @@ export function WorkspaceRunsScreen() {
     ) : undefined;
 
   return (
-    <>
-      <Stack.Screen options={{ title: WORKSPACE_RUNS_TITLE }} />
-      <Screen>
-        <RowList look={LIST_LOOK.PLAIN} scopes={scopes} empty={empty}>
-          <RowForEach data={kept} keyOf={runKey}>
-            {(run) => (
-              <AutomationRow
-                look={AUTOMATION_ROW_LOOK.LIST}
-                title={run.automation.name}
-                line={`${automationRunTitle(run)} · ${automationRunLine(run)}`}
-                standing={automationRunStanding(run)}
-                {...firingLook(firingMark(run.firing))}
-                when={sinceText(run.firedAt, now)}
-                onPress={
-                  openAgent(run) ??
-                  (() => router.push(onOwnTab(automationRoute(run.automation.id))))
-                }
-              />
-            )}
-          </RowForEach>
-        </RowList>
-      </Screen>
-    </>
+    <RowList
+      look={LIST_LOOK.PLAIN}
+      scopes={tabs}
+      narrowing={narrowing}
+      searched={search}
+      empty={empty}
+    >
+      <RowForEach data={kept} keyOf={runKey}>
+        {(run) => (
+          <AutomationRow
+            look={AUTOMATION_ROW_LOOK.LIST}
+            title={run.automation.name}
+            line={`${automationRunTitle(run)} · ${automationRunLine(run)}`}
+            standing={automationRunStanding(run)}
+            {...firingLook(firingMark(run.firing))}
+            when={sinceText(run.firedAt, now)}
+            onPress={
+              openAgent(run) ?? (() => router.push(onOwnTab(automationRoute(run.automation.id))))
+            }
+          />
+        )}
+      </RowForEach>
+    </RowList>
   );
 }
