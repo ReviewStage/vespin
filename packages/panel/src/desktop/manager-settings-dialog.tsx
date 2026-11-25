@@ -28,8 +28,13 @@
  *
  * Memory lists the Manager's own memories, those it alone recalls, with
  * workspace Settings › Memory's own section at the Manager's scope
- * (`MemorySection`), so a memory added there is kept for it alone, in the
- * workspace the Manager's task list row names, whichever surface opened it.
+ * (`MemorySection`), so a memory added there is kept for it alone.
+ *
+ * Every section reads the Manager's workspace as the dialog reads it once,
+ * by the Manager's own read by id, whichever surface opened it, since only
+ * the Manager's own page knows it beside the agent; none reads it on its own.
+ * While that read is out each section stands on its own skeleton, and where
+ * it failed every section but General offers Try again.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
@@ -72,10 +77,10 @@ import { renameWrite } from "../rename-write.js";
 import { replayMaskedError } from "../settings/marks.js";
 import { MemorySection } from "../settings/memory-page.js";
 import { usePhoneRoom } from "../stage-room.js";
-import { useTaskListCollections, useTaskListRowAs } from "../task-list-collections.js";
 import { type AgentBox, useAgentBox } from "../tasks/agent-box.js";
 import { RENAME_FAILED, teammateStarter } from "../tasks/agent-model.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
+import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
@@ -128,18 +133,26 @@ const WORDS = {
   ADD_AUTOMATION: "Add automation",
   NO_AUTOMATIONS: "No automations send it work yet.",
   AUTOMATIONS_UNREAD: "The automations could not be read.",
+  MANAGER_UNREAD: "This Manager could not be read.",
   RUNS_ON_YOURS: "Runs on your subscriptions.",
   RUNS_ON_PREFIX: "Runs on ",
   RUNS_ON_SUFFIX: "'s subscriptions.",
   STARTS_ON_YOURS: " Agents it starts for you run on yours.",
 } as const;
 
-/** What a Manager's Settings reads of it. */
+/** What a Manager's Settings is handed of it by the surface that opens it. */
 export type ManagerSettingsSubject = AgentSummary & {
-  /** The workspace it is in; none where the surface does not know it. */
-  readonly workspaceId?: string | undefined;
   /** Its checkout, the first repository it works in; none where the surface does not know it. */
   readonly repository?: string | null | undefined;
+};
+
+/**
+ * The Manager as every section reads it: what the surface handed, and the
+ * workspace it stands in, read once by the dialog by the Manager's own read
+ * by id; none until that read answers.
+ */
+type SettingsManager = ManagerSettingsSubject & {
+  readonly workspaceId: string | undefined;
 };
 
 /** What a Manager's Settings saves through: the control its agent is listed in, as its box reads it. */
@@ -176,7 +189,7 @@ function IdentityRow({
   agent,
   agents,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   agents: Pick<AgentsControl, "rename" | "onFace">;
 }): React.JSX.Element {
   const name = agent.title ?? "";
@@ -233,7 +246,7 @@ function PayerLine({
   agent,
   me,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   me: string | undefined;
 }): React.JSX.Element {
   const owner = teammateStarter(agent.startedBy, me);
@@ -261,7 +274,7 @@ function ModelRow({
   me,
   box,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   me: string | undefined;
   box: AgentBox;
 }): React.JSX.Element {
@@ -300,7 +313,7 @@ function GeneralSection({
   acts,
   onClose,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   agents: ManagerSettingsDoors;
   acts: ManagerSettingsActs;
   onClose: () => void;
@@ -377,7 +390,7 @@ function AutomationsSection({
   agent,
   onClose,
 }: {
-  agent: ManagerSettingsSubject;
+  agent: SettingsManager;
   onClose: () => void;
 }): React.JSX.Element {
   const automations = useAutomations(agent.workspaceId);
@@ -447,18 +460,12 @@ function AutomationsSection({
 }
 
 /** Memory: the Manager's own memories, in the workspace it stands in, as workspace Settings › Memory lists the workspace's. */
-function MemoryOfManager({
-  agent,
-  workspaceId,
-}: {
-  agent: ManagerSettingsSubject;
-  /** The workspace the Manager stands in, as its task list row names it; none until that row arrives, while Memory stands on its skeleton. */
-  workspaceId: string | undefined;
-}): React.JSX.Element {
+function MemoryOfManager({ agent }: { agent: SettingsManager }): React.JSX.Element {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
   const readerId = signedInAccountId(account);
-  const workspace = workspaces?.find((each) => each.id === workspaceId);
+  // Note that Memory stands on its skeleton until the Manager's own read names its workspace.
+  const workspace = workspaces?.find((each) => each.id === agent.workspaceId);
 
   return (
     <MemorySection
@@ -483,13 +490,17 @@ export function useManagerSettingsDialog(
   const [chosen, setSection] = useState<Section>(SECTION.GENERAL);
   const close = () => setOpen(false);
 
-  // Note that the Manager's workspace is read off its task list row, whichever surface opened the dialog, and Memory stands only where that workspace has Memory on, as workspace Settings lists it.
-  const workspaceId = useTaskListRowAs(
-    useTaskListCollections().agents,
-    agent.id,
-    (row) => row?.workspaceId,
-  );
+  // Note that the Manager's workspace is read once, by its own read by id, which answers for every Manager, an archived one's included, and is already held on its page, whichever surface opened the dialog; it is handed to every section, so none reads it on its own.
+  const read = useQuery({ ...agentPageQueryOptions(agent.id), enabled: open && shown });
+  const answer = read.data;
 
+  const workspaceId =
+    answer === undefined || "failure" in answer ? undefined : answer.agent.workspaceId;
+
+  const unread = read.isError || (answer !== undefined && "failure" in answer);
+
+  const manager: SettingsManager = { ...agent, workspaceId };
+  // Memory stands only where the workspace has Memory on, as workspace Settings lists it.
   const memoryOn = useWorkspaceExperiment(workspaceId, EXPERIMENT.MEMORY);
   const sections = memoryOn ? SECTIONS : SECTIONS.filter((each) => each.id !== SECTION.MEMORY);
   const section = chosen === SECTION.MEMORY && !memoryOn ? SECTION.GENERAL : chosen;
@@ -504,18 +515,24 @@ export function useManagerSettingsDialog(
       onChoose={setSection}
       onDismiss={close}
     >
+      {section !== SECTION.GENERAL && unread ? (
+        <ErrorState
+          failure={unreadShown(FAILURE_SURFACE.AGENTS_READ)}
+          onRetry={() => void read.refetch()}
+        >
+          {WORDS.MANAGER_UNREAD}
+        </ErrorState>
+      ) : null}
       {section === SECTION.GENERAL ? (
-        <GeneralSection agent={agent} agents={agents} acts={acts} onClose={close} />
+        <GeneralSection agent={manager} agents={agents} acts={acts} onClose={close} />
       ) : null}
-      {section === SECTION.PEOPLE ? (
-        <ManagerPeopleSection agentId={agent.id} workspaceId={agent.workspaceId} />
+      {section === SECTION.PEOPLE && !unread ? (
+        <ManagerPeopleSection agentId={agent.id} workspaceId={workspaceId} />
       ) : null}
-      {section === SECTION.AUTOMATIONS ? (
-        <AutomationsSection agent={agent} onClose={close} />
+      {section === SECTION.AUTOMATIONS && !unread ? (
+        <AutomationsSection agent={manager} onClose={close} />
       ) : null}
-      {section === SECTION.MEMORY ? (
-        <MemoryOfManager agent={agent} workspaceId={workspaceId} />
-      ) : null}
+      {section === SECTION.MEMORY && !unread ? <MemoryOfManager agent={manager} /> : null}
     </SettingsDialog>
   );
 
