@@ -22,6 +22,7 @@ import type {
   AppTranscript,
 } from "@repo/host/app-state";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
+import { createElement, type ReactElement } from "react";
 import type { AgentRoute } from "../agent-route.js";
 import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
@@ -34,11 +35,15 @@ import {
   agentDeleteMutation,
   agentRenameMutation,
   agentsArchiveMutation,
-  MODELS_READ,
   type TaskAgentsControl,
 } from "../tasks/use-agents.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
-import type { NewTask } from "../tasks/use-new-task.js";
+import {
+  NEW_TASK_UNSHOWN,
+  type NewTask,
+  type NewTaskShown,
+  NewTaskShownContext,
+} from "../tasks/use-new-task.js";
 import { DRAWN_KINDS } from "../tasks/use-side-panel.js";
 import {
   type TasksControl,
@@ -343,7 +348,6 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onRetryList: ignore,
     models: undefined,
     modelsFailed: false,
-    modelsRead: { state: MODELS_READ.UNREAD, generation: 0 },
     macs: undefined,
     readModels: ignore,
     onUnarchive: undefined,
@@ -495,16 +499,11 @@ export const UNMOVED_LINK_READS = (): (() => boolean) => () => true;
 /** New task as the Tasks tab hands it, its dialog put away and every press ignored, but where `overrides` say otherwise. */
 export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
   return {
-    starting: false,
     onOpen: ignore,
     onOpenIn: ignore,
     onOpenInSection: ignore,
     onOpenRelated: ignore,
     onOpenForAutomation: ignore,
-    open: false,
-    preset: undefined,
-    homeAsks: 0,
-    homeRefused: undefined,
     workspaces: [],
     workspaceId: undefined,
     repositoriesIn: () => NO_REPOSITORIES,
@@ -512,13 +511,20 @@ export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
     models: undefined,
     devices: undefined,
     modelsFailed: false,
-    modelsRead: { state: MODELS_READ.UNREAD, generation: 0 },
     readModels: ignore,
     onClose: ignore,
     typedNames: new Map(),
     onShowMention: ignore,
     ...overrides,
   };
+}
+
+/** `element` under New task's moving state as the window provides it (`NewTaskShownContext`): shown nowhere, but where `shown` says otherwise. */
+export function withNewTaskShown(
+  shown: Partial<NewTaskShown>,
+  element: ReactElement,
+): ReactElement {
+  return createElement(NewTaskShownContext, { value: { ...NEW_TASK_UNSHOWN, ...shown } }, element);
 }
 
 /** What a test sets of a Tasks tab, and the tasks and agents its window's task list holds (`tasks`, `listedAgents`), which the tab itself never carries. */

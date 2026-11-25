@@ -5,6 +5,7 @@ import { useDrawnThroughExit } from "../use-held-through-exit.js";
 import { MENTION_MENU_SIDE } from "./mention-picker.js";
 import { NewTaskComposer } from "./new-task-composer.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
+import { type NewTaskPreset, useNewTaskShown } from "./use-new-task.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -51,19 +52,22 @@ const CARD_SELECTOR = '[aria-modal="true"]';
  */
 function NewTaskCard({
   open,
+  preset,
   newTask,
   onExited,
 }: {
   /** Whether the card stands; falling, it fades out, then tells its owner it is gone. */
   open: boolean;
+  /** What the press that opened the card chose (`NewTaskShown.preset`). */
+  preset: NewTaskPreset | undefined;
   newTask: TasksControl["newTask"];
   onExited: () => void;
 }): React.JSX.Element {
   const [starting, setStarting] = useState(false);
   // The Automations page's Create with an agent opens this card for an automation's agent, and a refusal opens it again for the same.
-  const purpose = newTask.preset?.purpose ?? NEW_TASK_PURPOSE.TASK;
+  const purpose = preset?.purpose ?? NEW_TASK_PURPOSE.TASK;
   // A relation's New task opens it related to a task, whose workspace the new task starts in, as does a refused card opened again on its relations.
-  const related = newTask.preset?.relation ?? newTask.preset?.refused?.card.relations[0];
+  const related = preset?.relation ?? preset?.refused?.card.relations[0];
   const workspaceId = related?.task.workspaceId ?? newTask.workspaceId;
   const dialog = useRef<DialogHandle>(null);
   const titleId = useId();
@@ -102,6 +106,7 @@ function NewTaskCard({
       <div className="new-task flex min-h-0 flex-col gap-block-gap" ref={body}>
         <NewTaskComposer
           newTask={newTask}
+          preset={preset}
           workspaceId={workspaceId}
           onStarting={setStarting}
           // Note that the field's Escape goes through the dialog, so a start under way holds it back as it holds the card's own.
@@ -123,25 +128,28 @@ export function NewTaskDialog({
 }: {
   newTask: TasksControl["newTask"];
 }): React.JSX.Element | null {
+  const { open, preset } = useNewTaskShown();
   // Note that the card is drawn from its opening until its fade has run, because its picks are its own and start over each time it opens.
-  const { drawn, onExited } = useDrawnThroughExit(newTask.open);
+  const { drawn, onExited } = useDrawnThroughExit(open);
   // Each opening is a card of its own, so one asked while the last still fades, as ⌘N right after
   // a start is, opens afresh rather than bringing back the closing card and the start it holds;
   // so is a card opened on another preset over one standing, as a refused start's Open does.
   const [openings, setOpenings] = useState(0);
-  const [wasOpen, setWasOpen] = useState(newTask.open);
-  const [wasPreset, setWasPreset] = useState(newTask.preset);
+  const [wasOpen, setWasOpen] = useState(open);
+  const [wasPreset, setWasPreset] = useState(preset);
 
-  if (wasOpen !== newTask.open || wasPreset !== newTask.preset) {
-    if (newTask.open && (!wasOpen || wasPreset !== newTask.preset)) {
+  if (wasOpen !== open || wasPreset !== preset) {
+    if (open && (!wasOpen || wasPreset !== preset)) {
       setOpenings((count) => count + 1);
     }
 
-    setWasOpen(newTask.open);
-    setWasPreset(newTask.preset);
+    setWasOpen(open);
+    setWasPreset(preset);
   }
 
   if (!drawn) return null;
 
-  return <NewTaskCard key={openings} open={newTask.open} newTask={newTask} onExited={onExited} />;
+  return (
+    <NewTaskCard key={openings} open={open} preset={preset} newTask={newTask} onExited={onExited} />
+  );
 }

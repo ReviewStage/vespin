@@ -84,7 +84,14 @@ import { SkillFiles } from "./skill-chip.js";
 import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
-import type { AgentAsk, NewTaskPress, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
+import {
+  type AgentAsk,
+  type NewTaskPreset,
+  type NewTaskPress,
+  type NewTaskRefusal,
+  type NewTaskStart,
+  useNewTaskShown,
+} from "./use-new-task.js";
 import { useTaskSections } from "./use-pin-writes.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
@@ -352,6 +359,7 @@ function useDefaultChoice(
 
 export function NewTaskComposer({
   newTask,
+  preset,
   workspaceId,
   onStarting,
   onLeave,
@@ -363,6 +371,8 @@ export function NewTaskComposer({
   notices = NOTICE_LOOK.INSET,
 }: {
   newTask: TasksControl["newTask"];
+  /** What the press that opened the card chose, or the start refused that it opens again on (`NewTaskShown.preset`); none for a card opened bare. */
+  preset?: NewTaskPreset | undefined;
   /** The workspace the task starts in, the owner's to choose; none before the workspaces are read. */
   workspaceId: string | undefined;
   /** Hears whether a start is out, during which the owner holds what it draws around the card. */
@@ -395,9 +405,9 @@ export function NewTaskComposer({
     writer.update(newTaskPlace(undefined, purpose), () => EMPTY_DRAFT);
   }, [workspaceId, loose, writer, purpose]);
   // A card opened again on a start refused after it closed starts where it was left, saying why.
-  const refused = newTask.preset?.refused;
+  const refused = preset?.refused;
   // A card opened on a tree's relation starts on the other task's repository, which it keeps once the relation is removed.
-  const presetRelation = newTask.preset?.relation;
+  const presetRelation = preset?.relation;
 
   const repositories = newTask.repositoriesIn(workspaceId);
   const workspace = newTask.workspaces.find((each) => each.id === workspaceId);
@@ -409,7 +419,7 @@ export function NewTaskComposer({
       ? refused.card.repository
       : presetRelation !== undefined && treeKind(presetRelation.kind)
         ? presetRelation.task.repository
-        : newTask.preset?.repository,
+        : preset?.repository,
   );
 
   const { chosen, choose: setChosen } = repositoryDefault;
@@ -418,7 +428,7 @@ export function NewTaskComposer({
 
   // The section the press that opened the card chose, or the refused card's, which the chip's × lets go.
   const [sectionId, setSectionId] = useState<string | undefined>(
-    refused !== undefined ? refused.card.sectionId : newTask.preset?.sectionId,
+    refused !== undefined ? refused.card.sectionId : preset?.sectionId,
   );
 
   // A section is the card's workspace's, so the owner's switch, as Home's, lets it go for good, in the render that
@@ -539,8 +549,10 @@ export function NewTaskComposer({
   const device = deviceOfPlace(place);
 
   // Start is held until a read made since the card opened lands, where the member's last pick is a device (`useDevicesRead`).
+  const { modelsRead } = useNewTaskShown();
+
   const { unread: devicesUnread, failed: devicesFailed } = useDevicesRead(
-    newTask.modelsRead,
+    modelsRead,
     runsOnStands && keptDevice,
   );
 

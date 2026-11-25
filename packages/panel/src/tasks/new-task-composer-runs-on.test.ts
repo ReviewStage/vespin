@@ -22,7 +22,7 @@ import { handBeats, handState } from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { tasksControl, withNewTaskShown } from "../testing/tasks-control.js";
 import { MENTION_MENU_SIDE } from "./mention-picker.js";
 import { NewTaskComposer } from "./new-task-composer.js";
 import type { NewTaskRelation } from "./new-task-relation.js";
@@ -195,15 +195,15 @@ async function mount(offered: Offered = { devices: devicesWith() }, relation?: N
     draw();
   };
 
+  const preset = relation === undefined ? undefined : { relation };
+
   function Card() {
     const newTask = useSteadyDoors({
       ...control.newTask,
       workspaces: [ACME],
       workspaceId: ACME.id,
-      preset: relation === undefined ? undefined : { relation },
       devices,
       modelsFailed: modelsRead.state === MODELS_READ.FAILED,
-      modelsRead,
       readModels,
       start: (
         _name: string,
@@ -218,12 +218,16 @@ async function mount(offered: Offered = { devices: devicesWith() }, relation?: N
       },
     });
 
-    return createElement(NewTaskComposer, {
-      newTask,
-      workspaceId: ACME.id,
-      onLeave: () => undefined,
-      listSide: MENTION_MENU_SIDE.ABOVE,
-    });
+    return withNewTaskShown(
+      { modelsRead },
+      createElement(NewTaskComposer, {
+        newTask,
+        preset,
+        workspaceId: ACME.id,
+        onLeave: () => undefined,
+        listSide: MENTION_MENU_SIDE.ABOVE,
+      }),
+    );
   }
 
   const draw = () => root.render(withQueryClient(createElement(Card)));

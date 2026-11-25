@@ -55,7 +55,7 @@ import { ArrowUpDownIcon, GLYPH, SlidersHorizontalIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { type RefObject, useMemo, useRef } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { type ManagerSortControl, useManagerSort } from "../tasks/manager-sort.js";
 import {
@@ -289,6 +289,29 @@ function ManagerViewOptions({
   );
 }
 
+/**
+ * The New Manager card, which the Managers head's + asks through `asking`.
+ * Note that it is a component of its own, because the card reads the newest
+ * read of the models, which moves as New task opens (`useNewTaskShown`), so
+ * New task opening draws it alone rather than the Managers and their rows.
+ */
+function NewManagerCard({
+  tasks,
+  asking,
+  onOpen,
+}: {
+  tasks: SidebarTasksControl;
+  /** Where the card hands the + its ask, the newest at each draw. */
+  asking: RefObject<() => void>;
+  /** Opens a Manager's page, the sidebar put away where it floats. */
+  onOpen: (agentId: string) => void;
+}): React.JSX.Element {
+  const newManager = useNewManagerDialog({ tasks, onOpen });
+  asking.current = newManager.ask;
+
+  return newManager.dialog;
+}
+
 /** The Managers section; see the module's head. Nothing while the workspace listed has the Managers experiment off. */
 export function SidebarManagers({
   tasks,
@@ -313,7 +336,7 @@ export function SidebarManagers({
   onOpen: (agentId: string) => void;
 }): React.JSX.Element | null {
   const { listed, managers } = useListedManagers(tasks);
-  const newManager = useNewManagerDialog({ tasks, onOpen });
+  const askNewManager = useRef<() => void>(() => undefined);
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const sorting = useManagerSort(tasks.workspace?.id, staged);
 
@@ -364,7 +387,7 @@ export function SidebarManagers({
                 icon={<PlusIcon />}
                 label={NEW_MANAGER}
                 size={BUTTON_SIZE.COMPACT}
-                onClick={newManager.ask}
+                onClick={() => askNewManager.current()}
               />
             </Tooltip>
             <ManagerViewOptions shown={shown} control={sorting} />
@@ -376,7 +399,7 @@ export function SidebarManagers({
         ) : null}
         {listedManagers.length === 0 ? null : rows(listedManagers)}
       </GroupHeader>
-      {newManager.dialog}
+      <NewManagerCard tasks={tasks} asking={askNewManager} onOpen={onOpen} />
     </nav>
   );
 }
