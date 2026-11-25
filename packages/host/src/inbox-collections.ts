@@ -27,9 +27,9 @@
  * the service's word.
  */
 
-import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, type InboxItem, inboxItemSchema } from "@repo/features/inbox-wire";
 import type { Refused, RowKind, Written } from "@repo/sync";
-import { Effect, type Scope } from "effect";
+import { Effect, Schema, type Scope } from "effect";
 import { confirmWrite, type TxWait } from "./live-follow.js";
 
 /** What a member's write does to the items it names. */
@@ -141,10 +141,37 @@ export function changedIds(change: InboxChange): readonly string[] {
   }
 }
 
-/** An inbox item as the pool holds it, by its id, every write to it a change the item's reads draw over it. */
-export const INBOX_ITEM: RowKind<InboxItem, InboxChange> = {
+/**
+ * An inbox item as the pool holds it: the item, and the task it stands on,
+ * null for one on no task, which the item names nowhere of its own and every
+ * read that answers it knows, the account's read from its stamps and a
+ * plan's read as the plan it reads. Note that the row stays open to more of
+ * the read's own fields, as the generation of the whole read that last wrote
+ * it once whole reads come in pages.
+ */
+export const placedInboxItemSchema = Schema.Struct({
+  ...inboxItemSchema.fields,
+  taskId: Schema.NullOr(Schema.String),
+});
+
+export type PlacedInboxItem = typeof placedInboxItemSchema.Type;
+
+/** `item` placed on the task `taskId` names, none for one on no task. */
+export function placedItem(item: InboxItem, taskId: string | null): PlacedInboxItem {
+  return { ...item, taskId };
+}
+
+/** An inbox item as the pool holds it, by its id, every write to it a change the item's reads draw over it, on the task it stood on. */
+export const INBOX_ITEM: RowKind<PlacedInboxItem, InboxChange> = {
   key: (item) => item.id,
-  drawn: (change, item) => (item === undefined ? undefined : changedItem(change, item)),
+  drawn: (change, item) => {
+    const changed = item === undefined ? undefined : changedItem(change, item);
+
+    // Note that a change names the item alone, so the task it stands on is carried over from the row it was drawn over.
+    return changed === undefined || item === undefined
+      ? undefined
+      : placedItem(changed, item.taskId);
+  },
 };
 
 /**

@@ -12,7 +12,13 @@ import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
 import { Clock, Effect, Option, Schema } from "effect";
 import type { AppInboxItems, AppInboxRead } from "./app-state.js";
-import { type AccountWideReads, INBOX_ITEM, type InboxChange } from "./inbox-collections.js";
+import {
+  type AccountWideReads,
+  INBOX_ITEM,
+  type InboxChange,
+  type PlacedInboxItem,
+  placedItem,
+} from "./inbox-collections.js";
 import { KEPT_LIST } from "./kept-lists.js";
 import {
   confirmWrite,
@@ -138,7 +144,7 @@ const ACCOUNT_ITEMS_PARTS = Object.keys(INBOX_ITEMS_READ.parts) as readonly Acco
 
 type HeldAfterResult = {
   readonly held: Held;
-  readonly sent: readonly InboxItem[];
+  readonly sent: readonly PlacedInboxItem[];
   readonly placed: readonly string[];
 };
 
@@ -171,7 +177,12 @@ function heldAfter(
 
   for (const id of standing?.gone ?? []) next.delete(id);
   withinWindow(next, now);
-  const sent = [...carried.values()].filter((item) => next.has(item.id));
+
+  const sent = [...carried.values()].flatMap((item) => {
+    const on = next.get(item.id);
+
+    return on === undefined ? [] : [placedItem(item, on.taskId)];
+  });
 
   return { held: next, sent, placed };
 }
@@ -424,15 +435,18 @@ export function followAccountItems(
           return toldNow;
         });
 
-      const items: HeldRows<InboxItem, InboxChange> = yield* dependencies.pool.stand(INBOX_ITEM, {
-        redraw: drawn,
-        confirmation: () => {
-          const handed = wait;
+      const items: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
+        INBOX_ITEM,
+        {
+          redraw: drawn,
+          confirmation: () => {
+            const handed = wait;
 
-          return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
+            return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
+          },
+          kept: { ...KEPT_LIST.INBOX, bound: KEPT_INBOX_BOUND },
         },
-        kept: { ...KEPT_LIST.INBOX, bound: KEPT_INBOX_BOUND },
-      });
+      );
 
       yield* dependencies.accountWide.stand(() => wait);
 
@@ -440,7 +454,7 @@ export function followAccountItems(
       const taken = (
         was: Held,
         after: Held,
-        sent: readonly InboxItem[],
+        sent: readonly PlacedInboxItem[],
         placed: readonly string[],
         standing: SyncStanding | undefined,
       ) =>

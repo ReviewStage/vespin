@@ -82,6 +82,9 @@ catalogs:
     '@tanstack/db':
       specifier: 1.0.0-rc.1.5
       version: 1.0.0-rc.1.5
+    '@tanstack/db-sqlite-persistence-core':
+      specifier: 1.0.0-rc.1.5
+      version: 1.0.0-rc.1.5
     '@tanstack/react-db':
       specifier: 1.0.0-rc.1.5
       version: 1.0.0-rc.1.5
@@ -1755,6 +1758,9 @@ importers:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(vitest@5.1.1)
+      '@tanstack/db-sqlite-persistence-core':
+        specifier: 'catalog:'
+        version: 1.0.0-rc.1.5(typescript@7.0.2)
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.6
@@ -5724,6 +5730,11 @@ packages:
 
   '@tanstack/db-ivm@1.0.0-rc.1.3':
     resolution: {integrity: sha512-4LhRE/6nypOURscUzRyjqffaANVBK8TDv/011cLz79NMxNpZuNgjzwV3s9Z+Rb1d4je+ooRBfPt8hPmGp6dPMw==}
+    peerDependencies:
+      typescript: '>=4.7'
+
+  '@tanstack/db-sqlite-persistence-core@1.0.0-rc.1.5':
+    resolution: {integrity: sha512-R8X53vv6/qhZMtGIGQubpQAKtH/kED9s0L6MaVTu2Hk7LNWFaWyfhcTRDclR6dMdKYitwBEn6kVu2VCM7hOxng==}
     peerDependencies:
       typescript: '>=4.7'
 
@@ -14700,6 +14711,12 @@ snapshots:
   '@tanstack/db-ivm@1.0.0-rc.1.3(typescript@7.0.2)':
     dependencies:
       fractional-indexing: 3.4.0
+      typescript: 7.0.2
+
+  '@tanstack/db-sqlite-persistence-core@1.0.0-rc.1.5(typescript@7.0.2)':
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+      '@tanstack/db': 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
       typescript: 7.0.2
 
   '@tanstack/db@1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)':

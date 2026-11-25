@@ -10,7 +10,12 @@ import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
 import { Data, Effect, Equal, RcMap, type Scope, Stream, SubscriptionRef } from "effect";
 import { type AppHolderInboxes, NO_HOLDER_INBOXES } from "./app-state.js";
-import { INBOX_ITEM, type InboxChange } from "./inbox-collections.js";
+import {
+  INBOX_ITEM,
+  type InboxChange,
+  type PlacedInboxItem,
+  placedItem,
+} from "./inbox-collections.js";
 import { type HeldSlice, heldSlice } from "./live-collection.js";
 import {
   confirmWrite,
@@ -118,14 +123,17 @@ export function scopeInboxes(
             : Effect.void,
         );
 
-        const items: HeldRows<InboxItem, InboxChange> = yield* dependencies.pool.stand(INBOX_ITEM, {
-          redraw: () => drawn,
-          confirmation: () => {
-            const handed = wait;
+        const items: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
+          INBOX_ITEM,
+          {
+            redraw: () => drawn,
+            confirmation: () => {
+              const handed = wait;
 
-            return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
+              return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
+            },
           },
-        });
+        );
 
         const taken = followTakingRows(
           {
@@ -138,7 +146,8 @@ export function scopeInboxes(
           TASK_INBOX_READ.rows,
           (rows) =>
             Effect.andThen(
-              items.answer(inboxOfLiveRows(rows)),
+              // Note that every item a plan's inbox answers stands on that plan.
+              items.answer(inboxOfLiveRows(rows).map((item) => placedItem(item, scope.id))),
               Effect.suspend(() => {
                 answered = true;
 

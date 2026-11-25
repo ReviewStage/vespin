@@ -25,7 +25,6 @@
  */
 
 import { AUTOMATIONS_READ } from "@repo/features/automation-live";
-import { inboxItemSchema } from "@repo/features/inbox-wire";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import {
   agentSectionEntrySchema,
@@ -37,6 +36,7 @@ import { WORKSPACE_INVITATIONS_READ, WORKSPACE_MEMBERS_READ } from "@repo/featur
 import { workspaceSchema } from "@repo/features/workspace-wire";
 import { Context, Data, Effect, Path, Schema, type Scope } from "effect";
 import * as FileSystem from "effect/FileSystem";
+import { placedInboxItemSchema } from "./inbox-collections.js";
 
 /** The folder every account's own folder stands in, under the state root. */
 const ACCOUNTS_FOLDER = "accounts";
@@ -116,7 +116,7 @@ const keptRowsSchema = Schema.Struct({
   members: WORKSPACE_MEMBERS_READ.rows,
   invitations: WORKSPACE_INVITATIONS_READ.rows,
   automations: AUTOMATIONS_READ.rows,
-  inbox: Schema.Array(inboxItemSchema),
+  inbox: Schema.Array(placedInboxItemSchema),
 });
 
 /**
