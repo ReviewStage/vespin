@@ -714,6 +714,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       NSLog("PROBEINLINE split press-to-render=%.0fms read=%.0fms handed=%.0fms render-to-value=%.0fms take=%.0fms whole=%.0fms value-to-open=%.0fms", opening.renderAt - opening.pressedAt, opening.readMs, opening.handedMs, probeValueAt - opening.renderAt, probeTakeMs, probeWholeMs, Date().timeIntervalSince1970 * 1000 - probeValueAt)
     }
     NSLog("PROBEINLINE open nonce=%d start=%@ line=%d window=%@ press-to-open=%.0fms", opening?.nonce ?? -1, String(opening?.start ?? false), opening?.line ?? -1, String(window != nil), Date().timeIntervalSince1970 * 1000 - (opening?.pressedAt ?? 0))
+    probeMemory("open")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.probeMemory("open+2s") }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.probeMemory("open+6s") }
     guard let opening, opening.nonce != openedNonce else { return }
     openedNonce = opening.nonce
 
@@ -830,13 +833,59 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     page.setContentOffset(CGPoint(x: page.contentOffset.x, y: offset), animated: true)
   }
 
+  // PROBE: the app's memory footprint, the text view's viewport, and what it holds drawn, to learn whether a field grown to its words draws every line or only those in sight.
+  func probeMemory(_ tag: String) {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+    let result = withUnsafeMutablePointer(to: &info) {
+      $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+    }
+    let footprint = result == KERN_SUCCESS ? Double(info.phys_footprint) / 1_048_576 : -1
+    var views = 0
+    var fragmentViews = 0
+    var attachmentViews = 0
+    var backing: Double = 0
+    let scale = window?.screen.scale ?? UIScreen.main.scale
+    func walk(_ view: UIView) {
+      for child in view.subviews {
+        views += 1
+        let name = String(describing: type(of: child))
+        if name.contains("Fragment") { fragmentViews += 1 }
+        if name.contains("Attachment") || child is BlockView || child is PillView { attachmentViews += 1 }
+        if child.layer.contents != nil { backing += Double(child.bounds.width * child.bounds.height * scale * scale * 4) }
+        walk(child)
+      }
+    }
+    walk(textView)
+    var viewportBounds = CGRect.zero
+    var viewportFragments = -1
+    if let layout = textView.textLayoutManager {
+      let controller = layout.textViewportLayoutController
+      viewportBounds = controller.viewportBounds
+      if let range = controller.viewportRange {
+        viewportFragments = 0
+        layout.enumerateTextLayoutFragments(from: range.location, options: []) { fragment in
+          guard fragment.rangeInElement.location.compare(range.endLocation) == .orderedAscending else { return false }
+          viewportFragments += 1
+          return true
+        }
+      }
+    }
+    let visible = window.map { convert(bounds, to: $0).intersection($0.bounds).height } ?? -1
+    NSLog("PROBEINLINE memory tag=%@ chars=%d footprint=%.1fMB views=%d fragmentViews=%d attachmentViews=%d backing=%.1fMB viewportY=%.0f viewportH=%.0f viewportFragments=%d fieldH=%.0f visibleH=%.0f fitsWords=%@", tag, textView.textStorage.length, footprint, views, fragmentViews, attachmentViews, backing / 1_048_576, viewportBounds.minY, viewportBounds.height, viewportFragments, bounds.height, visible, String(fitsWords))
+  }
+
   /// Tells JavaScript the height the words ask for at the field's width, while the field grows to them, once it moves by a point or more.
   private func tellHeight() {
     guard fitsWords, bounds.width > 0 else { return }
     let probeStart = CFAbsoluteTimeGetCurrent()
     let whole = laidWhole
     let height = wordsHeight()
-    if whole == false { probeWholeMs = (CFAbsoluteTimeGetCurrent() - probeStart) * 1000 }
+    if whole == false {
+      probeWholeMs = (CFAbsoluteTimeGetCurrent() - probeStart) * 1000
+      DispatchQueue.main.async { [weak self] in self?.probeMemory("whole") }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.probeMemory("whole+2s") }
+    }
     NSLog("PROBEINLINE wordsHeight=%.2fms whole=%@ height=%.0f told=%@ chars=%d container=%.0f scrolls=%@ content=%.0f", (CFAbsoluteTimeGetCurrent() - probeStart) * 1000, String(!whole), height, String(describing: toldHeight), textView.textStorage.length, min(textView.textContainer.size.height, 99_999_999), String(textView.isScrollEnabled), textView.contentSize.height)
     if let toldHeight, abs(toldHeight - height) < 1 { return }
     toldHeight = height

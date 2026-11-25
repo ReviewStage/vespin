@@ -84,6 +84,7 @@ public final class PillFieldModule: Module {
       Events("onLines", "onHeight", "onFocusChange", "onLinkAsk", "onCaret")
 
       Prop("value") { (view: DocumentFieldView, value: DocumentValueRecord) in
+        view.probeMemory("before-take")
         view.probeValueAt = Date().timeIntervalSince1970 * 1000
         let probeTake = CFAbsoluteTimeGetCurrent()
         view.take(value.lines.map(DocumentLine.init), seen: value.seen)
