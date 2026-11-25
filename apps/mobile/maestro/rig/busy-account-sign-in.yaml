@@ -1,0 +1,27 @@
+# busy-account-sign-in.yaml -- the busy-account rig's first step: the stub's account signed in once from a clean install, so the seeded local copy laid over its folder next is the signed-in account's (`scripts/busy-account.sh`).
+#
+# It lives under maestro/rig/ rather than maestro/, so the screenshot run,
+# which runs every flow at maestro/'s top, never runs it. The notification
+# ask is let go with Not Now, as sign-in.yaml leaves it, so the measured
+# launch opens on the Inbox with nothing over it.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      authServer: stub
+- extendedWaitUntil:
+    visible: "Sign in to Vespin|Don.t Allow"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Don.t Allow"
+    commands:
+      - tapOn: "Don.t Allow"
+- tapOn: "Continue with GitHub"
+- extendedWaitUntil:
+    visible: "Know when an agent needs you"
+    timeout: 30000
+- tapOn: "Not Now"
+- assertVisible: "Inbox"
+- stopApp

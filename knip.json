@@ -96,6 +96,10 @@
       "entry": ["bench.ts", "host-bench.ts", "host-worker.ts"],
       "ignoreDependencies": ["playwright"]
     },
+    "tools/busy-account": {
+      "entry": ["seed.ts"],
+      "project": ["*.ts"]
+    },
     "tools/claude-code-probe": {
       "entry": ["src/sandbox/driver.mjs"],
       "project": ["src/**", "tests/**"],
