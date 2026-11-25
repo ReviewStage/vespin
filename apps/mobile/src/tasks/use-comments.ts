@@ -18,8 +18,7 @@
  * caches for its chip to open.
  */
 
-import { type AgentAttachment, base64Bytes } from "@repo/features/agent-wire";
-import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
+import type { AgentAttachment } from "@repo/features/agent-wire";
 import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
@@ -36,25 +35,32 @@ import {
 import { markersAsNames } from "@repo/features/file-marker";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
-import { formatBytes } from "@repo/features/number-format";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { BUZZ, buzz, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "@repo/ui-native";
+import {
+  BUZZ,
+  buzz,
+  type PictureById,
+  THREAD_MEDIA,
+  type ThreadMedia,
+  type ThreadMessage,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { cachedFile, cachedPicture, KEPT_MEDIA, keptMedia } from "../cached-media.js";
+import { cachedFile } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import type { PictureOf } from "../member-pictures.js";
-import { usePictureShownCount } from "../picture-shown.js";
 import {
   type AttachedPictures,
   type HeldPicture,
   useAttachedPictures,
 } from "../use-attached-pictures.js";
+import { usePictures } from "../use-pictures.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** No threads read yet. */
@@ -79,8 +85,10 @@ type CommentFilesRead = ReadonlyMap<string, CommentFileRead>;
 /** Nothing read yet. */
 const NOTHING_READ: CommentFilesRead = new Map();
 
-/** What draws a thread's files: each one's read, by its attachment, none while on its way, and what reads one again that could not be. */
+/** What draws a thread's files: each picture by its attachment, which it reads where it is drawn, each other file's read, none while on its way, and what reads one again that could not be. */
 export interface CommentMedia {
+  readonly pictureOf: (attachmentId: string) => PictureById;
+  readonly retryPicture: (attachmentId: string) => void;
   readonly readOf: (attachmentId: string) => CommentFileRead | undefined;
   readonly retry: (attachmentId: string) => void;
 }
@@ -93,30 +101,16 @@ function pictured(file: DescriptionCommentFile): boolean {
   );
 }
 
-/** What a comment's file is drawn from once its bytes land: its address under the app's caches, or a picture's `data:` address where no file can be named for its type. */
-async function sourceOf(
-  file: DescriptionCommentFile,
-  read: { readonly contentType: string; readonly base64: string },
-): Promise<string> {
-  // Note that a picture is written to a file as it lands, so a press opens Quick Look on that file at once.
-  if (pictured(file)) {
-    const written = await cachedPicture(
-      COMMENT_MEDIA_PREFIX,
-      file.attachmentId,
-      read.contentType,
-      read.base64,
-    );
+/** The file a comment's file other than a picture is written to once its bytes land, under its own name in the app's caches, which its chip opens and shares. */
+function sourceOf(file: DescriptionCommentFile, base64: string): Promise<string> {
+  return cachedFile(COMMENT_MEDIA_PREFIX, file.attachmentId, file.name, file.mediaType, base64);
+}
 
-    return written ?? `data:${read.contentType};base64,${read.base64}`;
-  }
-
-  return cachedFile(
-    COMMENT_MEDIA_PREFIX,
-    file.attachmentId,
-    file.name,
-    file.mediaType,
-    read.base64,
-  );
+/** Every file a thread's comments carry, in order; none for no thread. */
+function threadFiles(
+  thread: DescriptionCommentThread | undefined,
+): readonly DescriptionCommentFile[] {
+  return thread === undefined ? [] : threadComments(thread).flatMap((entry) => entry.files ?? []);
 }
 
 /**
@@ -292,22 +286,31 @@ function writerOf(
 function commentMedia(entry: DescriptionCommentEntry, media: CommentMedia): readonly ThreadMedia[] {
   return (entry.files ?? []).map((file): ThreadMedia => {
     const key = file.attachmentId;
+
+    if (pictured(file)) {
+      return {
+        kind: THREAD_MEDIA.PICTURE,
+        key,
+        source: media.pictureOf(key),
+        alt: file.name,
+        onRetry: () => media.retryPicture(key),
+      };
+    }
+
     const read = media.readOf(key);
 
     const onRetry =
       read?.source === null && read.gone !== true ? () => media.retry(key) : undefined;
 
-    return pictured(file)
-      ? { kind: THREAD_MEDIA.PICTURE, key, source: read?.source, alt: file.name, onRetry }
-      : {
-          kind: THREAD_MEDIA.FILE,
-          key,
-          source: read?.source,
-          name: file.name,
-          mediaType: file.mediaType,
-          size: read?.size,
-          onRetry,
-        };
+    return {
+      kind: THREAD_MEDIA.FILE,
+      key,
+      source: read?.source,
+      name: file.name,
+      mediaType: file.mediaType,
+      size: read?.size,
+      onRetry,
+    };
   });
 }
 
@@ -330,10 +333,12 @@ export function threadMessages(
 }
 
 /**
- * Each file a thread's comments carry, read once through the host while
- * the page stands, as the panel reads a comment's (`TASKS_PICTURE_READ`):
- * a picture drawn from its bytes, any other file written under the app's
- * caches, which its chip opens and shares. One the service answers is not
+ * Each file a thread's comments carry: a picture handed to its message by
+ * its attachment, which it reads where it is drawn and expo-image loads
+ * from the service's address (`usePictures`, under the page's
+ * `PicturesProvider`), and any other file read once through the host while
+ * the page stands, as the panel reads a comment's (`TASKS_PICTURE_READ`),
+ * and written under the app's caches, which its chip opens and shares. One the service answers is not
  * there stands unread for good, as a description's picture does
  * (`useDescriptionPictures`), and one that got no answer stands unread with
  * Try again, which asks for it anew. Note that a read that lands once the
@@ -344,8 +349,20 @@ export function useCommentMedia(
   thread: DescriptionCommentThread | undefined,
 ): CommentMedia {
   const acts = useHostActs();
-  const shown = usePictureShownCount(PRODUCT_PICTURE_KIND.COMMENT);
   const [read, setRead] = useState<CommentFilesRead>(NOTHING_READ);
+
+  // Note that no picture is read ahead until the task's id is known, which names whose pictures they are.
+  const pictureIds = useMemo(
+    () =>
+      taskId === undefined
+        ? []
+        : threadFiles(thread)
+            .filter(pictured)
+            .map((file) => file.attachmentId),
+    [taskId, thread],
+  );
+
+  const pictures = usePictures(PICTURE_OWNER.TASK, taskId ?? "", pictureIds);
   const [round, setRound] = useState(0);
   // The files asked for, by attachment, so each is asked for once while the page stands.
   const asked = useRef(new Set<string>());
@@ -366,20 +383,11 @@ export function useCommentMedia(
       if (mounted.current) setRead((held) => new Map(held).set(id, file));
     };
 
-    for (const file of threadComments(thread).flatMap((entry) => entry.files ?? [])) {
+    for (const file of threadFiles(thread).filter((each) => !pictured(each))) {
       const id = file.attachmentId;
 
       if (asked.current.has(id)) continue;
       asked.current.add(id);
-      const askedAt = performance.now();
-      // Note that a picture shown before draws from the file its first read wrote, asking the host nothing; any other file stands under its own name, so it is read as before.
-      const kept = pictured(file) ? keptMedia(COMMENT_MEDIA_PREFIX, id) : undefined;
-
-      if (kept?.kind === KEPT_MEDIA.PICTURE) {
-        landed(id, { source: kept.uri, size: formatBytes(kept.bytes) });
-        shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
-        continue;
-      }
 
       acts[ACT_KIND.TASKS_PICTURE_READ]({ taskId, attachmentId: id })
         .then(async (answer) => {
@@ -392,9 +400,10 @@ export function useCommentMedia(
 
           if (!("base64" in answer)) throw new Error(`The file was not read: ${answer.failure}.`);
           const chip = { name: file.name, mediaType: file.mediaType, url: "" };
-          landed(id, { source: await sourceOf(file, answer), size: chipSize(chip, answer.base64) });
-
-          if (pictured(file)) shown(PRODUCT_PICTURE_FROM.READ, askedAt, base64Bytes(answer.base64));
+          landed(id, {
+            source: await sourceOf(file, answer.base64),
+            size: chipSize(chip, answer.base64),
+          });
         })
         .catch((cause: unknown) => {
           console.error("A comment's file was not read.", cause);
@@ -402,10 +411,12 @@ export function useCommentMedia(
         });
     }
     // Note that `round` is read so a Try again, which forgets the file's ask, reads it anew.
-  }, [acts, taskId, thread, round, shown]);
+  }, [acts, taskId, thread, round]);
 
   return useMemo(
     () => ({
+      pictureOf: pictures.refOf,
+      retryPicture: pictures.retry,
       readOf: (attachmentId) => read.get(attachmentId),
       retry: (attachmentId) => {
         asked.current.delete(attachmentId);
@@ -418,7 +429,7 @@ export function useCommentMedia(
         setRound((at) => at + 1);
       },
     }),
-    [read],
+    [pictures, read],
   );
 }
 

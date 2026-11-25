@@ -385,7 +385,7 @@ export function useAgentDraftDoors(
 
 /** One agent's actions, as every surface that draws it offers them. */
 export function useAgentActions(
-  agent: AgentSummary & Pick<ManagerSettingsSubject, "workspaceId" | "repository">,
+  agent: AgentSummary & Pick<ManagerSettingsSubject, "repository">,
   agents: AgentsControl,
   input: {
     /** The agent's name as the surface draws it, which a transcript copied is headed by. */

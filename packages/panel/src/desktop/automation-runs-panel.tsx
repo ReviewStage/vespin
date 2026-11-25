@@ -96,9 +96,6 @@ const SKELETON_RUNS = [
   { title: "52%", line: "72%" },
 ] as const;
 
-/** How wide a placeholder run's glyph stands: the row's own glyph size. */
-const SKELETON_GLYPH = actorMarkWidth(ACTOR_SIZE.ROW);
-
 /** How wide a placeholder run's time stands, as wide as a short "2h ago". */
 const SKELETON_TIME = "36px";
 
@@ -243,7 +240,10 @@ export function RunsSkeleton(): React.JSX.Element {
         {SKELETON_RUNS.map(({ title, line }) => (
           <ListRow
             key={title}
-            leading={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_GLYPH} />}
+            // Note that the placeholder's glyph is the row's own glyph size, read as it draws, since the module may load before the actor marks'.
+            leading={
+              <Skeleton kind={SKELETON_KIND.CIRCLE} width={actorMarkWidth(ACTOR_SIZE.ROW)} />
+            }
             title={<Skeleton width={title} />}
             description={<Skeleton width={line} />}
             meta={<Skeleton width={SKELETON_TIME} />}

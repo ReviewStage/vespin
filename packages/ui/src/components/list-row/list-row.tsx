@@ -15,6 +15,7 @@ import {
   useId,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { ChevronRightIcon, FoldChevronIcon } from "../../icons/lucide-glyphs.js";
@@ -861,6 +862,9 @@ export function ListRow({
       ? undefined
       : { mark: leading, name: named, detail: plainWords(description) ?? plainWords(lead?.label) });
 
+  // Note that a row says its fold holds the keyboard, because its stylesheet cannot find that through `:has()` without checking the row again at every change under it.
+  const [foldHeld, setFoldHeld] = useState(false);
+
   const rowMenu = useRowMenu(menu === undefined ? undefined : { ...menu, subject }, {
     disabled,
     opener: onPress ? pressElement : undefined,
@@ -1078,6 +1082,8 @@ export function ListRow({
           aria-label={fold.label}
           aria-expanded={fold.open}
           onClick={() => fold.onOpenChange(!fold.open)}
+          onFocus={(event) => setFoldHeld(event.currentTarget.matches(":focus-visible"))}
+          onBlur={() => setFoldHeld(false)}
         >
           {/* Note that the chevron turns on the one turn every fold makes (`disclosure.css`). */}
           <span className="ui-disclosure-turn" data-open={fold.open}>
@@ -1175,6 +1181,14 @@ export function ListRow({
         data-ink={ink}
         data-menu-open={menuOpen || rowMenu.open ? "true" : undefined}
         data-depth={depth === 0 ? undefined : depth}
+        // What the row draws beside its words, which its stylesheet reads rather than its children (`list-row.css`).
+        data-opens={press === undefined ? undefined : "true"}
+        data-acts={said(actions) ? "true" : undefined}
+        data-more={moreDrawn ? "true" : undefined}
+        data-fold={fold === undefined ? undefined : "true"}
+        data-fold-held={foldHeld ? "true" : undefined}
+        data-end={end === null ? undefined : "true"}
+        data-attachments={said(attachments) ? "true" : undefined}
         onKeyDown={rowMenu.onKeyDown}
         {...withContextMenu(rowMenu.doors, {})}
         // Note that the row stands where its run places it (`VirtualRows`), its depth's own property beside that.

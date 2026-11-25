@@ -17,7 +17,7 @@ import {
   Inline,
   LAYOUT_ELEMENT,
 } from "@repo/ui";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useMemo, useRef, useState } from "react";
 import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 
@@ -165,7 +165,7 @@ function BoxFileChips({
   );
 }
 
-export function AttachedFileChips({
+export const AttachedFileChips = memo(function AttachedFileChips({
   files,
   onRemove,
   uploading = false,
@@ -226,4 +226,4 @@ export function AttachedFileChips({
       {viewer}
     </Inline>
   );
-}
+});

@@ -264,6 +264,22 @@ const SIDE_BUNDLE_ENTRIES = {
 const highlightWorker = await build(HIGHLIGHT_WORKER_BUILD);
 const highlightWorkerText = highlightWorker.outputFiles[0]?.text ?? "";
 
+// The worker thread main watches itself for stalls from
+// (`src/utility/stall-watch.ts`), bundled to text and handed to main as
+// `STALL_WATCH_WORKER`, which runs it with `eval`, so no file of its own has
+// to be loaded out of the asar for the thread to start.
+const stallWatchWorker = await build({
+  entryPoints: [path.join(appRoot, "src/utility/stall-watch.ts")],
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node22",
+  write: false,
+  logLevel: "warning",
+});
+
+const stallWatchWorkerText = stallWatchWorker.outputFiles[0]?.text ?? "";
+
 // The renderer, as ES modules: the window's entry, the side bundles above,
 // and the chunks they share, with no wrapper around the whole, which is about
 // 6 KB gzipped smaller than the same code as one script. The chunks are named by
@@ -316,9 +332,14 @@ await Promise.all([
     format: "cjs",
     target: "node22",
     external: ["electron"],
+    // Note that main is minified as the renderer is, because V8 parses the
+    // whole bundle before main can answer anything, and a smaller one parses
+    // sooner; its frames read back through the maps the upload stamps.
+    minify: true,
     define: {
       PACKAGED_SENTRY_DSN: JSON.stringify(process.env.SENTRY_DSN ?? ""),
       PACKAGED_SENTRY_RELEASE: JSON.stringify(sentryRelease),
+      STALL_WATCH_WORKER: JSON.stringify(stallWatchWorkerText),
       PACKAGED_BUILD_COMMIT: JSON.stringify(buildCommit()),
       // Whether this bundle rides in a Developer ID release, which is what
       // decides the name — and so the state directory and Keychain entry —
@@ -327,6 +348,20 @@ await Promise.all([
       // Whether this bundle is the nightly smoke's, which takes a loopback service and its own state root.
       ...e2eBuildDefine(process.env),
     },
+    sourcemap: "external",
+    logLevel: "info",
+  }),
+  // The mirror matching process main forks with `utilityProcess`
+  // (`src/main/services/mirror-matching.ts`), its own bundle so a mirror's
+  // match reads and hashes its checkout off main's event loop.
+  build({
+    entryPoints: [path.join(appRoot, "src/utility/mirror-match.ts")],
+    outfile: path.join(outputRoot, "mirror-match.js"),
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    target: "node22",
+    external: ["electron"],
     sourcemap: "external",
     logLevel: "info",
   }),

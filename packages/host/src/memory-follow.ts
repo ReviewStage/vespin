@@ -19,15 +19,17 @@ import {
   ROW_GONE,
   type WriteDeclaration,
 } from "@repo/sync";
-import { Effect, type Scope } from "effect";
-import { type AppMemories, NO_KEYS_HELD } from "./app-state.js";
+import { Data, Effect, type Scope } from "effect";
+import { type AppMemories, memoriesHolder, NO_KEYS_HELD } from "./app-state.js";
 import { type HeldSlice, heldSlice } from "./live-collection.js";
 import { followLiveRead } from "./live-read-follow.js";
 
 /**
  * memory-follow.ts -- each workspace's memories the windows hold, followed over the service's held poll into the sync engine's pool by their ids, told whole on their app-state slice, and a forget drawn gone over them the moment it is asked.
  *
- * Settings › Memory holds its workspace's memories, and the host follows
+ * Settings › Memory holds its workspace's memories, and a Manager's Settings
+ * › Memory that Manager's own (`managerId`), each its own read of the
+ * workspace, and the host follows
  * them while any window holds them and a while after (`heldSlice`), so a
  * memory an agent keeps, corrects, or another member forgets draws on every
  * open page within the service's coalesce window. Each memory is one row of
@@ -48,15 +50,22 @@ import { followLiveRead } from "./live-read-follow.js";
 /** A memory as the pool holds it, by its id, every write to it a change of its fields or its deletion. */
 const MEMORY = fieldKind((row: MemoryLiveRow) => row.id);
 
+/** Whose memories one held read is: a workspace's own, or one Manager's alone in it. */
+export class MemoriesKey extends Data.Class<{
+  readonly workspaceId: string;
+  /** The Manager whose own memories the read is; none for the workspace's own. */
+  readonly managerId: string | undefined;
+}> {}
+
 /** A read the service did not answer, as the client and the gate tell it. */
 interface MemoriesUnanswered {
   readonly failure: string;
 }
 
 export interface MemoriesFollowDependencies {
-  /** One workspace's memories sealed for `userId`, its rows inline at the poll address where it polls, held past `after` where it names one. */
+  /** One workspace's memories, or one Manager's in it, sealed for `userId`, its rows inline at the poll address where it polls, held past `after` where it names one. */
   readonly seal: (
-    workspaceId: string,
+    key: MemoriesKey,
     userId: string,
     poll: boolean,
     after?: string,
@@ -71,19 +80,20 @@ export interface MemoriesFollowDependencies {
 }
 
 /**
- * The held lifetime over every workspace's memories the windows hold
- * (`heldSlice`), keyed by the workspace, told whole on their slice: each
- * workspace's read as its follow last told it, kept where a later read does
- * not answer, and failed where it never answered.
+ * The held lifetime over every workspace's memories the windows hold, and
+ * every Manager's (`heldSlice`), keyed by the workspace and then whose they
+ * are (`memoriesHolder`), told whole on their slice: each read as its follow
+ * last told it, kept where a later read does not answer, and failed where it
+ * never answered.
  */
 export function heldMemories(
   dependencies: MemoriesFollowDependencies,
-): Effect.Effect<HeldSlice<string>, never, Scope.Scope> {
-  return heldSlice<typeof LIVE_READ.MEMORIES, string>({
+): Effect.Effect<HeldSlice<MemoriesKey>, never, Scope.Scope> {
+  return heldSlice<typeof LIVE_READ.MEMORIES, MemoriesKey>({
     empty: NO_KEYS_HELD,
-    path: (workspaceId) => [workspaceId],
+    path: (key) => [key.workspaceId, memoriesHolder(key.managerId)],
     gate: dependencies.gate,
-    follow: (workspaceId, answers) => {
+    follow: (key, answers) => {
       // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
       const userId = dependencies.accountId();
 
@@ -92,7 +102,7 @@ export function heldMemories(
           seal: (poll, after) =>
             userId === undefined
               ? Effect.succeed(LIVE_SIGNED_OUT)
-              : dependencies.seal(workspaceId, userId, poll, after),
+              : dependencies.seal(key, userId, poll, after),
           rows: WORKSPACE_MEMORIES_READ.rows,
           part: "memories",
           pool: dependencies.pool,

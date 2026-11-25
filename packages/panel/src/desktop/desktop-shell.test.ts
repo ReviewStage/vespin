@@ -68,6 +68,7 @@ import {
   type TasksControlOverrides,
   tasksControl,
   waitingOf,
+  withNewTaskShown,
 } from "../testing/tasks-control.js";
 import { holdingInboxChoice, leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
@@ -223,7 +224,6 @@ function mount(
       newTask: {
         ...control.newTask,
         onOpen: () => setAsked(true),
-        open: asked,
         onClose: () => setAsked(false),
       },
       ...overrides,
@@ -231,7 +231,10 @@ function mount(
 
     return overListedTasks(
       tasks,
-      createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch)),
+      withNewTaskShown(
+        { open: asked },
+        createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch)),
+      ),
     );
   }
 

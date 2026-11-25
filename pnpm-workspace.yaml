@@ -10,7 +10,7 @@ catalog:
   "@effect/platform-node": 4.0.4
   "@effect/sql-pg": 4.0.4
   "@effect/sql-pglite": 4.0.4
-  "@types/node": 26.6.6
+  "@types/node": 26.6.9
   tsx: 4.23.15
   react: 19.2.8
   react-dom: 19.2.8

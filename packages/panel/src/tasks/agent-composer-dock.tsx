@@ -25,7 +25,7 @@ import { SuggestionChip } from "./fork-action.js";
 import type { MoveCarry } from "./move-agent.js";
 import type { SkillSource } from "./skill-picker.js";
 import { CallPlaceProvider } from "./transcript-blocks.js";
-import { type HeldComposer, useHeldWords } from "./use-agent-composer.js";
+import type { HeldComposer } from "./use-agent-composer.js";
 import type { QueueEditing } from "./use-agent-queue.js";
 import type { AgentTranscriptControl } from "./use-agent-transcript.js";
 
@@ -112,8 +112,6 @@ export function AgentComposerDock({
 }): ReactNode {
   const enterQueues = useQuery({ ...appStateQuery, select: selectEnterQueues }).data === true;
   const queueEditing = queue?.editing;
-  // Note that the box reads its words here, so a word typed draws the box again and never the tab.
-  const drawn = useHeldWords(composer);
 
   if (onUnarchive !== undefined) {
     return (
@@ -143,7 +141,7 @@ export function AgentComposerDock({
             <AgentComposer
               {...box}
               talksIn={talks ? agent.taskId : undefined}
-              composer={drawn}
+              composer={composer}
               usage={transcript.usage}
               payer={transcript.payer}
               payerSubscriptionId={transcript.payerSubscriptionId}

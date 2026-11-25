@@ -1848,25 +1848,39 @@ export interface AccountItemsReader {
   readonly taskless: boolean;
 }
 
-/** The account's items `narrowed` keeps, as `accountItemsLiveStatements` reads them, those `changed` keeps among them whole. */
-function accountItemsOf(
-  { userId, settledSince, taskless, workspaceMachines }: AccountItemsReader,
-  narrowed: SQL,
-  changed: SQL,
-) {
-  const carried = and(
-    // Every item the account may read, as its read of what waits names them (`accountWaiting`).
-    itemVisibleTo(userId),
-    itemServed(workspaceMachines),
-    // Note that an item on no task is carried only where the build reads one, because a build before `HOSTED_API_VERSION` 6 fails its whole answer on one null task.
-    taskless ? undefined : isNotNull(inboxItem.taskId),
-    // Note that a settled item stands by the latest of its last change, its settling, and the time the reader's reminder brings it back, since a nod on an old notice settles it without moving its last change, and a reminder must find it still carried when it comes back.
-    or(
-      eq(inboxItem.status, INBOX_STATUS.OPEN),
-      sql`greatest(${inboxItem.updatedAt}, ${inboxItem.settledAt}, ${remindAtFor(userId)}) >= ${settledSince}`,
-    ),
-    narrowed,
+/**
+ * Every item an account-wide read carries for its reader: those the account
+ * may read and is served, those on no task only where `taskless`, and the
+ * settled ones by `settledSince`, as `accountItemsLiveStatements` reads
+ * them; where a whole answer in pages reads its parents
+ * (`../live/reads/inbox-items.ts`).
+ */
+export function accountItemsCarried({
+  userId,
+  settledSince,
+  taskless,
+  workspaceMachines,
+}: AccountItemsReader): SQL {
+  return (
+    and(
+      // Every item the account may read, as its read of what waits names them (`accountWaiting`).
+      itemVisibleTo(userId),
+      itemServed(workspaceMachines),
+      // Note that an item on no task is carried only where the build reads one, because a build before `HOSTED_API_VERSION` 6 fails its whole answer on one null task.
+      taskless ? undefined : isNotNull(inboxItem.taskId),
+      // Note that a settled item stands by the latest of its last change, its settling, and the time the reader's reminder brings it back, since a nod on an old notice settles it without moving its last change, and a reminder must find it still carried when it comes back.
+      or(
+        eq(inboxItem.status, INBOX_STATUS.OPEN),
+        sql`greatest(${inboxItem.updatedAt}, ${inboxItem.settledAt}, ${remindAtFor(userId)}) >= ${settledSince}`,
+      ),
+    ) ?? sql`true`
   );
+}
+
+/** The account's items `narrowed` keeps, as `accountItemsLiveStatements` reads them, those `changed` keeps among them whole. */
+function accountItemsOf(reader: AccountItemsReader, narrowed: SQL, changed: SQL) {
+  const { userId } = reader;
+  const carried = and(accountItemsCarried(reader), narrowed);
 
   const stamps = liveRowsStatement(
     INBOX_ITEMS_READ.parts.stamps,
@@ -1940,6 +1954,19 @@ function movedItems(moved: SyncMoved): SQL {
  */
 export function accountItemsDeltaStatements(reader: AccountItemsReader, moved: SyncMoved) {
   return accountItemsOf(reader, movedItems(moved), sql`true`);
+}
+
+/**
+ * One page of the account's inbox items, as `accountItemsLiveStatements`
+ * reads them whole, narrowed to the items `keys` names: their stamps, and
+ * those changed at or after `since` whole, with their threads and files.
+ */
+export function accountItemsPageStatements(
+  reader: AccountItemsReader,
+  since: Date,
+  keys: readonly string[],
+) {
+  return accountItemsOf(reader, liveKeysIn(inboxItem.id, keys), gte(inboxItem.updatedAt, since));
 }
 
 /** One plan's inbox written for Neon Realtime, as `taskInboxItems` reads it. */

@@ -260,6 +260,10 @@ export type AgentClient = Pick<
   | "rename"
   | "switchServers"
   | "changeFace"
+  | "followers"
+  | "follow"
+  | "setFollowerMachines"
+  | "changeFollower"
   | "choosePermissionMode"
   | "answerApproval"
   | "changeQueue"
@@ -1333,6 +1337,16 @@ function composed(
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),
     AGENTS_PERMISSION_MODE: declaredWrite(dependencies.pool, moded),
     AGENTS_FACE: declaredWrite(dependencies.pool, faced),
+    // Note that a Manager's followers are asked of the service as its Settings shows them and held nowhere here, so each write answers them whole for the window to draw.
+    AGENTS_FOLLOWERS: ({ agentId }) => asked(client.followers(agentId)),
+    AGENTS_FOLLOW: ({ agentId }) => asked(client.follow(agentId, true)),
+    AGENTS_UNFOLLOW: ({ agentId }) => asked(client.follow(agentId, false)),
+    AGENTS_SET_FOLLOWER_MACHINES: ({ agentId, machines }) =>
+      asked(client.setFollowerMachines(agentId, machines)),
+    AGENTS_ADD_FOLLOWER: ({ agentId, userId }) =>
+      asked(client.changeFollower(agentId, userId, true)),
+    AGENTS_REMOVE_FOLLOWER: ({ agentId, userId }) =>
+      asked(client.changeFollower(agentId, userId, false)),
     // Note that an answer draws nothing on the agent's row, whose ask the service takes off as it settles, so it is asked and answered alone.
     AGENTS_ANSWER_APPROVAL: ({ agentId, approvalId, ...request }) =>
       asked(client.answerApproval(agentId, approvalId, request)),

@@ -57,6 +57,7 @@ import {
 import { BOOT_PHASE, type WireBootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
 import { AGENT_BRIEF, AGENT_MACHINE, type AgentFailure } from "@repo/features/agent-wire";
+import { ORDER } from "@repo/features/live-read";
 import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
 import {
   NO_TASK_OWNER,
@@ -646,6 +647,13 @@ function movedAgents(moved: SyncMoved): SQL {
   );
 }
 
+/**
+ * How many tasks a page of the list's whole answer carries: some 2.5 rows
+ * each, the task and its agents, so a page stays near 200 rows, which a
+ * phone decodes in some 25 ms (`../live-pages.ts`).
+ */
+const TASKS_A_PAGE = 80;
+
 /** Every table the task list's statements read, which a write to wakes them. */
 const TASK_LIST_TABLES = [
   taskSync,
@@ -707,6 +715,10 @@ const TASK_LIST_TABLES = [
  * reaches any task (`workspacesWithTasks`), on the tasks' own rule, so a
  * window tells a workspace that never had a task from one whose tasks the
  * list does not hold, over every task it reaches rather than the live ones.
+ *
+ * A whole answer to a build that reads pages comes `TASKS_A_PAGE` tasks at
+ * a time, the newest first, each with every agent of it, and the agents on
+ * no task on the first page.
  */
 export const tasksRead = bindLiveRead(TASK_LIST_READ, {
   reads: TASK_LIST_TABLES,
@@ -755,6 +767,42 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
         ),
         issues: issuesStatement(),
       };
+    },
+    page: {
+      size: TASKS_A_PAGE,
+      order: [
+        [task.createdAt, ORDER.DESC],
+        [task.id, ORDER.DESC],
+      ],
+      parents: ({ userId, liveSince }) => ({
+        table: task,
+        where:
+          and(taskReachableBy(userId), liveTaskOf(userId, instantParam(liveSince))) ?? sql`false`,
+      }),
+      statements: (params, { keys, first }) => {
+        const { userId } = params;
+        const since = instantParam(params.liveSince);
+        const carried = agentsCarried(params);
+
+        // Note that an agent on no task rides with no task's page, so the first page carries those.
+        const ofPage = or(
+          liveKeysIn(agentTable.taskId, keys),
+          first ? isNull(agentTable.taskId) : undefined,
+        );
+
+        return {
+          tasks: tasksStatement(
+            userId,
+            and(liveTaskOf(userId, since), liveKeysIn(task.id, keys)) ?? sql`false`,
+          ),
+          agents: agentsStatement(
+            userId,
+            and(listedAgentOf(userId, since, carried.taskless), ofPage) ?? sql`false`,
+            carried,
+          ),
+          issues: issuesStatement(),
+        };
+      },
     },
   },
   beside: ({ params }) =>

@@ -32,6 +32,7 @@ import {
 import { confirmFailure } from "../failure-report.js";
 import { AgentComposer } from "./agent-composer.js";
 import { type LineAttachment, useLineAttachments } from "./agent-pictures.js";
+import { useHandedWords } from "./box-words.js";
 import type { HeldUpdate } from "./refused-send.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
@@ -235,7 +236,7 @@ export function EditComposer({
   );
 
   const composer: AgentComposerControl = {
-    held: { text: draft, attachments },
+    held: { words: useHandedWords(draft), attachments },
     updateHeld,
     sending: false,
     note: undefined,

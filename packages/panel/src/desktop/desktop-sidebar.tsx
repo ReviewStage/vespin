@@ -222,7 +222,7 @@ import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
 import { useInboxViewCount } from "./places-waiting.js";
 import { ProductIdentity } from "./product-identity.js";
-import { RowPlaced, useRowMoveKeys } from "./row-moves.js";
+import { RowPlaced, useRowMoveKeys, useRowPlaces } from "./row-moves.js";
 import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-collapse.js";
 import { ownOf, SIDEBAR_ENTRY, type SidebarEntry, SidebarEntryRow } from "./sidebar-entries.js";
 import { type CountNoun, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
@@ -1238,12 +1238,17 @@ function PinnedRows({
   const moveKeys = useRowMoveKeys(move);
   const pinPlaces = new Map(rows.map((row, at) => [pinnedRowKey(row), at]));
 
+  const keptPlace = useRowPlaces();
+
   const placeOf = (key: string) => {
     const at = pinPlaces.get(key);
 
-    return movePin === undefined || at === undefined
-      ? undefined
-      : { at, count: rows.length, onMove: movePin };
+    return keptPlace(
+      key,
+      movePin === undefined || at === undefined
+        ? undefined
+        : { at, count: rows.length, onMove: movePin },
+    );
   };
 
   const nests = nestsOf(depths);
@@ -2985,8 +2990,8 @@ function SidebarColumn({
     runs: runsPlace,
   };
 
-  // Whether New task's words are in sight; a person's page stands in Home's place without leaving its page, and draws no composer.
-  const newTaskShown = tasks.newTask.open || (atHome && place !== ROUTED_PLACE.PERSON);
+  // Whether Home's composer is in sight; a person's page stands in Home's place without leaving its page, and draws no composer.
+  const homeComposer = atHome && place !== ROUTED_PLACE.PERSON;
   const phone = room === SHELL_ROOM.NARROW;
 
   // Each place opens in a tab of its own on a middle-click, at its address under the listed workspace, where the window opens tabs.
@@ -3115,13 +3120,13 @@ function SidebarColumn({
         <WorkspaceSwitcher
           tasks={tasks}
           inSight={overlay.inSight}
-          newTask={{ shown: newTaskShown, onOpen: chosen(newTask) }}
+          newTask={{ home: homeComposer, onOpen: chosen(newTask) }}
           admin={{ onOpen: chosen(openAdmin), onPreload: preloadAdmin }}
         />
       ) : (
         // New task stands at the app's head until a workspace's row takes it, so it is never out of reach.
         <ProductIdentity
-          end={<NewTaskButton tasks={tasks} current={newTaskShown} onNewTask={chosen(newTask)} />}
+          end={<NewTaskButton tasks={tasks} home={homeComposer} onNewTask={chosen(newTask)} />}
         />
       )}
 

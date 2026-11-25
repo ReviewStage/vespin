@@ -89,6 +89,13 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_PERMISSION_MODE]:
     "Could not change the agent's permission mode on this system.",
   [AGENT_ACT_KIND.AGENTS_FACE]: "Could not change the Manager's face on this system.",
+  [AGENT_ACT_KIND.AGENTS_FOLLOWERS]: "Could not read the Manager's followers on this system.",
+  [AGENT_ACT_KIND.AGENTS_FOLLOW]: "Could not follow that Manager on this system.",
+  [AGENT_ACT_KIND.AGENTS_UNFOLLOW]: "Could not unfollow that Manager on this system.",
+  [AGENT_ACT_KIND.AGENTS_SET_FOLLOWER_MACHINES]:
+    "Could not change whether that Manager may use your machines on this system.",
+  [AGENT_ACT_KIND.AGENTS_ADD_FOLLOWER]: "Could not add that follower on this system.",
+  [AGENT_ACT_KIND.AGENTS_REMOVE_FOLLOWER]: "Could not remove that follower on this system.",
   [AGENT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: "Could not answer the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_QUEUE]: "Could not change the agent's queue on this system.",
   [AGENT_ACT_KIND.AGENTS_STOP]: "Could not stop the agent on this system.",
@@ -160,6 +167,12 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_SERVERS: { agentId: AGENT_ID, disabledServers: ["linear"] },
   AGENTS_PERMISSION_MODE: { agentId: AGENT_ID, permissionMode: "ask" },
   AGENTS_FACE: { agentId: AGENT_ID, face: { character: "cat", color: "blue" } },
+  AGENTS_FOLLOWERS: { agentId: AGENT_ID },
+  AGENTS_FOLLOW: { agentId: AGENT_ID },
+  AGENTS_UNFOLLOW: { agentId: AGENT_ID },
+  AGENTS_SET_FOLLOWER_MACHINES: { agentId: AGENT_ID, machines: true },
+  AGENTS_ADD_FOLLOWER: { agentId: AGENT_ID, userId: "user-2" },
+  AGENTS_REMOVE_FOLLOWER: { agentId: AGENT_ID, userId: "user-2" },
   AGENTS_ANSWER_APPROVAL: {
     agentId: AGENT_ID,
     approvalId: "0b1c4a39-3b5e-4f7c-9a52-8d4f0e7c2a11",

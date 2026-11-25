@@ -55,6 +55,7 @@ import {
 } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace, type ManagerFaceSize } from "@repo/ui/manager-face";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { HistoryIcon, type LucideIcon, UserRoundIcon, UserRoundXIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAutomation } from "./automation-directory.js";
@@ -676,6 +677,16 @@ const QUIET_BADGE =
 /** The quiet badge the reader's own account wears beside its name. */
 export function YouBadge(): React.JSX.Element {
   return <span className={`actor-you ${QUIET_BADGE}`}>You</span>;
+}
+
+/** A person's name as a list of people heads their row with it, You standing off it on the reader's own as it does on the card. */
+export function PersonName({ name, you }: { name: string; you: boolean }): React.JSX.Element {
+  return (
+    <span className="actor-card-name inline-flex items-center gap-item-gap">
+      <ReplayMask>{name}</ReplayMask>
+      {you ? <YouBadge /> : null}
+    </span>
+  );
 }
 
 /** Whether the actor is an App's bot on GitHub, whose name wears its badge. */

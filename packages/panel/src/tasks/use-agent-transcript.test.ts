@@ -31,6 +31,7 @@ import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bri
 import { handHostReads } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import {
+  type ToldPage,
   type TranscriptsTelling,
   tellingTranscripts,
   transcriptTold,
@@ -141,7 +142,7 @@ function drawn(older?: TranscriptOlderReader) {
       await act(async () => root?.render(withQueryClient(createElement(Window, { shown }))));
       await act(settle);
     },
-    push: (transcript: AgentTranscriptKey, page: AgentTranscriptPage) =>
+    push: (transcript: AgentTranscriptKey, page: ToldPage) =>
       act(async () => {
         telling.tell(transcript, page);
         await settle();
@@ -155,7 +156,7 @@ function ids(control: AgentTranscriptControl | undefined): readonly string[] | u
 }
 
 /** The agent's own transcript as it stands, held on the window's first document. */
-function heldOnFirstDocument(...pages: readonly AgentTranscriptPage[]): void {
+function heldOnFirstDocument(...pages: readonly ToldPage[]): void {
   handHostReads({
     transcripts: { [AGENT.agentId]: { [OWN_TRANSCRIPT]: transcriptTold(pages) } },
   });
@@ -275,7 +276,7 @@ test("an agent that ended stays held while its tab is shown, so the lines a call
   assert.deepEqual(telling.closed, [], "the ended agent's hold is never let go while shown");
 });
 
-test("a hold is timed to its first page drawn and to the page that caught it up, by what the transcript held", async () => {
+test("a hold is timed to its first page drawn and to the page that caught it up, by what the transcript held and where the host's read of it spent the wait", async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(1_000_000);
   const spans: PanelSpan[] = [];
@@ -284,7 +285,19 @@ test("a hold is timed to its first page drawn and to the page that caught it up,
 
   await draw(true);
   vi.setSystemTime(1_000_400);
-  const first = newestOf(["m-1"], "1");
+
+  // The host asked 50 ms into the hold, the service answered 200 ms later, the host laid it 10 ms after, while its process stood still 120 ms.
+  const first: ToldPage = {
+    ...newestOf(["m-1"], "1"),
+    read: {
+      followedAt: 1_000_030,
+      askedAt: 1_000_050,
+      answeredAt: 1_000_250,
+      laidAt: 1_000_260,
+      stalledMs: 120,
+    },
+  };
+
   await push(AGENT, first);
   vi.setSystemTime(1_000_900);
   const caughtUp: AgentTranscriptPage = { ...pageOf("m-1", "x"), messages: [], caughtUp: true };
@@ -306,6 +319,12 @@ test("a hold is timed to its first page drawn and to the page that caught it up,
           [PANEL_SPAN_ATTRIBUTE.MESSAGE_COUNT]: 1,
           [PANEL_SPAN_ATTRIBUTE.HELD_BYTES]: jsonBytes(transcriptTold([first]).rows),
           [PANEL_SPAN_ATTRIBUTE.CACHE_HIT]: 0,
+          [PANEL_SPAN_ATTRIBUTE.HOST_WAIT]: 50,
+          [PANEL_SPAN_ATTRIBUTE.REQUEST]: 200,
+          [PANEL_SPAN_ATTRIBUTE.LAY]: 10,
+          // Drawn at 400 ms, 140 ms after the host laid it.
+          [PANEL_SPAN_ATTRIBUTE.WINDOW]: 140,
+          [PANEL_SPAN_ATTRIBUTE.HOST_STALL]: 120,
         },
       },
       {
@@ -324,7 +343,14 @@ test("a hold is timed to its first page drawn and to the page that caught it up,
 test("a hold whose transcript the host already held is timed as a cache hit, caught up only by a page read since", async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(1_000_000);
-  const held: AgentTranscriptPage = { ...newestOf(["m-1", "m-2"], "1"), caughtUp: true };
+
+  // The host read it before this hold, as a tab shown lately left it.
+  const held: ToldPage = {
+    ...newestOf(["m-1", "m-2"], "1"),
+    caughtUp: true,
+    read: { followedAt: 990_000, askedAt: 990_000, answeredAt: 990_200, laidAt: 990_210 },
+  };
+
   heldOnFirstDocument(held);
   const spans: PanelSpan[] = [];
   const uninstall = installPanelSpanRecorder((span) => spans.push(span));
@@ -332,9 +358,11 @@ test("a hold whose transcript the host already held is timed as a cache hit, cau
 
   await draw(true);
 
+  // Note that a read from before the hold spent none of its wait, so it says nothing of the host's times.
   const painted = spans.map((span) => [
     span.name,
     span.attributes()[PANEL_SPAN_ATTRIBUTE.CACHE_HIT],
+    span.attributes()[PANEL_SPAN_ATTRIBUTE.REQUEST],
   ]);
 
   // The host lays what it held again as it reads on, and then the page past its cursor.
@@ -342,7 +370,7 @@ test("a hold whose transcript the host already held is timed as a cache hit, cau
   await push(AGENT, { ...pageOf("m-3", "Writing."), caughtUp: true });
   uninstall();
 
-  assert.deepEqual(painted, [[PANEL_SPAN.TRANSCRIPT_FIRST_PAINT, 1]]);
+  assert.deepEqual(painted, [[PANEL_SPAN.TRANSCRIPT_FIRST_PAINT, 1, undefined]]);
   assert.deepEqual(
     spans.map((span) => [span.name, span.attributes()[PANEL_SPAN_ATTRIBUTE.CACHE_HIT]]),
     [

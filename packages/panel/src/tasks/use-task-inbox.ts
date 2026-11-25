@@ -152,6 +152,9 @@ import { type HeldUpdate, heldUpdateOver, joinedAhead } from "./refused-send.js"
  * written lets go of its own.
  */
 
+/** No item's nod out, the one empty set every Inbox stands on until one is sent. */
+const NOT_SENDING: ReadonlySet<string> = new Set();
+
 /** How one nod is sent: the item, the revision it nods to, and the key the send is known by. */
 export type InboxAnswerer = (params: AgentInboxAnswerParams) => Promise<AgentInboxAnsweredView>;
 
@@ -585,7 +588,7 @@ export function useHeldTaskInbox(input: {
     [readInboxImage],
   );
 
-  const [sending, setSending] = useState<ReadonlySet<string>>(new Set());
+  const [sending, setSending] = useState<ReadonlySet<string>>(NOT_SENDING);
 
   const [pendingReplies, setPendingReplies] = useState<
     ReadonlyMap<string, readonly PendingInboxReply[]>
@@ -626,6 +629,8 @@ export function useHeldTaskInbox(input: {
 
   const note = useCallback((itemId: string, said: InboxNote | undefined) => {
     setNotes((was) => {
+      // Note that clearing a note the item does not hold keeps the notes as they are, so a nod with nothing to clear draws nothing again.
+      if (said === undefined && !was.has(itemId)) return was;
       const next = new Map(was);
 
       if (said === undefined) next.delete(itemId);
@@ -722,7 +727,11 @@ export function useHeldTaskInbox(input: {
 
       const release = () => {
         out.current.delete(item.id);
+        // Note that the last nod settled hands back the one empty set, so a nod sent and settled in one draw draws nothing again.
         setSending((standing) => {
+          if (!standing.has(item.id)) return standing;
+
+          if (standing.size === 1) return NOT_SENDING;
           const next = new Set(standing);
           next.delete(item.id);
 

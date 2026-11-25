@@ -18,6 +18,7 @@ import { agentName, modelsRunOn, unrunnableChoice } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { ArchivedComposerNote } from "./archived-note.js";
+import { useHandedWords } from "./box-words.js";
 import { ConnectAgentBanner } from "./connect-agent-banner.js";
 import { ForkChip, SuggestionChip } from "./fork-action.js";
 import { deviceOfPlace, NewTaskRunsOnChip, useOwnedMachines, useStartRunsOn } from "./runs-on.js";
@@ -279,7 +280,7 @@ export function DraftAgentTab({
       : undefined;
 
   const composer: AgentComposerControl = {
-    held: { text: draft.prompt, attachments: draft.attachments },
+    held: { words: useHandedWords(draft.prompt), attachments: draft.attachments },
     updateHeld: control.onDraftHeld,
     sending: sending || control.start.busy,
     note: shownNote,

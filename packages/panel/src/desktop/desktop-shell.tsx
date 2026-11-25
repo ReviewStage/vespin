@@ -39,7 +39,9 @@ import {
   Activity,
   createContext,
   type RefObject,
+  useCallback,
   useContext,
+  useDeferredValue,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -49,7 +51,7 @@ import { ACTOR_SIZE, actorMarkWidth } from "../actor-ref.js";
 import { useAdminView } from "../admin/admin-route.js";
 import { AdminCollectionPage, AdminPlaceFrameProvider } from "../admin/chrome/page-header.js";
 import type { AdminView } from "../admin/routing.js";
-import { useAppCommand } from "../app-commands.js";
+import { OffersLeft, useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { CallAgentShown, CallCardDock } from "../call/standing-call.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
@@ -1336,6 +1338,43 @@ function phoneAway(room: ShellRoom, away: TaskHeadBack): TaskHeadBack | undefine
   return room === SHELL_ROOM.NARROW ? away : undefined;
 }
 
+/** What a task's page is drawn from: the Tasks tab, and the looks at the task it shows, always of one moment. */
+type PageDrawn = { readonly tasks: TasksControl; readonly looks: ReturnType<typeof useTaskLooks> };
+
+/**
+ * What a task's page is drawn from. While another task opens, it is the tab
+ * and the looks the page was last drawn with, together, so a press on the
+ * page left never reaches the next task's looks, until the new task's page,
+ * drawn in the background, is ready to show. Note that only the page waits: the
+ * sidebar's row, the address, and every key read the tab itself, which moved
+ * at once, so a press paints its row chosen in the next frame and Back and
+ * the keys act on the task chosen while its page is still being drawn; the
+ * page left offers no key meanwhile (`usePageLeft`). A page drawn for the
+ * same task, a message streaming into its transcript among them, is drawn
+ * at once, as it always was.
+ */
+function usePageDrawn(tasks: TasksControl, looks: PageDrawn["looks"]): PageDrawn {
+  const now = useMemo((): PageDrawn => ({ tasks, looks }), [tasks, looks]);
+  const drawn = useDeferredValue(now);
+
+  return drawn.tasks.activeTaskId === tasks.activeTaskId ? now : drawn;
+}
+
+/**
+ * Whether the page drawn is the task's left while the next one's is drawn
+ * in the background, read at a key's press (`OffersLeft`), so its keys never
+ * act on the task left. Note that it is kept from the commit, never the
+ * render, because a render in the background may yet be thrown away.
+ */
+function usePageLeft(pageTaskId: string | undefined, taskId: string | undefined): () => boolean {
+  const left = useRef(false);
+  useLayoutEffect(() => {
+    left.current = pageTaskId !== taskId;
+  });
+
+  return useCallback(() => left.current, []);
+}
+
 /**
  * What a task's place draws in the places' content slot: the task bound
  * for, or its page in the shape it lands in while the host opens it, as a
@@ -1344,8 +1383,19 @@ function phoneAway(room: ShellRoom, away: TaskHeadBack): TaskHeadBack | undefine
  */
 export function StatePlace(): React.JSX.Element {
   const { tasks, room, looks, away } = useShellPlaces();
+  const page = usePageDrawn(tasks, looks);
+  const pageLeft = usePageLeft(page.tasks.activeTaskId, tasks.activeTaskId);
 
-  return <DesktopTasks tasks={tasks} looks={looks} room={room} away={phoneAway(room, away)} />;
+  return (
+    <OffersLeft value={pageLeft}>
+      <DesktopTasks
+        tasks={page.tasks}
+        looks={page.looks}
+        room={room}
+        away={phoneAway(room, away)}
+      />
+    </OffersLeft>
+  );
 }
 
 /**

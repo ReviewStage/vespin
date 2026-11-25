@@ -36,10 +36,9 @@ import {
 import { DesktopTasks } from "./desktop/desktop-tasks.js";
 
 import {
-  type AgentComposerControl,
+  type HeldComposer,
   type MessageSender,
   useAgentComposer,
-  useHeldWords,
 } from "./tasks/use-agent-composer.js";
 import type { MainTab } from "./tasks/use-main-tabs.js";
 import { type TaskInboxControl, useTaskInbox } from "./tasks/use-task-inbox.js";
@@ -1265,20 +1264,18 @@ test("words another window writes for a box this window let go a moment before s
 
 test("files attached in this window stay as its draft when another window lets the words beside them go", async () => {
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
-  let composer: AgentComposerControl | undefined;
+  let composer: HeldComposer | undefined;
 
   function Box(): null {
     useDraftsOwner(DEAN);
-    composer = useHeldWords(
-      useAgentComposer({
-        sending: useOutbox(INVITES.agent.id),
-        unsend: unsendOutbox,
-        agentId: INVITES.agent.id,
-        taskId: INVITES.plan.id,
-        messages: [],
-        send: outboxed(NEVER_ANSWERED),
-      }),
-    );
+    composer = useAgentComposer({
+      sending: useOutbox(INVITES.agent.id),
+      unsend: unsendOutbox,
+      agentId: INVITES.agent.id,
+      taskId: INVITES.plan.id,
+      messages: [],
+      send: outboxed(NEVER_ANSWERED),
+    });
 
     return null;
   }
@@ -1297,5 +1294,5 @@ test("files attached in this window stay as its draft when another window lets t
     window.dispatchEvent(new StorageEvent("storage", { key: "app.composerDrafts" }));
   });
   await settle();
-  assert.deepEqual([box().held.text, box().held.attachments], ["", [notes]]);
+  assert.deepEqual([box().heldNow().text, box().held.attachments], ["", [notes]]);
 });

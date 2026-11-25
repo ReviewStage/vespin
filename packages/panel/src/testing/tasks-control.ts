@@ -20,8 +20,10 @@ import type {
   AppInboxSlice,
   AppInboxWaitingItem,
   AppTranscript,
+  AppTranscriptRead,
 } from "@repo/host/app-state";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
+import { createElement, type ReactElement } from "react";
 import type { AgentRoute } from "../agent-route.js";
 import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
@@ -34,11 +36,15 @@ import {
   agentDeleteMutation,
   agentRenameMutation,
   agentsArchiveMutation,
-  MODELS_READ,
   type TaskAgentsControl,
 } from "../tasks/use-agents.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
-import type { NewTask } from "../tasks/use-new-task.js";
+import {
+  NEW_TASK_UNSHOWN,
+  type NewTask,
+  type NewTaskShown,
+  NewTaskShownContext,
+} from "../tasks/use-new-task.js";
 import { DRAWN_KINDS } from "../tasks/use-side-panel.js";
 import {
   type TasksControl,
@@ -74,23 +80,25 @@ export function listedAgent(
 }
 
 /** An open item as main's read of the account carries it into what waits: its id, its agent, what it asks, and when it was posted. */
+/** A page a test's host tells of a transcript, as the service answers one or as the host's follow tells it, with how the host read it where the test says. */
+export type ToldPage = (AgentMessagesAnswerView | AgentTranscriptPage) & {
+  readonly read?: AppTranscriptRead;
+};
+
 /** A page as the host pushes it: caught up where it came back with nothing on it, unless it says otherwise. */
-function pushedPage(page: AgentMessagesAnswerView | AgentTranscriptPage): AgentTranscriptPage {
+function pushedPage(page: ToldPage): AgentTranscriptPage & { readonly read?: AppTranscriptRead } {
   if ("failure" in page || "caughtUp" in page) return page;
 
   return { ...page, caughtUp: page.messages.length === 0 };
 }
 
-/** A page a test's host tells of a transcript, as the service answers one or as the host's follow tells it. */
-export type ToldPage = AgentMessagesAnswerView | AgentTranscriptPage;
-
 /**
  * A transcript as a test's host holds it once `pages` were told on it in
  * turn: each readable page's messages joined on by id, or a newest page
  * that does not meet them, or was read at another rewind, in their place;
- * its word on the agent the last's, and each counted; a page that could not
- * be read standing beside what was held, and one the account does not reach
- * in its place.
+ * its word on the agent the last's, and each counted, with the host's read
+ * of the last where it says one; a page that could not be read standing
+ * beside what was held, and one the account does not reach in its place.
  */
 export function transcriptTold(pages: readonly ToldPage[]): AppHostRead<AppTranscript> {
   let held: AppTranscript = { messages: [], pages: 0 };
@@ -104,7 +112,7 @@ export function transcriptTold(pages: readonly ToldPage[]): AppHostRead<AppTrans
       continue;
     }
 
-    const { messages, cursor, before, newest, ...word } = page;
+    const { messages, cursor, before, newest, read, ...word } = page;
     const ids = new Set(messages.map((message) => message.id));
     const meets = before === undefined || held.messages.some((message) => ids.has(message.id));
 
@@ -112,7 +120,8 @@ export function transcriptTold(pages: readonly ToldPage[]): AppHostRead<AppTrans
       newest === true &&
       (held.messages.length === 0 || !meets || word.rewound !== held.word?.rewound);
 
-    const { failure: _failure, before: heldBefore, ...standing } = held;
+    // Note that a page's read is its own, so one told without a read lays none, as the host's rows do.
+    const { failure: _failure, before: heldBefore, read: _read, ...standing } = held;
 
     // Note that a newest page naming no older page holds the whole transcript, so nothing stands below it.
     const below =
@@ -125,6 +134,7 @@ export function transcriptTold(pages: readonly ToldPage[]): AppHostRead<AppTrans
       cursor,
       word,
       pages: held.pages + 1,
+      ...(read === undefined ? undefined : { read }),
     };
   }
 
@@ -343,7 +353,6 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onRetryList: ignore,
     models: undefined,
     modelsFailed: false,
-    modelsRead: { state: MODELS_READ.UNREAD, generation: 0 },
     macs: undefined,
     readModels: ignore,
     onUnarchive: undefined,
@@ -495,16 +504,11 @@ export const UNMOVED_LINK_READS = (): (() => boolean) => () => true;
 /** New task as the Tasks tab hands it, its dialog put away and every press ignored, but where `overrides` say otherwise. */
 export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
   return {
-    starting: false,
     onOpen: ignore,
     onOpenIn: ignore,
     onOpenInSection: ignore,
     onOpenRelated: ignore,
     onOpenForAutomation: ignore,
-    open: false,
-    preset: undefined,
-    homeAsks: 0,
-    homeRefused: undefined,
     workspaces: [],
     workspaceId: undefined,
     repositoriesIn: () => NO_REPOSITORIES,
@@ -512,13 +516,20 @@ export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
     models: undefined,
     devices: undefined,
     modelsFailed: false,
-    modelsRead: { state: MODELS_READ.UNREAD, generation: 0 },
     readModels: ignore,
     onClose: ignore,
     typedNames: new Map(),
     onShowMention: ignore,
     ...overrides,
   };
+}
+
+/** `element` under New task's moving state as the window provides it (`NewTaskShownContext`): shown nowhere, but where `shown` says otherwise. */
+export function withNewTaskShown(
+  shown: Partial<NewTaskShown>,
+  element: ReactElement,
+): ReactElement {
+  return createElement(NewTaskShownContext, { value: { ...NEW_TASK_UNSHOWN, ...shown } }, element);
 }
 
 /** What a test sets of a Tasks tab, and the tasks and agents its window's task list holds (`tasks`, `listedAgents`), which the tab itself never carries. */

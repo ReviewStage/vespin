@@ -12,6 +12,7 @@ import {
   type PictureSourceView,
   picturePathOf,
 } from "@repo/features/picture-source-wire";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import { SIGN_IN_FAILURE, type SignInFailure } from "@repo/features/words";
 import { carried, GATEWAY_EVENT, GATEWAY_METHOD, RefusedRefusal } from "@repo/gateway";
 import { withoutTrailingSlash } from "@repo/wire";
@@ -331,7 +332,9 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
    * for it and the header the account's calls carry, renewed first where a
    * read the service refused asks, so one refused read is tried once more
    * under a new header. The header goes to the loader's source alone, never
-   * to a report.
+   * to a report. Note that the phone asks for a recording's MP4 copy, which
+   * the system's player plays, where the service keeps one; a picture is
+   * answered as it is.
    */
   const pictureSource = (picture: PictureSourceParams): Effect.Effect<PictureSourceView> =>
     Effect.gen(function* () {
@@ -342,7 +345,10 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
 
       if (authorization === undefined) return PICTURE_SOURCE_SIGNED_OUT;
 
-      return { uri: `${serviceOrigin}${picturePathOf(picture)}`, headers: { authorization } };
+      return {
+        uri: `${serviceOrigin}${picturePathOf(picture)}`,
+        headers: { authorization, accept: MP4_TYPE },
+      };
     });
 
   const methods: HostMethodTable = {

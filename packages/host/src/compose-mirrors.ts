@@ -58,7 +58,8 @@ import type { Composer } from "./composer.js";
 import type { MirrorPlatformSeam } from "./effect/seams.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
-import { mirrorDeleted, mirrorMatched, mirrorWritten } from "./mirror-disk.js";
+import { type KnownHashes, mirrorDeleted, mirrorMatched, mirrorWritten } from "./mirror-disk.js";
+import { type MatchMirror, MirrorMatchFailed } from "./mirror-match-remote.js";
 import type { RunMode } from "./run-mode.js";
 
 /**
@@ -405,6 +406,24 @@ export function composeMirrors(
     // Note that one mirror matches at a time, because a match reads and hashes the whole checkout.
     const matching = yield* Semaphore.make(1);
     const socketOrigin = webSocketOrigin(kernel.hostedServiceBaseUrl);
+    // Note that a match in this process keeps each mirror's hashes for the run, as the desktop's matching process does.
+    const knownByWorktree = new Map<string, KnownHashes>();
+
+    /** A mirror matched in this process, where the platform hands no process to match in. */
+    const matchHere: MatchMirror = (root, listed, files) => {
+      const known = knownByWorktree.get(root) ?? new Map();
+      knownByWorktree.set(root, known);
+
+      return Effect.provideContext(
+        Effect.mapError(
+          mirrorMatched(root, listed, files, known),
+          () => new MirrorMatchFailed({ timedOut: false }),
+        ),
+        context,
+      );
+    };
+
+    const matchMirror = platform.match ?? matchHere;
 
     const folderOf = (agentId: string) => path.join(platform.folder, agentId);
     const worktreeOf = (agentId: string) => path.join(folderOf(agentId), WORKTREE_FOLDER);
@@ -523,7 +542,14 @@ export function composeMirrors(
             agentId,
             MIRROR_STEP.MATCH,
             Effect.gen(function* () {
-              const asked = yield* mirrorMatched(worktree, listed, files);
+              const asked = yield* Effect.mapError(
+                matchMirror(worktree, listed, files),
+                (failed) =>
+                  new MirrorDropped({
+                    step: MIRROR_STEP.MATCH,
+                    failure: failed.timedOut ? MIRROR_FAILURE.TIMED_OUT : MIRROR_FAILURE.EXITED,
+                  }),
+              );
 
               for (let at = 0; at < asked.length; at += MIRROR_BOUNDS.REQUEST_PATHS) {
                 const paths = asked.slice(at, at + MIRROR_BOUNDS.REQUEST_PATHS);

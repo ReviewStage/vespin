@@ -31,12 +31,7 @@ import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AgentComposer } from "./agent-composer.js";
 import { AGENT_LEAD, AgentMessage, AgentTab } from "./agent-tab.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
-import {
-  type HeldComposer,
-  type MessageSender,
-  useAgentComposer,
-  useHeldWords,
-} from "./use-agent-composer.js";
+import { type HeldComposer, type MessageSender, useAgentComposer } from "./use-agent-composer.js";
 
 // Each test's host starts with no message on its way.
 beforeEach(resetOutbox);
@@ -131,16 +126,14 @@ function Tab({ sender }: { sender: MessageSender }): ReactNode {
   const tab = useRef<HTMLElement>(null);
   const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
 
-  const composer = useHeldWords(
-    useAgentComposer({
-      sending: useOutbox("agent-1"),
-      unsend: unsendOutbox,
-      agentId: "agent-1",
-      taskId: "plan-1",
-      messages: [],
-      send: outboxed(sender),
-    }),
-  );
+  const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
+    agentId: "agent-1",
+    taskId: "plan-1",
+    messages: [],
+    send: outboxed(sender),
+  });
 
   drawnComposer = composer;
 

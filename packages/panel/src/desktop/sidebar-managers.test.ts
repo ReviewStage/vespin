@@ -24,7 +24,7 @@ import {
   MODELS_READ,
   type ModelsRead,
 } from "../tasks/use-agents.js";
-import type { NewTask } from "../tasks/use-new-task.js";
+import { NEW_TASK_UNSHOWN, type NewTask } from "../tasks/use-new-task.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handHostReads, handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
@@ -35,6 +35,7 @@ import {
   newTaskControl,
   taskAgentsOf,
   tasksControl,
+  withNewTaskShown,
 } from "../testing/tasks-control.js";
 
 /**
@@ -412,11 +413,23 @@ const MAC: MacOffer = {
 };
 
 /** New Task's control as New Manager reads it: the recent repository, and the devices as `modelsRead` stands. */
-function newManagerTask(overrides: Partial<NewTask> = {}): NewTask {
-  return newTaskControl({
-    repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: [RELAY] }),
-    ...overrides,
-  });
+/** New task as New Manager reads it: its doors, and where the newest read of the models stands, which the window provides apart (`NewTaskShown.modelsRead`). */
+interface ManagerNewTask {
+  readonly newTask: NewTask;
+  readonly modelsRead: ModelsRead;
+}
+
+function newManagerTask({
+  modelsRead = NEW_TASK_UNSHOWN.modelsRead,
+  ...overrides
+}: Partial<NewTask> & { readonly modelsRead?: ModelsRead } = {}): ManagerNewTask {
+  return {
+    newTask: newTaskControl({
+      repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: [RELAY] }),
+      ...overrides,
+    }),
+    modelsRead,
+  };
 }
 
 /**
@@ -425,7 +438,7 @@ function newManagerTask(overrides: Partial<NewTask> = {}): NewTask {
  * unanswered; answers how to draw it again over another New Task, press a
  * button by its name, and type the Manager's name.
  */
-async function mountNewManager(newTask: NewTask) {
+async function mountNewManager(newTask: ManagerNewTask) {
   handState({ [EXPERIMENT.MANAGERS]: true });
   handHostReads({
     models: {
@@ -464,12 +477,19 @@ async function mountNewManager(newTask: NewTask) {
   const root = createRoot(container);
   roots.push(root);
 
-  const draw = (next: NewTask) =>
+  const draw = (next: ManagerNewTask) =>
     root.render(
       withQueryClient(
-        drawnSidebar(
-          sidebarProps(
-            tasksControl({ workspaces: [WORKSPACE], workspace: WORKSPACE, newTask: next }),
+        withNewTaskShown(
+          { modelsRead: next.modelsRead },
+          drawnSidebar(
+            sidebarProps(
+              tasksControl({
+                workspaces: [WORKSPACE],
+                workspace: WORKSPACE,
+                newTask: next.newTask,
+              }),
+            ),
           ),
         ),
       ),

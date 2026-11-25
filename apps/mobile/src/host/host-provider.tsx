@@ -34,8 +34,10 @@ import {
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
 import { followAppStateInto } from "./app-state-query.js";
+import { busyAccountAnswer } from "./busy-account-server.js";
 import { deviceSeams, hostStateRoot, onNetworkChanged } from "./device-seams.js";
 import {
+  launchBusyAccount,
   launchFixtureProfile,
   launchInboxOff,
   launchMachineAsk,
@@ -324,7 +326,7 @@ function launchOptions(): MobileHostStartOptions {
   };
 
   if (!launchStubsAuthServer()) return { ...base, device };
-  standStubAuthServer();
+  standStubAuthServer(launchBusyAccount() ? busyAccountAnswer : undefined);
 
   return {
     ...base,

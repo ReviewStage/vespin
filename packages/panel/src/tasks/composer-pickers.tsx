@@ -7,6 +7,7 @@ import type {
   ComposerTrigger,
 } from "../description-editor/contract.js";
 import type { IntegrationStatuses } from "../integration-statuses.js";
+import type { BoxWords } from "./box-words.js";
 import type { ComposerFieldMentions } from "./composer-field.js";
 import { MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, useMentionPicker } from "./mention-picker.js";
@@ -58,7 +59,7 @@ export interface ComposerPickers {
 export function useComposerPickers({
   editor,
   room,
-  draft,
+  words,
   placeholder,
   self,
   skills,
@@ -74,7 +75,8 @@ export function useComposerPickers({
   editor: RefObject<ComposerEditorHandle | undefined>;
   /** The box's field, which the lists stand inside. */
   room: RefObject<HTMLDivElement | null>;
-  draft: string;
+  /** The box's words, which the `/` list reads what it draws of. */
+  words: BoxWords;
   placeholder: string;
   /** The agent the words go to, which the `@` list does not offer; none for a draft not yet started, or a comment. */
   self?: string | undefined;
@@ -103,7 +105,7 @@ export function useComposerPickers({
   const skillPicker = useSkillPicker({
     editor,
     room,
-    draft,
+    words,
     source: skills,
     onOpen: openSkill,
     commands,

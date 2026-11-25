@@ -45,6 +45,7 @@ import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face } from "./marks.js";
 import type { MediaSize } from "./media-frame.js";
 import { PictureSet, type SetPicture } from "./picture-set.js";
+import type { PictureRef } from "./picture-source.js";
 import type { LongPressGroup } from "./row-menu-model.js";
 import {
   type BarFootItem,
@@ -89,7 +90,8 @@ export type ThreadMedia =
   | {
       readonly kind: typeof THREAD_MEDIA.PICTURE;
       readonly key: string;
-      readonly source: string | null | undefined;
+      /** A file, an address with the header its read carries, or one kept by its id that it reads where it is drawn (`PictureByIdProvider`). */
+      readonly source: PictureRef | null | undefined;
       readonly onRetry?: (() => void) | undefined;
       readonly alt: string;
       /** The size its header states, in pixels, where its bytes are held, which it stands at before it decodes. */
@@ -98,7 +100,7 @@ export type ThreadMedia =
   | {
       readonly kind: typeof THREAD_MEDIA.VIDEO;
       readonly key: string;
-      readonly source: string | null | undefined;
+      readonly source: PictureRef | null | undefined;
       readonly onRetry?: (() => void) | undefined;
       readonly label: string;
       /** Opens the video where it plays, such as its thread in Safari, for one the system's player cannot read. */

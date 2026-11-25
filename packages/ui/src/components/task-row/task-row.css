@@ -36,7 +36,10 @@
    chevron stands at rest. */
 
 @layer components {
-  .ui-task-row:has(:focus-visible),
+  .ui-task-row:is(
+    :where(:root[data-keyboard="true"]) :focus-within,
+    [data-editing="true"]:focus-within
+  ),
   .ui-task-row[data-menu-open="true"],
   .ui-task-row:has([aria-expanded="true"]) {
     z-index: 2;
@@ -67,7 +70,11 @@
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
 
-  .ui-task-row:is(:has(:focus-visible), [data-menu-open="true"]) .ui-task-row-more {
+  .ui-task-row:is(
+      :is(:where(:root[data-keyboard="true"]) :focus-within, [data-editing="true"]:focus-within),
+      [data-menu-open="true"]
+    )
+    .ui-task-row-more {
     pointer-events: auto;
   }
 
@@ -76,14 +83,20 @@
       pointer-events: auto;
     }
 
-    .ui-task-row:not(:hover, :has(:focus-visible), [data-menu-open="true"])
+    .ui-task-row:not(
+        :hover,
+        :is(:where(:root[data-keyboard="true"]) :focus-within, [data-editing="true"]:focus-within),
+        [data-menu-open="true"]
+      )
       > [data-cell="priority"]:not(:has([aria-expanded="true"])):has([data-priority="none"]) {
       opacity: 0;
     }
 
-    .ui-task-row:is(:hover, :has(:focus-visible), [data-menu-open="true"]):has(
-        > .ui-task-row-more:not(:empty)
-      )
+    .ui-task-row:is(
+        :hover,
+        :is(:where(:root[data-keyboard="true"]) :focus-within, [data-editing="true"]:focus-within),
+        [data-menu-open="true"]
+      ):has(> .ui-task-row-more:not(:empty))
       > .ui-task-row-cell[data-under-more="true"] {
       opacity: 0;
       pointer-events: none;
@@ -124,11 +137,11 @@
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
 
-  .ui-task-row:is(:hover, :has(.ui-task-row-fold-over:focus-visible)) .ui-task-row-fold-over {
+  .ui-task-row:is(:hover, [data-fold-held="true"]) .ui-task-row-fold-over {
     opacity: 1;
   }
 
-  .ui-task-row:is(:hover, :has(.ui-task-row-fold-over:focus-visible)) .ui-task-row-status {
+  .ui-task-row:is(:hover, [data-fold-held="true"]) .ui-task-row-status {
     opacity: 0;
   }
 

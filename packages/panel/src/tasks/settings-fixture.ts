@@ -91,6 +91,7 @@ import {
   type AppWorkspaceMembers,
   EVERY_WORKSPACE,
   RUN_PROFILE,
+  WORKSPACE_OWN_MEMORIES,
 } from "@repo/host/app-state";
 import {
   CLI_INSTALL_OUTCOME,
@@ -1344,7 +1345,7 @@ function memoriesStaged(): AppMemories {
     lastRecalledAt: each.lastRecalledAt === null ? null : each.lastRecalledAt + shift,
   }));
 
-  stagedMemories = { [WORKSPACE.ACME]: { rows } };
+  stagedMemories = { [WORKSPACE.ACME]: { [WORKSPACE_OWN_MEMORIES]: { rows } } };
 
   return stagedMemories;
 }

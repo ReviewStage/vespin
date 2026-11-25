@@ -66,6 +66,8 @@ export type { CaretAtWord } from "./caret-at-word.js";
 
 export { ChangedFileRow } from "./changed-file-row.js";
 
+export type { ChannelFaces } from "./channel-row.js";
+
 export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
 export {
@@ -142,6 +144,8 @@ export {
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
 export { releaseFields } from "./field-focus.js";
+
+export { type FiringLook, firingLook } from "./firing-look.js";
 
 export {
   AttachRow,
@@ -528,6 +532,7 @@ export {
 export {
   drawnCallIds,
   managerChatItems,
+  managerThreadItems,
   NO_TOGGLES,
   openCuts,
   rowsNear,
@@ -536,6 +541,7 @@ export {
   shownFiles,
   shownMediaIds,
   shownPictureIds,
+  shownRecordingIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptToggles,

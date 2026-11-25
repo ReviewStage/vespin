@@ -6,7 +6,13 @@ import { Dialog } from "@repo/ui";
 import { act, createElement, Fragment, type ReactElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import { useAppCommand, useAppKeymap, useMenuCommands, useMenuOffers } from "./app-commands.js";
+import {
+  OffersLeft,
+  useAppCommand,
+  useAppKeymap,
+  useMenuCommands,
+  useMenuOffers,
+} from "./app-commands.js";
 import { useFocusedRowKeys } from "./desktop/task-actions.js";
 import { SHORTCUT_SUBJECT, shortcutSubject } from "./shortcut-target.js";
 import { fakeAppPlatform } from "./testing/app-platform.js";
@@ -255,4 +261,46 @@ test("the window tells the menu bar the commands it offers as one set each time 
     [APP_COMMAND.BACK, APP_COMMAND.COPY_LINK].toSorted(),
     [APP_COMMAND.BACK],
   ]);
+});
+
+/** One offer of Version history, each press recorded under `who`. */
+function VersionHistory({ who, presses }: { who: string; presses: string[] }): null {
+  useAppCommand(APP_COMMAND.VERSION_HISTORY, () => presses.push(who));
+
+  return null;
+}
+
+/** A window offering the sidebar's Version history, with a task's page drawn after it whose offer answers over it unless the page is `left`. */
+function LeavingWindow({
+  presses,
+  left,
+}: {
+  presses: string[];
+  left: { current: boolean };
+}): ReactElement {
+  useMenuCommands(true);
+
+  return createElement(
+    Fragment,
+    null,
+    createElement(VersionHistory, { who: "sidebar", presses }),
+    createElement(
+      OffersLeft,
+      { value: () => left.current },
+      createElement(VersionHistory, { who: "task A", presses }),
+    ),
+  );
+}
+
+test("a page the window is leaving offers no key, so a press while the next task's page is drawn never acts on the task left", () => {
+  const presses: string[] = [];
+  const left = { current: false };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() => root.render(withQueryClient(createElement(LeavingWindow, { presses, left }))));
+
+  menu(APP_COMMAND.VERSION_HISTORY);
+  left.current = true;
+  menu(APP_COMMAND.VERSION_HISTORY);
+  assert.deepEqual(presses, ["task A", "sidebar"]);
 });

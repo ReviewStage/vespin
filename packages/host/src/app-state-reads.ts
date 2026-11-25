@@ -63,6 +63,7 @@ import {
   type AppStateRead,
   type AppStateSnapshot,
   type AppTranscript,
+  memoriesHolder,
   OWN_TRANSCRIPT,
   sharesUsageData,
   withAppStateDelivery,
@@ -950,11 +951,12 @@ export function selectWorkspaceRuns(
   return (state) => state[LIVE_READ.AUTOMATION_WORKSPACE_RUNS][workspaceId];
 }
 
-/** The memories the host holds for one workspace, with every save and delete drawn over them (`ACT_KIND.MEMORIES_FOLLOW`), as a `select`; none before they are read. */
+/** The memories the host holds for one workspace, or for one Manager in it where `managerId` names one, with every save and delete drawn over them (`ACT_KIND.MEMORIES_FOLLOW`), as a `select`; none before they are read. */
 export function selectWorkspaceMemories(
   workspaceId: string,
-): (state: AppStateSnapshot) => AppMemories[string] | undefined {
-  return (state) => state[LIVE_READ.MEMORIES][workspaceId];
+  managerId?: string,
+): (state: AppStateSnapshot) => AppMemories[string][string] | undefined {
+  return (state) => state[LIVE_READ.MEMORIES][workspaceId]?.[memoriesHolder(managerId)];
 }
 
 /** Whether the reader pinned the agent, as the task list follows their pins, as a `select`. */

@@ -14,9 +14,10 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { playheadText } from "@repo/features/time-format";
+import { Predicate } from "effect";
 import { useEvent, useEventListener } from "expo";
-import { useVideoPlayer, type VideoPlayer, VideoView } from "expo-video";
-import { useRef, useState } from "react";
+import { useVideoPlayer, type VideoPlayer, type VideoSource, VideoView } from "expo-video";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -26,6 +27,13 @@ import { KEPT_KIND } from "./keep-model.js";
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
 import { mediaFrame } from "./media-frame.js";
+import {
+  type PictureRef,
+  type PictureSource,
+  pictureUri,
+  usePictureEvents,
+  usePictureRef,
+} from "./picture-source.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
@@ -69,6 +77,38 @@ function useVideoLength(player: VideoPlayer): number | undefined {
   const duration = useEvent(player, "sourceLoad")?.duration ?? player.duration;
 
   return duration > 0 ? duration : undefined;
+}
+
+/**
+ * What the system's player reads a video from: a file of the app's, or an
+ * address with the header its read carries, which expo-video keeps on disk
+ * as it plays (`useCaching`), so a recording played once plays again with no
+ * read; none while its bytes are on their way.
+ */
+function playerSource(source: PictureSource | null | undefined): VideoSource {
+  if (source == null) return null;
+
+  if (Predicate.isString(source)) return source;
+
+  return { uri: source.uri, headers: { ...source.headers }, useCaching: true };
+}
+
+/**
+ * Tells the page a recording the player could not read from the service's
+ * address, once for each address, so the page asks for it once more under
+ * a renewed header, as a picture's loader does; one that fails again stands
+ * as one the player cannot play.
+ */
+function useRefusedOnce(source: PictureSource | null | undefined, failed: boolean): void {
+  const events = usePictureEvents();
+  const told = useRef<string | undefined>(undefined);
+  const address = source == null || Predicate.isString(source) ? undefined : source.uri;
+
+  useEffect(() => {
+    if (!failed || address === undefined || told.current === address) return;
+    told.current = address;
+    events?.failed(address);
+  }, [address, events, failed]);
 }
 
 /**
@@ -144,8 +184,8 @@ function PlayMark({
 }
 
 type VideoProps = {
-  /** The file the video plays from, such as one the thread wrote under the app's caches; none while its bytes are on their way, which stands its well alone, and `null` where they could not be read, which says so in its well. */
-  readonly source: string | null | undefined;
+  /** What the video plays from: a file, such as one the thread wrote under the app's caches, or the service's address with the header its read carries, or one kept by its id that it reads where it is drawn (`PictureByIdProvider`); none while its bytes are on their way, which stands its well alone, and `null` where they could not be read, which says so in its well. */
+  readonly source: PictureRef | null | undefined;
   /** What the video is, its file's name, heard in its place. */
   readonly label: string;
   /** Opens the video where it plays, offered where the system's player cannot read it; none offers nothing. */
@@ -168,25 +208,30 @@ type VideoProps = {
  * video's name, which opens the system's player full screen, where its
  * controls are read, as a video in Messages is.
  */
-export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: VideoProps) {
+export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry }: VideoProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
-  const player = useVideoPlayer(source ?? null);
+  const source = usePictureRef(ref);
+  const player = useVideoPlayer(playerSource(source));
   const view = useRef<VideoView>(null);
   const { status } = useEvent(player, "statusChange", { status: player.status });
   // Note that a track the player read before this listens is taken as it stands, since its change has already gone by.
   const { videoTrack } = useEvent(player, "videoTrackChange", { videoTrack: player.videoTrack });
   const natural = videoTrack?.size;
   const failed = status === "error";
+  useRefusedOnce(source, failed);
   const length = useVideoLength(player);
-  const played = usePlayedOnce(player, source ?? "");
+  const played = usePlayedOnce(player, source == null ? "" : pictureUri(source));
 
   // Note that a tile fills its tile at the tile's shape, and any other video stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
   const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
   const tiled = { aspectRatio: tileAspect ?? frame?.aspectRatio };
 
+  // Note that one the player can play is offered to Photos, as an MP4 is, and one it cannot, such as a WebM, only shared.
   const acts = useKeptActs(
-    source == null ? undefined : { kind: KEPT_KIND.VIDEO, source, name: label },
+    source == null
+      ? undefined
+      : { kind: KEPT_KIND.VIDEO, source, name: label, plays: status === "readyToPlay" },
   );
 
   // Note that a video whose bytes could not be read says so in its well with Try again, as a picture does, rather than spin as one still on its way.

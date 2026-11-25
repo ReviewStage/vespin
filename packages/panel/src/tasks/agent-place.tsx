@@ -22,6 +22,7 @@ import {
   HoverCardNote,
   Inline,
   type MenuRow,
+  POPOVER_WIDTH,
   STATUS_TONE,
   StaticChip,
   SUBMENU_WIDTH,
@@ -42,7 +43,7 @@ import { presenceStanding, useDevicePresence } from "../device-presence.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
-import { MachineValue, useDefaultMachineRow } from "./agent-machines.js";
+import { MachineValue, type ReachableMachines, useReachableMachines } from "./agent-machines.js";
 import type { PlaceMove } from "./move-agent.js";
 import {
   CLOUD_ROW,
@@ -142,6 +143,25 @@ const PLACE_WORDS = {
 /** The Agent runs in row's id, which no place's id is. */
 const RUNS_IN_ROW = "runs-in";
 
+/**
+ * The place popover's rows: the Agent runs in row, then the machines the
+ * agent may also run commands on, where it may reach any
+ * (`useReachableMachines`), under their heading and over the line that says
+ * what a pick does, the popover standing wide to give the machines' names
+ * and uses room.
+ */
+function placeMenu(runsIn: MenuRow, reachable: ReachableMachines | undefined): ChipPopoverMenu {
+  if (reachable === undefined) return { rows: [runsIn], noMatch: RUNS_ON_WORDS.NO_MATCH };
+
+  return {
+    rows: [runsIn, ...reachable.rows],
+    noMatch: RUNS_ON_WORDS.NO_MATCH,
+    onPick: reachable.onPick,
+    lastLine: reachable.lastLine,
+    width: POPOVER_WIDTH.WIDE,
+  };
+}
+
 /** A cloud agent's facts: its sandbox's state, and where the service says it, its size. */
 function cloudFacts(
   state: ReturnType<typeof useSandboxState>,
@@ -222,12 +242,11 @@ function useRunsInRow({
  * (`sandbox-place.tsx`), beside "Cloud" alone, the state said to a reader
  * and in the popover, never in a hint on the chip. A press opens its
  * popover (`@repo/ui`'s `ChipPopover`), headed "Where this agent works":
- * the sandbox's Status, CPU, and Memory, then two rows, each drawn as the
- * place it names is drawn in its submenu, its glyph wearing its dot and its
- * name at the row's end, and a chevron where it opens a submenu: Agent runs in, where the agent itself runs and
- * the places to move it to (`useRunsInRow`), and Default machine, where its
- * terminal commands and computer use go when a call names none
- * (`agent-machines.tsx`), for an agent offered them.
+ * the sandbox's Status, CPU, and Memory, then Agent runs in, drawn as the
+ * cloud is drawn in its submenu, its glyph wearing its dot and its name at
+ * the row's end, with a chevron where it opens the places to move it to
+ * (`useRunsInRow`), and under it the machines the agent may also run
+ * commands on (`placeMenu`).
  */
 function CloudChip({
   agentId,
@@ -261,7 +280,7 @@ function CloudChip({
     }),
   });
 
-  const defaultMachine = useDefaultMachineRow(agentId);
+  const reachable = useReachableMachines(agentId);
 
   return (
     <ChipPopover
@@ -272,10 +291,7 @@ function CloudChip({
       iconOnly={narrow}
       title={PLACE_WORDS.TITLE}
       facts={cloudFacts(state, vcpus)}
-      menu={{
-        rows: defaultMachine === undefined ? [runsIn] : [runsIn, defaultMachine],
-        noMatch: RUNS_ON_WORDS.NO_MATCH,
-      }}
+      menu={placeMenu(runsIn, reachable)}
     />
   );
 }
@@ -381,7 +397,8 @@ function useMoveMenu(
 
 /**
  * The chip of an agent on a device: where it has rows to offer, the move
- * (`useRunsInRow`) or its Default machine (`agent-machines.tsx`), a press
+ * (`useRunsInRow`) or the machines it may also run commands on
+ * (`agent-machines.tsx`), a press
  * opens its popover, headed "Where this agent works" as the Cloud chip's
  * is, with no facts, since the Agent runs in row's dot says whether the
  * device is online; otherwise the static chip and its card, the glyph, the
@@ -398,7 +415,7 @@ function PlaceChip({
   note,
   quiet = true,
   move,
-  defaultMachine,
+  reachable,
   narrow,
 }: {
   here: string | undefined;
@@ -411,8 +428,8 @@ function PlaceChip({
   note: string;
   quiet?: boolean;
   move: PlaceMove | undefined;
-  /** The Default machine row, where the agent is offered one. */
-  defaultMachine: MenuRow | undefined;
+  /** The machines the agent may also run commands on, where it may reach any. */
+  reachable: ReachableMachines | undefined;
   narrow: boolean;
 }): React.JSX.Element {
   const runsIn = useRunsInRow({
@@ -440,7 +457,7 @@ function PlaceChip({
       </>
     );
 
-  if (move !== undefined || defaultMachine !== undefined) {
+  if (move !== undefined || reachable !== undefined) {
     return (
       <ChipPopover
         label={RUNS_ON_WORDS.LABEL}
@@ -449,10 +466,7 @@ function PlaceChip({
         iconOnly={narrow}
         title={PLACE_WORDS.TITLE}
         facts={[]}
-        menu={{
-          rows: defaultMachine === undefined ? [runsIn] : [runsIn, defaultMachine],
-          noMatch: RUNS_ON_WORDS.NO_MATCH,
-        }}
+        menu={placeMenu(runsIn, reachable)}
       />
     );
   }
@@ -511,7 +525,7 @@ function WorkspaceMachineChip({
       }
       note={WORKSPACE_MACHINE_NOTE}
       quiet={standing === undefined || standing === DEVICE_STANDING.ONLINE}
-      defaultMachine={undefined}
+      reachable={undefined}
       narrow={narrow}
     />
   );
@@ -536,7 +550,7 @@ function MacChip({
   const { readerId } = useMemberDirectory();
   const ownerActor = usePerson(owner);
   const thisMac = useThisMac();
-  const defaultMachine = useDefaultMachineRow(agentId);
+  const reachable = useReachableMachines(agentId);
   // Note that the clock only redraws the label as a beat ages, since the standing is read off the book's own monotonic clock.
   useSecond();
   const standing = presenceStanding(presence, mac.deviceId);
@@ -557,7 +571,7 @@ function MacChip({
       <DeviceStandingGlyph device={listed} standing={standing} hinted={false} />
     );
 
-  // Note that a teammate's machine wears its owner's face beside its glyph, as a machine of theirs does in the Default machine list; the reader's own needs no saying whose it is.
+  // Note that a teammate's machine wears its owner's face beside its glyph, as a machine of theirs does in the machine list; the reader's own needs no saying whose it is.
   const teammate = owner !== undefined && readerId !== undefined && owner.userId !== readerId;
 
   return (
@@ -579,7 +593,7 @@ function MacChip({
       }
       note={DEVICE_NOTE}
       quiet={quiet}
-      defaultMachine={defaultMachine}
+      reachable={reachable}
       narrow={narrow}
     />
   );
