@@ -288,8 +288,11 @@ interface InboxShowChoice {
   onShow: (show: InboxShow) => void;
 }
 
-/** What the window's Inbox lists, and the presses that change it. */
-export interface InboxViewChoices extends InboxShowChoice, InboxWhoseChoice {
+/** Which items the window's Inbox lists, by scope and whom they are addressed to, and the presses that change them, which a Manager's Inbox tab shares (`agent-threads.tsx`). */
+export interface InboxScopeChoices extends InboxShowChoice, InboxWhoseChoice {}
+
+/** How the window's Inbox orders what it lists: its pinned tasks' items first, and the runs folded under their headings. */
+export interface InboxOrderChoices {
   /** Whether the pinned tasks' items stand first, under a heading of their own. */
   pinnedFirst: boolean;
   onPinnedFirst: (pinnedFirst: boolean) => void;
@@ -298,6 +301,9 @@ export interface InboxViewChoices extends InboxShowChoice, InboxWhoseChoice {
   /** Folds a run, or opens it. */
   onFold: (run: InboxRun, folded: boolean) => void;
 }
+
+/** What the window's Inbox lists, and the presses that change it. */
+export interface InboxViewChoices extends InboxScopeChoices, InboxOrderChoices {}
 
 /** Whom the items the window's Inbox lists are addressed to, and the press that lists another's. */
 export interface InboxWhoseChoice {

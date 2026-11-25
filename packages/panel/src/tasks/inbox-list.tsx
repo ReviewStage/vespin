@@ -148,7 +148,8 @@ import {
 import { ActionMenu, type MenuAction, type MenuEntry, rowMenu } from "../desktop/action-menu.js";
 import {
   INBOX_LIST_WIDTH,
-  type InboxViewChoices,
+  type InboxOrderChoices,
+  type InboxScopeChoices,
   type InboxWhoseChoice,
   useInboxListWidth,
 } from "../desktop/folded-groups.js";
@@ -301,7 +302,7 @@ function needsYouListed(head: InboxListHead): boolean {
 }
 
 /** Addressed to's choice where it narrows the scope shown (`narrowedByWhose`), for the chip it calls for; none under Questions, or where the Inbox offers no view. */
-function narrowingWhose(view: InboxViewChoices | undefined): InboxWhoseChoice | undefined {
+function narrowingWhose(view: InboxScopeChoices | undefined): InboxWhoseChoice | undefined {
   return view !== undefined && narrowedByWhose(view.show) ? view : undefined;
 }
 
@@ -644,16 +645,19 @@ function whoseEntries(
  * The window's Inbox's head's button that drops the view's menu: first what
  * it shows, Questions, Open, All, or Reminders, the one shown checked; then, but
  * under Questions, Addressed to, a submenu of Anyone, Me, or a teammate by
- * face and name, its choice checked; then Pinned tasks first, a switch.
+ * face and name, its choice checked; then Pinned tasks first, a switch,
+ * where the list holds tasks to pin.
  */
 function ViewOptions({
   shown,
   choices,
+  order,
   readerId,
   asked,
 }: {
   shown: boolean;
-  choices: InboxViewChoices;
+  choices: InboxScopeChoices;
+  order: InboxOrderChoices | undefined;
   readerId: string | undefined;
   /** Where a phone's ⋯ stands for the button, the menu drawn under the ⋯ each time it asks (`phone-head.tsx`), and no button of its own; none elsewhere. */
   asked?: { readonly ask: MenuAsk | undefined } | undefined;
@@ -680,7 +684,7 @@ function ViewOptions({
           replayUnmasked
           label={VIEW_OPTIONS}
           menu={menu.drawn}
-          groups={[scope, ...windowEntries(choices, reader, readerId)]}
+          groups={[scope, ...windowEntries(choices, order, reader, readerId)]}
           onClose={menu.close}
         />
       )}
@@ -712,24 +716,30 @@ function markAllAction(readAll: InboxReadAll): MenuAction {
   };
 }
 
-/** The window's Inbox's own groups of its view's menu, after its scopes: Addressed to, where it narrows the scope shown (`narrowedByWhose`); then the switch that stands the pinned tasks' items first. */
+/** The view's menu's groups after its scopes: Addressed to, where it narrows the scope shown (`narrowedByWhose`); then, where the list holds tasks to pin, the switch that stands the pinned tasks' items first. */
 function windowEntries(
-  choices: InboxViewChoices,
+  choices: InboxScopeChoices,
+  order: InboxOrderChoices | undefined,
   reader: ReturnType<typeof useMemberDirectory>,
   readerId: string | undefined,
 ): MenuEntry[][] {
-  const order: MenuEntry[] = [
-    {
-      label: PINNED_FIRST,
-      icon: <PinIcon />,
-      checked: choices.pinnedFirst,
-      mark: MENU_ITEM_MARK.SWITCH,
-      stays: true,
-      onSelect: () => choices.onPinnedFirst(!choices.pinnedFirst),
-    },
-  ];
+  const pinned: MenuEntry[][] =
+    order === undefined
+      ? []
+      : [
+          [
+            {
+              label: PINNED_FIRST,
+              icon: <PinIcon />,
+              checked: order.pinnedFirst,
+              mark: MENU_ITEM_MARK.SWITCH,
+              stays: true,
+              onSelect: () => order.onPinnedFirst(!order.pinnedFirst),
+            },
+          ],
+        ];
 
-  if (!narrowedByWhose(choices.show)) return [order];
+  if (!narrowedByWhose(choices.show)) return pinned;
 
   return [
     [
@@ -739,7 +749,7 @@ function windowEntries(
         items: whoseEntries(choices.whose, choices.onWhose, reader, readerId),
       },
     ],
-    order,
+    ...pinned,
   ];
 }
 
@@ -898,7 +908,7 @@ function FilterChips({
  * from Questions, where nothing else holds anything.
  */
 function emptyWayOn(
-  view: InboxViewChoices,
+  view: InboxScopeChoices,
   counts: InboxCounts,
   onList: () => void,
 ): EmptyStateAction | undefined {
@@ -934,7 +944,7 @@ function ShowEmpty({
   counts,
   onList,
 }: {
-  view: InboxViewChoices;
+  view: InboxScopeChoices;
   counts: InboxCounts;
   /** Asks the Inbox for its list, so the item chosen once the rows return does not stand in their place. */
   onList: () => void;
@@ -1108,6 +1118,7 @@ function ListHead({
           <ViewOptions
             shown={shown}
             choices={view}
+            order={head.order}
             readerId={readerId}
             asked={{ ask: asked.ask }}
           />
@@ -1126,7 +1137,7 @@ function ListHead({
       <>
         {head.readAll === undefined ? null : <MarkAllReadButton readAll={head.readAll} />}
         {view === undefined ? null : (
-          <ViewOptions shown={shown} choices={view} readerId={readerId} />
+          <ViewOptions shown={shown} choices={view} order={head.order} readerId={readerId} />
         )}
       </>
     );
@@ -1335,7 +1346,7 @@ export function InboxListNote({
   /** Opens New task, the way on from the Inbox's empty state where the list stands alone; none where nothing can start. */
   onNewTask?: (() => void) | undefined;
   /** The scope shown and whom the items are addressed to, where they leave out every item the Inbox holds, for its empty state to show another. */
-  filteredOut: InboxViewChoices | undefined;
+  filteredOut: InboxScopeChoices | undefined;
   /** How many items each scope lists, for the empty state to offer one that lists something. */
   counts: InboxCounts;
   /** Asks for the list, so the scope its empty state shows leaves it standing. */
@@ -1386,8 +1397,10 @@ export function InboxListNote({
 export interface InboxListHead {
   /** Whether the list is on screen, for its menu not to outlive it. */
   readonly shown: boolean;
-  /** The window's Inbox's view choices, and the presses that change them; none on a task's own, which lists every item it holds. */
-  readonly view: InboxViewChoices | undefined;
+  /** The view's choices of scope and whom the items are addressed to, on the window's Inbox and a Manager's Inbox tab, and the presses that change them; none on a task's own, which lists every item it holds. */
+  readonly view: InboxScopeChoices | undefined;
+  /** The window's Inbox's pinned tasks first and its folded runs; none where the list holds no task to pin, as a task's own or a Manager's. */
+  readonly order?: InboxOrderChoices | undefined;
   /** The list's search, under its head, on the window's Inbox and a task's own alike; none where the list offers none. */
   readonly search?: InboxSearchHead | undefined;
   /**
@@ -1888,7 +1901,7 @@ export function InboxList({
     >
       {/* Note that the Inbox's intro stands on the Inbox itself, not on a task's own Inbox tab. */}
       {head.tab === true ? null : <PageIntro intro={INTRO.INBOX} />}
-      <InboxRuns view={view} place={rowsPlace} row={row} onFold={head.view?.onFold} />
+      <InboxRuns view={view} place={rowsPlace} row={row} onFold={head.order?.onFold} />
       {note}
     </div>
   );
