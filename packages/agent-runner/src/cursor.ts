@@ -435,11 +435,13 @@ const watchSilence = Effect.fn("agent-runner/cursor/watchSilence")(function* (
   yield* Queue.offer(launch.signals, { kind: SIGNAL.RUN_SILENT, run });
 });
 
-/** Posts the model calls Cursor said ended since the launch last posted, in the order it said them. */
+/** Posts the model calls Cursor said ended since the launch last posted, in the order it said them, read as the effect runs rather than as it is built. */
 function postCalls(launch: CursorLaunch): Effect.Effect<void> {
-  return Effect.forEach(launch.calls.splice(0), (call) => launch.context.sink.emit(call), {
-    discard: true,
-  });
+  return Effect.suspend(() =>
+    Effect.forEach(launch.calls.splice(0), (call) => launch.context.sink.emit(call), {
+      discard: true,
+    }),
+  );
 }
 
 /**
