@@ -272,6 +272,11 @@ export function ConversationContent({
   );
 }
 
+/** Whether two runs of lines name the same lines in the same order. */
+function sameLines(a: readonly string[], b: readonly string[]): boolean {
+  return a === b || (a.length === b.length && a.every((key, at) => key === b[at]));
+}
+
 /**
  * The log's lines, drawn only near the view (`@repo/ui/virtual-rows`), in
  * the log's own scroll box. The run keeps to the newest line as the log's
@@ -361,10 +366,18 @@ export function ConversationRows({
       scrollBy: (delta) => now()?.scrollBy(delta),
     };
   }, []);
-  // Note that the lines changing may leave the box unfilled, which no scroll would say.
+  // Note that the lines changing may leave the box unfilled, which no scroll would say, so each run of
+  // lines asks once the box stands. Note too that the lines are compared by what they name, because a
+  // caller may hand the same lines anew on every draw, and an ask that draws again, as a read of older
+  // lines starting does, would then ask without end.
+  const asked = useRef<readonly string[] | undefined>(undefined);
   useLayoutEffect(() => {
+    const was = asked.current;
+
+    if (list.current === null || (was !== undefined && sameLines(was, keys))) return;
+    asked.current = keys;
     askOlder();
-  }, [keys, askOlder]);
+  });
 
   return (
     <VirtualRows
