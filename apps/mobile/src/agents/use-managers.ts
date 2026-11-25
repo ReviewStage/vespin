@@ -19,7 +19,9 @@ import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { READ_MARK, type ReadMark, unreadThroughOf } from "@repo/features/read-mark";
-import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
+import { NO_TASK_SECTIONS, sectionedTasks } from "@repo/features/task-sections-model";
+import type { TaskAgentPin } from "@repo/features/task-wire";
+import { pinnedManagersOf, workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { type FollowedAgent, selectWorkspaceExperiment } from "@repo/host/app-state-reads";
 import { windowRows } from "@repo/host/read-window";
@@ -38,6 +40,9 @@ import { useWrite } from "../use-write.js";
 
 /** No Manager, the same array every render. */
 const NO_MANAGERS: readonly ListedAgent[] = [];
+
+/** No pin of an agent, the same array every render. */
+const NO_AGENT_PINS: readonly TaskAgentPin[] = [];
 
 /** Says on the console a look the host refused, which the next delivery of the document corrects. */
 function lookRefused(cause: unknown): void {
@@ -120,6 +125,56 @@ function openedStay(agentId: string | undefined, mark: ChatMarkRead | undefined)
     newAfter: marked || said ? mark?.readThrough : undefined,
     newOverOwn: marked,
   };
+}
+
+/** Where the reader placed a workspace's Managers: those pinned, those kept in each of their sections, and the rest. */
+export interface PlacedManagers {
+  /** The pinned ones, in the order Pinned stands its pins. */
+  readonly pinned: readonly ListedAgent[];
+  /** Each section's, by the section's id, in the section's order. */
+  readonly bySection: ReadonlyMap<string, readonly ListedAgent[]>;
+  /** Those neither pinned nor in a section, which the Managers group lists. */
+  readonly rest: readonly ListedAgent[];
+}
+
+/**
+ * The workspace's Managers split by where the reader placed them, as the
+ * panel's sidebar places them (`sidebar-managers.tsx`): one pinned stands
+ * under Pinned alone (`pinnedManagersOf`); one put in a section, and not
+ * pinned, stands in that section alone (`sectionedTasks`); the rest stand
+ * in the Managers group.
+ */
+export function usePlacedManagers(
+  managers: readonly ListedAgent[],
+  workspaceId: string | undefined,
+): PlacedManagers {
+  const { data: pins = NO_AGENT_PINS } = useQuery({
+    ...appStateQuery,
+    select: (snapshot) => snapshot.tasks.taskAgentPins ?? NO_AGENT_PINS,
+  });
+
+  const { data: sections = NO_TASK_SECTIONS } = useQuery({
+    ...appStateQuery,
+    select: (snapshot) => snapshot.tasks.taskSections ?? NO_TASK_SECTIONS,
+  });
+
+  return useMemo(() => {
+    const pinned = pinnedManagersOf(managers, pins).map(({ agent }) => agent);
+    const pinnedIds = new Set(pinned.map(({ id }) => id));
+    const unpinned = managers.filter(({ id }) => !pinnedIds.has(id));
+    const sectioned = sectionedTasks(sections, workspaceId, [], unpinned);
+
+    return {
+      pinned,
+      bySection: new Map(
+        sectioned.sections.map((drawn) => [
+          drawn.section.id,
+          drawn.managers.map(({ agent }) => agent),
+        ]),
+      ),
+      rest: unpinned.filter(({ id }) => !sectioned.agentIds.has(id)),
+    };
+  }, [managers, pins, sections, workspaceId]);
 }
 
 /**

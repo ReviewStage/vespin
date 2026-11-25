@@ -7,12 +7,16 @@
  * The desktop's sidebar (`@repo/panel`'s `workspace-managers.ts`) and the
  * iOS app's Tasks tab and Search list them alike from here. A reader may
  * sort them otherwise (`MANAGER_SORT`, `sortedManagers`): by when each last
- * moved, by name, or by when each was started, the default.
+ * moved, by name, or by when each was started, the default. The ones the
+ * reader pinned stand under Pinned instead (`pinnedManagersOf`), each where
+ * its pin stands.
  */
 
 import { AGENT_KIND, type AgentSummary, type ListedAgent } from "./agent-wire.js";
+import { inPinOrder, type PinPlace } from "./pin-order.js";
 import { readsUnread } from "./read-mark.js";
 import { agentLastMovedAt } from "./task-agents-model.js";
+import type { TaskAgentPin } from "./task-wire.js";
 
 /** An agent as a list of Managers reads it: who it is, where, whether archived, and when it started. */
 type ListedManager = Pick<
@@ -104,4 +108,33 @@ export function managerChatUnread(
     { ...(agent.readThrough === undefined ? undefined : { readThrough: agent.readThrough }) },
     agent.saidAt,
   );
+}
+
+/** A Manager the reader pinned, and where its pin stands among the reader's other pins. */
+export interface PinnedManager<Agent extends AgentSummary = ListedAgent> {
+  readonly agent: Agent;
+  readonly place: PinPlace;
+}
+
+/**
+ * The Managers of `managers` the reader pinned, by `pins`, the reader's pins
+ * of agents, each with where its pin stands, in the order Pinned stands its
+ * pins: those dragged to a place by it, then the rest newest pinned first
+ * (`pin-order.ts`).
+ */
+export function pinnedManagersOf<Agent extends AgentSummary>(
+  managers: readonly Agent[],
+  pins: readonly TaskAgentPin[],
+): readonly PinnedManager<Agent>[] {
+  const byId = new Map(managers.map((agent) => [agent.id, agent]));
+
+  const pinned = pins.flatMap((pin): PinnedManager<Agent>[] => {
+    const agent = pin.taskId === null ? byId.get(pin.agentId) : undefined;
+
+    return agent === undefined
+      ? []
+      : [{ agent, place: { at: pin.pinnedAt, position: pin.pinPosition } }];
+  });
+
+  return inPinOrder(pinned, (each) => each.place);
 }

@@ -88,6 +88,7 @@ import {
 } from "@repo/features/task-standing-words";
 import {
   NO_REPOSITORY_KEY,
+  PINNED_HEAD,
   TASK_ROW_FACE,
   TASK_TREE_GROUP,
   type TaskBranch,
@@ -229,7 +230,11 @@ import {
 import { useColorScheme } from "react-native";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
+import {
+  useManagersListed,
+  usePlacedManagers,
+  useWorkspaceManagers,
+} from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useWholeListRead } from "../host/host-provider.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -1536,6 +1541,17 @@ function groupAdd(
   return { label, acts: [{ label, symbol: GLYPH.ADD, onPress: opens }] };
 }
 
+/** No Manager in a group, the same array every render. */
+const NO_LISTED_MANAGERS: readonly ListedAgent[] = [];
+
+/** Pinned holding no task, where only Managers are pinned. */
+const NO_PINNED_TASKS: TaskTreeGroup = {
+  kind: TASK_TREE_GROUP.PINNED,
+  key: TASK_TREE_GROUP.PINNED,
+  title: PINNED_HEAD,
+  rows: [],
+};
+
 /** What My tasks' fold is kept under in the tree's hold, apart from every group's key: a section's id, a repository's `owner/name`, or a kind. */
 const MY_TASKS_KEY = "my-tasks";
 
@@ -1597,11 +1613,15 @@ function GroupSection({
   group,
   listing,
   hold,
+  managers = NO_LISTED_MANAGERS,
 }: {
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
   readonly hold: TreeHold;
+  /** The Managers it holds after its tasks, Pinned's pinned and a section's kept there, each its Managers row; none elsewhere. */
+  readonly managers?: readonly ListedAgent[] | undefined;
 }) {
+  const asking = useAgentRowAsk();
   const newTaskIn = useNewTaskIn();
   const newTaskInRepository = useNewTaskInRepository();
   const dark = useColorScheme() === "dark";
@@ -1619,14 +1639,17 @@ function GroupSection({
       }
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
-      count={group.rows.length}
-      foldable={headed && group.rows.length > 0}
+      count={group.rows.length + managers.length}
+      foldable={headed && group.rows.length + managers.length > 0}
       folded={headed && hold.folded.has(group.key)}
       onFold={(shut) => hold.setFolded(group.key, shut)}
       onDropLink={headed ? dropOnto(group, listing) : undefined}
       add={groupAdd(group, newTaskIn, newTaskInRepository)}
     >
       <FoldedRows rows={group.rows} listing={listing} parents={groupParents(hold, group.key)} />
+      {managers.map((agent) => (
+        <ManagerTaskRow key={agent.id} agent={agent} asking={asking} />
+      ))}
     </ListSection>
   );
 }
@@ -1702,6 +1725,7 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
   const onOwnTab = useOnOwnTab();
   const managers = useWorkspaceManagers(listing.workspace?.id);
   const managersListed = useManagersListed(listing.workspace?.id);
+  const placed = usePlacedManagers(managers, listing.workspace?.id);
 
   // Note that a Manager's row opens its page over the list in either window, as an agent's row on a task's page does, since the split view's detail stands a task alone.
   const open = (id: string) => {
@@ -1738,18 +1762,23 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
     return notRead(read, onRefresh) ?? <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
   }
 
+  const sectionManagers = (group: TaskTreeGroup) =>
+    group.kind === TASK_TREE_GROUP.SECTION ? (placed.bySection.get(group.key) ?? []) : [];
+
   const underMyTasks = [...tree.sections, ...tree.tasks].reduce(
-    (count, group) => count + group.rows.length,
+    (count, group) => count + group.rows.length + sectionManagers(group).length,
     0,
   );
 
   const myTasksFolded = hold.folded.has(MY_TASKS_KEY);
+  // Note that a Manager pinned stands Pinned even where no task is pinned, as the panel's Pinned stands once anything is.
+  const pinned = tree.pinned ?? (placed.pinned.length > 0 ? NO_PINNED_TASKS : undefined);
 
   return (
     <RowList look={look} selected={selected} onSelect={open} onRefresh={onRefresh}>
-      <ManagersSection listed={managersListed} managers={managers} hold={hold} />
-      {tree.pinned === undefined ? null : (
-        <GroupSection group={tree.pinned} listing={listing} hold={hold} />
+      <ManagersSection listed={managersListed} managers={placed.rest} hold={hold} />
+      {pinned === undefined ? null : (
+        <GroupSection group={pinned} listing={listing} hold={hold} managers={placed.pinned} />
       )}
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} hold={hold} />
@@ -1758,7 +1787,13 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
       {myTasksFolded
         ? null
         : [...tree.sections, ...tree.tasks].map((group) => (
-            <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+            <GroupSection
+              key={group.key}
+              group={group}
+              listing={listing}
+              hold={hold}
+              managers={sectionManagers(group)}
+            />
           ))}
     </RowList>
   );

@@ -33,6 +33,8 @@ import { TERM } from "@repo/features/words";
 import {
   MANAGER_SORT,
   type ManagerSort,
+  type PinnedManager,
+  pinnedManagersOf,
   sortedManagers,
 } from "@repo/features/workspace-managers-model";
 import { EXPERIMENT } from "@repo/settings";
@@ -60,8 +62,6 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { type ManagerSortControl, useManagerSort } from "../tasks/manager-sort.js";
 import {
-  type PinnedManager,
-  pinnedManagersOf,
   sameForManagers,
   useManagerAgents,
   useWorkspaceManagers,

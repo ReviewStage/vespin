@@ -12,9 +12,7 @@
  * carries the reader's pins.
  */
 
-import { AGENT_KIND, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
-import { inPinOrder, type PinPlace } from "@repo/features/pin-order";
-import type { TaskAgentPin } from "@repo/features/task-wire";
+import { AGENT_KIND, type ListedAgent } from "@repo/features/agent-wire";
 import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { and, eq, isNull, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,35 +29,6 @@ import {
 interface WorkspaceManagers {
   /** The Managers; none while the live list carries no agents yet. */
   readonly managers: readonly ListedAgent[] | undefined;
-}
-
-/** A Manager the reader pinned, and where its pin stands among the reader's other pins. */
-export interface PinnedManager<Agent extends AgentSummary = ListedAgent> {
-  readonly agent: Agent;
-  readonly place: PinPlace;
-}
-
-/**
- * The Managers of `managers` the reader pinned, by `pins`, the reader's pins
- * of agents, each with where its pin stands, in the order Pinned stands its
- * pins: those dragged to a place by it, then the rest newest pinned first
- * (`pin-order.ts`).
- */
-export function pinnedManagersOf<Agent extends AgentSummary>(
-  managers: readonly Agent[],
-  pins: readonly TaskAgentPin[],
-): readonly PinnedManager<Agent>[] {
-  const byId = new Map(managers.map((agent) => [agent.id, agent]));
-
-  const pinned = pins.flatMap((pin): PinnedManager<Agent>[] => {
-    const agent = pin.taskId === null ? byId.get(pin.agentId) : undefined;
-
-    return agent === undefined
-      ? []
-      : [{ agent, place: { at: pin.pinnedAt, position: pin.pinPosition } }];
-  });
-
-  return inPinOrder(pinned, (each) => each.place);
 }
 
 /**
