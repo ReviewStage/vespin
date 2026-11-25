@@ -211,7 +211,7 @@ function IdentityRow({
  * Who pays for the Manager's turns, said under its Model: its starter's
  * subscriptions, named as the reader's own where they started it. With the
  * Manager acting for whoever asks (`MANAGER_ACTS_FOR_ASKER`), what it starts
- * for the reader runs on the reader's, as the experiment's own line says.
+ * for a reader who is not its starter runs on that reader's, as the experiment's own line says; its starter hears nothing more, since everything already runs on theirs.
  */
 function PayerLine({
   agent,
@@ -234,7 +234,7 @@ function PayerLine({
           {WORDS.RUNS_ON_SUFFIX}
         </>
       )}
-      {forAsker ? WORDS.STARTS_ON_YOURS : null}
+      {forAsker && owner !== undefined ? WORDS.STARTS_ON_YOURS : null}
     </>
   );
 }
