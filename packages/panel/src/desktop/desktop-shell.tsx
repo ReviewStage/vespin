@@ -40,6 +40,7 @@ import {
   createContext,
   type RefObject,
   useContext,
+  useDeferredValue,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -1337,6 +1338,22 @@ function phoneAway(room: ShellRoom, away: TaskHeadBack): TaskHeadBack | undefine
 }
 
 /**
+ * The Tasks tab a task's page is drawn from. While another task opens, it is
+ * the tab the page was last drawn with, until the new task's page, drawn in
+ * the background, is ready to show. Note that only the page waits: the
+ * sidebar's row, the address, and every key read the tab itself, which moved
+ * at once, so a press paints its row chosen in the next frame and Back and
+ * the keys act on the task chosen while its page is still being drawn. A
+ * page drawn for the same task, a message streaming into its transcript
+ * among them, is drawn at once, as it always was.
+ */
+function usePageTasks(tasks: TasksControl): TasksControl {
+  const drawn = useDeferredValue(tasks);
+
+  return drawn.activeTaskId === tasks.activeTaskId ? tasks : drawn;
+}
+
+/**
  * What a task's place draws in the places' content slot: the task bound
  * for, or its page in the shape it lands in while the host opens it, as a
  * link to it waits on its task. Every route of a task's draws this one
@@ -1344,8 +1361,9 @@ function phoneAway(room: ShellRoom, away: TaskHeadBack): TaskHeadBack | undefine
  */
 export function StatePlace(): React.JSX.Element {
   const { tasks, room, looks, away } = useShellPlaces();
+  const pageTasks = usePageTasks(tasks);
 
-  return <DesktopTasks tasks={tasks} looks={looks} room={room} away={phoneAway(room, away)} />;
+  return <DesktopTasks tasks={pageTasks} looks={looks} room={room} away={phoneAway(room, away)} />;
 }
 
 /**
