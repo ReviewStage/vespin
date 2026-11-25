@@ -169,7 +169,7 @@ it.effect(
         });
 
         // Note that this test takes about two seconds, since its point is an account's size.
-        // An account of thousands: 1,000 tasks, a third of them Done and each touched at its own instant past the live set's, and 2,000 agents that each ran a turn, some pinned, some started from another.
+        // An account of thousands: 1,000 tasks, a third of them Done and each touched at its own instant past the live set's, and 2,000 agents that each ran a turn, some pinned, a third with a pull request, some started from another.
         const liveSince = 1_000_000;
         const done = (at: number) => at % 3 === 0;
 
@@ -190,6 +190,7 @@ it.effect(
           startedAt: at,
           settledAt: at + 1,
           ...(at % 7 === 0 ? { pinnedAt: at, pinPosition: `a${at}` } : undefined),
+          ...(at % 3 === 0 ? { published: openPullRequest(at) } : undefined),
           ...(at >= 1_500
             ? { startedFrom: { agentId: `agent-${at - 1_500}`, steps: 1, totalSteps: 1 } }
             : undefined),
@@ -239,6 +240,9 @@ it.effect(
           [[moved.taskId, 1]],
         );
         assert.equal(after.taskAgentPins, before.taskAgentPins);
+        // The lists the move left alone are the very arrays drawn before, which the host tells on as they are drawn (`compose-tasks.ts`'s `publish`).
+        assert.equal(after.taskPullRequests, before.taskPullRequests);
+        assert.equal(after.agentPullRequests, before.agentPullRequests);
 
         // The delivery that brings a window holding the list before to the list after names the moved agent and its task alone, and reads no other row of either list.
         let reads = 0;

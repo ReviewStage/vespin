@@ -11,10 +11,6 @@
  * diffing the two lists. Where it cannot be told, the drawings being of two
  * logs, or one older than the log keeps, or an array no log drew, it is
  * told nothing, and the reader walks the lists as it did before.
- *
- * Note that a list laid anew over the one held (`keepIdentity`) is another
- * array of the same rows, so whoever lays it ties it to the drawing it was
- * laid from (`drawnAs`).
  */
 
 /** How many drawings of one list its log keeps the moves of. */
@@ -121,17 +117,6 @@ export function keyedListLog<Value>(
 
     return list;
   };
-}
-
-/** Ties `list`, laid anew from the drawing `drawn`, to that drawing, so it is told what moved as `drawn` is; nothing where `drawn` is no drawing. */
-export function drawnAs(
-  list: readonly unknown[] | undefined,
-  drawn: readonly unknown[] | undefined,
-): void {
-  if (list === undefined || drawn === undefined || list === drawn) return;
-  const drawing = DRAWINGS.get(drawn);
-
-  if (drawing !== undefined) DRAWINGS.set(list, drawing);
 }
 
 /**
