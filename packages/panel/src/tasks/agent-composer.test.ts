@@ -41,7 +41,7 @@ import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
-import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
+import { type MessageSender, useAgentComposer, useHeldWords } from "./use-agent-composer.js";
 import type { AgentModelControl } from "./use-agent-model.js";
 
 // Each test's host starts with no message on its way.
@@ -130,14 +130,16 @@ function Box({
   /** The transcript as the tab reads it, which a sent line is read back from. */
   messages?: readonly AgentTranscriptMessage[];
 }): ReactNode {
-  const composer = useAgentComposer({
-    sending: useOutbox("agent-1"),
-    unsend: unsendOutbox,
-    agentId: "agent-1",
-    taskId: "plan-1",
-    messages,
-    send: outboxed(sender),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
+      agentId: "agent-1",
+      taskId: "plan-1",
+      messages,
+      send: outboxed(sender),
+    }),
+  );
 
   return createElement(
     "div",
@@ -153,7 +155,7 @@ function Box({
       talksIn,
     }),
     // What Continue would carry, as the tab hands it on.
-    createElement("output", { "data-unsent": composer.unsent.words }),
+    createElement("output", { "data-unsent": composer.unsent().words }),
   );
 }
 
@@ -1087,14 +1089,16 @@ test("a message refused because the agent's host was removed closes the box on t
 test("while the agent's turn is starting, its status not yet running, a box that queues on Enter offers Queue in Send's place", async () => {
   /** The box while a turn starts: the tab says it works, as a line the box sent still on its way does, while the agent's status still reads the turn before. */
   function Starting(): ReactNode {
-    const composer = useAgentComposer({
-      sending: useOutbox("agent-1"),
-      unsend: unsendOutbox,
-      agentId: "agent-1",
-      taskId: "plan-1",
-      messages: [],
-      send: outboxed(() => new Promise(ignore)),
-    });
+    const composer = useHeldWords(
+      useAgentComposer({
+        sending: useOutbox("agent-1"),
+        unsend: unsendOutbox,
+        agentId: "agent-1",
+        taskId: "plan-1",
+        messages: [],
+        send: outboxed(() => new Promise(ignore)),
+      }),
+    );
 
     return createElement(AgentComposer, {
       ...QUIET_COMPOSER,
@@ -1129,18 +1133,20 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
 
   /** The box while a turn runs, Enter steering, each way a message leaves recorded. */
   function Running(): ReactNode {
-    const composer = useAgentComposer({
-      sending: useOutbox("agent-1"),
-      unsend: unsendOutbox,
-      agentId: "agent-1",
-      taskId: "plan-1",
-      messages: [],
-      send: outboxed((_agentId, { text }) => {
-        done.push(`sent ${text}`);
+    const composer = useHeldWords(
+      useAgentComposer({
+        sending: useOutbox("agent-1"),
+        unsend: unsendOutbox,
+        agentId: "agent-1",
+        taskId: "plan-1",
+        messages: [],
+        send: outboxed((_agentId, { text }) => {
+          done.push(`sent ${text}`);
 
-        return new Promise(ignore);
+          return new Promise(ignore);
+        }),
       }),
-    });
+    );
 
     return createElement(AgentComposer, {
       ...QUIET_COMPOSER,

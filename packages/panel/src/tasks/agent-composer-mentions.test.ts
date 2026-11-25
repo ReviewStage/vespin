@@ -90,7 +90,7 @@ import {
   useMentionAgentsReader,
 } from "./task-mentions.js";
 import { TranscriptWords } from "./transcript-blocks.js";
-import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
+import { type MessageSender, useAgentComposer, useHeldWords } from "./use-agent-composer.js";
 import { OpenLinkProvider } from "./use-open-link.js";
 
 // Each test's host starts with no message on its way.
@@ -485,14 +485,16 @@ function taskPage(opened: Mention[] = []): TaskMentionsValue {
 
 /** The box on the composer's own control, its sends answered by `sender`. */
 function Box({ sender, skills }: { sender: MessageSender; skills: SkillSource }): ReactNode {
-  const composer = useAgentComposer({
-    sending: useOutbox(SELF_ID),
-    unsend: unsendOutbox,
-    agentId: SELF_ID,
-    taskId: TASK_ID,
-    messages: [],
-    send: outboxed(sender),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox(SELF_ID),
+      unsend: unsendOutbox,
+      agentId: SELF_ID,
+      taskId: TASK_ID,
+      messages: [],
+      send: outboxed(sender),
+    }),
+  );
 
   return createElement(AgentComposer, { ...QUIET_COMPOSER, agentId: SELF_ID, composer, skills });
 }

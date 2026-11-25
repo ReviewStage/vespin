@@ -39,6 +39,7 @@ import {
   type AgentComposerControl,
   type MessageSender,
   useAgentComposer,
+  useHeldWords,
 } from "./tasks/use-agent-composer.js";
 import type { MainTab } from "./tasks/use-main-tabs.js";
 import { type TaskInboxControl, useTaskInbox } from "./tasks/use-task-inbox.js";
@@ -1189,6 +1190,28 @@ test("words another panel's window writes for a box reach this window's box as t
   assert.equal(app.box(), "Fix logout");
 });
 
+test("words another window wrote for another box stand in storage when this window writes before it hears of them", async () => {
+  const app = openWindow();
+  await app.show(INVITES, { account: DEAN });
+  typeInComposer(app.container, "Fix login");
+  await settle();
+  leaveWindow();
+
+  // The other window's write, which this one has not heard of as its own write lands.
+  window.localStorage.setItem(
+    "app.composerDrafts",
+    JSON.stringify([
+      ...JSON.parse(window.localStorage.getItem("app.composerDrafts") ?? "[]"),
+      keptEntry(DEAN.id, "plan-elsewhere", "agent-elsewhere", "Ship the export"),
+    ]),
+  );
+  typeInComposer(app.container, " now");
+  await settle();
+  leaveWindow();
+
+  assert.deepEqual(keptWords(), ["Ship the export", "Fix login now"]);
+});
+
 test("an account's drafts moved from its address reach a window that read its id's before", async () => {
   const app = openWindow();
   await app.show(INVITES, { account: DEAN });
@@ -1246,14 +1269,16 @@ test("files attached in this window stay as its draft when another window lets t
 
   function Box(): null {
     useDraftsOwner(DEAN);
-    composer = useAgentComposer({
-      sending: useOutbox(INVITES.agent.id),
-      unsend: unsendOutbox,
-      agentId: INVITES.agent.id,
-      taskId: INVITES.plan.id,
-      messages: [],
-      send: outboxed(NEVER_ANSWERED),
-    });
+    composer = useHeldWords(
+      useAgentComposer({
+        sending: useOutbox(INVITES.agent.id),
+        unsend: unsendOutbox,
+        agentId: INVITES.agent.id,
+        taskId: INVITES.plan.id,
+        messages: [],
+        send: outboxed(NEVER_ANSWERED),
+      }),
+    );
 
     return null;
   }

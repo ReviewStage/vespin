@@ -15,7 +15,7 @@ import {
 } from "@repo/ui";
 import { OPENAI_KEY_MISSING_NOTE } from "@repo/ui/microphone-access";
 import { CheckIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { frameLevel } from "./frame-level.js";
 import { DICTATION_PHASE, type DictationControl } from "./use-dictation.js";
 
@@ -56,14 +56,18 @@ const BAR_INDEXES = Array.from({ length: BAR_COUNT }, (_, index) => index);
 const MS_PER_SECOND = 1_000;
 
 /** The microphone press at the card's foot; held boxes take none. */
-export function DictateButton({
-  dictation,
+export const DictateButton = memo(function DictateButton({
+  keyMissing,
+  onStart,
   disabled,
 }: {
-  dictation: DictationControl;
+  /** Whether no OpenAI key is connected to hear the clip, which the press says rather than Dictate. */
+  keyMissing: boolean;
+  /** Starts recording; a steady door, so the press is drawn again only as what it says changes. */
+  onStart: () => void;
   disabled: boolean;
 }): React.JSX.Element {
-  const label = dictation.keyMissing ? OPENAI_KEY_MISSING_NOTE : LABEL.DICTATE;
+  const label = keyMissing ? OPENAI_KEY_MISSING_NOTE : LABEL.DICTATE;
 
   return (
     // Note that the box is what a narrow card's stylesheet hides and its ⋯ reads, and
@@ -75,12 +79,12 @@ export function DictateButton({
           label={label}
           disabled={disabled}
           keepFocus
-          onClick={dictation.start}
+          onClick={onStart}
         />
       </Tooltip>
     </span>
   );
-}
+});
 
 /** The voice as it is heard: one bar per slice of time, the newest at the right. */
 function DictationWave({ analyzer }: { analyzer: AnalyserNode | undefined }): React.JSX.Element {

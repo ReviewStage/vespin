@@ -36,7 +36,7 @@ import {
 import { AgentComposer } from "./agent-composer.js";
 import { FileTab } from "./file-tab.js";
 import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
-import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
+import { type MessageSender, useAgentComposer, useHeldWords } from "./use-agent-composer.js";
 
 // Each test's host starts with no message on its way.
 beforeEach(resetOutbox);
@@ -123,14 +123,16 @@ const readFile = (request: TaskFileRequest): Promise<TasksFileAnswer> =>
 
 /** The agent's box on the composer's own control, its sends answered by `sender`. */
 function Box({ sender }: { sender: MessageSender }): ReactNode {
-  const composer = useAgentComposer({
-    sending: useOutbox("agent-1"),
-    unsend: unsendOutbox,
-    agentId: "agent-1",
-    taskId: TASK_ID,
-    messages: [],
-    send: outboxed(sender),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
+      agentId: "agent-1",
+      taskId: TASK_ID,
+      messages: [],
+      send: outboxed(sender),
+    }),
+  );
 
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,

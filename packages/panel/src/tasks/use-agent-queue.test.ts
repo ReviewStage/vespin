@@ -21,7 +21,7 @@ import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbo
 import { STANDING_TOAST } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { useAgentPictureDoor } from "./agent-pictures.js";
-import { type AgentComposerControl, useAgentComposer } from "./use-agent-composer.js";
+import { type AgentComposerControl, useAgentComposer, useHeldWords } from "./use-agent-composer.js";
 import {
   type AgentQueueControl,
   type QueueEditing,
@@ -67,14 +67,16 @@ let owed: ((answer: AgentQueueAnswerView) => void)[] = [];
 function Tab(): ReactNode {
   const [page, setPage] = useState<AgentQueue | undefined>();
 
-  const composer = useAgentComposer({
-    sending: useOutbox("agent-1"),
-    unsend: unsendOutbox,
-    agentId: "agent-1",
-    taskId: "plan-1",
-    messages: [],
-    send: outboxed(() => new Promise(ignore)),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
+      agentId: "agent-1",
+      taskId: "plan-1",
+      messages: [],
+      send: outboxed(() => new Promise(ignore)),
+    }),
+  );
 
   const queue = useAgentQueue("agent-1", page);
   const files = useAgentPictureDoor("agent-1");

@@ -14,7 +14,7 @@ import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbo
 import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
-import { useAgentComposer } from "./use-agent-composer.js";
+import { useAgentComposer, useHeldWords } from "./use-agent-composer.js";
 
 // Each test's host starts with no message on its way.
 beforeEach(resetOutbox);
@@ -79,14 +79,16 @@ afterEach(() => {
 
 /** An agent's box with everything its foot can carry: a pull request, a model, and a step's context. */
 function Box({ status }: { status: AgentStatus }): ReactNode {
-  const composer = useAgentComposer({
-    sending: useOutbox("agent-1"),
-    unsend: unsendOutbox,
-    agentId: "agent-1",
-    taskId: "plan-1",
-    messages: [],
-    send: outboxed(() => new Promise(ignore)),
-  });
+  const composer = useHeldWords(
+    useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
+      agentId: "agent-1",
+      taskId: "plan-1",
+      messages: [],
+      send: outboxed(() => new Promise(ignore)),
+    }),
+  );
 
   const [choice, choose] = useState({ model: "anthropic/claude-opus-5.5", effort: "high" });
 
