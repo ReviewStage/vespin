@@ -27,7 +27,7 @@ import {
   listMessagesPast,
   type MessageCursor,
   type MessageListRead,
-  messageCursorNow,
+  messageStandingNow,
   readMessageByClientId,
   type StoredMessageRecord,
   turnsBefore,
@@ -1009,10 +1009,11 @@ export interface TranscriptOlder {
   readonly before?: number;
 }
 
-/** The transcript's newest page, with all a page past a cursor carries, its cursor the one to follow on from, and where the page older still is read below; none where nothing older stands. */
+/** The transcript's newest page, with all a page past a cursor carries, its cursor the one to follow on from, where the page older still is read below, none where nothing older stands, and the journal revision it was last rewound at, read with the cursor, none for one never rewound. */
 export interface TranscriptNewest {
   readonly page: TranscriptPage;
   readonly before?: number;
+  readonly rewound?: number;
 }
 
 /**
@@ -1041,20 +1042,36 @@ const olderPageOf = (
 /**
  * The transcript's newest page, read at once: the newest rows, oldest
  * first, with the agent's status and everything a page past a cursor
- * carries, read once for the whole answer. Its cursor is where a reader
- * who has every row as it now stands is (`messageCursorNow`), read before
+ * carries, read once for the whole answer, and what `afterRows` reads
+ * beside it. Its cursor is where a reader who has every row as it now
+ * stands is (`messageStandingNow`), read with the rewound revision before
  * the rows, which are read up to and including it, so a row written or
- * amended after the cursor is heard by the follow from it, and one amended
- * between the two reads is heard twice rather than missed.
+ * amended after the cursor is heard by the follow from it, one amended
+ * between the two reads is heard twice rather than missed, and a page read
+ * after a rewind never carries the one before it.
+ *
+ * Note that the reads are four rounds, because each round waits on the one
+ * before: the cursor, the rows and the status, then everything read after
+ * the rows at once, the rows' own senders and turns beside what the page
+ * carries of the agent and `afterRows`. The catalog the usage is priced at
+ * is read from the first round on, so an instance that holds none yet asks
+ * the gateway while the rows are read rather than after.
  */
-export function transcriptNewest(
+export function transcriptNewest<A, E, R>(
   target: ConversationTarget,
   tools: ToolSet,
   agent: AgentStart,
+  afterRows: Effect.Effect<A, E, R>,
   own?: OwnAgent,
-): TranscriptEffect<TranscriptNewest, ModelCatalog> {
+): Effect.Effect<
+  TranscriptNewest & { readonly afterRows: A },
+  StoreFailure | E,
+  DatabaseServices | ModelCatalog | R
+> {
   return Effect.gen(function* () {
-    const cursor = yield* messageCursorNow(target.userId, target.conversationId);
+    const catalog = yield* ModelCatalog;
+    yield* Effect.forkChild(Effect.ignore(catalog.read), { startImmediately: true });
+    const { cursor, rewound } = yield* messageStandingNow(target.userId, target.conversationId);
 
     const { read, standing } = yield* Effect.all(
       {
@@ -1070,11 +1087,10 @@ export function transcriptNewest(
       { concurrency: CODER.READ_CONCURRENCY },
     );
 
-    const { messages, before } = yield* olderPageOf(target, read);
     const { status, runStartedAt, failureReason, hostLost, turn, boot } = standing;
 
-    const page: TranscriptPage = {
-      messages,
+    const unlisted: TranscriptPage = {
+      messages: [],
       cursor,
       status,
       runStartedAt,
@@ -1083,9 +1099,20 @@ export function transcriptNewest(
       ...(boot === undefined ? undefined : { boot }),
     };
 
+    const { older, page, after } = yield* Effect.all(
+      {
+        older: olderPageOf(target, read),
+        page: withUsage(target, tools, unlisted, turn, own),
+        after: afterRows,
+      },
+      { concurrency: CODER.READ_CONCURRENCY },
+    );
+
     return {
-      page: yield* withUsage(target, tools, page, turn, own),
-      ...(before === undefined ? undefined : { before }),
+      page: { ...page, messages: older.messages },
+      afterRows: after,
+      ...(older.before === undefined ? undefined : { before: older.before }),
+      ...(Option.isNone(rewound) ? undefined : { rewound: rewound.value }),
     };
   });
 }
