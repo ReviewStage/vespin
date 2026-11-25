@@ -37,6 +37,7 @@ import { LIVE_POLL, LIVE_POLL_URL } from "@repo/features/live-wire";
 import { HTTP_METHOD, type WireRecord, type WireValue } from "@repo/wire";
 import { Schema } from "effect";
 import { File, Paths } from "expo-file-system";
+import { sinceLaunch } from "../launch-phases.js";
 import { hostStateRootIn } from "./expo-file-system.js";
 
 /** The sync ids the seed kept the task list at and answered the Inbox whole at (the seed's `BUSY_SYNC`). */
@@ -403,6 +404,8 @@ async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
 
   if (whole) return wholeAnswer(askedAt, BUSY_WAIT.INBOX_WHOLE);
 
+  // Note that the first read past the kept id is a catch-up after the gap, answered at once with what moved while the phone was away; each read after it is held until one more thread moves.
+  if (past === BUSY_SYNC.INBOX) return awayAnswer(askedAt);
   await wait(BUSY_WAIT.INBOX_EVERY);
   // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build, and each row in it was decoded by the build's own schemas as it was written.
   const moves = (await answerOnce("inbox-moves.json")) as readonly InboxMove[];
@@ -467,6 +470,80 @@ async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
   });
 }
 
+/** How many threads moved while the phone was away, which the first read past the kept id is answered. */
+const AWAY_MOVES = 5;
+
+/** The Inbox past the kept id: the first `AWAY_MOVES` of the seed's moves, each thread with a new message, a delta's round trip after the ask. */
+async function awayAnswer(askedAt: number): Promise<Response> {
+  // SAFETY: the file is the seed's, written as this shape by `tools/busy-account/seed.ts` from the same commit as this build, and each row in it was decoded by the build's own schemas as it was written.
+  const moves = ((await answerOnce("inbox-moves.json")) as readonly InboxMove[]).slice(
+    0,
+    AWAY_MOVES,
+  );
+
+  const at = Date.now();
+  await wait(BUSY_WAIT.TASKS_DELTA - (performance.now() - askedAt));
+
+  return json({
+    url: LIVE_POLL_URL,
+    queries: {
+      stamps: movedPart(
+        "stamps",
+        moves.map((move) => ({
+          ...move.stamp,
+          updatedAt: at,
+          messages: Number(move.stamp.messages) + 1,
+        })),
+        BUSY_SYNC.INBOX,
+      ),
+      items: movedPart(
+        "items",
+        moves.map((move) => ({ ...move.item, updatedAt: at })),
+        BUSY_SYNC.INBOX,
+      ),
+      messages: movedPart(
+        "messages",
+        moves.map((move) => ({ ...move.message, createdAt: at })),
+        BUSY_SYNC.INBOX,
+      ),
+      files: movedPart("files", [], BUSY_SYNC.INBOX),
+    },
+  });
+}
+
+/** Where a busy-account launch writes how its first Inbox read went, for the rig to split the catch-up by (`scripts/busy-account.sh`). */
+const CATCH_UP_FILE = `file://${ANSWERS}/catch-up.json`;
+
+/** Whether this launch's first Inbox read was noted, which it is once. */
+let inboxReadNoted = false;
+
+/**
+ * The Inbox's answer, the launch's first noted: when it was asked and
+ * answered after the launch's start (`sinceLaunch`), how many bytes the
+ * answer carried, and whether it was whole or past the kept id, written for
+ * the rig beside the first rows drawn (`app-ready.ts`'s `first-answers.json`).
+ */
+async function notedInboxAnswer(url: URL, answer: Promise<Response>): Promise<Response> {
+  if (inboxReadNoted) return answer;
+  inboxReadNoted = true;
+  const readMs = sinceLaunch();
+  const response = await answer;
+  const bytes = (await response.clone().text()).length;
+  const past = Number(url.searchParams.get(LIVE_POLL.SYNC));
+
+  new File(CATCH_UP_FILE).writeSync(
+    JSON.stringify({
+      inbox_read_ms: readMs,
+      inbox_answer_ms: sinceLaunch(),
+      inbox_answer_bytes: bytes,
+      inbox_whole: !Number.isInteger(past) || past < BUSY_SYNC.INBOX,
+      inbox_status: response.status,
+    }),
+  );
+
+  return response;
+}
+
 /** How many times "what waits" was asked this launch, so the first is answered at once and each after held, as the service holds one with nothing new. */
 let waitsAsked = 0;
 
@@ -504,7 +581,7 @@ export function busyAccountAnswer(request: Request): Promise<Response> | undefin
     case HOSTED_SERVICE_PATH.LIVE_WORKSPACES:
       return Promise.resolve(new Response(null, { status: 404 }));
     case HOSTED_SERVICE_PATH.LIVE_INBOX_ITEMS:
-      return inboxAnswer(url, askedAt);
+      return notedInboxAnswer(url, inboxAnswer(url, askedAt));
     case HOSTED_SERVICE_PATH.LIVE_TASKS:
       return tasksAnswer(url, askedAt);
     case HOSTED_SERVICE_PATH.LIVE_INBOX:
