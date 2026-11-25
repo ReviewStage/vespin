@@ -24,10 +24,15 @@ appId: dev.vespin.ios
 - assertVisible: "Share…"
 - waitForAnimationToEnd
 - takeScreenshot: keep-picture-menu
-# Note that a menu is put away by a tap on the thread's own title in the bar,
-# never a bare point, since a point can land on a link chip in the message
-# once the menu is gone, which opens the link's sheet instead.
-- tapOn: "Recorded the invite flow"
+# Note that a menu is put away by a swipe down on the dimmed page beside it,
+# as the system puts one away, never a tap: while a menu stands iOS hides the
+# page under it from the accessibility tree, so no named control can be
+# tapped, and a bare point can land on a link chip once the menu is gone,
+# which opens the link's sheet instead. The swipe starts at the window's
+# trailing edge, past where the menu stands.
+- swipe:
+    start: "94%, 45%"
+    end: "94%, 60%"
 - waitForAnimationToEnd
 - assertNotVisible: "Save to Photos"
 # The message's own menu, opened on its words. Note that they are scrolled to
@@ -42,7 +47,9 @@ appId: dev.vespin.ios
 - assertVisible: "Copy message"
 - waitForAnimationToEnd
 - takeScreenshot: keep-message-menu
-- tapOn: "Recorded the invite flow"
+- swipe:
+    start: "94%, 45%"
+    end: "94%, 60%"
 - waitForAnimationToEnd
 - assertNotVisible: "Copy message"
 # The picture opens full screen in the app's viewer, whose share sheet copies
