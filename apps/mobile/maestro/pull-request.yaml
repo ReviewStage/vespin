@@ -105,31 +105,18 @@ env:
     timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-title-edited
-# Note that the description stands above the checks, so the reviewers' rows,
-# the page's last, may stand below the fold on a phone and are scrolled to,
-# dragged at three quarters across as the card is, so a landscape iPad's
-# drag lands on the page rather than the list column beside it.
-- repeat:
-    while:
-      notVisible: "relay-review"
-    times: 10
-    commands:
-      - swipe:
-          start: "75%, 75%"
-          end: "75%, 35%"
-          duration: 400
-- assertVisible: "grace"
-# A review App's bot is named as the panel names it, its login without
-# GitHub's "[bot]", in its rounded square with the bot tag after its name.
-- assertVisible: "relay-review"
+# Its reviewers stand as faces in its heading after who opened it, as the
+# panel's people line draws them, each wearing where they stand at its
+# corner, heard as one element; the page holds no Reviews section.
+- assertVisible: "Reviewers"
+- assertNotVisible: "Reviews.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-reviewers
 # Merging is the press under the heading, in every window, and it asks
-# first, as the card's Merge does, scrolled back up to after the reviewer.
+# first, as the card's Merge does, with the page dragged to its top.
 # Note that it is dragged back to the page's top every time, rather than
-# while the press reads as not visible, because the tree still names the
-# press in its place from before the reviewer's drag while the list glides,
-# and the tap went there, above the press. The list is then let settle,
+# while the press reads as not visible, because the tree can still name the
+# press in an old place while the list glides, and the tap went there. The list is then let settle,
 # since a tap on a list still gliding only stops it and presses nothing.
 - swipe:
     start: "75%, 35%"
