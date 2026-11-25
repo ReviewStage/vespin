@@ -89,13 +89,14 @@ onFlowComplete:
       - assertVisible: "Settings"
       - assertVisible: "Manage"
       - takeScreenshot: switcher-settings
-      # Note that the switcher's list is a sheet at the window's foot, so it
-      # is put away by a tap above it, since one low on the window lands on
-      # its Settings row.
+      # Note that the switcher's list is the system's menu, dropped from its
+      # button at the window's top, so it is put away by a tap low on the
+      # window's trailing side, off it, since one high on the window lands on
+      # Relay's row and switches to that workspace, which holds no tasks.
       - runFlow:
           file: subflows/dismiss.yaml
           env:
-            POINT: "50%, 20%"
+            POINT: "85%, 80%"
       - runFlow:
           file: subflows/tab.yaml
           env:
