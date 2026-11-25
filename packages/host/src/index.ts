@@ -12,6 +12,8 @@
  * client does not reach yet is added when one arrives.
  */
 
+export { LOOP_TICK_MS, LoopStalls } from "./loop-stalls.js";
+
 export {
   appProcesses,
   type ElectronProcessName,

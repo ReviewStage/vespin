@@ -22,6 +22,7 @@ import {
   LoopbackListener,
   MirrorPlatform,
   oauthAccountSourceLayer,
+  PlatformLoopStalls,
   RunMode,
   reporterLayer,
   SecretCipher,
@@ -38,6 +39,7 @@ import { net } from "electron";
 import { computerUseHelperLayer } from "../native/computer-use";
 import { thisMacHostLayer } from "../native/this-mac-host";
 import type { DesktopConfig } from "./desktop-config";
+import { mainLoopStalls } from "./main-loop-stalls";
 import { matchMirrorsInUtilityProcess } from "./mirror-matching";
 import { mainSentryTracer } from "./telemetry-service";
 
@@ -74,6 +76,8 @@ function hostSeamLayersFor(dependencies: HostSeamDependencies) {
     // end-to-end build's loopback one included (`bootstrap.ts`).
     Layer.succeed(ServiceOrigin, config.hostedServiceBaseUrl),
     Layer.succeed(IdSource, { create: () => randomUUID() }),
+    // The host runs in main, so a stall in main holds its reads; it says so beside a transcript's.
+    Layer.succeed(PlatformLoopStalls, mainLoopStalls),
     reporterLayer(config.report),
     // The account's local database opens on Node's own `node:sqlite`, bundled with Electron.
     nodeSqliteDriverLayer,

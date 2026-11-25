@@ -137,3 +137,36 @@ export function sendTraceOf(
 
   return { sentryTrace, ...(Predicate.isString(baggage) ? { baggage } : undefined) };
 }
+
+/** The attribute a span says the longest its process's event loop stood still within it by, in milliseconds. */
+export const SENTRY_LOOP_STALL_ATTRIBUTE = "main.loop_stall_ms";
+
+/** The op Sentry lists a request a process made under. */
+const HTTP_CLIENT_OP = "http.client";
+
+/** A span as Sentry's streamed `beforeSendSpan` hands it: its times in the epoch's seconds, its end once it ended, and its attributes. */
+interface TimedSpan {
+  readonly start_timestamp: number;
+  readonly end_timestamp?: number;
+  readonly attributes?: { readonly "sentry.op"?: unknown };
+}
+
+/**
+ * A request's span with the longest its process stood still within it
+ * (`SENTRY_LOOP_STALL_ATTRIBUTE`), as `worstWithin` answers for its times in
+ * the epoch's milliseconds; every other span as it was. Note that a request
+ * is timed from its call to its answer read, so a stall that held the answer
+ * after the network delivered it is in its time, and this tells it apart from
+ * the service's. A span not yet ended is left as it was.
+ */
+export function spanWithLoopStall<Span extends TimedSpan>(
+  span: Span,
+  worstWithin: (from: number, to: number) => number,
+): Span {
+  const ended = span.end_timestamp;
+
+  if (ended === undefined || span.attributes?.["sentry.op"] !== HTTP_CLIENT_OP) return span;
+  const stalledMs = worstWithin(span.start_timestamp * 1_000, ended * 1_000);
+
+  return { ...span, attributes: { ...span.attributes, [SENTRY_LOOP_STALL_ATTRIBUTE]: stalledMs } };
+}

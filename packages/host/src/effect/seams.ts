@@ -137,6 +137,22 @@ export class PlatformScreensInProcess extends Context.Service<PlatformScreensInP
   "@repo/host/PlatformScreensInProcess",
 ) {}
 
+/**
+ * How long this process's event loop stood still within a stretch of time,
+ * in the epoch's milliseconds, as the platform hears it ticking
+ * (`loop-stalls.ts`), which a transcript's read says beside its times. It is
+ * optional: the desktop's main process provides it, since a stall there holds
+ * every request and push the host makes; a platform that hears none provides
+ * none.
+ */
+export interface LoopStallsSeam {
+  readonly worstWithin: (from: number, to: number) => number;
+}
+
+export class PlatformLoopStalls extends Context.Service<PlatformLoopStalls, LoopStallsSeam>()(
+  "@repo/host/PlatformLoopStalls",
+) {}
+
 /** The ids the host mints for its own records. */
 export interface IdSourceSeam {
   readonly create: () => string;
