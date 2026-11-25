@@ -74,6 +74,18 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.41.1 — 2026-11-24
+
+### Improvements
+
+- The MCP servers row says how many servers are on instead of listing them
+  ([#10839](https://github.com/ReviewStage/vespin/pull/10839))
+
+### Fixes
+
+- Fixed merge buttons crowding a narrow pull request header
+  ([#10781](https://github.com/ReviewStage/vespin/pull/10781))
+
 ## 0.41.0 — 2026-11-24
 
 ### One switch for your usage data
