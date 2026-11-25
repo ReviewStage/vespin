@@ -4,6 +4,7 @@
     "deploymentEnabled": {
       "main": true,
       "prototype/manager-one-thread-kind": true,
+      "prototype/inbox-one-feed": true,
       "**": false
     }
   },

@@ -62,6 +62,7 @@ import {
   PROTO_MANAGER,
   prototypeThreadOfItem,
 } from "../tasks/prototype-chat-ask.js";
+import { PrototypeInboxFeed } from "../tasks/prototype-inbox-feed.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import {
@@ -90,6 +91,7 @@ import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { AgentPane } from "./main-tabs.js";
+import { PhoneHead } from "./phone-head.js";
 import {
   SIDE_PANEL_HOLDER,
   SidePanel,
@@ -193,8 +195,42 @@ function useHeldWhile<Drawn>(holding: boolean, drawn: Drawn): Drawn {
   return shown;
 }
 
-/** The window's Inbox, in the task's place: every task's items, and the chosen one read beside them; a memo boundary, as the module's head says. */
+/**
+ * PROTOTYPE 2: the window's Inbox as one feed of threads
+ * (`prototype-inbox-feed.tsx`), headed as the Inbox's list is; the list it
+ * replaces stands below, unused, as `DesktopInboxList`.
+ */
 export const DesktopInbox = memo(function DesktopInbox({
+  tasks,
+  room = SHELL_ROOM.WIDE,
+  phoneStart = null,
+}: {
+  tasks: TasksControl;
+  room?: ShellRoom;
+  phoneStart?: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="desktop-inbox flex min-h-0 min-w-0 flex-1 flex-col">
+      {room === SHELL_ROOM.NARROW ? (
+        <PhoneHead place="inbox" start={phoneStart} title="Inbox" end={null} />
+      ) : (
+        <Toolbar title="Inbox" />
+      )}
+      <PrototypeInboxFeed
+        narrow={room === SHELL_ROOM.NARROW}
+        onOpenManagerThread={(root) => {
+          landInPrototypeThread(root);
+          tasks.agentView.onOpen(PROTO_MANAGER);
+        }}
+        onOpenTask={(taskId) => tasks.onShowTask(taskId)}
+        readInboxImage={tasks.agents.readInboxImage}
+      />
+    </div>
+  );
+});
+
+/** The window's Inbox, in the task's place: every task's items, and the chosen one read beside them; a memo boundary, as the module's head says. */
+export const DesktopInboxList = memo(function DesktopInboxList({
   tasks,
   room = SHELL_ROOM.WIDE,
   phoneStart = null,

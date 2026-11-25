@@ -2482,18 +2482,20 @@ let protoVersion = 0;
 function protoChatMessage(
   id: string,
   seq: number,
-  by: "agent" | "ada",
+  by: "agent" | "ada" | "grace",
   text: string,
   at: number,
   threadRoot: string | null,
 ): ManagerChatLiveMessage {
+  const person = by === "grace" ? GRACE : ADA;
+
   return {
     id,
     clientKey: `prototype-${id}`,
     seq,
     authorKind: by === "agent" ? MANAGER_CHAT_AUTHOR.AGENT : MANAGER_CHAT_AUTHOR.PERSON,
-    authorUserId: by === "agent" ? null : ADA.userId,
-    authorName: by === "agent" ? "Release manager" : ADA.name,
+    authorUserId: by === "agent" ? null : person.userId,
+    authorName: by === "agent" ? "Release manager" : person.name,
     text,
     attachments: [],
     threadRoot,
@@ -2522,6 +2524,52 @@ const PROTO_STAGED_REPLIES: readonly ManagerChatLiveMessage[] = [
     "Merged #128. The audit log line follows in its own PR.",
     MANAGER_STARTED + 13 * MINUTE,
     protoId(1),
+  ),
+];
+
+/** PROTOTYPE 2: a long thread of the release Manager's chat, its last replies new to the account, one naming it. */
+export const PROTOTYPE_LONG_ROOT = "c0ffee25";
+
+const LONG_REPLIES: readonly (readonly ["agent" | "ada" | "grace", string])[] = [
+  ["grace", "Do we tag from main or from a release branch this time?"],
+  ["agent", "From main. Nothing on it is held back for 0.26."],
+  ["ada", "Main is fine. Make sure the digest flag stays off by default."],
+  ["agent", "It does: `digest.enabled` defaults to false and only the beta cohort flips it."],
+  ["grace", "The iOS build should go to TestFlight the same day."],
+  ["agent", "I'll start the iOS release once the desktop tag lands."],
+  ["ada", "Who's writing the release notes?"],
+  ["agent", "I'm drafting them; I'll ask you for the headline."],
+  ["grace", "Can the notes link the invite docs page?"],
+  ["agent", "Yes, the docs PR merged an hour ago."],
+  ["ada", "Good. Ping me if CI flakes again."],
+  ["agent", "Will do. Two reruns so far today, both the same Playwright test."],
+  ["grace", "That test is fixed on main as of this morning."],
+  ["agent", "Confirmed: three green runs since the fix."],
+  [
+    "agent",
+    "[@Ada Lovelace](https://vespin.dev/personal/person/user-ada), can you confirm the changelog wording before I tag? It leads with invites and mentions the digest for the beta cohort.",
+  ],
+];
+
+/** The long thread's root and replies, oldest first. */
+const PROTO_LONG_THREAD: readonly ManagerChatLiveMessage[] = [
+  protoChatMessage(
+    PROTOTYPE_LONG_ROOT,
+    150,
+    "agent",
+    "Release checklist for 0.25.0. Reply here with anything that should block the tag.",
+    MANAGER_STARTED + 30 * MINUTE,
+    null,
+  ),
+  ...LONG_REPLIES.map(([by, text], at) =>
+    protoChatMessage(
+      `long${at.toString(16).padStart(4, "0")}`,
+      151 + at,
+      by,
+      text,
+      MANAGER_STARTED + (32 + at * 5) * MINUTE,
+      PROTOTYPE_LONG_ROOT,
+    ),
   ),
 ];
 
@@ -2645,6 +2693,43 @@ function prototypeAgentInboxes(): Readonly<Record<string, readonly InboxItem[]>>
   return { [AGENT.MANAGER]: PROTO_ASKS.map(protoItem) };
 }
 
+/** PROTOTYPE 2: one thread of the Manager's chat, its root then its replies, oldest first; none where no root has the id. */
+export function prototypeChatThread(root: string): readonly ManagerChatLiveMessage[] {
+  const messages = prototypeManagerChat().messages.toReversed();
+  const head = messages.find((each) => each.id === root && each.threadRoot === null);
+
+  return head === undefined ? [] : [head, ...messages.filter((each) => each.threadRoot === root)];
+}
+
+/** PROTOTYPE 2: the account's reply in a thread of the Manager's chat, and the Manager's acknowledgment a beat later. */
+export function replyPrototypeChat(root: string, text: string): void {
+  const now = Date.now();
+  protoWritten.push(
+    protoChatMessage(
+      `prototype-r${protoWritten.length}`,
+      300 + protoWritten.length,
+      "ada",
+      text,
+      now,
+      root,
+    ),
+  );
+  protoMoved();
+  setTimeout(() => {
+    protoWritten.push(
+      protoChatMessage(
+        `prototype-r${protoWritten.length}`,
+        300 + protoWritten.length,
+        "agent",
+        "Got it, thanks. I'll take it from here.",
+        Date.now(),
+        root,
+      ),
+    );
+    protoMoved();
+  }, 1200);
+}
+
 /** The prototype's items as the Inbox lists them, for a reader that lists them itself. */
 export function prototypeChatItem(id: string): InboxItem | undefined {
   const ask = prototypeChatAsk(id);
@@ -2657,9 +2742,19 @@ function prototypeManagerChat(): AppManagerChat {
   const roots = PROTO_ASKS.map((ask, at) =>
     protoChatMessage(ask.id, 10 + at, "agent", ask.text, ask.askedAt, null),
   );
-  const laid = [...MANAGER_CHAT.messages, ...roots, ...PROTO_STAGED_REPLIES, ...protoWritten];
+  const laid = [
+    ...MANAGER_CHAT.messages,
+    ...roots,
+    ...PROTO_STAGED_REPLIES,
+    ...PROTO_LONG_THREAD,
+    ...protoWritten,
+  ];
+  // Note that the chat's order is its messages' times, so a root staged here stands where it was said.
+  const ordered = laid
+    .toSorted((a, b) => a.createdAt - b.createdAt || a.seq - b.seq)
+    .map((message, at) => ({ ...message, seq: at }));
 
-  return { messages: laid.toSorted((a, b) => b.seq - a.seq) };
+  return { messages: ordered.toReversed() };
 }
 
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */

@@ -105,9 +105,12 @@ export function ThreadReplies({
   count,
   faces,
   open = false,
+  label,
   onOpen,
 }: {
   count: number;
+  /** PROTOTYPE: words of its own in the count's place ("12 earlier replies"). */
+  label?: string | undefined;
   /** One face to each replier, the first to answer first. */
   faces: readonly ReactNode[];
   /** Whether the thread stands open in its pane. */
@@ -129,7 +132,7 @@ export function ThreadReplies({
           </span>
         ))}
       </span>
-      {repliesWords(count)}
+      {label ?? repliesWords(count)}
     </ButtonPrimitive>
   );
 }

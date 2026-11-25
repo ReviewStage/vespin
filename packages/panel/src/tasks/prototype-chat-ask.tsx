@@ -26,6 +26,7 @@ import {
   INBOX_REPLY,
   type InboxAnswers,
   type InboxAsk,
+  type InboxMessage,
 } from "@repo/features/inbox-wire";
 import {
   answerPrototypeChatAsk,
@@ -170,33 +171,38 @@ function Standing({
 }
 
 /**
- * The ask a Manager's chat message carries, under its words: open with a
- * Send while it waits on the reader, held still while it waits on someone
- * else, as answered once it is; nothing for a message that asks nothing.
+ * An ask as a card under the message that asks it: open with a Send while
+ * it waits on the reader, held still while it waits on someone else, as
+ * answered once it is. PROTOTYPE 2 draws it in the Inbox's feed too.
  */
-export function PrototypeChatAsk({
-  messageId,
+export function AskCard({
+  itemId,
+  ask: inboxAsk,
+  title,
+  thread,
+  waitsOn,
   readerId,
+  answers,
+  onAnswer,
   readInboxImage,
   onLand,
 }: {
-  messageId: string;
+  itemId: string;
+  ask: InboxAsk;
+  title: string;
+  /** The item's thread as the Inbox reads it, which an answer is checked against. */
+  thread: readonly InboxMessage[];
+  waitsOn: { readonly userId: string; readonly name: string };
   readerId: string | undefined;
+  answers: InboxAnswers | undefined;
+  onAnswer: (answers: InboxAnswers, words: string) => void;
+  readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
   /** Lands in the chat on the ask's thread, where the ask is drawn outside the chat. */
   onLand?: (() => void) | undefined;
-  readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
-}): React.JSX.Element | null {
-  usePrototypeChat();
+}): React.JSX.Element {
   const [draft, setDraft] = useState<InboxDraft>(EMPTY_INBOX_DRAFT);
   const [missing, setMissing] = useState<string | undefined>(undefined);
-  const ask = prototypeChatAsk(messageId);
-  const item = prototypeChatItem(messageId);
-
-  if (ask === undefined || item === undefined || ask.message.ask === undefined) return null;
-  const inboxAsk = ask.message.ask as InboxAsk;
-  const answer = prototypeChatAnswer(ask.id);
-  const waitsOnReader = ask.waitsOn.userId === readerId;
-  const thread = item.thread ?? [];
+  const waitsOnReader = waitsOn.userId === readerId;
 
   const send = () => {
     const sent = inboxThreadSend(thread, draft);
@@ -209,7 +215,7 @@ export function PrototypeChatAsk({
     }
 
     setMissing(undefined);
-    answerPrototypeChatAsk(ask.id, sent.answers, answerWords(inboxAsk, sent.answers));
+    onAnswer(sent.answers, answerWords(inboxAsk, sent.answers));
   };
 
   const textDoors = {
@@ -221,16 +227,12 @@ export function PrototypeChatAsk({
   };
 
   const controls =
-    answer !== undefined ? (
-      <HeldControls
-        ask={inboxAsk}
-        title={ask.title}
-        draft={answeredDraft(inboxAsk, answer.answers)}
-      />
+    answers !== undefined ? (
+      <HeldControls ask={inboxAsk} title={title} draft={answeredDraft(inboxAsk, answers)} />
     ) : waitsOnReader ? (
       <AskControls
         ask={inboxAsk}
-        title={ask.title}
+        title={title}
         doors={{
           draft,
           disabled: false,
@@ -242,34 +244,34 @@ export function PrototypeChatAsk({
         }}
       />
     ) : (
-      <HeldControls ask={inboxAsk} title={ask.title} draft={EMPTY_INBOX_DRAFT} />
+      <HeldControls ask={inboxAsk} title={title} draft={EMPTY_INBOX_DRAFT} />
     );
 
   return (
     <InboxPictures
-      itemId={ask.id}
+      itemId={itemId}
       control={{
-        read: (itemId, attachmentId) =>
-          readInboxImage({ itemId, attachmentId }) as ReturnType<
+        read: (id, attachmentId) =>
+          readInboxImage({ itemId: id, attachmentId }) as ReturnType<
             Parameters<typeof InboxPictures>[0]["control"]["read"]
           >,
       }}
     >
-      <div className={`${INBOX_ASK_BOX} mt-tight-gap`} data-prototype-chat-ask={ask.id}>
+      <div className={`${INBOX_ASK_BOX} mt-tight-gap`} data-prototype-chat-ask={itemId}>
         <Card look={CARD_LOOK.RAISED} padding={CARD_PADDING.FLUSH}>
           <CardHead>
             <span className={INBOX_ASK_KIND}>{askHeadWords(inboxAsk, undefined)}</span>
             <Standing
-              answered={answer !== undefined}
+              answered={answers !== undefined}
               waitsOnReader={waitsOnReader}
-              waitsOnName={ask.waitsOn.name}
+              waitsOnName={waitsOn.name}
             />
           </CardHead>
           <div className="flex min-w-0 flex-col gap-block-gap px-card-head-inline pb-card-head-block">
             {controls}
-            {(answer === undefined && waitsOnReader) || onLand !== undefined ? (
+            {(answers === undefined && waitsOnReader) || onLand !== undefined ? (
               <div className="flex flex-wrap items-center gap-control-gap">
-                {answer === undefined && waitsOnReader ? (
+                {answers === undefined && waitsOnReader ? (
                   <Button
                     variant={BUTTON_VARIANT.PRIMARY}
                     size={BUTTON_SIZE.COMPACT}
@@ -294,6 +296,44 @@ export function PrototypeChatAsk({
         </Card>
       </div>
     </InboxPictures>
+  );
+}
+
+/**
+ * The ask a Manager's chat message carries, under its words, from the
+ * Manager's asks; nothing for a message that asks nothing.
+ */
+export function PrototypeChatAsk({
+  messageId,
+  readerId,
+  readInboxImage,
+  onLand,
+}: {
+  messageId: string;
+  readerId: string | undefined;
+  /** Lands in the chat on the ask's thread, where the ask is drawn outside the chat. */
+  onLand?: (() => void) | undefined;
+  readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
+}): React.JSX.Element | null {
+  usePrototypeChat();
+  const ask = prototypeChatAsk(messageId);
+  const item = prototypeChatItem(messageId);
+
+  if (ask === undefined || item === undefined || ask.message.ask === undefined) return null;
+
+  return (
+    <AskCard
+      itemId={ask.id}
+      ask={ask.message.ask as InboxAsk}
+      title={ask.title}
+      thread={item.thread ?? []}
+      waitsOn={ask.waitsOn}
+      readerId={readerId}
+      answers={prototypeChatAnswer(ask.id)?.answers}
+      onAnswer={(answers, words) => answerPrototypeChatAsk(ask.id, answers, words)}
+      readInboxImage={readInboxImage}
+      onLand={onLand}
+    />
   );
 }
 

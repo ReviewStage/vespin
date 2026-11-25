@@ -94,7 +94,7 @@ import { useTaskListCollections, useTaskListRow } from "../task-list-collections
 import { agentName } from "../tasks/agent-model.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
-import { ManagerChatTab, ManagerThreadTab } from "../tasks/manager-chat-tab.js";
+import { ManagerThreadTab } from "../tasks/manager-chat-tab.js";
 import { ThreadDoorsProvider } from "../tasks/manager-chat-threads.js";
 import type { OpenFileLines } from "../tasks/mention-chip.js";
 import {
@@ -103,6 +103,7 @@ import {
   takePrototypeThread,
   usePrototypeChat,
 } from "../tasks/prototype-chat-ask.js";
+import { PrototypeInboxFeed } from "../tasks/prototype-inbox-feed.js";
 import { ManagerGlyph } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
@@ -661,30 +662,16 @@ function OwnAgentPage({
                 <ManagerOverview tasks={tasks} manager={agent} threads={threads} staged={staged} />
               </Fill>
             ) : manager && view === MANAGER_VIEW.INBOX ? (
-              // PROTOTYPE: the Inbox tab is the chat filtered to its asks, each thread opening beside it.
-              <FindScope
-                className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
-                active={tasks.shown && !sideFocused}
-                subject={findSubject}
-                id={panels(view).panel}
-                role="tabpanel"
-                aria-labelledby={panels(view).tab}
-              >
-                <ThreadDoorsProvider value={threadDoors}>
-                  {summary === undefined ? null : (
-                    <ManagerChatTab
-                      agent={summary}
-                      control={agents}
-                      shown={tasks.shown && !sidePanel.fullScreen}
-                      onOpenTarget={openTarget}
-                      cards={cards.agent(agent.id)}
-                      threads={undefined}
-                      asksOnly
-                      onLand={(root) => landInThread.current(root)}
-                    />
-                  )}
-                </ThreadDoorsProvider>
-              </FindScope>
+              // PROTOTYPE 2: the Inbox tab is the Inbox's feed, narrowed to the Manager's threads.
+              <Fill id={panels(view).panel} role="tabpanel" aria-labelledby={panels(view).tab}>
+                <PrototypeInboxFeed
+                  only="manager"
+                  narrow={away !== undefined}
+                  onOpenManagerThread={(root) => landInThread.current(root)}
+                  onOpenTask={(taskId) => tasks.onShowTask(taskId)}
+                  readInboxImage={agents.readInboxImage}
+                />
+              </Fill>
             ) : (
               // Note that the scope stands as the column's own box, as its fill did, and is the panel of the tab shown on a Manager's page.
               <FindScope
