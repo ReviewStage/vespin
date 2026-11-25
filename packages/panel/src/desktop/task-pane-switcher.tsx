@@ -1,18 +1,25 @@
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { TASK_BOUNDS } from "@repo/features/task-wire";
 import { backToWords } from "@repo/features/words";
 import {
   BackButton,
+  IconButton,
   InlineEdit,
   type InlineEditEnd,
   NO_BACK_KEY,
   OneLine,
   TEXT_ELEMENT,
+  TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  TOOLBAR_CORNERS,
   type ToolbarPickUp,
+  Tooltip,
 } from "@repo/ui";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import type { AwayStep } from "../places/window-steps.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
+import type { MenuAction } from "./action-menu.js";
 import { PhoneHead, type TaskHeadBack } from "./phone-head.js";
 
 /**
@@ -38,10 +45,13 @@ import { PhoneHead, type TaskHeadBack } from "./phone-head.js";
  * named for where it
  * goes ("Back to Overview"); the title, one line centered between the two
  * equal corners and fading where it is cut, names what is on screen, or
- * nothing on Overview until the description's own heading scrolls away; and the ⋯
+ * on Overview the task's path in muted words (its repository and key, as
+ * the iOS app's bar names a task) until the description's own heading
+ * scrolls away and the row picks its name up; and the ⋯
  * holds the menu of what is on screen: the task's own on Overview
  * (`task-actions.tsx`), the agent's on its screen (`agent-actions.tsx`),
- * and the tab's on one of the panel's.
+ * and the tab's on one of the panel's. On Overview, New agent stands
+ * before the ⋯, its glyph alone, as the page's Agents "+" starts one.
  */
 
 /** What stands on a phone's task: its Overview, an agent's screen pushed over it, or a tab of the panel pushed over either. */
@@ -102,17 +112,23 @@ interface TaskHeadRename {
 export function TaskHead({
   back,
   title,
+  path,
   pickUp,
   rename,
+  newAgent,
   actions,
 }: {
   back: TaskHeadBack;
   /** What is on screen: the agent's or the tab's name; none on Overview, whose description names the task in its own heading, which the row then picks up once it scrolls away (`pickUp`). */
   title: string | undefined;
+  /** The task's path in words ("ada/relay › AL-42"), muted in the title's place where there is no title and no heading picked up. */
+  path?: string | undefined;
   /** The description's heading as the row picks it up where it draws no title. */
   pickUp?: ToolbarPickUp | undefined;
   /** The task's name as a field in the title's place while it is renamed, `title` then being the task's name. */
   rename?: TaskHeadRename | undefined;
+  /** New agent, before the ⋯ (`newAgentStarts`); none off Overview or on a task that starts no agent. */
+  newAgent?: MenuAction | undefined;
   /** The row's one ⋯ (`PlaceMore`). */
   actions: React.ReactNode;
 }): React.JSX.Element {
@@ -133,7 +149,11 @@ export function TaskHead({
         />
       }
       title={
-        named === undefined ? undefined : (
+        named === undefined ? (
+          path === undefined ? undefined : (
+            <TaskHeadPath path={path} />
+          )
+        ) : (
           <Text
             as={TEXT_ELEMENT.H1}
             variant={TEXT_VARIANT.TOOLBAR_TITLE}
@@ -153,7 +173,47 @@ export function TaskHead({
           </Text>
         )
       }
-      end={actions}
+      corners={newAgent === undefined ? undefined : TOOLBAR_CORNERS.FIT}
+      end={
+        newAgent === undefined ? (
+          actions
+        ) : (
+          <>
+            <TaskHeadNewAgent start={newAgent} />
+            {actions}
+          </>
+        )
+      }
     />
+  );
+}
+
+/** The task's path as a phone's row names it on Overview: one muted line, cut where it meets the corners. */
+function TaskHeadPath({ path }: { path: string }): React.JSX.Element {
+  return (
+    <Text
+      as={TEXT_ELEMENT.H1}
+      variant={TEXT_VARIANT.TOOLBAR_TITLE}
+      tone={TEXT_TONE.MUTED}
+      className="ui-toolbar-title"
+    >
+      <OneLine>{path}</OneLine>
+    </Text>
+  );
+}
+
+/** New agent before a phone's ⋯: the agent's glyph alone, named still, unavailable with Start's reason while a Start is out. */
+function TaskHeadNewAgent({ start }: { start: MenuAction }): React.JSX.Element {
+  return (
+    // Note that it names no key, as no phone's header does.
+    <Tooltip label={start.detail ?? start.label}>
+      <IconButton
+        icon={<EntityGlyph kind={ENTITY_KIND.AGENT} />}
+        label={start.label}
+        disabled={start.disabled}
+        focusableWhenDisabled
+        onClick={start.onSelect}
+      />
+    </Tooltip>
   );
 }
