@@ -64,8 +64,13 @@ interface PressTiming {
   readonly inputDelayMs: number;
   readonly processingMs: number;
   readonly presentationMs: number;
-  /** When the press began, on the page's clock: its earliest entry's start. */
-  readonly startedAt: number;
+}
+
+/** What `TAKE_PRESS` reads of the step's press: when it began, and its timing where the browser reported one. */
+interface TakenPress {
+  /** The press's time stamp on the page's clock, heard at its pointerdown; none where no press landed. */
+  readonly startedAt: number | null;
+  readonly timing: PressTiming | null;
 }
 
 /** What one step cost. */
@@ -175,11 +180,15 @@ const RENDER_SHIM = `(() => {
  * The browser's Event Timing for each press, laid before the page's scripts:
  * every entry of an interaction (`interactionId` past 0) into
  * `window.__benchPresses`, which the bench reads and clears around a step.
- * 16 ms is the least threshold the browser takes.
+ * 16 ms is the least threshold the browser takes, so a press painted sooner
+ * has no entry; its time stamp is heard at its pointerdown all the same
+ * (`window.__benchPressAt`), so when its page stands is still timed.
  */
 const PRESS_SHIM = `(() => {
   const presses = [];
   window.__benchPresses = presses;
+  window.__benchPressAt = null;
+  addEventListener("pointerdown", (event) => { window.__benchPressAt = event.timeStamp; }, { capture: true });
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       if (entry.interactionId > 0) presses.push({
@@ -199,16 +208,20 @@ const PRESS_SHIM = `(() => {
  */
 const TAKE_PRESS = `(() => {
   const presses = window.__benchPresses.splice(0);
-  if (presses.length === 0) return null;
+  const startedAt = window.__benchPressAt;
+  window.__benchPressAt = null;
+  if (presses.length === 0) return { startedAt, timing: null };
   const longest = presses.reduce((one, other) =>
     other.duration > one.duration ||
     (other.duration === one.duration && other.processingEnd > one.processingEnd) ? other : one);
   return {
-    paintMs: longest.duration,
-    inputDelayMs: longest.processingStart - longest.startTime,
-    processingMs: longest.processingEnd - longest.processingStart,
-    presentationMs: longest.startTime + longest.duration - longest.processingEnd,
-    startedAt: Math.min(...presses.map((press) => press.startTime)),
+    startedAt,
+    timing: {
+      paintMs: longest.duration,
+      inputDelayMs: longest.processingStart - longest.startTime,
+      processingMs: longest.processingEnd - longest.processingStart,
+      presentationMs: longest.startTime + longest.duration - longest.processingEnd,
+    },
   };
 })()`;
 
@@ -352,7 +365,7 @@ async function takeStep(
 
   await page.waitForTimeout(settle);
   const after = await scriptMs(session);
-  const press = place === undefined ? null : await page.evaluate<PressTiming | null>(TAKE_PRESS);
+  const press = place === undefined ? undefined : await page.evaluate<TakenPress>(TAKE_PRESS);
   const renders = await page.evaluate<Renders>(TAKE_RENDERS);
 
   if (scene.back !== undefined) {
@@ -369,9 +382,9 @@ async function takeStep(
     commits: renders.commits,
     named: new Map(Object.entries(renders.named)),
     namedAgain: new Map(Object.entries(renders.namedAgain)),
-    press: press ?? undefined,
+    press: press?.timing ?? undefined,
     settledMs:
-      press === null || renders.lastCommitAt === null
+      press?.startedAt == null || renders.lastCommitAt === null
         ? undefined
         : renders.lastCommitAt - press.startedAt,
   };
