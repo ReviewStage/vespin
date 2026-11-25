@@ -85,7 +85,7 @@ type WorkspaceSwitcherProps = {
   readonly onChoose: (id: string) => void;
   /** The signed-in account, whose row last in the list opens Settings; none while nobody is signed in, or where the window leads to Settings itself, as a landscape iPad's sidebar does at its foot. */
   readonly account?: SwitcherAccount | undefined;
-  /** The acts after the workspaces, in the panel's order: New workspace, then Workspace settings. */
+  /** The acts after the workspaces, in the panel's order: New workspace, Workspace settings, then Admin for an admin. */
   readonly actions: readonly SwitcherAction[];
   /** How its button stands; the tile and the name where none is given. */
   readonly look?: SwitcherLook | undefined;
@@ -259,4 +259,9 @@ export function newWorkspaceAction(onPress: () => void): SwitcherAction {
 /** The menu's act that opens the chosen workspace's settings, as the panel words it. */
 export function workspaceSettingsAction(onPress: () => void): SwitcherAction {
   return { label: WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS, symbol: GLYPH.SETTINGS, onPress };
+}
+
+/** The menu's act, for an admin alone, that opens Admin, as the panel words it and marks it. */
+export function adminAction(onPress: () => void): SwitcherAction {
+  return { label: WORKSPACE_SWITCHER_WORDS.ADMIN, symbol: GLYPH.ADMIN, onPress };
 }

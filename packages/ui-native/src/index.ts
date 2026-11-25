@@ -575,6 +575,7 @@ export {
 } from "./window-size-class.js";
 
 export {
+  adminAction,
   newWorkspaceAction,
   SWITCHER_LOOK,
   type SwitcherAccount,

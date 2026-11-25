@@ -2817,7 +2817,7 @@ function stagedSettings(
 
 /**
  * Main's document as these profiles draw it: the account signed in with
- * its staged experiments on, its read of what waits naming the tasks
+ * its staged experiments on, an admin, its read of what waits naming the tasks
  * holding items, and each of
  * `workspaceIds` held with no automation, so the person page and the
  * sidebar list none rather than reading for good. The same document, the
@@ -2835,6 +2835,8 @@ export function inboxAppState(
   return {
     ...state,
     account: ACCOUNT,
+    // Note that the account is an admin, so the workspace switcher offers Admin, as it does an admin's.
+    access: { admin: true },
     ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
