@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the system's menu of every workspace, New workspace, the chosen workspace's Manage under its name, then the account opening Settings.
+// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the system's menu of every workspace, New workspace and Workspace settings, then the account opening Settings.
 
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
@@ -10,6 +10,7 @@ import {
   newWorkspaceAction,
   type SwitcherWorkspace,
   type WorkspaceSwitcher,
+  workspaceSettingsAction,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -139,8 +140,10 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
             onPress: () => openSettings(),
           }
         : undefined,
-      actions: [newWorkspaceAction(() => router.push("/new-workspace"))],
-      onWorkspaceSettings: () => openSettings(SETTINGS_ROUTE.WORKSPACE),
+      actions: [
+        newWorkspaceAction(() => router.push("/new-workspace")),
+        workspaceSettingsAction(() => openSettings(SETTINGS_ROUTE.WORKSPACE)),
+      ],
     };
   }, [
     workspaces,

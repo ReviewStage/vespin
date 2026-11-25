@@ -69,7 +69,7 @@ onFlowComplete:
       - tapOn:
           id: "workspace-switcher"
       - assertVisible: "Settings"
-      - assertVisible: "Manage"
+      - assertVisible: "Workspace settings"
       - takeScreenshot: ipad-switcher-settings
       - tapOn: "Settings(, .*)?"
       - waitForAnimationToEnd
@@ -82,8 +82,8 @@ onFlowComplete:
       - setOrientation: PORTRAIT
       - waitForAnimationToEnd
 # A compact window, the iPhone's, names its workspace as the Inbox's one
-# leading button, whose list holds the workspaces, New workspace, the
-# workspace's Manage, then the account opening Settings, and keeps the
+# leading button, whose list holds the workspaces, New workspace and
+# Workspace settings, then the account opening Settings, and keeps the
 # system's tab bar, minimizing it as the Tasks list scrolls down, Search
 # staying on its own glass beside it.
 - runFlow:
@@ -93,7 +93,7 @@ onFlowComplete:
       - tapOn:
           id: "workspace-switcher"
       - assertVisible: "Settings"
-      - assertVisible: "Manage"
+      - assertVisible: "Workspace settings"
       - takeScreenshot: switcher-settings
       # Note that the switcher's menu is left by its own Settings, which
       # opens Settings, closed again by a swipe down, rather than by a tap
