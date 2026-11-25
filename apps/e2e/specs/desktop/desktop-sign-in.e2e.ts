@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { _electron, type ElectronApplication } from "@playwright/test";
+import { _electron, type ElectronApplication, type Page } from "@playwright/test";
 import { expect, test } from "../../support/signed-in.js";
 
 /** The task seeded for the member, which the window's task list shows once the app is signed in. */
@@ -110,6 +110,25 @@ async function firstOpened(app: ElectronApplication): Promise<string> {
   return first as string;
 }
 
+/** Playwright also reports the hidden storage migration view as a window. */
+async function firstBrowserWindow(app: ElectronApplication): Promise<Page | undefined> {
+  for (const page of app.windows()) {
+    try {
+      const window = await app.browserWindow(page);
+
+      try {
+        if (await window.evaluate((value) => value !== null)) return page;
+      } finally {
+        await window.dispose();
+      }
+    } catch (error) {
+      if (!page.isClosed()) throw error;
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * The desktop's sign-in end to end, over the suite's server, as the test's
  * own fresh member past setup with one task: the journey's browser is signed
@@ -151,7 +170,20 @@ test("the packaged app signs in on a fresh profile and shows the task list", asy
     });
 
     await holdOpens(app);
-    const window = await app.firstWindow();
+    let window: Page | undefined;
+    await expect
+      .poll(
+        async () => {
+          window = await firstBrowserWindow(app);
+
+          return window !== undefined;
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(true);
+
+    if (window === undefined) throw new Error("The app did not open a browser window");
+
     const signIn = window.getByRole("region", { name: /^Sign in to / });
     await signIn.getByRole("button", { name: "Continue with GitHub" }).click();
     await page.goto(withoutLoginPrompt(await firstOpened(app)));
