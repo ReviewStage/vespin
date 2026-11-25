@@ -211,7 +211,8 @@ export async function serviceFile(
 
   if (kept !== undefined) return { uri: kept.uri, contentType: kept.type, bytes: kept.size };
   folder.create({ intermediates: true, idempotent: true });
-  const partial = new File(folder, `${PARTIAL_PREFIX}${randomUUID()}`);
+  const partialName = `${PARTIAL_PREFIX}${randomUUID()}`;
+  const partial = new File(folder, partialName);
 
   try {
     let view = await sourceOf(acts, picture, false);
@@ -231,14 +232,17 @@ export async function serviceFile(
 
     if (type === undefined) throw new FileUnread();
     const file = new File(folder, nameOf(type, name));
-    partial.move(file);
+    // Note that a move points `partial` at the file it became, so the partial is cleaned up below by its own name alone.
+    await partial.move(file);
 
     return { uri: file.uri, contentType: type, bytes: file.size };
   } catch (cause: unknown) {
     // Note that any other failure, a file system's or the host's, leaves as the app's own words alone, since its own might name the request.
     throw cause instanceof FileUnread ? cause : new FileUnread();
   } finally {
-    if (partial.exists) partial.delete();
+    const left = new File(folder, partialName);
+
+    if (left.exists) left.delete();
   }
 }
 
