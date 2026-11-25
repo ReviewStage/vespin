@@ -564,6 +564,13 @@ interface Holding<Row, Change = unknown> {
   reportsWhole: boolean;
   /** The keys whose synced row, or whose holding by the read, moved since it last handed the store any, for a kept read. */
   readonly unreported: Set<string>;
+  /**
+   * Whether the read shows every row of its kind, as the read that answers
+   * every row (`PoolRead.owns`) does of a kind kept on disk, whose rows a
+   * launch holds in memory only once loaded, so a write over one it never
+   * answered is still carried by it.
+   */
+  readonly showsAll: boolean;
 }
 
 /** One write standing: the keys it changes and its change, the service's word in its place once it answered one. */
@@ -655,10 +662,23 @@ function drawnRow<Row extends object, Change>(
   return row;
 }
 
-/** Whether the read shows `key`'s row: one it answered, one it adopted, or one it keeps beside the pool. */
+/** The synced row `key` names as the kind's collection holds it, loaded from disk or taken; none where it holds none. */
+function loadedRow<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+  key: string,
+): Row | undefined {
+  const stored = rows.synced.collection.get(key);
+
+  return stored === undefined ? undefined : rowOf<Row, typeof stored>(stored);
+}
+
+/** Whether the read shows `key`'s row: one it answered, one it adopted, one it keeps beside the pool, or any where it shows every row. */
 function shows<Row, Change>(holding: Holding<Row, Change>, key: string): boolean {
   return (
-    holding.held.has(key) || holding.adopted.has(key) || holding.read.beside?.shows(key) === true
+    holding.showsAll ||
+    holding.held.has(key) ||
+    holding.adopted.has(key) ||
+    holding.read.beside?.shows(key) === true
   );
 }
 
@@ -1144,6 +1164,7 @@ function stood<Row extends object, Change>(
         reported: new Map(),
         reportsWhole: true,
         unreported: new Set(),
+        showsAll: rows.synced.kept && read.owns === true,
       };
 
       rows.reads.add(holding);
@@ -1244,8 +1265,9 @@ function takenInPlace<Row extends object, Change>(
       if (keys.some((key) => holding.read.beside?.shows(key) === true)) beside.push(holding);
 
       for (const key of keys) {
-        if (!holding.held.has(key) && !holding.adopted.has(key)) continue;
-        const drawn = rows.kind.drawn(taken, next.get(key));
+        if (!holding.showsAll && !holding.held.has(key) && !holding.adopted.has(key)) continue;
+        // Note that a row a launch only loaded from disk was never taken here, so the change is drawn over it as the collection holds it.
+        const drawn = rows.kind.drawn(taken, next.get(key) ?? loadedRow(rows, key));
 
         if (drawn === ROW_GONE) {
           next.delete(key);

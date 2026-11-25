@@ -12,7 +12,7 @@ import {
   SingleProcessCoordinator,
   type SQLiteDriver,
 } from "@tanstack/db-sqlite-persistence-core";
-import { Effect, Exit, Scope } from "effect";
+import { Deferred, Effect, Exit, Scope } from "effect";
 import {
   type CollectionsStore,
   type EntityPool,
@@ -22,6 +22,7 @@ import {
   type HeldRows,
   type PoolRead,
   type RowKind,
+  type WriteDeclaration,
 } from "./entity-pool.js";
 
 interface Row {
@@ -303,5 +304,87 @@ it.effect(
 
       yield* second.close;
       assert.deepEqual(seen, { stored: undefined, row: undefined, ids: [] });
+    }),
+);
+
+/** Every row the database open now keeps of the stored kind, as a live query loads it, by id and name. */
+function keptRows(pool: EntityPool) {
+  return Effect.flatMap(pool.collection(STORED), (collection) =>
+    Effect.promise(async () => {
+      const query = createLiveQueryCollection({
+        query: (q) => q.from({ row: collection }),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      await query.preload();
+      const rows = query.toArray.map((row) => [row.id, row.name] as const).sort();
+      await query.cleanup();
+
+      return rows;
+    }),
+  );
+}
+
+/** A rename of the row it names, carried by a service that answers the transaction `txid` names, or none. */
+function renamed(txid: string | undefined): WriteDeclaration<Row, FieldChange<Row>, string, void> {
+  return {
+    kind: STORED,
+    keys: (id) => [id],
+    change: () => () => ({ name: "Renamed" }),
+    send: () => Effect.succeed({ answer: undefined, txid }),
+  };
+}
+
+it.effect(
+  "a write over a row a launch only loaded from disk stands until the read that answers every row carries it, and lands there where the service names no transaction",
+  () =>
+    Effect.gen(function* () {
+      const file = join(yield* folder, "account.sqlite");
+
+      yield* launch(file, (pool) =>
+        Effect.gen(function* () {
+          const owner = yield* standing(pool, { owns: true, kept: KEPT });
+          yield* owner.rows.answer([ADA, BO], { cursor: { at: "1" } });
+        }),
+      );
+
+      const during = yield* launch(file, (pool) =>
+        Effect.gen(function* () {
+          const confirmed = yield* Deferred.make<void>();
+
+          yield* standing(pool, {
+            owns: true,
+            kept: KEPT,
+            confirmation: () => () => Deferred.await(confirmed),
+          });
+
+          // Note that the row is loaded from disk by a live query alone, as a screen loads it; no answer of this launch carries it.
+          yield* keptRows(pool);
+          yield* pool.write(renamed("tx-1"), "a");
+          yield* Effect.repeat(Effect.yieldNow, { times: 20 });
+          const shown = pool.row(STORED, "a")?.name;
+          yield* Deferred.succeed(confirmed, undefined);
+
+          return shown;
+        }),
+      );
+
+      yield* launch(file, (pool) =>
+        Effect.gen(function* () {
+          yield* standing(pool, { owns: true, kept: KEPT });
+          yield* keptRows(pool);
+          yield* pool.write(renamed(undefined), "b");
+          yield* Effect.repeat(Effect.yieldNow, { times: 20 });
+        }),
+      );
+
+      const kept = yield* launch(file, keptRows);
+
+      assert.equal(during, "Renamed", "the write stands while the read has not carried it");
+      assert.deepEqual(kept, [
+        ["a", "Ada"],
+        ["b", "Renamed"],
+      ]);
     }),
 );
