@@ -135,6 +135,7 @@ import { EXPERIMENT } from "@repo/settings";
 import {
   ANNOUNCE,
   announce,
+  CarryOnLine,
   CHAT_RUN,
   CHAT_SIDE,
   ChatBubble,
@@ -220,7 +221,7 @@ import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { useFindDetails, useFindOpen } from "../find-in-tab.js";
+import { FIND_DETAIL, FindDetailFolds, useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
@@ -1780,9 +1781,31 @@ function MessageSender({ actor }: { actor: Actor }): React.JSX.Element {
   );
 }
 
-/** A carry-on's head: where the turn before it was cut off and carried on by itself, in the words its reason reads (`carryOnLineWords`). */
-function CarryOnHead({ reason }: { reason: CarryOnReason }): React.JSX.Element {
-  return <SubjectLine lead={carryOnLineWords(reason)} fit={SUBJECT_FIT.OWN} />;
+/**
+ * A carry-on: where the turn before it was cut off and carried on by itself,
+ * one of the transcript's steps in the words its reason reads
+ * (`carryOnLineWords`), never a message anyone sent, the words the agent was
+ * sent folded under it as a thought's are, a detail a find may leave out.
+ */
+function CarryOnView({
+  message,
+  reason,
+  words,
+}: {
+  message: AgentTranscriptMessage;
+  reason: CarryOnReason;
+  words: string;
+}): React.JSX.Element {
+  return (
+    <FindDetailFolds>
+      <CarryOnLine
+        line={carryOnLineWords(reason)}
+        sent={words}
+        data-message-id={message.id}
+        {...FIND_DETAIL}
+      />
+    </FindDetailFolds>
+  );
 }
 
 /** What a wakeup's line says the agent did, after its own chip. */
@@ -1984,6 +2007,13 @@ export function AgentMessage({
   // A line the voice said on a call is the voice's, never the agent's words.
   if (isVoiceLine(message)) return <VoiceLineRow message={message} />;
 
+  // A carry-on is the app's word to the agent where a turn was cut off, drawn as a step of the transcript rather than under a sender.
+  const carryOn = carryOnLineOf(message);
+
+  if (carryOn !== undefined) {
+    return <CarryOnView message={message} reason={carryOn.reason} words={words} />;
+  }
+
   const named =
     sender === undefined ? null : senderFor === undefined ? (
       <MessageSender actor={sender} />
@@ -2051,16 +2081,8 @@ export function AgentMessage({
         <ThreadLineHead line={thread} words={words} received={received} fit={SUBJECT_FIT.OWN} />
       );
 
-    // A wakeup is the agent's own line, headed by what it did, as a thread's line is; a carry-on is headed by what cut the turn before it off.
-    const carryOn = carryOnLineOf(message);
-
-    const subject = isWakeupLine(message) ? (
-      <WakeupHead delay={wakeupDelay} />
-    ) : carryOn !== undefined ? (
-      <CarryOnHead reason={carryOn.reason} />
-    ) : (
-      threadHead
-    );
+    // A wakeup is the agent's own line, headed by what it did, as a thread's line is.
+    const subject = isWakeupLine(message) ? <WakeupHead delay={wakeupDelay} /> : threadHead;
 
     // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
     const copy = (

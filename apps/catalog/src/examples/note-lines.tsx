@@ -1,5 +1,7 @@
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   ArrowRightIcon,
+  CarryOnLine,
   CompactedLine,
   INLINE_REF_LOOK,
   InlineRef,
@@ -19,8 +21,17 @@ import { CatalogSection } from "../section";
  * transcript's quiet line, selectable, and its trail led by a glyph and
  * naming the agents that continued it, wrapping in a narrow column; and
  * the trails a coding agent's session leaves: compacted, with and without
- * the tokens it held, started afresh, and moved to a Mac or the cloud.
+ * the tokens it held, started afresh, and moved to a Mac or the cloud; and
+ * a turn cut off and carried on, twice in a row, each folding the words the
+ * agent was sent.
  */
+
+/** What a carry-on sends the agent, as the service words it. */
+const CARRY_ON_SENT =
+  `From ${PRODUCT_NAME}: your previous turn was interrupted before it ended: your run stopped answering before the turn ended. ` +
+  "Nothing was sent to you meanwhile. Whatever that turn had under way may be half done: " +
+  "check the state of your work first, your files, your branch, and any command or background task it had running, " +
+  "then carry on from where it stopped. If it had finished, say so and end your turn.";
 
 /** Nothing happens on a press: the catalog opens nowhere. */
 function press(): void {}
@@ -89,6 +100,21 @@ function NoteLines(): React.JSX.Element {
           <NewSessionLine />
           <MovedLine to="This Mac" />
           <MovedLine to={undefined} />
+        </div>
+      </CatalogSection>
+      <CatalogSection
+        id="note-line-carry-on"
+        title="A turn cut off and carried on, its words folded"
+      >
+        <div className="catalog-transcript">
+          <CarryOnLine
+            line="Interrupted when the agent stopped answering · carried on by itself"
+            sent={CARRY_ON_SENT}
+          />
+          <CarryOnLine
+            line="Lost the connection to the provider · carried on when it came back"
+            sent={CARRY_ON_SENT}
+          />
         </div>
       </CatalogSection>
     </>
