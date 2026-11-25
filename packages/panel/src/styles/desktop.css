@@ -924,6 +924,13 @@ body,
    beside it (the Manager's face, and the actions, which differ by side and
    take no width). A phone's room keeps a narrower share, as its face and
    actions take more of the column there. */
+/* A Manager's chat spans its pane, as a chat app's channel does: no reading
+   room beside it, so its messages, docks, and box keep only the page's
+   side inset (`--content-inset`), however wide the pane. */
+.agent-page[data-chat] .desktop-agent {
+  --reading-room: 0px;
+}
+
 .agent-page[data-chat] .transcript-message:has(> .ui-chat-bubble-row) {
   max-width: 100%;
 }
