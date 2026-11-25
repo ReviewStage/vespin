@@ -15,11 +15,11 @@
  *   one live agent, a turn starting and ending in turn, and `steps` that
  *   each move one live plan's own row. Each step ends once the draw tick
  *   has passed and the list is drawn;
- * - `paged`: the same whole answer a page at a time, as a build that reads
- *   pages takes one (`live-follow.ts`'s `SyncStanding`): `PAGE_TASKS` plans
- *   a page, the newest first, each with its agents, those on no plan on the
- *   first, each page joined on and the last letting go what no page carried,
- *   each ending once the draw tick has passed.
+ * - `paged`: the same whole answer as a build that reads pages takes one
+ *   (`live-follow.ts`'s `followTakingRows`): its first page, `PAGE_TASKS`
+ *   plans, the newest, with their agents and those on no plan, joined on at
+ *   once, then every other page together, joined on with the last, which
+ *   lets go what no page carried, each ending once the draw tick has passed.
  */
 
 import { appendFileSync } from "node:fs";
@@ -190,37 +190,36 @@ const program = Effect.gen(function* () {
       (one, other) => other.createdAt - one.createdAt || (other.id < one.id ? -1 : 1),
     );
 
+    const firstIds = new Set(newestFirst.slice(0, PAGE_TASKS).map((plan) => plan.id));
+    const ofFirst = (agent: AgentRow) => agent.taskId === null || firstIds.has(agent.taskId);
     const carried = new Set([...plans, ...agents].map((row) => row.id));
-    const pageCosts: number[] = [];
 
-    for (let at = 0; at < newestFirst.length; at += PAGE_TASKS) {
-      const page = newestFirst.slice(at, at + PAGE_TASKS);
-      const ids = new Set(page.map((plan) => plan.id));
+    // Note that a build that reads pages takes the first at once and every other with the last (`followTakingRows`), so the list takes two answers.
+    const firstStarted = performance.now();
 
-      const ofPage = agents.filter((agent) =>
-        agent.taskId === null ? at === 0 : ids.has(agent.taskId),
-      );
+    yield* collections.answer(
+      { tasks: newestFirst.slice(0, PAGE_TASKS), agents: agents.filter(ofFirst) },
+      { past: "", next: "", gone: [], paged: true },
+      0,
+    );
+    yield* TestClock.adjust(liveCollection.DRAW_TICK);
+    const pagedFirst = performance.now() - firstStarted;
+    const restStarted = performance.now();
 
-      const final = at + PAGE_TASKS >= newestFirst.length;
-      const started = performance.now();
-
-      yield* collections.answer(
-        { tasks: page, agents: ofPage },
-        final
-          ? { past: "", next: "1", gone: [], paged: true, carried }
-          : { past: "", next: "", gone: [], paged: true },
-        0,
-      );
-      yield* TestClock.adjust(liveCollection.DRAW_TICK);
-      pageCosts.push(performance.now() - started);
-    }
+    yield* collections.answer(
+      {
+        tasks: newestFirst.slice(PAGE_TASKS),
+        agents: agents.filter((agent) => !ofFirst(agent)),
+      },
+      { past: "", next: "1", gone: [], paged: true, carried },
+      0,
+    );
+    yield* TestClock.adjust(liveCollection.DRAW_TICK);
+    const pagedRest = performance.now() - restStarted;
 
     if (last?.taskAgents.length !== agentCount) throw new Error("the pages drew not every agent");
 
-    return {
-      pagedTotal: round(pageCosts.reduce((sum, cost) => sum + cost, 0)),
-      pagedLongest: round(Math.max(...pageCosts)),
-    };
+    return { pagedFirst: round(pagedFirst), pagedRest: round(pagedRest) };
   }
 
   const answerStarted = performance.now();

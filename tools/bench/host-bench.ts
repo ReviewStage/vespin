@@ -42,8 +42,8 @@ interface Measured {
   readonly keptTasks?: number;
   readonly keptAgents?: number;
   readonly firstAnswer?: number;
-  readonly pagedTotal?: number;
-  readonly pagedLongest?: number;
+  readonly pagedFirst?: number;
+  readonly pagedRest?: number;
   readonly agentStep?: StepSummary;
   readonly taskStep?: StepSummary;
 }
@@ -61,14 +61,14 @@ const FIGURES: readonly Figure[] = [
   { name: "kept draw, whole stand (ms)", mode: MODE.KEPT, of: (line) => line.keptDraw },
   { name: "first whole answer (ms)", mode: MODE.ANSWER, of: (line) => line.firstAnswer },
   {
-    name: "first whole answer in pages, all (ms)",
+    name: "first whole answer in pages, first page (ms)",
     mode: MODE.PAGED,
-    of: (line) => line.pagedTotal,
+    of: (line) => line.pagedFirst,
   },
   {
-    name: "first whole answer in pages, longest (ms)",
+    name: "first whole answer in pages, the rest (ms)",
     mode: MODE.PAGED,
-    of: (line) => line.pagedLongest,
+    of: (line) => line.pagedRest,
   },
   {
     name: "per moved live agent, median (ms)",
