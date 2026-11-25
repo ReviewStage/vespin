@@ -5,6 +5,7 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
+import { COPY_DESCRIPTION, descriptionMarkdown } from "@repo/features/description-markdown";
 import { agentGlyphState, GLYPH_STATE } from "@repo/features/glyph-state";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import {
@@ -79,6 +80,7 @@ import {
   TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
+  type Task,
   type TaskRelationKind,
   type TaskStatus,
   type TaskSummary,
@@ -378,6 +380,16 @@ function copyTaskLink(task: TaskSummary, workspace: Workspace | undefined): void
     .then(() => buzz(BUZZ.SUCCESS))
     .catch((cause: unknown) => {
       console.error("The task's link could not be copied.", cause);
+      buzz(BUZZ.ERROR);
+    });
+}
+
+/** Copies a task's description as the Markdown the panel's Copy description puts on the clipboard, its name as a title over its words, with the system's tap of success, or says on the console why it could not. */
+function copyDescription(task: Task): void {
+  setStringAsync(descriptionMarkdown(task))
+    .then(() => buzz(BUZZ.SUCCESS))
+    .catch((cause: unknown) => {
+      console.error("The task's description could not be copied.", cause);
       buzz(BUZZ.ERROR);
     });
 }
@@ -1600,10 +1612,22 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
     : [{ label: TASK_MOVE_WORDS.TITLE, symbol: GLYPH.MOVE, onPress: open }];
 }
 
+/** Copy description as a task's ⋯ offers it, as the panel's open task's menu does: none where the workspace's descriptions stand off or the description is not read yet. */
+function copyDescriptionActions(overview: TaskOverview, descriptions: boolean): BarMenu["actions"] {
+  const { document } = overview;
+
+  if (!descriptions || document === undefined) return [];
+
+  return [
+    { label: COPY_DESCRIPTION, symbol: GLYPH.COPY, onPress: () => copyDescription(document) },
+  ];
+}
+
 /**
  * What a task's ⋯ holds, the panel's acts in four groups set apart by the
  * system's rule, as Reminders and Mail group a list's ⋯: where the task is
- * (Copy link, Open in browser); the task itself (Rename, Edit description and
+ * (Copy description where the workspace's descriptions stand on, as the
+ * panel's open task's menu leads with it, Copy link, Open in browser); the task itself (Rename, Edit description and
  * Version history where the workspace's descriptions stand on, Move to workspace where the
  * reader may move it); where it stands among tasks (New sub-task, Remove
  * parent where it has one, Task relation, its section and its repository);
@@ -1617,6 +1641,8 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
     ...WORDS.MORE,
     choices: [],
     actions: [
+      // Note that the edit door stands where the workspace's descriptions stand on, as Copy description does.
+      ...copyDescriptionActions(overview, doors.editDescription !== undefined),
       {
         label: WORDS.COPY_LINK,
         symbol: GLYPH.LINK,
