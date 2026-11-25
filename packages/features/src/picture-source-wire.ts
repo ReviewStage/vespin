@@ -24,6 +24,8 @@ export const PICTURE_OWNER = {
   TASK: "task",
 } as const;
 
+export type PictureOwner = (typeof PICTURE_OWNER)[keyof typeof PICTURE_OWNER];
+
 /** Why a picture has no source: the platform's screens take no header, as a window apart from the host's process, or no account is signed in. */
 export const PICTURE_SOURCE_FAILURE = {
   UNOFFERED: "unoffered",

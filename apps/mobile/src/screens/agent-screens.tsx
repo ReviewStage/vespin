@@ -23,7 +23,7 @@ import {
   type AgentStatus,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { PRODUCT_PICTURE_KIND, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { appsInUse } from "@repo/features/apps-in-use";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import { UNDELIVERED_FILES_LOST } from "@repo/features/inbox-undelivered";
@@ -38,6 +38,7 @@ import {
 import { managerChatView } from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -163,11 +164,6 @@ import {
 } from "../agents/use-agent-composer.js";
 import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
-import {
-  AgentPicturesProvider,
-  useAgentPictureFiles,
-  useAgentPictures,
-} from "../agents/use-agent-pictures.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useChatFaces, useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
@@ -198,6 +194,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useDictation } from "../use-dictation.js";
+import { PicturesProvider, useAgentPictureFiles, usePictures } from "../use-pictures.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
 
@@ -1094,7 +1091,7 @@ const AgentConversation = memo(function AgentConversation({
   const retry = chat ? chatRetry : transcriptRetry;
   const media = useAgentMedia(id, mediaIds);
   const dockFiles = useAgentPictureFiles(id, dockIds);
-  const pictures = useAgentPictures(id, pictureIds);
+  const pictures = usePictures(PICTURE_OWNER.AGENT, id, pictureIds);
 
   // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
   const title =
@@ -1317,7 +1314,7 @@ const AgentConversation = memo(function AgentConversation({
   );
 
   const transcriptView = (
-    <AgentPicturesProvider agentId={id}>
+    <PicturesProvider owner={PICTURE_OWNER.AGENT} ownerId={id} kind={PRODUCT_PICTURE_KIND.AGENT}>
       <AgentTranscript
         items={rows}
         onRowsShown={showRows}
@@ -1363,7 +1360,7 @@ const AgentConversation = memo(function AgentConversation({
             : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
         }}
       />
-    </AgentPicturesProvider>
+    </PicturesProvider>
   );
 
   const asks = (
