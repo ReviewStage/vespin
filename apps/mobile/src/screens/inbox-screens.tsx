@@ -939,10 +939,7 @@ function ThreadDetail({
     symbol: menu.symbol,
     choices: [],
     actions: [],
-    groups: [
-      { title: path.join(PATH_PART), items: pathActions },
-      { choices: menu.choices, items: [...menu.actions, ...(menu.submenus ?? [])] },
-    ],
+    groups: [{ title: path.join(PATH_PART), items: pathActions }, ...(menu.groups ?? [])],
   };
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);

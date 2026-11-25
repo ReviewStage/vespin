@@ -453,11 +453,10 @@ export interface ThreadMenuDoors {
 
 /**
  * The thread's ⋯ menu, as the panel's row menu offers an item's acts
- * (`inbox-item-actions.tsx`): Copy link; Mark as read or unread, whichever
- * its mark is not; Resolve while it stands open; and Remind me's times, on
- * any thread, open or settled, as a submenu last, since a bar's menu holds
- * its submenus after its acts. A new thread with the agent stays the box's
- * own, under its +.
+ * (`inbox-item-actions.tsx`), in its two groups and its order: Copy link;
+ * then Mark as read or unread, whichever its mark is not, Remind me's times
+ * as a menu on any thread, open or settled, and Resolve while it stands
+ * open. A new thread with the agent stays the box's own, under its +.
  */
 export function threadMenu(item: InboxItem, answer: ThreadAnswer, doors: ThreadMenuDoors): BarMenu {
   const unread = isUnread(item);
@@ -470,20 +469,29 @@ export function threadMenu(item: InboxItem, answer: ThreadAnswer, doors: ThreadM
   return {
     ...THREAD_MORE,
     choices: [],
-    actions: [
+    actions: [],
+    groups: [
       {
-        label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
-        symbol: GLYPH.LINK,
-        onPress: doors.onCopyLink,
+        items: [
+          {
+            label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+            symbol: GLYPH.LINK,
+            onPress: doors.onCopyLink,
+          },
+        ],
       },
       {
-        label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-        symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
-        onPress: () => doors.onMark(!unread),
+        items: [
+          {
+            label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+            symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+            onPress: () => doors.onMark(!unread),
+          },
+          doors.remind,
+          ...resolve,
+        ],
       },
-      ...resolve,
     ],
-    submenus: [doors.remind],
   };
 }
 

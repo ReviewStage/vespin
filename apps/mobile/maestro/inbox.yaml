@@ -123,7 +123,8 @@ env:
 - assertNotVisible:
     id: "QLOverlayDoneButtonAccessibilityIdentifier"
 # Remind me's times stand in a menu: a compact window's ⋯ holds it as a
-# submenu, and a regular window's detail bar stands it as its own clock
+# submenu between Mark as read and Resolve, as the panel's row menu orders
+# them, and a regular window's detail bar stands it as its own clock
 # (`bar-act.yaml`). Each time says when it comes due, and Pick a date and
 # time… stands last. A tap off the menu closes it unchanged, so the row's
 # Remind me below still finds the thread under Open.
@@ -131,6 +132,8 @@ env:
     file: subflows/bar-act.yaml
     env:
       ACT: Remind me
+- waitForAnimationToEnd
+- takeScreenshot: inbox-thread-more
 - tapOn: "Remind me"
 - assertVisible: "Pick a date and time…"
 - waitForAnimationToEnd
