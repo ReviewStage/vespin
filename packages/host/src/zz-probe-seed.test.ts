@@ -408,7 +408,8 @@ function oldPlanAt(k: number): PlanRow {
   const plan = planAt(SCALE.PLANS + k);
   const at = NOW - 45 * DAY - k * HOUR;
 
-  return { ...plan, status: TASK_STATUS.DONE, completedAt: at, updatedAt: at } as PlanRow;
+  // Note that an old task takes a number past the list's own, each its own, since a number under one fails the row's decode and the task would read as gone.
+  return { ...plan, number: SCALE.PLANS + k + 1, status: TASK_STATUS.DONE, completedAt: at, updatedAt: at } as PlanRow;
 }
 
 /** The `k`th old task's one agent, archived with it. */
@@ -439,7 +440,11 @@ function whatWaitsBody(inbox: readonly { readonly item: InboxItem; readonly task
     },
   };
   const body = Schema.encodeSync(ACCOUNT_INBOX_READ.answer)(answer as never);
-  Schema.decodeUnknownSync(ACCOUNT_INBOX_READ.answer)(body);
+  const back = Schema.decodeUnknownSync(ACCOUNT_INBOX_READ.answer)(body) as { queries: Record<string, { rows: readonly unknown[] }> };
+  const rows = Schema.decodeUnknownSync(ACCOUNT_INBOX_READ.rows)(
+    Object.fromEntries(Object.entries(back.queries).map(([part, query]) => [part, query.rows])),
+  ) as { tasks: readonly unknown[] };
+  if (rows.tasks.length !== tasks.length) throw new Error(`probe seed: what waits lost tasks: ${rows.tasks.length}/${tasks.length}`);
 
   return JSON.stringify(body);
 }
@@ -452,7 +457,12 @@ function taskRowsBody(k: number): string {
     queries: { tasks: sealedPart("tasks", [oldPlanAt(k)], sync), agents: sealedPart("agents", [oldAgentAt(k)], sync) },
   };
   const body = Schema.encodeSync(TASK_ROWS_READ.answer)(answer as never);
-  Schema.decodeUnknownSync(TASK_ROWS_READ.answer)(body);
+  const back = Schema.decodeUnknownSync(TASK_ROWS_READ.answer)(body) as { queries: Record<string, { rows: readonly unknown[] }> };
+  // Note that the rows are decoded too, since a row that fails its own decode is dropped there rather than failing the answer.
+  const rows = Schema.decodeUnknownSync(TASK_ROWS_READ.rows)(
+    Object.fromEntries(Object.entries(back.queries).map(([part, query]) => [part, query.rows])),
+  ) as { tasks: readonly unknown[]; agents: readonly unknown[] };
+  if (rows.tasks.length !== 1 || rows.agents.length !== 1) throw new Error(`probe seed: old task ${k} lost rows: ${rows.tasks.length} tasks, ${rows.agents.length} agents`);
 
   return JSON.stringify(body);
 }
