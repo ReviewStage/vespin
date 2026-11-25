@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { APP_LINK_CLAIM, APP_LINK_SCHEME, appLinkClaim } from "@repo/features/app-links";
 import { LINK_DESTINATION, type ShownLink } from "@repo/features/link-grammar";
@@ -141,6 +142,9 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
   const rendererDirectory = path.join(config.resourceDirectory, "renderer");
 
   async function carryRendererStorage(): Promise<void> {
+    // Note that a profile no build has drawn in holds no storage to carry, so a fresh one opens no page for it.
+    if (!existsSync(path.join(config.stateRoot, "Local Storage"))) return;
+
     const view = new WebContentsView({
       webPreferences: { javascript: false, sandbox: true, contextIsolation: true },
     });
