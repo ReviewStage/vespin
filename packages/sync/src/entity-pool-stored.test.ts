@@ -419,3 +419,41 @@ it.effect(
       assert.equal(Exit.hasDies(exit), true);
     }),
 );
+
+it.effect(
+  "the read that answers every row keeps a row it holds but never took this launch, and every other read sees what it answered at once",
+  () =>
+    Effect.gen(function* () {
+      const file = join(yield* folder, "account.sqlite");
+
+      yield* launch(file, (pool) =>
+        Effect.gen(function* () {
+          const owner = yield* standing(pool, { owns: true, kept: KEPT });
+          yield* owner.rows.answer([ADA, BO], { cursor: { at: "1" } });
+        }),
+      );
+
+      const seen = yield* launch(file, (pool) =>
+        Effect.gen(function* () {
+          const owner = yield* standing(pool, { owns: true, kept: KEPT });
+          const plan = yield* standing(pool);
+          yield* plan.rows.answer([BO]);
+          // Note that the answer carries only the row that moved, and holds the other as the read had it, which this launch never took or loaded.
+          yield* owner.rows.answer([{ id: "b", name: "Bo updated" }], { held: ["a", "b"] });
+
+          return {
+            plan: plan.rows.rows().map((row) => row.name),
+            row: pool.row(STORED, "b")?.name,
+          };
+        }),
+      );
+
+      const kept = yield* launch(file, keptRows);
+
+      assert.deepEqual(seen, { plan: ["Bo updated"], row: "Bo updated" });
+      assert.deepEqual(kept, [
+        ["a", "Ada"],
+        ["b", "Bo updated"],
+      ]);
+    }),
+);

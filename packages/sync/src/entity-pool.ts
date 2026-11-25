@@ -129,7 +129,6 @@ import {
   type KeepCollection,
   type RowCollection,
   rowChanges,
-  rowOf,
   type SyncedCollection,
   syncedCollection,
 } from "./synced-collection.js";
@@ -648,8 +647,7 @@ function drawnRow<Row extends object, Change>(
   rows: KindRows<Row, Change>,
   key: string,
 ): Row | undefined {
-  const stored = rows.synced.collection.get(key);
-  let row = stored === undefined ? undefined : rowOf<Row, typeof stored>(stored);
+  let row = rows.synced.row(key);
 
   for (const write of rows.standing) {
     if (!write.keys.includes(key)) continue;
@@ -660,16 +658,6 @@ function drawnRow<Row extends object, Change>(
   }
 
   return row;
-}
-
-/** The synced row `key` names as the kind's collection holds it, loaded from disk or taken; none where it holds none. */
-function loadedRow<Row extends object, Change>(
-  rows: KindRows<Row, Change>,
-  key: string,
-): Row | undefined {
-  const stored = rows.synced.collection.get(key);
-
-  return stored === undefined ? undefined : rowOf<Row, typeof stored>(stored);
 }
 
 /** Whether the read shows `key`'s row: one it answered, one it adopted, one it keeps beside the pool, or any where it shows every row. */
@@ -946,9 +934,20 @@ function keptWhole<Row extends object, Change>(
 
     // Note that a key the read holds that this answer did not carry stands as it was taken, since an answer read at an older sync id leaves out a row taken at a newer one.
     for (const key of keys) {
-      const row = taken.get(key) ?? synced.get(key);
+      const row = taken.get(key) ?? rows.synced.row(key);
 
       if (row !== undefined) next.set(key, row);
+    }
+
+    // Note that a key the read holds whose row was neither taken nor loaded this launch stands on disk alone, where a truncate would drop it, so such an answer deletes only the rows it let go that the collection holds.
+    if ([...keys].some((key) => !next.has(key))) {
+      const known = new Set<string>([...synced.keys(), ...rows.synced.collection.keys()]);
+
+      const deleted = [...known].filter((key) => !keys.has(key) && !heldByAny(others, key));
+
+      for (const key of deleted) rows.takenAt.delete(key);
+
+      return Effect.succeed(rows.synced.patch(next, deleted, mark));
     }
 
     for (const [key, row] of synced) {
@@ -1265,7 +1264,7 @@ function takenInPlace<Row extends object, Change>(
 
     // Note that a row a launch only loaded from disk was never taken here, so the change is drawn over it as the collection holds it, and its delete is written by key.
     const current = (key: string): Row | undefined =>
-      deleted.has(key) ? undefined : (upserted.get(key) ?? held.get(key) ?? loadedRow(rows, key));
+      deleted.has(key) ? undefined : (upserted.get(key) ?? rows.synced.row(key));
 
     const taking = (key: string): boolean =>
       upserted.has(key) || (held.has(key) && !deleted.has(key));

@@ -172,6 +172,15 @@ export interface SyncedCollection<Row extends object, Key extends string> {
   readonly replace: (rows: ReadonlyMap<Key, Row>, mark?: CollectionMark) => readonly Key[];
   /** The mark `name` names as the collection last wrote it, kept on disk where the collection is; none where it wrote none. */
   readonly mark: (name: string) => CollectionMark | undefined;
+  /**
+   * The synced row `key` names as the collection last wrote it, or as it
+   * holds it where it wrote none: loaded from disk, for a kept collection.
+   * Note that a kept collection answers each row it wrote from what it
+   * wrote, because its persistence publishes a transaction to the
+   * collection only after the commit returns, and a reader drawn again at
+   * once must see the rows it moved.
+   */
+  readonly row: (key: Key) => Row | undefined;
 }
 
 /**
@@ -187,6 +196,10 @@ export function syncedCollection<Row extends object, Key extends string>(
     let writer: SyncWriter<Row, Key> | undefined;
     // Note that `held` is the collection's own, written in place by `patch`, so `take` holds a copy of the map it is handed.
     let held = new Map<Key, Row>();
+    /** The keys a kept collection deleted since it was made, none taken again since, which its persistence may not have published yet. */
+    const gone = new Set<Key>();
+    /** Whether a kept collection was replaced whole since it was made, so it holds no row but those taken since. */
+    let whole = false;
     const handedSync = yield* Deferred.make<void>();
     /** Settles once every transaction a kept collection wrote is on disk. */
     let durable: Promise<unknown> = Promise.resolve();
@@ -261,6 +274,11 @@ export function syncedCollection<Row extends object, Key extends string>(
         durable = Promise.allSettled([durable, accepted]);
       }
 
+      for (const change of changes) {
+        if (change.type === "delete") gone.add(change.key);
+        else gone.delete(getKey(change.value));
+      }
+
       return changes.map((change) =>
         change.type === "delete" ? change.key : getKey(change.value),
       );
@@ -282,6 +300,8 @@ export function syncedCollection<Row extends object, Key extends string>(
       const keys = written(inserted, mark, true);
 
       if (keys === undefined) return [];
+      whole = true;
+      gone.clear();
       const left = [...held.keys()].filter((key) => !rows.has(key));
       held = new Map(rows);
 
@@ -327,6 +347,14 @@ export function syncedCollection<Row extends object, Key extends string>(
         const value = writer?.metadata?.collection.get(name);
 
         return value === undefined ? undefined : { name, value };
+      },
+      row: (key) => {
+        const taken = keep === undefined ? undefined : held.get(key);
+
+        if (taken !== undefined || (keep !== undefined && (whole || gone.has(key)))) return taken;
+        const stored = collection.get(key);
+
+        return stored === undefined ? undefined : rowOf<Row, typeof stored>(stored);
       },
     };
   });
