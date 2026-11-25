@@ -89,6 +89,7 @@ import {
 } from "@repo/features/task-standing-words";
 import {
   NO_REPOSITORY_KEY,
+  PINNED_HEAD,
   TASK_ROW_FACE,
   TASK_TREE_GROUP,
   type TaskBranch,
@@ -238,7 +239,11 @@ import { useColorScheme } from "react-native";
 import { useManagerSort } from "../agents/manager-sort.js";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
+import {
+  useManagersListed,
+  usePlacedManagers,
+  useWorkspaceManagers,
+} from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useWholeListRead } from "../host/host-provider.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -1514,6 +1519,17 @@ function groupAdd(
   return { label, acts: [{ label, symbol: GLYPH.ADD, onPress: opens }] };
 }
 
+/** No Manager in a group, the same array every render. */
+const NO_LISTED_MANAGERS: readonly ListedAgent[] = [];
+
+/** Pinned holding no task, where only Managers are pinned. */
+const NO_PINNED_TASKS: TaskTreeGroup = {
+  kind: TASK_TREE_GROUP.PINNED,
+  key: TASK_TREE_GROUP.PINNED,
+  title: PINNED_HEAD,
+  rows: [],
+};
+
 /**
  * My tasks, the header the panel's sidebar heads the reader's own tasks
  * with, drawn whatever the list's grouping, as the desktop's and the web's
@@ -1577,11 +1593,15 @@ function GroupSection({
   group,
   listing,
   hold,
+  managers = NO_LISTED_MANAGERS,
 }: {
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
   readonly hold: TreeHold;
+  /** The Managers it holds after its tasks, Pinned's pinned and a section's kept there, each its Managers row; none elsewhere. */
+  readonly managers?: readonly ListedAgent[] | undefined;
 }) {
+  const asking = useAgentRowAsk();
   const newTaskIn = useNewTaskIn();
   const newTaskInRepository = useNewTaskInRepository();
   const dark = useColorScheme() === "dark";
@@ -1599,14 +1619,17 @@ function GroupSection({
       }
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
-      count={group.rows.length}
-      foldable={headed && group.rows.length > 0}
+      count={group.rows.length + managers.length}
+      foldable={headed && group.rows.length + managers.length > 0}
       folded={headed && hold.folded(group)}
       onFold={(shut) => hold.setFolded(group, shut)}
       onDropLink={headed ? dropOnto(group, listing) : undefined}
       add={groupAdd(group, newTaskIn, newTaskInRepository)}
     >
       <FoldedRows rows={group.rows} listing={listing} parents={treeParents(hold)} />
+      {managers.map((agent) => (
+        <ManagerTaskRow key={agent.id} agent={agent} asking={asking} />
+      ))}
     </ListSection>
   );
 }
@@ -1752,25 +1775,31 @@ function TreeSections({
   readonly managersListed: boolean;
 }) {
   const { tree } = listing;
+  const placed = usePlacedManagers(managers, listing.workspace?.id);
+
+  const sectionManagers = (group: TaskTreeGroup) =>
+    group.kind === TASK_TREE_GROUP.SECTION ? (placed.bySection.get(group.key) ?? []) : [];
 
   const underMyTasks = [...tree.sections, ...tree.tasks].reduce(
-    (count, group) => count + group.rows.length,
+    (count, group) => count + group.rows.length + sectionManagers(group).length,
     0,
   );
 
   const underMyTasksAny = tree.sections.length + tree.tasks.length > 0;
   const myTasksFolded = underMyTasksAny && hold.tasksFolded;
+  // Note that a Manager pinned stands Pinned even where no task is pinned, as the panel's Pinned stands once anything is.
+  const pinned = tree.pinned ?? (placed.pinned.length > 0 ? NO_PINNED_TASKS : undefined);
 
   return (
     <>
       <ManagersSection
         workspaceId={listing.workspace?.id}
         listed={managersListed}
-        managers={managers}
+        managers={placed.rest}
         hold={hold}
       />
-      {tree.pinned === undefined ? null : (
-        <GroupSection group={tree.pinned} listing={listing} hold={hold} />
+      {pinned === undefined ? null : (
+        <GroupSection group={pinned} listing={listing} hold={hold} managers={placed.pinned} />
       )}
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} hold={hold} />
@@ -1784,7 +1813,13 @@ function TreeSections({
       {myTasksFolded
         ? null
         : [...tree.sections, ...tree.tasks].map((group) => (
-            <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+            <GroupSection
+              key={group.key}
+              group={group}
+              listing={listing}
+              hold={hold}
+              managers={sectionManagers(group)}
+            />
           ))}
     </>
   );

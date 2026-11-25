@@ -63,6 +63,7 @@ import {
   repositoryPageUrl,
   TASK_MARK,
 } from "@repo/features/tasks-model";
+import type { PinnedManager } from "@repo/features/workspace-managers-model";
 import type { UpdateControl } from "@repo/settings/settings-controls";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -211,7 +212,6 @@ import { useSubTaskReads } from "../tasks/use-sub-task-reads.js";
 import { useReadMark, useUnreadWatching } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import type { PinnedManager } from "../tasks/workspace-managers.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";

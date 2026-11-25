@@ -67,7 +67,7 @@ import type { TaskListParts, TasksView } from "./tasks-view.js";
 import { taskKey } from "./workspace-key.js";
 
 /** What heads the reader's pinned tasks, as the sidebar's section is called. */
-const PINNED_HEAD = "Pinned";
+export const PINNED_HEAD = "Pinned";
 
 /** What heads the tasks the reader follows that no other list holds, as the sidebar's group is called. */
 export const FOLLOWING_HEAD = "Following";

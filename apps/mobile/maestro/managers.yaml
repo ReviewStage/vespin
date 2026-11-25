@@ -1,4 +1,4 @@
-# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
+# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a pinned one under Pinned and a kept one in its section, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -22,6 +22,20 @@ env:
 - assertVisible: "Pinned"
 - waitForAnimationToEnd
 - takeScreenshot: managers-list
+# A Manager the reader pinned stands under Pinned alone, the docs one, and
+# one put in a section stands in that section alone, the triage one in
+# Experiments, each as its Managers row, as the desktop's sidebar places
+# them; the Managers group lists the rest.
+- assertVisible: "Docs manager"
+- scrollUntilVisible:
+    element: "Triage manager"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: managers-placed
+- scrollUntilVisible:
+    element: "Release manager"
+    direction: UP
+- waitForAnimationToEnd
 # Its row's long press offers Change face › beside Rename, as the panel's
 # Manager menu does: a submenu to each character, its faces in each color.
 - longPressOn: "Release manager"
