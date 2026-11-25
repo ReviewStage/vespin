@@ -633,15 +633,29 @@ export function reviewPlaceholderOf(event: ReviewEvent): string {
     : "Leave a summary comment (optional)";
 }
 
+/** How many comments a pending review holds: "2 pending comments". */
+function pendingCommentsWords(count: number): string {
+  return `${count} pending ${count === 1 ? "comment" : "comments"}`;
+}
+
 /** What finishing a review says, on the desktop's panel and the phone's screen alike. */
 export const REVIEW_PANEL_WORDS = {
+  /** The press that opens the review, beside the pull request's title on a phone. */
+  OPEN: "Review",
   TITLE: "Finish your review",
   CLOSE: "Close",
   CANCEL: "Cancel",
   DISCARD: "Discard",
   BODY: "Review comment",
   /** How many comments a review holds, as its lead says it. */
-  pending: (count: number) => `${count} pending ${count === 1 ? "comment" : "comments"}`,
+  pending: pendingCommentsWords,
+  /** The press heard with the comments the review holds, where it holds any. */
+  openWith: (count: number) => `Review, ${pendingCommentsWords(count)}`,
+  /** What submitting says, where GitHub publishes the review, and the comments it publishes with it. */
+  lead: (count: number) =>
+    count === 0
+      ? "Submitted on GitHub as you."
+      : `Submitted on GitHub as you. ${pendingCommentsWords(count)} will be published.`,
 } as const;
 
 /** What a surface says of a change GitHub did not make. */

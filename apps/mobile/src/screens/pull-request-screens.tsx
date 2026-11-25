@@ -15,6 +15,7 @@ import {
   iosPullRequestChecksRoute,
   iosPullRequestCommentRoute,
   iosPullRequestFilesRoute,
+  iosPullRequestReviewRoute,
   iosPullRequestThreadRoute,
 } from "@repo/features/ios-app-links";
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
@@ -53,6 +54,7 @@ import {
   pullRequestStateActions,
   QUEUE_WARNING,
   queuedLabel,
+  REVIEW_PANEL_WORDS,
   REVIEW_WORDS,
   reactionsLine,
   reviewersOf,
@@ -506,6 +508,9 @@ function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
  * under the heading in every window, as wide as its words, as the panel's
  * head stands Merge under the title, and as a split button where the
  * repository merges more than one way.
+ * Review beside its title opens the member's review on a screen of its
+ * own, as the panel's phone stands Review beside its title, where it says
+ * Comment, Approve, or Request changes and is sent on GitHub as the member.
  * The bar's ⋯ menu opens it on GitHub, where its diff and comments are
  * read. Opened from a split view's detail, it is pushed on the tab's own
  * stack over the whole window, as a compact window pushes it.
@@ -869,6 +874,14 @@ function PullRequestPage({
       <ListSection>
         <PullRequestHead
           title={shownTitle ?? title}
+          review={
+            pullRequest === undefined
+              ? undefined
+              : {
+                  label: REVIEW_PANEL_WORDS.OPEN,
+                  onPress: () => router.push(onOwnTab(iosPullRequestReviewRoute(key))),
+                }
+          }
           titleEdit={
             editTitle === undefined || editTitle.disabled
               ? undefined

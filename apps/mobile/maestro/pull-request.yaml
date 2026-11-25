@@ -1,4 +1,4 @@
-# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, its title edited from a tap on it, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, its review opened whole in its conversation and reacted to from its long press, its thread replied to on its own screen and resolved and reopened from its long press, a new comment's field opened, turned to a draft and back from its state chip, its ⋯ holding only the GitHub link's acts, then closed from its state chip, with Undo reopening it; its Description and Conversation folded under their headings and opened again; its chapters opened from their row, and on one that has none, generated; and one in the merge queue, its long description folded behind Show more, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
+# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, reviewed from Review beside its title, its title edited from a tap on it, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, its review opened whole in its conversation and reacted to from its long press, its thread replied to on its own screen and resolved and reopened from its long press, a new comment's field opened, turned to a draft and back from its state chip, its ⋯ holding only the GitHub link's acts, then closed from its state chip, with Undo reopening it; its Description and Conversation folded under their headings and opened again; its chapters opened from their row, and on one that has none, generated; and one in the merge queue, its long description folded behind Show more, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -119,6 +119,27 @@ env:
 - scrollUntilVisible:
     element: "Invite a teammate by email #128"
     direction: UP
+# Review stands beside its title, as the panel's phone stands it, and opens
+# the member's review on a screen of its own: what it says in the capsule
+# at the field's foot (Comment, Approve, Request changes), sent on GitHub as
+# the member. Approve, sent, closes the screen.
+- tapOn: "Review"
+- extendedWaitUntil:
+    visible: "Finish your review"
+    timeout: 10000
+# The fixture's member holds one pending comment on it, which the review
+# lists and publishes with it.
+- assertVisible: "Could this also check the new expiry?"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-review-open
+- tapOn: "Comment"
+- tapOn: "Approve"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-review-approve
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Ready to merge"
+    timeout: 30000
 # Its title is edited where it stands: a tap on it opens the system's name
 # alert, as a task is renamed, and Save keeps the words, which the heading
 # draws at once and keeps once GitHub took them.
