@@ -230,6 +230,8 @@ struct LookRecord: Record {
   @Field var pillFill: UIColor? = nil
   @Field var pillWords: UIColor? = nil
   @Field var pillGlyph: UIColor? = nil
+  @Field var well: UIColor? = nil
+  @Field var edge: UIColor? = nil
 }
 
 /// A pill: the Markdown it is written back as, and what it draws and is heard as.
@@ -358,6 +360,9 @@ struct Look: Equatable {
   var pillFill: UIColor = .tertiarySystemFill
   var pillWords: UIColor = .label
   var pillGlyph: UIColor = .secondaryLabel
+  /// The well a document's table heads its columns on, and the hairline a table and a diagram stand inside.
+  var well: UIColor = .secondarySystemBackground
+  var edge: UIColor = .separator
 
   init() {}
 
@@ -368,6 +373,8 @@ struct Look: Equatable {
     pillFill = record.pillFill ?? pillFill
     pillWords = record.pillWords ?? pillWords
     pillGlyph = record.pillGlyph ?? pillGlyph
+    well = record.well ?? well
+    edge = record.edge ?? edge
   }
 }
 

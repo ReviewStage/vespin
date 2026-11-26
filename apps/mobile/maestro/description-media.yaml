@@ -1,4 +1,4 @@
-# description-media.yaml -- a description's file and picture drawn in its field as its page reads them, a PDF as its card and a picture at its own place in its line, while the words are edited in place.
+# description-media.yaml -- a description's table, file and picture drawn in its field as its page reads them, the table as its grid, a PDF as its card and a picture at its own place in its line, while the words are edited in place.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -7,8 +7,9 @@ env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as every flow is, so no server is
-# reached; the fixture's Teammate invitations ends its description with a
-# PDF, "Invite flow spec", and a picture, "The invite page".
+# reached; the fixture's Teammate invitations holds a table, then ends its
+# description with a PDF, "Invite flow spec", and a picture, "The invite
+# page".
 - launchApp:
     clearState: true
     arguments:
@@ -52,6 +53,15 @@ env:
       id: "description-words"
     timeout: 10000
 - waitForAnimationToEnd
+# The field draws the table as its grid, each cell read as its words, where
+# it once drew a card of the table's first line.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Send the invite"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: description-media-table
 # The field draws the PDF as its card, heard by its name and size, and the
 # picture as the picture, heard by its words, each on a line of its own,
 # where it once drew each as a pill of the word "Picture".

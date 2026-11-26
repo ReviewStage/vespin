@@ -30,6 +30,10 @@ export interface NativeLook {
   readonly pillFill: ColorValue;
   readonly pillWords: ColorValue;
   readonly pillGlyph: ColorValue;
+  /** The well a document field's table heads its columns on, as the read rows' table does; none where the field draws no table. */
+  readonly well?: ColorValue | undefined;
+  /** The hairline a document field's table and diagram stand inside. */
+  readonly edge?: ColorValue | undefined;
 }
 
 /** A run of the words as the view tells it: plain words as typed, or one pill by the Markdown it stands for. */

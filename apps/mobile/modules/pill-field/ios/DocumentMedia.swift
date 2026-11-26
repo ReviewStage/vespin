@@ -33,13 +33,15 @@ struct MediaRunRecord: Record {
   @Field var alt: String = ""
 }
 
-/// What an address holds once read: its kind, as `MediaKind` names it, the file it is drawn from, and its words.
+/// What an address holds once read: its kind, as `MediaKind` names it, the file it is drawn from, its words, a diagram's code as its detail, and its own size in points where it is known before it is read.
 struct MediaRecord: Record {
   @Field var address: String = ""
   @Field var kind: String = MediaKind.reading.rawValue
   @Field var file: String? = nil
   @Field var label: String = ""
   @Field var detail: String? = nil
+  @Field var width: Double? = nil
+  @Field var height: Double? = nil
 }
 
 /// What an address holds, as `document-field.tsx`'s `MEDIA_KIND` names it.
@@ -50,6 +52,8 @@ enum MediaKind: String {
   case audio
   case file
   case unread
+  /// A Mermaid fence's diagram, drawn by the app's renderer as a picture, its code standing where it could not be drawn.
+  case diagram
 }
 
 /// A picture's Markdown in a line, as the view holds it.
@@ -71,12 +75,15 @@ struct Media: Equatable {
   let file: URL?
   let label: String
   let detail: String?
+  /// Its own size in points, where JavaScript knows it, as a diagram's renderer does.
+  let natural: CGSize?
 
   init(_ record: MediaRecord) {
     kind = MediaKind(rawValue: record.kind) ?? .reading
     file = record.file.flatMap { URL(string: $0) }
     label = record.label
     detail = record.detail
+    natural = record.width.flatMap { width in record.height.map { CGSize(width: width, height: $0) } }
   }
 
   init(kind: MediaKind) {
@@ -84,6 +91,12 @@ struct Media: Equatable {
     file = nil
     label = ""
     detail = nil
+    natural = nil
+  }
+
+  /// Whether it is a diagram, or a diagram still being drawn, which stands under its head.
+  var diagram: Bool {
+    kind == .diagram || (kind == .reading && detail != nil)
   }
 }
 
@@ -103,8 +116,40 @@ enum MediaSpace {
   static let nearScreens: CGFloat = 1
 }
 
+/// A diagram's head and code, as the read rows' diagram card draws them (`DiagramBlock`): "Diagram" over the picture with Show code at its end, and the code in the monospaced face.
+enum DiagramSpace {
+  static let headGap: CGFloat = 6
+  static let codePadding: CGFloat = 12
+
+  static func headFont() -> UIFont { .preferredFont(forTextStyle: .subheadline) }
+  static func codeFont() -> UIFont {
+    UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .monospacedSystemFont(ofSize: 13, weight: .regular))
+  }
+
+  /// How tall the head stands over the diagram.
+  static func headHeight() -> CGFloat { ceil(headFont().lineHeight) + headGap }
+
+  /// How tall a diagram's code stands at `width`, its lines wrapped.
+  static func codeHeight(_ code: String, width: CGFloat) -> CGFloat {
+    let inner = max(1, width - codePadding * 2)
+    let bounds = (code as NSString).boundingRect(
+      with: CGSize(width: inner, height: .greatestFiniteMagnitude),
+      options: [.usesLineFragmentOrigin, .usesFontLeading],
+      attributes: [.font: codeFont()],
+      context: nil
+    )
+    return ceil(bounds.height) + codePadding * 2
+  }
+}
+
 /// The size a picture or a recording stands at in a line `width` wide: its own shape, scaled down only, held to `MediaSpace`'s bounds and the line, as `mediaFrame` and `MediaBox` hold it; a strip for a sound clip or a file.
 func mediaFrame(_ kind: MediaKind, natural: CGSize?, width: CGFloat) -> CGSize {
+  // Note that a diagram is held only to its own size and the column, as the panel holds one, since one held to a message's picture drew its labels too small to read (`COLUMN_BOUNDS`).
+  if kind == .diagram, let natural, natural.width > 0, natural.height > 0 {
+    let shown = min(natural.width, width)
+    return CGSize(width: shown.rounded(), height: (shown * natural.height / natural.width).rounded())
+  }
+
   if kind == .audio || kind == .file {
     return CGSize(width: min(MediaSpace.mostWidth, width), height: MediaSpace.stripHeight)
   }
@@ -126,6 +171,8 @@ final class MediaShelf {
   private(set) var held: [String: Media] = [:]
   private(set) var sizes: [String: CGSize] = [:]
   private let views = NSHashTable<MediaView>.weakObjects()
+  /// The diagrams standing as their code, by their code, which Show code and Show diagram trade.
+  private(set) var showingCode: Set<String> = []
   /// Lays out again the lines standing an address, once its size is read.
   var relay: ((String) -> Void)?
 
@@ -146,6 +193,26 @@ final class MediaShelf {
     views.allObjects
   }
 
+  /// How tall the media at `address` stands in a line `width` wide: a diagram's head and its picture or code, or the media's frame.
+  func height(of address: String, width: CGFloat) -> CGFloat {
+    let media = media(address)
+
+    guard media.diagram else { return mediaFrame(media.kind, natural: sizes[address], width: width).height }
+
+    let code = media.detail ?? ""
+    let body = media.kind == .diagram && (media.file == nil || showingCode.contains(address))
+      ? DiagramSpace.codeHeight(code, width: width)
+      : mediaFrame(media.kind, natural: sizes[address], width: width).height
+    return DiagramSpace.headHeight() + body
+  }
+
+  /// Trades a diagram's picture for its code, or back, laying out again the lines it stands in.
+  func toggleCode(_ address: String) {
+    if showingCode.contains(address) { showingCode.remove(address) } else { showingCode.insert(address) }
+    redraw(address)
+    relay?(address)
+  }
+
   /// Takes what each address holds: an address whose file changed reads its size, off the main thread, and draws its views again.
   func take(_ records: [MediaRecord]) {
     for record in records {
@@ -153,6 +220,7 @@ final class MediaShelf {
       guard held[record.address] != media else { continue }
       let before = held[record.address]?.kind ?? .reading
       held[record.address] = media
+      if let natural = media.natural { sizes[record.address] = natural }
       redraw(record.address)
       // Note that a sound clip, a file, and a picture that could not be read stand at a height of their own, so their lines are laid out again at once; a picture and a video wait for their size.
       if media.kind != before { relay?(record.address) }
@@ -167,7 +235,7 @@ final class MediaShelf {
 
   private func redraw(_ address: String) {
     for view in views.allObjects where view.run.address == address {
-      view.draw(media(address), size: sizes[address])
+      view.draw(media(address), size: sizes[address], code: showingCode.contains(address))
     }
   }
 
@@ -216,6 +284,18 @@ private func videoSize(_ file: URL) async -> CGSize? {
   return CGSize(width: abs(turned.width), height: abs(turned.height))
 }
 
+/// A picture's bytes decoded no larger than `most` pixels on its longer side, read from a file or a `data:` address; none where they cannot be read.
+private func decodedPicture(_ file: URL, most: CGFloat) -> UIImage? {
+  guard let data = try? Data(contentsOf: file), let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+  let options: [CFString: Any] = [
+    kCGImageSourceCreateThumbnailFromImageAlways: true,
+    kCGImageSourceCreateThumbnailWithTransform: true,
+    kCGImageSourceThumbnailMaxPixelSize: max(1, most),
+  ]
+  guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+  return UIImage(cgImage: image)
+}
+
 // MARK: - The attachment
 
 /// A picture's Markdown drawn as the media it names, as one character across its line.
@@ -257,9 +337,10 @@ final class MediaAttachment: NSTextAttachment {
 final class MediaViewProvider: NSTextAttachmentViewProvider {
   override func loadView() {
     guard let attachment = textAttachment as? MediaAttachment, let shelf = attachment.shelf else { return }
-    let shown = MediaView(run: attachment.run, look: attachment.look)
+    let shown = MediaView(run: attachment.run, look: attachment.look, shelf: shelf)
     shelf.watch(shown)
-    shown.draw(shelf.media(attachment.run.address), size: shelf.size(attachment.run.address))
+    let address = attachment.run.address
+    shown.draw(shelf.media(address), size: shelf.size(address), code: shelf.showingCode.contains(address))
     view = shown
   }
 
@@ -272,20 +353,26 @@ final class MediaViewProvider: NSTextAttachmentViewProvider {
   ) -> CGRect {
     guard let attachment = textAttachment as? MediaAttachment else { return .zero }
     let width = max(proposedLineFragment.width - 1, 1)
-    let media = attachment.shelf?.media(attachment.run.address) ?? Media(kind: .reading)
-    let frame = mediaFrame(media.kind, natural: attachment.shelf?.size(attachment.run.address), width: width)
+    let height = attachment.shelf?.height(of: attachment.run.address, width: width)
+      ?? mediaFrame(.reading, natural: nil, width: width).height
     let font = attributes[.font] as? UIFont ?? bodyFont()
-    return CGRect(x: 0, y: font.descender, width: width, height: frame.height + MediaSpace.gap)
+    return CGRect(x: 0, y: font.descender, width: width, height: height + MediaSpace.gap)
   }
 }
 
 // MARK: - The view
 
-/// The media at the leading edge of its line: a picture, or its well while on its way or where it could not be read; a video's first frame with the system's play button, which plays it full screen; a sound clip's strip, which plays it in place; or a file's card.
+/// The media at the leading edge of its line: a picture, or its well while on its way or where it could not be read; a video's first frame with the system's play button, which plays it full screen; a sound clip's strip, which plays it in place; a file's card; or a diagram under its head, with Show code trading its picture for its code.
 final class MediaView: UIView {
   let run: MediaRun
   private let look: Look
+  private weak var shelf: MediaShelf?
   private let box = UIView()
+  private let head = UILabel()
+  private var toggle: UIButton?
+  private let code = UILabel()
+  /// Whether a diagram stands as its code rather than its picture.
+  private var showingCode = false
   private let picture = UIImageView()
   private let spinner = UIActivityIndicatorView(style: .medium)
   private let words = UILabel()
@@ -303,10 +390,19 @@ final class MediaView: UIView {
     }
   }
 
-  init(run: MediaRun, look: Look) {
+  init(run: MediaRun, look: Look, shelf: MediaShelf) {
     self.run = run
     self.look = look
+    self.shelf = shelf
     super.init(frame: .zero)
+    head.font = DiagramSpace.headFont()
+    head.adjustsFontForContentSizeCategory = true
+    head.textColor = look.placeholder
+    head.isAccessibilityElement = false
+    code.font = DiagramSpace.codeFont()
+    code.textColor = look.text
+    code.numberOfLines = 0
+    addSubview(head)
     box.backgroundColor = look.pillFill
     box.layer.cornerRadius = MediaSpace.radius
     box.layer.cornerCurve = .continuous
@@ -326,6 +422,7 @@ final class MediaView: UIView {
     box.addSubview(spinner)
     box.addSubview(words)
     box.addSubview(detail)
+    box.addSubview(code)
     isAccessibilityElement = true
   }
 
@@ -349,14 +446,22 @@ final class MediaView: UIView {
     reckonNear()
   }
 
-  /// Draws what the address holds, at the size it was read at.
-  func draw(_ media: Media, size: CGSize?) {
+  /// Draws what the address holds, at the size it was read at, a diagram as its picture or, with `code`, its code.
+  func draw(_ media: Media, size: CGSize?, code showing: Bool) {
     let changed = media != self.media
     self.media = media
     self.size = size
+    showingCode = showing
     accessibilityLabel = heard()
-    // Note that only a video and a sound clip take a press, on their play button; any other press goes through to the text view, which places the caret beside the picture.
-    isUserInteractionEnabled = media.kind == .video || media.kind == .audio
+    // Note that only a video, a sound clip and a diagram take a press, on their play button or Show code; any other press goes through to the text view, which places the caret beside the picture.
+    isUserInteractionEnabled = media.kind == .video || media.kind == .audio || media.kind == .diagram
+    head.text = media.diagram ? media.label : nil
+    code.text = media.diagram ? media.detail : nil
+    // Note that the view stands as one element, the diagram's head and its toggle among it, so VoiceOver offers the toggle as the element's action.
+    accessibilityCustomActions = media.kind == .diagram && media.file != nil
+      ? [UIAccessibilityCustomAction(name: showing ? "Show diagram" : "Show code") { [weak self] _ in self?.toggleCode(); return true }]
+      : nil
+    layToggle()
     if media.kind == .reading { spinner.startAnimating() } else { spinner.stopAnimating() }
     words.text = media.kind == .unread ? failedWords() : media.label
     detail.text = media.detail
@@ -375,9 +480,25 @@ final class MediaView: UIView {
     super.layoutSubviews()
     let width = bounds.width
     guard width > 0 else { return }
-    let frame = mediaFrame(media.kind, natural: size, width: width)
-    box.frame = CGRect(origin: .zero, size: frame)
+    // Note that a diagram stands under its head, as its code where Mermaid could not draw it or where Show code was pressed, else as its picture.
+    let top = media.diagram ? DiagramSpace.headHeight() : 0
+    let asCode = media.kind == .diagram && (media.file == nil || showingCode)
+    let frame = asCode
+      ? CGSize(width: width, height: DiagramSpace.codeHeight(code.text ?? "", width: width))
+      : mediaFrame(media.kind, natural: size, width: width)
+    head.frame = CGRect(x: 0, y: 0, width: width, height: max(0, top - DiagramSpace.headGap))
+    box.frame = CGRect(origin: CGPoint(x: 0, y: top), size: frame)
+    box.backgroundColor = media.kind == .diagram && !asCode ? .clear : look.pillFill
     picture.frame = box.bounds
+    picture.contentMode = media.diagram ? .scaleAspectFit : .scaleAspectFill
+    picture.isHidden = asCode
+    code.isHidden = !asCode
+    code.frame = box.bounds.insetBy(dx: DiagramSpace.codePadding, dy: DiagramSpace.codePadding)
+
+    if let toggle {
+      let fits = toggle.sizeThatFits(CGSize(width: width, height: head.frame.height))
+      toggle.frame = CGRect(x: width - fits.width, y: 0, width: fits.width, height: head.frame.height)
+    }
     spinner.center = CGPoint(x: box.bounds.midX, y: box.bounds.midY)
     let strip = media.kind == .audio || media.kind == .file
     let lead = MediaSpace.padding + (strip && play != nil ? MediaSpace.playSize : 0)
@@ -417,8 +538,44 @@ final class MediaView: UIView {
     case .video, .audio: return named ?? media.label
     case .file: return [named ?? media.label, media.detail].compactMap { $0 }.joined(separator: ", ")
     case .unread: return failedWords()
-    case .reading, .picture: return named ?? "Picture"
+    case .diagram: return media.label
+    case .reading: return media.diagram ? media.label : named ?? "Picture"
+    case .picture: return named ?? "Picture"
     }
+  }
+
+  /// A drawn diagram's Show code at its head's end, Show diagram while its code stands, as the read rows' card offers them.
+  private func layToggle() {
+    guard media.kind == .diagram, media.file != nil else {
+      toggle?.removeFromSuperview()
+      toggle = nil
+      return
+    }
+
+    let title = showingCode ? "Show diagram" : "Show code"
+
+    if let toggle {
+      toggle.configuration?.title = title
+      return
+    }
+
+    var configuration = UIButton.Configuration.plain()
+    configuration.title = title
+    configuration.baseForegroundColor = look.text
+    configuration.contentInsets = .zero
+    configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+      var shown = attributes
+      shown.font = DiagramSpace.headFont().withWeight(.medium)
+      return shown
+    }
+    let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.toggleCode() })
+    button.isAccessibilityElement = false
+    addSubview(button)
+    toggle = button
+  }
+
+  private func toggleCode() {
+    shelf?.toggleCode(run.address)
   }
 
   /// What a picture that could not be read says in its well, its own words first, as the read rows' stand-in says it (`MEDIA_READ_WORDS`).
@@ -446,12 +603,24 @@ final class MediaView: UIView {
     play = button
   }
 
-  /// Decodes the picture, or a video's first frame, at the size it stands at, through SDWebImage, the engine expo-image draws with.
+  /// Decodes the picture, a video's first frame, or a diagram's picture, at the size it stands at: a picture through SDWebImage, the engine expo-image draws with, and a diagram, which its renderer hands as a PNG's `data:` address, through ImageIO.
   private func drawPicture() {
-    guard let file = media.file, media.kind == .picture || media.kind == .video else { return }
+    guard let file = media.file, media.kind == .picture || media.kind == .video || media.kind == .diagram else { return }
     let scale = window?.screen.scale ?? traitCollection.displayScale
     let frame = mediaFrame(media.kind, natural: size, width: max(bounds.width, MediaSpace.mostWidth))
     let pixels = CGSize(width: frame.width * scale, height: frame.height * scale)
+    let wanted = media
+
+    if media.kind == .diagram {
+      DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        let image = decodedPicture(file, most: max(pixels.width, pixels.height))
+        DispatchQueue.main.async {
+          guard let self, self.media == wanted, self.near else { return }
+          self.picture.image = image
+        }
+      }
+      return
+    }
 
     if media.kind == .picture {
       // Note that the picture is decoded at its drawn size and kept in no cache of SDWebImage's, so a picture let go beyond the window is gone from memory and read again from its file as it comes back.
@@ -467,7 +636,6 @@ final class MediaView: UIView {
     let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
     generator.appliesPreferredTrackTransform = true
     generator.maximumSize = pixels
-    let wanted = media
     generator.generateCGImageAsynchronously(for: .zero) { [weak self] image, _, _ in
       guard let image else { return }
       DispatchQueue.main.async {
