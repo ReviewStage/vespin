@@ -126,6 +126,7 @@ import {
   type ChoiceMark,
   type ColumnBar,
   ConfirmAsk,
+  type DocumentComments,
   DocumentField,
   EmptyState,
   type Face,
@@ -3155,6 +3156,37 @@ function InlineDescriptionSection({
   const { field } = inline;
   // Note that the field reads the description's pictures only while it edits, since the read rows read their own while they stand.
   const media = useDescriptionPictures(inline.editing ? body : undefined);
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+  const threads = useTaskComments(task.id);
+
+  // The open threads on the words, whose counts stand beside the field's blocks as the read rows stand them, a press opening the oldest, and Comment in the field's edit menu, which starts one on the block, as a long press on a read row does.
+  const comments = useMemo(
+    (): DocumentComments => ({
+      threads: threads.filter(threadOpen).flatMap((thread) =>
+        thread.anchor === undefined
+          ? []
+          : [
+              {
+                at: thread.anchor.from,
+                onOpen: () =>
+                  router.push({
+                    pathname: onOwnTab("/tasks/comments/[id]"),
+                    params: { id: thread.id, task: task.id },
+                  }),
+              },
+            ],
+      ),
+      heard: COMMENT_WORDS.heard,
+      onComment: ({ from, to, quote }) =>
+        router.push({
+          pathname: onOwnTab("/tasks/comments/new"),
+          params: { task: task.id, from: `${from}`, to: `${to}`, quote },
+        }),
+    }),
+    [threads, router, onOwnTab, task.id],
+  );
+
   // Note that what an `@` offers docks over the keyboard on a pushed page, so the caret's line keeps clear of it as of the keyboard; a split view's column ends over the offer at its foot, which the field clears on its own, and no dock stands around it there.
   const room = useDockRoom();
 
@@ -3184,6 +3216,7 @@ function InlineDescriptionSection({
             keepClear={inline.mentions === undefined ? undefined : room}
             opensAt={inline.opensAt}
             media={media}
+            comments={comments}
             testID={DESCRIPTION_FIELD_ID}
           />
         </FieldRow>

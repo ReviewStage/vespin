@@ -50,6 +50,7 @@ import {
   type FormatAct,
   MEDIA_KIND,
   type NativeCard,
+  type NativeCommentMark,
   NativeDocumentField,
   type NativeDocumentFieldDoors,
   type NativeDocumentLine,
@@ -154,6 +155,76 @@ interface DrawnBlocks {
 /** No diagram asked for. */
 const NO_CODES: readonly string[] = [];
 
+/** Comment, as the field's edit menu offers it on a block, in the panel's words and glyph. */
+const COMMENT_ACT: NativeFormatAct = {
+  act: FORMAT_ACT.COMMENT,
+  title: "Comment",
+  glyph: GLYPH.COMMENT,
+};
+
+/** Where a comment thread is started: the block's words in the Markdown, and the words it quotes. */
+export interface CommentPlace {
+  readonly from: number;
+  readonly to: number;
+  readonly quote: string;
+}
+
+/** A document's open comment threads, as the field stands their counts beside its blocks, as the read rows do, and starts one from its edit menu. */
+export interface DocumentComments {
+  /** Each open thread on the words, oldest first: where its quoted words start in the Markdown, and what opens it. */
+  readonly threads: readonly { readonly at: number; readonly onOpen: () => void }[];
+  /** How a block's count of threads is heard. */
+  readonly heard: (count: number) => string;
+  /** Starts a thread on a block's words. */
+  readonly onComment: (place: CommentPlace) => void;
+}
+
+/** Where each block of the document as read stands in the Markdown it was read from, its sources joined being the Markdown exactly (`documentBlocks`). */
+function blockSpans(
+  blocks: readonly DocumentBlock[],
+): readonly { readonly from: number; readonly to: number }[] {
+  let at = 0;
+
+  return blocks.map((block) => {
+    const from = at;
+    at += block.source.length;
+
+    return { from, to: at };
+  });
+}
+
+/** The counts a field stands beside its blocks, and the opener of each block's oldest thread, by the block. */
+interface BlockThreads {
+  readonly marks: readonly NativeCommentMark[];
+  readonly opens: ReadonlyMap<number, () => void>;
+}
+
+/** Each block's count of the threads on its words, and the oldest's opener, by the block. */
+function blockThreads(
+  spans: readonly { readonly from: number; readonly to: number }[],
+  comments: DocumentComments,
+): BlockThreads {
+  const counts = new Map<number, number>();
+  const opens = new Map<number, () => void>();
+
+  for (const thread of comments.threads) {
+    const block = spans.findIndex((span) => thread.at >= span.from && thread.at < span.to);
+
+    if (block === -1) continue;
+    counts.set(block, (counts.get(block) ?? 0) + 1);
+
+    if (!opens.has(block)) opens.set(block, thread.onOpen);
+  }
+
+  const marks = [...counts].map(([block, count]) => ({
+    block,
+    count,
+    heard: comments.heard(count),
+  }));
+
+  return { marks, opens };
+}
+
 /** A picture's words in its Markdown, `![words](address)`, its escapes read. */
 const PICTURE_WORDS = /^!\[((?:\\.|[^\\\]])*)\]/u;
 
@@ -208,6 +279,8 @@ interface DocumentFieldProps {
   readonly opensAt?: DocumentFieldOpening | undefined;
   /** How the document's pictures are drawn, each as the media it names in its own line, as the read rows draw it; none draws each as a pill of its words. */
   readonly media?: DocumentMedia | undefined;
+  /** The document's open comment threads, whose counts stand beside its blocks, and Comment in its edit menu; none stands none. */
+  readonly comments?: DocumentComments | undefined;
 }
 
 /** What the field last told: the Markdown it wrote, the Markdown that was written against, and its lines as the blocks it wrote read them. */
@@ -505,6 +578,7 @@ function FieldWords({
   keepClear,
   opensAt,
   media,
+  comments,
 }: DocumentFieldProps) {
   const colors = useColors();
   const native = useRef<NativeDocumentFieldDoors>(null);
@@ -576,6 +650,14 @@ function FieldWords({
         ? undefined
         : blocksMedia(read, media, drawn, diagramOf),
     [media, drawn, read, diagramOf],
+  );
+
+  // Where each block stands in the Markdown the lines stand on, and the counts of the threads on each.
+  const spans = useMemo(() => blockSpans(read), [read]);
+
+  const threaded = useMemo(
+    () => (comments === undefined ? undefined : blockThreads(spans, comments)),
+    [spans, comments],
   );
 
   const look = {
@@ -736,6 +818,14 @@ function FieldWords({
       onHeight={fitsWords ? ({ nativeEvent }) => setHeight(nativeEvent.height) : undefined}
       value={handed.value}
       media={held}
+      comments={threaded?.marks}
+      commentAct={comments === undefined ? undefined : COMMENT_ACT}
+      onCommentOpen={({ nativeEvent }) => threaded?.opens.get(nativeEvent.block)?.()}
+      onCommentAsk={({ nativeEvent }) => {
+        const span = spans[nativeEvent.block];
+
+        if (span !== undefined) comments?.onComment({ ...span, quote: nativeEvent.quote });
+      }}
       look={look}
       placeholder={placeholder}
       editable={editable}

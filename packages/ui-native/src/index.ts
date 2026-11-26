@@ -119,6 +119,7 @@ export {
 export { type DockChip, DockChips, DockPanel } from "./dock-chips.js";
 
 export {
+  type DocumentComments,
   DocumentField,
   type DocumentFieldHandle,
   type DocumentFieldOpening,

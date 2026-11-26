@@ -1,4 +1,4 @@
-# description-media.yaml -- a description's table, file, picture and diagram drawn in its field as its page reads them, the table as its grid, a PDF as its card, a picture at its own place in its line, and a Mermaid diagram as its picture under its head, while the words are edited in place.
+# description-media.yaml -- a description's comment counts, table, file, picture and diagram drawn in its field as its page reads them, a block's count of open threads at its first line's end, the table as its grid, a PDF as its card, a picture at its own place in its line, and a Mermaid diagram as its picture under its head, while the words are edited in place.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -54,6 +54,17 @@ env:
       id: "description-words"
     timeout: 10000
 - waitForAnimationToEnd
+# The count of the open thread on Context, the description's first block,
+# stands at its line's trailing edge in the field, as the read rows stand it,
+# heard as its count of comments.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "1 comment"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: description-media-comments
 # The field draws the table as its grid, each cell read as its words, where
 # it once drew a card of the table's first line.
 - runFlow:
