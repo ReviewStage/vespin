@@ -31,7 +31,16 @@
  * never a URL, since a presigned one is a bearer of the object.
  */
 
-import { BlobNotFoundError, del, get, head, issueSignedToken, presignUrl, put } from "@vercel/blob";
+import {
+  BlobNotFoundError,
+  del,
+  get,
+  head,
+  issueSignedToken,
+  parseStoreIdFromDelegationToken,
+  presignUrl,
+  put,
+} from "@vercel/blob";
 import { Clock, Config, Context, Data, Effect, Layer, Option } from "effect";
 import { present } from "../environment.js";
 
@@ -69,6 +78,23 @@ const RANGE_NOT_SATISFIABLE = "416";
 /** Every object in the store is private. */
 const ACCESS = "private";
 
+/**
+ * The headers an upload to a presigned URL carries, as the SDK's own
+ * presigned `put` sends them (`@vercel/blob` 2.9.0, Blob API version 13):
+ * the API version, the store, the object's access and type, and that it may
+ * not replace what stands.
+ */
+const PRESIGNED_PUT_HEADER = {
+  API_VERSION: "x-api-version",
+  STORE_ID: "x-vercel-blob-store-id",
+  ACCESS: "x-vercel-blob-access",
+  CONTENT_TYPE: "x-content-type",
+  ALLOW_OVERWRITE: "x-allow-overwrite",
+} as const;
+
+/** The Blob API version the SDK this store was measured against speaks. */
+const BLOB_API_VERSION = "13";
+
 export class BlobStoreFailure extends Data.TaggedError("BlobStoreFailure")<{
   readonly operation: BlobStoreOperation;
   readonly reason: BlobStoreFailureReason;
@@ -94,6 +120,12 @@ export interface BlobObjectStream {
 export interface PresignGetOptions {
   /** How long the URL opens the object, at most `BLOB_PRESIGN_MAX_SECONDS`. */
   readonly validForSeconds: number;
+}
+
+/** A presigned upload: the URL, which is a bearer of the upload and never logged, and the headers the request must carry, which are not secret. */
+export interface PresignedUpload {
+  readonly url: string;
+  readonly headers: Readonly<Record<string, string>>;
 }
 
 export interface PresignPutOptions {
@@ -132,11 +164,16 @@ export interface BlobStoreValues {
     pathname: string,
     options: PresignGetOptions,
   ) => Effect.Effect<string, BlobStoreFailure>;
-  /** A URL that takes one upload to `pathname`, of that type and at most that size, until it expires. */
+  /**
+   * A URL that takes one upload to `pathname`, of that type and at most that
+   * size, until it expires, and the headers the upload carries. Note that it
+   * never replaces what stands at the pathname, so once one upload has
+   * landed the URL takes no other, and what was read back after it stays.
+   */
   readonly presignPut: (
     pathname: string,
     options: PresignPutOptions,
-  ) => Effect.Effect<string, BlobStoreFailure>;
+  ) => Effect.Effect<PresignedUpload, BlobStoreFailure>;
   /** Deletes the objects at `pathnames`; one that names nothing is no failure. */
   readonly delete: (pathnames: ReadonlyArray<string>) => Effect.Effect<void, BlobStoreFailure>;
 }
@@ -381,10 +418,21 @@ function vercelBlobStore(storeId: string): BlobStoreValues {
             access: ACCESS,
             validUntil: until,
             ...limits,
-            allowOverwrite: true,
+            allowOverwrite: false,
           });
 
-          return signed.presignedUrl;
+          return {
+            url: signed.presignedUrl,
+            headers: {
+              [PRESIGNED_PUT_HEADER.API_VERSION]: BLOB_API_VERSION,
+              [PRESIGNED_PUT_HEADER.STORE_ID]: parseStoreIdFromDelegationToken(
+                token.delegationToken,
+              ),
+              [PRESIGNED_PUT_HEADER.ACCESS]: ACCESS,
+              [PRESIGNED_PUT_HEADER.CONTENT_TYPE]: options.contentType,
+              [PRESIGNED_PUT_HEADER.ALLOW_OVERWRITE]: "0",
+            },
+          };
         }),
       ),
 

@@ -2,6 +2,7 @@
  * blob-store-fake.ts -- the Blob store as a test stands it: objects held in memory, and presigned URLs that name what they would open without opening anything.
  */
 
+import { ATTACHMENT_BODY, type AttachmentBody } from "@repo/database/models/attachment-body";
 import { Clock, Effect, Layer, Option } from "effect";
 import { assertPresignLifetime, BLOB_STORE_OPERATION, BlobStore } from "../storage/blob-store.js";
 
@@ -32,6 +33,10 @@ export interface MemoryBlobStore {
   readonly objects: Map<string, MemoryBlobObject>;
   /** Every presigned URL the store minted, in order. */
   readonly presigned: MemoryBlobPresign[];
+  /** The bytes a body names: a row's own, or the object the store holds at its key; a test that expected one fails where none stands. */
+  readonly bytesOf: (body: AttachmentBody) => Uint8Array;
+  /** Takes an upload to a presigned URL the store minted, as Blob would: the object at its pathname, unless one stands there already. */
+  readonly acceptUpload: (url: string, contentType: string, bytes: Uint8Array) => void;
 }
 
 /** A store in memory: a write replaces, a delete of nothing succeeds, and a presign records what it was asked. */
@@ -88,14 +93,17 @@ export function memoryBlobStore(): MemoryBlobStore {
     presignGet: (pathname, options) =>
       presign({ operation: BLOB_STORE_OPERATION.PRESIGN_GET, pathname }, options.validForSeconds),
     presignPut: (pathname, options) =>
-      presign(
-        {
-          operation: BLOB_STORE_OPERATION.PRESIGN_PUT,
-          pathname,
-          contentType: options.contentType,
-          maxBytes: options.maxBytes,
-        },
-        options.validForSeconds,
+      Effect.map(
+        presign(
+          {
+            operation: BLOB_STORE_OPERATION.PRESIGN_PUT,
+            pathname,
+            contentType: options.contentType,
+            maxBytes: options.maxBytes,
+          },
+          options.validForSeconds,
+        ),
+        (url) => ({ url, headers: { "x-content-type": options.contentType } }),
       ),
     delete: (pathnames) =>
       Effect.sync(() => {
@@ -103,5 +111,23 @@ export function memoryBlobStore(): MemoryBlobStore {
       }),
   });
 
-  return { layer, objects, presigned };
+  const bytesOf = (body: AttachmentBody) => {
+    if (body.kind === ATTACHMENT_BODY.INLINE) return body.bytes;
+    const found = objects.get(body.blobKey);
+
+    if (found === undefined)
+      throw new Error("memoryBlobStore: no object stands at the body's key.");
+
+    return found.bytes;
+  };
+
+  const acceptUpload = (url: string, contentType: string, bytes: Uint8Array) => {
+    const pathname = new URL(url).pathname.slice(1);
+
+    if (objects.has(pathname)) return;
+    writes += 1;
+    objects.set(pathname, { bytes: bytes.slice(), contentType, etag: `"${writes}"` });
+  };
+
+  return { layer, objects, presigned, bytesOf, acceptUpload };
 }

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   CONVERSATION_PICTURE_BOUNDS,
@@ -25,6 +24,9 @@ import {
   attachmentBodyOf,
   phoneBodyFields,
   phoneBodyOf,
+  type StoredAttachment,
+  StoredAttachmentSchema,
+  storedAttachmentColumns,
 } from "./attachment-body.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import { agentVisibleTo } from "./workspace-store.js";
@@ -34,8 +36,9 @@ import type { ConversationTarget } from "./writer.js";
  * conversation-pictures.ts -- the pictures a conversation's tools answered, kept once each beside the transcript that names them.
  *
  * A tool hands each picture in as it settles the call that answered it
- * (`show-media.ts`, `browser-tool.ts`), already sniffed and measured, and
- * writes the id this answers into the stored output in the bytes' place.
+ * (`show-media.ts`, `browser-tool.ts`), already sniffed, measured, hashed,
+ * and uploaded to the Blob store under a fresh id, and writes the id this
+ * answers into the stored output in the bytes' place.
  * A picture is keyed by the hash of its bytes within its conversation, so
  * handing the same one in again answers the row already kept, and a call
  * made twice keeps nothing twice. A conversation keeps at
@@ -48,13 +51,13 @@ import type { ConversationTarget } from "./writer.js";
  * (`readShownAgentPicture`), settles that itself.
  */
 
-/** A picture to keep, or a video shown as one: its bytes, the type they were sniffed to be, the size their header states, and a recording's MP4 copy where its sandbox made one. */
+/** A picture to keep, or a video shown as one: its bytes as uploaded to the Blob store, with a recording's copy for a phone where its sandbox made one, the hex SHA-256 of its bytes, the type they were sniffed to be, and the size their header states. */
 export interface PictureToKeep {
-  readonly bytes: Uint8Array;
+  readonly stored: StoredAttachment;
+  readonly sha256: string;
   readonly contentType: ConversationMediaType;
   readonly width: number;
   readonly height: number;
-  readonly mp4Bytes?: Uint8Array | undefined;
 }
 
 /** A kept picture as a read answers it: the type it is served under, and where its bytes stand. */
@@ -111,12 +114,11 @@ const sumKept = SqlSchema.findAll({
 });
 
 const PictureRowSchema = Schema.Struct({
+  stored: StoredAttachmentSchema,
   sha256: Schema.String,
   contentType: conversationMediaTypeSchema,
   width: Schema.Int,
   height: Schema.Int,
-  bytes: Schema.Uint8Array,
-  mp4Bytes: Schema.optional(Schema.Uint8Array),
 });
 
 const insertPictures = SqlSchema.findAll({
@@ -132,14 +134,11 @@ const insertPictures = SqlSchema.findAll({
       db
         .insert(attachment)
         .values(
-          pictures.map(({ bytes, mp4Bytes, ...row }) => ({
+          pictures.map(({ stored, ...row }) => ({
             ...row,
+            ...storedAttachmentColumns(stored),
             userId,
             conversationId,
-            bytes,
-            mp4Bytes: mp4Bytes ?? null,
-            phoneByteCount: mp4Bytes?.byteLength ?? null,
-            byteCount: bytes.byteLength,
             createdAt: now,
           })),
         )
@@ -203,10 +202,6 @@ function keptPicture(row: typeof KeptRowSchema.Type): KeptPicture {
   };
 }
 
-function sha256Hex(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
-
 /** The rows of `found` by the hash each is keyed by. */
 function byHash(
   found: readonly (typeof KeptHashRowSchema.Type)[],
@@ -222,7 +217,9 @@ function byHash(
  * at all. The set is read, summed, and written in a statement each rather
  * than a few a picture. Note that a write that raced another to the same
  * bytes reads the winner's row, because the insert stands down on the hash
- * rather than failing.
+ * rather than failing. A picture answered by a row already kept, or kept
+ * by none, leaves its upload under an id no row takes, which its uploader
+ * tombstones once the write is done (`tombstoneUnwrittenUploads`).
  */
 export function keepConversationPictures(
   target: ConversationTarget,
@@ -230,14 +227,13 @@ export function keepConversationPictures(
 ): TaskStoreEffect<Option.Option<readonly KeptPicture[]>> {
   return Effect.gen(function* () {
     const { conversationId } = target;
-    const hashed = pictures.map((picture) => ({ ...picture, sha256: sha256Hex(picture.bytes) }));
-    const sha256s = [...new Set(hashed.map((picture) => picture.sha256))];
+    const sha256s = [...new Set(pictures.map((picture) => picture.sha256))];
     const held = byHash(yield* findByHashes({ conversationId, sha256s }));
 
     // Note that bytes the set names twice are kept once.
     const fresh = [
       ...new Map(
-        hashed.flatMap((picture) =>
+        pictures.flatMap((picture) =>
           held.has(picture.sha256) ? [] : [[picture.sha256, picture] as const],
         ),
       ).values(),
@@ -248,7 +244,7 @@ export function keepConversationPictures(
     if (fresh.length > 0) {
       const [summed] = yield* sumKept({ conversationId });
       const keptBytes = summed?.kept ?? 0;
-      const freshBytes = fresh.reduce((total, picture) => total + picture.bytes.byteLength, 0);
+      const freshBytes = fresh.reduce((total, picture) => total + picture.stored.byteCount, 0);
 
       if (keptBytes + freshBytes > CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION) {
         return Option.none();
@@ -272,7 +268,7 @@ export function keepConversationPictures(
 
     const answered: KeptPicture[] = [];
 
-    for (const { sha256 } of hashed) {
+    for (const { sha256 } of pictures) {
       const one = kept.get(sha256);
 
       if (one === undefined) return Option.none();

@@ -8,10 +8,7 @@ import { Database } from "@repo/database/core/query";
 import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { listAgentBrowserTabs } from "@repo/database/models/agent-browser-tabs";
 import { createAgent, recordAgentRunnerToken } from "@repo/database/models/agent-store";
-import {
-  DESCRIPTION_ATTACHMENT_KEEP,
-  keepDescriptionAttachment,
-} from "@repo/database/models/description-attachments";
+import { DESCRIPTION_ATTACHMENT_KEEP } from "@repo/database/models/description-attachments";
 import { parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import {
@@ -65,6 +62,7 @@ import { INTEGRATION } from "../../integrations/integrations.js";
 import { PageLinks } from "../../pages/page-links.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
 import { SlackBot, slackBotOver } from "../../slack/slack-bot.js";
+import { keepDescriptionFileBytes } from "../../storage/attachment-keeps.js";
 import type { CommentToolName } from "../../tasks/comment-tools.js";
 import { PICTURE_LOOK_REFUSAL, pictureNotLooked } from "../../tasks/picture-look.js";
 import {
@@ -72,6 +70,7 @@ import {
   fakeCdpPeer,
   noSandboxBrowserLayer,
 } from "../../testing/agent-browser-fake.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { experimentWordsIn } from "../../testing/experiment-words.js";
 import { NO_GITHUB } from "../../testing/github-app-fake.js";
 import {
@@ -123,7 +122,10 @@ import { NATIVE_CALL_KEY_WINDOW_MS } from "./call-key.js";
 import { workspaceMcpDoorSeams } from "./door-seams.js";
 
 /** What every case runs over: the store, and sandboxes kept in memory. */
-const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+const SUITE = Layer.mergeAll(getTestDB(), memorySandbox().layer, blobs.layer);
 
 /**
  * Our MCP server, answered by its group the way a function answers it,
@@ -184,6 +186,7 @@ const PAGE_SANDBOX = Layer.succeed(PageLinks, {
 const doorServices = Effect.gen(function* () {
   return Layer.mergeAll(
     memorySandbox().layer,
+    blobs.layer,
     Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
     Layer.succeed(Database, yield* Database),
     Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -1303,7 +1306,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const fetch = yield* standing;
         const agent = yield* agentWithBearer;
         yield* descriptionsOn(agent.userId);
-        const kept = yield* keepDescriptionAttachment(agent.userId, agent.taskId, PICTURE);
+        const kept = yield* keepDescriptionFileBytes(agent.userId, agent.taskId, PICTURE);
 
         if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT)
           return assert.fail("the picture was not kept");
@@ -1342,7 +1345,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           bytes: webmBytes(1280, 800),
         };
 
-        const kept = yield* keepDescriptionAttachment(agent.userId, agent.taskId, video);
+        const kept = yield* keepDescriptionFileBytes(agent.userId, agent.taskId, video);
 
         if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT)
           return assert.fail("the video was not kept");

@@ -1,6 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readAgentHeaderOfConversation } from "@repo/database/models/agent-store";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
@@ -36,6 +35,7 @@ import { isRecord, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Effect, Option, Predicate, Result, Schema } from "effect";
 import { logStoreFailure } from "../http/store-failure.js";
+import { keepPictureBytesOne } from "../storage/attachment-keeps.js";
 import type { InboxSandboxDoor } from "./coder-host/inbox-image.js";
 import { COMMAND_DESCRIPTION } from "./command-description.js";
 import {
@@ -65,7 +65,7 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * does: a copy at most `COMPUTER_SHOTS.MODEL.edge` pixels long, which the
  * model is handed as an image, and one at its own size up to
  * `COMPUTER_SHOTS.KEPT.edge`, kept beside the transcript the call is written
- * to (`keepConversationPicture`) and named in the result by id, so the
+ * to (`keepPictureBytesOne`) and named in the result by id, so the
  * window draws it. The app's icon is kept the same way, once per
  * transcript, since pictures are kept by their bytes. Neither picture's
  * base64 is spelled out in the result the conversation stores.
@@ -443,7 +443,7 @@ function kept(
     return Effect.succeed({ omitted: PICTURE_OMISSION.UNSUPPORTED, byteCount: bytes.byteLength });
   }
 
-  return keepConversationPicture(transcript, { bytes, contentType, ...dimensions }).pipe(
+  return keepPictureBytesOne(transcript, { bytes, contentType, ...dimensions }).pipe(
     Effect.map(
       (picture): KeptNote =>
         Option.isNone(picture)

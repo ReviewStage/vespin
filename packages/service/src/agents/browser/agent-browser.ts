@@ -33,7 +33,10 @@
  * each attempt failed is logged by its kind alone.
  */
 
+import type { StoredAttachment } from "@repo/database/models/attachment-body";
+import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { RECORDING_FAILURE, type RecordingFailure } from "@repo/features/recording-wire";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import {
   ptyLinesOf,
   SANDBOX_STATUS,
@@ -51,6 +54,7 @@ import {
   Exit,
   Layer,
   Match,
+  Option,
   Predicate,
   PubSub,
   Ref,
@@ -62,10 +66,23 @@ import {
 } from "effect";
 import { EXCESS_KEYS, type UnparsedWireValue, WireValueSchema } from "../../core.js";
 import { jsonOf } from "../../http/http-effect.js";
+import {
+  type ReservedUpload,
+  readBackUpload,
+  SANDBOX_UPLOAD_SECONDS,
+  storeSandboxPhoneCopy,
+} from "../../storage/attachment-uploads.js";
+import {
+  BLOB_STORE_FAILURE,
+  BLOB_STORE_OPERATION,
+  BlobStore,
+  BlobStoreFailure,
+} from "../../storage/blob-store.js";
 import type { RelaySocket } from "../../terminal/relay.js";
 import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
-import { phoneVideoAsk, phoneVideoOf } from "../machine/phone-video.js";
+import { copyUploaded, phoneVideoUploadAsk } from "../machine/phone-video.js";
+import { uploadFileAsk } from "../machine/sandbox-upload.js";
 import { type SandboxPtyService, sandboxPtyOf } from "../sandbox-pty.js";
 import {
   CDP_FAILURE,
@@ -84,9 +101,9 @@ import {
   startBrowser,
 } from "./sandbox-browser.js";
 import {
+  locateRecording,
   type RecordingStart,
-  readRecording,
-  recordingBytesOf,
+  recordingFileOf,
   recordingStartOf,
   recordingStopOf,
   startRecording,
@@ -170,14 +187,14 @@ export interface BrowserStanding {
   readonly started: boolean;
 }
 
-/** A recording stopped, as the sandbox answered it: the video's length, its bytes, the absolute path it stays at in the sandbox, and the MP4 made of it there where the sandbox could make one; or why there is none. */
+/** A recording stopped, as the sandbox answered it: the video's length, its bytes as the Blob store holds them, the absolute path it stays at in the sandbox, and where it was stored, with the MP4 made of it there where the sandbox could make one; or why there is none. */
 type BrowserRecordingRead =
   | {
       readonly ok: true;
       readonly seconds: number;
       readonly bytes: Uint8Array;
       readonly path: string;
-      readonly mp4Bytes: Uint8Array | undefined;
+      readonly stored: StoredAttachment;
     }
   | { readonly ok: false; readonly reason: RecordingFailure; readonly bytes?: number };
 
@@ -190,11 +207,16 @@ export interface AgentBrowserService {
     maxSeconds: number,
     maxBytes: number,
   ) => Effect.Effect<RecordingStart, BrowserUnreachable>;
-  /** Stops the recording that runs, waits on its video, and reads it back up to the bytes given, with the MP4 the sandbox makes of it. */
+  /**
+   * Stops the recording that runs, waits on its video, and has the sandbox
+   * upload it, up to the bytes given, with the MP4 it makes of it, to the
+   * pathnames reserved for them in the Blob store, each read back from there.
+   */
   readonly stopRecording: (
     sessionId: string,
     maxBytes: number,
-  ) => Effect.Effect<BrowserRecordingRead, BrowserUnreachable>;
+    reserved: ReservedUpload,
+  ) => Effect.Effect<BrowserRecordingRead, BrowserUnreachable | BlobStoreFailure>;
   /** Makes sure of the browser, then opens a CDP session with it for the caller's scope. */
   readonly connect: (
     sessionId: string,
@@ -568,7 +590,7 @@ export function agentBrowserOver(
       return recordingStartOf(run);
     });
 
-  const stopRecordingIn = (sessionId: string, maxBytes: number) =>
+  const stopRecordingIn = (sessionId: string, maxBytes: number, reserved: ReservedUpload) =>
     Effect.gen(function* () {
       const { running } = yield* ensured(sessionId);
 
@@ -580,27 +602,53 @@ export function agentBrowserOver(
 
       if (!stopped.ok) return stopped;
 
-      const read = yield* api
-        .run(running, readRecording(maxBytes))
+      const located = yield* api
+        .run(running, locateRecording())
         .pipe(Effect.mapError(sandboxUnavailable));
 
-      const file = recordingBytesOf(read, maxBytes);
+      const file = recordingFileOf(located, maxBytes);
+      const encoder = { ok: false, reason: RECORDING_FAILURE.ENCODER } as const;
 
-      if (file === undefined) {
-        return { ok: false, reason: RECORDING_FAILURE.ENCODER } satisfies BrowserRecordingRead;
+      if (file === undefined) return encoder satisfies BrowserRecordingRead;
+      const store = yield* BlobStore;
+      const video = { contentType: CONVERSATION_MEDIA_TYPE.WEBM, maxBytes };
+
+      const presigned = yield* store.presignPut(reserved.blobKey, {
+        ...video,
+        validForSeconds: SANDBOX_UPLOAD_SECONDS,
+      });
+
+      // Note that what the run answers is not read: what landed is read back from the store.
+      yield* api.run(running, uploadFileAsk(file.path, presigned)).pipe(Effect.ignore);
+      const landed = yield* readBackUpload(reserved.blobKey, video);
+
+      // Note that a video that never landed is the store's failure, which the call answers as one to retry, never the encoder's.
+      if (Option.isNone(landed)) {
+        return yield* new BlobStoreFailure({
+          operation: BLOB_STORE_OPERATION.PUT,
+          reason: BLOB_STORE_FAILURE.REQUEST,
+          pathnames: [reserved.blobKey],
+        });
       }
 
       // Note that a copy the sandbox could not make leaves the recording its WebM alone, never refused.
-      const mp4Bytes = yield* api.run(running, phoneVideoAsk(file.path)).pipe(
-        Effect.map(phoneVideoOf),
-        Effect.catch(() => Effect.succeed(undefined)),
+      const phone = yield* storeSandboxPhoneCopy(MP4_TYPE, reserved.phoneBlobKey, (upload) =>
+        Effect.map(api.run(running, phoneVideoUploadAsk(file.path, upload)), copyUploaded),
       );
+
+      const stored = {
+        id: reserved.id,
+        blobKey: reserved.blobKey,
+        byteCount: landed.value.byteLength,
+        ...(phone === undefined ? undefined : { phone }),
+      };
 
       return {
         ok: true,
         seconds: stopped.seconds,
-        ...file,
-        mp4Bytes,
+        path: file.path,
+        bytes: landed.value,
+        stored,
       } satisfies BrowserRecordingRead;
     });
 

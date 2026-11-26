@@ -4,8 +4,6 @@ import { posix } from "node:path";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent, readAgent } from "@repo/database/models/agent-store";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
-import { keepDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
@@ -14,7 +12,6 @@ import { messages } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
-  inlineBytesOf,
   joinWorkspace,
   leaveWorkspace,
   openRunningTurn,
@@ -44,7 +41,7 @@ import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { m4aBytes, paddedTo, pngBytes, webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { Duration, Effect, Option } from "effect";
+import { Duration, Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { ACTION_RESULT_STATUS, MESSAGE_ROLE } from "../../core.js";
 import {
@@ -57,6 +54,8 @@ import {
   readInboxAttachment,
   taskInboxItems,
 } from "../../inbox/inbox-store.js";
+import { keepDescriptionFileBytes, keepPictureBytesOne } from "../../storage/attachment-keeps.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { CODER } from "./bounds.js";
 import {
   INBOX_REFUSAL,
@@ -195,7 +194,7 @@ const keptBeside = (
   Effect.gen(function* () {
     const target = yield* conversationOf(agent);
     const picture = { bytes, contentType: CONVERSATION_MEDIA_TYPE.PNG, width: 4, height: 3 };
-    const kept = Option.getOrThrow(yield* keepConversationPicture(target, picture));
+    const kept = Option.getOrThrow(yield* keepPictureBytesOne(target, picture));
 
     if (shown) {
       const db = yield* Database;
@@ -312,7 +311,10 @@ function refusalOf(result: { readonly status: string; readonly reason?: string }
   return result.reason ?? "";
 }
 
-it.layer(getTestDB())("the coding agent's inbox", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("the coding agent's inbox", (it) => {
   it.effect(
     "a first post opens a thread under its title; a later post adds a message, one with an ask replacing the open one and keeping the title where it names none",
     () =>
@@ -786,7 +788,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           message?.files?.[0]?.attachmentId ?? "",
         );
 
-        assert.deepEqual(new Uint8Array(inlineBytesOf(Option.getOrThrow(kept).body)), PNG);
+        assert.deepEqual(new Uint8Array(blobs.bytesOf(Option.getOrThrow(kept).body)), PNG);
 
         const web = yield* post(agent, {
           key: "web-only",
@@ -848,7 +850,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         );
 
         assert.deepEqual(
-          Option.map(kept, (file) => [file.contentType, new Uint8Array(inlineBytesOf(file.body))]),
+          Option.map(kept, (file) => [file.contentType, new Uint8Array(blobs.bytesOf(file.body))]),
           Option.some([INBOX_FILE_TYPE.PDF, PDF]),
         );
       }),
@@ -920,7 +922,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         );
 
         assert.deepEqual(
-          Option.map(kept, (file) => [file.contentType, inlineBytesOf(file.body).byteLength]),
+          Option.map(kept, (file) => [file.contentType, blobs.bytesOf(file.body).byteLength]),
           Option.some([INBOX_FILE_TYPE.WEBM, recording.byteLength]),
         );
       }),
@@ -1026,7 +1028,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           named?.attachmentId ?? "",
         );
 
-        assert.deepEqual(new Uint8Array(inlineBytesOf(Option.getOrThrow(kept).body)), PNG);
+        assert.deepEqual(new Uint8Array(blobs.bytesOf(Option.getOrThrow(kept).body)), PNG);
       }),
   );
 
@@ -1043,7 +1045,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         const plan = pngBytes(4, 3, 3);
         const contentType = AGENT_ATTACHMENT_TYPE.PNG;
 
-        const kept = yield* keepDescriptionAttachment(agent.userId, task.id, {
+        const kept = yield* keepDescriptionFileBytes(agent.userId, task.id, {
           contentType,
           bytes: plan,
         });
@@ -1082,7 +1084,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           const named = inboxAttachmentOf(written);
           assert.equal(named?.itemId, item.id, written);
           const copy = yield* readInboxAttachment(agent.userId, item.id, named?.attachmentId ?? "");
-          copies.push(new Uint8Array(inlineBytesOf(Option.getOrThrow(copy).body)));
+          copies.push(new Uint8Array(blobs.bytesOf(Option.getOrThrow(copy).body)));
         }
 
         assert.deepEqual(copies, [shot, plan]);
