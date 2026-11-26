@@ -85,6 +85,8 @@ import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { AgentPane } from "./main-tabs.js";
+import { OfficePage } from "./office-prototype/office-page.js";
+import { OFFICE } from "./office-prototype/office-params.js";
 import {
   SIDE_PANEL_HOLDER,
   SidePanel,
@@ -189,7 +191,18 @@ function useHeldWhile<Drawn>(holding: boolean, drawn: Drawn): Drawn {
 }
 
 /** The window's Inbox, in the task's place: every task's items, and the chosen one read beside them; a memo boundary, as the module's head says. */
-export const DesktopInbox = memo(function DesktopInbox({
+/** PROTOTYPE, throwaway: a phone's first place shows the Office while the address asks for it. */
+export const DesktopInbox = memo(function DesktopInboxOrOffice(props: {
+  tasks: TasksControl;
+  room?: ShellRoom;
+  phoneStart?: React.ReactNode;
+}): React.JSX.Element {
+  if (OFFICE !== undefined && props.room === SHELL_ROOM.NARROW)
+    return <OfficePage variant={OFFICE} />;
+  return <DesktopInboxReal {...props} />;
+});
+
+const DesktopInboxReal = memo(function DesktopInbox({
   tasks,
   room = SHELL_ROOM.WIDE,
   phoneStart = null,

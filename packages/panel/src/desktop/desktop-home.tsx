@@ -36,6 +36,8 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.js";
 import { letGoOfFocus, useHomeNewTask, useListsTask, welcomed } from "./desktop-welcome.js";
 import { HomeStarters } from "./home-starters.js";
+import { OfficePage } from "./office-prototype/office-page.js";
+import { OFFICE } from "./office-prototype/office-params.js";
 import { PERSON_SECTION_FOLD, PersonBody, PersonSectionFrame } from "./person-frame.js";
 import { RecentTasks } from "./recent-tasks.js";
 
@@ -321,6 +323,9 @@ export function DesktopHome({
   const inboxOn = useInboxOn();
   const arriving = useArriving(tasks, read, waiting.length, inboxOn);
   const fresh = welcomed(tasks, useListsTask(undefined));
+
+  // PROTOTYPE, throwaway: the Office in Home's place while the address asks for it.
+  if (OFFICE !== undefined) return <OfficePage variant={OFFICE} />;
 
   return (
     // Note that the rows' links are written under the listed workspace, so their menus offer Copy link.

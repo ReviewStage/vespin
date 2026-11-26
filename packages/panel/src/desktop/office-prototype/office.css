@@ -1,0 +1,114 @@
+/* office.css -- PROTOTYPE, throwaway: the Office's grids, and the floor plan's walls behind real cards. */
+
+.office-rooms {
+  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--ui-space-section, 16px);
+  align-items: start;
+}
+.office-desks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.office-pair {
+  display: inline-flex;
+  gap: 2px;
+}
+.office-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ui-color-border);
+}
+
+.office-plan {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) 1fr;
+  gap: 0;
+  border: 3px solid var(--ui-color-border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: var(--ui-color-well);
+  background-image:
+    linear-gradient(var(--ui-color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ui-color-border) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.office-plan-side {
+  display: flex;
+  flex-direction: column;
+  border-right: 3px solid var(--ui-color-border-strong);
+}
+.office-plan-room {
+  position: relative;
+  padding: 28px 12px 12px;
+  border-bottom: 3px solid var(--ui-color-border-strong);
+}
+.office-plan-room:last-child {
+  border-bottom: none;
+  flex: 1;
+}
+.office-plan-room[data-room="you"] {
+  background: color-mix(in oklab, var(--ui-color-attention) 7%, transparent);
+}
+.office-plan-floor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+.office-plan-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-color-text-muted);
+}
+.office-plan-room > .office-plan-label {
+  position: absolute;
+  top: 8px;
+  left: 14px;
+}
+.office-pods {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.office-pod {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--ui-color-surface);
+  border-radius: 12px;
+  border: 2px dashed var(--ui-color-border-strong);
+}
+.office-pod[data-status="waiting"] {
+  border-color: var(--ui-color-attention);
+  border-style: solid;
+}
+.office-pod-seats {
+  padding-left: 4px;
+  border-left: 2px solid var(--ui-color-border);
+  margin-left: 18px;
+}
+
+@media (max-width: 700px) {
+  .office-plan {
+    grid-template-columns: 1fr;
+  }
+  .office-plan-side {
+    border-right: none;
+    border-bottom: 3px solid var(--ui-color-border-strong);
+  }
+  .office-desks,
+  .office-pods,
+  .office-rooms {
+    grid-template-columns: 1fr;
+  }
+}

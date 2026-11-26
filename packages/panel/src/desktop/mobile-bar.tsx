@@ -3,7 +3,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BarAction, BarItem, BarItems, MENU_KEEPS_CLEAR, PlusIcon, SearchIcon } from "@repo/ui";
 import { raiseKeyboard } from "@repo/ui/command";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { InboxIcon, ListTodoIcon } from "lucide-react";
+import { InboxIcon, ListTodoIcon, UsersIcon } from "lucide-react";
 import { useAdminView } from "../admin/admin-route.js";
 import { type AdminView, adminSection } from "../admin/routing.js";
 import { runAppCommand } from "../app-commands.js";
@@ -16,6 +16,7 @@ import { ROUTED_PLACE, type RoutedPlace, useWindowPlace } from "../places/routed
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { type AutomationsPlace, automationsTab } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { OFFICE } from "./office-prototype/office-params.js";
 import { useInboxViewCount } from "./places-waiting.js";
 
 /**
@@ -142,12 +143,12 @@ export function MobileBar({
         <BarItems>
           {inboxOn ? (
             <BarItem
-              icon={<InboxIcon />}
+              icon={OFFICE === undefined ? <InboxIcon /> : <UsersIcon />}
               current={inInbox}
-              count={inboxCount}
+              count={OFFICE === undefined ? inboxCount : 4}
               onPress={go(inbox.open)}
             >
-              Inbox
+              {OFFICE === undefined ? "Inbox" : "Office"}
             </BarItem>
           ) : null}
           <BarItem icon={<ListTodoIcon />} current={inTasks} onPress={go(board.open)}>

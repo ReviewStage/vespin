@@ -219,6 +219,7 @@ import { type HoverPane, useHoverPane } from "./hover-pane.js";
 import { MacResourcesButton } from "./mac-resources.js";
 import { childTasksFold, movedBeside, nestsOf, useNestedRows } from "./nested-rows.js";
 import { NewTaskButton, NewTaskInButton } from "./new-task-button.js";
+import { OFFICE } from "./office-prototype/office-params.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
 import { useInboxViewCount } from "./places-waiting.js";
@@ -3047,11 +3048,20 @@ function SidebarColumn({
       <SidebarPlaces>
         <HeldSearchRow onOpen={placeDoors.onSearch} />
         <HeldHomeRow
-          current={atHome}
+          current={atHome && OFFICE === undefined}
           disabled={!tasks.signedIn}
           onOpen={placeDoors.onHome}
           onOpenInTab={placeDoors.onHomeInTab}
         />
+        {OFFICE === undefined ? null : (
+          <NavItem
+            icon={<GLYPH.PEOPLE />}
+            current={atHome ? NAV_CURRENT.PAGE : undefined}
+            onClick={placeDoors.onHome}
+          >
+            Office
+          </NavItem>
+        )}
         {inboxOn ? (
           <HeldInboxRow
             count={inboxCount}
