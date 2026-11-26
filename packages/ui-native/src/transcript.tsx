@@ -1792,8 +1792,9 @@ export function AgentTranscript({
   }, [items]);
 
   // Note that a revealed row lets the anchor go, so a row landing at the end does not scroll it away again.
+  // Note that an ask made before the list has its width waits for it, since the list stands only once measured, and its scroll waits a frame, past the list's own first scroll to its newest row.
   useEffect(() => {
-    if (reveal === undefined) return;
+    if (reveal === undefined || !measured) return;
 
     const index = revealedIndex(itemsNow.current, reveal);
     const row = itemsNow.current[index];
@@ -1806,17 +1807,22 @@ export function AgentTranscript({
       settled.current = false;
     } else setLanded({ key: itemKey(row), serial: reveal.serial });
 
-    void list.current?.scrollToIndex({
-      index,
-      viewPosition: REVEAL_POSITION,
-      animated: !reduceMotion,
+    const frame = requestAnimationFrame(() => {
+      void list.current?.scrollToIndex({
+        index,
+        viewPosition: REVEAL_POSITION,
+        animated: !reduceMotion,
+      });
     });
 
     // Note that a scroll that moves the list ends in its momentum's end, which sends the focus, while one that has nowhere to go, the row already in view, ends at once, so the focus is also sent once the scroll would have settled.
     const settling = setTimeout(focusSentTo, reduceMotion ? 0 : REVEAL_SETTLE_MS);
 
-    return () => clearTimeout(settling);
-  }, [reveal, reduceMotion, focusSentTo]);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(settling);
+    };
+  }, [reveal, measured, reduceMotion, focusSentTo]);
 
   // Note that the keyboard rising under a reader at the newest row brings the row up with it, as Messages' does, rather than leaving it behind the keyboard; the list's inset has already grown for it, so its end is the row clear of the bar.
   useEffect(() => {

@@ -1275,7 +1275,10 @@ const AgentConversation = memo(function AgentConversation({
       return;
     }
 
-    if (!chat && items.some((item) => item.place.message === message)) {
+    // Note that a line someone sent during a turn is linked by its own row's id, the turn's rows by the turn's.
+    const held = items.some((item) => item.place.message === message || item.place.row === message);
+
+    if (!chat && held) {
       land();
 
       return;
