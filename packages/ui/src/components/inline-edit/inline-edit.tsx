@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
-import { useLayoutEffect, useRef } from "react";
+import type { ReactNode, Ref, RefObject } from "react";
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { isComposingKey } from "../../composing-key.js";
 import { ShadcnInput } from "../../shadcn/input.js";
+import { iconPickerChoiceOf } from "../icon-picker/icon-picker.js";
 
 /**
  * inline-edit.tsx -- words edited where they are drawn: shown as they stand, and, while the caller says, a field over them in their place.
@@ -14,6 +15,18 @@ import { ShadcnInput } from "../../shadcn/input.js";
  * uncontrolled, so the caller hears only how the edit ended, once, by
  * whichever of those came first, and whether a key ended it, so it can hand
  * focus back to what it draws while not editing.
+ *
+ * A field may stand beside controls of the edit's own, as a Manager's face
+ * well stands beside its name: the focus going into one of the boxes the
+ * caller names (`within`), or into a flyout an icon picker's choice floats
+ * that traces back into one (`iconPickerChoiceOf`), ends nothing, the focus
+ * leaving one of those boxes for anywhere else ends it as leaving the field
+ * does, and
+ * neither does the focus going anywhere while a layer one of them hung
+ * stands (`holding`), a picker drawn in a portal outside them, as a group
+ * head's editor has it (`GroupHeaderEditor`). A press away that puts the
+ * layer away after the focus left says no blur again, so its owner calls
+ * `leave` (`ref`), which ends the edit unless the focus stands in it.
  *
  * Text arriving through an input method is composed in place before it is
  * committed, so the Return that commits a composition, and the Escape that
@@ -60,13 +73,44 @@ export const INLINE_EDIT_FIELD =
   "data-[look=field]:block data-[look=field]:h-auto data-[look=field]:w-full data-[look=field]:rounded-none data-[look=field]:border-0 data-[look=field]:bg-transparent data-[look=field]:focus:bg-transparent data-[look=field]:p-0 data-[look=field]:text-inherit data-[look=field]:outline-none data-[look=field]:[font:inherit] " +
   "data-[look=well]:inline-block data-[look=well]:h-auto data-[look=well]:w-auto data-[look=well]:rounded-none data-[look=well]:border-0 data-[look=well]:bg-transparent data-[look=well]:focus:bg-transparent data-[look=well]:p-0 data-[look=well]:text-inherit data-[look=well]:outline-none data-[look=well]:[font:inherit]";
 
+/** No boxes beside the field, kept as one so a field given none redraws nothing. */
+const NOTHING_WITHIN: readonly RefObject<HTMLElement | null>[] = [];
+
 /** How an edit ended: the words to keep, if any changed, and whether a key ended it. */
 export interface InlineEditEnd {
   readonly value: string | undefined;
   readonly byKey: boolean;
 }
 
-/** The field, opened over `value`; it ends once, by Return, Escape, or the focus leaving. */
+/** What an edit answers its owner: `leave` ends it as the focus leaving would, unless the focus stands in it, and `field` is its field, where the owner may hand the focus back. */
+export interface InlineEditHandle {
+  leave: () => void;
+  field: () => HTMLInputElement | null;
+}
+
+/** Whether `target` stands in `field` or one of `within`'s boxes, traced back from a flyout an icon picker's choice floats, flyout by flyout. */
+function inEdit(
+  target: EventTarget | null,
+  field: HTMLInputElement | null,
+  within: readonly RefObject<HTMLElement | null>[],
+): boolean {
+  const seen = new Set<Node>();
+  let on: Node | undefined = target instanceof Node ? target : undefined;
+
+  while (on !== undefined && !seen.has(on)) {
+    seen.add(on);
+    const node = on;
+
+    if (field?.contains(node) === true) return true;
+
+    if (within.some((box) => box.current?.contains(node) === true)) return true;
+    on = iconPickerChoiceOf(node);
+  }
+
+  return false;
+}
+
+/** The field, opened over `value`; it ends once, by Return, Escape, or the focus leaving it and what `within` names while nothing is `holding`. */
 function InlineEditField({
   value,
   label,
@@ -74,7 +118,10 @@ function InlineEditField({
   look,
   placeholder,
   endsOnBlur,
+  holding,
+  within,
   onEnd,
+  ref,
 }: {
   value: string;
   label: string;
@@ -82,10 +129,16 @@ function InlineEditField({
   look: InlineEditLook;
   placeholder: string | undefined;
   endsOnBlur: boolean;
+  holding: boolean;
+  within: readonly RefObject<HTMLElement | null>[];
   onEnd: (end: InlineEditEnd) => void;
+  ref: Ref<InlineEditHandle> | undefined;
 }): React.JSX.Element {
   const field = useRef<HTMLInputElement | null>(null);
   const ended = useRef(false);
+  // Note that whether a layer stands is read as the focus leaves, from the render last drawn.
+  const held = useRef(holding);
+  held.current = holding;
   useLayoutEffect(() => {
     field.current?.focus();
     field.current?.select();
@@ -98,6 +151,34 @@ function InlineEditField({
     onEnd({ value: keep && typed !== "" && typed !== value ? typed : undefined, byKey });
   };
 
+  // Note that the focus may leave from a box of the edit's own as well as from the field, as it does from a face well tabbed to, so each box is heard too.
+  const leaving = (next: EventTarget | null) => {
+    if (held.current || inEdit(next, field.current, within)) return;
+    end(true, false);
+  };
+
+  const left = useRef(leaving);
+  left.current = leaving;
+  useEffect(() => {
+    if (!endsOnBlur) return undefined;
+
+    const boxes = within.flatMap((box) => (box.current === null ? [] : [box.current]));
+    const onFocusOut = (event: FocusEvent) => left.current(event.relatedTarget);
+
+    for (const box of boxes) box.addEventListener("focusout", onFocusOut);
+
+    return () => {
+      for (const box of boxes) box.removeEventListener("focusout", onFocusOut);
+    };
+  }, [within, endsOnBlur]);
+
+  useImperativeHandle(ref, () => ({
+    leave: () => {
+      if (!inEdit(document.activeElement, field.current, within)) end(true, false);
+    },
+    field: () => field.current,
+  }));
+
   return (
     <ShadcnInput
       ref={field}
@@ -109,7 +190,7 @@ function InlineEditField({
       placeholder={placeholder}
       maxLength={maxLength}
       spellCheck={false}
-      onBlur={endsOnBlur ? () => end(true, false) : undefined}
+      onBlur={endsOnBlur ? (event) => leaving(event.relatedTarget) : undefined}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.preventDefault();
@@ -136,7 +217,10 @@ export function InlineEdit({
   look = INLINE_EDIT_LOOK.FIELD,
   placeholder,
   endsOnBlur = true,
+  holding = false,
+  within = NOTHING_WITHIN,
   onEnd,
+  ref,
   children,
 }: {
   value: string;
@@ -149,8 +233,14 @@ export function InlineEdit({
   placeholder?: string | undefined;
   /** Whether the focus leaving ends the edit; a field beside controls of its own, a new thing's whose chips it leaves for, is ended by its keys and its caller alone. */
   endsOnBlur?: boolean | undefined;
+  /** Whether a layer a control of the edit's own hung stands, a picker in a portal, which the focus may go into and out of without ending the edit. */
+  holding?: boolean | undefined;
+  /** The boxes beside the field that are the edit's own, as a face well beside a name, which the focus may go into without ending the edit. */
+  within?: readonly RefObject<HTMLElement | null>[] | undefined;
   /** How the edit ended; the caller stops editing here. */
   onEnd: (end: InlineEditEnd) => void;
+  /** Ends the edit from its owner (`leave`), and hands it the field. */
+  ref?: Ref<InlineEditHandle> | undefined;
   /** What stands in the field's place while not editing; `value` in plain text where none is given. */
   children?: ReactNode;
 }): React.JSX.Element {
@@ -164,7 +254,10 @@ export function InlineEdit({
       look={look}
       placeholder={placeholder}
       endsOnBlur={endsOnBlur}
+      holding={holding}
+      within={within}
       onEnd={onEnd}
+      ref={ref}
     />
   );
 }

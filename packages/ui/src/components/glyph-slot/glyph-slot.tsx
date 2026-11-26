@@ -80,6 +80,20 @@ const INK_CLASS = {
   [GLYPH_INK.VOICE]: "text-working",
 } as const satisfies Record<GlyphInk, string>;
 
+/**
+ * A glyph's place that a control may take while its row is edited, a
+ * section's icon well or a Manager's face well: the place's own classes, on
+ * a row's glyph cell (a list row's leading mark, a task row's glyph, a group
+ * head's editor's glyph). Note that the control is a compact icon button,
+ * a step (`ui-4`) wider than the glyph on every side, so it overhangs the
+ * place by that step and lays out at the glyph's own size, and the glyph it
+ * draws and the words after it stand where they stood at rest. It is let
+ * out of a button's own cap at its holder's width, which would squeeze it
+ * to the place and push its glyph off the glyph's place by its edge.
+ */
+export const GLYPH_PLACE_CONTROL =
+  "[&>.ui-button[data-size=compact]]:-m-ui-4 [&>.ui-button[data-size=compact]]:max-w-none";
+
 /** The classes a slot of `ink`, `size`, `line`, and `inset` is drawn in. */
 function slotClass(
   ink: GlyphInk,

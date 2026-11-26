@@ -95,7 +95,9 @@ export default function SettingsScreen() {
           icon={glyphSymbol(GLYPH.CLOSE)}
           accessibilityLabel={"Done"}
           onPress={() => router.back()}
-        />
+        >
+          {"Done"}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>

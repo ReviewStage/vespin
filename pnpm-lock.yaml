@@ -375,6 +375,9 @@ importers:
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
+      '@tanstack/react-query':
+        specifier: 'catalog:'
+        version: 5.106.1(@types/react@19.2.18)(react@19.2.8)
       effect:
         specifier: 'catalog:'
         version: 4.0.4

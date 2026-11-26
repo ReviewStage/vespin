@@ -55,6 +55,7 @@ Every token is a `--ui-*` custom property under `src/tokens/`.
   | `--ui-type-toolbar-title-*` | 15 / 20 | 15 / 20 | 15 / 20 |
   | `--ui-page-inset` | 48px (24px under 480px of content) | 24px | 24px |
   | `--ui-control-gap`, `--ui-icon-gap` | 8px | 8px | 8px |
+  | `--ui-icon-gap-compact`, `--ui-icon-gap-regular` (with `--ui-icon-gap` the row step) | 4 / 6px | 4 / 6px | 4 / 6px |
   | `--ui-field-gap`, `--ui-section-gap` | 16px | 16px | 16px |
   | `--ui-page-section-gap` | 32px | 32px | 32px |
   | `--ui-tight-gap`, `--ui-item-gap`, `--ui-block-gap` | 4 / 6 / 12px | 4 / 6 / 12px | 4 / 6 / 12px |

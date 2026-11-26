@@ -1,4 +1,4 @@
-// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, then the places it goes to by name and the row that starts a task on what was typed; or, before anything is typed, those last opened, the workspace's Managers, and those places, each row drawn by its own list's row.
+// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, then the places it goes to under Commands as "Go to …", as ⌘K finds them, and the row that starts a task on what was typed; or, before anything is typed, those last opened, the workspace's Managers, and those places, each row drawn by its own list's row.
 
 import {
   holderTask,
@@ -27,6 +27,7 @@ import {
   GO_TO_TITLE,
   GO_TO_WORDS,
   type GoTo,
+  goToCommandLabel,
   goToShown,
   startTaskLabel,
 } from "@repo/features/search-go-to-model";
@@ -213,23 +214,44 @@ function useGoTo(leave: (() => void) | undefined) {
   return { reached: mergeQueueOn ? GO_TO_PLACES : GO_TO_WITHOUT_QUEUE, go };
 }
 
-/** The places `places` names under Go to, each its glyph and name; nothing where none is named. */
+/** How the places stand: under Go to by their names before anything is typed, or once something is, under Commands as "Go to …", as ⌘K lists the places it goes to among its commands. */
+const GO_TO_LOOK = {
+  PLACES: "places",
+  COMMANDS: "commands",
+} as const;
+
+type GoToLook = (typeof GO_TO_LOOK)[keyof typeof GO_TO_LOOK];
+
+/** Each look's heading and what each place's row says under it. */
+const GO_TO_LOOK_WORDS = {
+  [GO_TO_LOOK.PLACES]: { title: GO_TO_WORDS.TITLE, label: (place: GoTo) => GO_TO_TITLE[place] },
+  [GO_TO_LOOK.COMMANDS]: { title: GO_TO_WORDS.COMMANDS, label: goToCommandLabel },
+} as const satisfies Record<
+  GoToLook,
+  { readonly title: string; readonly label: (place: GoTo) => string }
+>;
+
+/** The places `places` names in `look`, each its glyph and words; nothing where none is named. */
 function GoToSection({
   places,
+  look,
   onGo,
 }: {
   readonly places: readonly GoTo[];
+  readonly look: GoToLook;
   readonly onGo: (place: GoTo) => void;
 }) {
   if (places.length === 0) return null;
 
+  const words = GO_TO_LOOK_WORDS[look];
+
   return (
-    <ListSection title={GO_TO_WORDS.TITLE}>
+    <ListSection title={words.title}>
       {places.map((place) => (
         <LinkRow
           key={place}
           symbol={GO_TO_GLYPH[place]}
-          label={GO_TO_TITLE[place]}
+          label={words.label(place)}
           onPress={() => onGo(place)}
         />
       ))}
@@ -487,7 +509,7 @@ function useRecentScreen(leave: (() => void) | undefined) {
           ))}
         </ListSection>
       )}
-      <GoToSection places={goTo.reached} onGo={goTo.go} />
+      <GoToSection places={goTo.reached} look={GO_TO_LOOK.PLACES} onGo={goTo.go} />
     </RowList>
   );
 
@@ -548,12 +570,14 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   const asking = useAgentRowAsk();
   const open = useOpenPicked(foundRoutes(found), leave);
   const goTo = useGoTo(leave);
-  // Note that Go to stands under All alone, since a kind's own scope lists that kind.
+  // Note that the places found stand under All alone, as Commands, since a kind's own scope lists that kind.
   const places = scope === SEARCH_SCOPE.ALL ? goToShown(goTo.reached, query) : [];
 
   const shown = scopedFound(found, scope);
-  const none = shown.tasks.length + shown.inbox.length + shown.agents.length === 0;
   const reading = scopeReading(found, scope);
+  // Note that a place found is a result too, as a command found is in ⌘K, so a query that finds only Settings never says it found nothing.
+  const listed = shown.tasks.length + shown.inbox.length + shown.agents.length + places.length;
+  const none = listed === 0;
 
   const scopes = (inboxShown ? SCOPES : SCOPES_WITHOUT_INBOX).map((each) => ({
     label: SEARCH_SCOPE_TITLE[each],
@@ -578,7 +602,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
       asking={asking}
       after={
         <>
-          <GoToSection places={places} onGo={goTo.go} />
+          <GoToSection places={places} look={GO_TO_LOOK.COMMANDS} onGo={goTo.go} />
           <StartTaskSection query={query} />
         </>
       }
@@ -670,7 +694,9 @@ function SearchStackScreen(words: SearchWords) {
           icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
           accessibilityLabel={compose.label}
           onPress={compose.onPress}
-        />
+        >
+          {compose.label}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       {query.trim() !== "" ? (
         <SearchStackFound {...words} leave={leave} />

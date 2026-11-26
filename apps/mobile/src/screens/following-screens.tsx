@@ -140,7 +140,9 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
           icon={glyphSymbol(GLYPH.CLOSE)}
           accessibilityLabel={SHEET_WORDS.DONE}
           onPress={() => router.back()}
-        />
+        >
+          {SHEET_WORDS.DONE}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
     </>
   );

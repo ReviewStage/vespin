@@ -3,13 +3,16 @@
 import type { ManagerFace } from "@repo/features/manager-face";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, expect, test } from "vitest";
-import { ManagerFacePicker } from "./manager-face-picker.js";
+import { afterEach, expect, test, vi } from "vitest";
+import { onQueryClient } from "../../testing/confirm-act.js";
+import { ManagerFacePicker, type ManagerFaceRecent } from "./manager-face-picker.js";
 
 /**
- * manager-face-picker.test.ts -- the face standing is the one pressed; a
- * search keeps the faces whose name holds every word typed, in any order,
- * and Enter picks the first it found.
+ * manager-face-picker.test.ts -- a face pressed asks its colors, gray first
+ * then the section colors, and the color pressed picks the face in it and
+ * keeps it first in Recent; a search finds an emoji typed first, then the
+ * characters, then the emoji by name, and Enter presses the first found; an
+ * emoji picked keeps the character standing beside it.
  */
 
 declare global {
@@ -23,69 +26,183 @@ const roots: Root[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
+  vi.unstubAllGlobals();
 });
 
-/** The picker over a face it keeps itself, starting on a blue ghost. */
-function Picker(): React.JSX.Element {
-  const [face, setFace] = useState<ManagerFace>({ character: "ghost", color: "blue" });
-
-  return createElement(ManagerFacePicker, { face, onChange: setFace });
-}
-
-/** The names of the faces the grid offers. */
-function offered(container: HTMLElement): string[] {
-  return [...container.querySelectorAll("fieldset button")].map(
-    (choice) => choice.getAttribute("aria-label") ?? "",
+/** Stands in for the browser's ResizeObserver, which jsdom lacks and a face's colors place themselves by. */
+function standInResizeObserver(): void {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class implements ResizeObserver {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    },
   );
 }
 
-/** The names of the faces pressed. */
-function pressed(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('fieldset button[aria-pressed="true"]')].map(
-    (choice) => choice.getAttribute("aria-label") ?? "",
-  );
+/** Recent as a window keeps it, in memory. */
+function memoryRecent(faces: readonly ManagerFace[]): ManagerFaceRecent & { faces: ManagerFace[] } {
+  const kept = { faces: [...faces] };
+
+  return {
+    get faces() {
+      return kept.faces;
+    },
+    read: () => kept.faces,
+    write: (next) => {
+      kept.faces = [...next];
+    },
+  };
 }
 
-/** Types `words` into the search as a reader does. */
-function search(field: HTMLInputElement, words: string): void {
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, words);
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-}
+/** Mounts the picker over a face it keeps itself, starting on `start`, and hands back each face picked. */
+function mount(start: ManagerFace, recent: ManagerFaceRecent): ManagerFace[] {
+  const picked: ManagerFace[] = [];
 
-test("a search keeps the faces whose name holds every word typed, and Enter picks the first found", () => {
+  function Picker(): React.JSX.Element {
+    const [face, setFace] = useState<ManagerFace>(start);
+
+    return createElement(ManagerFacePicker, {
+      face,
+      recent,
+      onChange: (next) => {
+        picked.push(next);
+        setFace(next);
+      },
+    });
+  }
+
+  standInResizeObserver();
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(createElement(Picker)));
+  act(() => root.render(onQueryClient(createElement(Picker))));
 
-  expect(offered(container)).toHaveLength(54);
-  expect(pressed(container)).toEqual(["Blue ghost"]);
+  return picked;
+}
 
-  const field = container.querySelector<HTMLInputElement>('input[type="search"], input');
+/** The names of the grid's groups, in order. */
+function groups(): string[] {
+  return [...document.querySelectorAll("fieldset section")].map(
+    (group) => group.getAttribute("aria-label") ?? "",
+  );
+}
+
+/** The names of the choices under the group named `name`. */
+function offered(name: string): string[] {
+  const group = document.querySelector(`fieldset section[aria-label="${name}"]`);
+
+  return [...(group?.querySelectorAll("button") ?? [])].map(
+    (choice) => choice.getAttribute("aria-label") ?? "",
+  );
+}
+
+/** The names of the grid's choices pressed. */
+function pressed(): string[] {
+  return [...document.querySelectorAll('fieldset button[aria-pressed="true"]')].flatMap((choice) =>
+    choice.closest(".ui-icon-picker-flyout") === null
+      ? [choice.getAttribute("aria-label") ?? ""]
+      : [],
+  );
+}
+
+/** The names of the colors standing popped up, those pressed alone where `pressedOnly`. */
+function colorNames(pressedOnly = false): string[] {
+  const selector = pressedOnly ? 'button[aria-pressed="true"]' : "button";
+
+  return [...document.querySelectorAll(`.ui-icon-picker-flyout ${selector}`)].map(
+    (one) => one.getAttribute("aria-label") ?? "",
+  );
+}
+
+/** The button named `label`, wherever it stands. */
+function button(label: string): HTMLButtonElement {
+  const found = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
+  if (found === null) throw new Error(`no ${label}`);
+
+  return found;
+}
+
+/** Types `words` into the search as a reader does. */
+function search(words: string): HTMLInputElement {
+  const field = document.querySelector<HTMLInputElement>("input");
 
   if (field === null) throw new Error("no search");
-  search(field, "cat purple");
-  expect(offered(container)).toEqual(["Purple cat"]);
-
-  search(field, "bubble");
-  expect(offered(container)).toEqual([
-    "Red speech bubble",
-    "Orange speech bubble",
-    "Yellow speech bubble",
-    "Green speech bubble",
-    "Teal speech bubble",
-    "Blue speech bubble",
-    "Purple speech bubble",
-    "Pink speech bubble",
-    "Gray speech bubble",
-  ]);
-
   act(() => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, words);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
-  expect(pressed(container)).toEqual(["Red speech bubble"]);
+  return field;
+}
+
+test("a character pressed asks its colors, gray first, and the color pressed picks it and keeps it first in Recent", async () => {
+  const recent = memoryRecent([{ character: "mug", color: "red" }]);
+  const picked = mount({ character: "ghost", color: "blue" }, recent);
+
+  expect(groups()).toEqual(["Recent", "Characters"]);
+  expect(offered("Recent")).toEqual(["Red mug"]);
+  expect(offered("Characters")).toEqual([
+    "Ghost",
+    "Planet",
+    "Cat",
+    "Backpack",
+    "Mug",
+    "Speech bubble",
+  ]);
+  expect(pressed()).toEqual(["Ghost"]);
+
+  await act(async () => button("Cat").click());
+  expect(colorNames()).toEqual([
+    "Gray",
+    "Red",
+    "Orange",
+    "Yellow",
+    "Green",
+    "Teal",
+    "Blue",
+    "Purple",
+    "Pink",
+  ]);
+  expect(colorNames(true)).toEqual(["Gray"]);
+
+  await act(async () => button("Teal").click());
+  expect(picked).toEqual([{ character: "cat", color: "teal" }]);
+  expect(colorNames()).toEqual([]);
+  expect(recent.faces).toEqual([
+    { character: "cat", color: "teal" },
+    { character: "mug", color: "red" },
+  ]);
+
+  // The face standing asks its colors from its own.
+  await act(async () => button("Cat").click());
+  expect(colorNames(true)).toEqual(["Teal"]);
+});
+
+test("a search finds an emoji typed first, then the characters, then the emoji by name, and Enter presses the first; an emoji picked keeps the character standing", async () => {
+  const recent = memoryRecent([]);
+  const picked = mount({ character: "ghost", color: "blue" }, recent);
+
+  search("🐱");
+  await vi.waitFor(() => expect(groups()).toEqual(["Emoji"]));
+  expect(offered("Emoji")).toEqual(["🐱"]);
+
+  search("cat");
+  await vi.waitFor(() => expect(groups()).toEqual(["Characters", "Emoji"]));
+  expect(offered("Characters")).toEqual(["Cat"]);
+  expect(offered("Emoji")).toContain("cat face");
+
+  const field = search("fox");
+  await vi.waitFor(() => expect(offered("Emoji")[0]).toBe("fox"));
+  await act(async () => {
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  expect(colorNames(true)).toEqual(["Gray"]);
+
+  await act(async () => button("Purple").click());
+  expect(picked).toEqual([{ character: "ghost", color: "purple", emoji: "🦊" }]);
+  expect(recent.faces).toEqual([{ character: "ghost", color: "purple", emoji: "🦊" }]);
 });

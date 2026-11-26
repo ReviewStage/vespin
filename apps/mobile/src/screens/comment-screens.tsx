@@ -319,7 +319,9 @@ function CommentThread({
             icon={glyphSymbol(threadOpen(thread) ? GLYPH.CHECK : GLYPH.RESTORE)}
             accessibilityLabel={threadOpen(thread) ? WORDS.RESOLVE : WORDS.REOPEN}
             onPress={() => settle(thread)}
-          />
+          >
+            {threadOpen(thread) ? WORDS.RESOLVE : WORDS.REOPEN}
+          </Stack.Toolbar.Button>
         </Stack.Toolbar>
       )}
       {thread === undefined ? (

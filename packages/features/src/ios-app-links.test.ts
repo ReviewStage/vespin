@@ -47,6 +47,7 @@ describe("a vespin.dev link", () => {
     ["/acme/agent/agent-1", "/tasks/agent/agent-1"],
     ["/acme/task/task-1/agent/agent-1", "/tasks/agent/agent-1"],
     ["/acme/agent/agent-1/page/page-1", "/tasks/agent/agent-1/page?page=page-1"],
+    ["/acme/agent/agent-1/message/message-1", "/tasks/agent/agent-1?message=message-1"],
     ["/acme/task/task-1/agent/agent-1/changes", undefined],
     ["/acme/person/user-1", "/tasks/person/user-1"],
     ["/acme/person/user-1#machine-device-1", "/tasks/person/user-1"],

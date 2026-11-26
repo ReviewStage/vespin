@@ -3496,7 +3496,9 @@ function TasksStackList({
           icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
           accessibilityLabel={compose.label}
           onPress={compose.onPress}
-        />
+        >
+          {compose.label}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         <TasksTree
@@ -3939,7 +3941,9 @@ export function TaskScreen() {
               icon={glyphSymbol(GLYPH.AGENT)}
               accessibilityLabel={WORDS.NEW_AGENT}
               onPress={() => newAgent(overview.task)}
-            />
+            >
+              {WORDS.NEW_AGENT}
+            </Stack.Toolbar.Button>
           </Stack.Toolbar>
         )}
       </InlineBar>

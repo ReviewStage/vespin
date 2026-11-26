@@ -76,7 +76,7 @@ import {
   TRANSCRIPT_PARTS_QUERY,
 } from "@repo/features/agent-wire";
 import { TRANSCRIPT_NOW_QUERY } from "@repo/features/live-wire";
-import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
+import { isOfferedReaction, MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { PROVIDER_KEY_KIND } from "@repo/features/provider-key-wire";
 import { isRecord } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -531,13 +531,17 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
         }
 
         yield* admitsPlanWriter(context.userId, agent);
+        const { kind } = input.body;
+
+        // Note that the service takes 👍 and 👎 alone until every client it serves reads any kind.
+        if (!isOfferedReaction(kind)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 
         const outcome = yield* hostedStoreOrUnavailable(
           reactManagerChat(context.userId, {
             agentId: agent.id,
             messageId: input.params.message,
             by: MANAGER_CHAT_AUTHOR.PERSON,
-            kind: input.body.kind,
+            kind,
             reacted: input.body.reacted,
             now: yield* DateTime.nowAsDate,
           }),

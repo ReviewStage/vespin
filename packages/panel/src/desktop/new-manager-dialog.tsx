@@ -72,6 +72,7 @@ import {
 } from "../tasks/runs-on.js";
 import { useNewTaskShown } from "../tasks/use-new-task.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
 import { type FormDialog, useFormDialog } from "./use-form-dialog.js";
 
 /** The card's title, and what its + is named. */
@@ -213,6 +214,7 @@ function ManagerCard({
           {() => (
             <ManagerFaceWell
               face={face.value}
+              recent={RECENT_MANAGER_FACES}
               open={facePicking}
               onOpenChange={setFacePicking}
               disabled={form.settling}
