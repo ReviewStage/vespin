@@ -12,8 +12,11 @@ import {
   pauseAgentQueue,
   queueAgentMessage,
 } from "@repo/database/models/agent-queue-store";
-import { latestTurnsOf, readAgent } from "@repo/database/models/agent-store";
-import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
+import { latestTurnsOf, moveAgentPlace, readAgent } from "@repo/database/models/agent-store";
+import {
+  deviceAgentLinesWaiting,
+  settleMovedDeviceAgentLaunches,
+} from "@repo/database/models/device-agent-store";
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
@@ -261,6 +264,32 @@ const carriedOnStands = (warm: WarmLocalAgent, turnId: string) =>
 it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
   "a local agent's turn cut off",
   (it) => {
+    it.effect(
+      "a launch from before its agent moved to the cloud, settled late, fails none of the agent's turns since",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const { userId, agent } = warm;
+          const standing = Option.getOrThrow(yield* readAgent(userId, agent.id));
+          yield* moveAgentPlace(userId, standing, {
+            machine: AGENT_MACHINE.VERCEL,
+            deviceId: null,
+          });
+          yield* settleMovedDeviceAgentLaunches(userId, agent.id);
+          const cloudTurn = yield* turnRunning(warm, "Then the tests.");
+
+          // The Mac comes back and reports the launch it ran before the move as ended.
+          yield* settledDeviceAgentLine(userId, warm.deviceId, warm.launchId, 1);
+
+          const newest = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
+            agent.conversationId,
+          );
+
+          assert.equal(newest?.id, cloudTurn);
+          assert.equal(newest?.status, TURN_STATUS.RUNNING);
+        }),
+    );
+
     // Note that a launch can end before it takes any line, its carry-on's among them, as one that fails on a line it was handed ahead of it does.
     it.effect.each([
       ["its runner takes the carry-on's line", true],

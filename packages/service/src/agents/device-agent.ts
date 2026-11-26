@@ -22,6 +22,7 @@ import {
   claimDeviceAgentLine,
   deviceAgentLineStanding,
   deviceAgentLinesWaiting,
+  deviceAgentPin,
   deviceAgentRequestsWaiting,
   latestDeviceAgentLaunch,
   settleDeviceAgentLine,
@@ -174,6 +175,8 @@ export function claimedDeviceAgentLine(
       return Option.some({ line });
     }
 
+    // Note that a launch whose agent is gone or no longer on a Mac is handed over without its secrets, for the device to settle as a runner that never started.
+    if (Option.isNone(yield* deviceAgentPin(line.agentId))) return Option.some({ line });
     const secrets = yield* openedSecrets(userId, line.agentId, sealedSecrets);
 
     return Option.some(Option.isSome(secrets) ? { line, secrets: secrets.value } : { line });
@@ -193,7 +196,9 @@ export function claimedDeviceAgentLine(
  * last reported where it reported one, and by the reason the Mac said where
  * it said one (`launchStoppedDetail`). A turn the runner ended itself
  * is already settled, and is left as it stands. An older launch a newer one
- * replaced settles nothing of the newer one's turn.
+ * replaced settles nothing of the newer one's turn, and nor does any
+ * launch of an agent no longer on a Mac (`deviceAgentPin`), as one moved to
+ * the cloud, whose turns since run in a sandbox.
  *
  * Note that a line this Mac already settled is answered as settled again,
  * and its runner's turn settled again, which settles nothing a second time,
@@ -222,6 +227,9 @@ export function settledDeviceAgentLine(
     const { agentId, kind } = settled.value;
 
     if (kind !== DEVICE_AGENT_LINE_KIND.LAUNCH) return true;
+
+    // Note that an agent moved off its Mac keeps that Mac's launches settled, so a late settle of one names its newest launch still, and must leave its turns in the cloud alone.
+    if (Option.isNone(yield* deviceAgentPin(agentId))) return true;
     const newest = yield* latestDeviceAgentLaunch(userId, agentId);
 
     if (Option.isNone(newest) || newest.value.id !== id) return true;
