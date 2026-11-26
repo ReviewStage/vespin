@@ -229,8 +229,8 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
             [
               "Ship the table?",
               [
-                { kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 2, reacted: true },
-                { kind: MANAGER_CHAT_REACTION.THUMBS_DOWN, count: 1, reacted: false },
+                { kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 2, reacted: true, emoji: "👍" },
+                { kind: MANAGER_CHAT_REACTION.THUMBS_DOWN, count: 1, reacted: false, emoji: "👎" },
               ],
             ],
           ],
